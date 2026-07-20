@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 232 124" width="232" height="124" xml:space="preserve">
+  <style>
+    text { font-family: 'Menlo','Consolas','DejaVu Sans Mono',monospace; font-size: 26px; font-weight: 700; white-space: pre; }
+  </style>
+  <rect width="232" height="124" fill="transparent"/>
+  <!-- keycap: F10 is a function key; the cascade inside is the pipeline stepping -->
+  <rect x="7" y="9" width="220" height="110" rx="14" fill="transparent" stroke="#9CA3AF" stroke-width="2" opacity="0.22"/>
+  <rect x="4" y="4" width="220" height="110" rx="14" fill="transparent" stroke="#9CA3AF" stroke-width="2" opacity="0.55"/>
+  <!-- F — capture (amber) -->
+  <text x="20" y="30" fill="#F59E0B">░█▀▀</text>
+  <text x="20" y="52" fill="#F59E0B">░█▀▀</text>
+  <text x="20" y="74" fill="#F59E0B">░▀░░</text>
+  <!-- 1 — plan (violet, dropped) -->
+  <text x="86" y="44" fill="#8B5CF6">░▄█░</text>
+  <text x="86" y="66" fill="#8B5CF6">░░█░</text>
+  <text x="86" y="88" fill="#8B5CF6">░▀▀▀</text>
+  <!-- 0 — ship (emerald, dropped) -->
+  <text x="150" y="58" fill="#10B981">░█▀█</text>
+  <text x="150" y="80" fill="#10B981">░█░█</text>
+  <text x="150" y="102" fill="#10B981">░▀▀▀</text>
+  <!-- stage bar: capture → plan → ship -->
+  <text x="22" y="103" style="font-size:12px">
+    <tspan fill="#F59E0B">▄▄▄</tspan><tspan fill="#8B5CF6"> ▄▄▄</tspan><tspan fill="#10B981"> ▄▄▄</tspan>
+  </text>
+</svg>
