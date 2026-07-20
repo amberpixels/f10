@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="logo.svg" alt="f10" width="232">
+  <img src="logo.svg" alt="f10" width="204">
 </p>
 
 <div align="center">
 
-### Press F10 to ship.
+### Capture. Plan. Ship.
 
 A generic, composable task pipeline for Claude Code: **capture → plan → ship**.
 
