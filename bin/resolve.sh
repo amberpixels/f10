@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# f10 · resolve — one-shot deterministic context resolution.
+# f10 · resolve - one-shot deterministic context resolution.
 #
 # Does, in a single call, everything context.md's loading order describes: locate
 # .f10/instructions/ (with main-worktree fallback), cat project.md + the requested
 # per-step overlays, and run the inference probes (remote host, stack, verify tooling).
 # A skill runs this once and reads the bundle, instead of spending five round trips
-# reading/globbing/greping by hand. It never fails — absence is a valid result.
+# reading/globbing/greping by hand. It never fails - absence is a valid result.
 #
 # Usage:  resolve.sh <step> [<step> ...]
 #   e.g.  resolve.sh capture        |  resolve.sh fetch plan  |  resolve.sh implement pr review
@@ -38,7 +38,7 @@ echo "--- project.md ---"
 if [ -n "$instr" ] && [ -f "$instr/project.md" ]; then
   cat "$instr/project.md"
 else
-  echo "ABSENT — no project.md. Infer from the signals below; suggest creating one."
+  echo "ABSENT - no project.md. Infer from the signals below; suggest creating one."
 fi
 echo
 
@@ -71,8 +71,10 @@ ls ./*.gemspec >/dev/null 2>&1 && echo "stack signal: *.gemspec present"
 { [ -f justfile ] || [ -f Justfile ]; } && echo "verify: justfile present (try: just lint / just test)"
 [ -f Makefile ] && echo "verify: Makefile present"
 if [ -d "$storage/plans" ]; then
-  n="$(ls "$storage"/plans/*.md 2>/dev/null | wc -l | tr -d ' ')"
-  echo "existing plans: $n file(s) in $storage/plans/"
+  shopt -s nullglob
+  plans=("$storage"/plans/*.md)
+  shopt -u nullglob
+  echo "existing plans: ${#plans[@]} file(s) in $storage/plans/"
 fi
 echo
 echo "=== end resolve (nothing was fetched, written, or created) ==="

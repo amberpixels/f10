@@ -3,15 +3,15 @@
     text { font-family: 'Menlo','Consolas','DejaVu Sans Mono',monospace; font-size: 26px; font-weight: 700; white-space: pre; }
   </style>
   <rect width="204" height="110" fill="transparent"/>
-  <!-- F — capture (amber) -->
+  <!-- F - capture (amber) -->
   <text x="8" y="26" fill="#F59E0B">░█▀▀</text>
   <text x="8" y="48" fill="#F59E0B">░█▀▀</text>
   <text x="8" y="70" fill="#F59E0B">░▀░░</text>
-  <!-- 1 — plan (violet, dropped) -->
+  <!-- 1 - plan (violet, dropped) -->
   <text x="74" y="40" fill="#8B5CF6">░▄█░</text>
   <text x="74" y="62" fill="#8B5CF6">░░█░</text>
   <text x="74" y="84" fill="#8B5CF6">░▀▀▀</text>
-  <!-- 0 — ship (emerald, dropped) -->
+  <!-- 0 - ship (emerald, dropped) -->
   <text x="138" y="54" fill="#10B981">░█▀█</text>
   <text x="138" y="76" fill="#10B981">░█░█</text>
   <text x="138" y="98" fill="#10B981">░▀▀▀</text>
