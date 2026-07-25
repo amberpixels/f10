@@ -1,5 +1,6 @@
 {
   "name": "amberpixels",
+  "description": "amberpixels tooling for Claude Code. Currently ships f10, a language-agnostic capture → plan → ship task pipeline.",
   "owner": {
     "name": "Eugene",
     "email": "eugene@amberpixels.io"
