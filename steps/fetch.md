@@ -6,12 +6,12 @@ Context: load per `conventions/context.md` - the tracker's **fetch adapter** com
 `.f10/instructions/project.md` (+ `.f10/instructions/fetch.md` overlay if present).
 
 1. **Fetch the task** via the project's fetch adapter - a skill to invoke, or a CLI command
-   such as `gh issue view <n> --comments` / `glab issue view <n>`. Read the full ticket,
+   such as `gh issue view <n> --comments` / `glab issue view <n>`. Read the full task,
    including comments.
 2. **Investigate the code - but only the genuine unknowns.** The task text and anything already
    established in this conversation are **ground truth**: do not spend investigation re-verifying
-   a premise the task or the user already gave you (e.g. the ticket says module A lacks the
-   behavior its sibling B already has - that premise *is* the ticket; don't go confirm it).
+   a premise the task or the user already gave you (e.g. the task says module A lacks the
+   behavior its sibling B already has - that premise *is* the task; don't go confirm it).
    Start from what's settled and investigate only what you still need to design well: the exact
    code you'll mirror or touch, existing patterns to reuse, callers, downstream consumers behind
    a real decision, and tests.
@@ -27,8 +27,10 @@ Context: load per `conventions/context.md` - the tracker's **fetch adapter** com
    and its house style. The _major_ forks left over - ones that change scope or are hard to reverse -
    become **gaps**: don't block the run asking them inline. Note each with a sensible default you'd
    proceed on, and carry them into the plan's Gaps section (see `conventions/gaps.md`). Don't nickel-and-dime.
-5. **Output** a short investigation brief: what changes, where, the obstacles found, the
-   decisions you took, and the list of gaps (with their defaults) for the plan to record.
+5. **Output** a short investigation brief: what changes, where, the **areas** the task really
+   touches (correcting the task's own _Areas_ note if investigation disagrees, and naming which
+   conditional roles in `project.md → Roles` they trigger), the obstacles found, the decisions
+   you took, and the list of gaps (with their defaults) for the plan to record.
 
 **On failure:** the id does not resolve, or the tracker is unreachable - stop and report it.
 Never plan against an assumed or invented task. See `conventions/failure.md`.

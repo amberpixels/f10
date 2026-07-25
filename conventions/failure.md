@@ -4,7 +4,7 @@ Every step assumes the happy path. This file covers the rest: a verify command t
 an adapter that errors or is missing, a tracker that will not answer, a PR that will not open.
 
 **Stop at the failing step. Report. Let the user decide.** A pipeline that keeps moving after a
-failed step produces the worst outcome f10 can produce: an open PR whose checks never passed, or
+failed step produces the worst outcome f10 can produce: an open PR whose verify never passed, or
 a plan built on a task that was never really fetched.
 
 ## Rules
@@ -22,7 +22,7 @@ a plan built on a task that was never really fetched.
    erroring, do not fall back to a different tool - do not reach for `gh` because the declared
    review skill is unavailable. Substitution turns a visible failure into an invisible one.
 5. **Preserve the work.** Output whatever the step had produced before it failed, so nothing has
-   to be redone: the drafted ticket body, the investigation brief, the plan prose. A failed
+   to be redone: the drafted task body, the investigation brief, the plan prose. A failed
    `Write` means the content belongs in the report.
 6. **Leave the workspace honest.** Do not partially commit, do not push a branch you cannot open
    a PR for, and do not delete evidence. If the failure left something half-done, say exactly

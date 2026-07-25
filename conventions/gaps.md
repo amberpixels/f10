@@ -3,7 +3,7 @@
 A **gap** is a genuine fork that needs *the user's* call - one that changes scope or is hard to
 reverse - **not** something you should resolve yourself. You still decide ~90% from the code and
 its house style (see `steps/fetch.md`); gaps are only the real forks left over. Don't manufacture
-gaps out of questions you can answer, and don't nickel-and-dime.
+gaps out of questions you can answer, and don't raise trivial ones.
 
 Gaps are **recorded, not blocking.** The plan is always complete and shippable on its noted
 defaults; filling gaps is always optional and can happen at any stage.
@@ -44,6 +44,6 @@ Offer to fill at any of these checkpoints - always as an offer the user can decl
 - **On demand:** the user can ask to fill gaps at any point.
 
 When answers come in: update each gap's status to **Resolved**, fold the decision into the relevant
-plan steps, and re-save the plan file. If an answer **differs from the default the code was already
+plan stages, and re-save the plan file. If an answer **differs from the default the code was already
 built on** (i.e. implementation happened first), say so plainly - that's a redesign/refactor pass,
 not a silent edit. Leave resolved gaps in the file so the decisions stay auditable and revisitable.

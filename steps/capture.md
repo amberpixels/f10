@@ -1,6 +1,6 @@
 # Step · capture - description → task
 
-Role: a **senior engineer** capturing a well-scoped ticket.
+Role: a **senior engineer** capturing a well-scoped task.
 Input: a free-text feature/bug description (may be terse).
 Context: load per `conventions/context.md` - the tracker's **create adapter** and **id format** come from
 `.f10/instructions/project.md` (+ `.f10/instructions/capture.md` overlay if present).
@@ -10,7 +10,9 @@ Context: load per `conventions/context.md` - the tracker's **create adapter** an
 2. **Draft the task.**
    - Title: concise, imperative.
    - Body (markdown): _Context / Problem_, _Proposed scope_, _Acceptance criteria_,
-     _Out of scope_, and a note on the areas of the codebase likely affected.
+     _Out of scope_, and an _Areas_ note naming the parts of the codebase likely affected
+     (user-facing UI, schema, auth, …). Later steps key conditional roles off this note, so
+     name the areas plainly rather than describing them.
 3. **Create it** via the project's create adapter - a skill to invoke, or a CLI command such
    as `gh issue create` / `glab issue create`. Apply the project's default status/labels if it
    declares any.

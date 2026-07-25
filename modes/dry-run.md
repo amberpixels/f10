@@ -20,7 +20,7 @@ side effect and no work-producing step**. Specifically, in a dry run you must **
 
 - fetch a task (don't invoke the tracker's fetch adapter / `gh`/`glab` - resolve and print the
   command instead),
-- create a task, investigate the codebase, draft ticket bodies, or write a plan file,
+- create a task, investigate the codebase, draft task bodies, or write a plan file,
 - implement, commit, push, open a PR/MR, review, or deploy,
 - create directories, touch `.git/info/exclude`, or write anything to disk.
 
@@ -95,5 +95,5 @@ Not executed: <the first real side effect this run would have performed>
 
 A dry run is accurate for **structural** resolution - paths, adapters, routing, which overlay
 wins, worktree fallback, out-of-tree storage, the ship pipeline and its order. It does **not** predict free-text
-content (a drafted ticket body, the plan's prose), because producing that *is* the work a dry
+content (a drafted task body, the plan's prose), because producing that *is* the work a dry
 run skips. Report structure, not invented content.
