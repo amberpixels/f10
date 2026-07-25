@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "f10 pipeline step 3 (full run) - take a task through the project's ship pipeline: implement, then whatever the project declares (review, PR/MR, deploy). Use when the user says \"/f10:ship <task-id | plan-file.md | description>\". Fetches and plans as needed, then runs the ship pipeline end to end."
+description: "f10 ship skill (full run) - take a task through the project's ship pipeline: implement, then whatever the project declares (review, PR/MR, deploy). Use when the user says \"/f10:ship <task-id | plan-file.md | description>\". Fetches and plans as needed, then runs the ship pipeline end to end."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ScheduleWakeup, ExitPlanMode
 argument-hint: "<task-id | path/to/plan.md | free-text description>"
 ---
