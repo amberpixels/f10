@@ -2,8 +2,8 @@
 
 A **gap** is a genuine fork that needs *the user's* call - one that changes scope or is hard to
 reverse - **not** something you should resolve yourself. You still decide ~90% from the code and
-conventions (see `fetch.md`); gaps are only the real forks left over. Don't manufacture gaps out of
-questions you can answer, and don't nickel-and-dime.
+its house style (see `steps/fetch.md`); gaps are only the real forks left over. Don't manufacture
+gaps out of questions you can answer, and don't nickel-and-dime.
 
 Gaps are **recorded, not blocking.** The plan is always complete and shippable on its noted
 defaults; filling gaps is always optional and can happen at any stage.

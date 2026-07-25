@@ -10,10 +10,10 @@ argument-hint: "<free-text task description>"
 Create a well-scoped task from a description. Runs the **capture** step only.
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/steps/dry-run.md` instead of executing - resolve the context, create
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of executing - resolve the context, create
 adapter, and drafted target, report them, and change nothing (no task created).
 
-First load the project context per `${CLAUDE_PLUGIN_ROOT}/steps/context.md`, then read and
+First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md`, then read and
 follow `${CLAUDE_PLUGIN_ROOT}/steps/capture.md`, using the user's argument as the description.
 
 Stop once the task is created and report its identifier (task id / url). Do not plan

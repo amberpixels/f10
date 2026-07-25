@@ -7,15 +7,15 @@ argument-hint: "<task-id | free-text description>"
 
 # f10 · plan
 
-Take a task from a reference (or a raw description) to a solid, saved plan. Does **not**
-implement.
+Take a task from a reference (or a raw description) to a solid, saved plan.
+**Do not implement.**
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/steps/dry-run.md` instead of executing - strip the token, resolve the
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of executing - strip the token, resolve the
 route, fetch/plan adapters, overlays, and the plan-file path, report them, and change nothing
 (no fetch, no plan written).
 
-First load the project context per `${CLAUDE_PLUGIN_ROOT}/steps/context.md` - it defines the
+First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - it defines the
 tracker, its task-id format, and any per-step overlays.
 
 **Route by the argument:**
@@ -36,5 +36,5 @@ the user adds is steering/notes for the run.
 plan step's deliverable). Do not end with the plan only in chat, and do not stop at analysis. If
 the session is in Plan / read-only mode, use `ExitPlanMode` to get the go-ahead to write it rather
 than degrading to an analysis-only run. Then present the plan, report the saved path, and - if it
-has open **gaps** - offer to fill them now via a questionnaire (see `gaps.md`; the user can decline
+has open **gaps** - offer to fill them now via a questionnaire (see `conventions/gaps.md`; the user can decline
 and ship on defaults). Stop before writing implementation code - hand off to `/f10:ship`.

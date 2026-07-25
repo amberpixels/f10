@@ -8,14 +8,14 @@ argument-hint: "<task-id | path/to/plan.md | free-text description>"
 # f10 · ship
 
 Drive a task end-to-end: plan (if needed) → the project's **ship pipeline** (declared in
-`project.md`; default `implement → pr` - see `steps/context.md`).
+`project.md`; default `implement → pr` - see `conventions/context.md`).
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/steps/dry-run.md` instead of executing - strip the token, resolve the
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of executing - strip the token, resolve the
 route, the selected ship pipeline and each step's adapter/overlay, report them, and change
 nothing (no implement, push, PR, or deploy).
 
-First load the project context per `${CLAUDE_PLUGIN_ROOT}/steps/context.md` - it defines the
+First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - it defines the
 tracker, its task-id format, the ship pipeline, and any per-step overlays.
 
 **Route by the argument:**
@@ -23,7 +23,7 @@ tracker, its task-id format, the ship pipeline, and any per-step overlays.
 - A **task id** (project id format / id / url): run `steps/fetch.md`, then look for the saved
   plan at **`<storage root>/plans/<TASK-ID>.md`** - the exact path `/f10:plan` writes; the
   storage root is `.f10/` unless context resolved out-of-tree storage (`~/.f10/<project>/`,
-  see `context.md → Storage`). Glob the plans dir if the exact name misses:
+  see `conventions/context.md → Storage`). Glob the plans dir if the exact name misses:
   - exists → ask the user **reuse this plan or re-plan?** (AskUserQuestion). Reuse → straight
     to the pipeline; re-plan → `steps/plan.md` first.
   - missing → run `steps/plan.md`.
@@ -35,14 +35,14 @@ tracker, its task-id format, the ship pipeline, and any per-step overlays.
 the user named another (as a word in the argument - e.g. `/f10:ship direct: fix typo …` - or
 in their own words). You may suggest a better-fitting pipeline for the task's size, but never
 switch without the user's pick. A **(planless)** pipeline skips capture/fetch/plan for
-free-text input (see `context.md`).
+free-text input (see `conventions/context.md`).
 
 Run the pipeline's steps **in the declared order** - generic ones live under
 `${CLAUDE_PLUGIN_ROOT}/steps/` (`implement`, `pr`, `push`, `review`, `deploy`), project-defined
 ones are `.f10/instructions/<name>.md`. Any extra text the user adds is steering/notes for the
 run.
 For a task whose plan you just wrote this run, proceed without re-confirming; open gaps are
-surfaced by the implement step (see `gaps.md`).
+surfaced by the implement step (see `conventions/gaps.md`).
 
 **Final report:** the PR/MR url, review status as far as the pipeline goes ("stopped at PR"
 is a normal end), deploy status if the pipeline deploys, a short note of what changed, and -

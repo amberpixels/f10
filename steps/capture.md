@@ -2,7 +2,7 @@
 
 Role: a **senior engineer** capturing a well-scoped ticket.
 Input: a free-text feature/bug description (may be terse).
-Context: load per `context.md` - the tracker's **create adapter** and **id format** come from
+Context: load per `conventions/context.md` - the tracker's **create adapter** and **id format** come from
 `.f10/instructions/project.md` (+ `.f10/instructions/capture.md` overlay if present).
 
 1. **Scope check.** Clarify with the user only if the description is too thin to write
@@ -17,3 +17,7 @@ Context: load per `context.md` - the tracker's **create adapter** and **id forma
 4. **Output** the task id (in the project's id format) and url so the fetch step can pick it up.
 
 Keep PII out of anything logged - use ids, not names/emails.
+
+**On failure:** the create adapter errors or is missing - report the drafted title and body
+verbatim so the wording survives, and create the task by no other route. See
+`conventions/failure.md`.

@@ -30,7 +30,7 @@ exist). Prefer already-known facts over shelling out. Never run the adapters the
 
 ## Procedure
 
-1. **Load context** per `context.md` - run its resolver
+1. **Load context** per `conventions/context.md` - run its resolver
    (`${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> …`) once; it already does the lookup, worktree
    fallback, overlay concat, and probes. This is the point of the exercise, so read its output
    for *how* each fact resolved: which `project.md` (direct, worktree-fallback, or none →
