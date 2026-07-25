@@ -149,7 +149,7 @@ checkout's; plans still land in the current worktree.
 
 ## Status
 
-v0.5.0 - a **failure** convention (what a step does when it cannot complete), and the plugin
+v0.5.1 - a **failure** convention (what a step does when it cannot complete), and the plugin
 split into `steps/` (units of work), `conventions/` (rules steps obey), and `modes/` (runs that
 replace execution), with conventions composed per run by the resolver.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
