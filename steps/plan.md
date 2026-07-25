@@ -1,8 +1,9 @@
 # Step · plan - investigation → architect-grade plan
 
-Role: a **senior software architect** in the project's stack - adopt the role from
-`.f10/instructions/project.md` (e.g. "+ Ruby on Rails developer", "+ Go developer").
-Precondition: the fetch step's brief (run `fetch.md` first if it hasn't been).
+Role: a **senior software architect** in the project's stack - adopt the roles from
+`project.md → Roles` (e.g. "+ Go developer"), including any conditional ones the areas in the
+fetch brief trigger.
+Input: the fetch step's investigation brief (run `steps/fetch.md` first if it hasn't been).
 Context: load per `conventions/context.md` - guardrails and house style come from
 `.f10/instructions/project.md` (+ `.f10/instructions/plan.md` overlay if present).
 
@@ -13,9 +14,11 @@ Context: load per `conventions/context.md` - guardrails and house style come fro
    UI component gallery / design system the project treats as canonical - design in terms of
    what already exists there, never invent a parallel component; the plan overlay spells out
    the specifics. No guardrails declared → skip.
-3. **Produce a staged plan:** ordered steps, the critical files each touches, any
+3. **Produce a staged plan.** Open it with a one-line **Roles** note recording the roles this
+   plan was written under, so a fresh `/f10:ship` agent adopts the same ones instead of
+   re-deriving them. Then: ordered **stages**, the critical files each touches, any
    data/migration work, the tests to add or adjust, and the key tradeoffs / alternatives
-   considered. Keep it focused and incremental - narrow per-piece steps, not a multi-tier
+   considered. Keep it focused and incremental - narrow per-piece stages, not a multi-tier
    strategy essay. End the plan with a **`## Gaps` section** capturing the real forks that need the
    user's call, each with the default the plan proceeds on (see `conventions/gaps.md`). No real forks →
    `## Gaps - none`.
@@ -28,11 +31,11 @@ Context: load per `conventions/context.md` - guardrails and house style come fro
      snippets - a signature or a one-line pseudocode sketch is the ceiling, and only when the
      intent isn't clear from words.
    - **No effort or time estimates.** Never include human-hours, "~13-18h", story points, or a
-     per-phase time budget - agents aren't paced like people and the numbers only spoil context.
+     per-stage time budget - agents aren't paced like people and the numbers only spoil context.
    - **No process boilerplate.** Skip generic deployment checklists, rollout/monitoring sections,
      and speculative feature flags unless the task genuinely calls for one - then say so in one line.
-   - **Right-size the phases.** A handful of ordered steps that fit the task. If you're at eight
-     phases, you're writing an essay - collapse it. List real tradeoffs, not filler risk tables.
+   - **Right-size the stages.** A handful of ordered stages that fit the task. If you're at eight
+     stages, you're writing an essay - collapse it. List real tradeoffs, not filler risk tables.
 4. **Save the plan - this IS the deliverable, not optional polish.** Write it with the `Write`
    tool to the **relative** path **`.f10/plans/<TASK-ID>.md`** - using the task's exact tracker
    id, uppercased, in the project's id format (e.g. `.f10/plans/ABC-2049.md`,
@@ -63,10 +66,8 @@ Context: load per `conventions/context.md` - guardrails and house style come fro
      The step is not done until the file exists.
 5. **Confirm and hand off.** Verify the file exists, present the plan in chat, and report its
    path so `/f10:ship` - this agent or a fresh one - can pick it up: `.f10/plans/<TASK-ID>.md`.
-   Then, if the plan has **open gaps**, list them by title (one line each) and **offer to fill them
-   now** via a batched `AskUserQuestion` (see `conventions/gaps.md`) - an offer the user can decline; the plan
-   ships on its defaults if they do. If they fill any, update the Gaps section + fold the decisions
-   into the plan, and re-save the file.
+   Then, if the plan has **open gaps**, list them by title (one line each) and offer to fill them
+   now per `conventions/gaps.md`.
 
 Do not write implementation code in this step.
 

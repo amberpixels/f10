@@ -1,5 +1,6 @@
 # Step · pr - verified code → open PR/MR
 
+Role: a **senior engineer** opening a PR someone else will have to review.
 Input: implemented, locally verified changes (the `implement` step is done, and any review
 steps the pipeline places before this one).
 Context: load per `conventions/context.md` - the PR adapter comes from `project.md → Hosting & PR`

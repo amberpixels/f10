@@ -99,7 +99,9 @@ and executes nothing.
 **Artifacts**
 
 - **Task** - the tracker item. Its **task id** (project-defined format) threads through every
-  stage and names every artifact.
+  step and names every artifact.
+- **Stage** - one ordered unit inside a plan file. Distinct from a step, which is a pipeline
+  unit, and from a skill, which is an entry point.
 - **Plan file** - `.f10/plans/<TASK-ID>.md`, the single handoff contract between plan and ship.
   A plan that exists only in chat is a failed run; superseded plans are archived, never edited
   in place.
@@ -111,9 +113,13 @@ and executes nothing.
 
 - **Project instructions** - `<repo>/.f10/instructions/`: `project.md` (the facts) plus
   optional per-step **overlays** that extend a generic step and win on conflict.
+- **Role** - who the agent is for a step. A base role per step, plus **conditional** roles a
+  project attaches by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
+  Capture records the areas, fetch confirms them, and the plan file records the roles it was
+  written under so ship inherits them.
 - **Adapter** - how a generic capability ("fetch a task", "open a PR", "verify") binds per
-  project: a skill to invoke, or a plain CLI command. f10 defines the ports, the project
-  supplies the adapters - that is what keeps it stack-agnostic.
+  project: a skill to invoke, or a plain CLI command. f10 names the capability, the project
+  supplies the adapter - that is what keeps it stack-agnostic.
 - **Review** - a step, local (pre-PR) or CI/human (post-PR), placed or omitted per the
   pipeline. Its absence is meaningful: no review entry → ship stops at the opened PR.
 - **Visibility** - `stealth` (default) or `public`. Stealth: the shipped work reads as if f10
@@ -149,9 +155,9 @@ checkout's; plans still land in the current worktree.
 
 ## Status
 
-v0.5.1 - a **failure** convention (what a step does when it cannot complete), and the plugin
-split into `steps/` (units of work), `conventions/` (rules steps obey), and `modes/` (runs that
-replace execution), with conventions composed per run by the resolver.
+v0.6.0 - **conditional roles** (a project attaches extra expertise by the areas a task touches),
+one fixed shape across every step, and one word per concept: **skill** → **step** → **stage**.
+Builds on v0.5.0's **failure** convention and the `steps/` + `conventions/` + `modes/` split.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
 `project.md` references instead of repeating).
 

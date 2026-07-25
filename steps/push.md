@@ -1,6 +1,11 @@
 # Step · push - verified code → committed and pushed directly (no PR)
 
-The direct-flow alternative to `pr.md`: one or a few clean commits pushed straight to the
+Role: a **senior engineer** committing directly to a shared branch.
+Input: implemented, locally verified changes (the `implement` step is done).
+Context: load per `conventions/context.md` - branch and commit conventions come from
+`.f10/instructions/project.md` (+ `.f10/instructions/push.md` overlay if present).
+
+The direct-flow alternative to `steps/pr.md`: one or a few clean commits pushed straight to the
 current (usually default) branch. For tiny, low-risk changes - chores, annotations, typos.
 
 1. **Authorization is stricter than for a PR.** Run this step only as part of a pipeline the
@@ -8,7 +13,7 @@ current (usually default) branch. For tiny, low-risk changes - chores, annotatio
    words). Never self-select a pipeline that pushes to a protected/default branch - if the
    task looks tiny enough for direct flow but the user didn't choose it, you may *suggest* it
    (AskUserQuestion) and proceed only on their pick.
-2. **Verify first.** The implement step's checks must have passed - never push red.
+2. **Verify first.** The implement step's verify must have passed - never push red.
 3. **Commit clean.** Small, conventional commits in the repo's style; no AI attribution
    lines; in stealth mode, no f10 traces in messages (see `conventions/context.md`).
 4. **Push** to the branch the user intended (default branch unless they said otherwise), and
