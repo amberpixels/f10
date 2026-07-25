@@ -1,6 +1,6 @@
 ---
 name: capture
-description: "f10 pipeline step 1 - turn a task description into a tracker task. Use when the user says \"/f10:capture <description>\" or wants to create a ticket from a description without planning or building it yet."
+description: "f10 capture skill - turn a freely written idea into a tracker task. Use when the user says \"/f10:capture <description>\" or wants to create a ticket from a description without planning or building it yet."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill
 argument-hint: "<free-text task description>"
 ---

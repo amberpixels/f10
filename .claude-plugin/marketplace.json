@@ -8,7 +8,7 @@
     {
       "name": "f10",
       "source": "./",
-      "description": "f10 (f-ten): generic task pipeline - capture → plan → ship. Composable steps; project specifics live in each repo's .f10/instructions/."
+      "description": "f10 (f-ten): language-agnostic task pipeline - capture → plan → ship. Composable steps, no stack assumptions; every project fact lives in the repo's .f10/instructions/."
     }
   ]
 }
