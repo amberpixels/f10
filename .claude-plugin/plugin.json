@@ -1,8 +1,8 @@
 {
-  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
   "name": "f10",
   "version": "0.4.0",
-  "description": "f10 (f-ten): generic task pipeline — capture → plan → ship. Composable steps; project specifics live in each repo's .f10/instructions/.",
+  "description": "f10 (f-ten): generic task pipeline - capture → plan → ship. Composable steps; project specifics live in each repo's .f10/instructions/.",
   "author": {
     "name": "Eugene",
     "email": "eugene@amberpixels.io"
