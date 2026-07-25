@@ -1,6 +1,6 @@
 # Step · deploy - shipped code → running environment
 
-Runs **only** when the project's ship pipeline declares it. The pipeline entry and the
+Run this step **only** when the project's ship pipeline declares it. The pipeline entry and the
 `.f10/instructions/deploy.md` overlay define the target and the exact commands (Heroku,
 Hetzner, …) - there is no inferred default deploy.
 
@@ -10,3 +10,7 @@ Hetzner, …) - there is no inferred default deploy.
   unresolved blocking review.
 - Afterwards, verify the way the project prescribes (health check, smoke test, an `e2e`
   step if the pipeline has one) and report the deploy status and url.
+
+**On failure:** the deploy errors, or its verification fails - report the environment's state
+first, before anything else. Never retry blindly, and never roll back without the user's
+go-ahead. See `conventions/failure.md`.

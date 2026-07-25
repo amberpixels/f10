@@ -7,8 +7,8 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 ## Loading order (do this once, at the start of any f10 run)
 
 **Run the resolver - one call, not five reads.** It does the lookup, worktree fallback, overlay
-concatenation, and inference probes below in a single shot and prints one labelled bundle, so a
-run spends one round trip here instead of a chain of Reads/greps:
+concatenation, inference probes, and the conventions this run needs in a single shot and prints
+one labelled bundle, so a run spends one round trip here instead of a chain of Reads/greps:
 
 ```
 ${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]
@@ -45,6 +45,10 @@ is ever unavailable):
 
 Free-form markdown under these headings - prose, not YAML. Only **Tracker** really matters for
 the pipeline's contracts; everything else has workable inferred defaults.
+
+Every **adapter** below is a binding, not a suggestion. An adapter that is missing, errors, or is
+ambiguous is a failure of that step, never a licence to substitute a different tool. Stop and
+report per `conventions/failure.md`.
 
 - **Project** - one-liner: what this is, the stack, and the role to adopt per step
   (e.g. "plan as a senior software architect + Go developer; implement as a senior Go developer").

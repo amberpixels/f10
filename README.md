@@ -19,10 +19,11 @@ f10 (f-ten) is about consistency: three skills over one step chain. **capture** 
 freely written idea into a tracked task; **plan** turns that task into an architect-grade plan
 on disk; **ship** turns the plan into code and, optionally, a release.
 
-**Stack-agnostic by construction**: the pipeline is pure process, with no knowledge of any
-language, framework, or toolchain. Every project fact - tracker, verify commands, PR flow,
-review policy, guardrails - lives on the repo's side in `.f10/instructions/`, so the same three
-commands drive a Go service, a Rails app, or a Terraform repo.
+**Stack-agnostic**: no stack is hard-coded into the pipeline, so the same three commands drive a
+Go service, a Rails app, or a Terraform repo. Point f10 at a repo and it works one of two ways.
+It **infers** the facts it needs (git remote → `gh`/`glab`, build files → verify commands), or
+you **declare** them once in `.f10/instructions/` - tracker, verify commands, PR flow, review
+policy, guardrails - and it stops guessing.
 
 ## Pipeline
 
@@ -89,8 +90,11 @@ and executes nothing.
   `.f10/instructions/<name>.md` *is* the step. Projects may declare several **named pipelines**;
   the user picks non-default ones, never the agent, and a *(planless)* one skips ticket and plan
   file for tiny chores.
-- **Convention** - a cross-cutting rule file every step obeys: `context.md` (config loading,
-  pipelines, stealth), `gaps.md`, `dry-run.md`.
+- **Convention** - a cross-cutting rule every step obeys, in `conventions/`: `context.md`
+  (config loading, pipelines, stealth), `gaps.md` (open decisions), `failure.md` (what to do
+  when a step cannot complete).
+- **Mode** - an alternate run in `modes/` that replaces execution rather than adding a rule.
+  `dry-run.md` is the only one today, loaded solely when `--dry-run` fires.
 
 **Artifacts**
 
@@ -126,7 +130,8 @@ flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
         skills2["skills/{capture,plan,ship}"]
         gsteps["steps/{capture,fetch,plan,implement,pr,push,review,deploy}.md"]
-        conv["steps/{context,gaps}.md"]
+        conv["conventions/{context,gaps,failure}.md"]
+        modes2["modes/dry-run.md"]
     end
     subgraph repo ["&lt;repo&gt;/.f10 - project-specific, often untracked"]
         proj["instructions/project.md - facts & adapters"]
@@ -138,13 +143,15 @@ flowchart TB
     gsteps -- "3· write" --> plans2
 ```
 
-Resolution order (full contract in `steps/context.md`): the repo's `project.md` → per-step
+Resolution order (full contract in `conventions/context.md`): the repo's `project.md` → per-step
 overlay → inferred defaults. A worktree with no local instructions falls back to the main
 checkout's; plans still land in the current worktree.
 
 ## Status
 
-v0.4.0 - standalone plugin repo with per-project storage modes (in-repo / out-of-tree).
+v0.5.0 - a **failure** convention (what a step does when it cannot complete), and the plugin
+split into `steps/` (units of work), `conventions/` (rules steps obey), and `modes/` (runs that
+replace execution), with conventions composed per run by the resolver.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
 `project.md` references instead of repeating).
 

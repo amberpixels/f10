@@ -17,3 +17,6 @@ first.
 
 Bound every review loop: at most **two** rounds per review step, then stop and summarize -
 never loop indefinitely. And never merge the PR (see `pr.md`).
+
+**On failure:** the declared reviewer is unavailable or never returns - report it and stop.
+Never record the step as passed, and never skip it silently. See `conventions/failure.md`.

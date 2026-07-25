@@ -4,21 +4,24 @@ Role: a **senior developer** in the project's stack - adopt the role from
 `.f10/instructions/project.md` - implementing an approved plan to the project's quality bar.
 Input: a plan - from the plan step just run, a saved `.f10/plans/<task>.md`, or a plan file
 the user passed.
-Part of the **ship pipeline** (see `context.md`): this step ends with verified code on a
+Part of the **ship pipeline** (see `conventions/context.md`): this step ends with verified code on a
 branch - later pipeline steps (`pr`, `review`, `deploy`) handle everything after that.
-Context: load per `context.md` - guardrails and verify commands come from
+Context: load per `conventions/context.md` - guardrails and verify commands come from
 `.f10/instructions/project.md` (+ `.f10/instructions/implement.md` overlay if present).
 
 0. **Check the plan's gaps first.** If the plan has a `## Gaps` section with **open** items,
    surface them and ask *fill now, or proceed on the defaults?* via a batched `AskUserQuestion`
-   (see `gaps.md`). Proceeding on the stated defaults is fine - just say which you'll use. If the
+   (see `conventions/gaps.md`). Proceeding on the stated defaults is fine - just say which you'll use. If the
    user fills any, fold the decisions into the plan and re-save before implementing. Leave the
    resolved gaps recorded so they stay revisitable after the PR is up.
-1. **Implement the plan.** Respect the project's coding standards and patterns - its CLAUDE.md
-   conventions and the guardrails in project.md / the implement overlay. Comments stay 1-2
-   lines. Keep PII out of logs.
+1. **Implement the plan.** Respect the project's house style - its CLAUDE.md rules and the
+   guardrails in project.md / the implement overlay. Comments stay 1-2 lines. Keep PII out
+   of logs.
 2. **Verify locally.** Run the project's verify commands from project.md, respecting its
    "never run X" rules. No Verify section → detect: `justfile` → `just lint` / `just test`;
    `Makefile` → its standard targets; else the stack's idiomatic checks (`go test ./...` +
    the linter the repo configures, etc.). Fix what you broke.
 3. **Hand off.** Briefly note what changed, then continue with the next ship-pipeline step.
+
+**On failure:** verify stays red and you cannot fix it - stop here. Never continue to `pr`,
+`push`, or `deploy` on red, whatever the original request was. See `conventions/failure.md`.

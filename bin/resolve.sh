@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 # f10 · resolve - one-shot deterministic context resolution.
 #
-# Does, in a single call, everything context.md's loading order describes: locate
-# .f10/instructions/ (with main-worktree fallback), cat project.md + the requested
-# per-step overlays, and run the inference probes (remote host, stack, verify tooling).
-# A skill runs this once and reads the bundle, instead of spending five round trips
-# reading/globbing/greping by hand. It never fails - absence is a valid result.
+# Does, in a single call, everything conventions/context.md's loading order describes: emit the
+# conventions this run needs, locate .f10/instructions/ (with main-worktree fallback), cat
+# project.md + the requested per-step overlays, and run the inference probes (remote host,
+# stack, verify tooling). A skill runs this once and reads the bundle, instead of spending five
+# round trips reading/globbing/greping by hand. It never fails - absence is a valid result.
+#
+# Conventions are composed here, at read time, so each lives in exactly one file and no skill
+# carries one it does not use. context + failure always apply; gaps only where a step records
+# or consumes them.
 #
 # Usage:  resolve.sh <step> [<step> ...]
 #   e.g.  resolve.sh capture        |  resolve.sh fetch plan  |  resolve.sh implement pr review
 
 set -uo pipefail
 cwd="$(pwd)"
+# plugin root, derived from this script's own location (CLAUDE_PLUGIN_ROOT is not guaranteed here)
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # --- locate the instructions dir: current checkout, main-worktree fallback, out-of-tree ---
 instr=""
@@ -33,6 +39,23 @@ echo "steps requested: $*"
 echo "instructions source: $src"
 echo "storage root: $storage  (plans -> $storage/plans/)"
 echo
+
+# --- conventions: context + failure always; gaps only for steps that touch them ---
+convs=(context failure)
+for s in "$@"; do
+  case "$s" in
+    plan|implement) convs+=(gaps); break ;;
+  esac
+done
+for c in "${convs[@]}"; do
+  echo "--- convention: $c ---"
+  if [ -f "$root/conventions/$c.md" ]; then
+    cat "$root/conventions/$c.md"
+  else
+    echo "MISSING - $root/conventions/$c.md not found"
+  fi
+  echo
+done
 
 echo "--- project.md ---"
 if [ -n "$instr" ] && [ -f "$instr/project.md" ]; then
