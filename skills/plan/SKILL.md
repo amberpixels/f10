@@ -36,6 +36,7 @@ the user adds is steering/notes for the run.
 `<storage root>/plans/<TASK-ID>.md`**, the root context resolution reported (the plan step's
 deliverable). Do not end with the plan only in chat, and do not stop at analysis. If
 the session is in Plan / read-only mode, use `ExitPlanMode` to get the go-ahead to write it rather
-than degrading to an analysis-only run. Then present the plan, report the saved path, and - if it
-has open **gaps** - offer to fill them now via a questionnaire (see `conventions/gaps.md`; the user can decline
-and ship on defaults). Stop before writing implementation code - hand off to `/f10:ship`.
+than degrading to an analysis-only run. Then present the plan, report the saved path per
+`conventions/report.md`, and - if it has open **gaps** - offer to fill them now via a
+questionnaire (see `conventions/gaps.md`; the user can decline and ship on defaults). Stop before
+writing implementation code - hand off to `/f10:ship`.

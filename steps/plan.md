@@ -68,9 +68,10 @@ Context: load per `conventions/context.md` - guardrails and house style come fro
      offer a menu of options. Call `ExitPlanMode` to present the plan and get the go-ahead to save
      it (or, failing that, ask the user to exit plan mode with shift+tab), then write the file.
      The step is not done until the file exists.
-5. **Confirm and hand off.** Verify the file exists, present the plan in chat, and report its
-   path so `/f10:ship` - this agent or a fresh one - can pick it up:
-   `<storage root>/plans/<TASK-ID>.md`.
+5. **Confirm and hand off.** Verify the file exists, present the plan in chat, and report per
+   `conventions/report.md` - a `task` row, a `url` row if the tracker gave one, and a `plan` row
+   holding `<storage root>/plans/<TASK-ID>.md` so `/f10:ship`, this agent or a fresh one, can
+   pick it up.
    Then, if the plan has **open gaps**, list them by title (one line each) and offer to fill them
    now per `conventions/gaps.md`.
 

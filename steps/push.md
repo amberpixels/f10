@@ -17,7 +17,9 @@ current (usually default) branch. For tiny, low-risk changes - chores, annotatio
 3. **Commit clean.** Small, conventional commits in the repo's style; no AI attribution
    lines; in stealth mode, no f10 traces in messages (see `conventions/context.md`).
 4. **Push** to the branch the user intended (default branch unless they said otherwise), and
-   **output** the commit sha(s) and a one-line summary.
+   **report** per `conventions/report.md` - a `branch` row and a `commit` row with the sha(s),
+   marker column blank throughout since neither is a url. The one-line summary of what changed
+   follows as prose.
 
 **On failure:** the push is rejected (protected branch, stale ref) - stop and report, leaving the
 commits local. Never force-push to resolve it. See `conventions/failure.md`.
