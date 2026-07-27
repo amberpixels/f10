@@ -28,9 +28,10 @@ Context: load per `conventions/context.md` - the tracker's **fetch adapter** com
    become **gaps**: don't block the run asking them inline. Note each with a sensible default you'd
    proceed on, and carry them into the plan's Gaps section (see `conventions/gaps.md`). Don't nickel-and-dime.
 5. **Output** a short investigation brief: what changes, where, the **areas** the task really
-   touches (correcting the task's own _Areas_ note if investigation disagrees, and naming which
-   conditional roles in `project.md → Roles` they trigger), the obstacles found, the decisions
-   you took, and the list of gaps (with their defaults) for the plan to record.
+   touches (correcting the task's own _Areas_ note if investigation disagrees, and deriving the
+   areas from the code when the task is small enough to carry no note at all - either way, name
+   which conditional roles in `project.md → Roles` they trigger), the obstacles found, the
+   decisions you took, and the list of gaps (with their defaults) for the plan to record.
 
 **On failure:** the id does not resolve, or the tracker is unreachable - stop and report it.
 Never plan against an assumed or invented task. See `conventions/failure.md`.
