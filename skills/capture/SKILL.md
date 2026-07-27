@@ -13,7 +13,9 @@ Create a well-scoped task from a description. Runs the **capture** step only.
 `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of executing - resolve the context, create
 adapter, and drafted target, report them, and change nothing (no task created).
 
-First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md`, then read and
+First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, **unless this context already holds the conventions
+bundle**, then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh capture`, every run. Then read and
 follow `${CLAUDE_PLUGIN_ROOT}/steps/capture.md`, using the user's argument as the description.
 
 Stop once the task is created and report it - task id and url - per

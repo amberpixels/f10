@@ -18,22 +18,41 @@ a name, so bare `plan` is ambiguous: never use it where either could be meant. R
 "run `steps/plan.md`" means execute that step's instructions - it is never an instruction to
 invoke the `/f10:plan` skill again.
 
-## Loading order (do this once, at the start of any f10 run)
+## Loading order (do this at the start of any f10 run)
 
-**Run the resolver - one call, not five reads.** It does the lookup, worktree layering, overlay
-concatenation, inference probes, and this run's conventions in one shot, printing a single
-labelled bundle:
+Two calls, with two different lifetimes. The difference between them is the design, so it comes
+before the mechanics:
 
 ```
-${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]
+${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh                    # once per context
+${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]    # once per run
 ```
 
-Pass the step(s) this run executes - `capture`, or `fetch plan`, or the ship pipeline's steps
-(`implement pr review`). Read its output as the resolved context. The script only
-**concatenates and probes**: it never interprets `project.md` or binds an adapter, so you still
-read the prose and decide. Its one exception is the **Layering** declaration below - composition
-has to be settled before anything can be concatenated. What it returns (and the contract to
-implement by hand if it is ever unavailable):
+**`conventions.sh` - the static half.** Cats the four cross-cutting rule files (`context`,
+`failure`, `gaps`, `report`). No arguments, and its output is identical on every machine, in every
+repo, for every step - so a second copy inside one context window is pure waste. **Load it unless
+this context already holds it**; its banner names the bundle, so spotting a copy you already have
+is one glance. *Per context*, not per conversation: a subagent starts empty and does need it, as
+does a fresh session.
+
+**`resolve.sh` - the resolved half. One call, not five reads.** It does the lookup, worktree
+layering, the instructions listing, overlay concatenation, and the inference probes in one shot,
+printing a single labelled bundle. Unlike the conventions, what it reports genuinely **can** change
+between two runs in one conversation - a different worktree, an edited `project.md` - so it is
+never skipped.
+
+Pass the step(s) this run executes - `capture`, or `fetch plan`. Read its output as the resolved
+context. The script only **concatenates and probes**: it never interprets `project.md` or binds an
+adapter, so you still read the prose and decide. Its one exception is the **Layering** declaration
+below - composition has to be settled before anything can be concatenated.
+
+**`/f10:ship` passes `--all` rather than step names**, and not as a convenience: ship's step list
+*is* the ship pipeline, the pipeline is declared in `project.md`, and printing `project.md` is what
+`resolve.sh` does. Ship cannot name its steps until after the very call it would be naming them
+for. `--all` cats every overlay each layer holds, so the question never arises. Capture and plan
+have their step lists fixed in the skill file and stay precise.
+
+What `resolve.sh` returns (and the contract to implement by hand if it is ever unavailable):
 
 1. **project.md** - `<storage root>/instructions/project.md`, the project facts file (contract
    below). The **storage root** is the **checkout root** plus `.f10/` - anchored to
@@ -56,19 +75,26 @@ implement by hand if it is ever unavailable):
    cwd outside git). Finding instructions there *is* the declaration: the whole storage root,
    instructions **and** plans, lives there, and nothing f10-related is ever written inside the
    project directory. See **Storage** below.
-4. **Per-step overlays** - each `<step>.md` you asked for, concatenated. An overlay extends the
+4. **Per-step overlays** - each `<step>.md` you asked for, or every one a layer holds under
+   `--all`, concatenated. An overlay extends the
    generic step. **Precedence is scope-major, specificity-minor**: `main/project.md` →
    `main/<step>.md` → `worktree/project.md` → `worktree/<step>.md`, later winning. So an overlay
    still beats `project.md` *within* a layer, and the worktree layer beats both of main's - the
    half-rule "the overlay wins on conflict" is the intuitive one and it is wrong across layers.
    The bundle prints in that order, so read it top to bottom and let the last statement stand.
-5. **Adjudicating two layers** - this is prose you merge, not data the resolver merged for you.
+5. **What each layer holds** - an `instructions files:` line naming the `.md` files present per
+   layer, printed whatever you asked for. It is there because the layer blocks print only the names
+   you requested and `absent:` reports only on those same names, so without it a bundle can omit an
+   overlay while asserting that nothing is missing. It is also the only way a **project-defined
+   step** is discoverable: when a pipeline names `e2e`, `.f10/instructions/e2e.md` *is* the step,
+   and nothing else in the bundle would ever mention the file.
+6. **Adjudicating two layers** - this is prose you merge, not data the resolver merged for you.
    A field the worktree layer doesn't mention keeps main's value; a field it does mention wins
    outright. A worktree layer should therefore state only what it changes. Two layers describing
    incompatible stacks is a `replaces main` situation, not something to reconcile field by field:
    four sources square the contradiction surface, and `replaces` is what keeps both stacks from
    reaching you at once. If you hit a genuine contradiction anyway, say so rather than picking.
-6. **Inferred signals** - when project.md is absent/partial, the deterministic probes (remote
+7. **Inferred signals** - when project.md is absent/partial, the deterministic probes (remote
    host → `gh`/`glab`; `go.mod` / `Gemfile` / `package.json` → stack and role; `justfile` /
    `Makefile` → verify commands). State the assumptions you're proceeding on and suggest creating
    `.f10/instructions/project.md`. Do not refuse to run just because the config is missing.
