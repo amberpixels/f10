@@ -14,7 +14,8 @@ Context: load per `conventions/context.md` - the PR adapter comes from `project.
    In stealth mode, no f10 traces in the branch name, commits, or PR text (see `conventions/context.md`).
 3. **Never merge.** Opening the PR is yours; merging is a human's action - regardless of
    review state - unless project.md explicitly says otherwise.
-4. **Output** the PR/MR url.
+4. **Report** per `conventions/report.md` - a `branch` row and a `pr` row (`mr` on GitLab)
+   carrying the url.
 
 **On failure:** the PR adapter errors - report whether the branch was pushed, so the user knows
 what state the remote is in, and open the PR by no other route. See `conventions/failure.md`.
