@@ -20,7 +20,7 @@ invoke the `/f10:plan` skill again.
 
 ## Loading order (do this once, at the start of any f10 run)
 
-**Run the resolver - one call, not five reads.** It does the lookup, worktree fallback, overlay
+**Run the resolver - one call, not five reads.** It does the lookup, worktree layering, overlay
 concatenation, inference probes, and this run's conventions in one shot, printing a single
 labelled bundle:
 
@@ -31,8 +31,9 @@ ${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]
 Pass the step(s) this run executes - `capture`, or `fetch plan`, or the ship pipeline's steps
 (`implement pr review`). Read its output as the resolved context. The script only
 **concatenates and probes**: it never interprets `project.md` or binds an adapter, so you still
-read the prose and decide. What it returns (and the contract to implement by hand if it is ever
-unavailable):
+read the prose and decide. Its one exception is the **Layering** declaration below - composition
+has to be settled before anything can be concatenated. What it returns (and the contract to
+implement by hand if it is ever unavailable):
 
 1. **project.md** - `<storage root>/instructions/project.md`, the project facts file (contract
    below). The **storage root** is the **checkout root** plus `.f10/` - anchored to
@@ -40,20 +41,34 @@ unavailable):
    subdirectory resolves exactly as one launched from the top - unless resolution lands
    out-of-tree (next two points). It is reported as an absolute path: use that path verbatim
    rather than re-deriving one.
-2. **Worktree fallback** - if the current checkout is a **different worktree** from main and has
-   no `.f10/instructions/`, it uses the main checkout's (first `git worktree list` path);
-   instructions are often untracked and don't propagate into fresh worktrees. Plans still always
-   go to the **current** worktree's `.f10/plans/`. A subdirectory of the main checkout is not a
-   fallback case - it resolves directly against that checkout's root. A `.f10/instructions/`
-   sitting *below* the root is not a per-directory config: resolution notes it and ignores it.
+2. **Worktree layering** - a linked worktree and the main checkout (first `git worktree list`
+   path) can each hold instructions, and both are read: **main's first, the worktree's on top**.
+   The two degenerate cases are the common ones. A worktree with none gets main's alone -
+   instructions are often untracked and don't propagate into fresh worktrees. A worktree whose
+   `project.md` declares `Layering - replaces main` gets its own alone, which is what a branch
+   rewriting the stack needs: main's `Verify: composer test` leaking into a Go worktree reds the
+   run for a reason nobody can see. Anything else extends. Plans still always go to the
+   **current** worktree's `.f10/plans/`. A subdirectory of the main checkout is not a layering
+   case - it resolves directly against that checkout's root. A `.f10/instructions/` sitting
+   *below* the root is not a per-directory config: resolution notes it and ignores it.
 3. **Out-of-tree storage** - if neither checkout has `.f10/instructions/`, it tries
    **`~/.f10/<project>/instructions/`** (`<project>` = basename of the main checkout, or of the
    cwd outside git). Finding instructions there *is* the declaration: the whole storage root,
    instructions **and** plans, lives there, and nothing f10-related is ever written inside the
    project directory. See **Storage** below.
 4. **Per-step overlays** - each `<step>.md` you asked for, concatenated. An overlay extends the
-   generic step; where the two conflict, the overlay wins.
-5. **Inferred signals** - when project.md is absent/partial, the deterministic probes (remote
+   generic step. **Precedence is scope-major, specificity-minor**: `main/project.md` →
+   `main/<step>.md` → `worktree/project.md` → `worktree/<step>.md`, later winning. So an overlay
+   still beats `project.md` *within* a layer, and the worktree layer beats both of main's - the
+   half-rule "the overlay wins on conflict" is the intuitive one and it is wrong across layers.
+   The bundle prints in that order, so read it top to bottom and let the last statement stand.
+5. **Adjudicating two layers** - this is prose you merge, not data the resolver merged for you.
+   A field the worktree layer doesn't mention keeps main's value; a field it does mention wins
+   outright. A worktree layer should therefore state only what it changes. Two layers describing
+   incompatible stacks is a `replaces main` situation, not something to reconcile field by field:
+   four sources square the contradiction surface, and `replaces` is what keeps both stacks from
+   reaching you at once. If you hit a genuine contradiction anyway, say so rather than picking.
+6. **Inferred signals** - when project.md is absent/partial, the deterministic probes (remote
    host → `gh`/`glab`; `go.mod` / `Gemfile` / `package.json` → stack and role; `justfile` /
    `Makefile` → verify commands). State the assumptions you're proceeding on and suggest creating
    `.f10/instructions/project.md`. Do not refuse to run just because the config is missing.
@@ -68,6 +83,10 @@ ambiguous is a failure of that step, never a licence to substitute a different t
 report per `conventions/failure.md`.
 
 - **Project** - one-liner: what this is and the stack it's built on.
+- **Layering** - `extends main` (default) or `replaces main`. Meaningful only in a **linked
+  worktree's** own `project.md`, where it decides whether main's instructions are read underneath
+  it; ignored in main's and in out-of-tree instructions, which have nothing to layer onto.
+  `replaces` is whole-dir - the worktree's overlays replace main's too, not just its `project.md`.
 - **Roles** - the role to adopt per step, on top of the base role each step file declares.
   **Always** - applied to every run (e.g. "plan as a senior software architect + Go developer;
   implement as a senior Go developer"). **Conditional** - attached only when the task touches a
@@ -106,7 +125,7 @@ report per `conventions/failure.md`.
   worktree scanners). Out-of-tree declares itself by location, so this section only makes it
   explicit. The two modes scope plans differently: **in-repo is per-checkout** - each worktree
   has its own `.f10/`, so plans sit beside the branch they were written against, even when the
-  instructions came from main via the worktree fallback - while **out-of-tree is per-project**:
+  instructions came wholly or partly from main's layer - while **out-of-tree is per-project**:
   one root, keyed on the main checkout's basename, shared by every worktree of that repo. Two
   projects with the same basename collide: rename one dir, or keep the busier one in-repo.
   Reported roots are physical paths, so one reached through a symlink reads back resolved.

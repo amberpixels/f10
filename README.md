@@ -113,7 +113,9 @@ and executes nothing.
 **Project binding**
 
 - **Project instructions** - `<checkout root>/.f10/instructions/`: `project.md` (the facts) plus
-  optional per-step **overlays** that extend a generic step and win on conflict.
+  optional per-step **overlays** that extend a generic step. A linked worktree's instructions
+  **layer** on top of main's unless they declare `Layering - replaces main`; later wins, scope
+  ahead of specificity.
 - **Role** - who the agent is for a step. A base role per step, plus **conditional** roles a
   project attaches by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
   Fetch settles the areas - from the task's note, or from the code when the task was too small to
@@ -147,13 +149,15 @@ flowchart TB
         plans2["plans/&lt;TASK-ID&gt;.md - output"]
     end
     gsteps -- "1· load facts" --> proj
-    gsteps -- "2· apply overlay (wins on conflict)" --> over
+    gsteps -- "2· apply overlay (later wins)" --> over
     gsteps -- "3· write" --> plans2
 ```
 
-Resolution order (full contract in `conventions/context.md`): the repo's `project.md` → per-step
-overlay → inferred defaults. A worktree with no local instructions falls back to the main
-checkout's; plans still land in the current worktree.
+Resolution order (full contract in `conventions/context.md`): `main/project.md` →
+`main/<step>.md` → `worktree/project.md` → `worktree/<step>.md` → inferred defaults, later
+winning - scope ahead of specificity. A linked worktree layers on top of main's instructions,
+takes them wholesale when it has none of its own, or shuts them out with
+`Layering - replaces main`. Plans always land in the current worktree.
 
 ## Status
 

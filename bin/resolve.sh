@@ -2,10 +2,14 @@
 # f10 · resolve - one-shot deterministic context resolution.
 #
 # Does, in a single call, everything conventions/context.md's loading order describes: emit the
-# conventions this run needs, locate .f10/instructions/ (with main-worktree fallback), cat
-# project.md + the requested per-step overlays, and run the inference probes (remote host,
-# stack, verify tooling). A skill runs this once and reads the bundle, instead of spending five
-# round trips reading/globbing/greping by hand. It never fails - absence is a valid result.
+# conventions this run needs, locate .f10/instructions/ (layering a linked worktree's on top of
+# main's), cat each layer's project.md + the requested per-step overlays in precedence order, and
+# run the inference probes (remote host, stack, verify tooling). A skill runs this once and reads
+# the bundle, instead of spending five round trips reading/globbing/greping by hand. It never
+# fails - absence is a valid result.
+#
+# It concatenates and probes; it does not interpret. The single exception is the worktree layer's
+# `Layering` declaration, which has to be read before anything can be concatenated.
 #
 # Conventions are composed here, at read time, so each lives in exactly one file and no skill
 # carries one it does not use. context + failure always apply; gaps only where a step records
@@ -23,10 +27,12 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # compared below
 canon() { if [ -d "$1" ]; then (cd "$1" && pwd -P); else printf '%s\n' "$1"; fi; }
 
-# --- locate the instructions dir: this checkout, main-worktree fallback, out-of-tree ---
+# --- locate the instructions layer(s): main's, a linked worktree's, or both ---
 # Everything anchors to `here`, the root of the checkout the run started in (main or a linked
 # worktree), so a run from a subdirectory reads and writes the same root a run from the top does.
-instr=""
+# Both in-tree layers are read when both exist - main's first, the worktree's on top - unless the
+# worktree declares that it replaces main. Out-of-tree is per-project by construction, so it is a
+# single layer and only a last resort.
 src="none"
 here="$(git rev-parse --show-toplevel 2>/dev/null)"
 here="$(canon "${here:-$(pwd -P)}")"
@@ -34,14 +40,68 @@ main="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; 
 if [ -n "${main:-}" ]; then main="$(canon "$main")"; fi
 proj="$(basename "${main:-$here}")"
 storage="$here/.f10"
-if [ -d "$here/.f10/instructions" ]; then
-  instr="$here/.f10/instructions"; src="direct ($here)"
-elif [ -n "${main:-}" ] && [ "$main" != "$here" ] && [ -d "$main/.f10/instructions" ]; then
-  instr="$main/.f10/instructions"; src="worktree-fallback ($main)"
+steps="$*"
+
+# the base layer is main's, or simply this checkout's where git cannot name a main worktree
+base_label="main"
+base_root="${main:-$here}"
+[ -n "${main:-}" ] || base_label="checkout"
+
+base_instr=""; wt_instr=""
+[ -d "$base_root/.f10/instructions" ] && base_instr="$base_root/.f10/instructions"
+[ "$here" != "$base_root" ] && [ -d "$here/.f10/instructions" ] && wt_instr="$here/.f10/instructions"
+
+# `Layering - replaces main` in the worktree's own project.md takes main's place wholesale;
+# anything else - another value, no line, no project.md - extends it. Always-extend would leak
+# main's stack into a worktree that deliberately rewrote it.
+layering="extends"
+if [ -n "$wt_instr" ] && [ -n "$base_instr" ]; then
+  decl="$(grep -im1 -E '^[[:space:]]*[-*#]*[[:space:]]*\**Layering\**[[:space:]]*[-:]' \
+    "$wt_instr/project.md" 2>/dev/null)"
+  case "$decl" in *[Rr]eplaces*) layering="replaces" ;; esac
+fi
+
+l1_label=""; l1_dir=""; l2_label=""; l2_dir=""
+if [ -n "$base_instr" ] && [ -n "$wt_instr" ] && [ "$layering" = "extends" ]; then
+  l1_label="$base_label"; l1_dir="$base_instr"; l2_label="worktree"; l2_dir="$wt_instr"
+  src="layered - $base_label ($base_root) + worktree ($here)"
+elif [ -n "$wt_instr" ]; then
+  l1_label="worktree"; l1_dir="$wt_instr"
+  src="worktree ($here)"
+  [ -n "$base_instr" ] && src="$src - replaces main"
+elif [ -n "$base_instr" ]; then
+  l1_label="$base_label"; l1_dir="$base_instr"
+  src="$base_label ($base_root)"
+  [ "$here" != "$base_root" ] && src="$src via worktree fallback"
 elif [ -d "$HOME/.f10/$proj/instructions" ]; then
-  instr="$HOME/.f10/$proj/instructions"; src="out-of-tree (~/.f10/$proj)"
+  l1_label="out-of-tree"; l1_dir="$HOME/.f10/$proj/instructions"
+  src="out-of-tree (~/.f10/$proj)"
   storage="$HOME/.f10/$proj"
 fi
+
+# print one layer: its project.md, then the requested overlays, existing files only
+print_layer() {
+  echo "--- layer: $1 ($2) ---"
+  if [ -f "$2/project.md" ]; then
+    echo "--- project.md ---"
+    cat "$2/project.md"
+    echo
+  fi
+  for s in $steps; do
+    if [ -f "$2/$s.md" ]; then
+      echo "--- overlay: $s.md ---"
+      cat "$2/$s.md"
+      echo
+    fi
+  done
+}
+
+# supplied <file.md> - did any layer supply it?
+supplied() {
+  { [ -n "$l1_dir" ] && [ -f "$l1_dir/$1" ]; } && return 0
+  { [ -n "$l2_dir" ] && [ -f "$l2_dir/$1" ]; } && return 0
+  return 1
+}
 
 echo "=== f10 resolve @ $cwd ==="
 echo "checkout root: $here"
@@ -68,23 +128,30 @@ for c in "${convs[@]}"; do
   echo
 done
 
-echo "--- project.md ---"
-if [ -n "$instr" ] && [ -f "$instr/project.md" ]; then
-  cat "$instr/project.md"
+# --- the instructions, in precedence order: later in this bundle wins ---
+if [ -z "$l1_dir" ]; then
+  echo "--- instructions ---"
+  echo "ABSENT - no .f10/instructions/ found. Infer from the signals below; suggest creating"
+  echo "$here/.f10/instructions/project.md."
+  echo
 else
-  echo "ABSENT - no project.md. Infer from the signals below; suggest creating one."
-fi
-echo
-
-for s in "$@"; do
-  echo "--- overlay: $s.md ---"
-  if [ -n "$instr" ] && [ -f "$instr/$s.md" ]; then
-    cat "$instr/$s.md"
+  if [ -n "$l2_dir" ]; then
+    echo "layering: $l1_label -> worktree, later wins ($l1_label/project.md ->"
+    echo "  $l1_label/<step>.md -> worktree/project.md -> worktree/<step>.md)"
   else
-    echo "none"
+    echo "layering: single layer - $l1_label/project.md -> $l1_label/<step>.md, later wins"
   fi
   echo
-done
+  print_layer "$l1_label" "$l1_dir"
+  [ -n "$l2_dir" ] && print_layer "$l2_label" "$l2_dir"
+  absent=""
+  supplied project.md || absent="project.md"
+  for s in $steps; do
+    supplied "$s.md" || absent="${absent:+$absent, }overlay: $s.md"
+  done
+  echo "absent: ${absent:-none}"
+  echo
+fi
 
 echo "--- inferred signals (deterministic; use only where project.md is silent) ---"
 origin="$(git remote get-url origin 2>/dev/null || true)"
