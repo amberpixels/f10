@@ -35,12 +35,17 @@ read the prose and decide. What it returns (and the contract to implement by han
 unavailable):
 
 1. **project.md** - `<storage root>/instructions/project.md`, the project facts file (contract
-   below). The **storage root** is `.f10/` in the current checkout unless resolution lands
-   out-of-tree (next two points).
-2. **Worktree fallback** - if the current checkout has no `.f10/instructions/`, it uses the main
-   checkout's (first `git worktree list` path); instructions are often untracked and don't
-   propagate into fresh worktrees. Plans still always go to the **current** worktree's
-   `.f10/plans/`.
+   below). The **storage root** is the **checkout root** plus `.f10/` - anchored to
+   `git rev-parse --show-toplevel`, never to the process cwd, so a run launched from a
+   subdirectory resolves exactly as one launched from the top - unless resolution lands
+   out-of-tree (next two points). It is reported as an absolute path: use that path verbatim
+   rather than re-deriving one.
+2. **Worktree fallback** - if the current checkout is a **different worktree** from main and has
+   no `.f10/instructions/`, it uses the main checkout's (first `git worktree list` path);
+   instructions are often untracked and don't propagate into fresh worktrees. Plans still always
+   go to the **current** worktree's `.f10/plans/`. A subdirectory of the main checkout is not a
+   fallback case - it resolves directly against that checkout's root. A `.f10/instructions/`
+   sitting *below* the root is not a per-directory config: resolution notes it and ignores it.
 3. **Out-of-tree storage** - if neither checkout has `.f10/instructions/`, it tries
    **`~/.f10/<project>/instructions/`** (`<project>` = basename of the main checkout, or of the
    cwd outside git). Finding instructions there *is* the declaration: the whole storage root,
@@ -94,12 +99,16 @@ report per `conventions/failure.md`.
   anything the plan and implementation must honour.
 - **Visibility** - `stealth` or `public`. Missing → **stealth**.
 - **Storage** - where this project's f10 files live. Missing → **in-repo**: storage root
-  `<repo>/.f10/`, untracked per Visibility. **out-of-tree**: storage root `~/.f10/<project>/`
-  (`<project>` = the main checkout's basename), with *nothing* f10-related inside the project
-  directory - for when even an untracked dir is too visible (screen-sharing, worktree scanners).
-  Out-of-tree declares itself by location, so this section only makes it explicit. All worktrees
-  of a repo share one root, so plans are per-project, not per-worktree. Two projects with the
-  same basename collide: rename one dir, or keep the busier one in-repo.
+  `<checkout root>/.f10/`, untracked per Visibility. **out-of-tree**: storage root
+  `~/.f10/<project>/` (`<project>` = the main checkout's basename), with *nothing* f10-related
+  inside the project directory - for when even an untracked dir is too visible (screen-sharing,
+  worktree scanners). Out-of-tree declares itself by location, so this section only makes it
+  explicit. The two modes scope plans differently: **in-repo is per-checkout** - each worktree
+  has its own `.f10/`, so plans sit beside the branch they were written against, even when the
+  instructions came from main via the worktree fallback - while **out-of-tree is per-project**:
+  one root, keyed on the main checkout's basename, shared by every worktree of that repo. Two
+  projects with the same basename collide: rename one dir, or keep the busier one in-repo.
+  Reported roots are physical paths, so one reached through a symlink reads back resolved.
 
 ## Stealth mode
 
