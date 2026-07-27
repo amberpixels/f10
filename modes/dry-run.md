@@ -24,7 +24,7 @@ side effect and no work-producing step**. Specifically, in a dry run you must **
 - implement, commit, push, open a PR/MR, review, or deploy,
 - create directories, touch `.git/info/exclude`, or write anything to disk.
 
-You **may** read what's needed to *resolve*: `.f10/instructions/*` (with the worktree fallback),
+You **may** read what's needed to *resolve*: `.f10/instructions/*` (both layers where both exist),
 `git worktree list`, and cheap repo signals for inference (does `go.mod` / `justfile` / a remote
 exist). Prefer already-known facts over shelling out. Never run the adapters themselves.
 
@@ -32,9 +32,9 @@ exist). Prefer already-known facts over shelling out. Never run the adapters the
 
 1. **Load context** per `conventions/context.md` - run its resolver
    (`${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> …`) once; it already does the lookup, worktree
-   fallback, overlay concat, and probes. This is the point of the exercise, so read its output
-   for *how* each fact resolved: which `project.md` (direct, worktree-fallback, or none →
-   inference), which overlays exist, and every inferred default with its signal.
+   layering, overlay concat, and probes. This is the point of the exercise, so read its output
+   for *how* each fact resolved: which instructions (main, worktree, layered, out-of-tree, or
+   none → inference), which overlays exist, and every inferred default with its signal.
 2. **Resolve routing** - apply the invoking skill's routing rules to the stripped argument:
    which entry step, what the argument was interpreted as, and where the run would stop.
 3. **Resolve each step that would run** - for every step on the path, name its adapter (skill or
@@ -54,9 +54,9 @@ line, commands quoted verbatim.
 consumes, not every field `project.md` defines. A fact nothing on the path uses is noise; leave
 it out. Roughly:
 
-- **capture** uses: project.md source, role, tracker's **create** adapter + id format,
+- **capture** uses: the instructions source, role, tracker's **create** adapter + id format,
   visibility. It does **not** use verify, the fetch adapter, guardrails, or the ship pipeline.
-- **plan** (fetch → plan) uses: project.md source, role, tracker's **fetch** adapter + id
+- **plan** (fetch → plan) uses: the instructions source, role, tracker's **fetch** adapter + id
   format, guardrails, the plan output path, visibility. It does **not** use verify or the PR/deploy adapters.
 - **ship** uses: whatever its selected pipeline touches - so verify (implement), the PR/push
   adapter, review, deploy, guardrails, visibility - listed per step.
@@ -68,7 +68,7 @@ facts on the path (don't infer-and-print verify for a capture run).
 f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
 
 Context resolved   (only facts this run's path uses)
-  project.md      <path, or "none - inferring">   (<direct | worktree-fallback from <main>>)
+  instructions    <path(s), or "none - inferring">   (<main | worktree | layered, main + worktree>)
   role            <role adopted this run>
   tracker         <kind>, id format <FMT>   (<create | fetch> adapter shown under Step below)
   verify          <commands, or inferred source>          - ship only (implement/verify steps)
@@ -94,6 +94,6 @@ Not executed: <the first real side effect this run would have performed>
 ## Faithfulness note
 
 A dry run is accurate for **structural** resolution - paths, adapters, routing, which overlay
-wins, worktree fallback, out-of-tree storage, the ship pipeline and its order. It does **not** predict free-text
+wins, worktree layering, out-of-tree storage, the ship pipeline and its order. It does **not** predict free-text
 content (a drafted task body, the plan's prose), because producing that *is* the work a dry
 run skips. Report structure, not invented content.
