@@ -1,27 +1,44 @@
 #!/usr/bin/env bash
 # f10 · resolve - one-shot deterministic context resolution.
 #
-# Does, in a single call, everything conventions/context.md's loading order describes: emit the
-# conventions this run needs, locate .f10/instructions/ (layering a linked worktree's on top of
-# main's), cat each layer's project.md + the requested per-step overlays in precedence order, and
-# run the inference probes (remote host, stack, verify tooling). A skill runs this once and reads
+# Does, in a single call, the project-specific half of conventions/context.md's loading order:
+# locate .f10/instructions/ (layering a linked worktree's on top of main's), list what each layer
+# holds, cat each layer's project.md + the per-step overlays in precedence order, and run the
+# inference probes (remote host, stack, verify tooling). A skill runs this once per run and reads
 # the bundle, instead of spending five round trips reading/globbing/greping by hand. It never
 # fails - absence is a valid result.
 #
 # It concatenates and probes; it does not interpret. The single exception is the worktree layer's
 # `Layering` declaration, which has to be read before anything can be concatenated.
 #
-# Conventions are composed here, at read time, so each lives in exactly one file and no skill
-# carries one it does not use. context + failure always apply; gaps only where a step records
-# or consumes them.
+# The conventions are bin/conventions.sh's job, not this script's. They are static plugin prose,
+# identical on every machine and every run, while everything below varies by repo, worktree and
+# step. Keeping them apart is what lets a caller load them once per context and still re-resolve
+# project facts on every run.
 #
-# Usage:  resolve.sh <step> [<step> ...]
-#   e.g.  resolve.sh capture        |  resolve.sh fetch plan  |  resolve.sh implement pr review
+# Usage:  resolve.sh <step> [<step> ...]   cat project.md + the named overlays
+#         resolve.sh --all                 cat project.md + every overlay a layer holds
+#         resolve.sh                       facts, layering, listing and probes only, no overlays
+#   e.g.  resolve.sh capture  |  resolve.sh fetch plan  |  resolve.sh --all
+#
+# --all exists for /f10:ship, whose step list *is* the ship pipeline - and the pipeline is declared
+# in the project.md this script prints. Ship cannot name its steps until after the call, so it names
+# none. Do not "simplify" it back into a fixed step list: that is the circularity, not a shortcut.
 
 set -uo pipefail
 cwd="$(pwd)"
-# plugin root, derived from this script's own location (CLAUDE_PLUGIN_ROOT is not guaranteed here)
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# --all anywhere in the arguments means "every overlay present"; everything else is a step name.
+# Kept as a string rather than an array: bash 3.2 trips over "${empty[*]}" under `set -u`, and the
+# rest of the script already walks $steps unquoted.
+all=0
+steps=""
+for a in "$@"; do
+  case "$a" in
+    --all) all=1 ;;
+    *) steps="${steps:+$steps }$a" ;;
+  esac
+done
 
 # physical form of a path: `pwd` is logical, git's output is already resolved, and the two are
 # compared below
@@ -62,7 +79,6 @@ main="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; 
 if [ -n "${main:-}" ]; then main="$(canon "$main")"; fi
 proj="$(basename "${main:-$here}")"
 storage="$here/.f10"
-steps="$*"
 
 # the base layer is main's, or simply this checkout's where git cannot name a main worktree
 base_label="main"
@@ -111,7 +127,20 @@ elif [ -d "$HOME/.f10/$proj/instructions" ]; then
   storage="$HOME/.f10/$proj"
 fi
 
-# print one layer: its project.md, then the requested overlays, existing files only
+# the .md basenames a layer holds - what exists, independent of what this run asked for. Without
+# it a present-but-unrequested overlay is invisible: the layer blocks print only requested names
+# and `absent:` reports only on those same names, so a bundle can omit an overlay while claiming
+# nothing is missing. It is also the only way a project-defined step is discoverable at all.
+list_md() {
+  local out=""
+  shopt -s nullglob
+  for f in "$1"/*.md; do out="${out:+$out, }${f##*/}"; done
+  shopt -u nullglob
+  printf '%s\n' "${out:-none}"
+}
+
+# print one layer: its project.md, then its overlays - every one under --all, otherwise the
+# requested ones. Existing files only, either way.
 print_layer() {
   echo "--- layer: $1 ($2) ---"
   if [ -f "$2/project.md" ]; then
@@ -119,13 +148,25 @@ print_layer() {
     cat "$2/project.md"
     echo
   fi
-  for s in $steps; do
-    if [ -f "$2/$s.md" ]; then
-      echo "--- overlay: $s.md ---"
-      cat "$2/$s.md"
+  if [ "$all" = 1 ]; then
+    shopt -s nullglob
+    for f in "$2"/*.md; do
+      b="${f##*/}"
+      [ "$b" = "project.md" ] && continue # already printed above
+      echo "--- overlay: $b ---"
+      cat "$f"
       echo
-    fi
-  done
+    done
+    shopt -u nullglob
+  else
+    for s in $steps; do
+      if [ -f "$2/$s.md" ]; then
+        echo "--- overlay: $s.md ---"
+        cat "$2/$s.md"
+        echo
+      fi
+    done
+  fi
 }
 
 # supplied <file.md> - did any layer supply it?
@@ -137,28 +178,23 @@ supplied() {
 
 echo "=== f10 resolve @ $cwd ==="
 echo "checkout root: $here"
-echo "steps requested: $*"
+if [ "$all" = 1 ]; then
+  echo "steps requested: --all (every overlay each layer holds)"
+else
+  echo "steps requested: ${steps:-none - facts only, no overlays}"
+fi
 echo "instructions source: $src"
+if [ -n "$l1_dir" ]; then
+  files="$l1_label: $(list_md "$l1_dir")"
+  [ -n "$l2_dir" ] && files="$files | $l2_label: $(list_md "$l2_dir")"
+  echo "instructions files: $files"
+fi
 echo "storage root: $storage  (plans -> $storage/plans/)"
 # a config below the root is not a per-directory config - say so rather than pass it over silently
 if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
   echo "note: ignoring nested $cwd/.f10/instructions - resolution is anchored to the checkout root"
 fi
 echo
-
-# --- conventions: context + failure always; gaps and report only for steps that touch them ---
-convs=(context failure)
-case " $* " in *" plan "* | *" implement "*) convs+=(gaps) ;; esac
-case " $* " in *" capture "* | *" plan "* | *" pr "* | *" push "* | *" deploy "*) convs+=(report) ;; esac
-for c in "${convs[@]}"; do
-  echo "--- convention: $c ---"
-  if [ -f "$root/conventions/$c.md" ]; then
-    cat "$root/conventions/$c.md"
-  else
-    echo "MISSING - $root/conventions/$c.md not found"
-  fi
-  echo
-done
 
 # --- the instructions, in precedence order: later in this bundle wins ---
 if [ -z "$l1_dir" ]; then
