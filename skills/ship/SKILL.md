@@ -15,8 +15,13 @@ Drive a task end-to-end: plan (if needed) → the project's **ship pipeline** (d
 route, the selected ship pipeline and each step's adapter/overlay, report them, and change
 nothing (no implement, push, PR, or deploy).
 
-First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - it defines the
-tracker, its task-id format, the ship pipeline, and any per-step overlays.
+First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - it defines the
+tracker, its task-id format, the ship pipeline, and any per-step overlays. Two calls:
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, **unless this context already holds the conventions
+bundle**, then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh --all`, every run. **`--all`, never a step
+list:** your steps *are* the ship pipeline, and the pipeline is declared in the `project.md` that
+same call prints, so you cannot name them beforehand. It cats every overlay each layer holds,
+project-defined steps included.
 
 **Route by the argument:**
 - A **plan file** (`*.md` path): skip planning - run the ship pipeline with that plan.
