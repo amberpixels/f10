@@ -21,9 +21,9 @@ tracker, its task-id format, the ship pipeline, and any per-step overlays.
 **Route by the argument:**
 - A **plan file** (`*.md` path): skip planning - run the ship pipeline with that plan.
 - A **task id** (project id format / id / url): run `steps/fetch.md`, then look for the saved
-  plan at **`<storage root>/plans/<TASK-ID>.md`** - the exact path `/f10:plan` writes; the
-  storage root is `.f10/` unless context resolved out-of-tree storage (`~/.f10/<project>/`,
-  see `conventions/context.md → Storage`). Glob the plans dir if the exact name misses:
+  plan at **`<storage root>/plans/<TASK-ID>.md`** - the exact path `/f10:plan` writes, using the
+  root context resolution reported (`conventions/context.md`), not a path derived from your
+  current working directory. Glob the plans dir if the exact name misses:
   - exists → ask the user **reuse this plan or re-plan?** (AskUserQuestion). Reuse → straight
     to the pipeline; re-plan → `steps/plan.md` first.
   - missing → run `steps/plan.md`.
@@ -39,8 +39,8 @@ free-text input (see `conventions/context.md`).
 
 Run the pipeline's steps **in the declared order** - generic ones live under
 `${CLAUDE_PLUGIN_ROOT}/steps/` (`implement`, `pr`, `push`, `review`, `deploy`), project-defined
-ones are `.f10/instructions/<name>.md`. Any extra text the user adds is steering/notes for the
-run.
+ones are `<name>.md` in the instructions dir context resolution reported. Any extra text the user
+adds is steering/notes for the run.
 For a task whose plan you just wrote this run, proceed without re-confirming; open gaps are
 surfaced by the implement step (see `conventions/gaps.md`).
 

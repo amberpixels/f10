@@ -102,16 +102,17 @@ and executes nothing.
   step and names every artifact.
 - **Stage** - one ordered unit inside a plan file. Distinct from a step, which is a pipeline
   unit, and from a skill, which is an entry point.
-- **Plan file** - `.f10/plans/<TASK-ID>.md`, the single handoff contract between plan and ship.
-  A plan that exists only in chat is a failed run; superseded plans are archived, never edited
-  in place.
+- **Plan file** - `<storage root>/plans/<TASK-ID>.md`, the single handoff contract between plan
+  and ship. The storage root is anchored to the checkout root, so it does not matter which
+  directory the agent was launched from. A plan that exists only in chat is a failed run;
+  superseded plans are archived, never edited in place.
 - **Gap** - an open decision only the user can make. *Recorded, not blocking*: every gap
   carries a default, so a plan is always shippable; filling them is an optional batched
   questionnaire.
 
 **Project binding**
 
-- **Project instructions** - `<repo>/.f10/instructions/`: `project.md` (the facts) plus
+- **Project instructions** - `<checkout root>/.f10/instructions/`: `project.md` (the facts) plus
   optional per-step **overlays** that extend a generic step and win on conflict.
 - **Role** - who the agent is for a step. A base role per step, plus **conditional** roles a
   project attaches by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
@@ -125,9 +126,10 @@ and executes nothing.
 - **Visibility** - `stealth` (default) or `public`. Stealth: the shipped work reads as if f10
   never existed - no pipeline mentions in commits, PRs, tickets, or code comments, `.f10/`
   untracked via `.git/info/exclude`.
-- **Storage** - `in-repo` (default) or `out-of-tree` (`~/.f10/<project>/` holds instructions
-  *and* plans; zero f10 files inside the project dir). Out-of-tree declares itself by location:
-  the loader finds it when the repo has no `.f10/instructions/`.
+- **Storage** - `in-repo` (default, one `.f10/` per checkout, so plans sit beside the branch they
+  were written against) or `out-of-tree` (`~/.f10/<project>/` holds instructions *and* plans for
+  every worktree; zero f10 files inside the project dir). Out-of-tree declares itself by
+  location: the loader finds it when the repo has no `.f10/instructions/`.
 
 ## Generic vs. Project-Specific
 
