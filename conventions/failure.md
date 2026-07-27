@@ -41,8 +41,9 @@ preserved       <the content the step had produced, if any>
 next            <the smallest thing the user can do to unblock it>
 ```
 
-Same left-aligned label column as the success block in `conventions/report.md`, with no marker
-cell - these values are prose, not artifacts. A url anywhere in this report is still printed bare.
+Same left-aligned label column as the success block in `conventions/report.md`, but plain-fenced
+and colonless, and with no marker cell - these values are prose, not artifacts, and prose is what
+the success block's `yaml` tag cannot take. A url anywhere in this report is still printed bare.
 
 Then stop. Do not offer to continue as the next action, and do not ask a question whose answer
 you could have found yourself - the user is reading this because you already could not.
