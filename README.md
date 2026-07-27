@@ -116,8 +116,8 @@ and executes nothing.
   optional per-step **overlays** that extend a generic step and win on conflict.
 - **Role** - who the agent is for a step. A base role per step, plus **conditional** roles a
   project attaches by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
-  Capture records the areas, fetch confirms them, and the plan file records the roles it was
-  written under so ship inherits them.
+  Fetch settles the areas - from the task's note, or from the code when the task was too small to
+  carry one - and the plan file records the roles it was written under so ship inherits them.
 - **Adapter** - how a generic capability ("fetch a task", "open a PR", "verify") binds per
   project: a skill to invoke, or a plain CLI command. f10 names the capability, the project
   supplies the adapter - that is what keeps it stack-agnostic.
