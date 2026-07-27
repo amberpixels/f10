@@ -30,11 +30,13 @@ exist). Prefer already-known facts over shelling out. Never run the adapters the
 
 ## Procedure
 
-1. **Load context** per `conventions/context.md` - run its resolver
-   (`${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> …`) once; it already does the lookup, worktree
-   layering, overlay concat, and probes. This is the point of the exercise, so read its output
-   for *how* each fact resolved: which instructions (main, worktree, layered, out-of-tree, or
-   none → inference), which overlays exist, and every inferred default with its signal.
+1. **Load context** per `conventions/context.md` - its two calls: `bin/conventions.sh`, skipped
+   where this context already holds the bundle, and `bin/resolve.sh <step> …` once (`--all` for a
+   ship dry run, since ship cannot name its own steps first). The resolver already does the lookup,
+   worktree layering, the instructions listing, overlay concat, and probes. This is the point of the
+   exercise, so read its output for *how* each fact resolved: which instructions (main, worktree,
+   layered, out-of-tree, or none → inference), which overlays exist, and every inferred default with
+   its signal.
 2. **Resolve routing** - apply the invoking skill's routing rules to the stripped argument:
    which entry step, what the argument was interpreted as, and where the run would stop.
 3. **Resolve each step that would run** - for every step on the path, name its adapter (skill or
@@ -69,6 +71,7 @@ f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
 
 Context resolved   (only facts this run's path uses)
   instructions    <path(s), or "none - inferring">   (<main | worktree | layered, main + worktree>)
+  overlays        <the .md files each layer holds, per the resolver's `instructions files:` line>
   role            <role adopted this run>
   tracker         <kind>, id format <FMT>   (<create | fetch> adapter shown under Step below)
   verify          <commands, or inferred source>          - ship only (implement/verify steps)
@@ -93,7 +96,7 @@ Not executed: <the first real side effect this run would have performed>
 
 ## Faithfulness note
 
-A dry run is accurate for **structural** resolution - paths, adapters, routing, which overlay
-wins, worktree layering, out-of-tree storage, the ship pipeline and its order. It does **not** predict free-text
+A dry run is accurate for **structural** resolution - paths, adapters, routing, which overlays
+exist and which one wins, worktree layering, out-of-tree storage, the ship pipeline and its order. It does **not** predict free-text
 content (a drafted task body, the plan's prose), because producing that *is* the work a dry
 run skips. Report structure, not invented content.

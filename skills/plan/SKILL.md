@@ -15,8 +15,11 @@ Take a task from a reference (or a raw description) to a solid, saved plan.
 route, fetch/plan adapters, overlays, and the plan-file path, report them, and change nothing
 (no fetch, no plan written).
 
-First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - it defines the
-tracker, its task-id format, and any per-step overlays.
+First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - it defines the
+tracker, its task-id format, and any per-step overlays. Two calls:
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, **unless this context already holds the conventions
+bundle**, then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh fetch plan`, every run - prepend `capture` to
+that step list when the argument is free text and the route starts there.
 
 **Route by the argument:**
 - **No argument, but a task is already in this conversation** (e.g. the user just fetched a
