@@ -73,9 +73,10 @@ report per `conventions/failure.md`.
   implement as a senior Go developer"). **Conditional** - attached only when the task touches a
   named area (e.g. "+ senior UI/UX engineer when the task touches user-facing UI; + data
   engineer on schema migrations; + security engineer on auth or PII"). Missing → each step's
-  base role alone. Conditional roles resolve from the areas `capture` recorded and `fetch`
-  confirmed; the plan file records which ones were adopted, so `/f10:ship` inherits them
-  instead of re-deriving.
+  base role alone. Conditional roles resolve from the areas `fetch` settles - confirming the
+  task's _Areas_ note where `capture` earned one, deriving them from the code where the task was
+  too small to carry one; the plan file records which ones were adopted, so `/f10:ship` inherits
+  them instead of re-deriving.
 - **Tracker** - kind (Notion / GitHub Issues / GitLab work items / Jira / …), the **task id
   format** (e.g. `ABC-####`, `GH-###`) - used verbatim as the plan filename
   `.f10/plans/<TASK-ID>.md` - and the **fetch** / **create** adapters: a skill to invoke or a
