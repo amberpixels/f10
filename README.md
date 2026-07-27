@@ -92,7 +92,7 @@ and executes nothing.
   file for tiny chores.
 - **Convention** - a cross-cutting rule every step obeys, in `conventions/`: `context.md`
   (config loading, pipelines, stealth), `gaps.md` (open decisions), `failure.md` (what to do
-  when a step cannot complete).
+  when a step cannot complete), `report.md` (the shape a successful run prints).
 - **Mode** - an alternate run in `modes/` that replaces execution rather than adding a rule.
   `dry-run.md` is the only one today, loaded solely when `--dry-run` fires.
 
@@ -138,7 +138,7 @@ flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
         skills2["skills/{capture,plan,ship}"]
         gsteps["steps/{capture,fetch,plan,implement,pr,push,review,deploy}.md"]
-        conv["conventions/{context,gaps,failure}.md"]
+        conv["conventions/{context,gaps,failure,report}.md"]
         modes2["modes/dry-run.md"]
     end
     subgraph repo ["&lt;repo&gt;/.f10 - project-specific, often untracked"]
