@@ -27,6 +27,28 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # compared below
 canon() { if [ -d "$1" ]; then (cd "$1" && pwd -P); else printf '%s\n' "$1"; fi; }
 
+# hostname of a git remote url - scp-like (git@host:path), ssh://, https://, userinfo and port
+# all handled. Matching the whole url instead would route a gitlab remote whose *path* happens to
+# contain "github.com" to gh, picking the wrong adapter silently.
+host_of() {
+  local h="$1"
+  h="${h#*://}"
+  h="${h#*@}"
+  h="${h%%/*}"
+  printf '%s\n' "${h%%:*}"
+}
+
+# Is this host one the CLI is already logged in to? gh lists each host as a top-level key of
+# hosts.yml, glab nests them under `hosts:` in config.yml. That covers GitHub Enterprise and
+# self-hosted GitLab without an allowlist of hostnames.
+# Both files hold OAuth tokens, so this matches and returns a status - never cat them into the
+# bundle, however much the rest of this script cats things.
+knows_host() {
+  [ -f "$1" ] || return 1
+  local esc="${2//./\\.}"
+  grep -qE "^[[:space:]]*${esc}:" "$1"
+}
+
 # --- locate the instructions layer(s): main's, a linked worktree's, or both ---
 # Everything anchors to `here`, the root of the checkout the run started in (main or a linked
 # worktree), so a run from a subdirectory reads and writes the same root a run from the top does.
@@ -167,11 +189,22 @@ echo "--- inferred signals (deterministic; use only where project.md is silent) 
 origin="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "${origin:-}" ]; then
   echo "remote: $origin"
-  case "$origin" in
-    *github.com*) echo "host: github  -> PR/issue CLI: gh" ;;
-    *gitlab.com*) echo "host: gitlab  -> PR/issue CLI: glab" ;;
-    *) echo "host: unknown -> confirm CLI with user" ;;
-  esac
+  rhost="$(host_of "$origin")"
+  gh_hosts="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}/hosts.yml"
+  glab_cfg="${GLAB_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/glab-cli}/config.yml"
+  if [ -z "$rhost" ]; then
+    echo "host: none (local path remote) -> no PR/issue CLI"
+  elif knows_host "$gh_hosts" "$rhost"; then
+    echo "host: $rhost  -> PR/issue CLI: gh   (gh is logged in to this host)"
+  elif knows_host "$glab_cfg" "$rhost"; then
+    echo "host: $rhost  -> PR/issue CLI: glab (glab is logged in to this host)"
+  else
+    case "$rhost" in
+      github.com) echo "host: $rhost  -> PR/issue CLI: gh" ;;
+      gitlab.com) echo "host: $rhost  -> PR/issue CLI: glab" ;;
+      *) echo "host: $rhost  -> PR/issue CLI: unknown (neither gh nor glab is logged in to it) - confirm with user" ;;
+    esac
+  fi
 else
   echo "remote: none (no origin)"
 fi
