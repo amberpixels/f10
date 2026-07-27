@@ -39,8 +39,8 @@ exist). Prefer already-known facts over shelling out. Never run the adapters the
    which entry step, what the argument was interpreted as, and where the run would stop.
 3. **Resolve each step that would run** - for every step on the path, name its adapter (skill or
    CLI command, *quoted, not executed*), whether a same-named overlay applies, and its concrete
-   output (e.g. the exact `.f10/plans/<TASK-ID>.md` path, and whether an existing file would be
-   archived first and to what `archive/<TASK-ID>.<N>.md`). For ship, resolve the selected
+   output (e.g. the exact `<storage root>/plans/<TASK-ID>.md` path, and whether an existing file
+   would be archived first and to what `archive/<TASK-ID>.<N>.md`). For ship, resolve the selected
    pipeline and list its steps in order with each one's adapter.
 4. **Report** in the format below, then **stop**. Do not offer to proceed for real as the next
    action - the user re-runs without `--dry-run` when they want the real thing.
@@ -73,7 +73,7 @@ Context resolved   (only facts this run's path uses)
   tracker         <kind>, id format <FMT>   (<create | fetch> adapter shown under Step below)
   verify          <commands, or inferred source>          - ship only (implement/verify steps)
   visibility      <stealth | public>  → <one-line implication>
-  storage         <in-repo .f10/ | out-of-tree ~/.f10/<project>/>   (plans land under it)
+  storage         <the resolved absolute root>   (in-repo | out-of-tree; plans land under it)
   inferred        <each inferred default ← the signal>   (only for facts on the path)
 
 Routing
@@ -84,7 +84,7 @@ Routing
 Step: <name>
   adapter         <skill to invoke | CLI command, quoted - NOT run>
   overlay         <APPLIED .f10/instructions/<name>.md | none>
-  would produce   <output path / action, e.g. write .f10/plans/ABC-1042.md>
+  would produce   <output path / action, e.g. write <storage root>/plans/ABC-1042.md>
   archive first?  <yes → plans/archive/ABC-1042.1.md | n/a>
   (repeat per step on the path; for ship, one block per pipeline step in order)
 
