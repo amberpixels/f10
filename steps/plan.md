@@ -37,35 +37,40 @@ Context: load per `conventions/context.md` - guardrails and house style come fro
    - **Right-size the stages.** A handful of ordered stages that fit the task. If you're at eight
      stages, you're writing an essay - collapse it. List real tradeoffs, not filler risk tables.
 4. **Save the plan - this IS the deliverable, not optional polish.** Write it with the `Write`
-   tool to the **relative** path **`.f10/plans/<TASK-ID>.md`** - using the task's exact tracker
-   id, uppercased, in the project's id format (e.g. `.f10/plans/ABC-2049.md`,
-   `.f10/plans/GH-141.md`). Create the `.f10/plans/` dir if missing; ensure `.f10/` is
-   untracked per the project's visibility (stealth → `.git/info/exclude`, see `conventions/context.md`).
-   Use the relative path from your **current working directory** - do NOT build an absolute
-   path to a specific checkout. If you're in a git worktree, the plan must land in that
-   worktree (where the branch is), not the main checkout. This exact relative path is the
-   handoff contract `/f10:ship` reads, so do not vary it. If the task has no tracker id, use a
-   short kebab slug (`.f10/plans/<slug>.md`).
-   **Out-of-tree storage** (context resolution found the instructions at `~/.f10/<project>/` -
-   see `conventions/context.md → Storage`): everything above applies with the storage root swapped in -
-   write to `~/.f10/<project>/plans/<TASK-ID>.md`, archive to its `plans/archive/`, and write
+   tool to **`<storage root>/plans/<TASK-ID>.md`**, where `<storage root>` is the path context
+   resolution reported on its `storage root:` line (see `conventions/context.md`) and `<TASK-ID>`
+   is the task's exact tracker id, uppercased, in the project's id format (e.g.
+   `<storage root>/plans/ABC-2049.md`, `<storage root>/plans/GH-141.md`). Create the `plans/`
+   dir if missing; for in-repo storage, ensure `.f10/` is untracked per the project's visibility
+   (stealth → the file `git rev-parse --git-path info/exclude` names, which resolves correctly
+   from a subdirectory and from a linked worktree, see `conventions/context.md`).
+   Take the reported root verbatim - do NOT re-derive one from your current working directory.
+   It is already anchored to the root of the checkout you are in, so a plan written from a
+   worktree lands in that worktree (where the branch is) and one written from a subdirectory
+   lands at the checkout root, not beside you. This exact path is the handoff contract
+   `/f10:ship` reads, so do not vary it. If the task has no tracker id, use a short kebab slug
+   (`<storage root>/plans/<slug>.md`).
+   **Out-of-tree storage** (the reported root is `~/.f10/<project>/` - see
+   `conventions/context.md → Storage`): everything above applies unchanged, plus write
    **nothing** inside the project directory (no `.f10/`, no exclude entry).
    A plan that exists only as a chat message is a **failed** run - finishing this step means the
    file is on disk.
    - **You, the main agent, write this file yourself.** Investigation subagents (Explore) are
      read-only and cannot save it - never leave the plan sitting only in a subagent's returned text.
    - **If a plan file already exists at that path, archive it - never edit it in place.** A clean
-     rewrite beats diffing an old plan. `mkdir -p .f10/plans/archive/` and move the existing file
-     to `.f10/plans/archive/<TASK-ID>.<N>.md`, where `<N>` is the next integer (1 if nothing
-     archived yet, else max existing + 1). Then `Write` the fresh plan to the now-free
-     `.f10/plans/<TASK-ID>.md`. Moving the old file away frees the path, so the new `Write`
-     needs no prior `Read` - and a `Write` error is a real failure, never "already written."
+     rewrite beats diffing an old plan. `mkdir -p <storage root>/plans/archive/` and move the
+     existing file to `<storage root>/plans/archive/<TASK-ID>.<N>.md`, where `<N>` is the next
+     integer (1 if nothing archived yet, else max existing + 1). Then `Write` the fresh plan to
+     the now-free `<storage root>/plans/<TASK-ID>.md`. Moving the old file away frees the path, so
+     the new `Write` needs no prior `Read` - and a `Write` error is a real failure, never
+     "already written."
    - **If you cannot write it (session is in Plan / read-only mode):** do NOT silently stop and
      offer a menu of options. Call `ExitPlanMode` to present the plan and get the go-ahead to save
      it (or, failing that, ask the user to exit plan mode with shift+tab), then write the file.
      The step is not done until the file exists.
 5. **Confirm and hand off.** Verify the file exists, present the plan in chat, and report its
-   path so `/f10:ship` - this agent or a fresh one - can pick it up: `.f10/plans/<TASK-ID>.md`.
+   path so `/f10:ship` - this agent or a fresh one - can pick it up:
+   `<storage root>/plans/<TASK-ID>.md`.
    Then, if the plan has **open gaps**, list them by title (one line each) and offer to fill them
    now per `conventions/gaps.md`.
 

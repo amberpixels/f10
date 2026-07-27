@@ -19,15 +19,24 @@ cwd="$(pwd)"
 # plugin root, derived from this script's own location (CLAUDE_PLUGIN_ROOT is not guaranteed here)
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# --- locate the instructions dir: current checkout, main-worktree fallback, out-of-tree ---
+# physical form of a path: `pwd` is logical, git's output is already resolved, and the two are
+# compared below
+canon() { if [ -d "$1" ]; then (cd "$1" && pwd -P); else printf '%s\n' "$1"; fi; }
+
+# --- locate the instructions dir: this checkout, main-worktree fallback, out-of-tree ---
+# Everything anchors to `here`, the root of the checkout the run started in (main or a linked
+# worktree), so a run from a subdirectory reads and writes the same root a run from the top does.
 instr=""
 src="none"
-storage=".f10"
+here="$(git rev-parse --show-toplevel 2>/dev/null)"
+here="$(canon "${here:-$(pwd -P)}")"
 main="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
-proj="$(basename "${main:-$cwd}")"
-if [ -d ".f10/instructions" ]; then
-  instr=".f10/instructions"; src="direct"
-elif [ -n "${main:-}" ] && [ -d "$main/.f10/instructions" ]; then
+if [ -n "${main:-}" ]; then main="$(canon "$main")"; fi
+proj="$(basename "${main:-$here}")"
+storage="$here/.f10"
+if [ -d "$here/.f10/instructions" ]; then
+  instr="$here/.f10/instructions"; src="direct ($here)"
+elif [ -n "${main:-}" ] && [ "$main" != "$here" ] && [ -d "$main/.f10/instructions" ]; then
   instr="$main/.f10/instructions"; src="worktree-fallback ($main)"
 elif [ -d "$HOME/.f10/$proj/instructions" ]; then
   instr="$HOME/.f10/$proj/instructions"; src="out-of-tree (~/.f10/$proj)"
@@ -35,9 +44,14 @@ elif [ -d "$HOME/.f10/$proj/instructions" ]; then
 fi
 
 echo "=== f10 resolve @ $cwd ==="
+echo "checkout root: $here"
 echo "steps requested: $*"
 echo "instructions source: $src"
 echo "storage root: $storage  (plans -> $storage/plans/)"
+# a config below the root is not a per-directory config - say so rather than pass it over silently
+if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
+  echo "note: ignoring nested $cwd/.f10/instructions - resolution is anchored to the checkout root"
+fi
 echo
 
 # --- conventions: context + failure always; gaps only for steps that touch them ---

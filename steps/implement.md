@@ -3,8 +3,8 @@
 Role: a **senior engineer** in the project's stack, implementing an approved plan to the
 project's house style - adopt the roles from `project.md → Roles`, including any conditional
 ones the plan recorded.
-Input: a plan - from the plan step just run, a saved `.f10/plans/<task>.md`, or a plan file
-the user passed.
+Input: a plan - from the plan step just run, a saved `<storage root>/plans/<task>.md`, or a plan
+file the user passed.
 Part of the **ship pipeline** (see `conventions/context.md`): this step ends with verified code on a
 branch - later pipeline steps (`pr`, `review`, `deploy`) handle everything after that.
 Context: load per `conventions/context.md` - guardrails and verify commands come from
