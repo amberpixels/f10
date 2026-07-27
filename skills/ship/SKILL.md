@@ -44,10 +44,11 @@ adds is steering/notes for the run.
 For a task whose plan you just wrote this run, proceed without re-confirming; open gaps are
 surfaced by the implement step (see `conventions/gaps.md`).
 
-**Final report:** the PR/MR url, review status as far as the pipeline goes ("stopped at PR"
-is a normal end), deploy status if the pipeline deploys, a short note of what changed, and -
-if any gaps were left on their defaults - a one-line reminder that they're recorded in the
-plan and can be revisited.
+**Final report:** lead with the facts block per `conventions/report.md` - the PR/MR url, its
+branch, and the deploy url where the pipeline deployed. Then, as prose: review status as far as
+the pipeline goes ("stopped at PR" is a normal end), deploy status if the pipeline deploys, a
+short note of what changed, and - if any gaps were left on their defaults - a one-line reminder
+that they're recorded in the plan and can be revisited.
 
 Note: running this skill is the user's explicit go-ahead to push and open the PR
 (`steps/pr.md`); deploy steps carry their own confirmation rules (`steps/deploy.md`).

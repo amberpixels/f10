@@ -54,13 +54,10 @@ if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
 fi
 echo
 
-# --- conventions: context + failure always; gaps only for steps that touch them ---
+# --- conventions: context + failure always; gaps and report only for steps that touch them ---
 convs=(context failure)
-for s in "$@"; do
-  case "$s" in
-    plan|implement) convs+=(gaps); break ;;
-  esac
-done
+case " $* " in *" plan "*|*" implement "*) convs+=(gaps) ;; esac
+case " $* " in *" capture "*|*" plan "*|*" pr "*|*" push "*|*" deploy "*) convs+=(report) ;; esac
 for c in "${convs[@]}"; do
   echo "--- convention: $c ---"
   if [ -f "$root/conventions/$c.md" ]; then

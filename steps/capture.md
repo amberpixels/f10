@@ -16,7 +16,8 @@ Context: load per `conventions/context.md` - the tracker's **create adapter** an
 3. **Create it** via the project's create adapter - a skill to invoke, or a CLI command such
    as `gh issue create` / `glab issue create`. Apply the project's default status/labels if it
    declares any.
-4. **Output** the task id (in the project's id format) and url so the fetch step can pick it up.
+4. **Report** per `conventions/report.md` - a `task` row (the id in the project's format) and a
+   `url` row, so the fetch step can pick the id up from here.
 
 Keep PII out of anything logged - use ids, not names/emails.
 

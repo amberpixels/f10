@@ -16,5 +16,6 @@ adapter, and drafted target, report them, and change nothing (no task created).
 First load the project context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md`, then read and
 follow `${CLAUDE_PLUGIN_ROOT}/steps/capture.md`, using the user's argument as the description.
 
-Stop once the task is created and report its identifier (task id / url). Do not plan
-or implement - that's `/f10:plan` and `/f10:ship`.
+Stop once the task is created and report it - task id and url - per
+`${CLAUDE_PLUGIN_ROOT}/conventions/report.md`. Do not plan or implement - that's `/f10:plan` and
+`/f10:ship`.
