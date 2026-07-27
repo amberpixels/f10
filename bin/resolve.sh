@@ -47,7 +47,8 @@ base_label="main"
 base_root="${main:-$here}"
 [ -n "${main:-}" ] || base_label="checkout"
 
-base_instr=""; wt_instr=""
+base_instr=""
+wt_instr=""
 [ -d "$base_root/.f10/instructions" ] && base_instr="$base_root/.f10/instructions"
 [ "$here" != "$base_root" ] && [ -d "$here/.f10/instructions" ] && wt_instr="$here/.f10/instructions"
 
@@ -61,20 +62,29 @@ if [ -n "$wt_instr" ] && [ -n "$base_instr" ]; then
   case "$decl" in *[Rr]eplaces*) layering="replaces" ;; esac
 fi
 
-l1_label=""; l1_dir=""; l2_label=""; l2_dir=""
+l1_label=""
+l1_dir=""
+l2_label=""
+l2_dir=""
 if [ -n "$base_instr" ] && [ -n "$wt_instr" ] && [ "$layering" = "extends" ]; then
-  l1_label="$base_label"; l1_dir="$base_instr"; l2_label="worktree"; l2_dir="$wt_instr"
+  l1_label="$base_label"
+  l1_dir="$base_instr"
+  l2_label="worktree"
+  l2_dir="$wt_instr"
   src="layered - $base_label ($base_root) + worktree ($here)"
 elif [ -n "$wt_instr" ]; then
-  l1_label="worktree"; l1_dir="$wt_instr"
+  l1_label="worktree"
+  l1_dir="$wt_instr"
   src="worktree ($here)"
   [ -n "$base_instr" ] && src="$src - replaces main"
 elif [ -n "$base_instr" ]; then
-  l1_label="$base_label"; l1_dir="$base_instr"
+  l1_label="$base_label"
+  l1_dir="$base_instr"
   src="$base_label ($base_root)"
   [ "$here" != "$base_root" ] && src="$src via worktree fallback"
 elif [ -d "$HOME/.f10/$proj/instructions" ]; then
-  l1_label="out-of-tree"; l1_dir="$HOME/.f10/$proj/instructions"
+  l1_label="out-of-tree"
+  l1_dir="$HOME/.f10/$proj/instructions"
   src="out-of-tree (~/.f10/$proj)"
   storage="$HOME/.f10/$proj"
 fi
@@ -116,8 +126,8 @@ echo
 
 # --- conventions: context + failure always; gaps and report only for steps that touch them ---
 convs=(context failure)
-case " $* " in *" plan "*|*" implement "*) convs+=(gaps) ;; esac
-case " $* " in *" capture "*|*" plan "*|*" pr "*|*" push "*|*" deploy "*) convs+=(report) ;; esac
+case " $* " in *" plan "* | *" implement "*) convs+=(gaps) ;; esac
+case " $* " in *" capture "* | *" plan "* | *" pr "* | *" push "* | *" deploy "*) convs+=(report) ;; esac
 for c in "${convs[@]}"; do
   echo "--- convention: $c ---"
   if [ -f "$root/conventions/$c.md" ]; then
@@ -160,7 +170,7 @@ if [ -n "${origin:-}" ]; then
   case "$origin" in
     *github.com*) echo "host: github  -> PR/issue CLI: gh" ;;
     *gitlab.com*) echo "host: gitlab  -> PR/issue CLI: glab" ;;
-    *)            echo "host: unknown -> confirm CLI with user" ;;
+    *) echo "host: unknown -> confirm CLI with user" ;;
   esac
 else
   echo "remote: none (no origin)"

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # shellcheck ships preinstalled on the ubuntu-latest runner image. shfmt
+      # does not, and is pinned: an unpinned formatter can change what counts as
+      # correctly formatted and turn a green branch red without a commit.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: Install shfmt
+        run: go install mvdan.cc/sh/v3/cmd/shfmt@v3.13.1
+
+      - uses: extractions/setup-just@v3
+
+      # The same recipe developers run locally, so `just lint` and CI cannot
+      # drift apart. ci depends on lint alone - it verifies, never rewrites.
+      - name: Lint
+        run: just ci

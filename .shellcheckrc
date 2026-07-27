@@ -1,0 +1,18 @@
+# shellcheck configuration for f10's bin/ scripts.
+#
+# Default severity (error/warning/info) is kept as-is. The checks below are
+# shellcheck optionals - off by default, enabled here because each one catches a
+# real class of mistake rather than expressing a style preference.
+#
+# Deliberately NOT enabled, having been tried against bin/:
+#   require-double-brackets    bin/ uses [ ] throughout, intentionally
+#   require-variable-braces    ${x} everywhere is noise, not safety
+#   check-extra-masked-returns too noisy around the $(...) probes
+#   add-default-case           fires on the match-or-do-nothing `case` idiom
+enable=check-unassigned-uppercase
+enable=deprecate-which
+enable=quote-safe-variables
+enable=check-set-e-suppressed
+enable=avoid-nullary-conditions
+enable=avoid-negated-conditions
+enable=useless-use-of-cat
