@@ -182,9 +182,14 @@ deliberately left off - are documented in `.shellcheckrc`.
 
 ## Status
 
-v0.6.0 - **conditional roles** (a project attaches extra expertise by the areas a task touches),
-one fixed shape across every step, and one word per concept: **skill** → **step** → **stage**.
-Builds on v0.5.0's **failure** convention and the `steps/` + `conventions/` + `modes/` split.
+v0.7.0 - a **report** convention: every successful run opens with the same yaml-tagged facts
+block, urls bare with a `↗` marker in the column beside them. Context loading splits in two -
+`conventions.sh` once per context, `resolve.sh` every run - so `/f10:ship` resolves `--all`
+instead of naming a pipeline it cannot know yet. A linked worktree's instructions now **layer**
+on top of main's, the storage root anchors to the checkout root rather than the process cwd,
+capture sizes a task body to the task, and the host comes from your `gh`/`glab` logins, so GitHub
+Enterprise and self-hosted GitLab need no allowlist. Shell sources are linted in CI.
+Builds on v0.6.0's conditional roles and one word per concept: **skill** → **step** → **stage**.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
 `project.md` references instead of repeating).
 
