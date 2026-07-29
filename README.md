@@ -282,14 +282,17 @@ deliberately left off - are documented in `.shellcheckrc`.
 
 ## Status
 
-v0.8.0 - a **status-line badge**. Three glyphs - capture, plan, ship - plus the task id, live in
+v0.8.1 - a **status-line badge**. Three glyphs - capture, plan, ship - plus the task id, live in
 Claude Code's status line while a run is going, so a pipeline stops being invisible between the
-prompt and the plan file. Steps report their phase through `bin/f10-state.sh`, and plugin hooks
-fill in what nobody should have to remember: a skill starting, a plan file being written, and the
-task id that file is named after. State is one file per session, outside every repo, and the badge
-is cosmetic by construction - nothing reads it back, so a call that fails costs one glyph and
-nothing else (`conventions/report.md`). Also: the marketplace entry no longer resolves with a
-trailing slash, so `${CLAUDE_PLUGIN_ROOT}` stops printing `//` in every path f10 runs.
+prompt and the plan file. Steps report their phase through `bin/f10-state.sh` precisely, and hooks
+report reliably, which is what lets the steps stay best-effort: a skill starting and whether its
+argument routes through capture, a plan file being written, the task id that file is named after,
+and the end of a turn, which closes out a run whose last step never said so. A phase nobody
+reported means *nobody said*, never *it did not happen* - the badge overstates by a glyph before it
+claims a phase was skipped when it ran. State is one file per session, outside every repo, and the
+whole thing is cosmetic by construction: nothing reads it back, so a call that fails costs one
+glyph and nothing else (`conventions/report.md`). Also: the marketplace entry no longer resolves
+with a trailing slash, so `${CLAUDE_PLUGIN_ROOT}` stops printing `//` in every path f10 runs.
 Builds on v0.7.0's report convention, worktree layering, and split context loading.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
 `project.md` references instead of repeating).
