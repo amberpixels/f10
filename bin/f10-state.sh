@@ -289,12 +289,30 @@ cmd_task() {
   exit 0
 }
 
+# Does this run's argument read as a description rather than a reference? A task id, a url and a
+# plan path are each one token; a description is a sentence. That is the same distinction the skills
+# themselves route on, and it is the only thing at seed time that knows whether capture is a phase
+# this run will actually reach.
+#
+# It has to be guessed here because the alternative is worse. Reporting is best-effort, so a phase
+# still `pending` means "nobody said" - not "it did not happen" - and the badge has to resolve that
+# ambiguity in one direction or the other. Resolving it as "skipped" is what made a run that really
+# did capture show a hollow first glyph. Guessing the route instead is wrong only for arguments no
+# one writes, and the capture step's own report overrides it the moment it speaks.
+is_description() {
+  local a="${1:-}"
+  a="${a//--dry-run/}"
+  # shellcheck disable=SC2086 # deliberate: word splitting is how tokens get counted
+  set -- $a
+  [ "$#" -gt 1 ]
+}
+
 # A skill invocation begins a run, and a run owns the three glyphs for its duration - so this
 # resets the phases rather than merging into whatever the last one left behind. The task id is
 # reset with them: keeping it would caption the new run with the old run's task, which is the one
 # way this badge could actively mislead.
 cmd_seed() {
-  local skill="${1:-}"
+  local skill="${1:-}" args="${3:-}"
   resolve_sid "${2:-}" || exit 0
   st_task=""
   st_url=""
@@ -302,10 +320,13 @@ cmd_seed() {
   st_capture="pending"
   st_plan="pending"
   st_ship="pending"
-  # capture is the only skill whose whole run is one phase, so it is the only one that can be
-  # marked running before the model has done anything. plan and ship route on their argument and
-  # may start anywhere in the chain; they say so themselves, once they know.
-  [ "$skill" = "capture" ] && st_capture="running"
+  # /f10:capture is one phase from end to end. /f10:plan and /f10:ship route on their argument, and
+  # a description routes them through capture first - so the phase opens here, where the argument
+  # is, rather than waiting for a step that may never think to mention it.
+  case "$skill" in
+    capture) st_capture="running" ;;
+    plan | ship) is_description "$args" && st_capture="running" ;;
+  esac
   save
   exit 0
 }
@@ -421,7 +442,7 @@ cmd_hook() {
     printf '%s\n' "$json" >>"$state_dir/hooks.log" 2>/dev/null
   fi
 
-  local event hook_sid skill
+  local event hook_sid skill finalize
   event="$(json_get hook_event_name)"
   hook_sid="$(json_get session_id)"
 
@@ -430,14 +451,14 @@ cmd_hook() {
       # the typed path: /f10:ship reaches the model as an expansion, never as a Skill tool call
       skill="$(f10_skill_of "$(json_get command_name)")"
       [ -n "$skill" ] || exit 0
-      cmd_seed "$skill" "$hook_sid"
+      cmd_seed "$skill" "$hook_sid" "$(json_get command_args)"
       ;;
     PreToolUse)
       # the other path: the model calling the skill itself, which the expansion event never sees
       [ "$(json_get tool_name)" = "Skill" ] || exit 0
       skill="$(f10_skill_of "$(json_get skill tool_input)")"
       [ -n "$skill" ] || exit 0
-      cmd_seed "$skill" "$hook_sid"
+      cmd_seed "$skill" "$hook_sid" "$(json_get args tool_input)"
       ;;
     PostToolUse)
       # the plan file *is* the plan step's output (conventions/context.md), so writing one is the
@@ -455,6 +476,35 @@ cmd_hook() {
       st_task="${base%.md}"
       backfill plan
       st_plan="done"
+      st_leaf=""
+      save
+      ;;
+    Stop)
+      # The turn is over, so nothing is still running - whatever the last step forgot to say. This
+      # is the backstop for the instruction a run is most likely to drop: the final `set ship done`
+      # arrives after the pipeline, the PR and the report, which is precisely where an agent stops
+      # following prose. Left to the steps alone, a finished run sits on a spinning glyph until the
+      # ttl retires it.
+      #
+      # `failed` is left alone (failure.md marks it before reporting, and that is the outcome), and
+      # a pause mid-run - a gap questionnaire, a confirmation - reads as done until the next step
+      # says otherwise. Overstating by one glyph for the length of a question is the cheaper error.
+      resolve_sid "$hook_sid" || exit 0
+      load || exit 0
+      finalize=0
+      if [ "$st_capture" = "running" ]; then
+        st_capture="done"
+        finalize=1
+      fi
+      if [ "$st_plan" = "running" ]; then
+        st_plan="done"
+        finalize=1
+      fi
+      if [ "$st_ship" = "running" ]; then
+        st_ship="done"
+        finalize=1
+      fi
+      [ "$finalize" = 1 ] || exit 0
       st_leaf=""
       save
       ;;

@@ -4,8 +4,6 @@ Role: a **senior engineer** capturing a well-scoped task.
 Input: a free-text feature/bug description (may be terse).
 Context: load per `conventions/context.md` - the tracker's **create adapter** and **id format** come from
 `.f10/instructions/project.md` (+ `.f10/instructions/capture.md` overlay if present).
-Badge (`conventions/report.md`): `f10-state.sh set capture running` on entry;
-`f10-state.sh set capture done` and `f10-state.sh task <id> <url>` once the task exists.
 
 1. **Scope check.** Clarify with the user only if the description is too thin to scope;
    otherwise infer the scope yourself as a senior engineer.
@@ -49,7 +47,8 @@ Badge (`conventions/report.md`): `f10-state.sh set capture running` on entry;
    as `gh issue create` / `glab issue create`. Apply the project's default status/labels if it
    declares any.
 4. **Report** per `conventions/report.md` - a `task` row (the id in the project's format) and a
-   `url` row, so the fetch step can pick the id up from here.
+   `url` row, so the fetch step can pick the id up from here. Same moment, same facts, second
+   surface: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`.
 
 Keep PII out of anything logged - use ids, not names/emails.
 
