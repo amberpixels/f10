@@ -223,15 +223,24 @@ badge renders right now.
 
 ### How it stays current
 
-Two writers, neither of which needs anyone to remember anything:
+Two writers, and the split between them is deliberate:
 
 - **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting,
-  whether it was typed or the model invoked it; `PostToolUse` catches the plan file being written,
-  which is both "plan done" and where the task id comes from; `SessionStart` prunes dead state and
+  whether it was typed or the model invoked it, and read the argument to tell a description (which
+  routes through capture) from a task id (which does not). `PostToolUse` catches the plan file
+  being written, which is both "plan done" and where the task id comes from. `Stop` closes out
+  whatever is still marked running when the turn ends. `SessionStart` prunes dead state and
   refreshes the symlink.
 - **Steps** - one `f10-state.sh set` call as each phase opens and closes. The rule is in
   `conventions/report.md`: the badge is **cosmetic and best-effort**, nothing reads it back, and a
   call that fails costs a glyph and nothing else.
+
+The steps report precisely and the hooks report reliably, and the second is why the first is
+allowed to be best-effort. An instruction to write one more line *after* the pipeline, the PR and
+the report is the one an agent is most likely to drop, so a run that finished would otherwise sit
+on a spinning glyph until the TTL retired it. For the same reason a phase left `pending` means
+"nobody said", not "it did not happen" - which is why the route is read from the argument at the
+start rather than inferred from silence at the end.
 
 State is one small file per session in `~/.claude/f10/state/`, outside every repo - stealth mode
 wants nothing f10-shaped inside a project directory, not even untracked. `/clear` mints a new
