@@ -160,12 +160,103 @@ winning - scope ahead of specificity. A linked worktree layers on top of main's 
 takes them wholesale when it has none of its own, or shuts them out with
 `Layering - replaces main`. Plans always land in the current worktree.
 
+## Status line
+
+A run happens where you cannot see it. The plan file lands on disk only at the end, the tracker
+knows nothing until capture is done, and the rest scrolls past. Three glyphs in Claude Code's
+[status line](https://code.claude.com/docs/en/statusline) - capture, plan, ship - say where the run
+is, with the task id beside them:
+
+```text
+e@host f10  main  ●●◎ GH-14 · implement  [Opus]
+                  ╰ captured, planned, now shipping - currently on the implement step
+```
+
+| glyph | phase state |
+|---|---|
+| `○` | pending - has not run |
+| `◎` | running |
+| `●` | done |
+| `◌` | skipped - not this run's to do (`/f10:ship ABC-1` never captures) |
+| `✗` | failed - the run stopped here |
+
+Each state has its own **shape**, and color only reinforces it: a status line is read at a glance,
+often in a daltonized theme, where red/green is exactly the pair that collapses. `NO_COLOR` and
+`F10_STATE_COLOR=0` drop the color and keep the badge readable. The task id is an OSC 8 hyperlink
+to the tracker wherever the run knows the url.
+
+All five are circles-by-fill for a duller reason than legibility: a codepoint your terminal font
+lacks does not fail, it is quietly substituted from some other font whose baseline is its own, and
+the badge renders visibly off the line. `◐` - the obvious mark for "half done" - is missing from
+JetBrains Mono, Fira Code and Hack alike, so it is not used. If a glyph still lands wrong in your
+font, `F10_STATE_GLYPHS` replaces the set.
+
+### Wiring it up
+
+A plugin cannot ship a `statusLine` - Claude Code applies only `agent` and `subagentStatusLine`
+from a plugin's settings - so this one edit to `~/.claude/settings.json` is yours to make. f10
+re-points `~/.claude/f10/statusline` at its current install on every session start, so the path
+below keeps working across plugin updates:
+
+```sh
+input=$(cat)                                                             # you already do this
+f10=$(printf '%s' "$input" | "$HOME/.claude/f10/statusline" 2>/dev/null)  # ← add
+printf '%s@%s %s%s' "$user" "$host" "$dir" "$f10"                        # ← append it anywhere
+```
+
+The segment brings its own leading space and is empty when no run is live, so it concatenates
+unconditionally. On one line it competes for width with the branch, though, and a worktree on
+`WS-2653-optimize-evaluation-edit-page-payload` leaves it nothing - so give it a row instead. A
+status-line script can print as many rows as it likes, and printing the second one only when it
+has content costs no vertical space while idle:
+
+```sh
+printf '%s@%s %s%s' "$user" "$host" "$dir"          # row 1, unchanged
+if [ -n "$f10" ]; then printf '\n%s' "${f10# }"; fi  # row 2, only when a run is live
+```
+
+Use the `if` form rather than `[ -n "$f10" ] && printf …`, which would exit non-zero on every idle
+render. Set `"refreshInterval": 2` on `statusLine` as well: it otherwise re-runs only when an
+assistant message arrives, and a long implement step would sit on a stale glyph for minutes.
+`f10-state.sh doctor` reports where state lives, whether the symlink is in place, and what the
+badge renders right now.
+
+### How it stays current
+
+Two writers, neither of which needs anyone to remember anything:
+
+- **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting,
+  whether it was typed or the model invoked it; `PostToolUse` catches the plan file being written,
+  which is both "plan done" and where the task id comes from; `SessionStart` prunes dead state and
+  refreshes the symlink.
+- **Steps** - one `f10-state.sh set` call as each phase opens and closes. The rule is in
+  `conventions/report.md`: the badge is **cosmetic and best-effort**, nothing reads it back, and a
+  call that fails costs a glyph and nothing else.
+
+State is one small file per session in `~/.claude/f10/state/`, outside every repo - stealth mode
+wants nothing f10-shaped inside a project directory, not even untracked. `/clear` mints a new
+session and so retires the badge; a file older than the TTL stops rendering.
+
+| variable | default | |
+|---|---|---|
+| `F10_STATE_DIR` | `~/.claude/f10/state` | where state files live |
+| `F10_STATE_TTL` | `86400` | seconds before a badge reads as stale |
+| `F10_STATE_COLOR` | `1` | `0` (or `NO_COLOR`) for shapes without color |
+| `F10_STATE_LINK` | `1` | `0` to drop the hyperlink on the task id |
+| `F10_STATE_GLYPHS` | `○ ◎ ● ◌ ✗` | pending, running, done, skipped, failed |
+
+Unrelated to f10 but pairs with it:
+[`footerLinksRegexes`](https://code.claude.com/docs/en/settings#footer-link-badges) turns a task id
+appearing in a reply into a clickable footer badge - one regex per tracker, no script at all.
+
 ## Development
 
 f10's executable surface is `bin/`: `conventions.sh` cats the four convention files and nothing
-else, `resolve.sh` resolves one repo's instructions. The line between them is static vs. resolved -
-the first is identical everywhere and loads once per context, the second varies by repo and
-worktree and reruns every run. Both are linted with [shellcheck](https://www.shellcheck.net)
+else, `resolve.sh` resolves one repo's instructions, `f10-state.sh` records where a run is for the
+status line to draw. The line between the first two is static vs. resolved - one is identical
+everywhere and loads once per context, the other varies by repo and worktree and reruns every run.
+The third is on neither side of it: it writes, and nothing in the pipeline reads it back. All are
+linted with [shellcheck](https://www.shellcheck.net)
 (correctness) and [shfmt](https://github.com/mvdan/sh) (formatting). The justfile is generated by
 [justx](https://github.com/amberpixels/just-x); recipes inside `# >>> justx:` fences are managed,
 anything outside them is yours.
@@ -182,14 +273,15 @@ deliberately left off - are documented in `.shellcheckrc`.
 
 ## Status
 
-v0.7.0 - a **report** convention: every successful run opens with the same yaml-tagged facts
-block, urls bare with a `↗` marker in the column beside them. Context loading splits in two -
-`conventions.sh` once per context, `resolve.sh` every run - so `/f10:ship` resolves `--all`
-instead of naming a pipeline it cannot know yet. A linked worktree's instructions now **layer**
-on top of main's, the storage root anchors to the checkout root rather than the process cwd,
-capture sizes a task body to the task, and the host comes from your `gh`/`glab` logins, so GitHub
-Enterprise and self-hosted GitLab need no allowlist. Shell sources are linted in CI.
-Builds on v0.6.0's conditional roles and one word per concept: **skill** → **step** → **stage**.
+v0.8.0 - a **status-line badge**. Three glyphs - capture, plan, ship - plus the task id, live in
+Claude Code's status line while a run is going, so a pipeline stops being invisible between the
+prompt and the plan file. Steps report their phase through `bin/f10-state.sh`, and plugin hooks
+fill in what nobody should have to remember: a skill starting, a plan file being written, and the
+task id that file is named after. State is one file per session, outside every repo, and the badge
+is cosmetic by construction - nothing reads it back, so a call that fails costs one glyph and
+nothing else (`conventions/report.md`). Also: the marketplace entry no longer resolves with a
+trailing slash, so `${CLAUDE_PLUGIN_ROOT}` stops printing `//` in every path f10 runs.
+Builds on v0.7.0's report convention, worktree layering, and split context loading.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
 `project.md` references instead of repeating).
 

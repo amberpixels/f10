@@ -49,6 +49,11 @@ adds is steering/notes for the run.
 For a task whose plan you just wrote this run, proceed without re-confirming; open gaps are
 surfaced by the implement step (see `conventions/gaps.md`).
 
+**Badge** (`conventions/report.md`): the pipeline is yours, so its glyph is too -
+`f10-state.sh set ship running <step>` before each pipeline step, named as the pipeline names it,
+and `f10-state.sh set ship done` after the last one. Add `f10-state.sh set plan done` on the reuse
+branch above: that plan exists, it just was not written this run.
+
 **Final report:** lead with the facts block per `conventions/report.md` - the PR/MR url, its
 branch, and the deploy url where the pipeline deployed. Then, as prose: review status as far as
 the pipeline goes ("stopped at PR" is a normal end), deploy status if the pipeline deploys, a

@@ -6,6 +6,8 @@ fetch brief trigger.
 Input: the fetch step's investigation brief (run `steps/fetch.md` first if it hasn't been).
 Context: load per `conventions/context.md` - guardrails and house style come from
 `.f10/instructions/project.md` (+ `.f10/instructions/plan.md` overlay if present).
+Badge (`conventions/report.md`): `f10-state.sh set plan running` on entry if `fetch` did not open
+the phase; `f10-state.sh set plan done` once the plan file is on disk.
 
 1. **Design a solid, conventional solution.** No hacky shortcuts, no reinventing the wheel.
    Reuse existing abstractions and honour the project's house style - its CLAUDE.md rules

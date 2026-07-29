@@ -4,6 +4,8 @@ Role: a **senior engineer** capturing a well-scoped task.
 Input: a free-text feature/bug description (may be terse).
 Context: load per `conventions/context.md` - the tracker's **create adapter** and **id format** come from
 `.f10/instructions/project.md` (+ `.f10/instructions/capture.md` overlay if present).
+Badge (`conventions/report.md`): `f10-state.sh set capture running` on entry;
+`f10-state.sh set capture done` and `f10-state.sh task <id> <url>` once the task exists.
 
 1. **Scope check.** Clarify with the user only if the description is too thin to scope;
    otherwise infer the scope yourself as a senior engineer.

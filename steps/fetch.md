@@ -4,6 +4,8 @@ Role: a **senior engineer** doing due diligence before touching any code.
 Input: a task identifier (in the project's id format).
 Context: load per `conventions/context.md` - the tracker's **fetch adapter** comes from
 `.f10/instructions/project.md` (+ `.f10/instructions/fetch.md` overlay if present).
+Badge (`conventions/report.md`): `f10-state.sh set plan running` on entry - fetch opens the plan
+phase - and `f10-state.sh task <id> <url>` once the task resolves.
 
 1. **Fetch the task** via the project's fetch adapter - a skill to invoke, or a CLI command
    such as `gh issue view <n> --comments` / `glab issue view <n>`. Read the full task,
