@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "f10",
-      "source": "./",
+      "source": ".",
       "description": "f10 (f-ten): language-agnostic task pipeline - capture → plan → ship. No stack is hard-coded: f10 infers your tracker, verify commands and PR flow, or uses the facts you declare in the repo's .f10/instructions/."
     }
   ]

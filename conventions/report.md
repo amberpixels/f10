@@ -49,6 +49,29 @@ plan:    .f10/plans/GH-2.md
    supposed to make scannable. Highlighting does not retire it: the tag colors **values**, not
    kinds of value, so a url renders exactly like a branch and only the marker separates them.
 
+## The status-line badge
+
+A report is read once, at the end. While a run is still going, the same facts have a second
+surface: three glyphs in the terminal's status line - capture, plan, ship - with the task id beside
+them. Steps keep it current with one call as they enter and leave their phase:
+
+```
+f10-state.sh set <capture|plan|ship> <running|done|failed> [<leaf>]
+f10-state.sh task <id> [<url>]
+```
+
+The plugin's `bin/` is on the Bash tool's `PATH`, so the bare name is the whole command. Which
+step reports which phase is stated in the step files. Entering a phase retires the ones before it
+by itself, so a run that starts at `ship` never needs to say that it did not capture; `/f10:ship`
+does pass the pipeline step it is on as the `<leaf>`, which is the one thing three glyphs cannot
+say.
+
+**Cosmetic and best-effort, everywhere.** Nothing in the pipeline reads this state back to decide
+anything - it draws a badge. A missing command, a failed write, a phase nobody reported: each
+costs one glyph and nothing else. Never treat one as a step failure, never retry it, never mention
+it to the user, and never let it change what the run does or the order it does it in. A run whose
+badge is wrong is still a correct run.
+
 ## Who reports under it
 
 The steps that produce something addressable: `capture` (task + url), `plan` (the saved plan
