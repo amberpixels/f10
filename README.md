@@ -177,7 +177,8 @@ e@host 󱊴 ●●◎ f10  main [Opus]
 | `○` | pending - has not run |
 | `◎` | running |
 | `●` | done |
-| `◌` | skipped - not this run's to do (`/f10:ship ABC-1` never captures) |
+| `◉` | prior - done before this run (`/f10:ship ABC-1` reusing a saved plan) |
+| `◌` | skipped - will not happen this run (a planless pipeline never plans) |
 | `✗` | failed - the run stopped here |
 
 Each state has its own **shape**, and color only reinforces it: a status line is read at a glance,
@@ -186,7 +187,7 @@ often in a daltonized theme, where red/green is exactly the pair that collapses.
 the badge is - the task id and the running ship step live in `f10-state.sh show`, for the human who
 wants the detail.
 
-All five are circles-by-fill for a duller reason than legibility: a codepoint your terminal font
+All six are circles-by-fill for a duller reason than legibility: a codepoint your terminal font
 lacks does not fail, it is quietly substituted from some other font whose baseline is its own, and
 the badge renders visibly off the line. `◐` - the obvious mark for "half done" - is missing from
 JetBrains Mono, Fira Code and Hack alike, so it is not used. If a glyph still lands wrong in your

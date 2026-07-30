@@ -14,7 +14,7 @@
 # step's prose, not a runtime condition, and a silent typo would leave a badge frozen forever.
 #
 # Usage:
-#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|skipped> [<leaf>]
+#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|skipped|prior> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh seed <skill>           begin a fresh run - hooks call this, steps do not
 #   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
@@ -108,6 +108,11 @@ save() {
 # they will not happen. Without this rule every route but the full free-text one would leave
 # leading circles that never fill, and no step would ever be the obvious place to say so. It is a
 # mechanical consequence of the chain's order, which is why it lives here and not in prose.
+#
+# `skipped` is the guess this rule can make on its own: "nobody said, and now it is too late".
+# Where positive evidence arrives that a phase's work exists from before - a task id resolving
+# (cmd_task), the ship skill reusing a saved plan - the phase is upgraded to `prior` instead:
+# done, just not by this run.
 backfill() {
   case "$1" in
     plan)
@@ -126,14 +131,15 @@ backfill() {
 # red/green is precisely the pair that collapses there - so each status carries its own shape and
 # the color only reinforces it. NO_COLOR and F10_STATE_COLOR=0 drop the color and keep the shapes.
 
-# The glyphs are one list, and which five they are was decided by what terminal fonts actually
+# The glyphs are one list, and which six they are was decided by what terminal fonts actually
 # contain. A codepoint the font lacks does not fail - the OS quietly substitutes another font, whose
 # baseline and advance width are its own, and the badge renders as circles that do not sit on one
 # line. U+25D0 ◐, the obvious "half done" mark, is missing from JetBrains Mono, Fira Code and Hack
-# alike, which is how this list ended up circles-by-fill instead: ring, ring-and-dot, solid, dotted,
-# and a cross, all five present in the common programming fonts.
-# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed>".
-read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗}"
+# alike, which is how this list ended up circles-by-fill instead: ring, double ring, solid, dotted,
+# a cross, and a fisheye (U+25C9, a dot inside a ring - "done, just not here"), all six present in
+# the common programming fonts.
+# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior>".
+read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉}"
 
 # These two assign to a global instead of printing, and are called rather than substituted. Render
 # needs both for each of three phases, on every assistant message and every refresh tick, and
@@ -147,6 +153,7 @@ glyph_for() {
     done) _glyph="${glyph_set[2]:-●}" ;;
     skipped) _glyph="${glyph_set[3]:-◌}" ;;
     failed) _glyph="${glyph_set[4]:-✗}" ;;
+    prior) _glyph="${glyph_set[5]:-◉}" ;;
     *) _glyph="${glyph_set[0]:-○}" ;;
   esac
 }
@@ -156,7 +163,8 @@ color_for() {
     done) _color=$'\033[32m' ;;
     running) _color=$'\033[1;36m' ;;
     failed) _color=$'\033[1;31m' ;;
-    *) _color=$'\033[2m' ;; # pending and skipped are both "nothing happening here"
+    prior) _color=$'\033[2;32m' ;; # done's green, dimmed: it happened, just not in this run
+    *) _color=$'\033[2m' ;;        # pending and skipped are both "nothing happening here"
   esac
 }
 
@@ -254,7 +262,7 @@ cmd_set() {
       ;;
   esac
   case "$status" in
-    pending | running | done | failed | skipped) ;;
+    pending | running | done | failed | skipped | prior) ;;
     *)
       echo "f10-state: unknown status '$status'" >&2
       exit 2
@@ -289,6 +297,12 @@ cmd_task() {
   load
   st_task="$id"
   [ -n "$url" ] && st_url="$url"
+  # A task id resolving is positive evidence the task existed before this run - so a capture
+  # nobody reported (pending) or one backfill already wrote off (skipped) becomes `prior`, not a
+  # hollow circle. `done` and `running` stay: capture.md reports those itself, in this run.
+  case "$st_capture" in
+    pending | skipped) st_capture="prior" ;;
+  esac
   save
   exit 0
 }
@@ -562,7 +576,7 @@ case "${1:-}" in
     cat >&2 <<'USAGE'
 f10-state.sh - where an f10 run is right now, for the status line to render.
 
-  set <capture|plan|ship> <pending|running|done|failed|skipped> [<leaf>]
+  set <capture|plan|ship> <pending|running|done|failed|skipped|prior> [<leaf>]
   task <id> [<url>]        record the task this run is about
   seed <skill>             begin a fresh run - hooks call this, steps do not
   render [<session id>]    the status-line segment; status-line JSON on stdin

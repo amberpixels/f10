@@ -56,7 +56,7 @@ surface: three glyphs in the terminal's status line - capture, plan, ship - with
 them. Steps keep it current with one call as they enter and leave their phase:
 
 ```
-f10-state.sh set <capture|plan|ship> <running|done|failed> [<leaf>]
+f10-state.sh set <capture|plan|ship> <running|done|failed|prior> [<leaf>]
 f10-state.sh task <id> [<url>]
 ```
 
@@ -64,7 +64,9 @@ The plugin's `bin/` is on the Bash tool's `PATH`, so the bare name is the whole 
 step reports which phase is stated in the step files. Entering a phase retires the ones before it
 by itself, so a run that starts at `ship` never needs to say that it did not capture; `/f10:ship`
 does pass the pipeline step it is on as the `<leaf>`, which is the one thing three glyphs cannot
-say.
+say. `prior` is for a phase whose work exists from an earlier run - a reused plan, a task that was
+already in the tracker: done, just not by this run. Reporting the task id (`task <id>`) marks
+capture `prior` by itself; a reused plan is the ship skill's to say.
 
 **Cosmetic and best-effort, everywhere.** Nothing in the pipeline reads this state back to decide
 anything - it draws a badge. A missing command, a failed write, a phase nobody reported: each
