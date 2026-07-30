@@ -203,18 +203,22 @@ render() {
     fi
   done
 
-  # The label: the task id, hyperlinked to the tracker where one is known (OSC 8, so a terminal
-  # that does not speak it prints the id and nothing else). The leaf - the ship-pipeline step
-  # currently running - is the one thing three glyphs cannot say, so it shows only while it is true.
-  local label="$st_task"
-  if [ -n "$st_task" ] && [ -n "$st_url" ] && [ "${F10_STATE_LINK:-1}" != "0" ]; then
-    label=$'\033]8;;'"$st_url"$'\033\\'"$st_task"$'\033]8;;\033\\'
+  # The label: an F10 keycap icon, so the three circles read as f10's and not some other plugin's.
+  # Nothing else - no task id, no step name - because the segment sits inline in a status line's
+  # first row, where every column it takes is a column the branch loses. The icon is Material
+  # Design's md-keyboard_f10 (U+F12B4), which every Nerd Font carries; that is a narrower bet than
+  # the circles' but the same shape of bet, since a status line dense enough to want this badge is
+  # overwhelmingly already on a patched font. On anything else it degrades to one substituted or
+  # tofu cell, not a broken badge. Task and leaf still surface in `show`, which is where a human
+  # who wants the detail already is.
+  local label="󱊴"
+  if [ "$color" = 1 ]; then
+    label=$'\033[2m'"$label$reset"
   fi
-  [ "$st_ship" = "running" ] && [ -n "$st_leaf" ] && label="${label:+$label }· $st_leaf"
 
   # A leading space, so a status-line script can concatenate the result unconditionally: empty
   # means empty, and the segment brings its own separator when it is not.
-  printf ' %s%s' "$icons" "${label:+ $label}"
+  printf ' %s %s' "$label" "$icons"
 }
 
 # --- reading hook payloads ---------------------------------------------------------------------
