@@ -165,11 +165,11 @@ takes them wholesale when it has none of its own, or shuts them out with
 A run happens where you cannot see it. The plan file lands on disk only at the end, the tracker
 knows nothing until capture is done, and the rest scrolls past. Three glyphs in Claude Code's
 [status line](https://code.claude.com/docs/en/statusline) - capture, plan, ship - say where the run
-is, with the task id beside them:
+is, behind an F10 keycap icon (`󱊴`) that says whose circles they are:
 
 ```text
-e@host f10  main  ●●◎ GH-14 · implement  [Opus]
-                  ╰ captured, planned, now shipping - currently on the implement step
+e@host 󱊴 ●●◎ f10  main [Opus]
+       ╰ captured, planned, now shipping
 ```
 
 | glyph | phase state |
@@ -182,14 +182,19 @@ e@host f10  main  ●●◎ GH-14 · implement  [Opus]
 
 Each state has its own **shape**, and color only reinforces it: a status line is read at a glance,
 often in a daltonized theme, where red/green is exactly the pair that collapses. `NO_COLOR` and
-`F10_STATE_COLOR=0` drop the color and keep the badge readable. The task id is an OSC 8 hyperlink
-to the tracker wherever the run knows the url.
+`F10_STATE_COLOR=0` drop the color and keep the badge readable. The label and three glyphs are all
+the badge is - the task id and the running ship step live in `f10-state.sh show`, for the human who
+wants the detail.
 
 All five are circles-by-fill for a duller reason than legibility: a codepoint your terminal font
 lacks does not fail, it is quietly substituted from some other font whose baseline is its own, and
 the badge renders visibly off the line. `◐` - the obvious mark for "half done" - is missing from
 JetBrains Mono, Fira Code and Hack alike, so it is not used. If a glyph still lands wrong in your
-font, `F10_STATE_GLYPHS` replaces the set.
+font, `F10_STATE_GLYPHS` replaces the set. The label is the one deliberate exception to the
+common-fonts rule: it is Material Design's `md-keyboard_f10` (U+F12B4), a whole F10 keycap in a
+single cell, which only [Nerd Fonts](https://www.nerdfonts.com) carry - a bet that a terminal
+dense enough to want this badge is already on a patched font. On anything else it degrades to one
+substituted or tofu cell, and the three glyphs beside it still read.
 
 ### Wiring it up
 
@@ -201,22 +206,14 @@ below keeps working across plugin updates:
 ```sh
 input=$(cat)                                                             # you already do this
 f10=$(printf '%s' "$input" | "$HOME/.claude/f10/statusline" 2>/dev/null)  # ← add
-printf '%s@%s %s%s' "$user" "$host" "$dir" "$f10"                        # ← append it anywhere
+printf '%s@%s%s %s' "$user" "$host" "$f10" "$dir"                        # ← drop it in anywhere
 ```
 
 The segment brings its own leading space and is empty when no run is live, so it concatenates
-unconditionally. On one line it competes for width with the branch, though, and a worktree on
-`WS-2653-optimize-evaluation-edit-page-payload` leaves it nothing - so give it a row instead. A
-status-line script can print as many rows as it likes, and printing the second one only when it
-has content costs no vertical space while idle:
+unconditionally, and at a label plus three glyphs it is narrow enough to sit anywhere - even
+between `user@host` and the directory, as above, without crowding the branch.
 
-```sh
-printf '%s@%s %s%s' "$user" "$host" "$dir"          # row 1, unchanged
-if [ -n "$f10" ]; then printf '\n%s' "${f10# }"; fi  # row 2, only when a run is live
-```
-
-Use the `if` form rather than `[ -n "$f10" ] && printf …`, which would exit non-zero on every idle
-render. Set `"refreshInterval": 2` on `statusLine` as well: it otherwise re-runs only when an
+Set `"refreshInterval": 2` on `statusLine` as well: it otherwise re-runs only when an
 assistant message arrives, and a long implement step would sit on a stale glyph for minutes.
 `f10-state.sh doctor` reports where state lives, whether the symlink is in place, and what the
 badge renders right now.
