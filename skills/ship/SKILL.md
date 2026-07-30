@@ -53,7 +53,9 @@ surfaced by the implement step (see `conventions/gaps.md`).
 `f10-state.sh set ship running <step>` before each pipeline step, named as the pipeline names it,
 and `f10-state.sh set ship done` after the last one. Where the plan came from an earlier run - the
 plan-file route, or the reuse branch above - add `f10-state.sh set plan prior`: that plan exists,
-it just was not written this run.
+it just was not written this run. Where the pipeline stops mid-way but durable artifacts already
+exist - commits, an open PR, a deploy - report `set ship partial <step>` rather than `failed`, per
+`conventions/failure.md` rule 7; a stop with nothing usable stays `failed`.
 
 **Final report:** lead with the facts block per `conventions/report.md` - the PR/MR url, its
 branch, and the deploy url where the pipeline deployed. Then, as prose: review status as far as

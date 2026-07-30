@@ -179,7 +179,8 @@ e@host 󱊴 ●●◎ f10  main [Opus]
 | `●` | done |
 | `◉` | prior - done before this run (`/f10:ship ABC-1` reusing a saved plan) |
 | `◌` | skipped - will not happen this run (a planless pipeline never plans) |
-| `✗` | failed - the run stopped here |
+| `󰅚` | partial - stopped, but work survived (committed but push failed, PR open but CI red) |
+| `✗` | failed - the run stopped here with nothing usable |
 
 Each state has its own **shape**, and color only reinforces it: a status line is read at a glance,
 often in a daltonized theme, where red/green is exactly the pair that collapses. `NO_COLOR` and
@@ -187,15 +188,18 @@ often in a daltonized theme, where red/green is exactly the pair that collapses.
 the badge is - the task id and the running ship step live in `f10-state.sh show`, for the human who
 wants the detail.
 
-All six are circles-by-fill for a duller reason than legibility: a codepoint your terminal font
-lacks does not fail, it is quietly substituted from some other font whose baseline is its own, and
-the badge renders visibly off the line. `◐` - the obvious mark for "half done" - is missing from
-JetBrains Mono, Fira Code and Hack alike, so it is not used. If a glyph still lands wrong in your
-font, `F10_STATE_GLYPHS` replaces the set. The label is the one deliberate exception to the
-common-fonts rule: it is Material Design's `md-keyboard_f10` (U+F12B4), a whole F10 keycap in a
-single cell, which only [Nerd Fonts](https://www.nerdfonts.com) carry - a bet that a terminal
-dense enough to want this badge is already on a patched font. On anything else it degrades to one
-substituted or tofu cell, and the three glyphs beside it still read.
+Six of the seven are circles-by-fill for a duller reason than legibility: a codepoint your
+terminal font lacks does not fail, it is quietly substituted from some other font whose baseline
+is its own, and the badge renders visibly off the line. `◐` - the obvious mark for "half done" -
+is missing from JetBrains Mono, Fira Code and Hack alike, so it is not used. If a glyph still
+lands wrong in your font, `F10_STATE_GLYPHS` replaces the set. Two glyphs are deliberate
+exceptions to the common-fonts rule, both Material Design icons only
+[Nerd Fonts](https://www.nerdfonts.com) carry: the label, `md-keyboard_f10` (U+F12B4), a whole
+F10 keycap in a single cell - and partial's `md-close-circle-outline` (U+F015A), because no
+crossed-circle codepoint exists across those same common fonts (`⊗` is absent from Fira Code).
+Both are a bet that a terminal dense enough to want this badge is already on a patched font; on
+anything else each degrades to one substituted or tofu cell, and the circles beside them still
+read.
 
 ### Wiring it up
 
