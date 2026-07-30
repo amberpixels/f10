@@ -56,7 +56,7 @@ surface: three glyphs in the terminal's status line - capture, plan, ship - with
 them. Steps keep it current with one call as they enter and leave their phase:
 
 ```
-f10-state.sh set <capture|plan|ship> <running|done|failed|prior> [<leaf>]
+f10-state.sh set <capture|plan|ship> <running|done|failed|partial|prior> [<leaf>]
 f10-state.sh task <id> [<url>]
 ```
 
@@ -66,7 +66,9 @@ by itself, so a run that starts at `ship` never needs to say that it did not cap
 does pass the pipeline step it is on as the `<leaf>`, which is the one thing three glyphs cannot
 say. `prior` is for a phase whose work exists from an earlier run - a reused plan, a task that was
 already in the tracker: done, just not by this run. Reporting the task id (`task <id>`) marks
-capture `prior` by itself; a reused plan is the ship skill's to say.
+capture `prior` by itself; a reused plan is the ship skill's to say. `partial` is for a phase that
+stopped after this run produced something durable - commits, an open PR, a deploy: stopped, but
+the work survived. `conventions/failure.md` rule 7 draws the line between it and `failed`.
 
 **Cosmetic and best-effort, everywhere.** Nothing in the pipeline reads this state back to decide
 anything - it draws a badge. A missing command, a failed write, a phase nobody reported: each

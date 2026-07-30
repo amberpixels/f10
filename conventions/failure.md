@@ -29,8 +29,11 @@ a plan built on a task that was never really fetched.
    what.
 7. **Mark the badge.** `f10-state.sh set <phase> failed` for the phase that stopped, before you
    write the report - so the status line shows where the run died rather than a phase frozen
-   mid-run. Cosmetic and best-effort like every other badge call (`conventions/report.md`): if it
-   errors, ignore it and report the real failure.
+   mid-run. Where the phase stopped **after this run produced something durable** - commits made
+   but the push rejected, a PR open but its CI review red, a deploy that errored after merge -
+   say `partial` instead: check for artifacts, do not judge severity. A stop that left nothing
+   usable stays `failed`. Cosmetic and best-effort like every other badge call
+   (`conventions/report.md`): if it errors, ignore it and report the real failure.
 
 ## Report format
 

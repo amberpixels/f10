@@ -14,7 +14,7 @@
 # step's prose, not a runtime condition, and a silent typo would leave a badge frozen forever.
 #
 # Usage:
-#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|skipped|prior> [<leaf>]
+#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh seed <skill>           begin a fresh run - hooks call this, steps do not
 #   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
@@ -131,15 +131,17 @@ backfill() {
 # red/green is precisely the pair that collapses there - so each status carries its own shape and
 # the color only reinforces it. NO_COLOR and F10_STATE_COLOR=0 drop the color and keep the shapes.
 
-# The glyphs are one list, and which six they are was decided by what terminal fonts actually
+# The glyphs are one list, and which seven they are was decided by what terminal fonts actually
 # contain. A codepoint the font lacks does not fail - the OS quietly substitutes another font, whose
 # baseline and advance width are its own, and the badge renders as circles that do not sit on one
 # line. U+25D0 ◐, the obvious "half done" mark, is missing from JetBrains Mono, Fira Code and Hack
 # alike, which is how this list ended up circles-by-fill instead: ring, double ring, solid, dotted,
 # a cross, and a fisheye (U+25C9, a dot inside a ring - "done, just not here"), all six present in
-# the common programming fonts.
-# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior>".
-read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉}"
+# the common programming fonts. The seventh, partial ("stopped, but the work survived"), is the
+# label's bet rather than the circles': no crossed-circle codepoint exists across those same fonts,
+# so it is Material Design's md-close-circle-outline (U+F015A), which every Nerd Font carries.
+# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior> <partial>".
+read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉ 󰅚}"
 
 # These two assign to a global instead of printing, and are called rather than substituted. Render
 # needs both for each of three phases, on every assistant message and every refresh tick, and
@@ -154,6 +156,7 @@ glyph_for() {
     skipped) _glyph="${glyph_set[3]:-◌}" ;;
     failed) _glyph="${glyph_set[4]:-✗}" ;;
     prior) _glyph="${glyph_set[5]:-◉}" ;;
+    partial) _glyph="${glyph_set[6]:-󰅚}" ;;
     *) _glyph="${glyph_set[0]:-○}" ;;
   esac
 }
@@ -163,8 +166,9 @@ color_for() {
     done) _color=$'\033[32m' ;;
     running) _color=$'\033[1;36m' ;;
     failed) _color=$'\033[1;31m' ;;
-    prior) _color=$'\033[2;32m' ;; # done's green, dimmed: it happened, just not in this run
-    *) _color=$'\033[2m' ;;        # pending and skipped are both "nothing happening here"
+    partial) _color=$'\033[1;33m' ;; # failed's weight in yellow: stopped, but the work survived
+    prior) _color=$'\033[2;32m' ;;   # done's green, dimmed: it happened, just not in this run
+    *) _color=$'\033[2m' ;;          # pending and skipped are both "nothing happening here"
   esac
 }
 
@@ -262,7 +266,7 @@ cmd_set() {
       ;;
   esac
   case "$status" in
-    pending | running | done | failed | skipped | prior) ;;
+    pending | running | done | failed | partial | skipped | prior) ;;
     *)
       echo "f10-state: unknown status '$status'" >&2
       exit 2
@@ -504,9 +508,10 @@ cmd_hook() {
       # following prose. Left to the steps alone, a finished run sits on a spinning glyph until the
       # ttl retires it.
       #
-      # `failed` is left alone (failure.md marks it before reporting, and that is the outcome), and
-      # a pause mid-run - a gap questionnaire, a confirmation - reads as done until the next step
-      # says otherwise. Overstating by one glyph for the length of a question is the cheaper error.
+      # `failed` and `partial` are left alone (failure.md marks them before reporting, and that is
+      # the outcome), and a pause mid-run - a gap questionnaire, a confirmation - reads as done
+      # until the next step says otherwise. Overstating by one glyph for the length of a question
+      # is the cheaper error.
       resolve_sid "$hook_sid" || exit 0
       load || exit 0
       finalize=0
@@ -576,7 +581,7 @@ case "${1:-}" in
     cat >&2 <<'USAGE'
 f10-state.sh - where an f10 run is right now, for the status line to render.
 
-  set <capture|plan|ship> <pending|running|done|failed|skipped|prior> [<leaf>]
+  set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior> [<leaf>]
   task <id> [<url>]        record the task this run is about
   seed <skill>             begin a fresh run - hooks call this, steps do not
   render [<session id>]    the status-line segment; status-line JSON on stdin
