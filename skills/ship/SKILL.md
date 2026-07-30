@@ -51,8 +51,9 @@ surfaced by the implement step (see `conventions/gaps.md`).
 
 **Badge** (`conventions/report.md`): the pipeline is yours, so its glyph is too -
 `f10-state.sh set ship running <step>` before each pipeline step, named as the pipeline names it,
-and `f10-state.sh set ship done` after the last one. Add `f10-state.sh set plan done` on the reuse
-branch above: that plan exists, it just was not written this run.
+and `f10-state.sh set ship done` after the last one. Where the plan came from an earlier run - the
+plan-file route, or the reuse branch above - add `f10-state.sh set plan prior`: that plan exists,
+it just was not written this run.
 
 **Final report:** lead with the facts block per `conventions/report.md` - the PR/MR url, its
 branch, and the deploy url where the pipeline deployed. Then, as prose: review status as far as
