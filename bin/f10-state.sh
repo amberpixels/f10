@@ -311,10 +311,15 @@ cmd_task() {
   exit 0
 }
 
-# Does this run's argument read as a description rather than a reference? A task id, a url and a
-# plan path are each one token; a description is a sentence. That is the same distinction the skills
-# themselves route on, and it is the only thing at seed time that knows whether capture is a phase
-# this run will actually reach.
+# Does this run's argument read as a description rather than a reference? The first token decides
+# where it can: a task id (WS-2703, or bare 2703), a plan path, a url - each is a reference no
+# matter what follows it, because the model routinely appends parenthetical context to skill args
+# ("WS-2703 (Notion task already fetched; ...)"). Counting tokens across the whole argument read
+# every such decorated reference as a description, which is how a run over a pre-existing task once
+# wore a solid green capture it never did. Only when the first token claims nothing does the old
+# tiebreak apply: one token is a reference, a sentence is a description. That is the same
+# distinction the skills themselves route on, and it is the only thing at seed time that knows
+# whether capture is a phase this run will actually reach.
 #
 # It has to be guessed here because the alternative is worse. Reporting is best-effort, so a phase
 # still `pending` means "nobody said" - not "it did not happen" - and the badge has to resolve that
@@ -326,6 +331,11 @@ is_description() {
   a="${a//--dry-run/}"
   # shellcheck disable=SC2086 # deliberate: word splitting is how tokens get counted
   set -- $a
+  [ "$#" -gt 0 ] || return 1
+  case "$1" in
+    *.md | http://* | https://*) return 1 ;;
+  esac
+  [[ "$1" =~ ^[A-Za-z]+-[0-9]+$ || "$1" =~ ^[0-9]+$ ]] && return 1
   [ "$#" -gt 1 ]
 }
 
@@ -349,6 +359,22 @@ cmd_seed() {
     capture) st_capture="running" ;;
     plan | ship) is_description "$args" && st_capture="running" ;;
   esac
+  # A plan-path argument names the task in its basename - that is the naming rule the PostToolUse
+  # arm already relies on - and the plan-file route skips fetch, so no `task` call ever arrives to
+  # record it. This is also the one route where the seed itself holds positive evidence of earlier
+  # work (a plan file exists, so capture happened wherever the plan did), which is cmd_task's bar
+  # for `prior` rather than backfill's later "nobody said" shrug of `skipped`.
+  if [ "$skill" = "plan" ] || [ "$skill" = "ship" ]; then
+    # shellcheck disable=SC2086 # deliberate: the reference, when there is one, is the first token
+    set -- ${args//--dry-run/}
+    case "${1:-}" in
+      *.md)
+        st_task="${1##*/}"
+        st_task="${st_task%.md}"
+        [ "$st_capture" = "pending" ] && st_capture="prior"
+        ;;
+    esac
+  fi
   save
   exit 0
 }
@@ -566,7 +592,7 @@ case "${1:-}" in
     ;;
   seed)
     shift
-    cmd_seed "${1:-}"
+    cmd_seed "$@"
     ;;
   render)
     shift
