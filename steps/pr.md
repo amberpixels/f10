@@ -3,8 +3,8 @@
 Role: a **senior engineer** opening a PR someone else will have to review.
 Input: implemented, locally verified changes (the `implement` step is done, and any review
 steps the pipeline places before this one).
-Context: load per `conventions/context.md` - the PR adapter comes from `project.md → Hosting & PR`
-(+ `.f10/instructions/pr.md` overlay if present).
+Context: per `conventions/context.md` - the PR adapter comes from `project.md → Hosting & PR`
+(+ same-named overlay).
 
 1. **Authorization.** Running `/f10:ship` **is** the user's explicit authorization to push and
    open this PR - it satisfies the global "never push / open a PR unless asked" rule for

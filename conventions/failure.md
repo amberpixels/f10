@@ -1,7 +1,7 @@
 # Convention · failure - a step cannot complete
 
 Every step assumes the happy path. This file covers the rest: a verify command that stays red,
-an adapter that errors or is missing, a tracker that will not answer, a PR that will not open.
+an adapter that errors, a tracker that will not answer.
 
 **Stop at the failing step. Report. Let the user decide.** A pipeline that keeps moving after a
 failed step produces the worst outcome f10 can produce: an open PR whose verify never passed, or
@@ -13,26 +13,24 @@ a plan built on a task that was never really fetched.
    step, and do not "come back to it later".
 2. **Never take an outward-facing action on a failed predecessor.** `pr`, `push`, and `deploy`
    leave the machine. Run none of them when an earlier step failed, verify is red, or a blocking
-   review is unresolved. This holds even when the user's original request was "ship it": their
-   go-ahead covered a working change, not a broken one.
+   review is unresolved - even when the user's original request was "ship it": their go-ahead
+   covered a working change, not a broken one.
 3. **Retry once, for the same cause, only when a retry could plausibly work** - a network blip, a
-   transient tracker 5xx. A second identical failure is an answer, not an invitation to try a
-   third time. Never loop.
+   transient tracker 5xx. A second identical failure is an answer. Never loop.
 4. **Never silently substitute.** If `project.md` declares an adapter and it is missing or
-   erroring, do not fall back to a different tool - do not reach for `gh` because the declared
-   review skill is unavailable. Substitution turns a visible failure into an invisible one.
-5. **Preserve the work.** Output whatever the step had produced before it failed, so nothing has
-   to be redone: the drafted task body, the investigation brief, the plan prose. A failed
+   erroring, do not fall back to a different tool - substitution turns a visible failure into an
+   invisible one.
+5. **Preserve the work.** Output whatever the step had produced before it failed - the drafted
+   task body, the investigation brief, the plan prose - so nothing has to be redone. A failed
    `Write` means the content belongs in the report.
 6. **Leave the workspace honest.** Do not partially commit, do not push a branch you cannot open
    a PR for, and do not delete evidence. If the failure left something half-done, say exactly
    what.
-7. **Mark the badge.** `f10-state.sh set <phase> failed` for the phase that stopped, before you
-   write the report - so the status line shows where the run died rather than a phase frozen
-   mid-run. Where the phase stopped **after this run produced something durable** - commits made
-   but the push rejected, a PR open but its CI review red, a deploy that errored after merge -
-   say `partial` instead: check for artifacts, do not judge severity. A stop that left nothing
-   usable stays `failed`. Cosmetic and best-effort like every other badge call
+7. **Mark the badge** before you write the report, so the status line shows where the run died:
+   `f10-state.sh set <phase> failed` - or `partial` where the phase stopped **after this run
+   produced something durable** (commits made but the push rejected, a PR open but its CI review
+   red, a deploy that errored after merge). Check for artifacts, do not judge severity; a stop
+   that left nothing usable stays `failed`. Cosmetic and best-effort like every badge call
    (`conventions/report.md`): if it errors, ignore it and report the real failure.
 
 ## Report format
@@ -48,9 +46,9 @@ preserved       <the content the step had produced, if any>
 next            <the smallest thing the user can do to unblock it>
 ```
 
-Same left-aligned label column as the success block in `conventions/report.md`, but plain-fenced
-and colonless, and with no marker cell - these values are prose, not artifacts, and prose is what
-the success block's `yaml` tag cannot take. A url anywhere in this report is still printed bare.
+Same label column as the success block, but plain-fenced, colonless, and with no marker cell -
+these values are prose, which the success block's `yaml` tag cannot take (see
+`conventions/report.md`). A url anywhere in this report is still printed bare.
 
 Then stop. Do not offer to continue as the next action, and do not ask a question whose answer
 you could have found yourself - the user is reading this because you already could not.

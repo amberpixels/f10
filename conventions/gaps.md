@@ -2,8 +2,7 @@
 
 A **gap** is a genuine fork that needs *the user's* call - one that changes scope or is hard to
 reverse - **not** something you should resolve yourself. You still decide ~90% from the code and
-its house style (see `steps/fetch.md`); gaps are only the real forks left over. Don't manufacture
-gaps out of questions you can answer, and don't raise trivial ones.
+its house style (see `steps/fetch.md`); gaps are only the real forks left over.
 
 Gaps are **recorded, not blocking.** The plan is always complete and shippable on its noted
 defaults; filling gaps is always optional and can happen at any stage.
@@ -32,18 +31,20 @@ If there are no real forks, write `## Gaps - none` and move on. Don't pad the li
 
 ## Filling gaps (the questionnaire)
 
-To fill, use **`AskUserQuestion`** - batch all open gaps into one questionnaire (one question per
-gap, with the default as the first / recommended option). Never ask them one-at-a-time across turns.
+To fill, use **`AskUserQuestion`** - batch all open gaps into one questionnaire (one question
+per gap, with the default as the first / recommended option). Never ask them one-at-a-time
+across turns.
 
-Offer to fill at any of these checkpoints - always as an offer the user can decline:
-- **After planning** (`/f10:plan`): once the file is saved, list the open gaps by title in one line
-  each and ask whether to fill them now.
+Offer - always declinable - at these checkpoints:
+- **After planning** (`/f10:plan`): once the file is saved, list the open gaps by title in one
+  line each and ask whether to fill them now.
 - **Before implementing** (`/f10:ship`): if the loaded plan has open gaps, surface them and ask
   *fill now, or proceed on the defaults?* Proceeding on defaults is a valid choice - say which
   defaults you'll use.
 - **On demand:** the user can ask to fill gaps at any point.
 
-When answers come in: update each gap's status to **Resolved**, fold the decision into the relevant
-plan stages, and re-save the plan file. If an answer **differs from the default the code was already
-built on** (i.e. implementation happened first), say so plainly - that's a redesign/refactor pass,
-not a silent edit. Leave resolved gaps in the file so the decisions stay auditable and revisitable.
+When answers come in: update each gap's status to **Resolved**, fold the decision into the
+relevant plan stages, and re-save the plan file. If an answer differs from the default the code
+was already built on (implementation happened first), say so plainly - that's a
+redesign/refactor pass, not a silent edit. Leave resolved gaps in the file so the decisions
+stay auditable and revisitable.

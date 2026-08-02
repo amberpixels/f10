@@ -5,10 +5,10 @@ project's house style - adopt the roles from `project.md → Roles`, including a
 ones the plan recorded.
 Input: a plan - from the plan step just run, a saved `<storage root>/plans/<task>.md`, or a plan
 file the user passed.
-Part of the **ship pipeline** (see `conventions/context.md`): this step ends with verified code on a
-branch - later pipeline steps (`pr`, `review`, `deploy`) handle everything after that.
-Context: load per `conventions/context.md` - guardrails and verify commands come from
-`.f10/instructions/project.md` (+ `.f10/instructions/implement.md` overlay if present).
+Part of the **ship pipeline**: this step ends with verified code on a branch - later pipeline
+steps (`pr`, `review`, `deploy`) handle everything after that.
+Context: per `conventions/context.md` - guardrails and verify commands come from `project.md`
+(+ same-named overlay).
 
 0. **Check the plan's gaps first.** If its `## Gaps` section has **open** items, handle them per
    `conventions/gaps.md` before writing code. Proceeding on the stated defaults is fine - just
