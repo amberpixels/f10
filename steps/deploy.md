@@ -2,9 +2,8 @@
 
 Role: a **senior engineer** putting a change in front of real users.
 Input: code that passed every earlier pipeline step.
-Context: load per `conventions/context.md` - the target and the exact commands come from the
-pipeline entry and the `.f10/instructions/deploy.md` overlay (Heroku, Hetzner, …). There is no
-inferred default deploy.
+Context: per `conventions/context.md` - the target and exact commands come from the pipeline
+entry and the `deploy` overlay (Heroku, Hetzner, …). There is no inferred default deploy.
 
 Run this step **only** when the project's ship pipeline declares it.
 

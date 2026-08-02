@@ -3,12 +3,11 @@
 Role: a **senior engineer** triaging review findings on your own change - adopt the roles from
 `project.md → Roles`, including any conditional ones the plan recorded.
 Input: the working diff (local review) or the open PR (external review).
-Context: load per `conventions/context.md` - who reviews and what resolves it comes from
-`project.md → Review` (+ `.f10/instructions/review.md` overlay if present).
+Context: per `conventions/context.md` - who reviews and what resolves it comes from
+`project.md → Review` (+ same-named overlay).
 
 This step can appear **before** the PR (local review of the working diff) or **after** it
-(external/CI/human review of the PR) - even both, as separate pipeline entries. The pipeline
-entry names the variant.
+(external/CI/human) - even both, as separate pipeline entries; the entry names the variant.
 
 1. **Local review** (pre-PR): run the declared reviewer - a review skill, or a fresh subagent -
    against the working diff. Triage findings like a senior engineer: fix what's real, push back
