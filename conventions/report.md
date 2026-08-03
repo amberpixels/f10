@@ -51,12 +51,14 @@ and leave their phase:
 ```
 f10-state.sh set <capture|plan|ship> <running|done|failed|partial|prior> [<leaf>]
 f10-state.sh task <id> [<url>]
+f10-state.sh final <step>
 ```
 
 The plugin's `bin/` is on the Bash tool's `PATH`, so the bare name is the whole command. Each
 step file states what it reports. Entering a phase retires the ones before it by itself;
 `/f10:ship` also passes the pipeline step it is on as the `<leaf>` - the one thing three glyphs
-cannot say. `prior` marks a phase whose work exists from an earlier run - a reused plan, a
+cannot say - and declares the pipeline's last step with `final`, which is what lets a turn
+ending mid-pipeline read as still running rather than done. `prior` marks a phase whose work exists from an earlier run - a reused plan, a
 task already in the tracker: done, just not by this run. Reporting the task id
 (`task <id>`) marks capture `prior` by itself; a reused plan is the ship skill's to say.
 `partial` marks a phase that stopped after this run produced something durable - commits, an

@@ -43,9 +43,11 @@ context resolution reported. Any extra text the user adds is steering/notes for 
 For a plan you just wrote this run, proceed without re-confirming; open gaps are surfaced by
 the implement step (`conventions/gaps.md`).
 
-**Badge** (`conventions/report.md`): `f10-state.sh set ship running <step>` before each
-pipeline step, named as the pipeline names it, and `f10-state.sh set ship done` after the
-last. Where the plan came from an earlier run - the plan-file route, or the reuse branch
+**Badge** (`conventions/report.md`): once the pipeline is selected, declare its last step -
+`f10-state.sh final <step>` - so a turn ending mid-pipeline keeps its spinning glyph. Then
+`f10-state.sh set ship running <step>` before each pipeline step, named as the pipeline names
+it, and `f10-state.sh set ship done` after the last. Where the plan came from an earlier run -
+the plan-file route, or the reuse branch
 above - add `f10-state.sh set plan prior`. Where the pipeline stops mid-way but durable
 artifacts exist - commits, an open PR, a deploy - report `set ship partial <step>` rather
 than `failed`, per `conventions/failure.md` rule 7.

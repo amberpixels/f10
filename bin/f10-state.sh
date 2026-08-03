@@ -16,6 +16,7 @@
 # Usage:
 #   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
+#   f10-state.sh final <step>           declare the ship pipeline's last step
 #   f10-state.sh seed <skill>           begin a fresh run - hooks call this, steps do not
 #   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
 #   f10-state.sh show                   the current run, human-readable
@@ -47,6 +48,7 @@ phases="capture plan ship"
 st_task=""
 st_url=""
 st_leaf=""
+st_final=""
 st_updated=0
 st_capture="pending"
 st_plan="pending"
@@ -73,6 +75,7 @@ load() {
       task) st_task="$v" ;;
       url) st_url="$v" ;;
       leaf) st_leaf="$v" ;;
+      final) st_final="$v" ;;
       updated) st_updated="$v" ;;
       capture) st_capture="$v" ;;
       plan) st_plan="$v" ;;
@@ -99,6 +102,7 @@ save() {
     echo "plan $st_plan"
     echo "ship $st_ship"
     echo "leaf $st_leaf"
+    echo "final $st_final"
     echo "updated $(date +%s)"
   } >"$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
 }
@@ -291,6 +295,23 @@ cmd_set() {
   exit 0
 }
 
+# The ship pipeline's last step, declared by the ship skill once pipeline selection settles. It
+# exists for the Stop backstop: with it, "turn ended while ship was running" splits into "on the
+# final step - the classic dropped `set ship done`, promote" and "mid-pipeline - a pause, keep
+# spinning". Best-effort like every badge call; undeclared falls back to promoting either way.
+cmd_final() {
+  local step="${1:-}"
+  [ -n "$step" ] || {
+    echo "f10-state: final needs a step name" >&2
+    exit 2
+  }
+  resolve_sid || exit 0
+  load
+  st_final="$step"
+  save
+  exit 0
+}
+
 cmd_task() {
   local id="${1:-}" url="${2:-}"
   [ -n "$id" ] || {
@@ -349,6 +370,7 @@ cmd_seed() {
   st_task=""
   st_url=""
   st_leaf=""
+  st_final=""
   st_capture="pending"
   st_plan="pending"
   st_ship="pending"
@@ -401,6 +423,7 @@ cmd_show() {
     printf '%-8s %s %s\n' "$p" "$_glyph" "$status"
   done
   [ -n "$st_leaf" ] && printf 'leaf     %s\n' "$st_leaf"
+  [ -n "$st_final" ] && printf 'final    %s\n' "$st_final"
   printf 'updated  %ss ago\n' "$(($(date +%s) - st_updated))"
   exit 0
 }
@@ -528,16 +551,19 @@ cmd_hook() {
       save
       ;;
     Stop)
-      # The turn is over, so nothing is still running - whatever the last step forgot to say. This
-      # is the backstop for the instruction a run is most likely to drop: the final `set ship done`
-      # arrives after the pipeline, the PR and the report, which is precisely where an agent stops
-      # following prose. Left to the steps alone, a finished run sits on a spinning glyph until the
-      # ttl retires it.
+      # The turn is over - the backstop for the instruction a run is most likely to drop: the
+      # final `set ship done` arrives after the pipeline, the PR and the report, which is
+      # precisely where an agent stops following prose. Left to the steps alone, a finished run
+      # sits on a spinning glyph until the ttl retires it.
       #
-      # `failed` and `partial` are left alone (failure.md marks them before reporting, and that is
-      # the outcome), and a pause mid-run - a gap questionnaire, a confirmation - reads as done
-      # until the next step says otherwise. Overstating by one glyph for the length of a question
-      # is the cheaper error.
+      # `failed` and `partial` are left alone (failure.md marks them before reporting, and that
+      # is the outcome). For capture and plan - single-turn phases - running at turn end means
+      # done. For ship it does not: an interactive run crosses many turn boundaries (a question,
+      # a steering message, a review poll), and promoting at each one painted implement-in-
+      # progress solid green. So ship promotes only when its leaf *is* the declared final step -
+      # the dropped-last-call case - and otherwise keeps spinning: a mid-pipeline turn end is a
+      # pause, and a run that truly died there is the ttl's to retire. No `final` declared (or a
+      # leafless running) → the old rule: promote, overstate, cheaper error.
       resolve_sid "$hook_sid" || exit 0
       load || exit 0
       finalize=0
@@ -550,11 +576,13 @@ cmd_hook() {
         finalize=1
       fi
       if [ "$st_ship" = "running" ]; then
-        st_ship="done"
-        finalize=1
+        if [ -z "$st_final" ] || [ -z "$st_leaf" ] || [ "$st_leaf" = "$st_final" ]; then
+          st_ship="done"
+          st_leaf=""
+          finalize=1
+        fi
       fi
       [ "$finalize" = 1 ] || exit 0
-      st_leaf=""
       save
       ;;
     SessionStart)
@@ -590,6 +618,10 @@ case "${1:-}" in
     shift
     cmd_task "$@"
     ;;
+  final)
+    shift
+    cmd_final "$@"
+    ;;
   seed)
     shift
     cmd_seed "$@"
@@ -609,6 +641,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
 
   set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior> [<leaf>]
   task <id> [<url>]        record the task this run is about
+  final <step>             declare the ship pipeline's last step
   seed <skill>             begin a fresh run - hooks call this, steps do not
   render [<session id>]    the status-line segment; status-line JSON on stdin
   show                     the current run, human-readable
