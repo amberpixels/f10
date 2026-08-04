@@ -360,32 +360,92 @@ is_description() {
   [ "$#" -gt 1 ]
 }
 
-# A skill invocation begins a run, and a run owns the three glyphs for its duration - so this
-# resets the phases rather than merging into whatever the last one left behind. The task id is
-# reset with them: keeping it would caption the new run with the old run's task, which is the one
-# way this badge could actively mislead.
+# What the first token of a run's argument names, where it names a task at all: a task id
+# (WS-2703, or bare 2703) is itself, a plan path is its basename - the same naming rule the
+# PostToolUse arm relies on. Empty for everything else (a url, a description, no argument),
+# which the caller reads as "the argument claims nothing".
+ref_task_of() {
+  local a="${1:-}"
+  a="${a//--dry-run/}"
+  # shellcheck disable=SC2086 # deliberate: the reference, when there is one, is the first token
+  set -- $a
+  local t="${1:-}"
+  case "$t" in
+    *.md)
+      t="${t##*/}"
+      printf '%s' "${t%.md}"
+      return 0
+      ;;
+    http://* | https://*) return 0 ;;
+  esac
+  [[ "$t" =~ ^[A-Za-z]+-[0-9]+$ || "$t" =~ ^[0-9]+$ ]] && printf '%s' "$t"
+  return 0
+}
+
+# A skill invocation begins a run, and a run owns the three glyphs for its duration - so seeding
+# resets the phases rather than merging into whatever the last one left behind. With one
+# exception: a chain of invocations over ONE task in one session - plan, then ship, each handing
+# its output to the next - is a single run in stages, and it is detectable right here, because
+# the new argument names the task the state already holds. Wiping there is how a plan this very
+# session had just written once rendered as `skipped` the moment ship started. So a matching
+# reference carries the settled phases (done/prior/partial) forward and resets only what the new
+# skill is about to redo; anything else is a genuinely new run and resets whole - task id
+# included, because keeping it would caption the new run with the old run's task, which is the
+# one way this badge could actively mislead.
 cmd_seed() {
   local skill="${1:-}" args="${3:-}"
   resolve_sid "${2:-}" || exit 0
-  st_task=""
-  st_url=""
+
+  # Chained only for plan/ship: capture always mints a new task, so an id argument to it never
+  # continues anything. A bare number matches its prefixed form - `ship 2703` continues WS-2703.
+  local ref up_ref up_task chain=0
+  ref="$(ref_task_of "$args")"
+  if [ "$skill" != "capture" ] && [ -n "$ref" ] && load && [ -n "$st_task" ]; then
+    up_ref="$(printf '%s' "$ref" | tr '[:lower:]' '[:upper:]')"
+    up_task="$(printf '%s' "$st_task" | tr '[:lower:]' '[:upper:]')"
+    if [ "$up_ref" = "$up_task" ] || { [[ "$ref" =~ ^[0-9]+$ ]] && [[ "$up_task" == *"-$ref" ]]; }; then
+      chain=1
+    fi
+  fi
+
   st_leaf=""
   st_final=""
-  st_capture="pending"
-  st_plan="pending"
   st_ship="pending"
-  # /f10:capture is one phase from end to end. /f10:plan and /f10:ship route on their argument, and
-  # a description routes them through capture first - so the phase opens here, where the argument
-  # is, rather than waiting for a step that may never think to mention it.
+  if [ "$chain" = 1 ]; then
+    # earlier phases stay where the last invocation left them - if their work is settled; a
+    # leftover `running` or `failed` is stale, not evidence, and resets with the rest
+    case "$st_capture" in done | prior | partial) ;; *) st_capture="pending" ;; esac
+    if [ "$skill" = "plan" ]; then
+      st_plan="pending" # the plan skill is here to (re)plan; a kept `done` would lie over it
+    else
+      case "$st_plan" in done | prior | partial) ;; *) st_plan="pending" ;; esac
+    fi
+  else
+    st_task=""
+    st_url=""
+    st_capture="pending"
+    st_plan="pending"
+  fi
+
+  # /f10:capture is one phase from end to end. /f10:plan and /f10:ship route on their argument,
+  # and a description routes them through capture first - so the phase opens here, where the
+  # argument is, rather than waiting for a step that may never think to mention it. A reference
+  # (or nothing at all) hands /f10:plan straight to fetch, which is the plan phase already
+  # underway - so plan opens at the seed too, deterministically: the run where fetch never really
+  # happens (the task already sat in context) is exactly the run whose prose-reported `set plan
+  # running` never arrives.
   case "$skill" in
     capture) st_capture="running" ;;
-    plan | ship) is_description "$args" && st_capture="running" ;;
+    plan) if is_description "$args"; then st_capture="running"; else st_plan="running"; fi ;;
+    ship) is_description "$args" && st_capture="running" ;;
   esac
   # A plan-path argument names the task in its basename - that is the naming rule the PostToolUse
   # arm already relies on - and the plan-file route skips fetch, so no `task` call ever arrives to
   # record it. This is also the one route where the seed itself holds positive evidence of earlier
-  # work (a plan file exists, so capture happened wherever the plan did), which is cmd_task's bar
-  # for `prior` rather than backfill's later "nobody said" shrug of `skipped`.
+  # work: the file IS the plan phase's output, so plan is `prior` and so is the capture that must
+  # have preceded it - cmd_task's bar, rather than backfill's later "nobody said" shrug of
+  # `skipped`. Only `pending` upgrades: a chain-preserved `done` outranks it (this session did the
+  # work), and under /f10:plan the phase is already `running` toward a rewrite.
   if [ "$skill" = "plan" ] || [ "$skill" = "ship" ]; then
     # shellcheck disable=SC2086 # deliberate: the reference, when there is one, is the first token
     set -- ${args//--dry-run/}
@@ -394,6 +454,7 @@ cmd_seed() {
         st_task="${1##*/}"
         st_task="${st_task%.md}"
         [ "$st_capture" = "pending" ] && st_capture="prior"
+        [ "$st_plan" = "pending" ] && st_plan="prior"
         ;;
     esac
   fi
