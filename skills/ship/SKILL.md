@@ -37,9 +37,9 @@ in their own words). You may suggest a better-fitting pipeline for the task's si
 switch without the user's pick. A **(planless)** pipeline skips capture/fetch/plan for
 free-text input (`conventions/context.md`).
 
-Run the pipeline's steps **in the declared order** - generic ones live under
-`${CLAUDE_PLUGIN_ROOT}/steps/`, project-defined ones are `<name>.md` in the instructions dir
-context resolution reported. Any extra text the user adds is steering/notes for the run.
+Run the pipeline's steps **in the declared order**. The `--all` bundle already carries every
+generic step, and project-defined ones arrived in it as overlays, so read nothing further before
+running them. Any extra text the user adds is steering/notes for the run.
 For a plan you just wrote this run, proceed without re-confirming; open gaps are surfaced by
 the implement step (`conventions/gaps.md`).
 

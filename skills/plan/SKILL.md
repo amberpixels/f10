@@ -29,8 +29,8 @@ argument is free text and the route starts there.
 - Free-text description: run `steps/capture.md` (create the task) → `steps/fetch.md` →
   `steps/plan.md`.
 
-Follow each step file in order - all live under `${CLAUDE_PLUGIN_ROOT}/steps/`. Any extra text
-the user adds is steering/notes for the run.
+Follow each step file in order - the resolve bundle already carries them, so read nothing further
+from `${CLAUDE_PLUGIN_ROOT}/steps/`. Any extra text the user adds is steering/notes for the run.
 
 **The run is only complete once the plan file exists on disk at
 `<storage root>/plans/<TASK-ID>.md`**, the root context resolution reported. Do not end with
