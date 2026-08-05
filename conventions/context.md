@@ -26,9 +26,9 @@ ${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh                    # once per context
 ${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]    # once per run
 ```
 
-**`conventions.sh` - the static half.** Cats the four cross-cutting rule files (`context`,
-`failure`, `gaps`, `report`). Identical output everywhere, so **load it unless this context
-already holds it** (its banner makes a copy easy to spot). *Per context*, not per
+**`conventions.sh` - the static half.** Cats the five cross-cutting rule files (`context`,
+`latency`, `failure`, `gaps`, `report`). Identical output everywhere, so **load it unless this
+context already holds it** (its banner makes a copy easy to spot). *Per context*, not per
 conversation: a subagent or a fresh session starts empty and does need it.
 
 **`resolve.sh` - the resolved half.** One call does the lookup, worktree layering, the
@@ -36,13 +36,15 @@ instructions listing, overlay concatenation, and the inference probes, printing 
 labelled bundle. Its output **can** change between two runs in one conversation - a different
 worktree, an edited `project.md` - so it is never skipped.
 
-Pass the step(s) this run executes and read the output as the resolved context. The script only **concatenates and probes**: it never interprets `project.md`
+Pass the step(s) this run executes and read the output as the resolved context. The bundle
+carries the **generic step files themselves**, so a run never reads the plugin's `steps/` by
+hand. The script only **concatenates and probes**: it never interprets `project.md`
 or binds an adapter, so you still read the prose and decide. Its one exception: it does honour
 the **Layering** declaration below, since composition must be settled before concatenation.
 
 **`/f10:ship` passes `--all` rather than step names:** ship's step list *is* the ship pipeline,
 declared in the very `project.md` this call prints, so ship cannot name its steps beforehand.
-`--all` cats every overlay each layer holds.
+`--all` cats every generic step and every overlay each layer holds.
 
 What `resolve.sh` returns (and the contract to implement by hand if it is ever unavailable):
 
@@ -65,12 +67,14 @@ What `resolve.sh` returns (and the contract to implement by hand if it is ever u
    **`~/.f10/<project>/instructions/`** (`<project>` = basename of the main checkout, or of the
    cwd outside git). Finding instructions there *is* the declaration: the whole storage root,
    instructions **and** plans, lives there - see **Storage** below.
-4. **Per-step overlays** - each `<step>.md` you asked for (every one a layer holds, under
-   `--all`), concatenated. An overlay extends the generic step. **Precedence is scope-major,
-   specificity-minor**: `main/project.md` → `main/<step>.md` → `worktree/project.md` →
-   `worktree/<step>.md`, later winning - an overlay beats `project.md` *within* its layer, but
-   the worktree layer beats both of main's. The bundle prints in that order - read top to
-   bottom, the last statement stands.
+4. **The steps** - each `<step>.md` you asked for (every one, under `--all`): the plugin's
+   **generic step** first, in a block of its own, then the layers' same-named overlays. An
+   overlay extends the generic step. **Precedence is scope-major, specificity-minor**: generic
+   step → `main/project.md` → `main/<step>.md` → `worktree/project.md` → `worktree/<step>.md`,
+   later winning - an overlay beats `project.md` *within* its layer, but the worktree layer
+   beats both of main's. The bundle prints in that order - read top to bottom, the last
+   statement stands. A requested name with no generic file says so, and is project-defined
+   (point 5).
 5. **What each layer holds** - an `instructions files:` line naming the `.md` files present per
    layer. The layer blocks and the `absent:` line cover only the names you requested, so
    without it a bundle could omit an overlay while asserting nothing is missing - and it is the

@@ -3,10 +3,10 @@
 #
 # Does, in a single call, the project-specific half of conventions/context.md's loading order:
 # locate .f10/instructions/ (layering a linked worktree's on top of main's), list what each layer
-# holds, cat each layer's project.md + the per-step overlays in precedence order, and run the
-# inference probes (remote host, stack, verify tooling). A skill runs this once per run and reads
-# the bundle, instead of spending five round trips reading/globbing/greping by hand. It never
-# fails - absence is a valid result.
+# holds, cat the generic step files this run executes plus each layer's project.md and the
+# per-step overlays in precedence order, and run the inference probes (remote host, stack, verify
+# tooling). A skill runs this once per run and reads the bundle, instead of spending five round
+# trips reading/globbing/greping by hand. It never fails - absence is a valid result.
 #
 # It concatenates and probes; it does not interpret. The single exception is the worktree layer's
 # `Layering` declaration, which has to be read before anything can be concatenated.
@@ -16,9 +16,15 @@
 # step. Keeping them apart is what lets a caller load them once per context and still re-resolve
 # project facts on every run.
 #
-# Usage:  resolve.sh <step> [<step> ...]   cat project.md + the named overlays
-#         resolve.sh --all                 cat project.md + every overlay a layer holds
-#         resolve.sh                       facts, layering, listing and probes only, no overlays
+# The generic step files are printed here anyway, and they are static prose too - so the line is
+# static-and-universal (load once per context) against static-but-selected (resolve every run),
+# not prose against facts. *Which* steps a run executes is resolved, and conventions.sh takes no
+# arguments precisely so it can never select anything. The alternative is a third call, which is
+# the round trip this exists to remove.
+#
+# Usage:  resolve.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
+#         resolve.sh --all                 cat every generic step + project.md + every overlay
+#         resolve.sh                       facts, layering, listing and probes only, no steps
 #   e.g.  resolve.sh capture  |  resolve.sh fetch plan  |  resolve.sh --all
 #
 # --all exists for /f10:ship, whose step list *is* the ship pipeline - and the pipeline is declared
@@ -27,6 +33,7 @@
 
 set -uo pipefail
 cwd="$(pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # --all anywhere in the arguments means "every overlay present"; everything else is a step name.
 # Kept as a string rather than an array: bash 3.2 trips over "${empty[*]}" under `set -u`, and the
@@ -195,6 +202,41 @@ if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
   echo "note: ignoring nested $cwd/.f10/instructions - resolution is anchored to the checkout root"
 fi
 echo
+
+# --- the generic steps this run executes: the base every overlay extends ---
+# Ahead of the instructions, because that is where they sit in the precedence chain. Printed at
+# all because the alternative is every skill spending a round trip on `cat steps/<name>.md`
+# before it can start - the one extra turn guaranteed on every f10 run (conventions/latency.md).
+print_step() {
+  if [ -f "$root/steps/$1.md" ]; then
+    echo "--- step: $1 (generic) ---"
+    cat "$root/steps/$1.md"
+    echo
+  else
+    echo "--- step: $1 - no generic step: project-defined, so its instructions file IS the step ---"
+    echo
+  fi
+}
+
+if [ "$all" = 1 ] || [ -n "$steps" ]; then
+  echo "--- generic steps (plugin prose; the instructions below extend them, later wins) ---"
+  echo
+  if [ "$all" = 1 ]; then
+    # every one of them, since --all's caller is /f10:ship, whose pipeline this same bundle is
+    # what declares - and all of them are reachable from it: a free-text ship runs capture, fetch
+    # and plan before the pipeline names any of the rest.
+    shopt -s nullglob
+    for f in "$root"/steps/*.md; do
+      b="${f##*/}"
+      print_step "${b%.md}"
+    done
+    shopt -u nullglob
+  else
+    for s in $steps; do
+      print_step "$s"
+    done
+  fi
+fi
 
 # --- the instructions, in precedence order: later in this bundle wins ---
 if [ -z "$l1_dir" ]; then

@@ -11,6 +11,10 @@ Context: per `conventions/context.md` - the PR adapter comes from `project.md â†
    _this_ PR only. If this step was reached any other way, ask first.
 2. **Open it** via the project's PR adapter - a skill, or plain `gh pr create` /
    `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
+   An adapter's numbered procedure is a **spec, not a turn budget**: run every step it declares,
+   in its order, but collapse consecutive mechanical ones into a single call
+   (`conventions/latency.md`), splitting only where an output decides what comes next. Never
+   skip, reorder, or substitute a different tool (`conventions/failure.md` rule 4).
    In stealth mode, no f10 traces in the branch name, commits, or PR text (see `conventions/context.md`).
 3. **Never merge.** Opening the PR is yours; merging is a human's action - regardless of
    review state - unless project.md explicitly says otherwise.

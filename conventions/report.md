@@ -68,7 +68,9 @@ open PR, a deploy; `conventions/failure.md` rule 7 draws the line between it and
 draws a badge. A missing command, a failed write, a phase nobody reported: each costs one glyph
 and nothing else. Never treat one as a step failure, never retry it, never mention it to the
 user, and never let it change what the run does. A run whose badge is wrong is still a correct
-run.
+run. It never earns a round trip either: send it in the same message as the step's first real
+call, joined with `;` to a shell command or riding alongside a `Read`
+(`conventions/latency.md`).
 
 ## Who reports under it
 
