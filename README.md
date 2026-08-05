@@ -91,9 +91,10 @@ and executes nothing.
   the user picks non-default ones, never the agent, and a *(planless)* one skips ticket and plan
   file for tiny chores.
 - **Convention** - a cross-cutting rule every step obeys, in `conventions/`: `context.md`
-  (config loading, pipelines, stealth), `gaps.md` (open decisions), `failure.md` (what to do
-  when a step cannot complete), `report.md` (the shape a successful run prints). They load as one
-  fixed bundle, once per context - unlike project resolution, which reruns every run.
+  (config loading, pipelines, stealth), `latency.md` (what a run costs: round trips, not
+  commands), `gaps.md` (open decisions), `failure.md` (what to do when a step cannot complete),
+  `report.md` (the shape a successful run prints). They load as one fixed bundle, once per
+  context - unlike project resolution, which reruns every run.
 - **Mode** - an alternate run in `modes/` that replaces execution rather than adding a rule.
   `dry-run.md` is the only one today, loaded solely when `--dry-run` fires.
 
@@ -141,7 +142,7 @@ flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
         skills2["skills/{capture,plan,ship}"]
         gsteps["steps/{capture,fetch,plan,implement,pr,push,review,deploy}.md"]
-        conv["conventions/{context,gaps,failure,report}.md"]
+        conv["conventions/{context,latency,gaps,failure,report}.md"]
         modes2["modes/dry-run.md"]
     end
     subgraph repo ["&lt;repo&gt;/.f10 - project-specific, often untracked"]
@@ -154,9 +155,10 @@ flowchart TB
     gsteps -- "3· write" --> plans2
 ```
 
-Resolution order (full contract in `conventions/context.md`): `main/project.md` →
-`main/<step>.md` → `worktree/project.md` → `worktree/<step>.md` → inferred defaults, later
-winning - scope ahead of specificity. A linked worktree layers on top of main's instructions,
+Resolution order (full contract in `conventions/context.md`): the plugin's generic step →
+`main/project.md` → `main/<step>.md` → `worktree/project.md` → `worktree/<step>.md` → inferred
+defaults, later winning - scope ahead of specificity. All of it arrives in one bundle, generic
+step files included, so a run never reads `steps/` by hand. A linked worktree layers on top of main's instructions,
 takes them wholesale when it has none of its own, or shuts them out with
 `Layering - replaces main`. Plans always land in the current worktree.
 
@@ -262,7 +264,7 @@ appearing in a reply into a clickable footer badge - one regex per tracker, no s
 
 ## Development
 
-f10's executable surface is `bin/`: `conventions.sh` cats the four convention files and nothing
+f10's executable surface is `bin/`: `conventions.sh` cats the five convention files and nothing
 else, `resolve.sh` resolves one repo's instructions, `f10-state.sh` records where a run is for the
 status line to draw. The line between the first two is static vs. resolved - one is identical
 everywhere and loads once per context, the other varies by repo and worktree and reruns every run.
@@ -284,18 +286,17 @@ deliberately left off - are documented in `.shellcheckrc`.
 
 ## Status
 
-v0.8.1 - a **status-line badge**. Three glyphs - capture, plan, ship - plus the task id, live in
-Claude Code's status line while a run is going, so a pipeline stops being invisible between the
-prompt and the plan file. Steps report their phase through `bin/f10-state.sh` precisely, and hooks
-report reliably, which is what lets the steps stay best-effort: a skill starting and whether its
-argument routes through capture, a plan file being written, the task id that file is named after,
-and the end of a turn, which closes out a run whose last step never said so. A phase nobody
-reported means *nobody said*, never *it did not happen* - the badge overstates by a glyph before it
-claims a phase was skipped when it ran. State is one file per session, outside every repo, and the
-whole thing is cosmetic by construction: nothing reads it back, so a call that fails costs one
-glyph and nothing else (`conventions/report.md`). Also: the marketplace entry no longer resolves
-with a trailing slash, so `${CLAUDE_PLUGIN_ROOT}` stops printing `//` in every path f10 runs.
-Builds on v0.7.0's report convention, worktree layering, and split context loading.
+v0.13.0 - **turns, not commands**. A `/f10:ship` run over code that was already written took
+202s; timing every command it executed accounts for ~50s of that, and the rest was fifteen agent
+round trips. So the round trip is now named as f10's unit of cost, in a fifth convention:
+`latency.md` - independent calls go in one message, a mechanical sequence goes in one call, a
+numbered procedure (a step's or a project adapter's) is a spec and not a turn budget, and none of
+it is ever a licence to skip, reorder, or substitute. Three changes follow it. `resolve.sh` now
+prints the generic step files themselves, so no skill spends a turn reading `steps/` before it can
+start - the one extra round trip every f10 run was guaranteed to pay. The status-line badge rides
+along with the step's first real call instead of costing a message of its own. And `implement`
+stops re-verifying a tree that has not moved since this session's own green run, which is a lint
+pass and a test pass of pure theatre. Builds on v0.12's chained-run badge fixes.
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles** - named configs a repo's
 `project.md` references instead of repeating).
 

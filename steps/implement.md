@@ -20,6 +20,10 @@ Context: per `conventions/context.md` - guardrails and verify commands come from
    "never run X" rules. No Verify section → detect: `justfile` → `just lint` / `just test`;
    `Makefile` → its standard targets; else the stack's idiomatic verify commands (`go test ./...` +
    the linter the repo configures, etc.). Fix what you broke.
+   **The one skip: a tree that did not move.** If *this session* already ran these same commands
+   green and nothing has touched the working tree since, say so and move on - re-running on a
+   byte-identical tree proves nothing. A green you did not run yourself, one from an earlier
+   session, or any edit, checkout, merge or dependency change since, and it runs.
 3. **Hand off.** Briefly note what changed, then continue with the next ship-pipeline step.
 
 **On failure:** verify stays red and you cannot fix it - stop here. Never continue to `pr`,
