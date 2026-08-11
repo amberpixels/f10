@@ -54,8 +54,11 @@ skill is an **entry point** into that chain:
 /plugin install f10@amberpixels
 ```
 
-No per-repo setup. With no `.f10/` present, steps infer what they can from the git remote and the
-repo's build files. Add `.f10/instructions/project.md` to pin the facts.
+Per-repo setup is optional, and f10 works either way. With no `.f10/` present, steps infer what
+they can from the git remote and the repo's build files, so you can install and run immediately.
+When you would rather have a fact pinned than guessed - the tracker, the verify commands, the PR
+flow - declare it in `.f10/instructions/project.md` and f10 stops inferring that one. Declare as
+much or as little as you like; anything you leave out stays inferred.
 
 ## Quick start
 
@@ -159,12 +162,13 @@ always land in the current worktree.
 A run happens where you cannot see it: the plan file lands only at the end, the tracker knows
 nothing until capture is done, the rest scrolls past. Three glyphs in Claude Code's
 [status line](https://code.claude.com/docs/en/statusline) say where the run is, behind an F10
-keycap icon (`󱊴`) that says whose circles they are:
+keycap icon that says whose circles they are:
 
-```text
-e@host 󱊴 ●●◎ f10  main [Opus]
-       ╰ captured, planned, now shipping
-```
+<img src="statusline.svg" alt="e@host, an F10 keycap, three glyphs (done, done, running), then f10 main [Opus] - captured, planned, now shipping" width="472">
+
+Done is green, running is bright cyan, and the keycap is the Nerd Font glyph `md-keyboard_f10`
+(U+F12B4). This is a drawing, not a screenshot, because that codepoint is private-use: it renders
+in a patched terminal font and shows as an empty box everywhere else, GitHub included.
 
 | glyph | phase state |
 |---|---|
@@ -173,8 +177,13 @@ e@host 󱊴 ●●◎ f10  main [Opus]
 | `●` | done |
 | `◉` | prior - done before this run (`/f10:ship ABC-1` reusing a saved plan) |
 | `◌` | skipped - will not happen this run (a planless pipeline never plans) |
-| `󰅚` | partial - stopped, but work survived (committed but push failed, PR open but CI red) |
+| `󰅚` (U+F015A) | partial - stopped, but work survived (committed but push failed, PR open but CI red) |
 | `✗` | failed - the run stopped here with nothing usable |
+
+Six of those are common Unicode. Partial's `󰅚` is `md-close-circle-outline` (U+F015A), a Nerd Font
+private-use codepoint, so on GitHub and in any unpatched font its cell above is an empty box. It
+draws correctly in a patched terminal font, and the code spans still carry the real character if
+you copy one.
 
 Each state has its own shape and color only reinforces it, because a status line is read at a
 glance, often in a daltonized theme where red/green is exactly the pair that collapses. `NO_COLOR`
@@ -232,6 +241,9 @@ session and so retires the badge; a file older than the TTL stops rendering.
 | `F10_STATE_COLOR` | `1` | `0` (or `NO_COLOR`) for shapes without color |
 | `F10_STATE_LINK` | `1` | `0` to drop the hyperlink on the task id |
 | `F10_STATE_GLYPHS` | `○ ◎ ● ◌ ✗ ◉ 󰅚` | pending, running, done, skipped, failed, prior, partial |
+
+All seven positions are required when you override `F10_STATE_GLYPHS`; the seventh renders as an
+empty box here for the reason above, but the code span holds the real U+F015A.
 
 <details>
 <summary>How the badge stays current: two writers</summary>
