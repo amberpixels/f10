@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # f10 · conventions - the static half of a run's context.
 #
-# Cats the five cross-cutting rule files every f10 run obeys. Deliberately inert: no arguments, no
+# Cats the six cross-cutting rule files every f10 run obeys. Deliberately inert: no arguments, no
 # git, no filesystem decisions, no probes. Its output is identical on every machine, in every repo,
 # for every step - which is precisely why it is not part of resolve.sh, whose output is none of
 # those things.
@@ -14,12 +14,12 @@
 # Usage:  conventions.sh
 #   Arguments are ignored rather than rejected - a caller passing a stale step name should get the
 #   conventions, not an error. There is nothing to select: every path but capture-only already
-#   needed all four, so selecting cost a rule to follow and saved one file.
+#   needed all of them, so selecting cost a rule to follow and saved one file.
 
 set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-convs=(context latency failure gaps report)
+convs=(context latency failure gaps report voice)
 
 echo "=== f10 conventions - static, identical every run. Load once per context. ==="
 echo "carries: ${convs[*]}"
