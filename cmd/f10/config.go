@@ -211,18 +211,8 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 		fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, e.field.Name, styleOrigin(e.field.Origin).Render(paddedOrigin), e.value)
 	}
 
-	faint := lipgloss.NewStyle().Faint(true)
-
 	for i, e := range blocks {
-		switch {
-		case i == 0 && len(rows) > 0:
-			fmt.Fprintln(w)
-
-			if limit > 0 {
-				fmt.Fprintln(w, faint.Render(rule(limit)))
-				fmt.Fprintln(w)
-			}
-		case i > 0:
+		if i > 0 || len(rows) > 0 {
 			fmt.Fprintln(w)
 		}
 
