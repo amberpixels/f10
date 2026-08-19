@@ -333,7 +333,7 @@ func parseFile(path, layer string) (map[string]section, []section) {
 			return
 		}
 
-		current.body = strings.TrimSpace(current.body)
+		current.body = normalizeBody(current.body)
 		if canonical := canonicalName(current.name); canonical != "" {
 			fields[canonical] = *current
 		} else if current.body != "" {
@@ -393,6 +393,36 @@ func isProse(value string) bool {
 	return strings.Contains(strings.TrimSpace(value), "\n")
 }
 
+// normalizeBody reduces declared prose to logical lines: hard-wrapped
+// continuations (broken at the author's editor width, which is not a
+// clause boundary) rejoin their paragraph or bullet, so renderers wrap to
+// the reader's width instead of double-wrapping. A bullet or a blank line
+// starts a new logical line; blanks collapse to one paragraph break.
+func normalizeBody(body string) string {
+	var logical []string
+
+	for line := range strings.SplitSeq(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		switch {
+		case trimmed == "":
+			if n := len(logical); n > 0 && logical[n-1] != "" {
+				logical = append(logical, "")
+			}
+		case isBullet(trimmed) || len(logical) == 0 || logical[len(logical)-1] == "":
+			logical = append(logical, trimmed)
+		default:
+			logical[len(logical)-1] += " " + trimmed
+		}
+	}
+
+	return strings.TrimSpace(strings.Join(logical, "\n"))
+}
+
+func isBullet(line string) bool {
+	return strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ")
+}
+
 // rolesLines reshapes Roles prose so each role sits on its own line:
 // the paragraph is unwrapped (declared prose is hard-wrapped at the
 // author's editor width, which is not a clause boundary), then split at
@@ -401,8 +431,7 @@ func isProse(value string) bool {
 // own lines.
 func rolesLines(value string) string {
 	for line := range strings.SplitSeq(value, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+		if isBullet(strings.TrimSpace(line)) {
 			return value
 		}
 	}
