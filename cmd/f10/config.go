@@ -211,31 +211,38 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 		fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, e.field.Name, styleOrigin(e.field.Origin).Render(paddedOrigin), e.value)
 	}
 
+	blockNameW := 0
+	for _, e := range blocks {
+		blockNameW = max(blockNameW, len(e.field.Name))
+	}
+
 	for i, e := range blocks {
 		if i > 0 || len(rows) > 0 {
 			fmt.Fprintln(w)
 		}
 
-		stanzaHeader(w, e.field.Name, e.origin, styleOrigin(e.field.Origin), limit)
+		stanzaHeader(w, e.field.Name, e.origin, styleOrigin(e.field.Origin), limit, blockNameW)
 		renderProse(w, e.value, limit)
 	}
 }
 
 // stanzaHeader draws a section header as a horizontal rule carrying the
 // name and origin - `── Roles · declared ─────` - so each prose block gets
-// a crisp edge to scan by. Piped output keeps the plain two-word header.
-func stanzaHeader(w io.Writer, name, origin string, originStyle lipgloss.Style, limit int) {
+// a crisp edge to scan by. Names pad to nameW so the dot and the origin
+// align down the page. Piped output keeps the plain two-word header.
+func stanzaHeader(w io.Writer, name, origin string, originStyle lipgloss.Style, limit, nameW int) {
 	bold := lipgloss.NewStyle().Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
+	padded := fmt.Sprintf("%-*s", nameW, name)
 
 	if limit <= 0 {
-		fmt.Fprintf(w, "%s  %s\n", name, origin)
+		fmt.Fprintf(w, "%s  %s\n", padded, origin)
 		return
 	}
 
-	used := 3 + len(name) + 3 + len(origin) + 1 // "── ", " · " and the trailing space, in display cells
+	used := 3 + nameW + 3 + len(origin) + 1 // "── ", " · " and the trailing space, in display cells
 	fmt.Fprintln(w,
-		faint.Render("── ")+bold.Render(name)+faint.Render(" · ")+
+		faint.Render("── ")+bold.Render(padded)+faint.Render(" · ")+
 			originStyle.Render(origin)+" "+faint.Render(rule(limit-used)))
 }
 
