@@ -80,6 +80,24 @@ func TestParseFileHeadingShape(t *testing.T) {
 		t.Errorf("Roles not caught from a plain label: %q", roles.body)
 	}
 
+	// each role clause renders on a line of its own, hard-wrap unwrapped
+	got := rolesLines("plan as a **senior software architect + Ruby on Rails developer**; implement as a\n" +
+		"**senior Ruby on Rails developer**. Quality bar: SOLID / DRY / MVC and the conventions in\n" +
+		"the repo's CLAUDE.md.")
+	want := "plan as a **senior software architect + Ruby on Rails developer**\n" +
+		"implement as a **senior Ruby on Rails developer**.\n" +
+		"Quality bar: SOLID / DRY / MVC and the conventions in the repo's CLAUDE.md."
+
+	if got != want {
+		t.Errorf("rolesLines:\n got: %q\nwant: %q", got, want)
+	}
+
+	// the contract's bullet shape is already line-structured and stays put
+	bullets := "- **Always** - plan as a senior architect\n- **Conditional** - + security engineer on auth"
+	if rolesLines(bullets) != bullets {
+		t.Errorf("bullet-shaped Roles were reflowed: %q", rolesLines(bullets))
+	}
+
 	if contains(fields["Project"].body, "Roles:") {
 		t.Errorf("Roles still buried in Project: %q", fields["Project"].body)
 	}
