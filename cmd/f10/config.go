@@ -116,8 +116,9 @@ func renderHuman(w io.Writer, v *view) {
 	}
 
 	if len(v.Plans) > 0 {
-		// the freshest few, not the whole dir - it grows without bound,
-		// and --json still carries the full list
+		// the freshest few, not the whole dir - it grows without bound.
+		// No directory here: it is always <storage root>/plans, and
+		// --json still carries both the path and the full list
 		const recent = 3
 
 		shown := v.Plans
@@ -130,7 +131,7 @@ func renderHuman(w io.Writer, v *view) {
 			list += ", ..."
 		}
 
-		headerRow(w, "plans", fmt.Sprintf("%d in %s: %s", len(v.Plans), v.PlansDir, list), limit, plain)
+		headerRow(w, "plans", fmt.Sprintf("%d: %s", len(v.Plans), list), limit, plain)
 	}
 
 	fmt.Fprintln(w)
@@ -154,41 +155,105 @@ func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style
 	}
 }
 
+// stanzaIndent is the left margin of a prose value block.
+const stanzaIndent = 4
+
+// renderFields prints scalar values as aligned rows and prose values as
+// stanzas - a `name  origin` header with the value as an indented block
+// using the full width. One table cannot serve both: a three-column prefix
+// leaves a paragraph a ribbon of the terminal, and a paragraph gives a
+// scalar nothing back.
 func renderFields(w io.Writer, fields []facts.Field, limit int) {
+	origins := displayOrigins(fields)
+
 	nameW, originW := 0, 0
-	for _, f := range fields {
+	for i, f := range fields {
 		nameW = max(nameW, len(f.Name))
-		originW = max(originW, len(f.Origin))
+		originW = max(originW, len(origins[i]))
 	}
 
-	valueIndent := nameW + 2 + originW + 2
+	bold := lipgloss.NewStyle().Bold(true)
+	prevStanza := false
 
-	for _, f := range fields {
-		origin := fmt.Sprintf("%-*s", originW, f.Origin)
+	for i, f := range fields {
 		value := f.Value
-
 		if value == "" {
 			value = "-"
 		}
 
+		origin := origins[i]
+		inline := !strings.Contains(value, "\n") &&
+			(limit <= 0 || nameW+2+originW+2+len(value) <= limit)
+
+		if inline {
+			if prevStanza {
+				fmt.Fprintln(w)
+			}
+
+			paddedOrigin := fmt.Sprintf("%-*s", originW, origin)
+			fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, f.Name, styleOrigin(f.Origin).Render(paddedOrigin), value)
+
+			prevStanza = false
+
+			continue
+		}
+
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+
+		fmt.Fprintf(w, "%s  %s\n", bold.Render(f.Name), styleOrigin(f.Origin).Render(origin))
+		renderProse(w, value, limit)
+
+		prevStanza = true
+	}
+}
+
+// renderProse prints a value block: each logical line wrapped to the
+// width, bullets keeping a hanging indent so continuations align with
+// their text.
+func renderProse(w io.Writer, value string, limit int) {
+	for line := range strings.SplitSeq(value, "\n") {
+		hang := 0
+		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+			hang = 2
+		}
+
 		first := true
 
-		for line := range strings.SplitSeq(value, "\n") {
-			for _, seg := range wrap(line, limit-valueIndent) {
-				if first {
-					fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, f.Name, styleOrigin(f.Origin).Render(origin), seg)
-
-					first = false
-
-					continue
-				}
-
-				// wrapped and prose continuation lines alike sit
-				// under the value column, never under the labels
-				fmt.Fprintf(w, "%-*s%s\n", valueIndent, "", seg)
+		for _, seg := range wrap(line, limit-stanzaIndent-hang) {
+			indent := stanzaIndent
+			if !first {
+				indent += hang
 			}
+
+			fmt.Fprintf(w, "%-*s%s\n", indent, "", seg)
+
+			first = false
 		}
 	}
+}
+
+// displayOrigins shortens origin labels for display: the layer qualifier
+// on "declared" earns its width only when more than one declaring layer is
+// actually in play. The full origin stays in --json.
+func displayOrigins(fields []facts.Field) []string {
+	declared := map[string]bool{}
+	for _, f := range fields {
+		if strings.HasPrefix(f.Origin, "declared") {
+			declared[f.Origin] = true
+		}
+	}
+
+	origins := make([]string, len(fields))
+	for i, f := range fields {
+		origins[i] = f.Origin
+		if len(declared) == 1 && strings.HasPrefix(f.Origin, "declared") {
+			origins[i] = "declared"
+		}
+	}
+
+	return origins
 }
 
 // wrap greedily breaks text at spaces so every line fits width. Width 0 or
