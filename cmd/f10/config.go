@@ -181,7 +181,16 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 		originW = max(originW, len(origins[i]))
 	}
 
-	prevStanza := false
+	// partition by render form: every inline row first, so scalars scan as
+	// one table, then the prose blocks behind a bare rule - the seam
+	// between the two groups is part of the layout
+	type entry struct {
+		field  facts.Field
+		origin string
+		value  string
+	}
+
+	var rows, blocks []entry
 
 	for i, f := range fields {
 		value := f.Value
@@ -189,31 +198,36 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 			value = "-"
 		}
 
-		origin := origins[i]
-		inline := !strings.Contains(value, "\n") &&
-			(limit <= 0 || nameW+2+originW+2+len(value) <= limit)
+		e := entry{field: f, origin: origins[i], value: value}
+		if !strings.Contains(value, "\n") && (limit <= 0 || nameW+2+originW+2+len(value) <= limit) {
+			rows = append(rows, e)
+		} else {
+			blocks = append(blocks, e)
+		}
+	}
 
-		if inline {
-			if prevStanza {
+	for _, e := range rows {
+		paddedOrigin := fmt.Sprintf("%-*s", originW, e.origin)
+		fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, e.field.Name, styleOrigin(e.field.Origin).Render(paddedOrigin), e.value)
+	}
+
+	faint := lipgloss.NewStyle().Faint(true)
+
+	for i, e := range blocks {
+		switch {
+		case i == 0 && len(rows) > 0:
+			fmt.Fprintln(w)
+
+			if limit > 0 {
+				fmt.Fprintln(w, faint.Render(rule(limit)))
 				fmt.Fprintln(w)
 			}
-
-			paddedOrigin := fmt.Sprintf("%-*s", originW, origin)
-			fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, f.Name, styleOrigin(f.Origin).Render(paddedOrigin), value)
-
-			prevStanza = false
-
-			continue
-		}
-
-		if i > 0 {
+		case i > 0:
 			fmt.Fprintln(w)
 		}
 
-		stanzaHeader(w, f.Name, origin, styleOrigin(f.Origin), limit)
-		renderProse(w, value, limit)
-
-		prevStanza = true
+		stanzaHeader(w, e.field.Name, e.origin, styleOrigin(e.field.Origin), limit)
+		renderProse(w, e.value, limit)
 	}
 }
 
