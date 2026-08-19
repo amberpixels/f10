@@ -50,12 +50,13 @@ type Effective struct {
 	TrackerKind string `json:"trackerKind,omitempty"`
 }
 
-// contractFields is the project.md contract, in the order
-// conventions/context.md lists it.
+// contractFields is the project.md contract. The order is presentation
+// order, not the contract's listing order: the short identity facts
+// (Project, Visibility, Storage, Layering) lead, the prose fields follow.
 func contractFields() []string {
 	return []string{
-		"Project", "Layering", "Roles", "Tracker", "Hosting & PR",
-		"Ship pipeline(s)", "Verify", "Review", "Guardrails", "Visibility", "Storage",
+		"Project", "Visibility", "Storage", "Layering", "Roles", "Tracker",
+		"Hosting & PR", "Ship pipeline(s)", "Verify", "Review", "Guardrails",
 	}
 }
 
