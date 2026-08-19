@@ -25,7 +25,7 @@ jobs:
 
       - uses: extractions/setup-just@v3
 
-      # The same recipe developers run locally, so `just lint` and CI cannot
-      # drift apart. ci depends on lint alone - it verifies, never rewrites.
-      - name: Lint
+      # The same recipe developers run locally, so `just ci` and CI cannot
+      # drift apart. ci is lint + test - it verifies, never rewrites.
+      - name: Lint and test
         run: just ci
