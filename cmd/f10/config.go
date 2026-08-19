@@ -138,17 +138,26 @@ func renderHuman(w io.Writer, v *view) {
 	renderFields(w, v.Fields, limit)
 
 	if len(v.Unrecognized) > 0 {
+		banner := "unrecognized sections (shown, never dropped)"
+
 		fmt.Fprintln(w)
-		fmt.Fprintln(w, faint.Render("unrecognized sections (shown, never dropped):"))
+
+		if limit > 0 {
+			banner = "── " + banner + " " + rule(limit-len(banner)-4)
+		}
+
+		fmt.Fprintln(w, faint.Render(banner))
 		renderFields(w, v.Unrecognized, limit)
 	}
 }
 
-// headerRow prints one label/value line, wrapping the value inside its own
-// column.
+// headerRow prints one label/value line, the label dimmed so values carry
+// the eye, wrapping the value inside its own column.
 func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style) {
+	faint := lipgloss.NewStyle().Faint(true)
+
 	segments := wrap(value, limit-headerIndent)
-	fmt.Fprintf(w, "%-*s%s\n", headerIndent, label, style.Render(segments[0]))
+	fmt.Fprintf(w, "%s%s\n", faint.Render(fmt.Sprintf("%-*s", headerIndent, label)), style.Render(segments[0]))
 
 	for _, s := range segments[1:] {
 		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", style.Render(s))
@@ -172,7 +181,6 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 		originW = max(originW, len(origins[i]))
 	}
 
-	bold := lipgloss.NewStyle().Bold(true)
 	prevStanza := false
 
 	for i, f := range fields {
@@ -202,11 +210,39 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 			fmt.Fprintln(w)
 		}
 
-		fmt.Fprintf(w, "%s  %s\n", bold.Render(f.Name), styleOrigin(f.Origin).Render(origin))
+		stanzaHeader(w, f.Name, origin, styleOrigin(f.Origin), limit)
 		renderProse(w, value, limit)
 
 		prevStanza = true
 	}
+}
+
+// stanzaHeader draws a section header as a horizontal rule carrying the
+// name and origin - `── Roles · declared ─────` - so each prose block gets
+// a crisp edge to scan by. Piped output keeps the plain two-word header.
+func stanzaHeader(w io.Writer, name, origin string, originStyle lipgloss.Style, limit int) {
+	bold := lipgloss.NewStyle().Bold(true)
+	faint := lipgloss.NewStyle().Faint(true)
+
+	if limit <= 0 {
+		fmt.Fprintf(w, "%s  %s\n", name, origin)
+		return
+	}
+
+	used := 3 + len(name) + 3 + len(origin) + 1 // "── ", " · " and the trailing space, in display cells
+	fmt.Fprintln(w,
+		faint.Render("── ")+bold.Render(name)+faint.Render(" · ")+
+			originStyle.Render(origin)+" "+faint.Render(rule(limit-used)))
+}
+
+// rule is n cells of horizontal line, none when the header already fills
+// the width.
+func rule(n int) string {
+	if n < 1 {
+		return ""
+	}
+
+	return strings.Repeat("─", n)
 }
 
 // renderProse prints a value block: each logical line wrapped to the
