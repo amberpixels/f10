@@ -187,8 +187,7 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 	}
 
 	// partition by render form: every inline row first, so scalars scan as
-	// one table, then the prose blocks behind a bare rule - the seam
-	// between the two groups is part of the layout
+	// one table, then the prose blocks, a blank line between the groups
 	type entry struct {
 		field  facts.Field
 		origin string
