@@ -164,8 +164,13 @@ func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style
 	}
 }
 
-// stanzaIndent is the left margin of a prose value block.
-const stanzaIndent = 4
+// stanzaIndent and stanzaRightPad are a prose block's margins: a hair of
+// left inset under the header, and enough right inset that text never
+// touches the terminal's edge.
+const (
+	stanzaIndent   = 1
+	stanzaRightPad = 2
+)
 
 // renderFields prints scalar values as aligned rows and prose values as
 // stanzas - a `name  origin` header with the value as an indented block
@@ -268,7 +273,7 @@ func renderProse(w io.Writer, value string, limit int) {
 
 		first := true
 
-		for _, seg := range wrap(line, limit-stanzaIndent-hang) {
+		for _, seg := range wrap(line, limit-stanzaIndent-hang-stanzaRightPad) {
 			indent := stanzaIndent
 			if !first {
 				indent += hang
