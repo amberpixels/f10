@@ -271,18 +271,43 @@ Unrelated to f10 but pairs with it:
 [`footerLinksRegexes`](https://code.claude.com/docs/en/settings#footer-link-badges) turns a task id
 appearing in a reply into a clickable footer badge - one regex per tracker, no script at all.
 
-## Development
+## The binary
 
-f10's executable surface is `bin/`: `conventions.sh` cats the six convention files, `resolve.sh`
-resolves one repo's instructions, `f10-state.sh` records where a run is for the status line to
-draw. The first two split on static vs. resolved: one is identical everywhere and loads once per
-context, the other varies by repo and worktree and reruns every run. The third is on neither side,
-because it writes and nothing in the pipeline reads it back.
+`f10 config`, run inside a repo, prints the effective f10 configuration with a provenance per
+value - `detected`, `declared (main)`, `declared (worktree)`, `default`, `absent` - like
+`git config --show-origin` with detection as a first-class origin. `--json` emits the same view
+for scripting.
 
 ```bash
-just lint   # report findings, change nothing (this is what CI runs)
-just fmt    # rewrite to canonical form
-just fix    # apply shellcheck's auto-fixable findings - run on a clean tree, read the diff
+just install   # go install ./cmd/f10
+f10 config
+```
+
+It is read-only by design: no uniform storage (everything stays in the files where it lives
+today; the binary reads and pre-computes), no scanning (it answers for the repo it runs in,
+never walking the filesystem for projects), and it writes nothing, anywhere. `bin/resolve.sh`
+stays the agent-facing surface - the binary explains to humans what the resolver hands to
+agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
+place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
+wrong. The parity suite in `internal/resolve` runs every fixture through both the Go resolution
+and the script, so their semantics cannot drift apart silently.
+
+## Development
+
+f10's executable surface is `bin/` plus `cmd/f10`. In `bin/`: `conventions.sh` cats the six
+convention files, `resolve.sh` resolves one repo's instructions, `f10-state.sh` records where a
+run is for the status line to draw. The first two split on static vs. resolved: one is identical
+everywhere and loads once per context, the other varies by repo and worktree and reruns every
+run. The third is on neither side, because it writes and nothing in the pipeline reads it back.
+`cmd/f10` is the read-only lookaround binary above.
+
+```bash
+just lint      # shell findings, change nothing (this is what CI runs)
+just fmt       # rewrite shell to canonical form
+just fix       # apply shellcheck's auto-fixable findings - run on a clean tree, read the diff
+just lint-go   # standardgo over the Go half - no lint config file, the ruleset is the binary
+just test      # go test ./..., the resolve.sh parity suite included
+just build     # go build ./...
 ```
 
 Linting is [shellcheck](https://www.shellcheck.net) for correctness and
