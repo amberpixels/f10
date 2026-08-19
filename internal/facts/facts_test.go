@@ -44,9 +44,55 @@ func TestParseFile(t *testing.T) {
 		t.Errorf("Ship pipelines alias not resolved: %q", pipe.body)
 	}
 
-	// unmatched openers are kept, never dropped
-	if len(unknown) != 2 { // the title heading and "Custom notes"
-		t.Errorf("unknown sections = %d, want 2: %+v", len(unknown), unknown)
+	// an unmatched heading with content is kept; the empty title heading
+	// says nothing and is skipped
+	if len(unknown) != 1 || unknown[0].name != "Custom notes" {
+		t.Errorf("unknown sections = %+v, want just Custom notes", unknown)
+	}
+}
+
+// The heading-per-field shape with plain labels and sub-bullets - how real
+// project.md files are written (westside is the reference).
+const headingProjectMD = "# westside · f10 project instructions\n\n" +
+	"## Project\n" +
+	"Westside — medical CRM. Ruby on Rails + PostgreSQL.\n" +
+	"Roles: plan as a **senior software architect**; implement as a **senior Rails developer**.\n\n" +
+	"## Tracker\n" +
+	"Notion. Task id format: **`WS-####`**.\n" +
+	"- **Fetch:** invoke the `tasks` skill with the number.\n" +
+	"- **Create:** invoke the `create-notion-task` skill.\n\n" +
+	"## Ship pipelines\n" +
+	"- **default**: `implement → pr → review`\n" +
+	"- **direct** (planless): `implement → push`\n\n" +
+	"## Visibility\nstealth\n"
+
+func TestParseFileHeadingShape(t *testing.T) {
+	fields, unknown := parseFile(writeProjectMD(t, headingProjectMD), "main")
+
+	// the empty title heading is skipped, and nothing else is unknown
+	if len(unknown) != 0 {
+		t.Errorf("unknown sections = %+v, want none", unknown)
+	}
+
+	// the plain Roles: label inside Project's prose opens its own field
+	roles := fields["Roles"]
+	if !contains(roles.body, "senior software architect") {
+		t.Errorf("Roles not caught from a plain label: %q", roles.body)
+	}
+
+	if contains(fields["Project"].body, "Roles:") {
+		t.Errorf("Roles still buried in Project: %q", fields["Project"].body)
+	}
+
+	// unknown bold items stay inside their section instead of hijacking it
+	tracker := fields["Tracker"]
+	if !contains(tracker.body, "Fetch:") || !contains(tracker.body, "Create:") {
+		t.Errorf("Tracker lost its sub-bullets: %q", tracker.body)
+	}
+
+	pipelines := fields["Ship pipeline(s)"]
+	if !contains(pipelines.body, "default") || !contains(pipelines.body, "(planless)") {
+		t.Errorf("named pipelines hijacked out of Ship pipelines: %q", pipelines.body)
 	}
 }
 
