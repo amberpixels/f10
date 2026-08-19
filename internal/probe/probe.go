@@ -168,20 +168,34 @@ func xdgConfigHome() string {
 	return filepath.Join(home, ".config")
 }
 
-// planNames lists the .md files in the plans dir. Names, not a count: the
-// binary is user-facing, and names are the point of a lookaround.
+// planNames lists the .md files in the plans dir, most recently touched
+// first - a plans dir grows without bound, so recency is the order a
+// lookaround wants and lets renderers trim to the freshest few.
 func planNames(dir string) []string {
 	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
 	if err != nil || len(matches) == 0 {
 		return nil
 	}
 
+	mtime := make(map[string]int64, len(matches))
 	names := make([]string, 0, len(matches))
+
 	for _, m := range matches {
-		names = append(names, filepath.Base(m))
+		name := filepath.Base(m)
+		names = append(names, name)
+
+		if fi, err := os.Stat(m); err == nil {
+			mtime[name] = fi.ModTime().UnixNano()
+		}
 	}
 
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		if mtime[names[i]] != mtime[names[j]] {
+			return mtime[names[i]] > mtime[names[j]]
+		}
+
+		return names[i] < names[j] // stable answer for equal mtimes
+	})
 
 	return names
 }
