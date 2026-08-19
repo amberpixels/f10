@@ -297,11 +297,15 @@ func storageField(name string, res *resolve.Resolution) Field {
 	return Field{Name: name, Value: "in-repo (" + res.StorageRoot + ")", Origin: OriginDefault}
 }
 
-// parseFile splits one project.md into contract sections. Both declared
-// shapes open a section: an unindented bold list item (`- **Tracker** - …`)
-// and a markdown heading (`## Tracker`). Everything until the next opener
-// belongs to the section - indented sub-bullets stay in their field's body.
-// Openers matching no contract field are returned separately, not dropped.
+// parseFile splits one project.md into contract sections. Three declared
+// shapes open one: a markdown heading (`## Tracker`), an unindented bold
+// list item naming a contract field (`- **Tracker** - …`), and a plain
+// label naming one (`Roles: plan as …`) - the shapes real files actually
+// use. A bold item the contract does not know stays inside the open
+// section's body (`- **Fetch:** …` under Tracker, a named pipeline under
+// Ship pipelines) instead of hijacking it. Unknown headings are returned
+// separately, not dropped; an empty one - a document title - says nothing
+// and is skipped.
 func parseFile(path, layer string) (map[string]section, []section) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -310,6 +314,7 @@ func parseFile(path, layer string) (map[string]section, []section) {
 
 	boldItem := regexp.MustCompile(`^[-*]\s+\*\*([^*]+)\*\*\s*[-:]?\s*(.*)$`)
 	heading := regexp.MustCompile(`^#{1,6}\s+(.+?)\s*$`)
+	plainLabel := regexp.MustCompile(`^\s{0,3}([A-Za-z][A-Za-z &()/]{0,30}):\s*(.*)$`)
 
 	fields := map[string]section{}
 
@@ -326,38 +331,57 @@ func parseFile(path, layer string) (map[string]section, []section) {
 		current.body = strings.TrimSpace(current.body)
 		if canonical := canonicalName(current.name); canonical != "" {
 			fields[canonical] = *current
-		} else {
+		} else if current.body != "" {
 			unknown = append(unknown, *current)
 		}
 
 		current = nil
 	}
 
+	open := func(name, rest string) {
+		flush()
+
+		current = &section{name: strings.TrimSpace(name), body: rest, layer: layer, file: path}
+	}
+
 	for line := range strings.SplitSeq(string(data), "\n") {
-		if m := boldItem.FindStringSubmatch(line); m != nil {
-			flush()
-
-			current = &section{name: strings.TrimSpace(m[1]), body: m[2], layer: layer, file: path}
-
-			continue
-		}
-
-		if m := heading.FindStringSubmatch(line); m != nil {
-			flush()
-
-			current = &section{name: m[1], layer: layer, file: path}
-
-			continue
-		}
-
-		if current != nil {
-			current.body += "\n" + line
+		switch {
+		case matchOpener(boldItem, line, func(m []string) bool {
+			if canonicalName(m[1]) != "" || current == nil {
+				open(m[1], m[2])
+				return true
+			}
+			return false // an unknown bold item continues the open section
+		}):
+		case matchOpener(heading, line, func(m []string) bool {
+			open(m[1], "")
+			return true
+		}):
+		case matchOpener(plainLabel, line, func(m []string) bool {
+			if canonicalName(m[1]) == "" {
+				return false // an unknown label is ordinary prose
+			}
+			open(m[1], m[2])
+			return true
+		}):
+		default:
+			if current != nil {
+				current.body += "\n" + line
+			}
 		}
 	}
 
 	flush()
 
 	return fields, unknown
+}
+
+// matchOpener runs the handler on a regexp match and reports whether the
+// line was consumed as a section opener.
+func matchOpener(re *regexp.Regexp, line string, handle func([]string) bool) bool {
+	m := re.FindStringSubmatch(line)
+
+	return m != nil && handle(m)
 }
 
 func isProse(value string) bool {
