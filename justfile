@@ -28,3 +28,19 @@ fix:
 # run all checks - read-only, safe for CI
 ci: lint
 # <<< justx:ci
+
+# build the f10 binary
+build:
+    go build ./...
+
+# install the f10 binary into GOBIN
+install:
+    go install ./cmd/f10
+
+# lint Go code - standardgo owns the ruleset, no config file here
+lint-go:
+    go tool standardgo
+
+# test Go packages, the resolve.sh parity suite included
+test:
+    go test ./...
