@@ -138,10 +138,15 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 	for _, name := range contractFields() {
 		var field Field
 		if sec, ok := declared[name]; ok {
+			value := sec.body
+			if name == "Roles" {
+				value = rolesLines(value)
+			}
+
 			field = Field{
 				Name:   name,
-				Value:  sec.body,
-				Prose:  isProse(sec.body),
+				Value:  value,
+				Prose:  isProse(value),
 				Origin: "declared (" + sec.layer + ")",
 				Source: sec.file,
 			}
@@ -386,4 +391,24 @@ func matchOpener(re *regexp.Regexp, line string, handle func([]string) bool) boo
 
 func isProse(value string) bool {
 	return strings.Contains(strings.TrimSpace(value), "\n")
+}
+
+// rolesLines reshapes Roles prose so each role sits on its own line:
+// the paragraph is unwrapped (declared prose is hard-wrapped at the
+// author's editor width, which is not a clause boundary), then split at
+// semicolons and at sentence breaks. A value already structured as
+// markdown bullets - the contract's Always/Conditional shape - keeps its
+// own lines.
+func rolesLines(value string) string {
+	for line := range strings.SplitSeq(value, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+			return value
+		}
+	}
+
+	unwrapped := strings.Join(strings.Fields(value), " ")
+	unwrapped = regexp.MustCompile(`;\s*`).ReplaceAllString(unwrapped, "\n")
+
+	return regexp.MustCompile(`\.\s+([A-Z])`).ReplaceAllString(unwrapped, ".\n$1")
 }
