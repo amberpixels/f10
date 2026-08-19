@@ -3,7 +3,9 @@ package probe
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 )
 
 func TestHostOf(t *testing.T) {
@@ -50,6 +52,28 @@ func TestKnowsHost(t *testing.T) {
 		if got := knowsHost(tc.path, tc.host); got != tc.want {
 			t.Errorf("knowsHost(%q, %q) = %v, want %v", tc.path, tc.host, got, tc.want)
 		}
+	}
+}
+
+func TestPlanNamesMostRecentFirst(t *testing.T) {
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+
+	for i, name := range []string{"GH-1.md", "GH-2.md", "GH-3.md"} {
+		path := filepath.Join(dir, name)
+		writeFile(t, path, "plan")
+
+		stamp := base.Add(time.Duration(i) * time.Minute)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatalf("chtimes: %v", err)
+		}
+	}
+
+	got := planNames(dir)
+	want := []string{"GH-3.md", "GH-2.md", "GH-1.md"}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("planNames = %v, want %v", got, want)
 	}
 }
 

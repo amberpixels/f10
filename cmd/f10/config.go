@@ -116,8 +116,21 @@ func renderHuman(w io.Writer, v *view) {
 	}
 
 	if len(v.Plans) > 0 {
-		plans := fmt.Sprintf("%d in %s: %s", len(v.Plans), v.PlansDir, strings.Join(v.Plans, ", "))
-		headerRow(w, "plans", plans, limit, plain)
+		// the freshest few, not the whole dir - it grows without bound,
+		// and --json still carries the full list
+		const recent = 3
+
+		shown := v.Plans
+		if len(shown) > recent {
+			shown = shown[:recent]
+		}
+
+		list := strings.Join(shown, ", ")
+		if len(v.Plans) > recent {
+			list += ", ..."
+		}
+
+		headerRow(w, "plans", fmt.Sprintf("%d in %s: %s", len(v.Plans), v.PlansDir, list), limit, plain)
 	}
 
 	fmt.Fprintln(w)
