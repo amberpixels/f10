@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/internal/facts"
 	"github.com/amberpixels/f10/internal/probe"
@@ -87,45 +88,67 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
+// headerIndent is the value column of the header block: the widest label,
+// "checkout root", plus the gap.
+const headerIndent = 16
+
 // renderHuman prints the aligned two-column header and the field table. The
 // origin column is the feature; lipgloss colors degrade to plain text when
-// stdout is not a tty or NO_COLOR is set - termenv handles both.
+// stdout is not a tty or NO_COLOR is set - termenv handles both. Values
+// longer than the terminal wrap inside their own column, never under the
+// labels.
 func renderHuman(w io.Writer, v *view) {
 	faint := lipgloss.NewStyle().Faint(true)
+	plain := lipgloss.NewStyle()
+	limit := termWidth(w)
 
-	fmt.Fprintln(w, "checkout root   "+v.CheckoutRoot)
-	fmt.Fprintln(w, "storage root    "+v.StorageRoot)
-	fmt.Fprintln(w, "instructions    "+v.Instructions)
+	headerRow(w, "checkout root", v.CheckoutRoot, limit, plain)
+	headerRow(w, "storage root", v.StorageRoot, limit, plain)
+	headerRow(w, "instructions", v.Instructions, limit, plain)
 
 	if v.NestedIgnored != "" {
 		note := "ignoring nested " + v.NestedIgnored + " - resolution is anchored to the checkout root"
-		fmt.Fprintln(w, "note            "+faint.Render(note))
+		headerRow(w, "note", note, limit, faint)
 	}
 
 	if v.Remote != "" {
-		fmt.Fprintln(w, "remote          "+v.Remote)
+		headerRow(w, "remote", v.Remote, limit, plain)
 	}
 
 	if len(v.Plans) > 0 {
-		fmt.Fprintf(w, "plans           %d in %s: %s\n", len(v.Plans), v.PlansDir, strings.Join(v.Plans, ", "))
+		plans := fmt.Sprintf("%d in %s: %s", len(v.Plans), v.PlansDir, strings.Join(v.Plans, ", "))
+		headerRow(w, "plans", plans, limit, plain)
 	}
 
 	fmt.Fprintln(w)
-	renderFields(w, v.Fields)
+	renderFields(w, v.Fields, limit)
 
 	if len(v.Unrecognized) > 0 {
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, faint.Render("unrecognized sections (shown, never dropped):"))
-		renderFields(w, v.Unrecognized)
+		renderFields(w, v.Unrecognized, limit)
 	}
 }
 
-func renderFields(w io.Writer, fields []facts.Field) {
+// headerRow prints one label/value line, wrapping the value inside its own
+// column.
+func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style) {
+	segments := wrap(value, limit-headerIndent)
+	fmt.Fprintf(w, "%-*s%s\n", headerIndent, label, style.Render(segments[0]))
+
+	for _, s := range segments[1:] {
+		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", style.Render(s))
+	}
+}
+
+func renderFields(w io.Writer, fields []facts.Field, limit int) {
 	nameW, originW := 0, 0
 	for _, f := range fields {
 		nameW = max(nameW, len(f.Name))
 		originW = max(originW, len(f.Origin))
 	}
+
+	valueIndent := nameW + 2 + originW + 2
 
 	for _, f := range fields {
 		origin := fmt.Sprintf("%-*s", originW, f.Origin)
@@ -135,14 +158,63 @@ func renderFields(w io.Writer, fields []facts.Field) {
 			value = "-"
 		}
 
-		lines := strings.Split(value, "\n")
-		fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, f.Name, styleOrigin(f.Origin).Render(origin), lines[0])
+		first := true
 
-		// continuation lines of a prose value sit under the value column
-		for _, line := range lines[1:] {
-			fmt.Fprintf(w, "%-*s  %-*s  %s\n", nameW, "", originW, "", line)
+		for line := range strings.SplitSeq(value, "\n") {
+			for _, seg := range wrap(line, limit-valueIndent) {
+				if first {
+					fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, f.Name, styleOrigin(f.Origin).Render(origin), seg)
+
+					first = false
+
+					continue
+				}
+
+				// wrapped and prose continuation lines alike sit
+				// under the value column, never under the labels
+				fmt.Fprintf(w, "%-*s%s\n", valueIndent, "", seg)
+			}
 		}
 	}
+}
+
+// wrap greedily breaks text at spaces so every line fits width. Width 0 or
+// below (terminal unknown, or narrower than the indent) disables wrapping;
+// a single token longer than the width is hard-cut rather than overflowed.
+func wrap(text string, width int) []string {
+	if width <= 0 || len(text) <= width {
+		return []string{text}
+	}
+
+	var lines []string
+
+	for len(text) > width {
+		cut := strings.LastIndex(text[:width+1], " ")
+		if cut <= 0 {
+			cut = width
+		}
+
+		lines = append(lines, strings.TrimRight(text[:cut], " "))
+		text = strings.TrimLeft(text[cut:], " ")
+	}
+
+	return append(lines, text)
+}
+
+// termWidth is the width wrapping targets: the terminal's when stdout is
+// one, otherwise 0 - piped output stays unwrapped for greppability.
+func termWidth(w io.Writer) int {
+	f, ok := w.(*os.File)
+	if !ok {
+		return 0
+	}
+
+	width, _, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return 0
+	}
+
+	return width
 }
 
 // styleOrigin colors the origin cell: detection, declaration and defaults
