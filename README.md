@@ -15,11 +15,12 @@ A language-agnostic, composable task pipeline for Claude Code: **capture → pla
 
 ---
 
-f10 (f-ten) is three skills over one step chain. **capture** turns a freely written idea into a
+f10 (f-ten) is four skills over one step chain. **capture** turns a freely written idea into a
 tracked task; **plan** turns that task into an architect-grade plan on disk; **ship** turns the
-plan into code and, optionally, a release.
+plan into code and, optionally, a release. Ahead of all three and optional, **brainstorm** is the
+conversation you have when you do not yet know what to capture - or whether to build it at all.
 
-No stack is hard-coded, so the same three commands drive a Go service, a Rails app, or a Terraform
+No stack is hard-coded, so the same commands drive a Go service, a Rails app, or a Terraform
 repo. f10 either **infers** what it needs (git remote → `gh`/`glab`, build files → verify commands)
 or you **declare** it once in `.f10/instructions/` and it stops guessing.
 
@@ -27,6 +28,8 @@ or you **declare** it once in `.f10/instructions/` and it stops guessing.
 
 ```mermaid
 flowchart LR
+    idea(["half-formed idea"]) -.-> brain[brainstorm]
+    brain -.->|"a shape you agreed on"| desc
     desc(["free-text description"]) --> capSt[capture]
     capSt -->|task id| fetch[fetch]
     fetch -->|investigation brief| plan[plan]
@@ -38,11 +41,12 @@ flowchart LR
     end
 ```
 
-Solid arrows are the default pipeline; dashed steps run only where a project declares them. Each
-skill is an **entry point** into that chain:
+Solid arrows are the default pipeline; dashed ones are optional - `brainstorm` when you ask for
+it, the rest where a project declares them. Each skill is an **entry point** into that chain:
 
 | Skill | Runs | Stops at |
 |---|---|---|
+| `/f10:brainstorm <idea>` | brainstorm | a shape agreed in chat - or the decision not to build |
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
@@ -63,6 +67,9 @@ much or as little as you like; anything you leave out stays inferred.
 ## Quick start
 
 ```text
+/f10:brainstorm public API abuse - rate limiting, or per-tenant quotas?
+# → a discussion. Nothing written; ends in a shape, or in "we don't build this"
+
 /f10:capture Add rate limiting to the public API
 # → creates the tracker task, replies with its id + url
 
@@ -83,8 +90,12 @@ executes nothing.
 
 **Pipeline**
 
-- **Step** - the unit of work: `capture`, `fetch`, `plan`, plus ship-pipeline steps `implement`,
-  `pr`, `push`, `review`, `deploy` (`steps/*.md`). Skills are thin routers over steps.
+- **Brainstorm** - the optional conversation before capture: what to build, whether to build it,
+  which shape. Read-only and artifact-free by design, it ends in a decision you hand to
+  `/f10:capture` or in not building at all. It draws no status-line glyph - there is nothing to
+  track yet.
+- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, plus ship-pipeline steps
+  `implement`, `pr`, `push`, `review`, `deploy` (`steps/*.md`). Skills are thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
   `implement → pr`). A name with no generic step (e.g. `e2e`) is project-defined:
   `.f10/instructions/<name>.md` *is* the step. A project may declare several **named pipelines**;
@@ -135,8 +146,8 @@ executes nothing.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{capture,plan,ship}"]
-        gsteps["steps/{capture,fetch,plan,implement,pr,push,review,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,implement,pr,push,review,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end

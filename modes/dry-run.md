@@ -50,6 +50,8 @@ quoted verbatim.
 **Scope the context to the run's path** - surface only the facts a step on *this* path
 actually consumes; a fact nothing on the path uses is noise:
 
+- **brainstorm**: instructions source, role, guardrails, stack - and no adapter at all, since
+  it binds none and creates nothing.
 - **capture**: instructions source, role, the **create** adapter + id format, visibility - not
   verify, the fetch adapter, guardrails, or the ship pipeline.
 - **plan** (fetch → plan): the above plus the **fetch** adapter, guardrails, and the plan
