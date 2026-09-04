@@ -6,25 +6,30 @@
 # removed on purpose: a managed re-sync would pick one stack and drop the
 # other, and `j @upgrade` never touches unfenced recipes.
 
+# standardgo carries the ruleset and the golangci-lint engine in one binary, so this
+# repo holds no lint config of its own. It is run via `go run`, not a go.mod tool
+# directive, to keep golangci-lint's dependency tree out of this module's graph.
+standardgo := "github.com/amberpixels/standardgo/cmd/standardgo@v0.2.1"
+
 # Default recipe: format (rewrites, decides nothing; `just fix` is the mutable one)
 default: fmt
 
 # format shell + Go - rewrites to canonical form
 fmt:
     shfmt -w -i 2 -ci .
-    go tool standardgo fmt ./...
+    go run {{ standardgo }} fmt ./...
 
 # lint shell + Go - reports findings, changes nothing
 lint:
     shfmt -f . | xargs -r shellcheck
     shfmt -d -i 2 -ci .
-    go tool standardgo ./...
+    go run {{ standardgo }} ./...
 
 # auto-fix what can be fixed - run on a clean tree and read the diff
 fix:
     shfmt -f . | xargs -r shellcheck -f diff | git apply --allow-empty
     shfmt -w -s -i 2 -ci .
-    go tool standardgo ./... --fix
+    go run {{ standardgo }} ./... --fix
 
 # run tests - the resolve.sh parity suite included
 test:
