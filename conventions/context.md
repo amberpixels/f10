@@ -115,7 +115,8 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   `.f10/plans/<TASK-ID>.md` - and the **fetch** / **create** adapters: a skill to invoke or a
   CLI command to run (e.g. `gh issue view <n> --comments` / `gh issue create`).
 - **Hosting & PR** - where the code lives and how to open a PR/MR: a skill, or plain
-  `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee).
+  `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee). The branch's
+  *shape* is the project's to declare; that it carries the task id is not - see `steps/pr.md`.
 - **Ship pipeline(s)** - the ordered steps `/f10:ship` runs after planning, e.g.
   `implement → review (local) → pr → review (CI) → deploy (staging)`. Omitted →
   **`implement → pr`**. Each name resolves to a generic step in the plugin's `steps/`

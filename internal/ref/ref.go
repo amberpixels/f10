@@ -12,6 +12,7 @@ package ref
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,9 +30,11 @@ const (
 	OriginSession  = "session"
 )
 
-// ErrNoReference means the cascade ran out: nothing was given, the branch
-// names no task, and the session records none.
-var ErrNoReference = errors.New("no task reference given, and none found in the branch or this session")
+// ErrNoReference means the cascade ran out. It is wrapped with what each
+// tier actually had to offer, because "none found" alone sends a reader
+// looking in the wrong place - most often at a session tier that was never
+// available to them.
+var ErrNoReference = errors.New("no task reference given")
 
 // A Ref is one resolved task reference.
 type Ref struct {
@@ -63,7 +66,29 @@ func (r Resolver) Resolve(ctx context.Context, explicit string) (Ref, error) {
 		return r.parse(id, OriginSession)
 	}
 
-	return Ref{}, ErrNoReference
+	return Ref{}, r.exhausted(ctx)
+}
+
+// exhausted explains which tier came up empty and why. The session tier is
+// the one worth naming out loud: it keys on an agent session's id, so at a
+// human's prompt it is not empty, it is absent - a distinction the old
+// message hid.
+func (r Resolver) exhausted(ctx context.Context) error {
+	var why []string
+
+	if r.Prefix == "" {
+		why = append(why, "no task id format for this project, so a branch cannot be searched")
+	} else if branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD"); branch != "" {
+		why = append(why, fmt.Sprintf("branch %q carries no %s-<n>", branch, r.Prefix))
+	}
+
+	if firstSet("F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID") == "" {
+		why = append(why, "no agent session to have recorded one")
+	} else {
+		why = append(why, "this session has recorded no task")
+	}
+
+	return fmt.Errorf("%w (%s)", ErrNoReference, strings.Join(why, "; "))
 }
 
 // numberRE is the reference shapes a user types: a bare number, a `#123`,
