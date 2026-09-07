@@ -4,7 +4,8 @@
 // interpret instruction prose - bin/resolve.sh stays a concatenator.
 //
 // Interpretation is deliberately shallow: only the sub-facts with a fixed
-// vocabulary (Layering, Visibility, Storage, the tracker kind) become
+// vocabulary (Layering, Visibility, Storage, the tracker kind and its id
+// prefix) become
 // structure; everything else is presented as the declared prose, attributed
 // but unparsed. The binary may be incomplete, never wrong - what it cannot
 // place it shows as-is instead of guessing.
@@ -48,6 +49,7 @@ type Effective struct {
 	Visibility  string `json:"visibility"`
 	Storage     string `json:"storage"`
 	TrackerKind string `json:"trackerKind,omitempty"`
+	IDPrefix    string `json:"idPrefix,omitempty"` // "WS", "GH" - the task id format's letters
 }
 
 // contractFields is the project.md contract. The order is presentation
@@ -163,6 +165,12 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 		eff.absorb(field, pb)
 	}
 
+	// a checkout with no Tracker field at all never reached absorb, so the
+	// host still gets to name the ids
+	if eff.IDPrefix == "" {
+		eff.IDPrefix = hostPrefix(pb)
+	}
+
 	return eff
 }
 
@@ -182,7 +190,49 @@ func (e *Effective) absorb(f Field, pb *probe.Probes) {
 		}
 	case "Tracker":
 		e.TrackerKind = trackerKind(lower, pb)
+		e.IDPrefix = idPrefix(f.Value, pb)
 	}
+}
+
+// The two shapes a declared task id format takes. The contract's own
+// placeholder form comes first and is trusted outright; a literal sample
+// (`ABC-1234`) is the fallback, because that shape also fits things nobody
+// means as an id - UTF-8, ISO-8601 - and preferring the placeholder keeps
+// those from winning where a project wrote its format properly.
+//
+// Neither pattern ends on a word boundary after the placeholders: `#` is
+// not a word character, so a trailing \b could never match `**`WS-####`**`,
+// which is exactly how a project.md writes it.
+var (
+	idPlaceholderRE = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-#+`)
+	idSampleRE      = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-\d+\b`)
+)
+
+// idPrefix extracts the task id format's letters from declared Tracker
+// prose, falling back to what the host implies. The prefix is the half the
+// ref resolver needs: it is how a branch name is searched and how a plan
+// file is named.
+func idPrefix(declared string, pb *probe.Probes) string {
+	for _, re := range []*regexp.Regexp{idPlaceholderRE, idSampleRE} {
+		if m := re.FindStringSubmatch(declared); m != nil {
+			return m[1]
+		}
+	}
+
+	return hostPrefix(pb)
+}
+
+// hostPrefix is the id prefix for a project that declares none: the
+// tracker is then the host's own issues, so the host names them.
+func hostPrefix(pb *probe.Probes) string {
+	switch pb.CLI.Value {
+	case "gh":
+		return "GH"
+	case "glab":
+		return "GL"
+	}
+
+	return ""
 }
 
 // trackerKind extracts the tracker's kind from declared prose, falling back
