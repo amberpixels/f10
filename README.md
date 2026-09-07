@@ -294,9 +294,48 @@ just install   # go install ./cmd/f10
 f10 config
 ```
 
-It is read-only by design: no uniform storage (everything stays in the files where it lives
-today; the binary reads and pre-computes), no scanning (it answers for the repo it runs in,
-never walking the filesystem for projects), and it writes nothing, anywhere. `bin/resolve.sh`
+### Lookaround
+
+The same binary reads the things that configuration points at. Which tool it reaches for is a
+function of the repo, not of your memory: `gh` here, `glab` there, your own driver where the
+tracker has no CLI at all.
+
+```bash
+f10 task read            # the current task as markdown - from the branch, or this session
+f10 task open 2703       # in the browser
+f10 task search billing  # rows, not a picker
+f10 plan read            # the plan saved for that same task
+f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
+```
+
+A verb means one thing under every noun. `read` writes content, `open` follows an address,
+`search` finds by description; `--print` writes the address instead of following it. The matrix
+stays sparse where a verb has no meaning for a noun, and never redefines one to fill a hole.
+
+With no argument, a reference resolves in one cascade: the id you passed, else the id in the
+current branch name, else the task this session recorded. `-C` answers for another checkout, so
+chasing a library's task from inside the app that hit the bug costs no `cd`:
+
+```bash
+f10 -C ../r3 task read 12                    # a path always works
+export F10_ROOTS=~/code/github.com/*/*       # opt in, and names work too
+f10 -C r3 task read 12
+```
+
+`read` writes markdown and picks its presentation from whether it is writing to a terminal: a
+pager when `$PAGER` is set, raw markdown into any pipe. Nothing is bundled and nothing is
+required, so `f10 task read | glow` works precisely because a pipe is not a terminal.
+
+Where the tracker is Notion, Jira or anything else without a CLI, `f10 task` routes through an
+executable at `.f10/driver` - see [the driver contract](docs/driver-contract.md). f10 specifies
+that contract and implements none of it.
+
+### Read-only by design
+
+No uniform storage (everything stays in the files where it lives today; the binary reads and
+pre-computes), no scanning (it answers for the repo it runs in, and walks the filesystem for
+other projects only once you set `F10_ROOTS`), and it writes nothing, anywhere - handing a url
+to a browser or a file to an editor is the whole of what leaves the process. `bin/resolve.sh`
 stays the agent-facing surface - the binary explains to humans what the resolver hands to
 agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
