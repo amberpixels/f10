@@ -1,0 +1,9 @@
+#!/bin/sh
+# A driver satisfying the contract for read and url, and declining search
+# with the reserved exit code - the shape a real driver takes while it is
+# still growing verbs.
+case "$1" in
+  read) echo "# read $2" ;;
+  url) echo "https://example.test/$2" ;;
+  *) exit 3 ;;
+esac

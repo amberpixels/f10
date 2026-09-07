@@ -1,0 +1,5 @@
+#!/bin/sh
+# A driver that ran and failed for its own reasons. f10 surfaces its stderr
+# verbatim rather than paraphrasing a tracker error it cannot interpret.
+echo "notion token missing" >&2
+exit 1

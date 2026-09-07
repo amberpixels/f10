@@ -13,8 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/internal/facts"
-	"github.com/amberpixels/f10/internal/probe"
-	"github.com/amberpixels/f10/internal/resolve"
+	"github.com/amberpixels/f10/internal/projects"
 )
 
 // A view is the one model both outputs render - the human table and --json
@@ -33,6 +32,8 @@ type view struct {
 	Visibility    string        `json:"visibility"`
 	Storage       string        `json:"storage"`
 	TrackerKind   string        `json:"trackerKind,omitempty"`
+	IDPrefix      string        `json:"idPrefix,omitempty"`
+	Roots         []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C resolves paths only
 }
 
 func configCommand() *cli.Command {
@@ -47,14 +48,14 @@ func configCommand() *cli.Command {
 }
 
 func runConfig(ctx context.Context, cmd *cli.Command) error {
-	cwd, err := os.Getwd()
+	// through the shared target, so -C answers here too: which project's
+	// configuration you are looking at is exactly what this command is for
+	t, err := targetFor(ctx, cmd)
 	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
+		return err
 	}
 
-	res := resolve.Resolve(ctx, cwd)
-	pb := probe.Run(ctx, res)
-	eff := facts.Build(res, pb)
+	res, pb, eff := t.res, t.pb, t.eff
 
 	v := &view{
 		CheckoutRoot:  res.CheckoutRoot,
@@ -70,6 +71,8 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Visibility:    eff.Visibility,
 		Storage:       eff.Storage,
 		TrackerKind:   eff.TrackerKind,
+		IDPrefix:      eff.IDPrefix,
+		Roots:         projects.Roots(),
 	}
 
 	if cmd.Bool("json") {
@@ -114,6 +117,18 @@ func renderHuman(w io.Writer, v *view) {
 	if v.Remote != "" {
 		headerRow(w, "remote", v.Remote, limit, plain)
 	}
+
+	if v.IDPrefix != "" {
+		headerRow(w, "task ids", v.IDPrefix+"-<n>", limit, plain)
+	}
+
+	// -C takes a path with nothing configured; a bare name needs these
+	projectLookup := "paths only - set " + projects.RootsEnv + " to resolve -C by name"
+	if len(v.Roots) > 0 {
+		projectLookup = strings.Join(v.Roots, ", ")
+	}
+
+	headerRow(w, "projects", projectLookup, limit, faint)
 
 	if len(v.Plans) > 0 {
 		// the freshest few, not the whole dir - it grows without bound.
