@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -93,7 +94,7 @@ func prURL(ctx context.Context, t *target, host, number string) (string, error) 
 	}
 
 	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", host, firstNonEmpty(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
+		return "", fmt.Errorf("%s: %s", host, cmp.Or(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
 	}
 
 	var payload map[string]any
@@ -107,14 +108,4 @@ func prURL(ctx context.Context, t *target, host, number string) (string, error) 
 	}
 
 	return url, nil
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-
-	return ""
 }

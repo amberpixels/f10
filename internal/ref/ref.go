@@ -10,6 +10,7 @@
 package ref
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -82,7 +83,7 @@ func (r Resolver) exhausted(ctx context.Context) error {
 		why = append(why, fmt.Sprintf("branch %q carries no %s-<n>", branch, r.Prefix))
 	}
 
-	if firstSet("F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID") == "" {
+	if cmp.Or(os.Getenv("F10_SESSION_ID"), os.Getenv("CLAUDE_CODE_SESSION_ID")) == "" {
 		why = append(why, "no agent session to have recorded one")
 	} else {
 		why = append(why, "this session has recorded no task")
@@ -147,7 +148,7 @@ func matchBranch(prefix, branch string) string {
 // The state file is flat `key value` lines by design - it is read on every
 // status-line tick - so it is parsed here rather than shelled out to.
 func sessionTask() string {
-	sid := firstSet("F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID")
+	sid := cmp.Or(os.Getenv("F10_SESSION_ID"), os.Getenv("CLAUDE_CODE_SESSION_ID"))
 	if sid == "" {
 		return ""
 	}
@@ -190,16 +191,6 @@ func sessionTask() string {
 	for line := range strings.SplitSeq(string(data), "\n") {
 		if v, ok := strings.CutPrefix(line, "task "); ok {
 			return strings.TrimSpace(v)
-		}
-	}
-
-	return ""
-}
-
-func firstSet(keys ...string) string {
-	for _, k := range keys {
-		if v := os.Getenv(k); v != "" {
-			return v
 		}
 	}
 

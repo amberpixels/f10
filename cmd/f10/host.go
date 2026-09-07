@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -39,17 +41,12 @@ type issue struct {
 	} `json:"comments"`
 }
 
-func (i issue) url() string   { return firstNonEmpty(i.URL, i.WebURL) }
-func (i issue) body() string  { return firstNonEmpty(i.Body, i.Description) }
-func (i issue) ident() string { return firstNonEmpty(itoa(i.Number), itoa(i.IID)) }
+func (i issue) url() string  { return cmp.Or(i.URL, i.WebURL) }
+func (i issue) body() string { return cmp.Or(i.Body, i.Description) }
 
-func itoa(n int) string {
-	if n == 0 {
-		return ""
-	}
-
-	return strconv.Itoa(n)
-}
+// gh numbers issues, glab gives them an iid; whichever came back is the one
+// this issue has.
+func (i issue) ident() string { return strconv.Itoa(cmp.Or(i.Number, i.IID)) }
 
 func hostIssueDoc(ctx context.Context, t *target, id, number string) (string, error) {
 	host, err := t.hostCLI()
@@ -76,15 +73,16 @@ func hostIssueDoc(ctx context.Context, t *target, id, number string) (string, er
 
 	fmt.Fprintf(&b, "# %s: %s\n\n", id, iss.Title)
 
-	if meta := strings.Join(nonEmpty(iss.State, iss.url()), " · "); meta != "" {
-		fmt.Fprintf(&b, "%s\n\n", meta)
+	meta := slices.DeleteFunc([]string{iss.State, iss.url()}, func(s string) bool { return s == "" })
+	if len(meta) > 0 {
+		fmt.Fprintf(&b, "%s\n\n", strings.Join(meta, " · "))
 	}
 
 	b.WriteString(strings.TrimSpace(iss.body()))
 	b.WriteString("\n")
 
 	for _, c := range iss.Comments {
-		fmt.Fprintf(&b, "\n---\n\n**%s**\n\n%s\n", firstNonEmpty(c.Author.Login, "comment"), strings.TrimSpace(c.Body))
+		fmt.Fprintf(&b, "\n---\n\n**%s**\n\n%s\n", cmp.Or(c.Author.Login, "comment"), strings.TrimSpace(c.Body))
 	}
 
 	return b.String(), nil
@@ -154,20 +152,8 @@ func runHost(ctx context.Context, t *target, host string, args ...string) (strin
 	}
 
 	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", host, firstNonEmpty(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
+		return "", fmt.Errorf("%s: %s", host, cmp.Or(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
 	}
 
 	return res.Stdout, nil
-}
-
-func nonEmpty(values ...string) []string {
-	out := make([]string, 0, len(values))
-
-	for _, v := range values {
-		if v != "" {
-			out = append(out, v)
-		}
-	}
-
-	return out
 }
