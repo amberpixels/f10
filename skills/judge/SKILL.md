@@ -34,7 +34,8 @@ that bundle just printed - it carries the step file, so there is nothing left to
 - **No argument**: whatever this conversation is about. Do not ask what to judge - name the
   target in one line and judge it.
 
-Stay in the discussion until the user closes it, leading every reply with the verdict as it now
-stands - the step's banner when it changed, the bold word when it held. Where the verdict implies a next f10 skill, offer it in one line - `/f10:capture` after
+Stay in the discussion until the user closes it, talking normally: the verdict was delivered
+once, and the step's banner returns only when an argument changes it. Where the verdict implies
+a next f10 skill, offer it in one line - `/f10:capture` after
 **proceed** on a raw idea, `/f10:plan` after **rethink** on a task - and leave the call to the
 user. Never roll on into capturing, planning, or writing code.

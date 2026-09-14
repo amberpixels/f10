@@ -74,8 +74,8 @@ not agree because agreeing is cheaper.
 
    Under the banner, points 2 to 6 in a few short paragraphs, each grounded in something read,
    then the smallest thing that would change the verdict. In the discussion that follows, the
-   banner returns only when the verdict changes; a reply that holds it leads with the word in
-   bold.
+   banner returns only when the verdict changes. A reply that holds it is plain conversation:
+   answer the question, no verdict line, no bold word - the user already read it.
 
 **Two modes.** In-context is the default: the judge has the conversation, and the chat
 rationale is often where the real reason lives. **Blind** - `--blind` in the argument - is for
@@ -109,8 +109,9 @@ in the `conventions/failure.md` sense - nothing broke, so no FAILED block and no
   skill's.
 
 **It writes nothing.** No plan edits, no tracker comment, no code, no scratch file. Stay in the
-conversation as long as the user wants to argue - that argument is the point - but every reply
-leads with the verdict as it now stands: the banner when it changed, the bold word when it held.
+conversation as long as the user wants to argue - that argument is the point. Talk normally:
+the verdict was delivered once, and repeating it on every reply is noise. Only when an argument
+actually moves it does the banner come back, with the new verdict and its one-line reason.
 
 **On failure:** a task id that does not resolve, or a PR the host CLI cannot read, is a failure
 per `conventions/failure.md` - never judge an artifact you could not fetch. A **stop** verdict is
