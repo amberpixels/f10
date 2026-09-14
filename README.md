@@ -55,7 +55,7 @@ that chain:
 | Skill | Runs | Stops at |
 |---|---|---|
 | `/f10:brainstorm <idea>` | brainstorm | a shape agreed in chat - or the decision not to build |
-| `/f10:judge <idea \| id \| PR> [--blind]` | judge | a verdict in chat: proceed, proceed with changes, rethink, or stop |
+| `/f10:judge <idea \| id \| PR \| commit> [--blind]` | judge | a verdict in chat: proceed, proceed with changes, rethink, or stop |
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
@@ -104,12 +104,13 @@ executes nothing.
   `/f10:capture` or in not building at all. It draws no status-line glyph - there is nothing to
   track yet.
 - **Judge** - the optional verdict at any point of the chain: a raw idea, a captured task, a
-  saved plan, or a PR. It restates the problem, finds it in the code, asks symptom or cause,
-  looks for what already exists and for the longer-lived shape, then answers in one word -
+  saved plan, a PR, or a commit range. It restates the problem, finds it in the code, asks symptom
+  or cause, looks for what already exists and for the longer-lived shape, then answers in one word -
   proceed, proceed with changes, rethink, or stop - with the argument under it. `--blind` runs
   it in a fresh agent that sees the artifact and the repo, never the conversation that produced
-  them. A project may also name `judge` inside its ship pipeline, where anything but proceed
-  ends the run. Creates nothing.
+  them. A project may also name `judge` inside its ship pipeline: proceed continues, stop ends
+  the run blocked, and rethink or proceed with changes open a discussion that ends in the
+  user's call to continue or block. Creates nothing.
 - **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, plus
   ship-pipeline steps `implement`, `pr`, `push`, `review`, `deploy` (`steps/*.md`). Skills are
   thin routers over steps.
@@ -207,11 +208,12 @@ in a patched terminal font and shows as an empty box everywhere else, GitHub inc
 | `◌` | skipped - will not happen this run (a planless pipeline never plans) |
 | `󰅚` (U+F015A) | partial - stopped, but work survived (committed but push failed, PR open but CI red) |
 | `✗` | failed - the run stopped here with nothing usable |
+| `󰜺` (U+F073A) | blocked - a judge verdict ended the run; nothing broke, the user decided |
 
-Six of those are common Unicode. Partial's `󰅚` is `md-close-circle-outline` (U+F015A), a Nerd Font
-private-use codepoint, so on GitHub and in any unpatched font its cell above is an empty box. It
-draws correctly in a patched terminal font, and the code spans still carry the real character if
-you copy one.
+Six of those are common Unicode. Partial's `󰅚` is `md-close-circle-outline` (U+F015A) and
+blocked's `󰜺` is `md-cancel` (U+F073A), both Nerd Font private-use codepoints, so on GitHub and in
+any unpatched font their cells above are empty boxes. They draw correctly in a patched terminal
+font, and the code spans still carry the real characters if you copy one.
 
 Each state has its own shape and color only reinforces it, because a status line is read at a
 glance, often in a daltonized theme where red/green is exactly the pair that collapses. `NO_COLOR`
@@ -226,13 +228,14 @@ whose baseline is its own, and the badge renders visibly off the line. `◐`, th
 "half done", is missing from JetBrains Mono, Fira Code and Hack alike, so it is not used. If a
 glyph still lands wrong in your font, `F10_STATE_GLYPHS` replaces the set.
 
-Two glyphs are deliberate exceptions, both Material Design icons only
+Three glyphs are deliberate exceptions, all Material Design icons only
 [Nerd Fonts](https://www.nerdfonts.com) carry: the label `md-keyboard_f10` (U+F12B4), a whole F10
-keycap in a single cell, and partial's `md-close-circle-outline` (U+F015A), because no
-crossed-circle codepoint exists across those same common fonts (`⊗` is absent from Fira Code).
-Both are a bet that a terminal dense enough to want this badge is already on a patched font. On
-anything else each degrades to one substituted or tofu cell, and the circles beside them still
-read.
+keycap in a single cell, partial's `md-close-circle-outline` (U+F015A), because no
+crossed-circle codepoint exists across those same common fonts (`⊗` is absent from Fira Code),
+and blocked's `md-cancel` (U+F073A), because the slashed circle `⊘` is missing even from the Nerd
+Fonts. All three are a bet that a terminal dense enough to want this badge is already on a
+patched font. On anything else each degrades to one substituted or tofu cell, and the circles
+beside them still read.
 
 </details>
 
@@ -268,10 +271,10 @@ session and so retires the badge; a file older than the TTL stops rendering.
 | `F10_STATE_TTL` | `86400` | seconds before a badge reads as stale |
 | `F10_STATE_COLOR` | `1` | `0` (or `NO_COLOR`) for shapes without color |
 | `F10_STATE_LINK` | `1` | `0` to drop the hyperlink on the task id |
-| `F10_STATE_GLYPHS` | `○ ◎ ● ◌ ✗ ◉ 󰅚` | pending, running, done, skipped, failed, prior, partial |
+| `F10_STATE_GLYPHS` | `○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺` | pending, running, done, skipped, failed, prior, partial, blocked |
 
-All seven positions are required when you override `F10_STATE_GLYPHS`; the seventh renders as an
-empty box here for the reason above, but the code span holds the real U+F015A.
+All eight positions are required when you override `F10_STATE_GLYPHS`; the last two render as
+empty boxes here for the reason above, but the code spans hold the real U+F015A and U+F073A.
 
 <details>
 <summary>How the badge stays current: two writers</summary>

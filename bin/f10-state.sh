@@ -14,7 +14,7 @@
 # step's prose, not a runtime condition, and a silent typo would leave a badge frozen forever.
 #
 # Usage:
-#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior> [<leaf>]
+#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh final <step>           declare the ship pipeline's last step
 #   f10-state.sh seed <skill>           begin a fresh run - hooks call this, steps do not
@@ -144,8 +144,11 @@ backfill() {
 # the common programming fonts. The seventh, partial ("stopped, but the work survived"), is the
 # label's bet rather than the circles': no crossed-circle codepoint exists across those same fonts,
 # so it is Material Design's md-close-circle-outline (U+F015A), which every Nerd Font carries.
-# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior> <partial>".
-read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉ 󰅚}"
+# The eighth, blocked ("stopped by a decision, not by breakage" - a judge verdict inside a ship
+# pipeline), takes the same bet for the same reason: no slashed-circle codepoint survives those
+# fonts either (U+2298 is missing even from the Nerd Fonts), so it is md-cancel (U+F073A).
+# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior> <partial> <blocked>".
+read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺}"
 
 # These two assign to a global instead of printing, and are called rather than substituted. Render
 # needs both for each of three phases, on every assistant message and every refresh tick, and
@@ -161,6 +164,7 @@ glyph_for() {
     failed) _glyph="${glyph_set[4]:-✗}" ;;
     prior) _glyph="${glyph_set[5]:-◉}" ;;
     partial) _glyph="${glyph_set[6]:-󰅚}" ;;
+    blocked) _glyph="${glyph_set[7]:-󰜺}" ;;
     *) _glyph="${glyph_set[0]:-○}" ;;
   esac
 }
@@ -171,6 +175,7 @@ color_for() {
     running) _color=$'\033[1;36m' ;;
     failed) _color=$'\033[1;31m' ;;
     partial) _color=$'\033[1;33m' ;; # failed's weight in yellow: stopped, but the work survived
+    blocked) _color=$'\033[1;35m' ;; # neither red nor yellow: nothing broke, someone said no
     prior) _color=$'\033[2;32m' ;;   # done's green, dimmed: it happened, just not in this run
     *) _color=$'\033[2m' ;;          # pending and skipped are both "nothing happening here"
   esac
@@ -270,7 +275,7 @@ cmd_set() {
       ;;
   esac
   case "$status" in
-    pending | running | done | failed | partial | skipped | prior) ;;
+    pending | running | done | failed | partial | skipped | prior | blocked) ;;
     *)
       echo "f10-state: unknown status '$status'" >&2
       exit 2
@@ -617,8 +622,8 @@ cmd_hook() {
       # precisely where an agent stops following prose. Left to the steps alone, a finished run
       # sits on a spinning glyph until the ttl retires it.
       #
-      # `failed` and `partial` are left alone (failure.md marks them before reporting, and that
-      # is the outcome). For capture and plan - single-turn phases - running at turn end means
+      # `failed`, `partial` and `blocked` are left alone (failure.md and judge.md mark them
+      # before reporting, and that is the outcome). For capture and plan - single-turn phases - running at turn end means
       # done. For ship it does not: an interactive run crosses many turn boundaries (a question,
       # a steering message, a review poll), and promoting at each one painted implement-in-
       # progress solid green. So ship promotes only when its leaf *is* the declared final step -
@@ -700,7 +705,7 @@ case "${1:-}" in
     cat >&2 <<'USAGE'
 f10-state.sh - where an f10 run is right now, for the status line to render.
 
-  set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior> [<leaf>]
+  set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
   task <id> [<url>]        record the task this run is about
   final <step>             declare the ship pipeline's last step
   seed <skill>             begin a fresh run - hooks call this, steps do not
