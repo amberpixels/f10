@@ -221,7 +221,7 @@ and `F10_STATE_COLOR=0` drop the color and keep the badge readable. The task id 
 ship step live in `f10-state.sh show`, for the human who wants the detail.
 
 <details>
-<summary>Why circles-by-fill, and the two Nerd Font exceptions</summary>
+<summary>Why circles-by-fill, and the three Nerd Font exceptions</summary>
 
 A codepoint your terminal font lacks does not fail. It is quietly substituted from another font
 whose baseline is its own, and the badge renders visibly off the line. `◐`, the obvious mark for
@@ -391,16 +391,13 @@ when the repo went hybrid, so every recipe is hand-owned now.
 
 ## Status
 
-**v0.14.0 - the user watched the run happen.** Every facts block a run prints was specified; the
-sentences around them were not. `voice.md`, a sixth always-loaded convention, governs that prose.
-It leads with one test - cut every clause that would still be true if the topic changed - and
-names the eight forms the test catches, from frame markers and codas down to nominalization and
-pleonasm. The task body and the plan file are exempt from the first four, since they are read
-later by someone who was not in the session. `latency.md` is rewritten rule-first as the specimen
-for the same pass over the remaining prompt files. Two documentation bugs fell out of it:
-`F10_STATE_GLYPHS` listed five of its seven glyphs, so an override from the README silently lost
-`prior` and `partial`, and `conventions.sh` was described as catting five files. Builds on v0.13's
-turn-cost work.
+Five skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, and
+`judge`. Project facts come from `.f10/instructions/` through the resolver, worktree-layered,
+with inferred defaults where nothing is declared. Six conventions bind every run: what it costs,
+how it fails, how it reports, how it talks, where open decisions go, and how context loads. A
+status-line badge tracks the run through capture, plan and ship, and the `f10` binary explains
+the resolved configuration and reads tasks, plans and PRs through `gh`, `glab`, or a project's
+own driver.
 
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles**, named configs a repo's
 `project.md` references instead of repeating).
