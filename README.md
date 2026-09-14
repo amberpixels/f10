@@ -15,10 +15,12 @@ A language-agnostic, composable task pipeline for Claude Code: **capture → pla
 
 ---
 
-f10 (f-ten) is four skills over one step chain. **capture** turns a freely written idea into a
+f10 (f-ten) is five skills over one step chain. **capture** turns a freely written idea into a
 tracked task; **plan** turns that task into an architect-grade plan on disk; **ship** turns the
 plan into code and, optionally, a release. Ahead of all three and optional, **brainstorm** is the
 conversation you have when you do not yet know what to capture - or whether to build it at all.
+Beside the chain, at any point of it, **judge** is the verdict you ask for when you doubt what is
+about to be built, or what already was: proceed, proceed with changes, rethink, or stop.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app, or a Terraform
 repo. f10 either **infers** what it needs (git remote → `gh`/`glab`, build files → verify commands)
@@ -39,14 +41,21 @@ flowchart LR
         implement -.-> revL["review (local)"] -.-> pr
         pr -.-> revC["review (CI / human)"] -.-> deploy["deploy / e2e / …"]
     end
+    idea -.-> judge[judge]
+    capSt -.-> judge
+    plan -.-> judge
+    pr -.-> judge
+    judge -.->|"proceed · proceed with changes · rethink · stop"| verdict(["verdict"])
 ```
 
-Solid arrows are the default pipeline; dashed ones are optional - `brainstorm` when you ask for
-it, the rest where a project declares them. Each skill is an **entry point** into that chain:
+Solid arrows are the default pipeline; dashed ones are optional - `brainstorm` and `judge` when
+you ask for them, the rest where a project declares them. Each skill is an **entry point** into
+that chain:
 
 | Skill | Runs | Stops at |
 |---|---|---|
 | `/f10:brainstorm <idea>` | brainstorm | a shape agreed in chat - or the decision not to build |
+| `/f10:judge <idea \| id \| PR> [--blind]` | judge | a verdict in chat: proceed, proceed with changes, rethink, or stop |
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
@@ -94,8 +103,16 @@ executes nothing.
   which shape. Read-only and artifact-free by design, it ends in a decision you hand to
   `/f10:capture` or in not building at all. It draws no status-line glyph - there is nothing to
   track yet.
-- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, plus ship-pipeline steps
-  `implement`, `pr`, `push`, `review`, `deploy` (`steps/*.md`). Skills are thin routers over steps.
+- **Judge** - the optional verdict at any point of the chain: a raw idea, a captured task, a
+  saved plan, or a PR. It restates the problem, finds it in the code, asks symptom or cause,
+  looks for what already exists and for the longer-lived shape, then answers in one word -
+  proceed, proceed with changes, rethink, or stop - with the argument under it. `--blind` runs
+  it in a fresh agent that sees the artifact and the repo, never the conversation that produced
+  them. A project may also name `judge` inside its ship pipeline, where anything but proceed
+  ends the run. Creates nothing.
+- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, plus
+  ship-pipeline steps `implement`, `pr`, `push`, `review`, `deploy` (`steps/*.md`). Skills are
+  thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
   `implement → pr`). A name with no generic step (e.g. `e2e`) is project-defined:
   `.f10/instructions/<name>.md` *is* the step. A project may declare several **named pipelines**;
@@ -146,8 +163,8 @@ executes nothing.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,implement,pr,push,review,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,implement,pr,push,review,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end
