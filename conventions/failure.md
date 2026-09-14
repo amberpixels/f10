@@ -57,5 +57,6 @@ you could have found yourself - the user is reading this because you already cou
 
 A step that correctly declines is a **normal end**, not a failure. Ship stopping at an open PR
 because the pipeline declares no review, a gap left on its default, a review that returns
-findings you then fixed, a `(planless)` pipeline skipping the plan file: report these as
-outcomes, in the run's normal report. Do not dress them up as errors.
+findings you then fixed, a `(planless)` pipeline skipping the plan file, a judge verdict that
+ends a ship run (`steps/judge.md` - its badge state is `blocked`, never `failed`): report these
+as outcomes, in the run's normal report. Do not dress them up as errors.

@@ -54,7 +54,8 @@ actually consumes; a fact nothing on the path uses is noise:
   it binds none and creates nothing.
 - **judge**: instructions source, role, guardrails, and - only for the input kind the argument
   routed to - the **fetch** adapter and the plan path for a task id, or the PR-read command
-  (`gh pr diff` / `glab mr diff`) for a PR, quoted and not run. Blind mode is a routing fact:
+  (`gh pr diff` / `glab mr diff`) for a PR or `git show` / `git diff` for a commit or range,
+  quoted and not run. Blind mode is a routing fact:
   say whether the judgment would run in a fresh subagent. It creates nothing.
 - **capture**: instructions source, role, the **create** adapter + id format, visibility - not
   verify, the fetch adapter, guardrails, or the ship pipeline.

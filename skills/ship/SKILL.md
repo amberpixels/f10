@@ -43,6 +43,13 @@ running them. Any extra text the user adds is steering/notes for the run.
 For a plan you just wrote this run, proceed without re-confirming; open gaps are surfaced by
 the implement step (`conventions/gaps.md`).
 
+**A `judge` step routes the run by its verdict** (`steps/judge.md`): proceed continues; stop
+ends the run blocked - `f10-state.sh set ship blocked judge`, the verdict as the report, no
+FAILED block; rethink or proceed with changes open a discussion whose gaps you put to the user
+in one questionnaire. If they choose to continue, fold the answers into the plan file the way
+you fold answered gaps, then run the next step; if they block, end as stop does. Never continue
+past anything but proceed on your own.
+
 **Badge** (`conventions/report.md`): once the pipeline is selected, declare its last step -
 `f10-state.sh final <step>` - so a turn ending mid-pipeline keeps its spinning glyph. Then
 `f10-state.sh set ship running <step>` before each pipeline step, named as the pipeline names
