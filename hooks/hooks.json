@@ -2,7 +2,7 @@
   "hooks": {
     "UserPromptExpansion": [
       {
-        "matcher": "f10:(capture|plan|ship)",
+        "matcher": "f10:(capture|plan|ship|status)",
         "hooks": [
           {
             "type": "command",
