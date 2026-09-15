@@ -94,10 +94,12 @@ in the `conventions/failure.md` sense - nothing broke, so no FAILED block and no
 
 - **proceed** - the pipeline continues to the next step. The verdict is one line in the run's
   report.
-- **stop** - the run ends **blocked**: `f10-state.sh set ship blocked judge`, then the verdict as
-  the report, in its normal shape. Anything durable the run had already produced - commits, an
-  open PR - is named there, but the badge still reads blocked, not partial: the work stopped by
-  decision, not by breakage. The pipeline never continues on its own.
+- **stop** - the run ends **blocked**: `f10-state.sh set ship blocked judge`, then
+  `f10-state.sh note "stop: <the reason, one line>" "<the smallest thing that would change the
+  verdict>"` in the same call, then the verdict as the report, in its normal shape. Anything
+  durable the run had already produced - commits, an open PR - is named there, but the badge
+  still reads blocked, not partial: the work stopped by decision, not by breakage. The pipeline
+  never continues on its own.
 - **rethink** and **proceed with changes** - the run pauses in a discussion, in brainstorm's
   shape (`steps/brainstorm.md` points 3 to 6: a position, then converge). Each named change or
   objection becomes a gap in the questionnaire shape of `conventions/gaps.md` - one
@@ -105,10 +107,13 @@ in the `conventions/failure.md` sense - nothing broke, so no FAILED block and no
   a real option, not a courtesy. The discussion ends in one of two decisions, both the user's:
   **continue** - the ship skill folds the answers into the plan file, stages and Gaps section
   alike, exactly as it already does for open gaps before implementing, then runs the next step;
-  or **block** - as stop above. The judge still writes nothing; the plan edit is the ship
-  skill's.
+  or **block** - as stop above, the note carrying this verdict's word and reason. The judge
+  still writes nothing; the plan edit is the ship skill's.
 
-**It writes nothing.** No plan edits, no tracker comment, no code, no scratch file. Stay in the
+**It writes nothing.** No plan edits, no tracker comment, no code, no scratch file. The one
+line it leaves behind is the badge's, not an artifact: `f10-state.sh note` lands in the
+session's state file, outside every repo and gone with the TTL, so that `f10 status` can say
+why a run stopped after the chat has scrolled past (`conventions/report.md`). Stay in the
 conversation as long as the user wants to argue - that argument is the point. Talk normally:
 the verdict was delivered once, and repeating it on every reply is noise. Only when an argument
 actually moves it does the banner come back, with the new verdict and its one-line reason.

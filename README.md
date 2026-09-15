@@ -59,6 +59,7 @@ that chain:
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
+| `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
 
 ## Install
 
@@ -217,8 +218,29 @@ font, and the code spans still carry the real characters if you copy one.
 
 Each state has its own shape and color only reinforces it, because a status line is read at a
 glance, often in a daltonized theme where red/green is exactly the pair that collapses. `NO_COLOR`
-and `F10_STATE_COLOR=0` drop the color and keep the badge readable. The task id and the running
-ship step live in `f10-state.sh show`, for the human who wants the detail.
+and `F10_STATE_COLOR=0` drop the color and keep the badge readable.
+
+A run that stopped shows one more word: the step it stopped on, so `◉ ● 󰜺 judge` reads as
+"blocked at judge" without leaving the status line. A normal run stays three glyphs wide. The
+rest - the task, the reason, what unblocks it - is `f10 status`:
+
+```
+task      GH-26
+url       https://github.com/amberpixels/f10/issues/26
+capture   prior
+plan      done
+ship      blocked at judge
+note      stop: the change patches the symptom, the cause is the retry loop in sync.go
+next      move the retry into the client and re-run /f10:ship GH-26
+updated   4m ago
+```
+
+Three ways in, one implementation. From a plain terminal, `f10 status` lists this repo's live
+runs (`--all`, every session on the machine; `--json`, the same for scripts). Inside a session,
+`! f10 status` runs it where the session id is already in the environment. And `/f10:status`
+is for not having to remember which of those it is: the plugin's own hook answers it from
+`f10 status` and ends the turn before a model runs, so it costs no tokens. On a machine without
+the binary, `f10-state.sh show` prints the same facts for the current session.
 
 <details>
 <summary>Why circles-by-fill, and the three Nerd Font exceptions</summary>
@@ -281,7 +303,8 @@ empty boxes here for the reason above, but the code spans hold the real U+F015A 
 
 - **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting,
   whether it was typed or the model invoked it, and read the argument to tell a description (which
-  routes through capture) from a task id (which does not). `PostToolUse` catches the plan file
+  routes through capture) from a task id (which does not); the first also answers `/f10:status`
+  outright, on stderr with exit 2, which is what ends the turn. `PostToolUse` catches the plan file
   being written, which is both "plan done" and where the task id comes from. `Stop` closes out
   whatever is still marked running when the turn ends. `SessionStart` prunes dead state and
   refreshes the symlink.
@@ -326,6 +349,7 @@ f10 task open 2703       # in the browser
 f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
+f10 status               # where the run is: this session's, or this repo's live ones
 ```
 
 A verb means one thing under every noun. `read` writes content, `open` follows an address,
@@ -395,9 +419,9 @@ Five skills over one step file per unit of work: `brainstorm`, `capture`, `plan`
 `judge`. Project facts come from `.f10/instructions/` through the resolver, worktree-layered,
 with inferred defaults where nothing is declared. Six conventions bind every run: what it costs,
 how it fails, how it reports, how it talks, where open decisions go, and how context loads. A
-status-line badge tracks the run through capture, plan and ship, and the `f10` binary explains
-the resolved configuration and reads tasks, plans and PRs through `gh`, `glab`, or a project's
-own driver.
+status-line badge tracks the run through capture, plan and ship, `f10 status` says in words
+where it is and why it stopped, and the `f10` binary explains the resolved configuration and
+reads tasks, plans and PRs through `gh`, `glab`, or a project's own driver.
 
 Next: `/f10:init` (bootstrap questionnaire + shared **profiles**, named configs a repo's
 `project.md` references instead of repeating).

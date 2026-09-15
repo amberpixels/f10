@@ -1,6 +1,7 @@
 // Command f10 is the read-only lookaround binary: it prints the effective
 // configuration of the repo it runs in with a provenance per value, and
-// reads the tasks, plans and pull requests that configuration points at.
+// reads the tasks, plans and pull requests that configuration points at,
+// and where a run is right now.
 //
 // Read-only means it changes nothing - no file it did not read, no tracker
 // item, no cache. It does act on the reader's behalf, handing a url to a
@@ -42,6 +43,7 @@ func main() {
 			taskCommand(),
 			planCommand(),
 			prCommand(),
+			statusCommand(),
 		},
 	}
 

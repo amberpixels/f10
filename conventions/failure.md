@@ -30,7 +30,9 @@ a plan built on a task that was never really fetched.
    `f10-state.sh set <phase> failed` - or `partial` where the phase stopped **after this run
    produced something durable** (commits made but the push rejected, a PR open but its CI review
    red, a deploy that errored after merge). Check for artifacts, do not judge severity; a stop
-   that left nothing usable stays `failed`. Cosmetic and best-effort like every badge call
+   that left nothing usable stays `failed`. In the same call, `f10-state.sh note "<what failed>"
+   "<next>"` - the report's own two rows, one line each - so `f10 status` can answer why after
+   the report has scrolled past. Cosmetic and best-effort like every badge call
    (`conventions/report.md`): if it errors, ignore it and report the real failure.
 
 ## Report format

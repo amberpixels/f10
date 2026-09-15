@@ -51,6 +51,7 @@ and leave their phase:
 ```
 f10-state.sh set <capture|plan|ship> <running|done|failed|partial|prior|blocked> [<leaf>]
 f10-state.sh task <id> [<url>]
+f10-state.sh note <reason> [<next>]
 f10-state.sh final <step>
 ```
 
@@ -64,7 +65,10 @@ task already in the tracker: done, just not by this run. Reporting the task id
 `partial` marks a phase that stopped after this run produced something durable - commits, an
 open PR, a deploy; `conventions/failure.md` rule 7 draws the line between it and `failed`.
 `blocked` marks a ship run a judge verdict ended (`steps/judge.md`): nothing broke, the user
-decided, and neither `failed` nor `partial` would be true.
+decided, and neither `failed` nor `partial` would be true. A stop state keeps the leaf it
+stopped on, and `note` records why and what unblocks it, one line each - the badge shows the
+step's name beside the glyphs, and `f10 status` (`/f10:status` in a session, `f10-state.sh show`
+without the binary) prints the rest.
 
 **Cosmetic and best-effort, everywhere.** Nothing in the pipeline reads this state back - it
 draws a badge. A missing command, a failed write, a phase nobody reported: each costs one glyph
