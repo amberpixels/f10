@@ -16,10 +16,11 @@
 # Usage:
 #   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
+#   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
 #   f10-state.sh final <step>           declare the ship pipeline's last step
 #   f10-state.sh seed <skill>           begin a fresh run - hooks call this, steps do not
 #   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
-#   f10-state.sh show                   the current run, human-readable
+#   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
 #   f10-state.sh doctor                 is any of this actually wired up?
 #   f10-state.sh hook                   dispatch one hook event; hook JSON on stdin
@@ -47,8 +48,11 @@ phases="capture plan ship"
 
 st_task=""
 st_url=""
+st_root=""
 st_leaf=""
 st_final=""
+st_note=""
+st_next=""
 st_updated=0
 st_capture="pending"
 st_plan="pending"
@@ -74,8 +78,11 @@ load() {
     case "$k" in
       task) st_task="$v" ;;
       url) st_url="$v" ;;
+      root) st_root="$v" ;;
       leaf) st_leaf="$v" ;;
       final) st_final="$v" ;;
+      note) st_note="$v" ;;
+      next) st_next="$v" ;;
       updated) st_updated="$v" ;;
       capture) st_capture="$v" ;;
       plan) st_plan="$v" ;;
@@ -98,11 +105,14 @@ save() {
     echo "v 1"
     echo "task $st_task"
     echo "url $st_url"
+    echo "root $st_root"
     echo "capture $st_capture"
     echo "plan $st_plan"
     echo "ship $st_ship"
     echo "leaf $st_leaf"
     echo "final $st_final"
+    echo "note $st_note"
+    echo "next $st_next"
     echo "updated $(date +%s)"
   } >"$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
 }
@@ -237,9 +247,22 @@ render() {
     label=$'\033[2m'"$label$reset"
   fi
 
+  # The one word the three glyphs cannot say, and only when a human is about to ask for it: a
+  # run that stopped shows the step it stopped on. A normal run stays three glyphs wide, so the
+  # column argument for the label above holds where it matters; `f10 status` carries the reason.
+  local word=""
+  if [ -n "$st_leaf" ]; then
+    case "$st_capture$st_plan$st_ship" in
+      *failed* | *partial* | *blocked*)
+        word=" $st_leaf"
+        [ "$color" = 1 ] && word=$'\033[2m'"$word$reset"
+        ;;
+    esac
+  fi
+
   # A leading space, so a status-line script can concatenate the result unconditionally: empty
   # means empty, and the segment brings its own separator when it is not.
-  printf ' %s %s' "$label" "$icons"
+  printf ' %s %s%s' "$label" "$icons" "$word"
 }
 
 # --- reading hook payloads ---------------------------------------------------------------------
@@ -290,12 +313,37 @@ cmd_set() {
     plan) st_plan="$status" ;;
     ship) st_ship="$status" ;;
   esac
-  # the leaf belongs to a step that is running; anything else is a phase boundary and clears it
-  if [ "$status" = "running" ]; then
-    st_leaf="$leaf"
-  else
-    st_leaf=""
-  fi
+  # The leaf belongs to a step that is running - or to the step a run stopped on. A stop state
+  # keeps it (the argument when given, else the one the last `running` recorded), because "ship
+  # blocked" is the badge and "blocked at judge" is the answer; clearing it here is how a run once
+  # forgot who blocked it. A phase starting over retires the earlier stop's reason with it.
+  case "$status" in
+    running)
+      st_leaf="$leaf"
+      st_note=""
+      st_next=""
+      ;;
+    failed | partial | blocked) [ -n "$leaf" ] && st_leaf="$leaf" ;;
+    *) st_leaf="" ;;
+  esac
+  save
+  exit 0
+}
+
+# Why a run stopped, and the smallest thing that unblocks it - the two lines a badge cannot hold.
+# Written by whoever stops the run (a judge verdict, a failure report) in the same breath as the
+# stop state. One line each: the file is `key value` per line and the reader takes the rest of the
+# line as the value, so a newline would become a second, unknown key.
+cmd_note() {
+  local reason="${1:-}" next="${2:-}"
+  [ -n "$reason" ] || {
+    echo "f10-state: note needs a reason" >&2
+    exit 2
+  }
+  resolve_sid || exit 0
+  load
+  st_note="$(printf '%s' "$reason" | tr '\n' ' ')"
+  st_next="$(printf '%s' "$next" | tr '\n' ' ')"
   save
   exit 0
 }
@@ -398,7 +446,7 @@ ref_task_of() {
 # included, because keeping it would caption the new run with the old run's task, which is the
 # one way this badge could actively mislead.
 cmd_seed() {
-  local skill="${1:-}" args="${3:-}"
+  local skill="${1:-}" args="${3:-}" cwd="${4:-}"
   resolve_sid "${2:-}" || exit 0
 
   # Chained only for plan/ship: capture always mints a new task, so an id argument to it never
@@ -415,7 +463,15 @@ cmd_seed() {
 
   st_leaf=""
   st_final=""
+  st_note=""
+  st_next=""
   st_ship="pending"
+  # The checkout this run is about, so a terminal with no session id can still find its runs.
+  # The hook payload's cwd is wherever the session was launched; the checkout root is what a
+  # run from a subdirectory shares with one from the top. Outside git the cwd is the root.
+  if [ -n "$cwd" ]; then
+    st_root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$cwd")"
+  fi
   if [ "$chain" = 1 ]; then
     # earlier phases stay where the last invocation left them - if their work is settled; a
     # leftover `running` or `failed` is stale, not evidence, and resets with the rest
@@ -467,6 +523,45 @@ cmd_seed() {
   exit 0
 }
 
+# The loaded run, one `label value` line per fact, in the order `f10 status` prints them - the
+# binary is the fuller surface (every live run, --json), and this is the same facts for the
+# machine that has only the script. A phase carries its step where one is known: `running:
+# implement`, `blocked at judge`.
+print_run() {
+  printf 'task     %s\n' "${st_task:--}"
+  printf 'url      %s\n' "${st_url:--}"
+  [ -n "$st_root" ] && printf 'root     %s\n' "$st_root"
+  local p status
+  for p in $phases; do
+    case "$p" in
+      capture) status="$st_capture" ;;
+      plan) status="$st_plan" ;;
+      *) status="$st_ship" ;;
+    esac
+    glyph_for "$status"
+    printf '%-8s %s %s\n' "$p" "$_glyph" "$(phase_text "$p" "$status")"
+  done
+  [ -n "$st_note" ] && printf 'note     %s\n' "$st_note"
+  [ -n "$st_next" ] && printf 'next     %s\n' "$st_next"
+  [ -n "$st_final" ] && printf 'final    %s\n' "$st_final"
+  printf 'updated  %ss ago\n' "$(($(date +%s) - st_updated))"
+  return 0
+}
+
+# A status with its step attached, where the step is known and belongs to this status. The leaf
+# is a pipeline step, so only ship ever carries one.
+phase_text() { # phase_text <phase> <status>
+  if [ "$1" != "ship" ] || [ -z "$st_leaf" ]; then
+    printf '%s' "$2"
+    return 0
+  fi
+  case "$2" in
+    running) printf '%s: %s' "$2" "$st_leaf" ;;
+    failed | partial | blocked) printf '%s at %s' "$2" "$st_leaf" ;;
+    *) printf '%s' "$2" ;;
+  esac
+}
+
 cmd_show() {
   resolve_sid || {
     echo "no session id - nothing to show"
@@ -476,21 +571,7 @@ cmd_show() {
     echo "no state for session $sid"
     exit 0
   }
-  printf 'task     %s\n' "${st_task:--}"
-  printf 'url      %s\n' "${st_url:--}"
-  local p status
-  for p in $phases; do
-    case "$p" in
-      capture) status="$st_capture" ;;
-      plan) status="$st_plan" ;;
-      *) status="$st_ship" ;;
-    esac
-    glyph_for "$status"
-    printf '%-8s %s %s\n' "$p" "$_glyph" "$status"
-  done
-  [ -n "$st_leaf" ] && printf 'leaf     %s\n' "$st_leaf"
-  [ -n "$st_final" ] && printf 'final    %s\n' "$st_final"
-  printf 'updated  %ss ago\n' "$(($(date +%s) - st_updated))"
+  print_run
   exit 0
 }
 
@@ -568,7 +649,10 @@ cmd_doctor() {
 
 # One entry point for every hook event, dispatching on the payload's own hook_event_name rather
 # than on an argument, so hooks.json registers the same command everywhere and a new event costs a
-# case arm instead of a new script. Always exits 0: a badge is never a reason to interrupt a run.
+# case arm instead of a new script. Exits 0 everywhere but one arm: a badge is never a reason to
+# interrupt a run. The exception is `/f10:status`, which is not a run - it is a question, and the
+# answer is the interruption: exit 2 ends the turn before the model runs and puts stderr in the
+# chat, so the status costs no model turn at all.
 cmd_hook() {
   [ -t 0 ] && exit 0
   json="$(cat)"
@@ -586,16 +670,21 @@ cmd_hook() {
   case "$event" in
     UserPromptExpansion)
       # the typed path: /f10:ship reaches the model as an expansion, never as a Skill tool call
-      skill="$(f10_skill_of "$(json_get command_name)")"
+      local name
+      name="$(json_get command_name)"
+      case "$name" in
+        f10:status | status) answer_status "$hook_sid" ;;
+      esac
+      skill="$(f10_skill_of "$name")"
       [ -n "$skill" ] || exit 0
-      cmd_seed "$skill" "$hook_sid" "$(json_get command_args)"
+      cmd_seed "$skill" "$hook_sid" "$(json_get command_args)" "$(json_get cwd)"
       ;;
     PreToolUse)
       # the other path: the model calling the skill itself, which the expansion event never sees
       [ "$(json_get tool_name)" = "Skill" ] || exit 0
       skill="$(f10_skill_of "$(json_get skill tool_input)")"
       [ -n "$skill" ] || exit 0
-      cmd_seed "$skill" "$hook_sid" "$(json_get args tool_input)"
+      cmd_seed "$skill" "$hook_sid" "$(json_get args tool_input)" "$(json_get cwd)"
       ;;
     PostToolUse)
       # the plan file *is* the plan step's output (conventions/context.md), so writing one is the
@@ -659,6 +748,21 @@ cmd_hook() {
   exit 0
 }
 
+# The answer to `/f10:status`, on stderr, then exit 2 - see cmd_hook. The binary is the full
+# surface and answers when it is on the hook's PATH; the script's own view is the fallback, so a
+# machine without the binary installed still gets an answer rather than a model turn. Neither is
+# on stdout: with exit 2 the chat shows stderr.
+answer_status() {
+  if command -v f10 >/dev/null 2>&1; then
+    F10_SESSION_ID="$1" f10 status >&2
+  elif resolve_sid "$1" && load; then
+    print_run >&2
+  else
+    echo "no f10 run in this session" >&2
+  fi
+  exit 2
+}
+
 # Which f10 skill a command or Skill-tool name refers to - empty for anything else, which the
 # caller reads as "not ours, do nothing". Both paths carry the plugin's own prefix (`/f10:ship`,
 # `Skill(f10:ship)`), so the prefixed form is what this really matches; the bare form is accepted
@@ -684,6 +788,10 @@ case "${1:-}" in
     shift
     cmd_task "$@"
     ;;
+  note)
+    shift
+    cmd_note "$@"
+    ;;
   final)
     shift
     cmd_final "$@"
@@ -707,6 +815,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
 
   set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
   task <id> [<url>]        record the task this run is about
+  note <reason> [<next>]   why a run stopped, and what unblocks it
   final <step>             declare the ship pipeline's last step
   seed <skill>             begin a fresh run - hooks call this, steps do not
   render [<session id>]    the status-line segment; status-line JSON on stdin

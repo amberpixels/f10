@@ -57,7 +57,8 @@ it, and `f10-state.sh set ship done` after the last. Where the plan came from an
 the plan-file route, or the reuse branch
 above - add `f10-state.sh set plan prior`. Where the pipeline stops mid-way but durable
 artifacts exist - commits, an open PR, a deploy - report `set ship partial <step>` rather
-than `failed`, per `conventions/failure.md` rule 7.
+than `failed`, per `conventions/failure.md` rule 7, and `note` what stopped it and what
+unblocks it in the same call.
 
 **Final report:** lead with the facts block per `conventions/report.md` - the PR/MR url, its
 branch, and the deploy url where the pipeline deployed. Then, as prose: review status as far as
