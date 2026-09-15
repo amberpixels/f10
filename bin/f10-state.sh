@@ -100,6 +100,13 @@ load() {
 save() {
   [ -n "$file" ] || return 1
   mkdir -p "$state_dir" 2>/dev/null || return 1
+  # The root is the seed's to record, from the hook payload - but a run seeded before there was
+  # a root key, or by hand, has none, and every later call runs where the session runs: a step's
+  # Bash call and a hook alike have the checkout as their cwd. So the first save after the seed
+  # fills it in, and a file that predates the key catches up on its next badge call.
+  if [ -z "$st_root" ]; then
+    st_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)"
+  fi
   local tmp="$file.$$"
   {
     echo "v 1"
