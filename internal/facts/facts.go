@@ -9,6 +9,10 @@
 // structure; everything else is presented as the declared prose, attributed
 // but unparsed. The binary may be incomplete, never wrong - what it cannot
 // place it shows as-is instead of guessing.
+//
+// It writes that prose too, in scaffold.go: `f10 init` renders detection as
+// a project.md. Reader and writer share a package so the vocabulary one
+// keys on and the words the other emits cannot drift apart.
 package facts
 
 import (

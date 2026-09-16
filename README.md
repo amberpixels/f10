@@ -337,6 +337,14 @@ just install   # go install ./cmd/f10
 f10 config
 ```
 
+`f10 init` is where that configuration comes from. Run inside a checkout that declares none, it
+writes `.f10/instructions/project.md` from what the probes found - stack, tracker and its id
+format, host and PR CLI, verify commands, storage and visibility - and adds the stealth `.f10/`
+line to `.git/info/exclude`. Sections nothing detected are left out rather than stubbed, since
+`absent` already carries a default; the `Project` one-liner is left to you, because no probe
+reaches what a project *is*. It creates and never overwrites, and the file's existence is what
+marks the directory as an f10 project.
+
 ### Lookaround
 
 The same binary reads the things that configuration points at. Which tool it reaches for is a
@@ -378,8 +386,9 @@ that contract and implements none of it.
 
 No uniform storage (everything stays in the files where it lives today; the binary reads and
 pre-computes), no scanning (it answers for the repo it runs in, and walks the filesystem for
-other projects only once you set `F10_ROOTS`), and it writes nothing, anywhere - handing a url
-to a browser or a file to an editor is the whole of what leaves the process. `bin/resolve.sh`
+other projects only once you set `F10_ROOTS`), and one writing verb: `init` creates the two
+files that register a project and nothing else writes anywhere, ever - handing a url to a
+browser or a file to an editor is the whole of what leaves the process. `bin/resolve.sh`
 stays the agent-facing surface - the binary explains to humans what the resolver hands to
 agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
@@ -420,11 +429,13 @@ Five skills over one step file per unit of work: `brainstorm`, `capture`, `plan`
 with inferred defaults where nothing is declared. Six conventions bind every run: what it costs,
 how it fails, how it reports, how it talks, where open decisions go, and how context loads. A
 status-line badge tracks the run through capture, plan and ship, `f10 status` says in words
-where it is and why it stopped, and the `f10` binary explains the resolved configuration and
-reads tasks, plans and PRs through `gh`, `glab`, or a project's own driver.
+where it is and why it stopped, and the `f10` binary explains the resolved configuration, writes
+the `project.md` that registers a checkout, and reads tasks, plans and PRs through `gh`, `glab`,
+or a project's own driver.
 
-Next: `/f10:init` (bootstrap questionnaire + shared **profiles**, named configs a repo's
-`project.md` references instead of repeating).
+Next: the `/f10:init` skill over that command (the `Project` line and guardrails read out of a
+repo, not detected) + shared **profiles**, named configs a repo's `project.md` references
+instead of repeating.
 
 ## Feedback
 
