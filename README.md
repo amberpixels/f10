@@ -304,10 +304,10 @@ empty boxes here for the reason above, but the code spans hold the real U+F015A 
 - **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting,
   whether it was typed or the model invoked it, and read the argument to tell a description (which
   routes through capture) from a task id (which does not); the first also answers `/f10:status`
-  outright, on stderr with exit 2, which is what ends the turn. `PostToolUse` catches the plan file
-  being written, which is both "plan done" and where the task id comes from. `Stop` closes out
-  whatever is still marked running when the turn ends. `SessionStart` prunes dead state and
-  refreshes the symlink.
+  outright, with a blocking verdict on stdout, which is what ends the turn. `PostToolUse` catches
+  the plan file being written, which is both "plan done" and where the task id comes from. `Stop`
+  closes out whatever is still marked running when the turn ends. `SessionStart` prunes dead state
+  and refreshes the symlink.
 - **Steps** - one `f10-state.sh set` call as each phase opens and closes. Per
   `conventions/report.md` the badge is **cosmetic and best-effort**: nothing reads it back, and a
   call that fails costs a glyph and nothing else.

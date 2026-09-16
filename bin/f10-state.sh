@@ -656,10 +656,10 @@ cmd_doctor() {
 
 # One entry point for every hook event, dispatching on the payload's own hook_event_name rather
 # than on an argument, so hooks.json registers the same command everywhere and a new event costs a
-# case arm instead of a new script. Exits 0 everywhere but one arm: a badge is never a reason to
-# interrupt a run. The exception is `/f10:status`, which is not a run - it is a question, and the
-# answer is the interruption: exit 2 ends the turn before the model runs and puts stderr in the
-# chat, so the status costs no model turn at all.
+# case arm instead of a new script. Nothing here fails a run: a badge is never a reason to
+# interrupt one. The exception is `/f10:status`, which is not a run - it is a question, and the
+# answer is the interruption: a blocking verdict ends the turn before the model runs and puts the
+# status in the chat, so it costs no model turn at all.
 cmd_hook() {
   [ -t 0 ] && exit 0
   json="$(cat)"
@@ -755,19 +755,54 @@ cmd_hook() {
   exit 0
 }
 
-# The answer to `/f10:status`, on stderr, then exit 2 - see cmd_hook. The binary is the full
-# surface and answers when it is on the hook's PATH; the script's own view is the fallback, so a
-# machine without the binary installed still gets an answer rather than a model turn. Neither is
-# on stdout: with exit 2 the chat shows stderr.
+# The answer to `/f10:status` - see cmd_hook. It travels as a blocking verdict on stdout rather
+# than as stderr with exit 2, because exit 2 is the *error* path: the chat wraps that stderr in the
+# hook's own command line and then echoes the prompt back under it, with the status squeezed
+# between the two. The verdict prints the block alone, under one header line that is Claude Code's
+# and not ours to drop. The binary is the full surface and answers when it is on the hook's PATH;
+# the script's own view is the fallback, so a machine without the binary installed still gets an
+# answer rather than a model turn.
 answer_status() {
+  local text=""
   if command -v f10 >/dev/null 2>&1; then
-    F10_SESSION_ID="$1" f10 status >&2
+    text="$(F10_SESSION_ID="$1" f10 status 2>&1)"
   elif resolve_sid "$1" && load; then
-    print_run >&2
-  else
-    echo "no f10 run in this session" >&2
+    text="$(print_run)"
   fi
-  exit 2
+  [ -n "$text" ] || text="no f10 run in this session"
+
+  printf '{"decision":"block","reason":"%s","hookSpecificOutput":{"hookEventName":"UserPromptExpansion","suppressOriginalPrompt":true}}\n' \
+    "$(json_string "$(titled "$text")")"
+  exit 0
+}
+
+# The block under a title of its own. The line Claude Code prints above it says `blocked by hook`
+# about a command the user simply typed, and none of those three words are his: he asked for a
+# status. The title takes that sentence's place as the thing the eye lands on, and the tag on its
+# right answers what the noise above it raises - nothing went wrong, nothing ran, here is the
+# status. Rule width follows the widest row, within bounds a narrow terminal and a long URL both
+# survive.
+titled() {
+  local w pad rule
+  w="$(printf '%s\n' "$1" | awk '
+    { if (length($0) > w) w = length($0) }
+    END { if (w < 44) w = 44; if (w > 72) w = 72; print w }
+  ')"
+  pad=$((w - 25)) # 12 columns of title, 13 of tag
+  [ "$pad" -ge 2 ] || pad=2
+  rule="$(awk -v n="$w" 'BEGIN { while (i++ < n) printf "─" }')"
+
+  printf 'f10 · status%*sno model turn\n%s\n%s\n' "$pad" "" "$rule" "$1"
+}
+
+# Text as the body of a JSON string. Three characters in a status block need escaping - backslash,
+# quote, newline - and anything else in the control range is dropped rather than escaped: one raw
+# control byte makes the whole verdict unparseable, and an unparseable verdict costs the answer.
+json_string() {
+  printf '%s' "$1" |
+    tr '\t' ' ' |
+    sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/[[:cntrl:]]//g' |
+    awk 'BEGIN { ORS = "" } { if (NR > 1) print "\\n"; print }'
 }
 
 # Which f10 skill a command or Skill-tool name refers to - empty for anything else, which the
