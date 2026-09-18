@@ -124,14 +124,18 @@ executes nothing.
   the run blocked, and rethink or proceed with changes open a discussion that ends in the
   user's call to continue or block. Creates nothing.
 - **Demo** - the optional answer to *what was built*, for the moment before you merge a PR whose
-  code you did not write. It derives one **demo script** from the task, the plan and the diff -
-  entry point, the state it needs, the steps, what to look for - then either runs it and captures
-  evidence (screenshots and a local `report.html`) or seeds the state, leaves the app running and
-  hands you the script (`--hands-on`). The executor is declared, never guessed: no `demo` overlay
-  means no way to drive the app, so the run degrades to hands-on and says so. Evidence is budgeted
-  by claim, not by count, before/after is captured only where something visible already existed,
-  and every sentence of the report points at an artifact the run actually captured. Finds no bugs
-  and reaches no verdict - that is `review` and `judge`.
+  code you did not write. It **says what changed** in plain words - what the app did before, what
+  it does now - and derives a **demo script** that confirms it: entry point, the state it needs,
+  the steps, what to look for. Then it either runs that script and captures evidence (screenshots
+  and a local `report.html`) or seeds the state, leaves the app running and hands you the script
+  (`--hands-on`). The executor is declared, never guessed, and a project without a `demo` overlay
+  is offered one: the step finds the e2e config, dev-server recipe, seed task and test user the
+  project already has, puts them in a single pre-filled questionnaire, writes
+  `.f10/instructions/demo.md`, and carries on. That questionnaire also settles where the report
+  goes - a local file, a private published page, or both (`--publish` / `--local` per run).
+  Evidence is budgeted by claim, not by count, before/after is captured only where something
+  visible already existed, and the report carries rows only for artifacts that were actually
+  written. Finds no bugs and reaches no verdict - that is `review` and `judge`.
 - **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, plus
   ship-pipeline steps `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). Skills
   are thin routers over steps.
