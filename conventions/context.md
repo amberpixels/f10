@@ -9,10 +9,11 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 Three tiers, never interchangeable:
 
 - **skill** - an entry point the user invokes: `/f10:brainstorm`, `/f10:capture`, `/f10:plan`,
-  `/f10:ship`, `/f10:judge`. `/f10:status` is the one that runs no step: a hook answers it
-  from `f10 status` before any model turn.
+  `/f10:ship`, `/f10:judge`, `/f10:demo`. `/f10:status` is the one that runs no step: a hook
+  answers it from `f10 status` before any model turn.
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
-  `implement`, `pr`, `push`, `review`, `deploy` (`steps/*.md`). A skill runs one or more steps.
+  `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). A skill runs one or more
+  steps.
 - **stage** - one ordered unit *inside* a plan file. Never a step, never a skill.
 
 Two of them share a name, so bare `plan` is ambiguous - write `/f10:plan` for the skill,
