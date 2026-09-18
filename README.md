@@ -380,6 +380,7 @@ f10 task read            # the current task as markdown - from the branch, or th
 f10 task open 2703       # in the browser
 f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
+f10 demo open            # the demo report for it, in the browser
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
 f10 status               # where the run is: this session's, or this repo's live ones
 ```
