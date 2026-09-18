@@ -49,14 +49,26 @@ carries the script and the live url as well: taking the wheel afterwards costs n
    app, the overlay declaring that skill *is* the executor - f10 specifies the capability and the
    project binds it, as with every other adapter.
 
-   **A missing overlay is a gap to fill, not a reason to give up** (`conventions/gaps.md`). By
-   this point the run has read the project's build files, its CLAUDE.md and its diff, so it can
-   usually *propose* every answer rather than ask an empty question. Put them in **one**
-   `AskUserQuestion` - what drives the app, how to launch it, how to seed state, how to
-   authenticate - each with what was detected as the first option. On answers, write
-   `.f10/instructions/demo.md` and carry straight on with the run that prompted it; no later
-   `/f10:demo` in this project asks again. Never invent an answer the user declined to give, and
-   never write the overlay without showing what goes in it.
+   **A missing overlay is a gap to fill, not a reason to give up** (`conventions/gaps.md`), and
+   **the questionnaire proposes, it does not interrogate.** Look before asking - a project that
+   already runs browsers answers most of this itself, in a few targeted `Read`/`Grep` calls in one
+   message:
+
+   - **what drives it** - a Playwright, Cypress, Selenium or Capybara config, an existing e2e
+     suite and the command that runs it, a browser MCP server this session already has, or a
+     project skill that launches and drives the app.
+   - **how to launch it** - the dev-server recipe in the `justfile`, `Makefile`, `package.json`
+     scripts or `Procfile`, and the port it binds.
+   - **how to seed state** - the fixture, factory, or seed task the test suite already uses.
+   - **how to authenticate** - the test user, the dev-login route, or the header or marker the
+     project's CLAUDE.md documents.
+
+   Then **one** `AskUserQuestion`: a question per fact, each carrying what you found as its first
+   option, plus **where the report should go** (point 10). A fact nothing turned up is still asked,
+   with the conservative choice first - an empty question is better than a fabricated default. On
+   answers, write `.f10/instructions/demo.md` and carry straight on with the run that prompted it;
+   no later `/f10:demo` in this project asks again. Never invent an answer the user declined to
+   give, and never write the overlay without showing what goes in it.
 
    Only when the user declines does the run **degrade to hands-on**, naming the fact that is
    missing. That is a normal end, not a failure.
@@ -106,9 +118,21 @@ carries the script and the live url as well: taking the wheel afterwards costs n
     a dark browser. No build step and no dependency - a file that needs a server to open is not an
     artifact anyone keeps.
 
-    Write it locally and **publish nothing**. The evidence does not go to the PR, the tracker, or
-    any hosted page unless the user asks for it in as many words - under stealth
-    (`conventions/context.md`) it would announce the pipeline as loudly as a commit message could.
+    **Where that page goes is the project's declared choice**, settled by point 4's questionnaire
+    and recorded in the overlay: the local file alone, a published page as well, or a published
+    page only. `--publish` and `--local` in the argument override it for one run.
+
+    Publishing makes it a **private page on the user's own account**, reachable by a url that is
+    theirs to share or not - the choice is between a file they open and a link they can send, not
+    between private and public. It still leaves the machine, so two rules bind it. Nothing is
+    published that the overlay does not declare or the user did not ask for in as many words. And
+    the page carries **no f10 traces** whatever the project's visibility (`conventions/context.md`)
+    - no storage-root paths, no plan references, nothing naming the pipeline - so a page that gets
+    shared later is already clean. Screenshots referenced by relative path do not survive
+    publishing: upload them with the page and reference the urls the host gives back.
+
+    Nothing else travels. The report does not go to the PR, the tracker, or any hosted page beyond
+    the one the user chose.
 
 **On failure:** the app will not start, or the state the script needs cannot be reached - stop and
 report per `conventions/failure.md`, saying whether anything was created during setup. A script
