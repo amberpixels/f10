@@ -1,8 +1,9 @@
-# Step · demo - a shipped change → what it does, and evidence of it
+# Step · demo - a shipment → what it does, and evidence of it
 
 Role: a **senior engineer** showing a change to someone who did not write it - adopt the roles
 from `project.md → Roles`, including any conditional ones the plan recorded.
-Input: a shipped change - the task, its plan, and the diff - usually behind an open PR.
+Input: a shipment - the task, its plan, and the diff - usually an open PR, but a branch
+without one demos the same way.
 Output: **what the change does**, stated in plain words, and a **demo script** that confirms it -
 plus, where the run executes the script, the evidence: screenshots and a `report.html` under
 `<storage root>/demo/<TASK-ID>/`.

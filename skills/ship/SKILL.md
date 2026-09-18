@@ -60,11 +60,12 @@ artifacts exist - commits, an open PR, a deploy - report `set ship partial <step
 than `failed`, per `conventions/failure.md` rule 7, and `note` what stopped it and what
 unblocks it in the same call.
 
-**Final report:** lead with the facts block per `conventions/report.md` - the PR/MR url, its
-branch, and the deploy url where the pipeline deployed. Then, as prose: review status as far as
-the pipeline goes ("stopped at PR" is a normal end), deploy status if it deploys, a short note
-of what changed, and - if any gaps stayed on their defaults - a one-line reminder that they're
-recorded in the plan.
+**Final report:** lead with the facts block per `conventions/report.md`, carrying the run's
+**shipment** - the branch, the PR/MR url where the pipeline opened one, the sha where it pushed,
+the deploy url where it deployed. Then, as prose: review status as far as the pipeline goes
+("stopped at PR" is a normal end), deploy status if it deploys, a short note of what changed,
+and - if any gaps stayed on their defaults - a one-line reminder that they're recorded in the
+plan.
 
 Note: running this skill is the user's explicit go-ahead to push and open the PR
 (`steps/pr.md`); deploy steps carry their own confirmation rules (`steps/deploy.md`).

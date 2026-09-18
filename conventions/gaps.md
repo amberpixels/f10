@@ -9,7 +9,7 @@ defaults; filling gaps is always optional and can happen at any stage.
 
 ## Where gaps live
 
-In the plan file (`.f10/plans/<TASK-ID>.md`), as a section at the end. Keep it lean - same
+In the plan (`<storage root>/plans/<TASK-ID>.md`), as a section at the end. Keep it lean - same
 altitude as the rest of the plan (prose, no code):
 
 ```

@@ -119,7 +119,7 @@ executes nothing.
   saved plan, a PR, or a commit range. It restates the problem, finds it in the code, asks symptom
   or cause, looks for what already exists and for the longer-lived shape, then answers in one word -
   proceed, proceed with changes, rethink, or stop - with the argument under it. `--blind` runs
-  it in a fresh agent that sees the artifact and the repo, never the conversation that produced
+  it in a fresh agent that sees the subject and the repo, never the conversation that produced
   them. A project may also name `judge` inside its ship pipeline: proceed continues, stop ends
   the run blocked, and rethink or proceed with changes open a discussion that ends in the
   user's call to continue or block. Creates nothing.
@@ -161,6 +161,10 @@ executes nothing.
   plan that exists only in chat is a failed run; superseded plans are archived, never edited.
 - **Gap** - an open decision only the user can make. Recorded, not blocking: every gap carries a
   default, so a plan is always shippable. Filling them is an optional batched questionnaire.
+- **Shipment** - what a ship run leaves behind, named by the pipeline's last step: verified code
+  in the working tree (`implement`), commits on a branch (`push`), an open PR/MR (`pr`), a running
+  environment (`deploy`). A PR is one shipment, not the word for all of them - a project with no
+  git in its pipeline still ships.
 
 **Project binding**
 

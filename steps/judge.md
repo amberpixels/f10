@@ -13,7 +13,7 @@ The step exists for doubt: the moment before a shape hardens, or after it harden
 feels off. It is not a denial machine - **proceed** is a full, legitimate outcome - but it does
 not agree because agreeing is cheaper.
 
-1. **Gather the artifact.** Free text is the artifact as written. A task id: the task via the
+1. **Gather the subject.** Free text is the subject as written. A task id: the task via the
    project's fetch adapter, plus `<storage root>/plans/<TASK-ID>.md` when one exists. A PR
    number, url, or the current branch: the diff and the description via the host CLI
    (`gh pr diff` / `gh pr view --comments`, `glab mr diff` / `glab mr view`), or
@@ -24,7 +24,7 @@ not agree because agreeing is cheaper.
    over a merged branch. No argument: the thing this conversation is about - name it back in one
    line before judging it, so the user can correct the target. Where the `f10` binary is
    installed, `f10 task read` and `f10 plan read` are the same lookups in one command each.
-2. **Restate the problem, then find it in the code.** The problem as the artifact states it,
+2. **Restate the problem, then find it in the code.** The problem as the subject states it,
    in one line, and the problem the code actually shows, grounded in a few targeted
    `Read`/`Grep` calls in one message. Where the two differ, that difference is the spine of
    the judgment - a change that solves the stated problem and not the real one is the case
@@ -38,7 +38,7 @@ not agree because agreeing is cheaper.
    what you read, not a catalogue - with its cost now set against the cost of getting there
    later from the proposed shape. A quick hack is a hack only if a better shape is reachable
    now; say whether it is.
-6. **For an implementation: keep, reshape, or discard.** When the artifact is code, say
+6. **For an implementation: keep, reshape, or discard.** When the subject is code, say
    whether what is written survives the verdict, and which parts.
 7. **Verdict.** The first line of the reply, one of exactly four:
    - **proceed** - the problem is real, the shape is right, build it as it stands.
@@ -80,9 +80,9 @@ not agree because agreeing is cheaper.
 **Two modes.** In-context is the default: the judge has the conversation, and the chat
 rationale is often where the real reason lives. **Blind** - `--blind` in the argument - is for
 judging something this session produced, where a judge sharing the author's context carries the
-author's sunk cost. In blind mode the main agent still gathers the artifact per point 1, then
+author's sunk cost. In blind mode the main agent still gathers the subject per point 1, then
 spawns **one fresh `general-purpose` agent - never `fork`, which inherits the whole
-conversation** - whose prompt carries the artifact text verbatim, the checkout root, and the
+conversation** - whose prompt carries the subject text verbatim, the checkout root, and the
 instruction to load the two context calls (`conventions.sh`, `resolve.sh judge`) and follow this
 step. Project facts and guardrails reach it through the resolver, not through the author. The
 main agent relays the returned verdict as given - it may dispute it in one line, never rewrite
@@ -119,5 +119,5 @@ the verdict was delivered once, and repeating it on every reply is noise. Only w
 actually moves it does the banner come back, with the new verdict and its one-line reason.
 
 **On failure:** a task id that does not resolve, or a PR the host CLI cannot read, is a failure
-per `conventions/failure.md` - never judge an artifact you could not fetch. A **stop** verdict is
+per `conventions/failure.md` - never judge a subject you could not fetch. A **stop** verdict is
 the step succeeding; report it plainly.

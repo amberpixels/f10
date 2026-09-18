@@ -83,7 +83,7 @@ Context resolved   (only facts this run's path uses)
 Routing
   arg "<stripped>"  → <interpretation, e.g. matches ABC-#### → ABC-1042 | free-text | plan file>
   path              <steps in order>   (<what's skipped and why>)
-  stops at          <the deliverable this skill would end on>
+  stops at          <the task, plan, shipment or verdict this run would end on>
 
 Step: <name>
   adapter         <skill to invoke | CLI command, quoted - NOT run>

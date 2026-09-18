@@ -5,8 +5,9 @@ project's house style - adopt the roles from `project.md → Roles`, including a
 ones the plan recorded.
 Input: a plan - from the plan step just run, a saved `<storage root>/plans/<task>.md`, or a plan
 file the user passed.
-Part of the **ship pipeline**: this step ends with verified code on a branch - later pipeline
-steps (`pr`, `review`, `deploy`) handle everything after that.
+Part of the **ship pipeline**: this step ends with verified code in the working tree - later
+pipeline steps (`pr`, `push`, `review`, `deploy`) decide where it goes. Where `implement` is the
+pipeline's last step, that tree is the run's shipment: nothing to commit, nothing to open.
 Context: per `conventions/context.md` - guardrails and verify commands come from `project.md`
 (+ same-named overlay).
 
