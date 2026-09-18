@@ -59,7 +59,11 @@ carries the script and the live url as well: taking the wheel afterwards costs n
      project skill that launches and drives the app.
    - **how to launch it** - the dev-server recipe in the `justfile`, `Makefile`, `package.json`
      scripts or `Procfile`, and the port it binds.
-   - **how to seed state** - the fixture, factory, or seed task the test suite already uses.
+   - **how to create what a script needs** - the console, runner or factory the test suite
+     already uses, the app's own forms, or a seed task. Reusing a record that already fits is
+     tried first whatever the answer, so it is **not** one of the options: this asks what to do
+     when nothing fits. Nor does it ask about cleanup, which is settled below and is not a
+     property of any one mechanism.
    - **how to authenticate** - the test user, the dev-login route, or the header or marker the
      project's CLAUDE.md documents.
 
@@ -72,11 +76,16 @@ carries the script and the live url as well: taking the wheel afterwards costs n
 
    Only when the user declines does the run **degrade to hands-on**, naming the fact that is
    missing. That is a normal end, not a failure.
-5. **Set the state up, out loud.** Baseline state comes from the overlay's declared seeding
-   command. Derive only the delta this feature needs on top of it - the entity in the particular
-   state the script walks through - and **say what you will create before creating it**. Create it
-   through the app's own affordances or the declared command, never by improvising a route into a
-   database, and never against one the overlay did not name.
+5. **Set the state up, out loud.** Reuse first: a record that already satisfies the script is the
+   cheapest state there is, and finding one is why point 3 names the state it needs rather than
+   just the steps. Only where nothing fits does the run **create** the delta, through the
+   mechanism the overlay declares - never by improvising a route into a database, and never
+   against one the overlay did not name. **Say what you will create before creating it.**
+
+   **What a demo creates stays.** It is dev data, not a fixture to tear down, and the report names
+   every record it made, with its id, so removing it later is a decision the user gets to make
+   rather than one the step takes for them. Automatic cleanup would also be flatly wrong in
+   hands-on mode, where it would delete the state the user is still clicking through.
 6. **Execute, or hand over.** Static: run the script, capture evidence as you go, and note
    anything that did not behave as the script predicted. Hands-on: seed, leave the app running,
    and print the script with its urls resolved, so the first step is a link the user clicks.
@@ -107,7 +116,9 @@ carries the script and the live url as well: taking the wheel afterwards costs n
     that captured nothing has no `evidence` row; a run that wrote no page has no `report` row.
     Rule 3 forbids the placeholder, and a path to a file that was never written is worse than a
     missing row, because the reader goes looking for it. Then, as prose and in this order: what
-    changed (point 2), what was demonstrated, what was not and why, and the script.
+    changed (point 2), what was demonstrated, what was not and why, anything the run created and
+    left behind (point 5), and the script. Where the report is a file, close with
+    `f10 demo open <TASK-ID>` - the way back to it after the terminal has scrolled.
 
     On disk, `report.html` in the evidence directory - written in **both** modes, because the page
     is not a frame for screenshots. Static: what changed at the top, then each shot under the
