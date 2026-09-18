@@ -1,7 +1,7 @@
 // Command f10 is the read-only lookaround binary: it prints the effective
 // configuration of the repo it runs in with a provenance per value, and
-// reads the tasks, plans and pull requests that configuration points at,
-// and where a run is right now.
+// reads the tasks, plans, demo reports and pull requests that
+// configuration points at, and where a run is right now.
 //
 // Read-only means it changes nothing - no file it did not read, no tracker
 // item, no cache - with one exception: `init` writes the two files that
@@ -55,6 +55,7 @@ func newApp() *cli.Command {
 			configCommand(),
 			taskCommand(),
 			planCommand(),
+			demoCommand(),
 			prCommand(),
 			statusCommand(),
 		},
