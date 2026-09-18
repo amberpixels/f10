@@ -15,12 +15,14 @@ A language-agnostic, composable task pipeline for Claude Code: **capture → pla
 
 ---
 
-f10 (f-ten) is five skills over one step chain. **capture** turns a freely written idea into a
+f10 (f-ten) is six skills over one step chain. **capture** turns a freely written idea into a
 tracked task; **plan** turns that task into an architect-grade plan on disk; **ship** turns the
 plan into code and, optionally, a release. Ahead of all three and optional, **brainstorm** is the
 conversation you have when you do not yet know what to capture - or whether to build it at all.
 Beside the chain, at any point of it, **judge** is the verdict you ask for when you doubt what is
-about to be built, or what already was: proceed, proceed with changes, rethink, or stop.
+about to be built, or what already was: proceed, proceed with changes, rethink, or stop. After
+it, **demo** shows you what the change actually does, in screenshots it captured or a scenario
+you click through, for the moment before you merge code you did not write.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app, or a Terraform
 repo. f10 either **infers** what it needs (git remote → `gh`/`glab`, build files → verify commands)
@@ -46,11 +48,13 @@ flowchart LR
     plan -.-> judge
     pr -.-> judge
     judge -.->|"proceed · proceed with changes · rethink · stop"| verdict(["verdict"])
+    pr -.-> demo[demo]
+    demo -.->|"screenshots · a scenario to click"| evidence(["what it does"])
 ```
 
-Solid arrows are the default pipeline; dashed ones are optional - `brainstorm` and `judge` when
-you ask for them, the rest where a project declares them. Each skill is an **entry point** into
-that chain:
+Solid arrows are the default pipeline; dashed ones are optional - `brainstorm`, `judge` and
+`demo` when you ask for them, the rest where a project declares them. Each skill is an **entry
+point** into that chain:
 
 | Skill | Runs | Stops at |
 |---|---|---|
@@ -59,6 +63,7 @@ that chain:
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
+| `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
 
 ## Install
@@ -91,6 +96,12 @@ much or as little as you like; anything you leave out stays inferred.
 
 /f10:ship fix the flaky retry test
 # → or skip the ceremony: capture-plan-ship a small chore in one go
+
+/f10:demo
+# → before you merge: runs the branch, captures what it does, writes a local report.html
+
+/f10:demo --hands-on
+# → same setup, but you drive: a live url and a short scenario to click through
 ```
 
 `--dry-run` on any skill resolves context, routing, adapters, and output paths, reports them, and
@@ -112,9 +123,18 @@ executes nothing.
   them. A project may also name `judge` inside its ship pipeline: proceed continues, stop ends
   the run blocked, and rethink or proceed with changes open a discussion that ends in the
   user's call to continue or block. Creates nothing.
+- **Demo** - the optional answer to *what was built*, for the moment before you merge a PR whose
+  code you did not write. It derives one **demo script** from the task, the plan and the diff -
+  entry point, the state it needs, the steps, what to look for - then either runs it and captures
+  evidence (screenshots and a local `report.html`) or seeds the state, leaves the app running and
+  hands you the script (`--hands-on`). The executor is declared, never guessed: no `demo` overlay
+  means no way to drive the app, so the run degrades to hands-on and says so. Evidence is budgeted
+  by claim, not by count, before/after is captured only where something visible already existed,
+  and every sentence of the report points at an artifact the run actually captured. Finds no bugs
+  and reaches no verdict - that is `review` and `judge`.
 - **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, plus
-  ship-pipeline steps `implement`, `pr`, `push`, `review`, `deploy` (`steps/*.md`). Skills are
-  thin routers over steps.
+  ship-pipeline steps `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). Skills
+  are thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
   `implement → pr`). A name with no generic step (e.g. `e2e`) is project-defined:
   `.f10/instructions/<name>.md` *is* the step. A project may declare several **named pipelines**;
@@ -165,8 +185,8 @@ executes nothing.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,implement,pr,push,review,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge,demo}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,implement,pr,push,review,demo,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end
@@ -424,8 +444,8 @@ when the repo went hybrid, so every recipe is hand-owned now.
 
 ## Status
 
-Five skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, and
-`judge`. Project facts come from `.f10/instructions/` through the resolver, worktree-layered,
+Six skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, `judge`,
+and `demo`. Project facts come from `.f10/instructions/` through the resolver, worktree-layered,
 with inferred defaults where nothing is declared. Six conventions bind every run: what it costs,
 how it fails, how it reports, how it talks, where open decisions go, and how context loads. A
 status-line badge tracks the run through capture, plan and ship, `f10 status` says in words
