@@ -241,8 +241,8 @@ fi
 # --- the instructions, in precedence order: later in this bundle wins ---
 if [ -z "$l1_dir" ]; then
   echo "--- instructions ---"
-  echo "ABSENT - no .f10/instructions/ found. Infer from the signals below; suggest creating"
-  echo "$here/.f10/instructions/project.md."
+  echo "ABSENT - no .f10/instructions/ found. Infer from the signals below; suggest \`f10 init\`,"
+  echo "which writes $here/.f10/instructions/project.md from these same probes."
   echo
 else
   if [ -n "$l2_dir" ]; then

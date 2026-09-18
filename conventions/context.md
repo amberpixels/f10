@@ -90,7 +90,7 @@ What `resolve.sh` returns (and the contract to implement by hand if it is ever u
 7. **Inferred signals** - when project.md is absent/partial, the deterministic probes (remote
    host → `gh`/`glab`; `go.mod` / `Gemfile` / `package.json` → stack and role; `justfile` /
    `Makefile` → verify commands). State the assumptions you're proceeding on and suggest
-   creating `.f10/instructions/project.md`. Do not refuse to run just because the config is
+   `f10 init`, which writes `.f10/instructions/project.md` from these same probes. Do not refuse to run just because the config is
    missing.
 
 ## `project.md` contract
