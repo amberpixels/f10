@@ -1,10 +1,11 @@
-# Step · demo - a shipped change → evidence of what it does
+# Step · demo - a shipped change → what it does, and evidence of it
 
 Role: a **senior engineer** showing a change to someone who did not write it - adopt the roles
 from `project.md → Roles`, including any conditional ones the plan recorded.
 Input: a shipped change - the task, its plan, and the diff - usually behind an open PR.
-Output: a **demo script**, and where the run executes it, the evidence: screenshots and a
-`report.html` under `<storage root>/demo/<TASK-ID>/`.
+Output: **what the change does**, stated in plain words, and a **demo script** that confirms it -
+plus, where the run executes the script, the evidence: screenshots and a `report.html` under
+`<storage root>/demo/<TASK-ID>/`.
 Context: per `conventions/context.md` - how to launch, seed and drive the app comes from the
 `demo` overlay (`.f10/instructions/demo.md`). There is no inferred default executor.
 Badge (`conventions/report.md`): none standalone - the three glyphs are the capture → plan → ship
@@ -13,7 +14,12 @@ chain, and this inspects a finished one rather than extending it. Inside a ship 
 
 `review` and `judge` answer *how* a change was built. This step answers **what it does** - the
 question left standing in front of an open PR whose code you did not write. It hunts no bugs and
-reaches no verdict: it produces the evidence, and the merge stays the user's call.
+reaches no verdict: it produces the answer and the evidence, and the merge stays the user's call.
+
+Answering it means **saying** what the change does, first and in plain words. A script is how a
+reader confirms that; it is never the answer by itself. A run that hands back a list of things to
+click has left the reader exactly where they started, which is the one outcome this step exists to
+prevent.
 
 **One derivation, two executions.** Everything up to the execution is identical in both modes.
 **Static** is the default: the step runs the script itself and captures what it sees.
@@ -25,26 +31,56 @@ carries the script and the live url as well: taking the wheel afterwards costs n
    targets - a PR number or url, the current branch, a task id, no argument at all - reaching the
    diff through the host CLI or `git diff <base>...HEAD`, plus the task and the plan the branch
    resolves to. Read it there rather than restating it here, so the two cannot drift.
-2. **Derive the demo script.** The artifact both modes share: the entry point, the state it needs,
-   the ordered steps, and what to look for at each. Derive it from what the task **claims** and
-   what the diff **actually changed** - the claims say which effects matter, the diff says which
-   ones exist. Where the two disagree the script follows the diff, and the report says where they
-   parted. A script derived from the task alone demonstrates the plan, not the code.
-3. **Resolve the executor.** From the `demo` overlay, never inferred: how to launch the app, how
-   to seed baseline state, the base url, any test credentials. Where the project already has a
-   skill that launches and drives its app, the overlay declaring that skill *is* the executor -
-   f10 specifies the capability and the project binds it, as with every other adapter. No overlay,
-   or an overlay that declares no way to drive the app, and the run **degrades to hands-on** and
-   says which fact was missing. That is a normal end, not a failure.
-4. **Set the state up, out loud.** Baseline state comes from the overlay's declared seeding
+2. **Say what changed, in the user's words.** The headline of the step and the first thing the
+   report prints: what the app did before, what it does now, and what a person using it will
+   notice. Derived from the diff, written in the vocabulary of someone using the feature and never
+   of the code behind it - no handler names, no component names, no file paths. Two or three
+   sentences for an ordinary change. Where the change is invisible from the outside, say so
+   plainly rather than dressing an internal refactor up as a user-facing effect.
+3. **Derive the demo script.** How a reader confirms the statement above: the entry point, the
+   state it needs, the ordered steps, and what to look for at each. Derive it from what the task
+   **claims** and what the diff **actually changed** - the claims say which effects matter, the
+   diff says which ones exist. Where the two disagree the script follows the diff, and the report
+   says where they parted. A script derived from the task alone demonstrates the plan, not the
+   code.
+4. **Resolve the executor - and offer to declare it when there is none.** The facts come from the
+   `demo` overlay, never inferred: how to launch the app, how to seed baseline state, the base
+   url, any test credentials. Where the project already has a skill that launches and drives its
+   app, the overlay declaring that skill *is* the executor - f10 specifies the capability and the
+   project binds it, as with every other adapter.
+
+   **A missing overlay is a gap to fill, not a reason to give up** (`conventions/gaps.md`), and
+   **the questionnaire proposes, it does not interrogate.** Look before asking - a project that
+   already runs browsers answers most of this itself, in a few targeted `Read`/`Grep` calls in one
+   message:
+
+   - **what drives it** - a Playwright, Cypress, Selenium or Capybara config, an existing e2e
+     suite and the command that runs it, a browser MCP server this session already has, or a
+     project skill that launches and drives the app.
+   - **how to launch it** - the dev-server recipe in the `justfile`, `Makefile`, `package.json`
+     scripts or `Procfile`, and the port it binds.
+   - **how to seed state** - the fixture, factory, or seed task the test suite already uses.
+   - **how to authenticate** - the test user, the dev-login route, or the header or marker the
+     project's CLAUDE.md documents.
+
+   Then **one** `AskUserQuestion`: a question per fact, each carrying what you found as its first
+   option, plus **where the report should go** (point 10). A fact nothing turned up is still asked,
+   with the conservative choice first - an empty question is better than a fabricated default. On
+   answers, write `.f10/instructions/demo.md` and carry straight on with the run that prompted it;
+   no later `/f10:demo` in this project asks again. Never invent an answer the user declined to
+   give, and never write the overlay without showing what goes in it.
+
+   Only when the user declines does the run **degrade to hands-on**, naming the fact that is
+   missing. That is a normal end, not a failure.
+5. **Set the state up, out loud.** Baseline state comes from the overlay's declared seeding
    command. Derive only the delta this feature needs on top of it - the entity in the particular
    state the script walks through - and **say what you will create before creating it**. Create it
    through the app's own affordances or the declared command, never by improvising a route into a
    database, and never against one the overlay did not name.
-5. **Execute, or hand over.** Static: run the script, capture evidence as you go, and note
+6. **Execute, or hand over.** Static: run the script, capture evidence as you go, and note
    anything that did not behave as the script predicted. Hands-on: seed, leave the app running,
    and print the script with its urls resolved, so the first step is a link the user clicks.
-6. **Before and after, only when it says something.** A second capture at the base commit is
+7. **Before and after, only when it says something.** A second capture at the base commit is
    worth its cost in one case: the change modifies something visible that **already existed**.
    Otherwise skip it and say why in one line.
    - A feature that adds a new surface has no meaningful before - it is an empty page or a 404,
@@ -53,30 +89,50 @@ carries the script and the live url as well: taking the wheel afterwards costs n
      across it compares two different worlds. Say that instead of faking the pair.
    Where it is worth it, both sides run the same script against the same seeded state, and the
    report says which commit each side is.
-7. **Budget evidence by claim, not by count.** One artifact per user-visible claim the change
+8. **Budget evidence by claim, not by count.** One artifact per user-visible claim the change
    makes. A button that grew and changed colour is one claim and one shot; a feature spanning five
    screens earns more. Never target a number: a count is a quota, and a quota gets filled with
    screenshots of the navigation between the interesting ones. The hands-on scenario obeys the
    same rule - the shortest path that touches every claim, and if walking it yourself would take
    more than a few minutes, it is demonstrating too much.
-8. **Claim only what you captured.** Every sentence in the report points at an artifact this run
+9. **Claim only what you captured.** Every sentence about behaviour points at an artifact this run
    produced, and anything the run could not demonstrate is listed separately, with the reason it
    could not. Never describe behaviour read out of the diff as though it was observed - a report
    written from the code and illustrated with a screenshot that does not show the thing is worse
-   than no demo at all, because it is what gets merged on.
-9. **Report, in two places.** In chat, per `conventions/report.md`: a facts block with the task,
-   the PR url where there is one, the evidence directory, and the `report.html` path, then what
-   was demonstrated, what was not and why, and the script, as prose.
+   than no demo at all, because it is what gets merged on. Point 2 is the one statement derived
+   from the diff by design, and it is written as what the change *does*, never as what the run
+   *saw*.
+10. **Report, in two places.** In chat, per `conventions/report.md`: the facts block first - the
+    task, the PR url where there is one, and **only the artifacts this run actually wrote**. A run
+    that captured nothing has no `evidence` row; a run that wrote no page has no `report` row.
+    Rule 3 forbids the placeholder, and a path to a file that was never written is worse than a
+    missing row, because the reader goes looking for it. Then, as prose and in this order: what
+    changed (point 2), what was demonstrated, what was not and why, and the script.
 
-   On disk, `report.html` in the evidence directory - where screenshots actually become readable.
-   One self-contained page: each shot under the claim it evidences, before and after side by side
-   where step 6 produced a pair, the script at the end, styles inline, images referenced by
-   relative path, legible in a light and a dark browser. No build step and no dependency: a file
-   that needs a server to open is not an artifact the user can keep.
+    On disk, `report.html` in the evidence directory - written in **both** modes, because the page
+    is not a frame for screenshots. Static: what changed at the top, then each shot under the
+    claim it evidences, before and after side by side where point 7 produced a pair. Hands-on: the
+    same opening, then the script as a checklist to tick through in the browser while walking it,
+    which beats scrolling back through a terminal and is what survives the session. One
+    self-contained page either way: styles inline, images by relative path, legible in a light and
+    a dark browser. No build step and no dependency - a file that needs a server to open is not an
+    artifact anyone keeps.
 
-   Write it locally and **publish nothing**. The evidence does not go to the PR, the tracker, or
-   any hosted page unless the user asks for it in as many words - under stealth
-   (`conventions/context.md`) it would announce the pipeline as loudly as a commit message could.
+    **Where that page goes is the project's declared choice**, settled by point 4's questionnaire
+    and recorded in the overlay: the local file alone, a published page as well, or a published
+    page only. `--publish` and `--local` in the argument override it for one run.
+
+    Publishing makes it a **private page on the user's own account**, reachable by a url that is
+    theirs to share or not - the choice is between a file they open and a link they can send, not
+    between private and public. It still leaves the machine, so two rules bind it. Nothing is
+    published that the overlay does not declare or the user did not ask for in as many words. And
+    the page carries **no f10 traces** whatever the project's visibility (`conventions/context.md`)
+    - no storage-root paths, no plan references, nothing naming the pipeline - so a page that gets
+    shared later is already clean. Screenshots referenced by relative path do not survive
+    publishing: upload them with the page and reference the urls the host gives back.
+
+    Nothing else travels. The report does not go to the PR, the tracker, or any hosted page beyond
+    the one the user chose.
 
 **On failure:** the app will not start, or the state the script needs cannot be reached - stop and
 report per `conventions/failure.md`, saying whether anything was created during setup. A script
