@@ -15,7 +15,7 @@ tracker comment, no code. It ends in a one-word verdict with the argument under 
 `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
 
 **Blind:** if the argument contains `--blind`, strip the token and judge in a fresh subagent per
-the step's blind mode - the artifact and the repo, never this conversation.
+the step's blind mode - the subject and the repo, never this conversation.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
@@ -24,7 +24,7 @@ that bundle just printed - it carries the step file, so there is nothing left to
 `steps/`.
 
 **Route by the stripped argument:**
-- **Free text**: the idea as written is the artifact.
+- **Free text**: the idea as written is the subject.
 - **A task id** (the project's id format, an id, or a tracker url): the task via the fetch
   adapter, plus the saved plan at `<storage root>/plans/<TASK-ID>.md` when it exists.
 - **A PR / MR** (number, url, or "this branch"): the diff and description via the host CLI, plus

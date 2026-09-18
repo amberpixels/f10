@@ -6,7 +6,7 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 
 ## Vocabulary
 
-Three tiers, never interchangeable:
+**Units of work** - three tiers, never interchangeable:
 
 - **skill** - an entry point the user invokes: `/f10:brainstorm`, `/f10:capture`, `/f10:plan`,
   `/f10:ship`, `/f10:judge`, `/f10:demo`. `/f10:status` is the one that runs no step: a hook
@@ -14,11 +14,23 @@ Three tiers, never interchangeable:
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
   `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). A skill runs one or more
   steps.
-- **stage** - one ordered unit *inside* a plan file. Never a step, never a skill.
+- **stage** - one ordered unit *inside* a plan. Never a step, never a skill.
 
-Two of them share a name, so bare `plan` is ambiguous - write `/f10:plan` for the skill,
-"the plan step" or `steps/plan.md` for the step. "Run `steps/plan.md`" means execute that
-step's instructions, never re-invoke the skill.
+**What a run produces** - three, in pipeline order:
+
+- **task** - the tracker item `capture` creates and `fetch` reads. Its **task id**, in the
+  project's format, names everything downstream: the plan file, the branch, the report's rows.
+  A planless pipeline has none, and no later step may invent one.
+- **plan** - the file at `<storage root>/plans/<TASK-ID>.md`: the stages, and the handoff
+  `/f10:ship` reads. A plan that exists only in chat is a failed run.
+- **shipment** - what the ship pipeline leaves behind, named by its **last step**: verified code
+  in the working tree (`implement`), commits on a branch (`push`), an open PR/MR (`pr`), a
+  running environment (`deploy`), or whatever a project-defined step produces. A PR is one
+  shipment, not the word for all of them - a project with no git in its pipeline still ships.
+
+`plan` is the one name in both lists, so bare `plan` is ambiguous - write `/f10:plan` for the
+skill, "the plan step" or `steps/plan.md` for the step, "the plan" for the file. "Run
+`steps/plan.md`" means execute that step's instructions, never re-invoke the skill.
 
 ## Loading order (do this at the start of any f10 run)
 
@@ -62,7 +74,7 @@ What `resolve.sh` returns (and the contract to implement by hand if it is ever u
    instructions are often untracked and don't propagate into fresh worktrees. A worktree whose
    `project.md` declares `Layering - replaces main` gets its own alone - what a branch
    rewriting the stack needs, so main's verify commands cannot red a different-stack worktree.
-   Anything else extends. Plans still always go to the **current** worktree's `.f10/plans/`. A
+   Anything else extends. Plans never layer: they go to the storage root this run resolved. A
    subdirectory of the main checkout is not a layering case - it resolves against that
    checkout's root - and a `.f10/instructions/` sitting *below* the root is noted and ignored,
    not a per-directory config.
@@ -113,17 +125,16 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   or PII"). Missing → each step's base role alone. Conditional roles resolve from the areas
   `fetch` settles and are recorded in the plan file, so `/f10:ship` inherits them.
 - **Tracker** - kind (Notion / GitHub Issues / GitLab work items / Jira / …), the **task id
-  format** (e.g. `ABC-####`, `GH-###`) - used verbatim as the plan filename
-  `.f10/plans/<TASK-ID>.md` - and the **fetch** / **create** adapters: a skill to invoke or a
-  CLI command to run (e.g. `gh issue view <n> --comments` / `gh issue create`).
+  format** (e.g. `ABC-####`, `GH-###`), and the **fetch** / **create** adapters: a skill to
+  invoke or a CLI command to run (e.g. `gh issue view <n> --comments` / `gh issue create`).
 - **Hosting & PR** - where the code lives and how to open a PR/MR: a skill, or plain
   `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee). The branch's
   *shape* is the project's to declare; that it carries the task id is not - see `steps/pr.md`.
 - **Ship pipeline(s)** - the ordered steps `/f10:ship` runs after planning, e.g.
-  `implement → review (local) → pr → review (CI) → deploy (staging)`. Omitted →
-  **`implement → pr`**. Each name resolves to a generic step in the plugin's `steps/`
-  (extended by its same-named overlay); a name with no generic step (e.g. `e2e`) is a
-  **project-defined step** - `.f10/instructions/<name>.md` *is* the step.
+  `implement → review (local) → pr → review (CI) → deploy (staging)`; its last step is the
+  run's shipment. Omitted → **`implement → pr`**. Each name resolves to a generic step in the
+  plugin's `steps/` (extended by its same-named overlay); a name with no generic step (e.g.
+  `e2e`) is a **project-defined step** - `.f10/instructions/<name>.md` *is* the step.
   A project may declare **several named pipelines** (e.g. `default`, `direct`): `default`
   runs unless the **user** selects another - never self-select one; for tiny work you may
   *suggest* and let the user pick. A pipeline marked **(planless)** skips capture/fetch/plan
