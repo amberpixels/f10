@@ -63,7 +63,7 @@ is an **entry point** into that chain:
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
-| `/f10:explain <PR \| id \| this branch \| local>` | explain | what the change was and what it is now, in chat |
+| `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
 
 ## Install
@@ -99,6 +99,9 @@ much or as little as you like; anything you leave out stays inferred.
 
 /f10:explain
 # → what this branch was and what it is now, in a few lines. Nothing run, nothing written
+
+/f10:explain grace period
+# → what a grace period is, the way a peer who wrote it would tell you: three or four sentences from the code
 
 /f10:demo
 # → before you merge: runs the branch, captures what it does, writes a local report.html
@@ -139,11 +142,13 @@ executes nothing.
   Evidence is budgeted by claim, not by count, before/after is captured only where something
   visible already existed, and the report carries rows only for artifacts that were actually
   written. Finds no bugs and reaches no verdict - that is `review` and `judge`.
-- **Explain** - the optional answer to *what changed*, for a diff you did not watch happen: an
-  agent's branch, a colleague's, your own after a long run. It states each change as a **pair** -
-  what it was, what it is now - for a reader who knows the product and the codebase but has not
-  seen this one diff, and it cuts every sentence that would still be true if the diff did not
-  exist. Two to five items, nothing run, nothing written. Where `demo` shows, `explain` tells:
+- **Explain** - the optional answer to *what is this*, for a reader who knows the product and
+  the codebase but has not met this one thing. For a diff you did not watch happen - an agent's
+  branch, a colleague's, your own after a long run - it states each change as a **pair**, what it
+  was and what it is now, and cuts every sentence that would still be true if the diff did not
+  exist. Two to five items. For a concept, a file, a package or a function, it gives the hallway
+  answer a senior dev gives a peer: what it is, what the name hides, where to look, in three or
+  four sentences from the code. Nothing run, nothing written either way. Where `demo` shows, `explain` tells:
   it costs a read of the diff instead of a seeded app, which is what makes it the thing you run
   before deciding whether a change is worth demoing at all. Creates nothing.
 - **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, plus
