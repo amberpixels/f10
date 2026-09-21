@@ -55,7 +55,7 @@ func TestParseFile(t *testing.T) {
 // project.md files are written (acme is the reference).
 const headingProjectMD = "# acme · f10 project instructions\n\n" +
 	"## Project\n" +
-	"Acme — inventory app. Ruby on Rails + PostgreSQL.\n" +
+	"Acme - inventory app. Ruby on Rails + PostgreSQL.\n" +
 	"Roles: plan as a **senior software architect**; implement as a **senior Rails developer**.\n\n" +
 	"## Tracker\n" +
 	"Notion. Task id format: **`ABC-####`**.\n" +

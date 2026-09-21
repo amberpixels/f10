@@ -396,7 +396,7 @@ tracker has no CLI at all.
 
 ```bash
 f10 task read            # the current task as markdown - from the branch, or this session
-f10 task open 2703       # in the browser
+f10 task open 1042       # in the browser
 f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
 f10 demo open            # the demo report for it, in the browser

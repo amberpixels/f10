@@ -19,8 +19,8 @@ func TestParse(t *testing.T) {
 	}{
 		{name: "bare number takes the project prefix", prefix: "GH", token: "22", wantID: "GH-22", wantNumber: "22"},
 		{name: "hash prefix is stripped", prefix: "GH", token: "#22", wantID: "GH-22", wantNumber: "22"},
-		{name: "declared id passes through", prefix: "ABC", token: "ABC-1042", wantID: "ABC-1042", wantNumber: "2703"},
-		{name: "lowercase id is uppercased", prefix: "ABC", token: "abc-1042", wantID: "ABC-1042", wantNumber: "2703"},
+		{name: "declared id passes through", prefix: "ABC", token: "ABC-1042", wantID: "ABC-1042", wantNumber: "1042"},
+		{name: "lowercase id is uppercased", prefix: "ABC", token: "abc-1042", wantID: "ABC-1042", wantNumber: "1042"},
 		{name: "an explicit prefix beats the project's", prefix: "ABC", token: "GH-7", wantID: "GH-7", wantNumber: "7"},
 		{name: "no prefix anywhere leaves the number alone", token: "22", wantID: "22", wantNumber: "22"},
 		{name: "a url is not a reference", prefix: "GH", token: "https://x/issues/22", wantErr: true},

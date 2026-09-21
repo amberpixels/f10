@@ -109,8 +109,9 @@ project instead: **cut every sentence that would still be true if this thing did
 
 3. **Say what the name hides.** The part they would get wrong knowing only the word: what it
    triggers, what else it touches, the second table it writes, the state it leaves behind. "It is
-   not just a delay - entering it pauses reminders and opens a dunning task for each unpaid line." This is the sentence the whole answer exists for; where there is nothing hidden, say
-   that the name is the whole story.
+   not just a delay - entering it pauses reminders and opens a dunning task for each unpaid line."
+   This is the sentence the whole answer exists for; where there is nothing hidden, say that the
+   name is the whole story.
 
 4. **Name the one place to look.** The identifier they would grep for next: the type, the file,
    the handler. One, not a tour.

@@ -31,7 +31,7 @@ Three verbs, each writing its answer to stdout:
 | `search` | a query string | a JSON array of task rows |
 
 The argument for `read` and `url` is the **number**, not the prefixed id: f10 has already parsed
-`ABC-1042` down to `2703`, so a driver never has to know the id format.
+`ABC-1042` down to `1042`, so a driver never has to know the id format.
 
 A `search` row carries at least these four fields. Extra fields are allowed and ignored:
 

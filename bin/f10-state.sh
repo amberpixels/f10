@@ -393,7 +393,7 @@ cmd_task() {
 }
 
 # Does this run's argument read as a description rather than a reference? The first token decides
-# where it can: a task id (ABC-1042, or bare 2703), a plan path, a url - each is a reference no
+# where it can: a task id (ABC-1042, or bare 1042), a plan path, a url - each is a reference no
 # matter what follows it, because the model routinely appends parenthetical context to skill args
 # ("ABC-1042 (Notion task already fetched; ...)"). Counting tokens across the whole argument read
 # every such decorated reference as a description, which is how a run over a pre-existing task once
@@ -421,7 +421,7 @@ is_description() {
 }
 
 # What the first token of a run's argument names, where it names a task at all: a task id
-# (ABC-1042, or bare 2703) is itself, a plan path is its basename - the same naming rule the
+# (ABC-1042, or bare 1042) is itself, a plan path is its basename - the same naming rule the
 # PostToolUse arm relies on. Empty for everything else (a url, a description, no argument),
 # which the caller reads as "the argument claims nothing".
 ref_task_of() {
@@ -457,7 +457,7 @@ cmd_seed() {
   resolve_sid "${2:-}" || exit 0
 
   # Chained only for plan/ship: capture always mints a new task, so an id argument to it never
-  # continues anything. A bare number matches its prefixed form - `ship 2703` continues ABC-1042.
+  # continues anything. A bare number matches its prefixed form - `ship 1042` continues ABC-1042.
   local ref up_ref up_task chain=0
   ref="$(ref_task_of "$args")"
   if [ "$skill" != "capture" ] && [ -n "$ref" ] && load && [ -n "$st_task" ]; then
