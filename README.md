@@ -15,14 +15,11 @@ A language-agnostic, composable task pipeline for Claude Code: **capture → pla
 
 ---
 
-f10 (f-ten) is six skills over one step chain. **capture** turns a freely written idea into a
-tracked task; **plan** turns that task into an architect-grade plan on disk; **ship** turns the
-plan into code and, optionally, a release. Ahead of all three and optional, **brainstorm** is the
-conversation you have when you do not yet know what to capture - or whether to build it at all.
-Beside the chain, at any point of it, **judge** is the verdict you ask for when you doubt what is
-about to be built, or what already was: proceed, proceed with changes, rethink, or stop. After
-it, **demo** shows you what the change actually does, in screenshots it captured or a scenario
-you click through, for the moment before you merge code you did not write.
+f10 (f-ten) is a set of skills over one step chain. Three of them carry it: **capture** turns a
+freely written idea into a tracked task, **plan** turns that task into an architect-grade plan on
+disk, and **ship** turns the plan into code and, optionally, a release. The rest are optional and
+sit around that chain rather than in it - **brainstorm** ahead of it, **judge** at any point of
+it, **demo** and **explain** after it.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app, or a Terraform
 repo. f10 either **infers** what it needs (git remote → `gh`/`glab`, build files → verify commands)
@@ -50,11 +47,13 @@ flowchart LR
     judge -.->|"proceed · proceed with changes · rethink · stop"| verdict(["verdict"])
     pr -.-> demo[demo]
     demo -.->|"screenshots · a scenario to click"| evidence(["what it does"])
+    pr -.-> expl[explain]
+    expl -.->|"what it was · what it is"| told(["what changed"])
 ```
 
-Solid arrows are the default pipeline; dashed ones are optional - `brainstorm`, `judge` and
-`demo` when you ask for them, the rest where a project declares them. Each skill is an **entry
-point** into that chain:
+Solid arrows are the default pipeline; dashed ones are optional - `brainstorm`, `judge`,
+`demo` and `explain` when you ask for them, the rest where a project declares them. Each skill
+is an **entry point** into that chain:
 
 | Skill | Runs | Stops at |
 |---|---|---|
@@ -64,6 +63,7 @@ point** into that chain:
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
+| `/f10:explain <PR \| id \| this branch \| local>` | explain | what the change was and what it is now, in chat |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
 
 ## Install
@@ -96,6 +96,9 @@ much or as little as you like; anything you leave out stays inferred.
 
 /f10:ship fix the flaky retry test
 # → or skip the ceremony: capture-plan-ship a small chore in one go
+
+/f10:explain
+# → what this branch was and what it is now, in a few lines. Nothing run, nothing written
 
 /f10:demo
 # → before you merge: runs the branch, captures what it does, writes a local report.html
@@ -136,7 +139,14 @@ executes nothing.
   Evidence is budgeted by claim, not by count, before/after is captured only where something
   visible already existed, and the report carries rows only for artifacts that were actually
   written. Finds no bugs and reaches no verdict - that is `review` and `judge`.
-- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, plus
+- **Explain** - the optional answer to *what changed*, for a diff you did not watch happen: an
+  agent's branch, a colleague's, your own after a long run. It states each change as a **pair** -
+  what it was, what it is now - for a reader who knows the product and the codebase but has not
+  seen this one diff, and it cuts every sentence that would still be true if the diff did not
+  exist. Two to five items, nothing run, nothing written. Where `demo` shows, `explain` tells:
+  it costs a read of the diff instead of a seeded app, which is what makes it the thing you run
+  before deciding whether a change is worth demoing at all. Creates nothing.
+- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, plus
   ship-pipeline steps `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). Skills
   are thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
@@ -193,8 +203,8 @@ executes nothing.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge,demo}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,implement,pr,push,review,demo,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge,demo,explain}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,implement,pr,push,review,demo,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end
@@ -453,14 +463,14 @@ when the repo went hybrid, so every recipe is hand-owned now.
 
 ## Status
 
-Six skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, `judge`,
-and `demo`. Project facts come from `.f10/instructions/` through the resolver, worktree-layered,
-with inferred defaults where nothing is declared. Six conventions bind every run: what it costs,
-how it fails, how it reports, how it talks, where open decisions go, and how context loads. A
-status-line badge tracks the run through capture, plan and ship, `f10 status` says in words
-where it is and why it stopped, and the `f10` binary explains the resolved configuration, writes
-the `project.md` that registers a checkout, and reads tasks, plans and PRs through `gh`, `glab`,
-or a project's own driver.
+Skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, `judge`,
+`demo` and `explain`. Project facts come from `.f10/instructions/` through the resolver,
+worktree-layered, with inferred defaults where nothing is declared. Six conventions bind every
+run: what it costs, how it fails, how it reports, how it talks, where open decisions go, and how
+context loads. A status-line badge tracks the run through capture, plan and ship, `f10 status`
+says in words where it is and why it stopped, and the `f10` binary explains the resolved
+configuration, writes the `project.md` that registers a checkout, and reads tasks, plans and PRs
+through `gh`, `glab`, or a project's own driver.
 
 Next: the `/f10:init` skill over that command (the `Project` line and guardrails read out of a
 repo, not detected) + shared **profiles**, named configs a repo's `project.md` references
