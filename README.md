@@ -376,7 +376,7 @@ value - `detected`, `declared (main)`, `declared (worktree)`, `default`, `absent
 for scripting.
 
 ```bash
-just install   # go install ./cmd/f10
+just install   # go install ./cli/cmd/f10
 f10 config
 ```
 
@@ -436,17 +436,19 @@ browser or a file to an editor is the whole of what leaves the process. `bin/res
 stays the agent-facing surface - the binary explains to humans what the resolver hands to
 agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
-wrong. The parity suite in `internal/resolve` runs every fixture through both the Go resolution
-and the script, so their semantics cannot drift apart silently.
+wrong. The parity suite in `cli/internal/resolve` runs every fixture through both the Go
+resolution and the script, so their semantics cannot drift apart silently.
 
 ## Development
 
-f10's executable surface is `bin/` plus `cmd/f10`. In `bin/`: `conventions.sh` cats the six
+f10's executable surface is `bin/` plus `cli/`. In `bin/`: `conventions.sh` cats the six
 convention files, `resolve.sh` resolves one repo's instructions, `f10-state.sh` records where a
 run is for the status line to draw. The first two split on static vs. resolved: one is identical
 everywhere and loads once per context, the other varies by repo and worktree and reruns every
 run. The third is on neither side, because it writes and nothing in the pipeline reads it back.
-`cmd/f10` is the read-only lookaround binary above.
+`cli/` is the read-only lookaround binary above, a Go module of its own
+(`github.com/amberpixels/f10/cli`) with `cmd/f10` as its main. The repo root is the plugin;
+the binary lives beside it, in one repo because its parity tests run the scripts in `bin/`.
 
 ```bash
 just lint   # shell + Go findings, change nothing (with `just test`, what CI runs)
@@ -456,13 +458,14 @@ just test   # go test ./..., the resolve.sh parity suite included
 just build  # go build ./...
 ```
 
-Each recipe covers both halves of the repo. Shell is
+Each root recipe covers both halves: the shell half in place, the Go half through the `cli`
+module, so `just cli::test` runs Go alone. Shell is
 [shellcheck](https://www.shellcheck.net) for correctness and
 [shfmt](https://github.com/mvdan/sh) for formatting - scripts are discovered by `shfmt -f`,
 which matches on extension *and* shebang, so a new `bin/whatever` is covered the moment it
 exists, and enabled shellcheck optionals are documented in `.shellcheckrc`. Go is
-[standardgo](https://github.com/amberpixels/standardgo), pinned as a `tool` directive in
-`go.mod` - the ruleset ships in the binary, so there is no lint config file to drift. The
+[standardgo](https://github.com/amberpixels/standardgo), pinned by version in `cli/justfile` -
+the ruleset ships in the binary, so there is no lint config file to drift. The
 justfile started from [justx](https://github.com/amberpixels/just-x); its fences were removed
 when the repo went hybrid, so every recipe is hand-owned now.
 
@@ -480,6 +483,13 @@ through `gh`, `glab`, or a project's own driver.
 Next: the `/f10:init` skill over that command (the `Project` line and guardrails read out of a
 repo, not detected) + shared **profiles**, named configs a repo's `project.md` references
 instead of repeating.
+
+## Docs
+
+- [Setting up a project](docs/project-setup.md): `f10 init`, `project.md`, overlays, pipelines, storage, worktrees.
+- [The status line](docs/statusline.md): wiring the badge and reading it.
+- [The `f10` binary](docs/cli.md): every command, references, output.
+- [The driver contract](docs/driver-contract.md): a tracker without a CLI.
 
 ## Feedback
 

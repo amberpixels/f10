@@ -34,6 +34,11 @@
 # `/clear` mints a new session id, which retires the badge for free. It lives outside the repo,
 # which is also what stealth mode wants (conventions/context.md): nothing f10-shaped inside the
 # project directory, not even untracked.
+#
+# The only script here with an f10- prefix, because it is the only one that leaves the plugin: a
+# person types it by hand (`f10-state.sh show`, `doctor`), step prose names it bare, and the
+# statusline symlink points at it. resolve.sh and conventions.sh are plumbing a skill reaches by
+# full plugin-root path, so a bare name never meets a reader outside this directory.
 
 set -uo pipefail
 

@@ -1,0 +1,37 @@
+# justfile - the Go half of f10: the read-only lookaround binary.
+#
+# The root justfile loads this as the `cli` module, so `just fmt` at the root
+# formats shell and Go while `just cli::fmt` (or `just fmt` from this directory)
+# touches only Go. Recipes run with this directory as cwd, where go.mod lives.
+
+# standardgo carries the ruleset and the golangci-lint engine in one binary, so this
+# module holds no lint config of its own. It is run via `go run`, not a go.mod tool
+# directive, to keep golangci-lint's dependency tree out of this module's graph.
+standardgo := "github.com/amberpixels/standardgo/cmd/standardgo@v0.2.1"
+
+# Default recipe: format (rewrites, decides nothing; `just fix` is the mutable one)
+default: fmt
+
+# format Go - rewrites to canonical form
+fmt:
+    go run {{ standardgo }} fmt ./...
+
+# lint Go - reports findings, changes nothing
+lint:
+    go run {{ standardgo }} ./...
+
+# auto-fix what can be fixed - run on a clean tree and read the diff
+fix:
+    go run {{ standardgo }} ./... --fix
+
+# run tests - the resolve.sh and f10-state.sh parity suites included
+test:
+    go test ./...
+
+# build the f10 binary
+build:
+    go build ./...
+
+# install the f10 binary into GOBIN
+install:
+    go install ./cmd/f10

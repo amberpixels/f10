@@ -9,11 +9,11 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 **Units of work** - three tiers, never interchangeable:
 
 - **skill** - an entry point the user invokes: `/f10:brainstorm`, `/f10:capture`, `/f10:plan`,
-  `/f10:ship`, `/f10:judge`, `/f10:demo`. `/f10:status` is the one that runs no step: a hook
-  answers it from `f10 status` before any model turn.
+  `/f10:ship`, `/f10:judge`, `/f10:demo`, `/f10:explain`. `/f10:status` is the one that runs no
+  step: a hook answers it from `f10 status` before any model turn.
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
-  `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). A skill runs one or more
-  steps.
+  `explain`, `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). A skill runs
+  one or more steps.
 - **stage** - one ordered unit *inside* a plan. Never a step, never a skill.
 
 **What a run produces** - three, in pipeline order:
@@ -41,10 +41,10 @@ ${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh                    # once per context
 ${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]    # once per run
 ```
 
-**`conventions.sh` - the static half.** Cats the five cross-cutting rule files (`context`,
-`latency`, `failure`, `gaps`, `report`). Identical output everywhere, so **load it unless this
-context already holds it** (its banner makes a copy easy to spot). *Per context*, not per
-conversation: a subagent or a fresh session starts empty and does need it.
+**`conventions.sh` - the static half.** Cats the six cross-cutting rule files (`context`,
+`latency`, `failure`, `gaps`, `report`, `voice`). Identical output everywhere, so **load it
+unless this context already holds it** (its banner makes a copy easy to spot). *Per context*,
+not per conversation: a subagent or a fresh session starts empty and does need it.
 
 **`resolve.sh` - the resolved half.** One call does the lookup, worktree layering, the
 instructions listing, overlay concatenation, and the inference probes, printing a single

@@ -17,9 +17,11 @@ jobs:
       # shellcheck ships preinstalled on the ubuntu-latest runner image. shfmt
       # does not, and is pinned: an unpinned formatter can change what counts as
       # correctly formatted and turn a green branch red without a commit.
+      # go.mod lives in cli/, the Go half of the repo; the cache key must follow it.
       - uses: actions/setup-go@v7
         with:
           go-version: stable
+          cache-dependency-path: cli/go.sum
       - name: Install shfmt
         run: go install mvdan.cc/sh/v3/cmd/shfmt@v3.13.1
 
