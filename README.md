@@ -65,7 +65,7 @@ is an **entry point** into that chain:
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
-| `/f10:start <id> [--plan \| --local] [--on <id>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
+| `/f10:start <id> [--plan \| --local] [--on <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
 
 ## Install
 
@@ -442,6 +442,7 @@ f10 start 1042                # branch, worktree, Herdr workspace, claude prompt
 f10 start 1042 --plan         # prompt the plan only
 f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
 f10 start 1042 --on 1040      # base the branch on that task's branch instead of the default
+f10 start 1042 --base rel/2   # base the branch on a git ref: the local branch, else origin's
 f10 start 1042-attempt2       # a second worktree for the same task, beside the first
 ```
 

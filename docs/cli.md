@@ -24,7 +24,7 @@ f10 demo open [id]       # the demo report, in the browser
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
 f10 status [--all] [--json]   # where the run is: this session's, or every live one
 
-f10 start <id>[-suffix] [--plan | --local] [--on <id>]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] [--plan | --local] [--on <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
 ```
 
 A verb means one thing under every noun. `read` writes content, `open` follows an address,
@@ -44,10 +44,15 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   pushed
 - `--on <id>` bases the branch on that task's existing branch, local or on origin, and fails
   before creating anything when there is none
+- `--base <branch>` bases the branch on a git ref instead: the local branch, else the one on
+  origin (`origin/main` typed as such also resolves). It fails before creating anything when
+  neither exists, and notes beneath the report when the base sits at the default branch's
+  commit, since a base that changes nothing is otherwise invisible. Exclusive with `--on`
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a
   second worktree for one task can live beside the first
 - a task that already has a branch gets its worktree reused, or created when the branch has
-  none; a workspace Herdr already shows keeps its agent, and nothing is prompted twice
+  none, and `--on` or `--base` is noted as ignored since the branch keeps its base; a
+  workspace Herdr already shows keeps its agent, and nothing is prompted twice
 - `--local` refuses before creating anything when `project.md` declares no `local` pipeline,
   since ship never picks a pipeline unasked
 
