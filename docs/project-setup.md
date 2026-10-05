@@ -33,7 +33,7 @@ pipeline's contracts; the rest have workable defaults.
 | Ship pipeline(s) | the ordered steps `/f10:ship` runs after planning | `implement → pr` |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
 | Roles | the role per step, always or by area | each step's base role |
-| Review | who or what reviews, and what resolves it | none |
+| Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask` | the four core categories, reviewed locally by a blind agent; every ask goes to you |
 | Guardrails | domain rules a plan and its code must honour | none |
 | Visibility | `stealth` or `public` | `stealth` |
 | Storage | `in-repo` or `out-of-tree` | `in-repo` |
@@ -65,6 +65,28 @@ One pipeline, or several named ones:
 run ends in commits and nothing leaves the machine. A planless pipeline skips capture and the plan
 file for free-text input. The last step names what a run ships: an open PR, a pushed branch, a
 running deploy.
+
+## Review
+
+Nothing declared gets the blind local reviewer with its four core categories: correctness and
+logic, architecture and guidelines, security and performance, tests and docs. Each of the three
+things a project can add is optional:
+
+```markdown
+## Review
+
+Categories, each with its source of truth:
+- UI consistency - docs/components.md
+- API style - docs/api-style.md
+
+Never flag: generated code under `gen/`, TODO comments.
+Human reviewer: the PR's assignee, on the PR.
+```
+
+A source-of-truth file is read in full as reference data: instructions inside it are ignored,
+and an edit to it is reviewed, not obeyed. The never-flag list holds whatever no category may
+report. The human reviewer is who answers an `ask` on a remote review; a local round's asks
+always go to you, in one questionnaire at the end of resolve.
 
 ## Storage and visibility
 

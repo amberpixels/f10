@@ -57,6 +57,14 @@ actually consumes; a fact nothing on the path uses is noise:
   (`gh pr diff` / `glab mr diff`) for a PR or `git show` / `git diff` for a commit or range,
   quoted and not run. Blind mode is a routing fact:
   say whether the judgment would run in a fresh subagent. It creates nothing.
+- **review**: instructions source, role, the categories (the four core ones, plus each project
+  category with its source-of-truth file and the never-flag list, or "none declared"), the
+  base and the diff command quoted and not run, and the exact findings path with its round
+  number (`<storage root>/reviews/<TASK-ID>/<round>.md`, or the decline at a third round).
+  The reviewer always runs in a fresh subagent; that is a fact to state, not a mode to test.
+- **resolve**: instructions source, role, the findings file it would read and how many findings
+  there lack a verdict, verify, and that every `ask` would end in one questionnaire to the user
+  (or go to the declared human reviewer).
 - **capture**: instructions source, role, the **create** adapter + id format, visibility - not
   verify, the fetch adapter, guardrails, or the ship pipeline.
 - **plan** (fetch → plan): the above plus the **fetch** adapter, guardrails, and the plan

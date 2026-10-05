@@ -82,9 +82,9 @@ call, joined with `;` to a shell command or riding alongside a `Read`
 
 The steps that produce something addressable: `capture` (task + url), `plan` (the saved plan
 path), `commit` (branch + sha), `pr` (branch + PR/MR url), `push` (branch + sha), `deploy`
-(target + url). `f10 start` prints the same block (task, branch, path, workspace). Skills report
-the same way for the run as a whole. `implement` and `review` produce nothing addressable and
-stay prose.
+(target + url), `review` and `resolve` (the findings file's path, as a `findings` row). `f10
+start` prints the same block (task, branch, path, workspace). Skills report the same way for the
+run as a whole. `implement` produces nothing addressable and stays prose.
 
 `conventions/failure.md` and `modes/dry-run.md` keep their own blocks: the same left-aligned
 label column and bare-url rules (1 and 5), but **plain-fenced and colonless**, with no marker
