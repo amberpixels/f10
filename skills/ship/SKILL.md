@@ -62,8 +62,8 @@ unblocks it in the same call.
 
 **Final report:** lead with the facts block per `conventions/report.md`, carrying the run's
 **shipment** - the branch, the PR/MR url where the pipeline opened one, the sha where it
-committed or pushed, the deploy url where it deployed. Then, as prose: review status as far as the pipeline goes
-("stopped at PR" is a normal end), deploy status if it deploys, a short note of what changed,
+committed or pushed, the deploy url where it deployed. Then, as prose: review status as far as
+the pipeline goes ("stopped at PR" is a normal end), deploy status if it deploys, a short note of what changed,
 and - if any gaps stayed on their defaults - a one-line reminder that they're recorded in the
 plan.
 

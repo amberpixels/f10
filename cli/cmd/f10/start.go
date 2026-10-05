@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -77,6 +78,11 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	if mode == modeLocal && !declaresPipeline(t.eff, modeLocal) {
+		return errors.New("--local: project.md declares no `local` pipeline; " +
+			"add `local: implement -> commit` under Ship pipeline(s), since ship never picks one unasked")
+	}
+
 	base, suffix := ref.SplitSuffix(token)
 
 	r, err := t.reference(ctx, base)
@@ -117,6 +123,26 @@ func startMode(cmd *cli.Command) (string, error) {
 	}
 }
 
+// declaresPipeline reports whether project.md names a pipeline: a line of
+// the Ship pipeline(s) fact that opens with the name and a colon, in the
+// shape docs/project-setup.md shows (`- local: implement -> commit`).
+func declaresPipeline(eff *facts.Effective, name string) bool {
+	for _, f := range eff.Fields {
+		if f.Name != "Ship pipeline(s)" {
+			continue
+		}
+
+		for line := range strings.SplitSeq(f.Value, "\n") {
+			line = strings.TrimLeft(strings.TrimSpace(line), "-* ")
+			if head, _, ok := strings.Cut(line, ":"); ok && strings.EqualFold(strings.TrimSpace(head), name) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // startInput is everything start needs once the target is resolved, so
 // the flow can be tested without a checkout.
 type startInput struct {
@@ -128,9 +154,9 @@ type startInput struct {
 	on     string // task id whose branch is the base, or ""
 }
 
-// start runs the flow in the order the issue fixes it: branch name, base,
-// existing branch, worktree, workspace, agent, prompt, report. Every
-// lookup that can refuse runs before the first thing is created.
+// start runs the flow: branch name, base, existing branch, worktree,
+// workspace, agent, prompt, report. Every lookup that can refuse runs
+// before the first thing is created.
 func start(ctx context.Context, w io.Writer, in startInput) error {
 	name, err := branchName(ctx, in.driver, in.task, in.suffix)
 	if err != nil {
@@ -185,14 +211,20 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		return err
 	}
 
-	agent := agentName(in.task.ID, in.suffix)
+	// a workspace Herdr already showed has its agent in the root pane, or
+	// whatever the user left there - starting another would be refused
+	if ws.AlreadyOpen {
+		notes = append(notes, "workspace already open: its agent left as it was, nothing prompted")
+	} else {
+		agent := agentName(in.task.ID, in.suffix)
 
-	if err := herdr.StartAgent(ctx, path, agent, agentKind, ws.RootPane); err != nil {
-		return err
-	}
+		if err := herdr.StartAgent(ctx, path, agent, agentKind, ws.RootPane); err != nil {
+			return err
+		}
 
-	if err := herdr.Prompt(ctx, path, agent, prompt(in.mode, in.task.ID)); err != nil {
-		return err
+		if err := herdr.Prompt(ctx, path, agent, prompt(in.mode, in.task.ID)); err != nil {
+			return err
+		}
 	}
 
 	return writeStartReport(w, [][2]string{

@@ -62,12 +62,30 @@ func TestOpenWorktreeReadsIds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if ws.ID != "ws:3" || ws.RootPane != "pane:7" {
-		t.Errorf("OpenWorktree = %+v, want ws:3/pane:7", ws)
+	if ws.ID != "ws:3" || ws.RootPane != "pane:7" || ws.AlreadyOpen {
+		t.Errorf("OpenWorktree = %+v, want ws:3/pane:7, not already open", ws)
 	}
 
 	if want := "herdr worktree open --path /repo.GH-1 --label GH-1"; (*calls)[0] != want {
 		t.Errorf("called %q, want %q", (*calls)[0], want)
+	}
+}
+
+func TestOpenWorktreeReportsAlreadyOpen(t *testing.T) {
+	fake(
+		t,
+		shell.Result{
+			Stdout: `{"result":{"workspace":{"workspace_id":"ws:3"},"root_pane":{"pane_id":"pane:7"},"already_open":true}}`,
+		},
+	)
+
+	ws, err := OpenWorktree(t.Context(), "/repo", "/p", "l")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !ws.AlreadyOpen {
+		t.Error("already_open was not read")
 	}
 }
 

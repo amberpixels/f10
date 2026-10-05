@@ -26,8 +26,8 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 - **shipment** - what the ship pipeline leaves behind, named by its **last step**: verified code
   in the working tree (`implement`), local commits (`commit`), commits pushed to a branch
   (`push`), an open PR/MR (`pr`), a running environment (`deploy`), or whatever a
-  project-defined step produces. A PR is one
-  shipment, not the word for all of them - a project with no git in its pipeline still ships.
+  project-defined step produces. A PR is one shipment, not the word for all of them - a project
+  with no git in its pipeline still ships.
 
 `plan` is the one name in both lists, so bare `plan` is ambiguous - write `/f10:plan` for the
 skill, "the plan step" or `steps/plan.md` for the step, "the plan" for the file. "Run

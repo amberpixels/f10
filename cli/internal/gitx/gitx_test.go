@@ -44,15 +44,15 @@ func TestOutSwallowsErrors(t *testing.T) {
 
 func TestRefs(t *testing.T) {
 	calls := script(t, map[string]string{
-		"for-each-ref --format=%(refname:short) refs/heads/GH-1 refs/heads/GH-1-*": "GH-1/slug\nGH-1-attempt2\n",
+		"for-each-ref --format=%(refname) refs/heads/GH-1 refs/heads/GH-1-* refs/remotes/origin/GH-1": "refs/heads/GH-1/slug\nrefs/heads/GH-1-attempt2\nrefs/remotes/origin/GH-1\n",
 	})
 
-	got, err := Refs(t.Context(), ".", "refs/heads/GH-1", "refs/heads/GH-1-*")
+	got, err := Refs(t.Context(), ".", "refs/heads/GH-1", "refs/heads/GH-1-*", "refs/remotes/origin/GH-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if want := []string{"GH-1/slug", "GH-1-attempt2"}; !slices.Equal(got, want) {
+	if want := []string{"GH-1/slug", "GH-1-attempt2", "origin/GH-1"}; !slices.Equal(got, want) {
 		t.Errorf("Refs = %v, want %v", got, want)
 	}
 

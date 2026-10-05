@@ -3,7 +3,7 @@
 A lookaround, and the command that starts a task. The lookaround verbs explain the resolved
 configuration and read the things it points at, changing nothing. Two verbs write: `init`
 registers a checkout and never overwrites, and `start` creates the branch and worktree a task
-is worked on and opens them in Herdr.
+is worked on in, and opens them in Herdr.
 
 ```bash
 go install github.com/amberpixels/f10/cli/cmd/f10@latest
@@ -47,7 +47,9 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a
   second worktree for one task can live beside the first
 - a task that already has a branch gets its worktree reused, or created when the branch has
-  none; the command never fails for running twice
+  none; a workspace Herdr already shows keeps its agent, and nothing is prompted twice
+- `--local` refuses before creating anything when `project.md` declares no `local` pipeline,
+  since ship never picks a pipeline unasked
 
 It runs inside a Herdr session only. Outside one it stops before touching anything and points
 at https://herdr.dev.

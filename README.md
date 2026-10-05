@@ -179,8 +179,8 @@ executes nothing.
   default, so a plan is always shippable. Filling them is an optional batched questionnaire.
 - **Shipment** - what a ship run leaves behind, named by the pipeline's last step: verified code
   in the working tree (`implement`), local commits (`commit`), commits pushed to a branch
-  (`push`), an open PR/MR (`pr`), a running environment (`deploy`). A PR is one shipment, not the word for all of them - a project with no
-  git in its pipeline still ships.
+  (`push`), an open PR/MR (`pr`), a running environment (`deploy`). A PR is one shipment, not
+  the word for all of them - a project with no git in its pipeline still ships.
 
 **Project binding**
 
@@ -451,7 +451,8 @@ The worktree goes through [worktrunk](https://github.com/max-sixty/worktrunk) wh
 is not. The command returns once the prompt is submitted and never waits on the agent, so a
 session inside Herdr can run it too - `/f10:start` is that skill. It runs inside a Herdr session
 only; outside one it stops before touching anything and points at https://herdr.dev. Run twice
-for one task it opens the worktree that exists rather than failing.
+for one task it opens the worktree that exists and leaves the agent already in it alone, rather
+than failing.
 
 ### Lookaround by design
 
@@ -460,8 +461,8 @@ pre-computes), no scanning (it answers for the repo it runs in, and walks the fi
 other projects only once you set `F10_ROOTS`), and two writing verbs: `init` creates the two
 files that register a project, `start` creates a branch and a worktree, and nothing else writes
 anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
-process otherwise. `bin/resolve.sh` stays the agent-facing surface - the binary explains to humans what the resolver hands to
-agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
+process otherwise. `bin/resolve.sh` stays the agent-facing surface - the binary explains to
+humans what the resolver hands to agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
 wrong. The parity suite in `cli/internal/resolve` runs every fixture through both the Go
 resolution and the script, so their semantics cannot drift apart silently.

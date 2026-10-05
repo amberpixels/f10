@@ -48,18 +48,26 @@ func Out(ctx context.Context, dir string, args ...string) string {
 	return out
 }
 
-// Refs lists the short names of the refs matching patterns, in git's own
-// order. A pattern is what for-each-ref takes: a literal ref, which also
-// matches everything under it at a slash, or a glob.
+// Refs lists the refs matching patterns, in git's own order, as branch
+// names: `refs/heads/` and `refs/remotes/` stripped, so a remote branch
+// reads `origin/x`. The full refname is asked for rather than the short
+// one, which git disambiguates to `heads/x` when a tag shares the name.
+// A pattern is what for-each-ref takes: a literal ref, which also matches
+// everything under it at a slash, or a glob.
 func Refs(ctx context.Context, dir string, patterns ...string) ([]string, error) {
-	args := append([]string{"for-each-ref", "--format=%(refname:short)"}, patterns...)
+	args := append([]string{"for-each-ref", "--format=%(refname)"}, patterns...)
 
 	out, err := Exec(ctx, dir, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	return strings.Fields(out), nil
+	refs := strings.Fields(out)
+	for i, r := range refs {
+		refs[i] = strings.TrimPrefix(strings.TrimPrefix(r, "refs/heads/"), "refs/remotes/")
+	}
+
+	return refs, nil
 }
 
 // A Worktree is one checkout git knows about.

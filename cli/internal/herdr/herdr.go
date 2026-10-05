@@ -35,8 +35,9 @@ func Available() error {
 // A Workspace is what opening a worktree yields: the ids the agent calls
 // are addressed by.
 type Workspace struct {
-	ID       string
-	RootPane string
+	ID          string
+	RootPane    string
+	AlreadyOpen bool // Herdr was showing this checkout before the call
 }
 
 // OpenWorktree turns the checkout at path into a workspace labelled label,
@@ -48,8 +49,9 @@ func OpenWorktree(ctx context.Context, dir, path, label string) (Workspace, erro
 	}
 
 	ws := Workspace{
-		ID:       field(res, "workspace", "workspace_id"),
-		RootPane: field(res, "root_pane", "pane_id"),
+		ID:          field(res, "workspace", "workspace_id"),
+		RootPane:    field(res, "root_pane", "pane_id"),
+		AlreadyOpen: res["already_open"] == true,
 	}
 
 	switch {
