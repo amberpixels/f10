@@ -26,7 +26,7 @@ fix: cli::fix
     shfmt -f . | xargs -r shellcheck -f diff | git apply --allow-empty
     shfmt -w -s -i 2 -ci .
 
-# run tests - the resolve.sh parity suite included
+# run tests - the bundle.sh parity suite included
 test: cli::test
 
 # build the f10 binary

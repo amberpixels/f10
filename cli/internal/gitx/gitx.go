@@ -1,5 +1,5 @@
 // Package gitx is the binary's one door to git. The reads mirror the
-// shell-outs bin/resolve.sh makes - the bash script is the semantics
+// shell-outs bin/bundle.sh makes - the bash script is the semantics
 // oracle, and shelling out identically keeps the two comparable. The
 // writes are `f10 start`'s - a branch, a worktree, and the config entries
 // that record what a branch depends on - and `f10 finish`'s, which undoes

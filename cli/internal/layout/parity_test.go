@@ -1,4 +1,4 @@
-package resolve
+package layout
 
 import (
 	"os"
@@ -9,9 +9,9 @@ import (
 	"testing"
 )
 
-// The parity suite pins this package to bin/resolve.sh, the semantics
+// The parity suite pins this package to bin/bundle.sh, the semantics
 // oracle. Every fixture runs both and compares the script's header lines
-// with the Go resolution, so a semantic change to either side fails here
+// with the Go layout, so a semantic change to either side fails here
 // until both move.
 
 type scriptFacts struct {
@@ -126,29 +126,29 @@ func TestParity(t *testing.T) {
 			t.Setenv("HOME", home)
 
 			runDir := tc.setup(t, home)
-			res := Resolve(t.Context(), runDir)
+			lay := Locate(t.Context(), runDir)
 			want := runScript(t, script, runDir, home)
 
-			if res.CheckoutRoot != want.checkoutRoot {
-				t.Errorf("checkout root:\n  go:     %q\n  script: %q", res.CheckoutRoot, want.checkoutRoot)
+			if lay.CheckoutRoot != want.checkoutRoot {
+				t.Errorf("checkout root:\n  go:     %q\n  script: %q", lay.CheckoutRoot, want.checkoutRoot)
 			}
 
-			if res.Source != want.source {
-				t.Errorf("source:\n  go:     %q\n  script: %q", res.Source, want.source)
+			if lay.Source != want.source {
+				t.Errorf("source:\n  go:     %q\n  script: %q", lay.Source, want.source)
 			}
 
-			if res.StorageRoot != want.storageRoot {
-				t.Errorf("storage root:\n  go:     %q\n  script: %q", res.StorageRoot, want.storageRoot)
+			if lay.StorageRoot != want.storageRoot {
+				t.Errorf("storage root:\n  go:     %q\n  script: %q", lay.StorageRoot, want.storageRoot)
 			}
 
-			if got := res.NestedIgnored != ""; got != tc.wantNested {
-				t.Errorf("nested ignored: got %v (%q), want %v", got, res.NestedIgnored, tc.wantNested)
+			if got := lay.NestedIgnored != ""; got != tc.wantNested {
+				t.Errorf("nested ignored: got %v (%q), want %v", got, lay.NestedIgnored, tc.wantNested)
 			}
 		})
 	}
 }
 
-// scriptPath locates bin/resolve.sh relative to this source file.
+// scriptPath locates bin/bundle.sh relative to this source file.
 func scriptPath(t *testing.T) string {
 	t.Helper()
 
@@ -157,19 +157,19 @@ func scriptPath(t *testing.T) string {
 		t.Fatal("cannot locate this source file")
 	}
 
-	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "resolve.sh"))
+	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "bundle.sh"))
 	if err != nil {
 		t.Fatalf("abs: %v", err)
 	}
 
 	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("resolve.sh not found at %s: %v", path, err)
+		t.Fatalf("bundle.sh not found at %s: %v", path, err)
 	}
 
 	return path
 }
 
-// runScript runs bin/resolve.sh in dir with an overridden HOME and parses
+// runScript runs bin/bundle.sh in dir with an overridden HOME and parses
 // the three header facts this suite compares.
 func runScript(t *testing.T, script, dir, home string) scriptFacts {
 	t.Helper()
@@ -187,7 +187,7 @@ func runScript(t *testing.T, script, dir, home string) scriptFacts {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("resolve.sh failed: %v\n%s", err, out)
+		t.Fatalf("bundle.sh failed: %v\n%s", err, out)
 	}
 
 	var facts scriptFacts

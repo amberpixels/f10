@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-// bin/resolve.sh derives the same prefix for the steps that the binary
+// bin/bundle.sh derives the same prefix for the steps that the binary
 // derives for its verbs, in shell. Both are held to one table here, so a
 // rule that moves on one side fails until the other follows.
 func TestProjectPrefixParity(t *testing.T) {
-	script := resolveScript(t)
+	script := bundleScript(t)
 
 	for _, name := range []string{
 		"f10", "r3", "git-undo", "notion-sdk-go", "runwell", "herdr", "d3rtyjson",
@@ -31,7 +31,7 @@ func TestProjectPrefixParity(t *testing.T) {
 
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("resolve.sh failed: %v\n%s", err, out)
+				t.Fatalf("bundle.sh failed: %v\n%s", err, out)
 			}
 
 			var printed string
@@ -43,13 +43,13 @@ func TestProjectPrefixParity(t *testing.T) {
 			}
 
 			if want := projectPrefix(name); printed != want {
-				t.Errorf("resolve.sh printed prefix %q, projectPrefix(%q) = %q", printed, name, want)
+				t.Errorf("bundle.sh printed prefix %q, projectPrefix(%q) = %q", printed, name, want)
 			}
 		})
 	}
 }
 
-func resolveScript(t *testing.T) string {
+func bundleScript(t *testing.T) string {
 	t.Helper()
 
 	_, file, _, ok := runtime.Caller(0)
@@ -57,13 +57,13 @@ func resolveScript(t *testing.T) string {
 		t.Fatal("cannot locate this source file")
 	}
 
-	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "resolve.sh"))
+	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "bundle.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("resolve.sh not found at %s: %v", path, err)
+		t.Fatalf("bundle.sh not found at %s: %v", path, err)
 	}
 
 	return path

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
-	"github.com/amberpixels/f10/cli/internal/resolve"
 )
 
 const mainProjectMD = `# demo project
@@ -39,9 +39,9 @@ func TestParseFile(t *testing.T) {
 		t.Errorf("Tracker body lost its sub-lines: %q", tracker.body)
 	}
 
-	// the alias form resolves to the canonical name
+	// the alias form maps to the canonical name
 	if pipe := fields["Ship pipeline(s)"]; !contains(pipe.body, "review (local)") {
-		t.Errorf("Ship pipelines alias not resolved: %q", pipe.body)
+		t.Errorf("Ship pipelines alias not mapped: %q", pipe.body)
 	}
 
 	// an unmatched heading with content is kept; the empty title heading
@@ -115,15 +115,15 @@ func TestParseFileHeadingShape(t *testing.T) {
 }
 
 func TestBuildMergesLayersFieldLevel(t *testing.T) {
-	res := &resolve.Resolution{
-		Layers: []resolve.Layer{
+	lay := &layout.Layout{
+		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "- **Project** - main says\n- **Verify** - just test\n")},
 			{Label: "worktree", Dir: dirWithProjectMD(t, "- **Verify** - go test ./...\n")},
 		},
-		Layering: resolve.LayeringExtends,
+		Layering: layout.LayeringExtends,
 	}
 
-	eff := Build(res, &probe.Probes{})
+	eff := Build(lay, &probe.Probes{})
 
 	verify := fieldByName(t, eff, "Verify")
 	if verify.Value != "go test ./..." || verify.Origin != "declared (worktree)" {
@@ -137,14 +137,14 @@ func TestBuildMergesLayersFieldLevel(t *testing.T) {
 }
 
 func TestBuildDefaultsAndDetection(t *testing.T) {
-	res := &resolve.Resolution{Project: "demo"} // no layers at all
+	lay := &layout.Layout{Project: "demo"} // no layers at all
 	pb := &probe.Probes{
 		CLI:   probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
 		Host:  "github.com",
 		Stack: []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
 	}
 
-	eff := Build(res, pb)
+	eff := Build(lay, pb)
 
 	for name, want := range map[string]struct{ origin, value string }{
 		"Project":          {origin: OriginDetected, value: "Go (go.mod)"},
@@ -177,13 +177,13 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 }
 
 func TestBuildDeclaredVisibilityWins(t *testing.T) {
-	res := &resolve.Resolution{
-		Layers: []resolve.Layer{
+	lay := &layout.Layout{
+		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "- **Visibility** - public\n")},
 		},
 	}
 
-	eff := Build(res, &probe.Probes{})
+	eff := Build(lay, &probe.Probes{})
 
 	if eff.Visibility != "public" {
 		t.Errorf("visibility = %q, want public", eff.Visibility)
@@ -242,14 +242,14 @@ func contains(haystack, needle string) bool {
 // A declared id format is never second-guessed by the project's name, and
 // says where it came from.
 func TestBuildDeclaredPrefixWins(t *testing.T) {
-	res := &resolve.Resolution{
+	lay := &layout.Layout{
 		Project: "demo",
-		Layers: []resolve.Layer{
+		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "- **Tracker** - Jira. Task ids `ABC-####`.\n")},
 		},
 	}
 
-	eff := Build(res, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+	eff := Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
 
 	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin != "declared (main)" {
 		t.Errorf("id prefix = %q (%s), want ABC declared (main)", eff.IDPrefix, eff.IDPrefixOrigin)
@@ -257,9 +257,9 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 }
 
 // A name that derives nothing leaves the prefix empty rather than inventing
-// one: only explicit ids resolve, and init leaves the Tracker to a human.
+// one: only explicit ids are accepted, and init leaves the Tracker to a human.
 func TestBuildUnusableProjectName(t *testing.T) {
-	eff := Build(&resolve.Resolution{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+	eff := Build(&layout.Layout{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
 
 	if eff.IDPrefix != "" || eff.IDPrefixOrigin != "" {
 		t.Errorf("id prefix = %q (%s), want none", eff.IDPrefix, eff.IDPrefixOrigin)

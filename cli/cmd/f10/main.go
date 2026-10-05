@@ -10,7 +10,7 @@
 // `start` creates a branch and a worktree, opens them in Herdr and prompts
 // an agent there, and `finish` undoes start once the work merged: the PR
 // merged on the host, the plan archived, the workspace closed, the worktree
-// and branch removed, main pulled. bin/resolve.sh stays the agent-facing
+// and branch removed, main pulled. bin/bundle.sh stays the agent-facing
 // surface for a pipeline run; this is the surface for a person, and for the
 // commands an agent runs to read a task, start the next one or finish this one.
 //

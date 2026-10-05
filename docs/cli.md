@@ -1,7 +1,7 @@
 # The `f10` binary
 
 A lookaround, and the commands that start and finish a task. The lookaround verbs explain the
-resolved configuration and read the things it points at, changing nothing. Three verbs write:
+loaded configuration and read the things it points at, changing nothing. Three verbs write:
 `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task
 is worked on in and opens them in Herdr, and `finish` merges the task's PR and removes what
 start created.
@@ -65,7 +65,7 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   plan is not written yet. A base still at the default branch's commit is noted as a task with
   no code yet. It fails before creating anything when the task has no branch
 - `--base <branch>` bases the branch on a git ref instead: the local branch, else the one on
-  origin (`origin/main` typed as such also resolves). It fails before creating anything when
+  origin (`origin/main` typed as such is also accepted). It fails before creating anything when
   neither exists, and notes beneath the report when the base sits at the default branch's
   commit, since a base that changes nothing is otherwise invisible. Exclusive with `--after`
 - the default branch is `<ID>/<slug>`: the title fetched through `gh` or `glab`, lowercased,
@@ -148,7 +148,7 @@ a task whose PR was never opened, and worktrees f10 did not start.
 
 A reference is a bare number, a `#123`, a prefixed id in any case, or a url whose last path
 segment is one of those (`.../issues/42`, `.../browse/ABC-1042`). With no id, a reference
-resolves in one cascade: the id you passed, else the id in the current branch name, else the
+is looked up in one cascade: the id you passed, else the id in the current branch name, else the
 task this session recorded. The branch lookup needs the project's task id format, declared in
 `project.md` or derived from the project's name.
 

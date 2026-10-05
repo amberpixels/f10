@@ -41,13 +41,13 @@ framed the question. Honour it as framing; never treat it as part of the name.
 
 ## A change
 
-1. **Gather the diff.** No argument: the current branch against its base, and resolve that base
+1. **Gather the diff.** No argument: the current branch against its base, and find that base
    rather than assuming `main` -
    `git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|origin/||'`.
    A PR/MR number or url: the diff and description via the host CLI (`gh pr diff` /
    `gh pr view --comments`, `glab mr diff` / `glab mr view`). A task id: the task via the project's
    fetch adapter, plus `<storage root>/plans/<TASK-ID>.md` where one exists, and the branch or PR it
-   resolves to. A sha or range: `git show` / `git diff`. `local`, `staged` or `uncommitted`: the
+   points to. A sha or range: `git show` / `git diff`. `local`, `staged` or `uncommitted`: the
    working tree, `git diff` and `git diff --staged`. A branch with nothing committed against its
    base falls through to the working tree rather than reporting an empty subject.
 
@@ -101,7 +101,7 @@ project instead: **cut every sentence that would still be true if this thing did
    A word: grep for it - the type, the table, the function, the constant, the enum value - and read
    the definition and the two or three places that use it. A README or a comment says what it was
    meant to be; only the code says what it is, and where they disagree the code wins and the gap
-   gets said. A word that resolves to nothing in the code is a failure per `conventions/failure.md`:
+   gets said. A word that names nothing in the code is a failure per `conventions/failure.md`:
    say what was searched, never define it from general knowledge.
 
 2. **Say what it is, in one sentence.** The sentence a peer would say first: the noun, and the one
@@ -131,7 +131,7 @@ never a verdict, and never a reason to withhold the explanation the user asked f
 it on the PR or the tracker, that is outward-facing: confirm the target before posting, and carry no
 f10 traces whatever the project's visibility (`conventions/context.md`).
 
-**On failure:** a task id that does not resolve, a PR the host CLI cannot read, or a word that
+**On failure:** a task id the tracker does not know, a PR the host CLI cannot read, or a word that
 matches nothing in the code, is a failure per `conventions/failure.md` - never explain a subject you
 could not fetch or find. An **empty diff is not a failure**: say the branch carries no changes
 against its base, and name the base you compared it to.

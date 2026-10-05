@@ -10,11 +10,11 @@ argument-hint: "<free-text task description>"
 Create a well-scoped task from a description. Runs the **capture** step only.
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh capture`, every run. Then follow the **capture** step
+then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture`, every run. Then follow the **capture** step
 that bundle just printed, with the user's argument as the description - it carries the step
 file, so there is nothing left to read from `steps/`.
 

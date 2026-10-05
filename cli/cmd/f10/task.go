@@ -57,7 +57,7 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if d := driver.Find(t.res.StorageRoot, t.dir); d != nil {
+	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
 			return writeDoc(ctx, cmd.Writer, t.dir, doc)
@@ -92,7 +92,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if d := driver.Find(t.res.StorageRoot, t.dir); d != nil {
+	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
 		url, err := d.Run(ctx, driver.VerbURL, r.Number)
 		if err == nil {
 			return follow(ctx, cmd.Writer, t.dir, strings.TrimSpace(url), cmd.Bool("print"))
@@ -151,7 +151,7 @@ type row struct {
 }
 
 func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
-	if d := driver.Find(t.res.StorageRoot, t.dir); d != nil {
+	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
 		out, err := d.Run(ctx, driver.VerbSearch, query)
 		if err == nil {
 			var rows []row

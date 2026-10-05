@@ -62,7 +62,7 @@ const (
 
 // The keys --after writes under `branch.<name>.` in the local git config:
 // the base task's id, and its branch as a bare name, so the ship skill and
-// the pr step read both with `git config --get` and resolve nothing.
+// the pr step read both with `git config --get` and look up nothing.
 // finish clears them from every dependent once the base branch merged.
 const (
 	cfgAfter       = "f10-after"
@@ -107,8 +107,8 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in := startInput{
-		main:     cmp.Or(t.res.MainRoot, t.res.CheckoutRoot),
-		driver:   driver.Find(t.res.StorageRoot, t.dir),
+		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		driver:   driver.Find(t.lay.StorageRoot, t.dir),
 		task:     r,
 		suffix:   suffix,
 		mode:     mode,
@@ -156,7 +156,7 @@ func declaresPipeline(t *target, name string) bool {
 	return false
 }
 
-// startInput is everything start needs once the target is resolved, so
+// startInput is everything start needs once the target is settled, so
 // the flow can be tested without a checkout.
 type startInput struct {
 	main     string         // the main checkout: worktrees are its siblings
@@ -194,7 +194,7 @@ type baseRef struct {
 
 // A dependency is what --after records on the new branch: the base task,
 // its branch as a bare name (`origin/` stripped, since the pr step targets
-// a branch and ship resolves local-first), and where its plan is.
+// a branch and ship looks it up local-first), and where its plan is.
 type dependency struct {
 	task    string
 	branch  string
@@ -212,7 +212,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		return err
 	}
 
-	base, dep, err := resolveBase(ctx, in)
+	base, dep, err := baseFor(ctx, in)
 	if err != nil {
 		return err
 	}
@@ -306,10 +306,10 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	return writeReport(w, append(rows, fact{label: "path", value: path}, fact{label: "workspace", value: ws.ID}), notes)
 }
 
-// resolveBase turns --after or --base into the ref the worktree is created
+// baseFor turns --after or --base into the ref the worktree is created
 // from, and for --after the dependency to record. Neither given is an empty
 // base, which lets git choose.
-func resolveBase(ctx context.Context, in startInput) (baseRef, *dependency, error) {
+func baseFor(ctx context.Context, in startInput) (baseRef, *dependency, error) {
 	switch {
 	case in.after != "":
 		branch, err := taskBranch(ctx, in.main, in.after)

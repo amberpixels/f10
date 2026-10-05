@@ -17,7 +17,7 @@ cannot know those tool names in advance, so a concrete list here would silently 
 executor in exactly the projects that configured one.
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
 
 **Hands-on:** if the argument contains `--hands-on`, strip the token and run the step's hands-on
 execution - derive the script and seed the state as always, then leave the app running and hand
@@ -25,14 +25,14 @@ the script over instead of capturing evidence.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh demo`, every run. Then follow the **demo** step that
+then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh demo`, every run. Then follow the **demo** step that
 bundle just printed - it carries the step file, so there is nothing left to read from `steps/`.
 
 **Route by the stripped argument:**
 - **A PR / MR** (number, url, or "this branch"): the diff and description via the host CLI, plus
-  the task and plan the branch name resolves to.
+  the task and plan the branch name points to.
 - **A task id** (the project's id format, an id, or a tracker url): the task via the fetch
-  adapter, its plan at `<storage root>/plans/<TASK-ID>.md`, and the branch or PR it resolves to.
+  adapter, its plan at `<storage root>/plans/<TASK-ID>.md`, and the branch or PR it points to.
 - **No argument**: the current branch against its base. This is the case the skill exists for -
   do not ask what to demo, name the change in one line and demo it.
 

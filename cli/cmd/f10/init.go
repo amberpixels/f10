@@ -14,7 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/resolve"
+	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
 // init is the one verb in this binary that writes, and the whole of what it
@@ -41,21 +41,21 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	res := t.res
+	lay := t.lay
 
-	path, err := destination(res)
+	path, err := destination(lay)
 	if err != nil {
 		return err
 	}
 
-	draft := facts.Scaffold(res, t.pb, t.eff)
+	draft := facts.Scaffold(lay, t.pb, t.eff)
 
 	// the exclude entry first, so `.f10/` is already invisible to git by
 	// the time anything appears inside it
 	var excluded string
 
 	if t.eff.Storage == "in-repo" && t.eff.Visibility == "stealth" {
-		if excluded, err = excludeF10(ctx, res.CheckoutRoot); err != nil {
+		if excluded, err = excludeF10(ctx, lay.CheckoutRoot); err != nil {
 			return fmt.Errorf("excluding %s: %w", excludeLine, err)
 		}
 	}
@@ -72,17 +72,17 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 // destination is where a project.md would land, or the reason none can:
 // this command creates, and only for a checkout that is a project of its
 // own.
-func destination(res *resolve.Resolution) (string, error) {
-	if res.MainRoot == "" {
-		return "", fmt.Errorf("%s is not a git checkout - f10 init registers one", res.CheckoutRoot)
+func destination(lay *layout.Layout) (string, error) {
+	if lay.MainRoot == "" {
+		return "", fmt.Errorf("%s is not a git checkout - f10 init registers one", lay.CheckoutRoot)
 	}
 
-	if res.CheckoutRoot != res.MainRoot {
+	if lay.CheckoutRoot != lay.MainRoot {
 		return "", fmt.Errorf("%s is a linked worktree, which layers over main rather than being a project "+
-			"of its own - run `f10 -C %s init`", res.CheckoutRoot, res.MainRoot)
+			"of its own - run `f10 -C %s init`", lay.CheckoutRoot, lay.MainRoot)
 	}
 
-	path := filepath.Join(res.StorageRoot, "instructions", "project.md")
+	path := filepath.Join(lay.StorageRoot, "instructions", "project.md")
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("%s already exists - f10 init creates, never overwrites", path)
 	}

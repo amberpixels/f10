@@ -5,7 +5,7 @@ Input: a task identifier (in the project's id format).
 Context: per `conventions/context.md` - the tracker's **fetch adapter** comes from
 `project.md` (+ same-named overlay).
 Badge (`conventions/report.md`): `f10-state.sh set plan running` on entry - fetch opens the plan
-phase - and `f10-state.sh task <id> <url>` once the task resolves.
+phase - and `f10-state.sh task <id> <url>` once the tracker returns it.
 
 1. **Fetch the task** via the project's fetch adapter - a skill to invoke, or a CLI command
    such as `gh issue view <n> --comments` / `glab issue view <n>`. Read the full task,
@@ -20,7 +20,7 @@ phase - and `f10-state.sh task <id> <url>` once the task resolves.
    contradictory summaries you then waste turns reconciling.
 3. **Surface obstacles explicitly.** Task out of date vs. the current code, internal
    conflicts, ambiguous or missing requirements, hidden coupling, data/migration concerns.
-4. **Decide like a senior engineer.** Resolve ~90% of open questions yourself from the code and
+4. **Decide like a senior engineer.** Settle ~90% of open questions yourself from the code and
    its house style. The _major_ forks left over - ones that change scope or are hard to
    reverse - become **gaps**: note each with a sensible default you'd proceed on and carry them
    into the plan's Gaps section (see `conventions/gaps.md`) rather than blocking the run to ask.
@@ -31,5 +31,5 @@ phase - and `f10-state.sh task <id> <url>` once the task resolves.
    they trigger), the obstacles found, the decisions you took, and the list of gaps (with
    their defaults) for the plan to record.
 
-**On failure:** the id does not resolve, or the tracker is unreachable - stop and report it.
+**On failure:** the tracker does not know the id, or is unreachable - stop and report it.
 Never plan against an assumed or invented task. See `conventions/failure.md`.

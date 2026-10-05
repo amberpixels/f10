@@ -52,7 +52,7 @@ func runDemoOpen(ctx context.Context, cmd *cli.Command) error {
 	return shell.Passthrough(ctx, t.dir, opener, path)
 }
 
-// demoReport resolves the reference and names the report written for it. A
+// demoReport looks up the reference and names the report written for it. A
 // missing file is an error naming the path, for the reason planFile gives:
 // falling back to whatever else the directory holds is how a reader ends up
 // reading another task's demo.
@@ -67,7 +67,7 @@ func demoReport(ctx context.Context, cmd *cli.Command) (*target, string, error) 
 		return nil, "", err
 	}
 
-	path := filepath.Join(t.res.StorageRoot, "demo", r.ID, "report.html")
+	path := filepath.Join(t.lay.StorageRoot, "demo", r.ID, "report.html")
 	if _, err := os.Stat(path); err != nil {
 		return nil, "", fmt.Errorf("no demo report for %s at %s", r.ID, path)
 	}

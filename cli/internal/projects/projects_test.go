@@ -31,20 +31,20 @@ func TestIsName(t *testing.T) {
 
 // Off unless asked for: with the variable unset nothing is globbed and
 // nothing is scanned, which is the fence this package exists to keep.
-func TestResolveDisabledByDefault(t *testing.T) {
+func TestFindDisabledByDefault(t *testing.T) {
 	t.Setenv(RootsEnv, "")
 
 	if roots := Roots(); roots != nil {
 		t.Errorf("Roots() with %s unset = %v, want nil", RootsEnv, roots)
 	}
 
-	_, err := Resolve("r3")
+	_, err := Find("r3")
 	if !errors.Is(err, ErrDisabled) {
-		t.Fatalf("Resolve with %s unset = %v, want ErrDisabled", RootsEnv, err)
+		t.Fatalf("Find with %s unset = %v, want ErrDisabled", RootsEnv, err)
 	}
 }
 
-func TestResolve(t *testing.T) {
+func TestFind(t *testing.T) {
 	home := t.TempDir()
 	for _, dir := range []string{"org-a/r3", "org-b/acme", "org-b/r3", "org-a/not-a-checkout"} {
 		if err := os.MkdirAll(filepath.Join(home, dir), 0o755); err != nil {
@@ -67,25 +67,25 @@ func TestResolve(t *testing.T) {
 
 	t.Setenv(RootsEnv, filepath.Join(home, "org-b", "*"))
 
-	got, err := Resolve("acme")
+	got, err := Find("acme")
 	if err != nil {
-		t.Fatalf("Resolve(acme): %v", err)
+		t.Fatalf("Find(acme): %v", err)
 	}
 
 	if want := filepath.Join(home, "org-b", "acme"); got != want {
-		t.Errorf("Resolve(acme) = %q, want %q", got, want)
+		t.Errorf("Find(acme) = %q, want %q", got, want)
 	}
 
-	if _, err := Resolve("not-a-checkout"); err == nil {
-		t.Error("Resolve matched a directory that is not a checkout")
+	if _, err := Find("not-a-checkout"); err == nil {
+		t.Error("Find matched a directory that is not a checkout")
 	}
 
 	// two roots, one name: a guess here would run against the wrong repo
 	t.Setenv(RootsEnv, filepath.Join(home, "org-a", "*")+
 		string(os.PathListSeparator)+filepath.Join(home, "org-b", "*"))
 
-	_, err = Resolve("r3")
+	_, err = Find("r3")
 	if err == nil || !strings.Contains(err.Error(), "matches 2 checkouts") {
-		t.Fatalf("Resolve with an ambiguous name = %v, want an error naming both", err)
+		t.Fatalf("Find with an ambiguous name = %v, want an error naming both", err)
 	}
 }

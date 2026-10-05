@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# f10 · resolve - one-shot deterministic context resolution.
+# f10 · bundle - one-shot deterministic context loading.
 #
 # Does, in a single call, the project-specific half of conventions/context.md's loading order:
 # locate .f10/instructions/ (layering a linked worktree's on top of main's), list what each layer
@@ -13,19 +13,19 @@
 #
 # The conventions are bin/conventions.sh's job, not this script's. They are static plugin prose,
 # identical on every machine and every run, while everything below varies by repo, worktree and
-# step. Keeping them apart is what lets a caller load them once per context and still re-resolve
+# step. Keeping them apart is what lets a caller load them once per context and still reload
 # project facts on every run.
 #
 # The generic step files are printed here anyway, and they are static prose too - so the line is
-# static-and-universal (load once per context) against static-but-selected (resolve every run),
-# not prose against facts. *Which* steps a run executes is resolved, and conventions.sh takes no
+# static-and-universal (load once per context) against static-but-selected (load every run),
+# not prose against facts. *Which* steps a run executes is selected per run, and conventions.sh takes no
 # arguments precisely so it can never select anything. The alternative is a third call, which is
 # the round trip this exists to remove.
 #
-# Usage:  resolve.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
-#         resolve.sh --all                 cat every generic step + project.md + every overlay
-#         resolve.sh                       facts, layering, listing and probes only, no steps
-#   e.g.  resolve.sh capture  |  resolve.sh fetch plan  |  resolve.sh --all
+# Usage:  bundle.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
+#         bundle.sh --all                 cat every generic step + project.md + every overlay
+#         bundle.sh                       facts, layering, listing and probes only, no steps
+#   e.g.  bundle.sh capture  |  bundle.sh fetch plan  |  bundle.sh --all
 #
 # --all exists for /f10:ship, whose step list *is* the ship pipeline - and the pipeline is declared
 # in the project.md this script prints. Ship cannot name its steps until after the call, so it names
@@ -210,7 +210,7 @@ supplied() {
   return 1
 }
 
-echo "=== f10 resolve @ $cwd ==="
+echo "=== f10 bundle @ $cwd ==="
 echo "checkout root: $here"
 if [ "$all" = 1 ]; then
   echo "steps requested: --all (every overlay each layer holds)"
@@ -226,7 +226,7 @@ fi
 echo "storage root: $storage  (plans -> $storage/plans/)"
 # a config below the root is not a per-directory config - say so rather than pass it over silently
 if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
-  echo "note: ignoring nested $cwd/.f10/instructions - resolution is anchored to the checkout root"
+  echo "note: ignoring nested $cwd/.f10/instructions - loading is anchored to the checkout root"
 fi
 echo
 
@@ -332,4 +332,4 @@ if [ -d "$storage/plans" ]; then
   echo "existing plans: ${#plans[@]} file(s) in $storage/plans/"
 fi
 echo
-echo "=== end resolve (nothing was fetched, written, or created) ==="
+echo "=== end bundle (nothing was fetched, written, or created) ==="

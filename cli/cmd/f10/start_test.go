@@ -382,7 +382,7 @@ func TestNamedRef(t *testing.T) {
 		}
 	})
 
-	t.Run("a remote typed as such resolves literally", func(t *testing.T) {
+	t.Run("a remote typed as such is taken literally", func(t *testing.T) {
 		f := newFakes(t)
 		f.fail("git rev-parse --verify --quiet refs/heads/origin/main", missing)
 		f.script("git rev-parse --verify --quiet refs/remotes/origin/main", "bbb")
@@ -751,7 +751,7 @@ func TestStartAfterEqualsDefault(t *testing.T) {
 	}
 }
 
-// A --after that resolves to no branch refuses before git, wt or herdr
+// A --after that points to no branch refuses before git, wt or herdr
 // create or record anything.
 func TestStartRefusesMissingAfter(t *testing.T) {
 	f := newFakes(t)
@@ -768,7 +768,7 @@ func TestStartRefusesMissingAfter(t *testing.T) {
 	}
 }
 
-// --base hands git the ref it resolved, and a base that is not at the
+// --base hands git the ref it found, and a base that is not at the
 // default branch's commit gets no note.
 func TestStartWithBase(t *testing.T) {
 	f := newFakes(t)
@@ -859,7 +859,7 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 	}
 }
 
-// A --base that resolves nowhere refuses before git, wt or herdr create anything.
+// A --base that points nowhere refuses before git, wt or herdr create anything.
 func TestStartRefusesMissingBase(t *testing.T) {
 	f := newFakes(t)
 	f.fail(shaLocal, missing)

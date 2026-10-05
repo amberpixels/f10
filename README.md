@@ -112,7 +112,7 @@ much or as little as you like; anything you leave out stays inferred.
 # → same setup, but you drive: a live url and a short scenario to click through
 ```
 
-`--dry-run` on any skill resolves context, routing, adapters, and output paths, reports them, and
+`--dry-run` on any skill loads context, settles routing, adapters, and output paths, reports them, and
 executes nothing.
 
 ## Concepts
@@ -414,7 +414,7 @@ A verb means one thing under every noun. `read` writes content, `open` follows a
 `search` finds by description; `--print` writes the address instead of following it. The matrix
 stays sparse where a verb has no meaning for a noun, and never redefines one to fill a hole.
 
-With no argument, a reference resolves in one cascade: the id you passed, else the id in the
+With no argument, a reference is looked up in one cascade: the id you passed, else the id in the
 current branch name, else the task this session recorded. `-C` answers for another checkout, so
 chasing a library's task from inside the app that hit the bug costs no `cd`:
 
@@ -486,17 +486,17 @@ pre-computes), no scanning (it answers for the repo it runs in, and walks the fi
 other projects only once you set `F10_ROOTS`), and three writing verbs: `init` creates the two
 files that register a project, `start` creates a branch and a worktree, `finish` removes them
 once the work merged, and nothing else writes anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
-process otherwise. `bin/resolve.sh` stays the agent-facing surface - the binary explains to
-humans what the resolver hands to agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
+process otherwise. `bin/bundle.sh` stays the agent-facing surface - the binary explains to
+humans what the loader hands to agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
-wrong. The parity suite in `cli/internal/resolve` runs every fixture through both the Go
-resolution and the script, so their semantics cannot drift apart silently.
+wrong. The parity suite in `cli/internal/layout` runs every fixture through both the Go
+layout and the script, so their semantics cannot drift apart silently.
 
 ## Development
 
 f10's executable surface is `bin/` plus `cli/`. In `bin/`: `conventions.sh` cats the six
-convention files, `resolve.sh` resolves one repo's instructions, `f10-state.sh` records where a
-run is for the status line to draw. The first two split on static vs. resolved: one is identical
+convention files, `bundle.sh` loads one repo's instructions, `f10-state.sh` records where a
+run is for the status line to draw. The first two split on static vs. loaded: one is identical
 everywhere and loads once per context, the other varies by repo and worktree and reruns every
 run. The third is on neither side, because it writes and nothing in the pipeline reads it back.
 `cli/` is the read-only lookaround binary above, a Go module of its own
@@ -507,7 +507,7 @@ the binary lives beside it, in one repo because its parity tests run the scripts
 just lint   # shell + Go findings, change nothing (with `just test`, what CI runs)
 just fmt    # rewrite shell + Go to canonical form
 just fix    # apply everything auto-fixable - run on a clean tree, read the diff
-just test   # go test ./..., the resolve.sh parity suite included
+just test   # go test ./..., the bundle.sh parity suite included
 just build  # go build ./...
 ```
 
@@ -525,11 +525,11 @@ when the repo went hybrid, so every recipe is hand-owned now.
 ## Status
 
 Skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, `judge`,
-`demo` and `explain`. Project facts come from `.f10/instructions/` through the resolver,
+`demo` and `explain`. Project facts come from `.f10/instructions/` through the loader,
 worktree-layered, with inferred defaults where nothing is declared. Six conventions bind every
 run: what it costs, how it fails, how it reports, how it talks, where open decisions go, and how
 context loads. A status-line badge tracks the run through capture, plan and ship, `f10 status`
-says in words where it is and why it stopped, and the `f10` binary explains the resolved
+says in words where it is and why it stopped, and the `f10` binary explains the loaded
 configuration, writes the `project.md` that registers a checkout, and reads tasks, plans and PRs
 through `gh`, `glab`, or a project's own driver.
 

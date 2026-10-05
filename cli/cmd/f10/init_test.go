@@ -210,7 +210,7 @@ func readExclude(t *testing.T, repo string) string {
 	return string(data)
 }
 
-// canonical matches the resolver, which reports physical paths - a temp dir
+// canonical matches the layout package, which reports physical paths - a temp dir
 // on macOS is reached through a symlink.
 func canonical(t *testing.T, path string) string {
 	t.Helper()

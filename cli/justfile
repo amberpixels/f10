@@ -24,7 +24,7 @@ lint:
 fix:
     go run {{ standardgo }} ./... --fix
 
-# run tests - the resolve.sh and f10-state.sh parity suites included
+# run tests - the bundle.sh and f10-state.sh parity suites included
 test:
     go test ./...
 

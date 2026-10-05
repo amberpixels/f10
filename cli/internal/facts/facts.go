@@ -1,7 +1,7 @@
 // Package facts interprets the declared project.md layers, merges them with
 // the detection probes and the contract's defaults, and attributes every
 // effective value to its origin. It is the one component of f10 allowed to
-// interpret instruction prose - bin/resolve.sh stays a concatenator.
+// interpret instruction prose - bin/bundle.sh stays a concatenator.
 //
 // Interpretation is deliberately shallow: only the sub-facts with a fixed
 // vocabulary (Layering, Visibility, Storage, the tracker kind and its id
@@ -23,8 +23,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
-	"github.com/amberpixels/f10/cli/internal/resolve"
 )
 
 // Origins an effective value can have. Declared origins are qualified by
@@ -113,14 +113,14 @@ type section struct {
 
 // Build merges the declared layers with detection and the contract's
 // defaults into one attributed view.
-func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
+func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 	declared := map[string]section{}
 
 	var unknown []section
 
 	// field-level merge: a field a later layer mentions wins outright,
 	// silence keeps the earlier layer's value (conventions/context.md)
-	for _, layer := range res.Layers {
+	for _, layer := range lay.Layers {
 		file := filepath.Join(layer.Dir, "project.md")
 
 		fields, unrec := parseFile(file, layer.Label)
@@ -130,7 +130,7 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 	}
 
 	eff := &Effective{
-		Layering:   res.Layering,
+		Layering:   lay.Layering,
 		Visibility: "stealth",
 		Storage:    "in-repo",
 	}
@@ -161,7 +161,7 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 				Source: sec.file,
 			}
 		} else {
-			field = fallbackFor(name, res, pb)
+			field = fallbackFor(name, lay, pb)
 		}
 
 		if field.Name == "" {
@@ -175,8 +175,8 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 	// no declared id format, in the Tracker prose or at all: the project's
 	// own name settles the prefix, until f10 init writes it down
 	if eff.IDPrefix == "" {
-		if eff.IDPrefix = projectPrefix(res.Project); eff.IDPrefix != "" {
-			eff.IDPrefixOrigin = "derived from project name " + res.Project
+		if eff.IDPrefix = projectPrefix(lay.Project); eff.IDPrefix != "" {
+			eff.IDPrefixOrigin = "derived from project name " + lay.Project
 			eff.IDPrefixDerived = true
 		}
 	}
@@ -184,7 +184,7 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 	return eff
 }
 
-// absorb folds a resolved field's fixed-vocabulary sub-facts into the
+// absorb folds a field's fixed-vocabulary sub-facts into the
 // structured summary.
 func (e *Effective) absorb(f Field, pb *probe.Probes) {
 	lower := strings.ToLower(f.Value)
@@ -223,7 +223,7 @@ var (
 
 // idPrefix extracts the task id format's letters from declared Tracker
 // prose, or "" when it declares none. The prefix is the half the ref
-// resolver needs: it is how a branch name is searched and how a plan file
+// lookup needs: it is how a branch name is searched and how a plan file
 // is named.
 func idPrefix(declared string) string {
 	for _, re := range []*regexp.Regexp{idPlaceholderRE, idSampleRE} {
@@ -255,7 +255,7 @@ const (
 // segments give initials (git-undo -> GU, notion-sdk-go -> NSG), one word
 // gives its first three characters (herdr -> HER). A name that yields
 // nothing usable - one letter, a leading digit - derives no prefix, so only
-// explicit ids resolve and f10 init leaves the Tracker section to a human.
+// explicit ids are accepted and f10 init leaves the Tracker section to a human.
 func projectPrefix(name string) string {
 	segments := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
 		return r == '-' || r == '_' || r == '.' || r == ' '
@@ -326,18 +326,18 @@ func trackerKind(declared string, pb *probe.Probes) string {
 // fallbackFor answers for a contract field no layer declared: detection
 // where a probe can, the contract's default where one exists, absent
 // otherwise. A zero Field means the field has nothing to say here.
-func fallbackFor(name string, res *resolve.Resolution, pb *probe.Probes) Field {
+func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 	switch name {
 	case "Project":
 		return detectedList(name, pb.Stack)
 	case "Layering":
 		// meaningful only in a linked worktree; elsewhere there is
 		// nothing to layer onto
-		if res.MainRoot == "" || res.CheckoutRoot == res.MainRoot {
+		if lay.MainRoot == "" || lay.CheckoutRoot == lay.MainRoot {
 			return Field{}
 		}
 
-		return Field{Name: name, Value: res.Layering, Origin: OriginDefault}
+		return Field{Name: name, Value: lay.Layering, Origin: OriginDefault}
 	case "Tracker":
 		return detectedTracker(name, pb)
 	case "Hosting & PR":
@@ -358,7 +358,7 @@ func fallbackFor(name string, res *resolve.Resolution, pb *probe.Probes) Field {
 	case "Visibility":
 		return Field{Name: name, Value: "stealth", Origin: OriginDefault}
 	case "Storage":
-		return storageField(name, res)
+		return storageField(name, lay)
 	default: // Roles, Review, Guardrails: nothing infers them
 		return Field{Name: name, Origin: OriginAbsent}
 	}
@@ -402,19 +402,19 @@ func detectedTracker(name string, pb *probe.Probes) Field {
 
 // storageField reports where storage landed. Out-of-tree declares itself by
 // location, so finding it there is detection, not a default.
-func storageField(name string, res *resolve.Resolution) Field {
-	for _, l := range res.Layers {
+func storageField(name string, lay *layout.Layout) Field {
+	for _, l := range lay.Layers {
 		if l.Label == "out-of-tree" {
 			return Field{
 				Name:   name,
-				Value:  "out-of-tree (" + res.StorageRoot + ")",
+				Value:  "out-of-tree (" + lay.StorageRoot + ")",
 				Origin: OriginDetected,
 				Source: l.Dir,
 			}
 		}
 	}
 
-	return Field{Name: name, Value: "in-repo (" + res.StorageRoot + ")", Origin: OriginDefault}
+	return Field{Name: name, Value: "in-repo (" + lay.StorageRoot + ")", Origin: OriginDefault}
 }
 
 // parseFile splits one project.md into contract sections. Three declared

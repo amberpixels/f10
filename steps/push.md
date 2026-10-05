@@ -20,4 +20,4 @@ current (usually default) branch. For tiny, low-risk changes - chores, annotatio
    the one-line summary of what changed follows as prose.
 
 **On failure:** the push is rejected (protected branch, stale ref) - stop and report, leaving the
-commits local. Never force-push to resolve it. See `conventions/failure.md`.
+commits local. Never force-push to clear it. See `conventions/failure.md`.

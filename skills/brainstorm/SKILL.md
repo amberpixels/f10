@@ -12,11 +12,11 @@ file, no code. It ends in a shape the user can hand to `/f10:capture`, or in the
 build.
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh brainstorm`, every run. The project facts are what
+then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm`, every run. The project facts are what
 keep the options honest - the stack, the guardrails, the roles this project attaches. Then
 follow the **brainstorm** step that bundle just printed, with the user's argument as the idea;
 it carries the step file, so there is nothing left to read from `steps/`.

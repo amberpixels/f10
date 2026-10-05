@@ -31,7 +31,7 @@ carries the script and the live url as well: taking the wheel afterwards costs n
 1. **Gather the change.** The same routing `steps/judge.md` point 1 specifies, for the same
    targets - a PR number or url, the current branch, a task id, no argument at all - reaching the
    diff through the host CLI or `git diff <base>...HEAD`, plus the task and the plan the branch
-   resolves to. Read it there rather than restating it here, so the two cannot drift.
+   points to. Read it there rather than restating it here, so the two cannot drift.
 2. **Say what changed, in the user's words.** The headline of the step and the first thing the
    report prints: what the app did before, what it does now, and what a person using it will
    notice. Derived from the diff, written in the vocabulary of someone using the feature and never
@@ -44,7 +44,7 @@ carries the script and the live url as well: taking the wheel afterwards costs n
    diff says which ones exist. Where the two disagree the script follows the diff, and the report
    says where they parted. A script derived from the task alone demonstrates the plan, not the
    code.
-4. **Resolve the executor - and offer to declare it when there is none.** The facts come from the
+4. **Pick the executor - and offer to declare it when there is none.** The facts come from the
    `demo` overlay, never inferred: how to launch the app, how to seed baseline state, the base
    url, any test credentials. Where the project already has a skill that launches and drives its
    app, the overlay declaring that skill *is* the executor - f10 specifies the capability and the
@@ -89,7 +89,7 @@ carries the script and the live url as well: taking the wheel afterwards costs n
    hands-on mode, where it would delete the state the user is still clicking through.
 6. **Execute, or hand over.** Static: run the script, capture evidence as you go, and note
    anything that did not behave as the script predicted. Hands-on: seed, leave the app running,
-   and print the script with its urls resolved, so the first step is a link the user clicks.
+   and print the script with its urls filled in, so the first step is a link the user clicks.
 7. **Before and after, only when it says something.** A second capture at the base commit is
    worth its cost in one case: the change modifies something visible that **already existed**.
    Otherwise skip it and say why in one line.

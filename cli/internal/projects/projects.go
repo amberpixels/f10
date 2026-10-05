@@ -1,4 +1,4 @@
-// Package projects resolves a bare project name to a checkout directory,
+// Package projects maps a bare project name to a checkout directory,
 // for `-C r3` run from somewhere else entirely.
 //
 // Off unless asked for. GH-20 fenced the binary as answering for the repo it
@@ -25,8 +25,8 @@ import (
 // expanding to candidate checkout directories: `~/code/github.com/*/*`.
 const RootsEnv = "F10_ROOTS"
 
-// ErrDisabled means a name was given while name resolution is off.
-var ErrDisabled = errors.New("resolving a project by name needs " + RootsEnv +
+// ErrDisabled means a name was given while name lookup is off.
+var ErrDisabled = errors.New("finding a project by name needs " + RootsEnv +
 	" set to a colon-separated list of globs (for example ~/code/github.com/*/*); a path such as -C ../r3 always works")
 
 // Roots is the configured glob list, with a leading ~ expanded. Empty means
@@ -61,7 +61,7 @@ func Roots() []string {
 
 // IsName reports whether a -C value is a project name rather than a path.
 // Anything carrying a separator, a ~, or a leading dot is a path, and paths
-// resolve without any of this.
+// need none of this.
 func IsName(value string) bool {
 	return value != "" &&
 		!strings.ContainsRune(value, filepath.Separator) &&
@@ -69,10 +69,10 @@ func IsName(value string) bool {
 		!strings.HasPrefix(value, ".")
 }
 
-// Resolve finds the one checkout named name under the configured roots.
+// Find returns the one checkout named name under the configured roots.
 // Nothing found and more than one found are both errors that name what was
 // searched: a wrong guess here would run a command against the wrong repo.
-func Resolve(name string) (string, error) {
+func Find(name string) (string, error) {
 	roots := Roots()
 	if len(roots) == 0 {
 		return "", ErrDisabled

@@ -70,7 +70,7 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 	return shell.Passthrough(ctx, t.dir, editor[0], append(editor[1:], path)...)
 }
 
-// planFile resolves the reference and names the plan file for it. A missing
+// planFile looks up the reference and names the plan file for it. A missing
 // file is an error naming the path, because the alternative - falling back
 // to some other plan - is how a run ends up reading the wrong task's work.
 func planFile(ctx context.Context, cmd *cli.Command) (*target, string, error) {

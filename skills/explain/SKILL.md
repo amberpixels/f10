@@ -14,11 +14,11 @@ way a senior dev answers a peer in a hallway - a few sentences from the code, an
 (`/f10:judge`), hunts no bugs (`/f10:review`) and runs nothing (`/f10:demo`).
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh explain`, every run. Then follow the **explain** step
+then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain`, every run. Then follow the **explain** step
 that bundle just printed - it carries the step file, so there is nothing left to read from
 `steps/`.
 
@@ -26,9 +26,9 @@ that bundle just printed - it carries the step file, so there is nothing left to
 - **No argument**: the current branch against its base. This is the case the skill exists for -
   do not ask what to explain, name the subject in one line and explain it.
 - **A PR / MR** (number, url, or "this branch"): the diff and description via the host CLI, plus
-  the task and plan the branch name resolves to.
+  the task and plan the branch name points to.
 - **A task id** (the project's id format, an id, or a tracker url): the task via the fetch
-  adapter, its plan at `<storage root>/plans/<TASK-ID>.md`, and the branch or PR it resolves to.
+  adapter, its plan at `<storage root>/plans/<TASK-ID>.md`, and the branch or PR it points to.
 - **A commit or range** (a sha, `<a>..<b>`, or "last N commits"): the diff and messages via
   `git show` / `git diff`.
 - **`local`, `staged`, `uncommitted`**: the working tree, for the change that is not committed

@@ -82,7 +82,7 @@ func TTL() time.Duration {
 }
 
 // Session is the session this process runs in, in the order the script
-// resolves it: the explicit override, then the id Claude Code exports into
+// finds it: the explicit override, then the id Claude Code exports into
 // every Bash tool call. Empty from a plain terminal.
 func Session() string {
 	return cmp.Or(os.Getenv(sessionEnv), os.Getenv(claudeSessionEnv))
