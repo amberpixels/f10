@@ -121,11 +121,19 @@ const (
 	refsOn     = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-*"
 	refsOnOrig = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-*"
 	worktrees  = "git worktree list --porcelain"
+	shaLocal   = "git rev-parse --verify --quiet refs/heads/release/1.2"
+	shaRemote  = "git rev-parse --verify --quiet refs/remotes/release/1.2"
+	shaOrigin  = "git rev-parse --verify --quiet refs/remotes/origin/release/1.2"
+	headRef    = "git symbolic-ref --short refs/remotes/origin/HEAD"
+	shaMain    = "git rev-parse --verify --quiet refs/remotes/origin/main"
 	opened     = `{"result":{"workspace":{"workspace_id":"ws:3"},"root_pane":{"pane_id":"pane:7"},"already_open":false}}`
 	reopened   = `{"result":{"workspace":{"workspace_id":"ws:3"},"root_pane":{"pane_id":"pane:7"},"already_open":true}}`
 )
 
 var gh1 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit}
+
+// missing is what rev-parse --verify --quiet answers for a ref that is not there.
+var missing = shell.Result{Code: 1}
 
 // heads prefixes branch names the way for-each-ref prints them.
 func heads(names ...string) string {
@@ -251,6 +259,57 @@ func TestBaseBranch(t *testing.T) {
 		_, err := baseBranch(t.Context(), "/code/repo", "GH-7")
 		if err == nil || !strings.Contains(err.Error(), "GH-7-attempt2") {
 			t.Errorf("err = %v, want the candidates named", err)
+		}
+	})
+}
+
+func TestBaseRef(t *testing.T) {
+	t.Run("local branch wins", func(t *testing.T) {
+		f := newFakes(t)
+		f.script(shaLocal, "aaa")
+
+		got, sha, err := baseRef(t.Context(), "/code/repo", "release/1.2")
+		if err != nil || got != "release/1.2" || sha != "aaa" {
+			t.Errorf("baseRef = %q, %q, %v", got, sha, err)
+		}
+
+		if f.called("git rev-parse --verify --quiet refs/remotes") {
+			t.Error("remotes were searched although a local branch matched")
+		}
+	})
+
+	t.Run("a remote typed as such resolves literally", func(t *testing.T) {
+		f := newFakes(t)
+		f.fail("git rev-parse --verify --quiet refs/heads/origin/main", missing)
+		f.script("git rev-parse --verify --quiet refs/remotes/origin/main", "bbb")
+
+		got, sha, err := baseRef(t.Context(), "/code/repo", "origin/main")
+		if err != nil || got != "origin/main" || sha != "bbb" {
+			t.Errorf("baseRef = %q, %q, %v", got, sha, err)
+		}
+	})
+
+	t.Run("origin is the fallback", func(t *testing.T) {
+		f := newFakes(t)
+		f.fail(shaLocal, missing)
+		f.fail(shaRemote, missing)
+		f.script(shaOrigin, "ccc")
+
+		got, sha, err := baseRef(t.Context(), "/code/repo", "release/1.2")
+		if err != nil || got != "origin/release/1.2" || sha != "ccc" {
+			t.Errorf("baseRef = %q, %q, %v", got, sha, err)
+		}
+	})
+
+	t.Run("nothing anywhere fails naming the branch", func(t *testing.T) {
+		f := newFakes(t)
+		f.fail(shaLocal, missing)
+		f.fail(shaRemote, missing)
+		f.fail(shaOrigin, missing)
+
+		_, _, err := baseRef(t.Context(), "/code/repo", "release/1.2")
+		if err == nil || !strings.Contains(err.Error(), "release/1.2") {
+			t.Errorf("err = %v, want the branch named", err)
 		}
 	})
 }
@@ -424,6 +483,114 @@ func TestStartWithGitAlone(t *testing.T) {
 	}
 }
 
+// --base hands git the ref it resolved, and a base that is not at the
+// default branch's commit gets no note.
+func TestStartWithBase(t *testing.T) {
+	f := newFakes(t)
+	f.script(shaLocal, "aaa")
+	f.script(refsLocal, "")
+	f.script(headRef, "origin/main")
+	f.script(shaMain, "bbb")
+	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("git worktree add -b GH-1 /code/repo.GH-1 release/1.2", "")
+	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, base: "release/1.2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !f.called("git worktree add -b GH-1 /code/repo.GH-1 release/1.2") {
+		t.Error("the worktree was not created from the base")
+	}
+
+	if strings.Contains(out.String(), "same commit") {
+		t.Errorf("a base that differs from the default was noted as equal:\n%s", out.String())
+	}
+}
+
+// A base at the default branch's commit still creates the worktree from
+// it, and says beneath the report that it changed nothing.
+func TestStartBaseEqualsDefault(t *testing.T) {
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script("git rev-parse --verify --quiet refs/heads/main", "aaa")
+	f.script(refsLocal, "")
+	f.script(headRef, "origin/main")
+	f.script(shaMain, "aaa")
+	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("wt switch --no-cd --yes --format json --create --base main GH-1", "{}")
+	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, base: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !f.called("wt switch --no-cd --yes --format json --create --base main GH-1") {
+		t.Error("the worktree was not created from the base")
+	}
+
+	want := "--base main is at the same commit as the default branch origin/main"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("report missing %q:\n%s", want, out.String())
+	}
+}
+
+// A task that already has a branch keeps its base: --base is noted as
+// ignored and never reaches wt.
+func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(shaLocal, "aaa")
+	f.script(refsLocal, heads("GH-1"))
+	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("wt switch --no-cd --yes --format json GH-1", "{}")
+	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, base: "release/1.2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "--base ignored") {
+		t.Errorf("report missing the ignored note:\n%s", out.String())
+	}
+
+	if strings.Contains(strings.Join(f.calls, "\n"), "--base") {
+		t.Error("the base reached wt although the branch exists")
+	}
+}
+
+// A --base that resolves nowhere refuses before git, wt or herdr create anything.
+func TestStartRefusesMissingBase(t *testing.T) {
+	f := newFakes(t)
+	f.fail(shaLocal, missing)
+	f.fail(shaRemote, missing)
+	f.fail(shaOrigin, missing)
+
+	err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1, base: "release/1.2"})
+	if err == nil || !strings.Contains(err.Error(), "no branch") {
+		t.Fatalf("err = %v, want the missing base refused", err)
+	}
+
+	if f.called("wt ") || f.called("git worktree add") || f.called("herdr") {
+		t.Errorf("something was created after the refusal: %v", f.calls)
+	}
+}
+
 // A second run for the same task opens the worktree that exists and does
 // not fail: Herdr already shows it, so its root pane is not at a prompt and
 // no agent is started or prompted. --on is noted as ignored since the
@@ -527,5 +694,18 @@ func TestStartModesAreExclusive(t *testing.T) {
 	err := newApp().Run(t.Context(), []string{"f10", "start", "--plan", "--local", "42"})
 	if err == nil || !strings.Contains(err.Error(), "exclusive") {
 		t.Errorf("err = %v, want the flags refused together", err)
+	}
+}
+
+func TestStartBaseAndOnAreExclusive(t *testing.T) {
+	f := newFakes(t)
+
+	err := newApp().Run(t.Context(), []string{"f10", "start", "--base", "main", "--on", "7", "42"})
+	if err == nil || !strings.Contains(err.Error(), "exclusive") {
+		t.Errorf("err = %v, want the flags refused together", err)
+	}
+
+	if len(f.calls) != 0 {
+		t.Errorf("commands ran before the refusal: %v", f.calls)
 	}
 }

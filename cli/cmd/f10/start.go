@@ -41,6 +41,10 @@ func startCommand() *cli.Command {
 				Name:  "on",
 				Usage: "base the branch on `TASK-ID`'s existing branch instead of the default branch",
 			},
+			&cli.StringFlag{
+				Name:  "base",
+				Usage: "base the branch on `BRANCH`, local or on origin, instead of the default branch",
+			},
 		},
 		Action: runStart,
 	}
@@ -62,6 +66,11 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	mode, err := startMode(cmd)
 	if err != nil {
 		return err
+	}
+
+	on, base := strings.TrimSpace(cmd.String("on")), strings.TrimSpace(cmd.String("base"))
+	if on != "" && base != "" {
+		return errors.New("--base and --on are exclusive: one names a git ref, the other a task's branch")
 	}
 
 	if err := herdr.Available(); err != nil {
@@ -96,9 +105,10 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		task:   r,
 		suffix: suffix,
 		mode:   mode,
+		base:   base,
 	}
 
-	if on := strings.TrimSpace(cmd.String("on")); on != "" {
+	if on != "" {
 		onRef, err := t.reference(ctx, on)
 		if err != nil {
 			return fmt.Errorf("--on: %w", err)
@@ -152,6 +162,7 @@ type startInput struct {
 	suffix string
 	mode   string
 	on     string // task id whose branch is the base, or ""
+	base   string // branch whose ref is the base, or ""
 }
 
 // start runs the flow: branch name, base, existing branch, worktree,
@@ -163,11 +174,21 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		return err
 	}
 
-	var base string
-	if in.on != "" {
+	var base, baseFlag, baseSHA string
+
+	switch {
+	case in.on != "":
 		if base, err = baseBranch(ctx, in.main, in.on); err != nil {
 			return err
 		}
+
+		baseFlag = "--on"
+	case in.base != "":
+		if base, baseSHA, err = baseRef(ctx, in.main, in.base); err != nil {
+			return err
+		}
+
+		baseFlag = "--base"
 	}
 
 	existing, err := existingBranch(ctx, in.main, name, in.task.ID, in.suffix)
@@ -181,7 +202,8 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		name = existing
 
 		if base != "" {
-			notes = append(notes, fmt.Sprintf("--on ignored: branch %s already exists and keeps its base", name))
+			notes = append(notes,
+				fmt.Sprintf("%s ignored: branch %s already exists and keeps its base", baseFlag, name))
 			base = ""
 		}
 	}
@@ -201,6 +223,15 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 			return err
 		}
 	default:
+		// a base at the default branch's commit changes nothing, which is
+		// otherwise indistinguishable from no base at all
+		if baseSHA != "" {
+			if def := defaultBranch(ctx, in.main); def != "" && refSHA(ctx, in.main, "refs/remotes/"+def) == baseSHA {
+				notes = append(notes,
+					fmt.Sprintf("--base %s is at the same commit as the default branch %s", base, def))
+			}
+		}
+
 		if path, err = checkout(ctx, in.main, name, base, true); err != nil {
 			return err
 		}
@@ -306,6 +337,26 @@ func baseBranch(ctx context.Context, dir, id string) (string, error) {
 	}
 
 	return "", fmt.Errorf("--on %s: no branch for it locally or on origin", id)
+}
+
+// baseRef is the ref --base names, with the commit it points at: the local
+// branch, else a remote branch typed as such (`origin/main`), else the
+// branch on origin. Exact refs rather than for-each-ref, since a base is
+// one commit and a literal pattern would also match everything below the
+// name at a slash. Nothing matching is a failure before anything is created.
+func baseRef(ctx context.Context, dir, branch string) (string, string, error) {
+	for _, root := range []string{"refs/heads/", "refs/remotes/", "refs/remotes/origin/"} {
+		if sha := refSHA(ctx, dir, root+branch); sha != "" {
+			return strings.TrimPrefix(strings.TrimPrefix(root+branch, "refs/heads/"), "refs/remotes/"), sha, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("--base %s: no branch %s locally or on origin", branch, branch)
+}
+
+// refSHA is the commit a full ref points at, or "" when there is no such ref.
+func refSHA(ctx context.Context, dir, fullRef string) string {
+	return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", fullRef)
 }
 
 // existingBranch is the branch to reuse, or "" when the task has none yet.
