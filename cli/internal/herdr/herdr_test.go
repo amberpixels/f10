@@ -119,3 +119,57 @@ func TestFailureCarriesHerdrsMessage(t *testing.T) {
 		t.Errorf("err = %v, want the raw stderr", err)
 	}
 }
+
+func TestWorkspacesReadsTheListing(t *testing.T) {
+	calls := fake(
+		t,
+		shell.Result{Stdout: `{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[` +
+			`{"workspace_id":"wJA","label":"f10","focused":false,"agent_status":"done",` +
+			`"worktree":{"checkout_path":"/code/f10","is_linked_worktree":false}},` +
+			`{"workspace_id":"wJ2","label":"p44","focused":true}]}}`},
+	)
+
+	list, err := Workspaces(t.Context(), "/code/f10")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(list) != 2 {
+		t.Fatalf("Workspaces = %+v, want two", list)
+	}
+
+	if list[0] != (Listed{ID: "wJA", Label: "f10", Path: "/code/f10", Agent: "done"}) {
+		t.Errorf("first = %+v", list[0])
+	}
+
+	if list[1] != (Listed{ID: "wJ2", Label: "p44", Focused: true}) {
+		t.Errorf("second = %+v, want no path for a workspace without a worktree", list[1])
+	}
+
+	if want := "herdr workspace list"; (*calls)[0] != want {
+		t.Errorf("called %q, want %q", (*calls)[0], want)
+	}
+}
+
+func TestFocusAndCloseAddressTheWorkspace(t *testing.T) {
+	calls := fake(t, shell.Result{Stdout: `{"result":{}}`})
+
+	if err := FocusWorkspace(t.Context(), "/repo", "ws:1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CloseWorkspace(t.Context(), "/repo", "ws:9"); err != nil {
+		t.Fatal(err)
+	}
+
+	if (*calls)[0] != "herdr workspace focus ws:1" || (*calls)[1] != "herdr workspace close ws:9" {
+		t.Errorf("calls = %v", *calls)
+	}
+
+	fake(t, shell.Result{Code: 1, Stderr: `{"error":{"code":"workspace_not_found","message":"no workspace ws:9"}}`})
+
+	err := CloseWorkspace(t.Context(), "/repo", "ws:9")
+	if err == nil || !strings.Contains(err.Error(), "workspace_not_found: no workspace ws:9") {
+		t.Errorf("err = %v, want herdr's code and message", err)
+	}
+}

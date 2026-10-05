@@ -32,7 +32,7 @@ func TestScaffoldSections(t *testing.T) {
 			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Review", "Guardrails"},
 			wantIn: []string{
 				"# demo · f10 project instructions",
-				"GitHub Issues. Task ids `GH-###`.",
+				"GitHub Issues. Task ids `DEM-###`.",
 				"`gh issue view <n> --comments`",
 				"`gh issue create`",
 				"github.com. Open PRs with `gh pr create`.",
@@ -53,7 +53,7 @@ func TestScaffoldSections(t *testing.T) {
 			wantSection: []string{"Project", "Visibility", "Storage", "Tracker", "Hosting & PR"},
 			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Verify", "Review", "Guardrails"},
 			wantIn: []string{
-				"GitLab work items. Task ids `GL-###`.",
+				"GitLab work items. Task ids `DEM-###`.",
 				"`glab issue view <n>`",
 				"Open MRs with `glab mr create`.",
 				"Ruby.",

@@ -125,3 +125,49 @@ func TestSetConfig(t *testing.T) {
 		t.Errorf("git asked %q, want %q", (*calls)[0], want)
 	}
 }
+
+func TestStatusListsEveryLine(t *testing.T) {
+	script(t, map[string]string{"status --porcelain": " M a.go\n?? b.txt"})
+
+	got, err := Status(t.Context(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{" M a.go", "?? b.txt"}; !slices.Equal(got, want) {
+		t.Errorf("Status = %q, want %q", got, want)
+	}
+
+	script(t, map[string]string{"status --porcelain": ""})
+
+	if got, _ := Status(t.Context(), "."); got != nil {
+		t.Errorf("Status on a clean tree = %q, want nil", got)
+	}
+}
+
+func TestIsAncestorReadsTheExitCode(t *testing.T) {
+	script(t, map[string]string{"merge-base --is-ancestor abc main": ""})
+
+	if !IsAncestor(t.Context(), ".", "abc", "main") {
+		t.Error("a scripted success read as not an ancestor")
+	}
+
+	if IsAncestor(t.Context(), ".", "def", "main") {
+		t.Error("a failing merge-base read as an ancestor")
+	}
+}
+
+func TestRemoteBranchExists(t *testing.T) {
+	script(
+		t,
+		map[string]string{"ls-remote --heads origin GH-1": "abc\trefs/heads/GH-1", "ls-remote --heads origin GH-2": ""},
+	)
+
+	if ok, err := RemoteBranchExists(t.Context(), ".", "GH-1"); err != nil || !ok {
+		t.Errorf("GH-1 = %v, %v; want true", ok, err)
+	}
+
+	if ok, err := RemoteBranchExists(t.Context(), ".", "GH-2"); err != nil || ok {
+		t.Errorf("GH-2 = %v, %v; want false", ok, err)
+	}
+}

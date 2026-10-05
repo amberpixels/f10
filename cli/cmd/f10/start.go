@@ -115,6 +115,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		suffix: suffix,
 		mode:   mode,
 		base:   base,
+		title:  titleLookup(t, r.Number),
 	}
 
 	// out-of-tree storage shares one plans dir between every worktree;
@@ -176,9 +177,23 @@ type startInput struct {
 	task     ref.Ref
 	suffix   string
 	mode     string
-	after    string // task id whose branch is the base and whose plan is the contract, or ""
-	base     string // branch whose ref is the base, or ""
-	plansDir string // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
+	base     string                                // branch whose ref is the base, or ""
+	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
+}
+
+// titleLookup asks the host for the task's title. A checkout with no host
+// CLI answers with the reason, so the note beneath the report can quote it.
+func titleLookup(t *target, number string) func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		host, err := t.hostCLI()
+		if err != nil {
+			return "", err
+		}
+
+		return hostIssueTitle(ctx, t, host, number)
+	}
 }
 
 // A baseRef is what the worktree is created from: the ref as git takes it,
@@ -204,7 +219,7 @@ type dependency struct {
 // workspace, agent, prompt, report. Every lookup that can refuse runs
 // before the first thing is created.
 func start(ctx context.Context, w io.Writer, in startInput) error {
-	name, err := branchName(ctx, in.driver, in.task, in.suffix)
+	name, slugNote, err := branchName(ctx, in.driver, in.task, in.suffix, in.title)
 	if err != nil {
 		return err
 	}
@@ -221,13 +236,18 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 
 	var notes []string
 
-	if existing != "" {
+	// the bare-id note explains a name this run gives; a branch that exists
+	// keeps the name it has, whatever the title would have said
+	switch {
+	case existing != "":
 		name = existing
 
 		if base.ref != "" {
 			notes = append(notes, ignoredBaseNote(base, dep, name))
 			base = baseRef{}
 		}
+	case slugNote != "":
+		notes = append(notes, slugNote)
 	}
 
 	wts, err := gitx.Worktrees(ctx, in.main)
@@ -288,12 +308,12 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		}
 	}
 
-	rows := [][2]string{{"task", in.task.ID}, {"branch", name}}
+	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: name}}
 	if dep != nil {
-		rows = append(rows, [2]string{"after", dep.task})
+		rows = append(rows, fact{label: "after", value: dep.task})
 	}
 
-	return writeStartReport(w, append(rows, [2]string{"path", path}, [2]string{"workspace", ws.ID}), notes)
+	return writeReport(w, append(rows, fact{label: "path", value: path}, fact{label: "workspace", value: ws.ID}), notes)
 }
 
 // resolveBase turns --after or --base into the ref the worktree is created
@@ -399,11 +419,17 @@ func recordDependency(ctx context.Context, dir, branch string, dep *dependency) 
 	return nil
 }
 
-// branchName is the driver's answer to `branch`, or the bare task id for a
-// project with no driver or a driver that declines, with the suffix
-// appended to whichever came back.
-func branchName(ctx context.Context, d *driver.Driver, task ref.Ref, suffix string) (string, error) {
-	name := task.ID
+// branchName is the driver's answer to `branch`, else `<ID>/<slug>` from
+// the task's title, else the bare id with a note saying why no slug came -
+// and the suffix appended to whichever came back.
+func branchName(
+	ctx context.Context,
+	d *driver.Driver,
+	task ref.Ref,
+	suffix string,
+	title func(context.Context) (string, error),
+) (string, string, error) {
+	var name, note string
 
 	if d != nil {
 		out, err := d.Run(ctx, driver.VerbBranch, task.Number)
@@ -412,18 +438,90 @@ func branchName(ctx context.Context, d *driver.Driver, task ref.Ref, suffix stri
 		case err == nil:
 			name, _, _ = strings.Cut(strings.TrimSpace(out), "\n")
 			if name == "" {
-				return "", errors.New("driver branch printed nothing")
+				return "", "", errors.New("driver branch printed nothing")
 			}
 		case !errors.Is(err, driver.ErrUnsupported):
-			return "", err
+			return "", "", err
 		}
+	}
+
+	if name == "" {
+		name, note = slugBranch(ctx, task, title)
 	}
 
 	if suffix != "" {
 		name += "-" + suffix
 	}
 
-	return name, nil
+	return name, note, nil
+}
+
+// slugBranch is the default shape, `<ID>/<slug>`: the id in front keeps
+// the branch searchable by its task, the slug says what the task is where
+// only the branch name shows - a Herdr tab, a worktree listing. No title,
+// or one that slugs to nothing, leaves the bare id and says so.
+func slugBranch(ctx context.Context, task ref.Ref, title func(context.Context) (string, error)) (string, string) {
+	if title == nil {
+		return task.ID, fmt.Sprintf("no title source for %s, so the branch is the bare id", task.ID)
+	}
+
+	text, err := title(ctx)
+	if err != nil {
+		return task.ID, fmt.Sprintf("no title for %s (%v), so the branch is the bare id", task.ID, err)
+	}
+
+	slug := slugify(text)
+	if slug == "" {
+		return task.ID, fmt.Sprintf("the title of %s yields no slug, so the branch is the bare id", task.ID)
+	}
+
+	return task.ID + "/" + slug, ""
+}
+
+// slugMax is where a slug is cut: long enough to carry a title's meaning,
+// short enough for a tab label and a worktree path.
+const slugMax = 40
+
+// slugify turns a title into a branch segment: ASCII letters and digits
+// kept and lowercased, every other run of characters a single hyphen, cut
+// at the last hyphen at or before slugMax so no word is split, hard at
+// slugMax when there is none.
+func slugify(title string) string {
+	var (
+		b   strings.Builder
+		gap bool
+	)
+
+	for _, r := range strings.ToLower(title) {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			gap = true
+
+			continue
+		}
+
+		if gap && b.Len() > 0 {
+			b.WriteByte('-')
+		}
+
+		gap = false
+
+		b.WriteRune(r)
+	}
+
+	slug := b.String()
+	if len(slug) <= slugMax {
+		return slug
+	}
+
+	if slug[slugMax] == '-' {
+		return slug[:slugMax]
+	}
+
+	if i := strings.LastIndexByte(slug[:slugMax], '-'); i > 0 {
+		return slug[:i]
+	}
+
+	return slug[:slugMax]
 }
 
 // taskRefs are the patterns a task's branch can sit under a root: the id
@@ -651,18 +749,31 @@ func dependencyClause(id string, dep *dependency) string {
 	}
 }
 
-// writeStartReport prints the facts block conventions/report.md fixes:
-// labels padded to the widest including its colon, two spaces, the value.
-// None of these values is a url, so the marker cell stays blank. Notes
+// A fact is one row of the facts block: a label, a value, and whether the
+// value is a url, which earns the marker cell.
+type fact struct {
+	label string
+	value string
+	url   bool
+}
+
+// writeReport prints the facts block conventions/report.md fixes: labels
+// padded to the widest including its colon, two spaces, the marker cell
+// (the arrow for a url, blank otherwise), one space, the value. Notes
 // follow as prose beneath the block.
-func writeStartReport(w io.Writer, rows [][2]string, notes []string) error {
+func writeReport(w io.Writer, rows []fact, notes []string) error {
 	width := 0
 	for _, r := range rows {
-		width = max(width, len(r[0])+1)
+		width = max(width, len(r.label)+1)
 	}
 
 	for _, r := range rows {
-		if _, err := fmt.Fprintf(w, "%-*s   %s\n", width, r[0]+":", r[1]); err != nil {
+		marker := " "
+		if r.url {
+			marker = "↗"
+		}
+
+		if _, err := fmt.Fprintf(w, "%-*s  %s %s\n", width, r.label+":", marker, r.value); err != nil {
 			return err
 		}
 	}

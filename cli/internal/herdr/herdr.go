@@ -1,8 +1,9 @@
 // Package herdr is the binary's door to Herdr, the terminal multiplexer
-// `f10 start` opens a task's worktree in. Three calls, all over the herdr
-// CLI: open a worktree as a workspace, start an agent in its root pane,
-// hand that agent a prompt. Every answer is JSON, and the ids the next
-// call needs are read from it rather than predicted.
+// `f10 start` opens a task's worktree in and `f10 finish` closes it from.
+// Six calls, all over the herdr CLI: open a worktree as a workspace, start
+// an agent in its root pane, hand that agent a prompt, list the
+// workspaces, focus one, close one. Every answer is JSON, and the ids the
+// next call needs are read from it rather than predicted.
 package herdr
 
 import (
@@ -17,9 +18,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// ErrNotInside is the one refusal: start runs inside a Herdr session and
-// nowhere else, by decision rather than by accident of a missing fallback.
-var ErrNotInside = errors.New("f10 start runs inside a Herdr session: " +
+// ErrNotInside is the one refusal: start and finish run inside a Herdr
+// session and nowhere else, by decision rather than by accident of a
+// missing fallback.
+var ErrNotInside = errors.New("f10 start and finish run inside a Herdr session: " +
 	"open a pane there, or install it from https://herdr.dev")
 
 // Available reports whether this process can reach Herdr: the session
@@ -76,6 +78,60 @@ func StartAgent(ctx context.Context, dir, name, kind, pane string) error {
 // submitted. Never --wait: the caller may itself be an agent in Herdr.
 func Prompt(ctx context.Context, dir, name, text string) error {
 	_, err := call(ctx, dir, "agent", "prompt", name, text)
+
+	return err
+}
+
+// A Listed is one workspace as `workspace list` reports it. Path is the
+// checkout the workspace shows, or "" for a workspace with no worktree.
+type Listed struct {
+	ID      string
+	Label   string
+	Path    string
+	Focused bool
+	Agent   string // herdr's agent_status: idle, working, done, unknown
+}
+
+// Workspaces lists every workspace the session shows.
+func Workspaces(ctx context.Context, dir string) ([]Listed, error) {
+	res, err := call(ctx, dir, "workspace", "list")
+	if err != nil {
+		return nil, err
+	}
+
+	raw, _ := res["workspaces"].([]any)
+
+	list := make([]Listed, 0, len(raw))
+
+	for _, item := range raw {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		list = append(list, Listed{
+			ID:      field(obj, "workspace_id"),
+			Label:   field(obj, "label"),
+			Path:    field(obj, "worktree", "checkout_path"),
+			Focused: obj["focused"] == true,
+			Agent:   field(obj, "agent_status"),
+		})
+	}
+
+	return list, nil
+}
+
+// FocusWorkspace brings the workspace to the front.
+func FocusWorkspace(ctx context.Context, dir, id string) error {
+	_, err := call(ctx, dir, "workspace", "focus", id)
+
+	return err
+}
+
+// CloseWorkspace closes the workspace, its tabs and panes, and whatever
+// agent ran in them.
+func CloseWorkspace(ctx context.Context, dir, id string) error {
+	_, err := call(ctx, dir, "workspace", "close", id)
 
 	return err
 }

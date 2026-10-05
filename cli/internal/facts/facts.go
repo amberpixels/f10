@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -49,11 +50,12 @@ type Effective struct {
 	Unrecognized []Field `json:"unrecognized,omitempty"`
 
 	// The fixed-vocabulary sub-facts v1 extracts.
-	Layering    string `json:"layering"`
-	Visibility  string `json:"visibility"`
-	Storage     string `json:"storage"`
-	TrackerKind string `json:"trackerKind,omitempty"`
-	IDPrefix    string `json:"idPrefix,omitempty"` // "ABC", "GH" - the task id format's letters
+	Layering       string `json:"layering"`
+	Visibility     string `json:"visibility"`
+	Storage        string `json:"storage"`
+	TrackerKind    string `json:"trackerKind,omitempty"`
+	IDPrefix       string `json:"idPrefix,omitempty"`       // "ABC", "F10" - the task id format's letters
+	IDPrefixOrigin string `json:"idPrefixOrigin,omitempty"` // "declared (<layer>)" or "derived from project name <name>"
 }
 
 // contractFields is the project.md contract. The order is presentation
@@ -169,10 +171,12 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 		eff.absorb(field, pb)
 	}
 
-	// a checkout with no Tracker field at all never reached absorb, so the
-	// host still gets to name the ids
+	// no declared id format, in the Tracker prose or at all: the project's
+	// own name settles the prefix, until f10 init writes it down
 	if eff.IDPrefix == "" {
-		eff.IDPrefix = hostPrefix(pb)
+		if eff.IDPrefix = projectPrefix(res.Project); eff.IDPrefix != "" {
+			eff.IDPrefixOrigin = "derived from project name " + res.Project
+		}
 	}
 
 	return eff
@@ -194,7 +198,10 @@ func (e *Effective) absorb(f Field, pb *probe.Probes) {
 		}
 	case "Tracker":
 		e.TrackerKind = trackerKind(lower, pb)
-		e.IDPrefix = idPrefix(f.Value, pb)
+
+		if e.IDPrefix = idPrefix(f.Value); e.IDPrefix != "" {
+			e.IDPrefixOrigin = f.Origin
+		}
 	}
 }
 
@@ -213,30 +220,81 @@ var (
 )
 
 // idPrefix extracts the task id format's letters from declared Tracker
-// prose, falling back to what the host implies. The prefix is the half the
-// ref resolver needs: it is how a branch name is searched and how a plan
-// file is named.
-func idPrefix(declared string, pb *probe.Probes) string {
+// prose, or "" when it declares none. The prefix is the half the ref
+// resolver needs: it is how a branch name is searched and how a plan file
+// is named.
+func idPrefix(declared string) string {
 	for _, re := range []*regexp.Regexp{idPlaceholderRE, idSampleRE} {
 		if m := re.FindStringSubmatch(declared); m != nil {
 			return m[1]
 		}
 	}
 
-	return hostPrefix(pb)
+	return ""
 }
 
-// hostPrefix is the id prefix for a project that declares none: the
-// tracker is then the host's own issues, so the host names them.
-func hostPrefix(pb *probe.Probes) string {
-	switch pb.CLI.Value {
-	case "gh":
-		return "GH"
-	case "glab":
-		return "GL"
+// The shape a usable prefix has: what idPlaceholderRE accepts, anchored,
+// since f10 init writes a derived prefix back and it must parse again.
+var prefixRE = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
+
+// The two cuts projectPrefix makes on a single word: a name this short
+// that holds a digit is already an abbreviation, a longer word gives up
+// its first letters.
+const (
+	shortName  = 4
+	wordPrefix = 3
+)
+
+// projectPrefix derives a task id prefix from the project's name, for a
+// project that declares no id format. The host's letters would name every
+// GitLab project GL and say nothing about the task; the project's own name
+// says which project and reads as one in a branch or a plan filename. A
+// short name with a digit keeps its letters (f10 -> F10, r3 -> R3), several
+// segments give initials (git-undo -> GU, notion-sdk-go -> NSG), one word
+// gives its first three characters (herdr -> HER). A name that yields
+// nothing usable - one letter, a leading digit - derives no prefix, so only
+// explicit ids resolve and f10 init leaves the Tracker section to a human.
+func projectPrefix(name string) string {
+	segments := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
+		return r == '-' || r == '_' || r == '.' || r == ' '
+	})
+
+	for i, seg := range segments {
+		segments[i] = strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				return r
+			}
+
+			return -1
+		}, seg)
 	}
 
-	return ""
+	segments = slices.DeleteFunc(segments, func(s string) bool { return s == "" })
+
+	var derived strings.Builder
+
+	switch {
+	case len(segments) == 0:
+		return ""
+	case len(segments) == 1:
+		word := segments[0]
+		if len(word) <= shortName && strings.ContainsAny(word, "0123456789") {
+			derived.WriteString(word)
+		} else {
+			derived.WriteString(word[:min(wordPrefix, len(word))])
+		}
+	default:
+		for _, seg := range segments {
+			derived.WriteByte(seg[0])
+		}
+	}
+
+	prefix := strings.ToUpper(derived.String())
+	if !prefixRE.MatchString(prefix) {
+		return ""
+	}
+
+	return prefix
 }
 
 // trackerKind extracts the tracker's kind from declared prose, falling back

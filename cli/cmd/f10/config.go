@@ -19,21 +19,22 @@ import (
 // A view is the one model both outputs render - the human table and --json
 // marshal the same struct, so they cannot disagree.
 type view struct {
-	CheckoutRoot  string        `json:"checkoutRoot"`
-	StorageRoot   string        `json:"storageRoot"`
-	Instructions  string        `json:"instructions"` // source description, resolve.sh wording
-	NestedIgnored string        `json:"nestedIgnored,omitempty"`
-	Remote        string        `json:"remote,omitempty"`
-	PlansDir      string        `json:"plansDir"`
-	Plans         []string      `json:"plans,omitempty"`
-	Fields        []facts.Field `json:"fields"`
-	Unrecognized  []facts.Field `json:"unrecognized,omitempty"`
-	Layering      string        `json:"layering"`
-	Visibility    string        `json:"visibility"`
-	Storage       string        `json:"storage"`
-	TrackerKind   string        `json:"trackerKind,omitempty"`
-	IDPrefix      string        `json:"idPrefix,omitempty"`
-	Roots         []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C resolves paths only
+	CheckoutRoot   string        `json:"checkoutRoot"`
+	StorageRoot    string        `json:"storageRoot"`
+	Instructions   string        `json:"instructions"` // source description, resolve.sh wording
+	NestedIgnored  string        `json:"nestedIgnored,omitempty"`
+	Remote         string        `json:"remote,omitempty"`
+	PlansDir       string        `json:"plansDir"`
+	Plans          []string      `json:"plans,omitempty"`
+	Fields         []facts.Field `json:"fields"`
+	Unrecognized   []facts.Field `json:"unrecognized,omitempty"`
+	Layering       string        `json:"layering"`
+	Visibility     string        `json:"visibility"`
+	Storage        string        `json:"storage"`
+	TrackerKind    string        `json:"trackerKind,omitempty"`
+	IDPrefix       string        `json:"idPrefix,omitempty"`
+	IDPrefixOrigin string        `json:"idPrefixOrigin,omitempty"`
+	Roots          []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C resolves paths only
 }
 
 func configCommand() *cli.Command {
@@ -58,21 +59,22 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	res, pb, eff := t.res, t.pb, t.eff
 
 	v := &view{
-		CheckoutRoot:  res.CheckoutRoot,
-		StorageRoot:   res.StorageRoot,
-		Instructions:  res.Source,
-		NestedIgnored: res.NestedIgnored,
-		Remote:        pb.RemoteURL,
-		PlansDir:      pb.PlansDir,
-		Plans:         pb.Plans,
-		Fields:        eff.Fields,
-		Unrecognized:  eff.Unrecognized,
-		Layering:      eff.Layering,
-		Visibility:    eff.Visibility,
-		Storage:       eff.Storage,
-		TrackerKind:   eff.TrackerKind,
-		IDPrefix:      eff.IDPrefix,
-		Roots:         projects.Roots(),
+		CheckoutRoot:   res.CheckoutRoot,
+		StorageRoot:    res.StorageRoot,
+		Instructions:   res.Source,
+		NestedIgnored:  res.NestedIgnored,
+		Remote:         pb.RemoteURL,
+		PlansDir:       pb.PlansDir,
+		Plans:          pb.Plans,
+		Fields:         eff.Fields,
+		Unrecognized:   eff.Unrecognized,
+		Layering:       eff.Layering,
+		Visibility:     eff.Visibility,
+		Storage:        eff.Storage,
+		TrackerKind:    eff.TrackerKind,
+		IDPrefix:       eff.IDPrefix,
+		IDPrefixOrigin: eff.IDPrefixOrigin,
+		Roots:          projects.Roots(),
 	}
 
 	if cmd.Bool("json") {
@@ -120,6 +122,12 @@ func renderHuman(w io.Writer, v *view) {
 
 	if v.IDPrefix != "" {
 		headerRow(w, "task ids", v.IDPrefix+"-<n>", limit, plain)
+
+		// a derived prefix holds only until something declares one, and the
+		// plan files it has already named will not follow a change
+		if strings.HasPrefix(v.IDPrefixOrigin, "derived") {
+			headerRow(w, "", v.IDPrefixOrigin+" - `f10 init` declares it", limit, faint)
+		}
 	}
 
 	// -C takes a path with nothing configured; a bare name needs these

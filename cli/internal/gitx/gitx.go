@@ -1,8 +1,10 @@
 // Package gitx is the binary's one door to git. The reads mirror the
 // shell-outs bin/resolve.sh makes - the bash script is the semantics
 // oracle, and shelling out identically keeps the two comparable. The
-// writes are `f10 start`'s: a branch, a worktree, and the config entries
-// that record what a branch depends on.
+// writes are `f10 start`'s - a branch, a worktree, and the config entries
+// that record what a branch depends on - and `f10 finish`'s, which undoes
+// them once the branch has merged: the pull, the worktree removal, the
+// branch deletion.
 //
 // Everything goes through Exec, a variable so a test can answer git
 // without a checkout. No go-git.
@@ -136,4 +138,79 @@ func SetConfig(ctx context.Context, dir, key, value string) error {
 	_, err := Exec(ctx, dir, "config", key, value)
 
 	return err
+}
+
+// Status lists what `status --porcelain` reports for dir: one line per
+// changed or untracked path, empty for a clean tree. Ignored files are
+// not listed, so an excluded .f10/ never counts.
+func Status(ctx context.Context, dir string) ([]string, error) {
+	out, err := Exec(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+
+	if out == "" {
+		return nil, nil
+	}
+
+	return strings.Split(out, "\n"), nil
+}
+
+// CurrentBranch is the branch dir has checked out, or "" when detached.
+func CurrentBranch(ctx context.Context, dir string) string {
+	return Out(ctx, dir, "branch", "--show-current")
+}
+
+// IsAncestor reports whether commit is reachable from ref. git answers
+// with its exit code, so any failure reads as "no".
+func IsAncestor(ctx context.Context, dir, commit, ref string) bool {
+	_, err := Exec(ctx, dir, "merge-base", "--is-ancestor", commit, ref)
+
+	return err == nil
+}
+
+// PullFF fast-forwards the checked-out branch from its upstream, and fails
+// rather than merge when it cannot.
+func PullFF(ctx context.Context, dir string) error {
+	_, err := Exec(ctx, dir, "pull", "--ff-only")
+
+	return err
+}
+
+// FetchInto updates local branch from origin's branch of the same name
+// without touching the checkout: git fast-forwards a branch that is not
+// checked out and refuses anything else.
+func FetchInto(ctx context.Context, dir, branch string) error {
+	_, err := Exec(ctx, dir, "fetch", "origin", branch+":"+branch)
+
+	return err
+}
+
+// RemoveWorktree removes the checkout at path. A dirty tree makes git
+// refuse, which callers rule out first.
+func RemoveWorktree(ctx context.Context, dir, path string) error {
+	_, err := Exec(ctx, dir, "worktree", "remove", path)
+
+	return err
+}
+
+// DeleteBranch deletes the local branch whether or not git sees it as
+// merged: a squash or rebase merge leaves no trace git recognises, so the
+// caller's proof is the host's, not git's. The branch's config section
+// goes with it.
+func DeleteBranch(ctx context.Context, dir, branch string) error {
+	_, err := Exec(ctx, dir, "branch", "-D", branch)
+
+	return err
+}
+
+// RemoteBranchExists asks origin whether it still has branch, which is the
+// one git read here that reaches the network.
+func RemoteBranchExists(ctx context.Context, dir, branch string) (bool, error) {
+	out, err := Exec(ctx, dir, "ls-remote", "--heads", "origin", branch)
+	if err != nil {
+		return false, err
+	}
+
+	return out != "", nil
 }
