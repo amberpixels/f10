@@ -13,8 +13,10 @@ f10 --version
 
 The binary carries the plugin's version, read from the build: each release tags the commit
 `f10--vX.Y.Z` for the plugin and `cli/vX.Y.Z` for the Go module under `cli/`, so `@latest`
-resolves to the release and `--version` prints its number. A build from an untagged or dirty
-checkout prints the commit and its date instead, so a dev binary never claims to be a release.
+resolves to the release and `--version` prints its number. A build from the checkout
+(`just install`) prints the commit and its date instead, tagged or not, since Go stamps a
+version from tags only for a module at the repository root; a dev binary never claims to be a
+release.
 The skills and the binary are one contract - the skill text describes the flags the binary takes
 - and a `flag provided but not defined` from `f10` means the binary is behind the plugin:
 reinstall it.

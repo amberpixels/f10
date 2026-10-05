@@ -70,10 +70,11 @@ func newApp() *cli.Command {
 // skills are one contract - the skills describe the flags the binary takes
 // - so the binary carries the plugin's version: the `cli/vX.Y.Z` tag each
 // release puts beside `f10--vX.Y.Z`, which is the tag Go reads for a module
-// under cli/. A release install (`go install ...@v0.25.0`, or a build at
-// the tag) prints the bare number. A build from an untagged or dirty
-// checkout prints what Go stamped - the pseudo-version, else the commit
-// and its date - so a dev binary never claims to be a release.
+// under cli/. A release install (`go install ...@v0.25.0`) prints the bare
+// number. A build from the checkout prints what Go stamped instead - the
+// commit and its date, dirty when the tree was - even at the tag, since Go
+// derives a version from tags only for a module at the repository root; so
+// a dev binary never claims to be a release.
 func version(bi *debug.BuildInfo, ok bool) string {
 	if !ok || bi == nil {
 		return "unknown"
