@@ -34,9 +34,9 @@ Four verbs, each writing its answer to stdout:
 The argument for `read`, `url` and `branch` is the **number**, not the prefixed id: f10 has
 already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 
-`branch` is where a project encodes its branch shape - `ABC-1042/short-slug-of-the-title`, or
-whatever `project.md` declares under Hosting & PR. `f10 start` creates that branch; a driver
-without the verb gets the bare task id as the branch.
+`branch` is where a project encodes its branch shape - `feat/1042-short-slug`, or whatever
+`project.md` declares under Hosting & PR. `f10 start` creates that branch; a driver without the
+verb gets the default, `<ID>/<slug>`, the slug cut from the title the host CLI returns.
 
 A `search` row carries at least these four fields. Extra fields are allowed and ignored:
 
@@ -53,8 +53,8 @@ A `search` row carries at least these four fields. Extra fields are allowed and 
 | anything else | it failed; stderr is shown to the user verbatim |
 
 Code `3` is a normal answer, not an error. A driver may implement `read` without `search`, and
-f10 falls back to the host's issues rather than failing; a driver without `branch` gets the bare
-task id as the branch name. Every other non-zero exit is a real failure, and f10 surfaces your
+f10 falls back to the host's issues rather than failing; a driver without `branch` gets the
+default `<ID>/<slug>` branch name. Every other non-zero exit is a real failure, and f10 surfaces your
 stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Two rules worth knowing

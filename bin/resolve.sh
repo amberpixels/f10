@@ -73,6 +73,33 @@ knows_host() {
   grep -qE "^[[:space:]]*${esc}:" "$1"
 }
 
+# project_prefix <name> - the task id prefix a project with no declared id format gets, from its
+# own name: a short name with a digit as is (f10 -> F10), initials across segments (git-undo ->
+# GU, notion-sdk-go -> NSG), the first three characters of one word (herdr -> HER). Nothing
+# usable - one letter, a leading digit - prints nothing. Must answer exactly as
+# facts.projectPrefix in cli/ does; the parity test there holds both to the same names.
+project_prefix() {
+  local lower seg n=0 first="" initials="" out=""
+  lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -- '-_.' '   ')"
+  for seg in $lower; do
+    seg="$(printf '%s' "$seg" | tr -cd 'a-z0-9')"
+    [ -n "$seg" ] || continue
+    n=$((n + 1))
+    [ "$n" = 1 ] && first="$seg"
+    initials="$initials${seg:0:1}"
+  done
+  if [ "$n" = 1 ]; then
+    case "$first" in
+      *[0-9]*) if [ "${#first}" -le 4 ]; then out="$first"; else out="${first:0:3}"; fi ;;
+      *) out="${first:0:3}" ;;
+    esac
+  elif [ "$n" -gt 1 ]; then
+    out="$initials"
+  fi
+  out="$(printf '%s' "$out" | tr '[:lower:]' '[:upper:]')"
+  printf '%s' "$out" | grep -qE '^[A-Z][A-Z0-9]{1,9}$' && printf '%s\n' "$out"
+}
+
 # --- locate the instructions layer(s): main's, a linked worktree's, or both ---
 # Everything anchors to `here`, the root of the checkout the run started in (main or a linked
 # worktree), so a run from a subdirectory reads and writes the same root a run from the top does.
@@ -285,6 +312,12 @@ if [ -n "${origin:-}" ]; then
   fi
 else
   echo "remote: none (no origin)"
+fi
+# the prefix is load-bearing: it names plan files and is how a branch is searched for its task,
+# so once a plan has used it, declare it (f10 init writes it) rather than let a rename move it
+prefix="$(project_prefix "$proj")"
+if [ -n "$prefix" ]; then
+  echo "task id prefix: $prefix  (derived from the project name \"$proj\"; applies where project.md declares no id format; \`f10 init\` freezes it)"
 fi
 for f in go.mod Gemfile package.json; do
   [ -f "$f" ] && echo "stack signal: $f present"

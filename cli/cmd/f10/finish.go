@@ -221,7 +221,9 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 // finishTarget is the task's branch and the worktree that has it checked
 // out. Both must exist: finish removes only what start could have created.
 func finishTarget(ctx context.Context, in finishInput) (string, string, error) {
-	want, err := branchName(ctx, in.driver, in.task, in.suffix)
+	// no title lookup: the branch exists, so the id narrows the search by
+	// itself and a slug would cost a host call for nothing
+	want, _, err := branchName(ctx, in.driver, in.task, in.suffix, nil)
 	if err != nil {
 		return "", "", err
 	}

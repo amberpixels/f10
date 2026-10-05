@@ -137,7 +137,7 @@ func TestBuildMergesLayersFieldLevel(t *testing.T) {
 }
 
 func TestBuildDefaultsAndDetection(t *testing.T) {
-	res := &resolve.Resolution{} // no layers at all
+	res := &resolve.Resolution{Project: "demo"} // no layers at all
 	pb := &probe.Probes{
 		CLI:   probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
 		Host:  "github.com",
@@ -161,6 +161,11 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 
 	if eff.Visibility != "stealth" || eff.TrackerKind != "GitHub Issues" {
 		t.Errorf("sub-facts: visibility=%q trackerKind=%q", eff.Visibility, eff.TrackerKind)
+	}
+
+	// the host names the tracker's kind, the project's own name its ids
+	if eff.IDPrefix != "DEM" || eff.IDPrefixOrigin != "derived from project name demo" {
+		t.Errorf("id prefix = %q (%s), want DEM derived from the project name", eff.IDPrefix, eff.IDPrefixOrigin)
 	}
 
 	// Layering says nothing outside a linked worktree
@@ -232,4 +237,31 @@ func keys(m map[string]section) []string {
 
 func contains(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)
+}
+
+// A declared id format is never second-guessed by the project's name, and
+// says where it came from.
+func TestBuildDeclaredPrefixWins(t *testing.T) {
+	res := &resolve.Resolution{
+		Project: "demo",
+		Layers: []resolve.Layer{
+			{Label: "main", Dir: dirWithProjectMD(t, "- **Tracker** - Jira. Task ids `ABC-####`.\n")},
+		},
+	}
+
+	eff := Build(res, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+
+	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin != "declared (main)" {
+		t.Errorf("id prefix = %q (%s), want ABC declared (main)", eff.IDPrefix, eff.IDPrefixOrigin)
+	}
+}
+
+// A name that derives nothing leaves the prefix empty rather than inventing
+// one: only explicit ids resolve, and init leaves the Tracker to a human.
+func TestBuildUnusableProjectName(t *testing.T) {
+	eff := Build(&resolve.Resolution{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+
+	if eff.IDPrefix != "" || eff.IDPrefixOrigin != "" {
+		t.Errorf("id prefix = %q (%s), want none", eff.IDPrefix, eff.IDPrefixOrigin)
+	}
 }

@@ -31,7 +31,7 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 		t.Fatalf("reading what init wrote: %v", err)
 	}
 
-	for _, want := range []string{"## Visibility", "## Storage", "## Tracker", "GH-###"} {
+	for _, want := range []string{"## Visibility", "## Storage", "## Tracker", "DEM-###"} {
 		if !strings.Contains(string(written), want) {
 			t.Errorf("project.md missing %q:\n%s", want, written)
 		}
@@ -167,10 +167,17 @@ func isolateEnv(t *testing.T) string {
 	return home
 }
 
+// mkRepo is a checkout named demo: the name derives the task id prefix
+// init writes, and a temp dir's own basename derives none.
 func mkRepo(t *testing.T) string {
 	t.Helper()
 
-	dir := canonical(t, t.TempDir())
+	dir := filepath.Join(t.TempDir(), "demo")
+	if err := os.Mkdir(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	dir = canonical(t, dir)
 
 	git(t, dir, "init", "-q")
 	git(t, dir, "remote", "add", "origin", "git@github.com:amberpixels/demo.git")

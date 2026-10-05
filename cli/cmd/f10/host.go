@@ -87,19 +87,9 @@ func hostIssueDoc(ctx context.Context, t *target, id, number string) (string, er
 }
 
 func hostIssueURL(ctx context.Context, t *target, host, number string) (string, error) {
-	args := []string{"issue", "view", number, "--json", "url"}
-	if host == "glab" {
-		args = []string{"issue", "view", number, "-F", "json"}
-	}
-
-	out, err := runHost(ctx, t, host, args...)
+	iss, err := hostIssue(ctx, t, host, number, "url")
 	if err != nil {
 		return "", err
-	}
-
-	var iss issue
-	if err := json.Unmarshal([]byte(out), &iss); err != nil {
-		return "", fmt.Errorf("parsing %s issue: %w", host, err)
 	}
 
 	if url := iss.url(); url != "" {
@@ -107,6 +97,41 @@ func hostIssueURL(ctx context.Context, t *target, host, number string) (string, 
 	}
 
 	return "", fmt.Errorf("%s returned no url for issue %s", host, number)
+}
+
+// hostIssueTitle is the one field the default branch name carries.
+func hostIssueTitle(ctx context.Context, t *target, host, number string) (string, error) {
+	iss, err := hostIssue(ctx, t, host, number, "title")
+	if err != nil {
+		return "", err
+	}
+
+	if iss.Title == "" {
+		return "", fmt.Errorf("%s returned no title for issue %s", host, number)
+	}
+
+	return iss.Title, nil
+}
+
+// hostIssue reads one issue. gh is asked for the named fields alone; glab
+// has no field selection and answers with the whole issue.
+func hostIssue(ctx context.Context, t *target, host, number, fields string) (issue, error) {
+	args := []string{"issue", "view", number, "--json", fields}
+	if host == "glab" {
+		args = []string{"issue", "view", number, "-F", "json"}
+	}
+
+	out, err := runHost(ctx, t, host, args...)
+	if err != nil {
+		return issue{}, err
+	}
+
+	var iss issue
+	if err := json.Unmarshal([]byte(out), &iss); err != nil {
+		return issue{}, fmt.Errorf("parsing %s issue: %w", host, err)
+	}
+
+	return iss, nil
 }
 
 func hostIssueSearch(ctx context.Context, t *target, query string) ([]row, error) {

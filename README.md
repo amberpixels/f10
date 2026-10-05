@@ -447,7 +447,8 @@ f10 start 1042 --base rel/2   # base the branch on a git ref: the local branch, 
 f10 start 1042-attempt2       # a second worktree for the same task, beside the first
 ```
 
-The branch name is the driver's `branch` verb where the project has one, else the bare task id.
+The branch name is the driver's `branch` verb where the project has one, else `<ID>/<slug>` with
+the slug cut from the task's title, so a Herdr tab says what the task is.
 The worktree goes through [worktrunk](https://github.com/max-sixty/worktrunk) when `wt` is on
 `PATH`, so the project's hooks keep firing, and through plain git at the same sibling path when it
 is not. The command returns once the prompt is submitted and never waits on the agent, so a

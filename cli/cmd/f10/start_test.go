@@ -161,22 +161,36 @@ func porcelain(pairs ...string) string {
 	return b.String()
 }
 
+// titled is a title lookup that answers with one title, or fails.
+func titled(title string, err error) func(context.Context) (string, error) {
+	return func(context.Context) (string, error) { return title, err }
+}
+
 func TestBranchName(t *testing.T) {
 	cases := []struct {
-		name   string
-		driver bool
-		answer shell.Result
-		suffix string
-		want   string
+		name     string
+		driver   bool
+		answer   shell.Result
+		title    func(context.Context) (string, error)
+		suffix   string
+		want     string
+		wantNote string
 	}{
-		{name: "no driver is the bare id", want: "GH-1"},
+		{name: "no driver slugs the title", title: titled("Add dark mode", nil), want: "GH-1/add-dark-mode"},
 		{
 			name:   "driver names the branch",
 			driver: true,
 			answer: shell.Result{Stdout: "GH-1/short-slug\n"},
+			title:  titled("unused", nil),
 			want:   "GH-1/short-slug",
 		},
-		{name: "driver declining falls back", driver: true, answer: shell.Result{Code: 3}, want: "GH-1"},
+		{
+			name:   "driver declining slugs the title",
+			driver: true,
+			answer: shell.Result{Code: 3},
+			title:  titled("Add dark mode", nil),
+			want:   "GH-1/add-dark-mode",
+		},
 		{
 			name:   "suffix follows the driver's name",
 			driver: true,
@@ -184,7 +198,35 @@ func TestBranchName(t *testing.T) {
 			suffix: "v2",
 			want:   "GH-1/slug-v2",
 		},
-		{name: "suffix follows the bare id", suffix: "attempt2", want: "GH-1-attempt2"},
+		{
+			name:   "suffix follows the slug",
+			title:  titled("Add dark mode", nil),
+			suffix: "v2",
+			want:   "GH-1/add-dark-mode-v2",
+		},
+		{
+			name:     "no title is the bare id, with the reason",
+			title:    titled("", errors.New("gh: offline")),
+			want:     "GH-1",
+			wantNote: "no title for GH-1 (gh: offline), so the branch is the bare id",
+		},
+		{
+			name:     "a title with no slug in it is the bare id",
+			title:    titled("Исправить", nil),
+			want:     "GH-1",
+			wantNote: "the title of GH-1 yields no slug, so the branch is the bare id",
+		},
+		{
+			name:     "no title source is the bare id",
+			want:     "GH-1",
+			wantNote: "no title source for GH-1, so the branch is the bare id",
+		},
+		{
+			name:     "suffix follows the bare id",
+			suffix:   "attempt2",
+			want:     "GH-1-attempt2",
+			wantNote: "no title source for GH-1, so the branch is the bare id",
+		},
 	}
 
 	for _, c := range cases {
@@ -197,13 +239,17 @@ func TestBranchName(t *testing.T) {
 				f.fail("driver branch 1", c.answer)
 			}
 
-			got, err := branchName(t.Context(), d, gh1, c.suffix)
+			got, note, err := branchName(t.Context(), d, gh1, c.suffix, c.title)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if got != c.want {
 				t.Errorf("branchName = %q, want %q", got, c.want)
+			}
+
+			if note != c.wantNote {
+				t.Errorf("note = %q, want %q", note, c.wantNote)
 			}
 		})
 	}
@@ -213,9 +259,70 @@ func TestBranchNameDriverFailure(t *testing.T) {
 	f := newFakes(t)
 	f.fail("driver branch 1", shell.Result{Code: 1, Stderr: "tracker down"})
 
-	_, err := branchName(t.Context(), fakeDriver(t), gh1, "")
+	_, _, err := branchName(t.Context(), fakeDriver(t), gh1, "", titled("unused", nil))
 	if err == nil || !strings.Contains(err.Error(), "tracker down") {
 		t.Errorf("err = %v, want the driver's stderr", err)
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	cases := []struct{ title, want string }{
+		{title: "Add dark mode", want: "add-dark-mode"},
+		{title: "  f10 start: --after <task-id> records a dependency!  ", want: "f10-start-after-task-id-records-a"},
+		{title: "Fix (again) the CSV/XLSX export", want: "fix-again-the-csv-xlsx-export"},
+		{
+			title: "Default task ids from the project name, default branches as <ID>/<slug>",
+			want:  "default-task-ids-from-the-project-name",
+		},
+		{title: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", want: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{title: "exactly-forty-characters-long-slug-here!", want: "exactly-forty-characters-long-slug-here"},
+		{title: "Поддержка кириллицы", want: ""},
+		{title: "---", want: ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.title, func(t *testing.T) {
+			if got := slugify(c.title); got != c.want {
+				t.Errorf("slugify(%q) = %q, want %q", c.title, got, c.want)
+			}
+
+			if len(c.want) > slugMax {
+				t.Errorf("case expects %d characters, over the %d cut", len(c.want), slugMax)
+			}
+		})
+	}
+}
+
+// The title comes from the host's own issue, through the one field gh is
+// asked for and the whole issue glab answers with.
+func TestHostIssueTitle(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh issue view 1 --json title", `{"title":"Add dark mode"}`)
+	f.script("glab issue view 1 -F json", `{"iid":1,"title":"Dunkelmodus","web_url":"https://x"}`)
+	f.fail("gh issue view 2 --json title", shell.Result{Code: 1, Stderr: "no issue 2"})
+	f.script("gh issue view 3 --json title", `{"title":""}`)
+
+	tgt := &target{dir: "/code/repo"}
+
+	for host, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
+		got, err := hostIssueTitle(t.Context(), tgt, host, "1")
+		if err != nil || got != want {
+			t.Errorf("%s title = %q, %v; want %q", host, got, err, want)
+		}
+	}
+
+	if _, err := hostIssueTitle(
+		t.Context(),
+		tgt,
+		"gh",
+		"2",
+	); err == nil ||
+		!strings.Contains(err.Error(), "no issue 2") {
+		t.Errorf("err = %v, want gh's stderr", err)
+	}
+
+	if _, err := hostIssueTitle(t.Context(), tgt, "gh", "3"); err == nil || !strings.Contains(err.Error(), "no title") {
+		t.Errorf("err = %v, want no title", err)
 	}
 }
 
@@ -812,6 +919,91 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// The default branch carries the title: the worktree lands at the
+// flattened sibling path, the workspace is labelled with the full name,
+// and the agent keeps the task's name.
+func TestStartSlugsTheBranch(t *testing.T) {
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, "")
+	f.script(worktrees, porcelain(), porcelain("GH-1/add-dark-mode", "/code/repo.GH-1-add-dark-mode"))
+	f.script("wt switch --no-cd --yes --format json --create GH-1/add-dark-mode", "{}")
+	f.script("herdr worktree open --path /code/repo.GH-1-add-dark-mode --label GH-1/add-dark-mode", opened)
+	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, title: titled("Add dark mode", nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"branch:", "GH-1/add-dark-mode", "/code/repo.GH-1-add-dark-mode"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report missing %q:\n%s", want, out.String())
+		}
+	}
+
+	if strings.Contains(out.String(), "bare id") {
+		t.Errorf("a slugged branch was reported as the bare id:\n%s", out.String())
+	}
+}
+
+// No title from the host still starts the task, on the bare id, and the
+// report says why beneath the block.
+func TestStartWithoutATitle(t *testing.T) {
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, "")
+	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
+	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
+
+	var out bytes.Buffer
+
+	in := startInput{main: "/code/repo", task: gh1, title: titled("", errors.New("gh: offline"))}
+	if err := start(t.Context(), &out, in); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "no title for GH-1 (gh: offline), so the branch is the bare id") {
+		t.Errorf("report missing the bare-id note:\n%s", out.String())
+	}
+}
+
+// A task whose branch predates the slug default keeps that branch: git
+// cannot hold GH-1 and GH-1/<slug> at once, and the existing one is the
+// work. The title is not even mentioned.
+func TestStartReusesABareBranchOverTheSlug(t *testing.T) {
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, heads("GH-1"))
+	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", reopened)
+
+	var out bytes.Buffer
+
+	err := start(
+		t.Context(),
+		&out,
+		startInput{main: "/code/repo", task: gh1, title: titled("", errors.New("gh: offline"))},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if f.called("wt ") {
+		t.Error("a worktree was created although the task's branch has one")
+	}
+
+	if strings.Contains(out.String(), "bare id") {
+		t.Errorf("the note explains a name that was not given:\n%s", out.String())
 	}
 }
 

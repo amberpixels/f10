@@ -102,9 +102,12 @@ What `resolve.sh` returns (and the contract to implement by hand if it is ever u
    stacks is a `replaces main` situation, not something to reconcile field by field. A genuine
    contradiction you cannot resolve: say so rather than picking.
 7. **Inferred signals** - when project.md is absent/partial, the deterministic probes (remote
-   host → `gh`/`glab`; `go.mod` / `Gemfile` / `package.json` → stack and role; `justfile` /
+   host → `gh`/`glab`; project name → task id prefix, `f10` → `F10`, `git-undo` → `GU`,
+   `herdr` → `HER`; `go.mod` / `Gemfile` / `package.json` → stack and role; `justfile` /
    `Makefile` → verify commands). State the assumptions you're proceeding on and suggest
-   `f10 init`, which writes `.f10/instructions/project.md` from these same probes. Do not refuse to run just because the config is
+   `f10 init`, which writes `.f10/instructions/project.md` from these same probes. A derived
+   prefix names plan files and is how a branch is searched for its task, so say it once
+   and point at `f10 init`, which freezes it. Do not refuse to run just because the config is
    missing.
 
 ## `project.md` contract

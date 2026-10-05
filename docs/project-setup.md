@@ -14,6 +14,12 @@ Writes `.f10/instructions/project.md` from what detection found and adds `.f10/`
 `.git/info/exclude`. It never overwrites, so re-running is safe. The `Project` one-liner is left
 for you: no probe knows what a project *is*.
 
+Run it before the first plan. With nothing declared, task ids take a prefix derived from the
+checkout's name (`f10` → `F10`, `git-undo` → `GU`, `herdr` → `HER`), and that prefix names every
+plan file and is how a branch is searched for its task. `f10 init` writes it down, so a rename
+or a changed rule later cannot leave two eras of plan files side by side. A two-letter
+abbreviation of a one-word name is your choice to make, in the Tracker line.
+
 ## `project.md`
 
 Free-form markdown under these headings. Prose, not YAML. Only **Tracker** matters for the
@@ -22,7 +28,7 @@ pipeline's contracts; the rest have workable defaults.
 | heading | what it declares | default |
 |---|---|---|
 | Project | one line: what this is, and the stack | detected from build files |
-| Tracker | kind, task id format, fetch and create adapters | host issues via `gh` or `glab` |
+| Tracker | kind, task id format, fetch and create adapters | host issues via `gh` or `glab`; ids prefixed from the project's name |
 | Hosting & PR | where code lives, how to open a PR or MR; optionally `merge method: squash` (or `merge`, `rebase`) for `f10 finish` | from the git remote; the merge method the repo allows, else squash |
 | Ship pipeline(s) | the ordered steps `/f10:ship` runs after planning | `implement → pr` |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
@@ -77,5 +83,5 @@ out, for a branch on a different stack. Plans always land in the worktree that r
 ## Trackers without a CLI
 
 Notion, Jira, a wiki: drop an executable at `.f10/driver` and `f10 task` routes through it. Its
-`branch` verb is also where the project encodes its branch shape for `f10 start`. See
-[the driver contract](driver-contract.md).
+`branch` verb is also where the project encodes its branch shape for `f10 start`; without one,
+the branch is `<ID>/<slug>` from the task's title. See [the driver contract](driver-contract.md).

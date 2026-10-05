@@ -35,7 +35,8 @@ A verb means one thing under every noun. `read` writes content, `open` follows a
 ## Start
 
 `f10 start 42` is the three hand-offs of starting a task as one command. It derives the branch
-name (the driver's `branch` verb, else the bare task id), creates the worktree beside the main
+name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else
+the bare id with a note when the host returns no title), creates the worktree beside the main
 checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on
 `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling
 path - opens it as a Herdr workspace, starts a claude agent in its root pane and prompts it.
@@ -56,6 +57,12 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   origin (`origin/main` typed as such also resolves). It fails before creating anything when
   neither exists, and notes beneath the report when the base sits at the default branch's
   commit, since a base that changes nothing is otherwise invisible. Exclusive with `--after`
+- the default branch is `<ID>/<slug>`: the title fetched through `gh` or `glab`, lowercased,
+  non-alphanumerics collapsed to single hyphens, cut at 40 characters on a hyphen
+  (`F10-8/default-task-ids-from-the-project-name`). The id stays in front, so the branch is
+  still searched by its task. A project with its own shape encodes it in the driver's `branch`
+  verb; no title, or a title with no ASCII letters in it, leaves the bare id and says so beneath
+  the report
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a
   second worktree for one task can live beside the first
 - a task that already has a branch gets its worktree reused, or created when the branch has
@@ -122,8 +129,8 @@ a task whose PR was never opened, and worktrees f10 did not start.
 A reference is a bare number, a `#123`, a prefixed id in any case, or a url whose last path
 segment is one of those (`.../issues/42`, `.../browse/ABC-1042`). With no id, a reference
 resolves in one cascade: the id you passed, else the id in the current branch name, else the
-task this session recorded. The branch lookup needs the project's task id format, declared or
-implied by the host.
+task this session recorded. The branch lookup needs the project's task id format, declared in
+`project.md` or derived from the project's name.
 
 `-C` answers for another checkout. A path always works. A bare name works once `F10_ROOTS`
 says where to look:
@@ -146,3 +153,10 @@ The host's issues need nothing declared: the git remote says GitHub or GitLab, a
 `glab` does the rest. Anything else goes through an executable at `.f10/driver`, per
 [the driver contract](driver-contract.md). A driver that declines a verb falls back to the
 host's issues.
+
+Task ids take the prefix `project.md` declares, else one derived from the main checkout's name:
+a short name with a digit as is (`f10` → `F10`, `r3` → `R3`), initials across hyphens,
+underscores or dots (`git-undo` → `GU`, `notion-sdk-go` → `NSG`), the first three characters
+of one word (`herdr` → `HER`). The prefix names plan files and is how a branch is searched for
+its task, so it must not move once used: `f10 init` writes it into `project.md`, and `f10
+config` shows which it is and where it came from.
