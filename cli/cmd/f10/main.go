@@ -1,17 +1,16 @@
-// Command f10 is the read-only lookaround binary: it prints the effective
-// configuration of the repo it runs in with a provenance per value, and
-// reads the tasks, plans, demo reports and pull requests that
-// configuration points at, and where a run is right now.
+// Command f10 is the lookaround binary and the one that starts a task. It
+// prints the effective configuration of the repo it runs in with a
+// provenance per value, reads the tasks, plans, demo reports and pull
+// requests that configuration points at, and says where a run is right now.
 //
-// Read-only means it changes nothing - no file it did not read, no tracker
-// item, no cache - with one exception: `init` writes the two files that
-// register a project, creating .f10/instructions/project.md and adding one
-// line to the repo's info/exclude, and it never overwrites either. It does
-// act on the reader's behalf, handing a url to a browser or a file to an
-// editor, and that is the whole of what leaves this process.
-// bin/resolve.sh stays the agent-facing surface for a pipeline run; this is
-// the surface for a person, and for the one command an agent runs to read a
-// task.
+// The lookaround verbs change nothing - no file they did not read, no
+// tracker item, no cache - and act on the reader's behalf only by handing a
+// url to a browser or a file to an editor. Two verbs write: `init` creates
+// the two files that register a project and never overwrites either, and
+// `start` creates a branch and a worktree, opens them in Herdr and prompts
+// an agent there. bin/resolve.sh stays the agent-facing surface for a
+// pipeline run; this is the surface for a person, and for the commands an
+// agent runs to read a task or start the next one.
 //
 // A verb means one thing under every noun: `read` writes content, `open`
 // follows an address, `search` finds by description. The matrix is sparse
@@ -41,7 +40,7 @@ func main() {
 func newApp() *cli.Command {
 	return &cli.Command{
 		Name:    "f10",
-		Usage:   "look around a project's f10 configuration, tasks and plans",
+		Usage:   "look around a project's f10 configuration, tasks and plans, and start a task",
 		Version: version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -58,6 +57,7 @@ func newApp() *cli.Command {
 			demoCommand(),
 			prCommand(),
 			statusCommand(),
+			startCommand(),
 		},
 	}
 }

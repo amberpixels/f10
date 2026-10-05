@@ -5,5 +5,6 @@
 case "$1" in
   read) echo "# read $2" ;;
   url) echo "https://example.test/$2" ;;
+  branch) echo "ABC-$2/short-slug" ;;
   *) exit 3 ;;
 esac

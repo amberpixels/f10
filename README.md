@@ -65,6 +65,7 @@ is an **entry point** into that chain:
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
+| `/f10:start <id> [--plan \| --local] [--on <id>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
 
 ## Install
 
@@ -152,8 +153,8 @@ executes nothing.
   it costs a read of the diff instead of a seeded app, which is what makes it the thing you run
   before deciding whether a change is worth demoing at all. Creates nothing.
 - **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, plus
-  ship-pipeline steps `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). Skills
-  are thin routers over steps.
+  ship-pipeline steps `implement`, `commit`, `pr`, `push`, `review`, `demo`, `deploy`
+  (`steps/*.md`). Skills are thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
   `implement → pr`). A name with no generic step (e.g. `e2e`) is project-defined:
   `.f10/instructions/<name>.md` *is* the step. A project may declare several **named pipelines**;
@@ -177,8 +178,8 @@ executes nothing.
 - **Gap** - an open decision only the user can make. Recorded, not blocking: every gap carries a
   default, so a plan is always shippable. Filling them is an optional batched questionnaire.
 - **Shipment** - what a ship run leaves behind, named by the pipeline's last step: verified code
-  in the working tree (`implement`), commits on a branch (`push`), an open PR/MR (`pr`), a running
-  environment (`deploy`). A PR is one shipment, not the word for all of them - a project with no
+  in the working tree (`implement`), local commits (`commit`), commits pushed to a branch
+  (`push`), an open PR/MR (`pr`), a running environment (`deploy`). A PR is one shipment, not the word for all of them - a project with no
   git in its pipeline still ships.
 
 **Project binding**
@@ -209,7 +210,7 @@ executes nothing.
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
         skills2["skills/{brainstorm,capture,plan,ship,judge,demo,explain}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,implement,pr,push,review,demo,deploy}.md"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,implement,commit,pr,push,review,demo,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end
@@ -404,6 +405,9 @@ f10 pr open              # this branch's PR or MR, gh or glab decided by the rem
 f10 status               # where the run is: this session's, or this repo's live ones
 ```
 
+A reference is an id in any of its shapes - `1042`, `#1042`, `ABC-1042` - or the task's url
+pasted from the browser.
+
 A verb means one thing under every noun. `read` writes content, `open` follows an address,
 `search` finds by description; `--print` writes the address instead of following it. The matrix
 stays sparse where a verb has no meaning for a noun, and never redefines one to fill a hole.
@@ -426,14 +430,37 @@ Where the tracker is Notion, Jira or anything else without a CLI, `f10 task` rou
 executable at `.f10/driver` - see [the driver contract](docs/driver-contract.md). f10 specifies
 that contract and implements none of it.
 
-### Read-only by design
+### Start
+
+Starting a task used to be three hand-offs across three tools: a justfile recipe creating the
+worktree, a Herdr dialog turning it into a tab, a shell function launching claude there with a
+prompt typed by hand. Each hand-off was a place to lose the branch suffix, the base branch or the
+"keep it local" words. `f10 start` is the one command:
+
+```bash
+f10 start 1042                # branch, worktree, Herdr workspace, claude prompted with plan + ship
+f10 start 1042 --plan         # prompt the plan only
+f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
+f10 start 1042 --on 1040      # base the branch on that task's branch instead of the default
+f10 start 1042-attempt2       # a second worktree for the same task, beside the first
+```
+
+The branch name is the driver's `branch` verb where the project has one, else the bare task id.
+The worktree goes through [worktrunk](https://github.com/max-sixty/worktrunk) when `wt` is on
+`PATH`, so the project's hooks keep firing, and through plain git at the same sibling path when it
+is not. The command returns once the prompt is submitted and never waits on the agent, so a
+session inside Herdr can run it too - `/f10:start` is that skill. It runs inside a Herdr session
+only; outside one it stops before touching anything and points at https://herdr.dev. Run twice
+for one task it opens the worktree that exists rather than failing.
+
+### Lookaround by design
 
 No uniform storage (everything stays in the files where it lives today; the binary reads and
 pre-computes), no scanning (it answers for the repo it runs in, and walks the filesystem for
-other projects only once you set `F10_ROOTS`), and one writing verb: `init` creates the two
-files that register a project and nothing else writes anywhere, ever - handing a url to a
-browser or a file to an editor is the whole of what leaves the process. `bin/resolve.sh`
-stays the agent-facing surface - the binary explains to humans what the resolver hands to
+other projects only once you set `F10_ROOTS`), and two writing verbs: `init` creates the two
+files that register a project, `start` creates a branch and a worktree, and nothing else writes
+anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
+process otherwise. `bin/resolve.sh` stays the agent-facing surface - the binary explains to humans what the resolver hands to
 agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never
 wrong. The parity suite in `cli/internal/resolve` runs every fixture through both the Go

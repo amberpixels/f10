@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "f10 ship skill (full run) - take a task through the project's ship pipeline: implement, then whatever the project declares (review, PR/MR, deploy). Use when the user says \"/f10:ship <task-id | plan-file.md | description>\". Fetches and plans as needed, then runs the ship pipeline end to end."
+description: "f10 ship skill (full run) - take a task through the project's ship pipeline: implement, then whatever the project declares (review, commit, PR/MR, deploy). Use when the user says \"/f10:ship <task-id | plan-file.md | description>\". Fetches and plans as needed, then runs the ship pipeline end to end."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ScheduleWakeup, ExitPlanMode
 argument-hint: "<task-id | path/to/plan.md | free-text description>"
 ---
@@ -61,8 +61,8 @@ than `failed`, per `conventions/failure.md` rule 7, and `note` what stopped it a
 unblocks it in the same call.
 
 **Final report:** lead with the facts block per `conventions/report.md`, carrying the run's
-**shipment** - the branch, the PR/MR url where the pipeline opened one, the sha where it pushed,
-the deploy url where it deployed. Then, as prose: review status as far as the pipeline goes
+**shipment** - the branch, the PR/MR url where the pipeline opened one, the sha where it
+committed or pushed, the deploy url where it deployed. Then, as prose: review status as far as the pipeline goes
 ("stopped at PR" is a normal end), deploy status if it deploys, a short note of what changed,
 and - if any gaps stayed on their defaults - a one-line reminder that they're recorded in the
 plan.

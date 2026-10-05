@@ -81,7 +81,8 @@ call, joined with `;` to a shell command or riding alongside a `Read`
 ## Who reports under it
 
 The steps that produce something addressable: `capture` (task + url), `plan` (the saved plan
-path), `pr` (branch + PR/MR url), `push` (branch + sha), `deploy` (target + url). Skills report
+path), `commit` (branch + sha), `pr` (branch + PR/MR url), `push` (branch + sha), `deploy`
+(target + url). `f10 start` prints the same block (task, branch, path, workspace). Skills report
 the same way for the run as a whole. `implement` and `review` produce nothing addressable and
 stay prose.
 
