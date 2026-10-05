@@ -12,8 +12,8 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
   `/f10:ship`, `/f10:judge`, `/f10:demo`, `/f10:explain`. `/f10:status` is the one that runs no
   step: a hook answers it from `f10 status` before any model turn.
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
-  `explain`, `implement`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). A skill runs
-  one or more steps.
+  `explain`, `implement`, `commit`, `pr`, `push`, `review`, `demo`, `deploy` (`steps/*.md`). A
+  skill runs one or more steps.
 - **stage** - one ordered unit *inside* a plan. Never a step, never a skill.
 
 **What a run produces** - three, in pipeline order:
@@ -24,9 +24,10 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 - **plan** - the file at `<storage root>/plans/<TASK-ID>.md`: the stages, and the handoff
   `/f10:ship` reads. A plan that exists only in chat is a failed run.
 - **shipment** - what the ship pipeline leaves behind, named by its **last step**: verified code
-  in the working tree (`implement`), commits on a branch (`push`), an open PR/MR (`pr`), a
-  running environment (`deploy`), or whatever a project-defined step produces. A PR is one
-  shipment, not the word for all of them - a project with no git in its pipeline still ships.
+  in the working tree (`implement`), local commits (`commit`), commits pushed to a branch
+  (`push`), an open PR/MR (`pr`), a running environment (`deploy`), or whatever a
+  project-defined step produces. A PR is one shipment, not the word for all of them - a project
+  with no git in its pipeline still ships.
 
 `plan` is the one name in both lists, so bare `plan` is ambiguous - write `/f10:plan` for the
 skill, "the plan step" or `steps/plan.md` for the step, "the plan" for the file. "Run
@@ -135,9 +136,10 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   run's shipment. Omitted → **`implement → pr`**. Each name resolves to a generic step in the
   plugin's `steps/` (extended by its same-named overlay); a name with no generic step (e.g.
   `e2e`) is a **project-defined step** - `.f10/instructions/<name>.md` *is* the step.
-  A project may declare **several named pipelines** (e.g. `default`, `direct`): `default`
-  runs unless the **user** selects another - never self-select one; for tiny work you may
-  *suggest* and let the user pick. A pipeline marked **(planless)** skips capture/fetch/plan
+  A project may declare **several named pipelines** (e.g. `default`, `direct`,
+  `local: implement → commit`): `default` runs unless the **user** selects another - never
+  self-select one; for tiny work you may *suggest* and let the user pick. `f10 start --local`
+  selects `local` by name. A pipeline marked **(planless)** skips capture/fetch/plan
   for free-text input: no task, no plan file - a brief inline plan in chat is enough.
 - **Verify** - the exact lint/test commands, plus any "never run X" rules.
 - **Review** - facts about the project's review(s): who/what reviews, when it fires, what

@@ -23,7 +23,47 @@ func TestParse(t *testing.T) {
 		{name: "lowercase id is uppercased", prefix: "ABC", token: "abc-1042", wantID: "ABC-1042", wantNumber: "1042"},
 		{name: "an explicit prefix beats the project's", prefix: "ABC", token: "GH-7", wantID: "GH-7", wantNumber: "7"},
 		{name: "no prefix anywhere leaves the number alone", token: "22", wantID: "22", wantNumber: "22"},
-		{name: "a url is not a reference", prefix: "GH", token: "https://x/issues/22", wantErr: true},
+		{
+			name:       "an issue url ends in the number",
+			prefix:     "GH",
+			token:      "https://github.com/amberpixels/f10/issues/22",
+			wantID:     "GH-22",
+			wantNumber: "22",
+		},
+		{
+			name:       "a gitlab work item url",
+			prefix:     "GL",
+			token:      "https://gitlab.com/g/p/-/work_items/7",
+			wantID:     "GL-7",
+			wantNumber: "7",
+		},
+		{
+			name:       "a jira browse url carries its own prefix",
+			prefix:     "GH",
+			token:      "https://x.atlassian.net/browse/ABC-1042",
+			wantID:     "ABC-1042",
+			wantNumber: "1042",
+		},
+		{
+			name:       "a url drops its query and fragment",
+			prefix:     "GH",
+			token:      "https://github.com/a/b/issues/5?x=1#top",
+			wantID:     "GH-5",
+			wantNumber: "5",
+		},
+		{
+			name:       "a url with a trailing slash",
+			prefix:     "GH",
+			token:      "https://github.com/a/b/issues/5/",
+			wantID:     "GH-5",
+			wantNumber: "5",
+		},
+		{
+			name:    "a url ending in prose is not a reference",
+			prefix:  "GH",
+			token:   "https://github.com/a/b/issues",
+			wantErr: true,
+		},
 		{name: "prose is not a reference", prefix: "GH", token: "the search one", wantErr: true},
 	}
 
@@ -44,6 +84,32 @@ func TestParse(t *testing.T) {
 
 			if got.ID != c.wantID || got.Number != c.wantNumber {
 				t.Errorf("parse(%q) = %q/%q, want %q/%q", c.token, got.ID, got.Number, c.wantID, c.wantNumber)
+			}
+		})
+	}
+}
+
+func TestSplitSuffix(t *testing.T) {
+	cases := []struct {
+		token      string
+		wantBase   string
+		wantSuffix string
+	}{
+		{token: "1454-attempt2", wantBase: "1454", wantSuffix: "attempt2"},
+		{token: "1454_v2", wantBase: "1454", wantSuffix: "v2"},
+		{token: "GH-1-attempt2", wantBase: "GH-1", wantSuffix: "attempt2"},
+		{token: "#7-retry", wantBase: "#7", wantSuffix: "retry"},
+		{token: "ABC-1042", wantBase: "ABC-1042"},
+		{token: "22", wantBase: "22"},
+		{token: "https://github.com/a/b/issues/5-x", wantBase: "https://github.com/a/b/issues/5-x"},
+		{token: "GH-1-", wantBase: "GH-1-"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.token, func(t *testing.T) {
+			base, suffix := SplitSuffix(c.token)
+			if base != c.wantBase || suffix != c.wantSuffix {
+				t.Errorf("SplitSuffix(%q) = %q/%q, want %q/%q", c.token, base, suffix, c.wantBase, c.wantSuffix)
 			}
 		})
 	}

@@ -52,9 +52,11 @@ One pipeline, or several named ones:
 
 - default: implement → review (local) → pr
 - direct (planless): implement → push
+- local: implement → commit
 ```
 
-`default` runs unless the user names another. A planless pipeline skips capture and the plan
+`default` runs unless the user names another. `local` is the one `f10 start --local` selects: the
+run ends in commits and nothing leaves the machine. A planless pipeline skips capture and the plan
 file for free-text input. The last step names what a run ships: an open PR, a pushed branch, a
 running deploy.
 
@@ -74,5 +76,6 @@ out, for a branch on a different stack. Plans always land in the worktree that r
 
 ## Trackers without a CLI
 
-Notion, Jira, a wiki: drop an executable at `.f10/driver` and `f10 task` routes through it. See
+Notion, Jira, a wiki: drop an executable at `.f10/driver` and `f10 task` routes through it. Its
+`branch` verb is also where the project encodes its branch shape for `f10 start`. See
 [the driver contract](driver-contract.md).

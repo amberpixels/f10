@@ -1,9 +1,9 @@
 # The f10 driver contract
 
-`f10 task` needs to reach your tracker. Where that tracker is the host's own issues, it already
-can: the git remote says GitHub or GitLab and `gh` / `glab` do the rest, with nothing to declare.
-Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route to, and that is what a
-driver is for.
+`f10 task` and `f10 start` need to reach your tracker. Where that tracker is the host's own
+issues, it already can: the git remote says GitHub or GitLab and `gh` / `glab` do the rest, with
+nothing to declare. Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route
+to, and that is what a driver is for.
 
 **f10 specifies this contract and implements none of it.** What a driver talks to is your
 project's business, and so is the language it is written in - a shell script dispatching to what
@@ -22,16 +22,21 @@ falls back to the host's issues.
 <driver> <verb> [argument]
 ```
 
-Three verbs, each writing its answer to stdout:
+Four verbs, each writing its answer to stdout:
 
 | verb | argument | stdout |
 |---|---|---|
 | `read` | task number | the task as markdown |
 | `url` | task number | one url, alone on a line |
 | `search` | a query string | a JSON array of task rows |
+| `branch` | task number | one branch name, alone on a line |
 
-The argument for `read` and `url` is the **number**, not the prefixed id: f10 has already parsed
-`ABC-1042` down to `1042`, so a driver never has to know the id format.
+The argument for `read`, `url` and `branch` is the **number**, not the prefixed id: f10 has
+already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
+
+`branch` is where a project encodes its branch shape - `ABC-1042/short-slug-of-the-title`, or
+whatever `project.md` declares under Hosting & PR. `f10 start` creates that branch; a driver
+without the verb gets the bare task id as the branch.
 
 A `search` row carries at least these four fields. Extra fields are allowed and ignored:
 
@@ -48,15 +53,16 @@ A `search` row carries at least these four fields. Extra fields are allowed and 
 | anything else | it failed; stderr is shown to the user verbatim |
 
 Code `3` is a normal answer, not an error. A driver may implement `read` without `search`, and
-f10 falls back to the host's issues rather than failing. Every other non-zero exit is a real
-failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot
-interpret.
+f10 falls back to the host's issues rather than failing; a driver without `branch` gets the bare
+task id as the branch name. Every other non-zero exit is a real failure, and f10 surfaces your
+stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Two rules worth knowing
 
-**Return data, never act.** A driver prints a url; f10 opens it. That separation is what lets
-`open` mean the same thing for a task as it does for a pull request, where no driver is involved
-at all - and it keeps `f10 task open --print` pipeable.
+**Return data, never act.** A driver prints a url; f10 opens it. A driver prints a branch name;
+f10 creates the branch. That separation is what lets `open` mean the same thing for a task as it
+does for a pull request, where no driver is involved at all - and it keeps `f10 task open
+--print` pipeable.
 
 **Print markdown, not a rendering.** `read` writes plain markdown and stops. f10 decides
 presentation from whether it is writing to a terminal, so the same command serves a person at a
@@ -74,6 +80,7 @@ case "${1:-}" in
   read)   exec bash "$here/scripts/notion-read.sh" "${2:-}" ;;
   url)    exec bash "$here/scripts/notion-url.sh" "${2:-}" ;;
   search) exec bash "$here/scripts/notion-search.sh" "${2:-}" ;;
+  branch) echo "ABC-${2:-}/$(bash "$here/scripts/notion-slug.sh" "${2:-}")" ;;
   *)      exit 3 ;;
 esac
 ```

@@ -62,6 +62,21 @@ func TestRunSucceeds(t *testing.T) {
 	}
 }
 
+// branch returns a name and never creates it: the one verb whose answer
+// f10 acts on with git rather than with a browser.
+func TestRunBranch(t *testing.T) {
+	root := storageWith(t, "ok-driver")
+
+	out, err := Find(root, root).Run(t.Context(), VerbBranch, "1042")
+	if err != nil {
+		t.Fatalf("Run(branch): %v", err)
+	}
+
+	if want := "ABC-1042/short-slug"; out != want {
+		t.Errorf("Run(branch) = %q, want %q", out, want)
+	}
+}
+
 // The reserved code is a normal answer, not a failure: a driver may
 // implement read without search, and the caller falls back rather than
 // erroring out.

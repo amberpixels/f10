@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,12 +94,56 @@ func (r Resolver) exhausted(ctx context.Context) error {
 }
 
 // numberRE is the reference shapes a user types: a bare number, a `#123`,
-// or a prefixed id in any case. A url is deliberately not one of them - the
-// nouns take ids, and a url is already openable without f10.
+// or a prefixed id in any case. A url is accepted too - its last path
+// segment is held to the same shape, so an issue link pasted from the
+// browser (`.../issues/42`, `.../browse/ABC-7`) is as good as the id it
+// ends in.
 var numberRE = regexp.MustCompile(`^(?:([A-Za-z][A-Za-z0-9]*)-)?#?(\d+)$`)
 
+// suffixRE is the salted shape `f10 start` takes: a reference glued to a
+// word by `-` or `_` (`1454-attempt2`, `GH-1_v2`). The word salts the
+// branch so a second worktree for one task can live beside the first.
+var suffixRE = regexp.MustCompile(`^((?:[A-Za-z][A-Za-z0-9]*-)?#?\d+)[-_]([A-Za-z0-9][A-Za-z0-9_-]*)$`)
+
+// SplitSuffix separates a salted reference into the reference and its
+// suffix. A token without one, or a url, comes back whole with "".
+func SplitSuffix(token string) (string, string) {
+	token = strings.TrimSpace(token)
+	if isURL(token) {
+		return token, ""
+	}
+
+	if m := suffixRE.FindStringSubmatch(token); m != nil {
+		return m[1], m[2]
+	}
+
+	return token, ""
+}
+
+func isURL(token string) bool {
+	return strings.Contains(token, "://")
+}
+
+// lastSegment is where a url carries its reference: the final path
+// segment, query and fragment dropped.
+func lastSegment(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+
+	return segs[len(segs)-1]
+}
+
 func (r Resolver) parse(token, origin string) (Ref, error) {
-	m := numberRE.FindStringSubmatch(strings.TrimSpace(strings.TrimPrefix(token, "#")))
+	probe := strings.TrimSpace(token)
+	if isURL(probe) {
+		probe = lastSegment(probe)
+	}
+
+	m := numberRE.FindStringSubmatch(strings.TrimPrefix(probe, "#"))
 	if m == nil {
 		return Ref{}, errors.New("not a task reference: " + token)
 	}
