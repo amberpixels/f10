@@ -3,18 +3,14 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
-	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The host's side of `f10 finish`: read a branch's pull or merge request,
 // merge it, delete its remote branch. Both CLIs are asked for JSON and read
 // into one shape, as host.go does for issues, so finish decides on
-// open / merged / closed and never on a CLI's spelling of them.
+// open / merged and never on a CLI's spelling of them.
 
 // pull is the union of the two CLIs' request shapes, tagged for both.
 type pull struct {
@@ -35,12 +31,12 @@ type pull struct {
 	} `json:"mergeCommit"`
 }
 
-// The three states finish acts on. gh spells them OPEN / MERGED / CLOSED,
-// glab opened / merged / closed / locked.
+// The two states finish acts on; anything else is a refusal that quotes
+// the state. gh spells them OPEN / MERGED / CLOSED, glab opened / merged /
+// closed / locked.
 const (
 	pullOpen   = "open"
 	pullMerged = "merged"
-	pullClosed = "closed"
 )
 
 func (p pull) url() string  { return cmp.Or(p.URL, p.WebURL) }
@@ -56,46 +52,38 @@ func (p pull) status() string {
 	}
 }
 
-// viewPull reads the request whose head is branch. No request is the host's
+// pull reads the request whose head is branch. No request is the host's
 // error, verbatim: finish has nothing to merge and says why in gh's or
 // glab's words.
-func viewPull(ctx context.Context, dir, host, branch string) (pull, error) {
-	args := []string{"pr", "view", branch, "--json", "state,url,number,baseRefName,mergeStateStatus,mergeCommit"}
-	if host == "glab" {
-		args = []string{"mr", "view", branch, "-F", "json"}
-	}
-
-	out, err := hostRun(ctx, dir, host, args...)
-	if err != nil {
-		return pull{}, err
-	}
-
+func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	var p pull
-	if err := json.Unmarshal([]byte(out), &p); err != nil {
-		return pull{}, fmt.Errorf("parsing %s output: %w", host, err)
-	}
 
-	return p, nil
+	err := h.decode(ctx, &p, h.pick(
+		[]string{"pr", "view", branch, "--json", "state,url,number,baseRefName,mergeStateStatus,mergeCommit"},
+		[]string{"mr", "view", branch, "-F", "json"},
+	)...)
+
+	return p, err
 }
 
 // mergePull merges the request with method and reads it back, since the
 // merge commit exists only afterwards. Never --admin: a host that refuses
 // has a reason, and it is the error. glab's auto-merge is turned off so a
 // running pipeline makes it refuse rather than queue and report success.
-func mergePull(ctx context.Context, dir, host, branch, method string) (pull, error) {
-	args := []string{"pr", "merge", branch, method}
-	if host == "glab" {
-		args = []string{"mr", "merge", branch, "--remove-source-branch", "--auto-merge=false", "--yes"}
-		if method != "" {
-			args = append(args, method)
-		}
+func (h host) mergePull(ctx context.Context, branch, method string) (pull, error) {
+	args := h.pick(
+		[]string{"pr", "merge", branch},
+		[]string{"mr", "merge", branch, "--remove-source-branch", "--auto-merge=false", "--yes"},
+	)
+	if method != "" {
+		args = append(args, method)
 	}
 
-	if _, err := hostRun(ctx, dir, host, args...); err != nil {
+	if _, err := h.run(ctx, args...); err != nil {
 		return pull{}, err
 	}
 
-	return viewPull(ctx, dir, host, branch)
+	return h.pull(ctx, branch)
 }
 
 // deleteRemoteBranch deletes branch on origin through the host's API, the
@@ -103,13 +91,11 @@ func mergePull(ctx context.Context, dir, host, branch, method string) (pull, err
 // because it also deletes the local branch, which git refuses while a
 // worktree has it checked out, and gh then exits non-zero after the merge
 // landed.
-func deleteRemoteBranch(ctx context.Context, dir, host, branch string) error {
-	args := []string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + branch}
-	if host == "glab" {
-		args = []string{"api", "-X", "DELETE", "projects/:fullpath/repository/branches/" + branch}
-	}
-
-	_, err := hostRun(ctx, dir, host, args...)
+func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
+	_, err := h.run(ctx, h.pick(
+		[]string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + branch},
+		[]string{"api", "-X", "DELETE", "projects/:fullpath/repository/branches/" + branch},
+	)...)
 
 	return err
 }
@@ -119,45 +105,36 @@ func deleteRemoteBranch(ctx context.Context, dir, host, branch string) error {
 var mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|merge|rebase)\b`)
 
 // mergeMethod is the flag the host CLI takes for this repo's merge: the
-// method project.md declares, else the one the repo allows, else squash.
-// On GitLab the server fixes the strategy per project and squash is the
-// request's only call, so the absent case reads the project's squash
-// option and "" means a plain merge.
-func mergeMethod(ctx context.Context, dir, host, hosting string) (string, error) {
+// method project.md declares, else the one the repo allows. On GitLab the
+// server fixes the strategy per project and squash is the request's only
+// call, so the absent case reads the project's squash option and "" means
+// a plain merge. On GitHub a repo allowing several methods gets squash,
+// and the note says so: a default that rewrites history is not taken in
+// silence.
+func (h host) mergeMethod(ctx context.Context, hosting string) (string, string, error) {
 	if m := mergeMethodRe.FindStringSubmatch(hosting); m != nil {
 		method := strings.ToLower(m[1])
-		if host == "glab" && method == "merge" {
-			return "", nil
+		if h.glab() && method == "merge" {
+			return "", "", nil
 		}
 
-		return "--" + method, nil
+		return "--" + method, "", nil
 	}
 
-	if host == "glab" {
-		out, err := hostRun(ctx, dir, host, "repo", "view", "-F", "json")
-		if err != nil {
-			return "", err
-		}
-
+	if h.glab() {
 		var repo struct {
 			SquashOption string `json:"squash_option"`
 		}
 
-		if err := json.Unmarshal([]byte(out), &repo); err != nil {
-			return "", fmt.Errorf("parsing glab repo: %w", err)
+		if err := h.decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
+			return "", "", err
 		}
 
 		if repo.SquashOption == "always" || repo.SquashOption == "default_on" {
-			return "--squash", nil
+			return "--squash", "", nil
 		}
 
-		return "", nil
-	}
-
-	out, err := hostRun(ctx, dir, host, "repo", "view", "--json",
-		"squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed")
-	if err != nil {
-		return "", err
+		return "", "", nil
 	}
 
 	var repo struct {
@@ -166,8 +143,9 @@ func mergeMethod(ctx context.Context, dir, host, hosting string) (string, error)
 		Rebase bool `json:"rebaseMergeAllowed"`
 	}
 
-	if err := json.Unmarshal([]byte(out), &repo); err != nil {
-		return "", fmt.Errorf("parsing gh repo: %w", err)
+	err := h.decode(ctx, &repo, "repo", "view", "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed")
+	if err != nil {
+		return "", "", err
 	}
 
 	var allowed []string
@@ -182,23 +160,9 @@ func mergeMethod(ctx context.Context, dir, host, hosting string) (string, error)
 	}
 
 	if len(allowed) == 1 {
-		return allowed[0], nil
+		return allowed[0], "", nil
 	}
 
-	return "--squash", nil
-}
-
-// hostRun runs one host CLI command in dir and returns its stdout. A
-// non-zero exit is the CLI's stderr, verbatim.
-func hostRun(ctx context.Context, dir, host string, args ...string) (string, error) {
-	res, err := shell.Capture(ctx, dir, host, args...)
-	if err != nil {
-		return "", fmt.Errorf("running %s: %w", host, err)
-	}
-
-	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", host, cmp.Or(res.Stderr, res.Stdout, fmt.Sprintf("exit %d", res.Code)))
-	}
-
-	return res.Stdout, nil
+	return "--squash", "merged with --squash: project.md declares no merge method and the repo allows several; " +
+		"declare `merge method: squash` (or merge, rebase) under Hosting & PR to settle it", nil
 }

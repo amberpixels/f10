@@ -302,26 +302,20 @@ func TestHostIssueTitle(t *testing.T) {
 	f.fail("gh issue view 2 --json title", shell.Result{Code: 1, Stderr: "no issue 2"})
 	f.script("gh issue view 3 --json title", `{"title":""}`)
 
-	tgt := &target{dir: "/code/repo"}
-
-	for host, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
-		got, err := hostIssueTitle(t.Context(), tgt, host, "1")
+	for name, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
+		got, err := host{name: name, dir: "/code/repo"}.issueTitle(t.Context(), "1")
 		if err != nil || got != want {
-			t.Errorf("%s title = %q, %v; want %q", host, got, err, want)
+			t.Errorf("%s title = %q, %v; want %q", name, got, err, want)
 		}
 	}
 
-	if _, err := hostIssueTitle(
-		t.Context(),
-		tgt,
-		"gh",
-		"2",
-	); err == nil ||
-		!strings.Contains(err.Error(), "no issue 2") {
+	gh := host{name: "gh", dir: "/code/repo"}
+
+	if _, err := gh.issueTitle(t.Context(), "2"); err == nil || !strings.Contains(err.Error(), "no issue 2") {
 		t.Errorf("err = %v, want gh's stderr", err)
 	}
 
-	if _, err := hostIssueTitle(t.Context(), tgt, "gh", "3"); err == nil || !strings.Contains(err.Error(), "no title") {
+	if _, err := gh.issueTitle(t.Context(), "3"); err == nil || !strings.Contains(err.Error(), "no title") {
 		t.Errorf("err = %v, want no title", err)
 	}
 }
@@ -531,15 +525,15 @@ func TestDeclaresPipeline(t *testing.T) {
 		Prose: true,
 	}}}
 
-	if !declaresPipeline(eff, "local") {
+	if !declaresPipeline(&target{eff: eff}, "local") {
 		t.Error("a declared local pipeline was not found")
 	}
 
-	if declaresPipeline(eff, "direct") {
+	if declaresPipeline(&target{eff: eff}, "direct") {
 		t.Error("an undeclared pipeline was found")
 	}
 
-	if declaresPipeline(&facts.Effective{}, "local") {
+	if declaresPipeline(&target{eff: &facts.Effective{}}, "local") {
 		t.Error("a project with no pipelines declares local")
 	}
 }
@@ -616,6 +610,12 @@ func TestStartWithGitAlone(t *testing.T) {
 
 	if !f.called(cfgTask) || !f.called(cfgBranch) {
 		t.Errorf("the dependency was not recorded: %v", f.calls)
+	}
+
+	// the branch exists before anything is recorded about it
+	created := indexAfter(f.calls, "git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", -1)
+	if created < 0 || indexAfter(f.calls, cfgTask, created) < 0 || indexAfter(f.calls, cfgBranch, created) < 0 {
+		t.Errorf("the dependency was recorded before the worktree existed: %v", f.calls)
 	}
 
 	for _, want := range []string{"after:", "GH-7", "GH-7 has no checkout here"} {

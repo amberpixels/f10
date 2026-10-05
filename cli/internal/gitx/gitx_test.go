@@ -171,3 +171,36 @@ func TestRemoteBranchExists(t *testing.T) {
 		t.Errorf("GH-2 = %v, %v; want false", ok, err)
 	}
 }
+
+func TestConfigEntries(t *testing.T) {
+	script(t, map[string]string{
+		`config --get-regexp ^branch\..*\.f10-after-branch$`: "branch.GH-8/a.b.f10-after-branch GH-7/base\nbranch.GH-9.f10-after-branch main",
+	})
+
+	got := ConfigEntries(t.Context(), ".", `^branch\..*\.f10-after-branch$`)
+	want := []ConfigEntry{
+		{Key: "branch.GH-8/a.b.f10-after-branch", Value: "GH-7/base"},
+		{Key: "branch.GH-9.f10-after-branch", Value: "main"},
+	}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("entries = %+v, want %+v", got, want)
+	}
+
+	// no match is git's exit 1, which reads as an empty list
+	if got := ConfigEntries(t.Context(), ".", "^nothing$"); got != nil {
+		t.Errorf("entries for no match = %+v, want none", got)
+	}
+}
+
+func TestUnsetConfig(t *testing.T) {
+	calls := script(t, map[string]string{"config --unset branch.x.f10-after": ""})
+
+	if err := UnsetConfig(t.Context(), ".", "branch.x.f10-after"); err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Contains(*calls, "config --unset branch.x.f10-after") {
+		t.Errorf("calls = %v", *calls)
+	}
+}

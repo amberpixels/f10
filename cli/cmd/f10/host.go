@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -46,25 +45,24 @@ func (i issue) body() string { return cmp.Or(i.Body, i.Description) }
 // this issue has.
 func (i issue) ident() string { return strconv.Itoa(cmp.Or(i.Number, i.IID)) }
 
-func hostIssueDoc(ctx context.Context, t *target, id, number string) (string, error) {
-	host, err := t.hostCLI()
-	if err != nil {
-		return "", err
-	}
-
-	args := []string{"issue", "view", number, "--json", "number,title,state,url,body,comments"}
-	if host == "glab" {
-		args = []string{"issue", "view", number, "-F", "json"}
-	}
-
-	out, err := runHost(ctx, t, host, args...)
-	if err != nil {
-		return "", err
-	}
-
+// issue reads one issue. gh is asked for the named fields alone; glab has
+// no field selection and answers with the whole issue.
+func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 	var iss issue
-	if err := json.Unmarshal([]byte(out), &iss); err != nil {
-		return "", fmt.Errorf("parsing %s issue: %w", host, err)
+
+	err := h.decode(ctx, &iss, h.pick(
+		[]string{"issue", "view", number, "--json", fields},
+		[]string{"issue", "view", number, "-F", "json"},
+	)...)
+
+	return iss, err
+}
+
+// issueDoc is the issue as the markdown document `task read` prints.
+func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
+	iss, err := h.issue(ctx, number, "number,title,state,url,body,comments")
+	if err != nil {
+		return "", err
 	}
 
 	var b strings.Builder
@@ -86,8 +84,8 @@ func hostIssueDoc(ctx context.Context, t *target, id, number string) (string, er
 	return b.String(), nil
 }
 
-func hostIssueURL(ctx context.Context, t *target, host, number string) (string, error) {
-	iss, err := hostIssue(ctx, t, host, number, "url")
+func (h host) issueURL(ctx context.Context, number string) (string, error) {
+	iss, err := h.issue(ctx, number, "url")
 	if err != nil {
 		return "", err
 	}
@@ -96,78 +94,45 @@ func hostIssueURL(ctx context.Context, t *target, host, number string) (string, 
 		return url, nil
 	}
 
-	return "", fmt.Errorf("%s returned no url for issue %s", host, number)
+	return "", fmt.Errorf("%s returned no url for issue %s", h.name, number)
 }
 
-// hostIssueTitle is the one field the default branch name carries.
-func hostIssueTitle(ctx context.Context, t *target, host, number string) (string, error) {
-	iss, err := hostIssue(ctx, t, host, number, "title")
+// issueTitle is the one field the default branch name carries.
+func (h host) issueTitle(ctx context.Context, number string) (string, error) {
+	iss, err := h.issue(ctx, number, "title")
 	if err != nil {
 		return "", err
 	}
 
 	if iss.Title == "" {
-		return "", fmt.Errorf("%s returned no title for issue %s", host, number)
+		return "", fmt.Errorf("%s returned no title for issue %s", h.name, number)
 	}
 
 	return iss.Title, nil
 }
 
-// hostIssue reads one issue. gh is asked for the named fields alone; glab
-// has no field selection and answers with the whole issue.
-func hostIssue(ctx context.Context, t *target, host, number, fields string) (issue, error) {
-	args := []string{"issue", "view", number, "--json", fields}
-	if host == "glab" {
-		args = []string{"issue", "view", number, "-F", "json"}
-	}
-
-	out, err := runHost(ctx, t, host, args...)
-	if err != nil {
-		return issue{}, err
-	}
-
-	var iss issue
-	if err := json.Unmarshal([]byte(out), &iss); err != nil {
-		return issue{}, fmt.Errorf("parsing %s issue: %w", host, err)
-	}
-
-	return iss, nil
-}
-
-func hostIssueSearch(ctx context.Context, t *target, query string) ([]row, error) {
-	host, err := t.hostCLI()
-	if err != nil {
-		return nil, err
-	}
-
-	args := []string{"issue", "list", "--search", query, "--json", "number,title,state,url", "--limit", "30"}
-	if host == "glab" {
-		args = []string{"issue", "list", "--search", query, "-F", "json", "--per-page", "30"}
-	}
-
-	out, err := runHost(ctx, t, host, args...)
-	if err != nil {
-		return nil, err
-	}
-
+// searchIssues lists the issues matching query as task rows, their ids
+// carrying prefix when the project has one.
+func (h host) searchIssues(ctx context.Context, query, prefix string) ([]row, error) {
 	var found []issue
-	if err := json.Unmarshal([]byte(out), &found); err != nil {
-		return nil, fmt.Errorf("parsing %s issue list: %w", host, err)
+
+	err := h.decode(ctx, &found, h.pick(
+		[]string{"issue", "list", "--search", query, "--json", "number,title,state,url", "--limit", "30"},
+		[]string{"issue", "list", "--search", query, "-F", "json", "--per-page", "30"},
+	)...)
+	if err != nil {
+		return nil, err
 	}
 
 	rows := make([]row, 0, len(found))
 	for _, iss := range found {
 		id := iss.ident()
-		if t.eff.IDPrefix != "" {
-			id = t.eff.IDPrefix + "-" + id
+		if prefix != "" {
+			id = prefix + "-" + id
 		}
 
 		rows = append(rows, row{ID: id, Title: iss.Title, Status: iss.State, URL: iss.url()})
 	}
 
 	return rows, nil
-}
-
-func runHost(ctx context.Context, t *target, host string, args ...string) (string, error) {
-	return hostRun(ctx, t.dir, host, args...)
 }

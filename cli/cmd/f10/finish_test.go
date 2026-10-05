@@ -27,6 +27,7 @@ const (
 	ghRepo  = "gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
+	cfgDeps = `git config --get-regexp ^branch\..*\.f10-after-branch$`
 	lsRem   = "git ls-remote --heads origin GH-1"
 	curBr   = "git branch --show-current"
 	wsList  = "herdr workspace list"
@@ -48,7 +49,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 		}
 	}
 
-	fx.in = finishInput{main: fx.main, task: gh1, host: "gh", cwd: fx.main}
+	fx.in = finishInput{main: fx.main, task: gh1, host: host{name: "gh", dir: fx.main}, cwd: fx.main}
 
 	f := fx.f
 	f.script(refsLocal, heads("GH-1"))
@@ -59,6 +60,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 	f.script(curBr, "main")
 	f.script("git pull --ff-only", "")
 	f.script("git merge-base --is-ancestor m3rge main", "")
+	f.script(cfgDeps, "")
 	f.script(lsRem, "abc\trefs/heads/GH-1")
 	f.script(ghDel, "")
 	f.script("herdr workspace close ws:9", "{}")
@@ -152,9 +154,9 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 		curBr,
 		"git pull --ff-only",
 		"git merge-base --is-ancestor m3rge main",
-		"herdr workspace close ws:9",
 		"git worktree remove " + fx.wt,
 		"git branch -D GH-1",
+		"herdr workspace close ws:9",
 	}
 
 	last := -1
@@ -174,6 +176,76 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 
 	if strings.Contains(strings.Join(fx.f.calls, "\n"), "--admin") {
 		t.Error("the merge used --admin")
+	}
+
+	// the repo allows every method and project.md declares none, so the
+	// squash default is said rather than taken in silence
+	if !strings.Contains(out, "merged with --squash: project.md declares no merge method") {
+		t.Errorf("the default merge method was not noted:\n%s", out)
+	}
+}
+
+// A branch another task started with --after on this one loses its
+// dependency once this one merged: both keys go, the note says so, and a
+// dependency on some other branch is left alone.
+func TestFinishReleasesDependents(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script(cfgDeps, "branch.GH-8/slug.f10-after-branch GH-1\nbranch.GH-9.f10-after-branch GH-2")
+	fx.f.script("git config --unset branch.GH-8/slug.f10-after", "")
+	fx.f.script("git config --unset branch.GH-8/slug.f10-after-branch", "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{
+		"git config --unset branch.GH-8/slug.f10-after",
+		"git config --unset branch.GH-8/slug.f10-after-branch",
+	} {
+		if !fx.f.called(want) {
+			t.Errorf("%q did not run: %v", want, fx.f.calls)
+		}
+	}
+
+	if fx.f.called("git config --unset branch.GH-9") {
+		t.Error("a dependency on another branch was cleared")
+	}
+
+	if !strings.Contains(
+		out,
+		"GH-8/slug depended on GH-1: the dependency is cleared, its ship and pr target main now",
+	) {
+		t.Errorf("the release note is missing:\n%s", out)
+	}
+}
+
+// A plan that cannot leave the worktree stops finish before the worktree
+// goes: with in-repo storage the worktree holds the only copy.
+func TestFinishStopsWhenThePlanCannotBeArchived(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.plan(t, "GH-1.md", "# plan")
+
+	// the archive dir's path is taken by a file, so it cannot be created
+	if err := os.MkdirAll(filepath.Join(fx.main, ".f10", "plans"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(fx.main, ".f10", "plans", "archive"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "archiving the plan at") {
+		t.Fatalf("err = %v, want the archive failure", err)
+	}
+
+	for _, ran := range []string{"herdr workspace close", "git worktree remove", "git branch -D", "wt remove"} {
+		if fx.f.called(ran) {
+			t.Errorf("%q ran although the plan was not archived", ran)
+		}
 	}
 }
 
@@ -513,7 +585,7 @@ func TestFinishRemovesThroughWorktrunk(t *testing.T) {
 // auto-merge off, the source branch removed by the merge itself.
 func TestFinishOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = "glab"
+	fx.in.host = host{name: "glab", dir: fx.main}
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"opened","web_url":"https://gl/mr/4","iid":4,"target_branch":"main"}`,
@@ -581,20 +653,22 @@ func TestMergeMethod(t *testing.T) {
 		hosting string
 		repo    string
 		want    string
+		noted   bool // the method was a default worth saying
 	}{
-		{"declared squash", "gh", "github.com. Merge method: squash.", "", "--squash"},
-		{"declared rebase, any case", "gh", "merge: REBASE", "", "--rebase"},
-		{"declared merge on gitlab is plain", "glab", "merge method: merge", "", ""},
+		{"declared squash", "gh", "github.com. Merge method: squash.", "", "--squash", false},
+		{"declared rebase, any case", "gh", "merge: REBASE", "", "--rebase", false},
+		{"declared merge on gitlab is plain", "glab", "merge method: merge", "", "", false},
 		{
 			"one allowed",
 			"gh",
 			"",
 			`{"squashMergeAllowed":false,"mergeCommitAllowed":false,"rebaseMergeAllowed":true}`,
 			"--rebase",
+			false,
 		},
-		{"several allowed", "gh", "", allowAll, "--squash"},
-		{"gitlab squash always", "glab", "", `{"squash_option":"always"}`, "--squash"},
-		{"gitlab squash off", "glab", "", `{"squash_option":"never"}`, ""},
+		{"several allowed", "gh", "", allowAll, "--squash", true},
+		{"gitlab squash always", "glab", "", `{"squash_option":"always"}`, "--squash", false},
+		{"gitlab squash off", "glab", "", `{"squash_option":"never"}`, "", false},
 	}
 
 	for _, c := range cases {
@@ -603,13 +677,17 @@ func TestMergeMethod(t *testing.T) {
 			f.script(ghRepo, c.repo)
 			f.script("glab repo view -F json", c.repo)
 
-			got, err := mergeMethod(t.Context(), "/repo", c.host, c.hosting)
+			got, note, err := host{name: c.host, dir: "/repo"}.mergeMethod(t.Context(), c.hosting)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if got != c.want {
 				t.Errorf("mergeMethod = %q, want %q", got, c.want)
+			}
+
+			if (note != "") != c.noted {
+				t.Errorf("note = %q, noted = %v", note, c.noted)
 			}
 
 			if c.hosting != "" && f.called(c.host+" repo view") {

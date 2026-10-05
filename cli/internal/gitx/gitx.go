@@ -214,3 +214,35 @@ func RemoteBranchExists(ctx context.Context, dir, branch string) (bool, error) {
 
 	return out != "", nil
 }
+
+// A ConfigEntry is one key and its value as `config --get-regexp` lists them.
+type ConfigEntry struct {
+	Key   string
+	Value string
+}
+
+// ConfigEntries lists the local config entries whose key matches pattern,
+// in git's order. No match is an empty list, not an error: git exits 1 for
+// it, and absence is a valid answer here.
+func ConfigEntries(ctx context.Context, dir, pattern string) []ConfigEntry {
+	out := Out(ctx, dir, "config", "--get-regexp", pattern)
+	if out == "" {
+		return nil
+	}
+
+	var entries []ConfigEntry
+
+	for line := range strings.SplitSeq(out, "\n") {
+		key, value, _ := strings.Cut(line, " ")
+		entries = append(entries, ConfigEntry{Key: key, Value: value})
+	}
+
+	return entries
+}
+
+// UnsetConfig removes one entry from the repository's local config.
+func UnsetConfig(ctx context.Context, dir, key string) error {
+	_, err := Exec(ctx, dir, "config", "--unset", key)
+
+	return err
+}

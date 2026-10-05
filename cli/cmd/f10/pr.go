@@ -1,9 +1,7 @@
 package main
 
 import (
-	"cmp"
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/urfave/cli/v3"
@@ -37,7 +35,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	host, err := t.hostCLI()
+	h, err := t.host()
 	if err != nil {
 		return err
 	}
@@ -47,7 +45,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 	number := cmd.Args().First()
 
 	if cmd.Bool("print") {
-		url, err := prURL(ctx, t, host, number)
+		url, err := h.prURL(ctx, number)
 		if err != nil {
 			return err
 		}
@@ -57,16 +55,13 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return shell.Passthrough(ctx, t.dir, host, prArgs(host, number, "--web")...)
+	return shell.Passthrough(ctx, h.dir, h.name, h.prArgs(number, "--web")...)
 }
 
 // prArgs is the subcommand each CLI names this thing: GitHub has pull
 // requests, GitLab has merge requests.
-func prArgs(host, number string, tail ...string) []string {
-	args := []string{"pr", "view"}
-	if host == "glab" {
-		args = []string{"mr", "view"}
-	}
+func (h host) prArgs(number string, tail ...string) []string {
+	args := h.pick([]string{"pr", "view"}, []string{"mr", "view"})
 
 	if number != "" {
 		args = append(args, number)
@@ -75,36 +70,27 @@ func prArgs(host, number string, tail ...string) []string {
 	return append(args, tail...)
 }
 
-func prURL(ctx context.Context, t *target, host, number string) (string, error) {
-	var (
-		args  []string
-		field string
-	)
-
-	switch host {
-	case "glab":
-		args, field = prArgs(host, number, "-F", "json"), "web_url"
-	default:
-		args, field = prArgs(host, number, "--json", "url"), "url"
-	}
-
-	res, err := shell.Capture(ctx, t.dir, host, args...)
-	if err != nil {
-		return "", fmt.Errorf("running %s: %w", host, err)
-	}
-
-	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", host, cmp.Or(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
-	}
-
+// prURL is the request's url: the one for number, or for the current
+// branch's request when number is "".
+func (h host) prURL(ctx context.Context, number string) (string, error) {
 	var payload map[string]any
-	if err := json.Unmarshal([]byte(res.Stdout), &payload); err != nil {
-		return "", fmt.Errorf("parsing %s output: %w", host, err)
+
+	err := h.decode(ctx, &payload, h.pick(
+		h.prArgs(number, "--json", "url"),
+		h.prArgs(number, "-F", "json"),
+	)...)
+	if err != nil {
+		return "", err
+	}
+
+	field := "url"
+	if h.glab() {
+		field = "web_url"
 	}
 
 	url, _ := payload[field].(string)
 	if url == "" {
-		return "", fmt.Errorf("%s returned no %s", host, field)
+		return "", fmt.Errorf("%s returned no %s", h.name, field)
 	}
 
 	return url, nil

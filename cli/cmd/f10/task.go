@@ -68,7 +68,12 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	doc, err := hostIssueDoc(ctx, t, r.ID, r.Number)
+	h, err := t.host()
+	if err != nil {
+		return err
+	}
+
+	doc, err := h.issueDoc(ctx, r.ID, r.Number)
 	if err != nil {
 		return err
 	}
@@ -98,13 +103,13 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	host, err := t.hostCLI()
+	h, err := t.host()
 	if err != nil {
 		return err
 	}
 
 	if cmd.Bool("print") {
-		url, err := hostIssueURL(ctx, t, host, r.Number)
+		url, err := h.issueURL(ctx, r.Number)
 		if err != nil {
 			return err
 		}
@@ -114,7 +119,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return shell.Passthrough(ctx, t.dir, host, "issue", "view", r.Number, "--web")
+	return shell.Passthrough(ctx, h.dir, h.name, "issue", "view", r.Number, "--web")
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -162,7 +167,12 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		}
 	}
 
-	return hostIssueSearch(ctx, t, query)
+	h, err := t.host()
+	if err != nil {
+		return nil, err
+	}
+
+	return h.searchIssues(ctx, query, t.eff.IDPrefix)
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a

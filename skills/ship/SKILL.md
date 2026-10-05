@@ -32,8 +32,8 @@ ship's steps are the pipeline that same call prints, so they cannot be named bef
   `steps/plan.md` → the ship pipeline.
 
 **Pipeline selection:** if the project declares several named pipelines, run `default` unless
-the user named another (as a word in the argument - e.g. `/f10:ship direct: fix typo …` - or
-in their own words). You may suggest a better-fitting pipeline for the task's size, but never
+the user named another (as a word in the argument - e.g. `/f10:ship direct: fix typo …`, which
+is also how `f10 start --local` sends `/f10:ship local: <id>` - or in their own words). You may suggest a better-fitting pipeline for the task's size, but never
 switch without the user's pick. A **(planless)** pipeline skips capture/fetch/plan for
 free-text input (`conventions/context.md`).
 
@@ -46,7 +46,10 @@ git config --get branch."$(git branch --show-current)".f10-after-branch   # its 
 ```
 
 Nothing recorded: nothing changes. Recorded: `git fetch origin`, resolve the base branch
-local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of three:
+local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of four:
+- the base exists nowhere: the base task was finished and its branch deleted, so its code is
+  in the default branch. `git config --unset` both keys and carry on as if nothing was recorded
+  (`f10 finish` does this itself; this is the fallback for a base merged by hand);
 - the base is an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
 - the base moved: `git rebase <base>` before implement. A conflict ends the run as a failure
   (`conventions/failure.md`), the rebase aborted so the tree stays as it was;

@@ -144,7 +144,7 @@ func call(ctx context.Context, dir string, args ...string) (map[string]any, erro
 		return nil, fmt.Errorf("running herdr %s: %w", args[0], err)
 	}
 
-	what := "herdr " + strings.Join(args[:2], " ")
+	what := "herdr " + strings.Join(args[:min(2, len(args))], " ")
 
 	if res.Code != 0 {
 		return nil, fmt.Errorf(

@@ -13,11 +13,9 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
-	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The finish verb is start's inverse. Closing a task by hand is the same
@@ -29,11 +27,12 @@ import (
 //
 // Everything after the merge is gated on the merge having landed: the
 // merge commit must be in the local default branch before anything local
-// is touched. Every refusal comes before the first change.
+// is touched. Every refusal comes before the first change, and the plan
+// is out of the worktree before the worktree goes.
 func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "finish",
-		Usage:     "finish a task: merge its PR, archive the plan, close the workspace, remove the worktree, pull main",
+		Usage:     "finish a task: merge its PR, archive the plan, remove the worktree, close the workspace, pull main",
 		ArgsUsage: "<task-id>[-suffix]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -60,7 +59,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	host, err := t.hostCLI()
+	h, err := t.host()
 	if err != nil {
 		return err
 	}
@@ -77,36 +76,20 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("getwd: %w", err)
 	}
 
-	in := finishInput{
-		main:      cmp.Or(t.res.MainRoot, t.res.CheckoutRoot),
+	main := cmp.Or(t.res.MainRoot, t.res.CheckoutRoot)
+
+	return finish(ctx, cmd.Writer, finishInput{
+		main:      main,
 		driver:    driver.Find(t.res.StorageRoot, t.dir),
 		task:      r,
 		suffix:    suffix,
-		host:      host,
-		hosting:   factValue(t.eff, "Hosting & PR"),
+		host:      h.at(main),
+		hosting:   t.fact("Hosting & PR"),
 		cwd:       cwd,
 		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 		yes:       cmd.Bool("yes"),
-	}
-
-	// out-of-tree storage shares one plans dir between every worktree;
-	// in-repo storage keeps each worktree's plans under its own .f10/
-	if t.res.StorageRoot != filepath.Join(t.res.CheckoutRoot, ".f10") {
-		in.plansDir = t.pb.PlansDir
-	}
-
-	return finish(ctx, cmd.Writer, in)
-}
-
-// factValue is the effective value of one project.md field, or "".
-func factValue(eff *facts.Effective, name string) string {
-	for _, f := range eff.Fields {
-		if f.Name == name {
-			return f.Value
-		}
-	}
-
-	return ""
+		plansDir:  t.sharedPlansDir(),
+	})
 }
 
 // finishInput is everything finish needs once the target is resolved, so
@@ -116,7 +99,7 @@ type finishInput struct {
 	driver    *driver.Driver // nil without one
 	task      ref.Ref
 	suffix    string
-	host      string // gh or glab
+	host      host
 	hosting   string // the Hosting & PR fact, read for a declared merge method
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
@@ -125,9 +108,10 @@ type finishInput struct {
 }
 
 // finish runs the flow: branch, worktree, the refusals, the merge, the
-// pull, the plan, the report, the workspace, the removal. The report is
-// printed before the workspace closes, because on the self-close path the
-// close ends this process too.
+// pull, the dependents, the plan, the report, the removal, the workspace.
+// The report is printed before anything local goes, and the workspace
+// closes last: on the self-close path the close ends this process, so
+// everything that must happen has happened by then.
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	name, path, err := finishTarget(ctx, in)
 	if err != nil {
@@ -157,23 +141,31 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	var notes []string
-
-	p, note, err := landPull(ctx, in, name, def)
+	p, notes, err := landPull(ctx, in, name, def)
 	if err != nil {
 		return err
 	}
 
-	if note != "" {
-		notes = append(notes, note)
-	}
-
-	if err := pullMain(ctx, in.main, def, p.sha(), &notes); err != nil {
+	note, err := pullMain(ctx, in.main, def, p.sha())
+	if err != nil {
 		return err
 	}
 
-	archived, planNotes := archivePlan(path, in.main, in.plansDir, in.task.ID)
-	notes = append(notes, planNotes...)
+	notes = appendNote(notes, note)
+
+	released, err := releaseDependents(ctx, in.main, name, def)
+	if err != nil {
+		return err
+	}
+
+	notes = append(notes, released...)
+
+	archived, note, err := archivePlan(path, in.main, in.plansDir, in.task.ID)
+	if err != nil {
+		return err
+	}
+
+	notes = appendNote(notes, note)
 
 	rows := []fact{
 		{label: "task", value: in.task.ID},
@@ -194,12 +186,14 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	rows = append(rows, fact{label: "path", value: path})
 
 	if self {
-		notes = append(notes, fmt.Sprintf(
-			"this workspace closes after this report; if %s is still listed by `git worktree list` afterwards, "+
-				"run `f10 finish %s` again from the main checkout to remove it", path, in.task.ID))
+		notes = append(notes, "this workspace closes after this report")
 	}
 
 	if err := writeReport(w, rows, notes); err != nil {
+		return err
+	}
+
+	if err := removeCheckout(ctx, in.main, path, name); err != nil {
 		return err
 	}
 
@@ -210,12 +204,19 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if ws != nil {
-		if err := herdr.CloseWorkspace(ctx, in.main, ws.ID); err != nil {
-			return err
-		}
+		return herdr.CloseWorkspace(ctx, in.main, ws.ID)
 	}
 
-	return removeCheckout(ctx, in.main, path, name)
+	return nil
+}
+
+// appendNote adds note to notes unless it is empty.
+func appendNote(notes []string, note string) []string {
+	if note == "" {
+		return notes
+	}
+
+	return append(notes, note)
 }
 
 // finishTarget is the task's branch and the worktree that has it checked
@@ -325,105 +326,132 @@ func resolved(p string) string {
 	return filepath.Join(resolved(parent), filepath.Base(p))
 }
 
-// localDefault is the default branch as a local name ("main"), read from
-// what origin points HEAD at. Without it finish cannot tell a stacked PR
-// from one against main, nor what to pull.
-func localDefault(ctx context.Context, dir string) (string, error) {
-	def := defaultBranch(ctx, dir)
-	if def == "" {
-		return "", errors.New("cannot tell the default branch: origin has no HEAD here (git remote set-head origin -a)")
-	}
-
-	return strings.TrimPrefix(def, "origin/"), nil
-}
-
 // landPull makes sure the branch's request is merged: merges it when open,
 // confirms it when already merged, refuses otherwise. It then deletes the
 // remote branch when the host still has it, which is what retargets a PR
-// stacked on this branch. The note says when the merge was not this run's.
-func landPull(ctx context.Context, in finishInput, name, def string) (pull, string, error) {
-	p, err := viewPull(ctx, in.main, in.host, name)
+// stacked on this branch. The notes say when the merge was not this run's
+// and when the merge method was a default rather than a declaration.
+func landPull(ctx context.Context, in finishInput, name, def string) (pull, []string, error) {
+	p, err := in.host.pull(ctx, name)
 	if err != nil {
-		return pull{}, "", err
+		return pull{}, nil, err
 	}
 
-	var note string
+	var notes []string
 
 	switch p.status() {
 	case pullOpen:
 		if base := p.base(); base != "" && base != def {
-			return pull{}, "", fmt.Errorf("%s is stacked on %s, not %s: finish the task that branch belongs to first, "+
-				"and the host retargets this PR to %s", p.url(), base, def, def)
+			return pull{}, nil, fmt.Errorf(
+				"%s is stacked on %s, not %s: finish the task that branch belongs to first, "+
+					"and the host retargets this PR to %s",
+				p.url(),
+				base,
+				def,
+				def,
+			)
 		}
 
-		method, err := mergeMethod(ctx, in.main, in.host, in.hosting)
+		method, note, err := in.host.mergeMethod(ctx, in.hosting)
 		if err != nil {
-			return pull{}, "", err
+			return pull{}, nil, err
 		}
 
-		if p, err = mergePull(ctx, in.main, in.host, name, method); err != nil {
-			return pull{}, "", err
+		notes = appendNote(notes, note)
+
+		if p, err = in.host.mergePull(ctx, name, method); err != nil {
+			return pull{}, nil, err
 		}
 	case pullMerged:
-		note = p.url() + " was already merged"
+		notes = append(notes, p.url()+" was already merged")
 	default:
-		return pull{}, "", fmt.Errorf("%s is %s without a merge: finish only finishes merged or mergeable work",
+		return pull{}, nil, fmt.Errorf("%s is %s without a merge: finish only finishes merged or mergeable work",
 			p.url(), p.status())
 	}
 
 	if p.status() != pullMerged || p.sha() == "" {
-		return pull{}, "", fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
-			in.host, p.url(), p.status())
+		return pull{}, nil, fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
+			in.host.name, p.url(), p.status())
 	}
 
 	exists, err := gitx.RemoteBranchExists(ctx, in.main, name)
 	if err != nil {
-		return pull{}, "", err
+		return pull{}, nil, err
 	}
 
 	if exists {
-		if err := deleteRemoteBranch(ctx, in.main, in.host, name); err != nil {
-			return pull{}, "", fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.url(), err)
+		if err := in.host.deleteRemoteBranch(ctx, name); err != nil {
+			return pull{}, nil, fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.url(), err)
 		}
 	}
 
-	return p, note, nil
+	return p, notes, nil
 }
 
 // pullMain brings the local default branch up to the merge: a
 // fast-forward pull when the main checkout is on it, a fetch into the
-// branch when the checkout is parked elsewhere. Either way the merge
-// commit must then be in it, or nothing local is removed.
-func pullMain(ctx context.Context, main, def, sha string, notes *[]string) error {
+// branch when the checkout is parked elsewhere, which the note says.
+// Either way the merge commit must then be in it, or nothing local is
+// removed.
+func pullMain(ctx context.Context, main, def, sha string) (string, error) {
+	var note string
+
 	if gitx.CurrentBranch(ctx, main) == def {
 		if err := gitx.PullFF(ctx, main); err != nil {
-			return err
+			return "", err
 		}
 	} else {
 		if err := gitx.FetchInto(ctx, main, def); err != nil {
-			return err
+			return "", err
 		}
 
-		*notes = append(
-			*notes,
-			fmt.Sprintf("%s updated by fetch: the main checkout at %s is on another branch and was left there",
-				def, main),
-		)
+		note = fmt.Sprintf("%s updated by fetch: the main checkout at %s is on another branch and was left there",
+			def, main)
 	}
 
 	if !gitx.IsAncestor(ctx, main, sha, def) {
-		return fmt.Errorf("merge commit %s is not in %s after pulling: nothing removed", sha, def)
+		return "", fmt.Errorf("merge commit %s is not in %s after pulling: nothing removed", sha, def)
 	}
 
-	return nil
+	return note, nil
+}
+
+// releaseDependents clears the dependency other branches recorded on the
+// finished one with `start --after`. Its code is in the default branch
+// now, so a dependent's ship and pr steps act as if nothing was recorded
+// and target the default branch; the note says so, since the dependent's
+// agent is not told otherwise. Without this the dependents would point at
+// a branch that no longer exists anywhere.
+func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, error) {
+	var notes []string
+
+	for _, e := range gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`) {
+		if e.Value != branch {
+			continue
+		}
+
+		dependent := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgAfterBranch)
+
+		for _, key := range []string{cfgAfter, cfgAfterBranch} {
+			if err := gitx.UnsetConfig(ctx, dir, "branch."+dependent+"."+key); err != nil {
+				return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
+			}
+		}
+
+		notes = append(notes, fmt.Sprintf("%s depended on %s: the dependency is cleared, its ship and pr target %s now",
+			dependent, branch, def))
+	}
+
+	return notes, nil
 }
 
 // archivePlan moves the task's plan out of the worktree before the worktree
 // goes: into main's plans/archive/ for in-repo storage, into the shared
 // root's archive/ for out-of-tree. Prior versions already archived beside it
 // move along. A missing plan is a note, since a task shipped without one
-// still needs cleaning up.
-func archivePlan(worktree, main, plansDir, id string) (string, []string) {
+// still needs cleaning up; a plan that cannot be moved is an error, since
+// removing the worktree would delete it.
+func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	src := filepath.Join(worktree, ".f10", "plans")
 	dst := filepath.Join(main, ".f10", "plans", "archive")
 
@@ -432,15 +460,13 @@ func archivePlan(worktree, main, plansDir, id string) (string, []string) {
 	}
 
 	plan := filepath.Join(src, id+".md")
-	if _, err := os.Stat(plan); err != nil {
-		return "", []string{fmt.Sprintf("no plan at %s, nothing archived", plan)}
+	if !exists(plan) {
+		return "", fmt.Sprintf("no plan at %s, nothing archived", plan), nil
 	}
 
 	if err := os.MkdirAll(dst, 0o750); err != nil {
-		return "", []string{fmt.Sprintf("plan left at %s: %v", plan, err)}
+		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
 	}
-
-	var notes []string
 
 	// in-repo: older versions the worktree archived go first, so the
 	// current plan ends up with the highest number
@@ -448,71 +474,38 @@ func archivePlan(worktree, main, plansDir, id string) (string, []string) {
 		older, _ := filepath.Glob(filepath.Join(src, "archive", id+".*.md"))
 		for _, o := range older {
 			if err := os.Rename(o, freeArchiveName(dst, id)); err != nil {
-				notes = append(notes, fmt.Sprintf("prior plan left at %s: %v", o, err))
+				return "", "", fmt.Errorf("archiving the prior plan at %s: %w", o, err)
 			}
 		}
 	}
 
 	target := freeArchiveName(dst, id)
 	if err := os.Rename(plan, target); err != nil {
-		return "", append(notes, fmt.Sprintf("plan left at %s: %v", plan, err))
+		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
 	}
 
-	return target, notes
+	return target, "", nil
 }
 
 // freeArchiveName is `<id>.md` under dir when free, else `<id>.<N>.md` with
 // the next integer, the numbering steps/plan.md uses.
 func freeArchiveName(dir, id string) string {
 	candidate := filepath.Join(dir, id+".md")
-	if _, err := os.Stat(candidate); err != nil {
+	if !exists(candidate) {
 		return candidate
 	}
 
 	for n := 1; ; n++ {
 		candidate = filepath.Join(dir, fmt.Sprintf("%s.%d.md", id, n))
-		if _, err := os.Stat(candidate); err != nil {
+		if !exists(candidate) {
 			return candidate
 		}
 	}
 }
 
-// removeCheckout removes the worktree and deletes its branch, through
-// worktrunk when it is on PATH so the project's hooks fire, else with git.
-// The branch goes with -D: the host confirmed the merge, which a squash or
-// rebase hides from git.
-func removeCheckout(ctx context.Context, main, path, branch string) error {
-	if shell.Has("wt") {
-		res, err := shell.Capture(
-			ctx,
-			main,
-			"wt",
-			"remove",
-			"--yes",
-			"--force-delete",
-			"--foreground",
-			"--format",
-			"json",
-			branch,
-		)
-		if err != nil {
-			return fmt.Errorf("running wt remove: %w", err)
-		}
+// exists reports whether something is at path.
+func exists(path string) bool {
+	_, err := os.Stat(path)
 
-		if res.Code != 0 {
-			return fmt.Errorf(
-				"wt remove %s: %s",
-				branch,
-				cmp.Or(res.Stderr, res.Stdout, fmt.Sprintf("exit %d", res.Code)),
-			)
-		}
-
-		return nil
-	}
-
-	if err := gitx.RemoveWorktree(ctx, main, path); err != nil {
-		return err
-	}
-
-	return gitx.DeleteBranch(ctx, main, branch)
+	return err == nil
 }

@@ -77,6 +77,8 @@ first pipeline step, ship rebases onto the base branch when it moved, and asks o
 proceed on the plan's assumption - when it still equals the default branch. The pr step opens
 the PR or MR against the base branch, so it is stacked and the host retargets it when the base
 merges; a base not yet on origin stops that step rather than pushing another task's branch.
+`f10 finish` on the base task clears the record from every dependent, since the base's code is
+in the default branch from then on.
 
 It runs inside a Herdr session only. Outside one it stops before touching anything and points
 at https://herdr.dev.
@@ -99,8 +101,9 @@ only what start could have created.
    refusal too: finish the task that base belongs to first, and the host retargets this PR.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method:
    squash` (or `merge`, `rebase`, in any case). Absent, the repo's settings decide: on GitHub the
-   one method allowed, else squash; on GitLab the project's squash option, since GitLab fixes the
-   strategy per project.
+   one method allowed, else squash with a note beneath the report saying the default was taken
+   and how to declare one; on GitLab the project's squash option, since GitLab fixes the strategy
+   per project.
 4. **The remote branch is deleted** when origin still has it, through the host's API (glab's
    `--remove-source-branch` usually did it already). On GitHub, deleting the branch is what
    retargets a PR stacked on it to main. GitLab retargets when the base's MR is merged, so the
@@ -109,14 +112,20 @@ only what start could have created.
    default branch is fetched into without touching the checkout, and a note says so. Either way
    the merge commit must be in the local default branch, or the run stops here with nothing
    removed.
-6. **The plan is archived**: with in-repo storage `<worktree>/.f10/plans/<ID>.md` moves to
+6. **Dependents are released.** A branch another task started with `--after` on this one has
+   `branch.<name>.f10-after` and `.f10-after-branch` in local config; both are cleared, since the
+   base is in the default branch now and the dependent's ship and pr steps target it from here.
+   A note names each dependent.
+7. **The plan is archived**: with in-repo storage `<worktree>/.f10/plans/<ID>.md` moves to
    main's `.f10/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken, older archived versions
-   first); with out-of-tree storage it moves within the shared root. No plan is a note.
-7. **The report**, then the Herdr workspace closes (the agent goes with it), then the worktree
-   and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else
-   `git worktree remove` and `git branch -D`. With `--yes` from inside the worktree, main's
+   first); with out-of-tree storage it moves within the shared root. No plan is a note. A plan
+   that cannot be moved is an error and nothing is removed, since with in-repo storage the
+   worktree holds the only copy.
+8. **The report**, then the worktree and its local branch are removed - through `wt remove`
+   when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr
+   workspace closes (the agent goes with it). With `--yes` from inside the worktree, main's
    workspace is focused before the close so the user lands at home; the close ends the process,
-   so a worktree still listed afterwards is removed by running `f10 finish <id>` again from main.
+   which is why it comes last.
 
 Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already
 archived, there is no workspace to close, and only what is left is removed.

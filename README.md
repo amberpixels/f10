@@ -471,10 +471,12 @@ f10 finish 1042 --yes    # the same from inside the task's own workspace, which 
 It merges through `gh pr merge` or `glab mr merge` when the PR is open, or confirms it is already
 merged, and stops with the host's own reason when the host refuses: red CI, a required review, a
 conflict. It never passes `--admin`. Everything after is gated on the merge having landed in the
-local default branch. Refusals come before anything changes: a dirty worktree, named file by
-file, with no `--force`; a PR stacked on another task's branch, which waits for that task; a cwd
-inside the worktree being removed, unless `--yes` was passed. `/f10:finish` is the skill that
-turns that last refusal into one question.
+local default branch, and the plan is out of the worktree before the worktree goes. Branches
+started with `--after` on the finished one lose their dependency, since its code is in main now.
+Refusals come before anything changes: a dirty worktree, named file by file, with no `--force`;
+a PR stacked on another task's branch, which waits for that task; a cwd inside the worktree
+being removed, unless `--yes` was passed. `/f10:finish` is the skill that turns that last
+refusal into one question.
 
 ### Lookaround by design
 

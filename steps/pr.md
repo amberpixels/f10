@@ -22,7 +22,9 @@ Context: per `conventions/context.md` - the PR adapter comes from `project.md â†
    <branch>` - so it is stacked, and the host retargets it when the base merges. The base must
    already be on origin: when it is not, stop and report (`conventions/failure.md`) with the
    branch named and `next: push the base task's branch`. Never push another task's branch from
-   this run, and never open against the default branch instead.
+   this run, and never open against the default branch instead. One exception: a base that
+   exists neither locally nor on origin was finished and deleted, so its code is in the default
+   branch - `git config --unset` both keys and open against the default branch.
 4. **Open it** via the project's PR adapter - a skill, or plain `gh pr create` /
    `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
    An adapter's numbered procedure is a **spec, not a turn budget**: run every step it declares,

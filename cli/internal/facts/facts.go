@@ -50,12 +50,13 @@ type Effective struct {
 	Unrecognized []Field `json:"unrecognized,omitempty"`
 
 	// The fixed-vocabulary sub-facts v1 extracts.
-	Layering       string `json:"layering"`
-	Visibility     string `json:"visibility"`
-	Storage        string `json:"storage"`
-	TrackerKind    string `json:"trackerKind,omitempty"`
-	IDPrefix       string `json:"idPrefix,omitempty"`       // "ABC", "F10" - the task id format's letters
-	IDPrefixOrigin string `json:"idPrefixOrigin,omitempty"` // "declared (<layer>)" or "derived from project name <name>"
+	Layering        string `json:"layering"`
+	Visibility      string `json:"visibility"`
+	Storage         string `json:"storage"`
+	TrackerKind     string `json:"trackerKind,omitempty"`
+	IDPrefix        string `json:"idPrefix,omitempty"`        // "ABC", "F10" - the task id format's letters
+	IDPrefixOrigin  string `json:"idPrefixOrigin,omitempty"`  // "declared (<layer>)" or "derived from project name <name>"
+	IDPrefixDerived bool   `json:"idPrefixDerived,omitempty"` // the prefix came from the project's name, not a declaration
 }
 
 // contractFields is the project.md contract. The order is presentation
@@ -176,6 +177,7 @@ func Build(res *resolve.Resolution, pb *probe.Probes) *Effective {
 	if eff.IDPrefix == "" {
 		if eff.IDPrefix = projectPrefix(res.Project); eff.IDPrefix != "" {
 			eff.IDPrefixOrigin = "derived from project name " + res.Project
+			eff.IDPrefixDerived = true
 		}
 	}
 

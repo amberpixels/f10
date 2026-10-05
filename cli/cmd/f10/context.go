@@ -99,16 +99,38 @@ func (t *target) reference(ctx context.Context, explicit string) (ref.Ref, error
 	return ref.Resolver{Prefix: t.eff.IDPrefix, Dir: t.dir}.Resolve(ctx, explicit)
 }
 
-// cli is the tracker/host CLI probe routing settled on, or an error naming
-// the evidence. A wrong guess opens the wrong site, so "unknown" refuses
-// rather than picking.
-func (t *target) hostCLI() (string, error) {
+// host is the tracker/host CLI probe routing settled on, bound to this
+// checkout, or an error naming the evidence. A wrong guess opens the wrong
+// site, so "unknown" refuses rather than picking.
+func (t *target) host() (host, error) {
 	switch t.pb.CLI.Value {
 	case "gh", "glab":
-		return t.pb.CLI.Value, nil
+		return host{name: t.pb.CLI.Value, dir: t.dir}, nil
 	default:
-		return "", errors.New("no host CLI for this checkout: " + t.pb.CLI.Evidence)
+		return host{}, errors.New("no host CLI for this checkout: " + t.pb.CLI.Evidence)
 	}
+}
+
+// sharedPlansDir is the plans dir every worktree shares with out-of-tree
+// storage, or "" with in-repo storage, where each worktree keeps its own
+// plans under its .f10/plans.
+func (t *target) sharedPlansDir() string {
+	if t.res.StorageRoot == filepath.Join(t.res.CheckoutRoot, ".f10") {
+		return ""
+	}
+
+	return t.pb.PlansDir
+}
+
+// fact is the effective value of one project.md field, or "".
+func (t *target) fact(name string) string {
+	for _, f := range t.eff.Fields {
+		if f.Name == name {
+			return f.Value
+		}
+	}
+
+	return ""
 }
 
 // follow performs the side effect a url deserves, or prints it when the
