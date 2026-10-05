@@ -379,6 +379,7 @@ for scripting.
 
 ```bash
 just install   # go install ./cli/cmd/f10
+f10 --version  # the plugin's version from a release build, the commit from a dev one
 f10 config
 ```
 

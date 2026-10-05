@@ -29,5 +29,4 @@ session. On no, stop.
 
 Every other refusal is final: print the message verbatim and stop. It names the cause (outside
 Herdr, a dirty worktree file by file, no branch or worktree for the task, the host's reason for
-not merging, a PR stacked on another task's branch, a closed PR) and what to do. If `f10` is
-not on `PATH`, say so and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
+not merging, a PR stacked on another task's branch, a closed PR) and what to do. If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.

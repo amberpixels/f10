@@ -21,5 +21,4 @@ Then print the command's report block in a fenced `yaml` block (`conventions/rep
 line it printed beneath it, and stop. Add nothing: the work now happens in the other workspace.
 
 If the command fails, print its message verbatim and stop - it names the cause (outside Herdr,
-no branch for `--after` or `--base`, several branches for the task) and what to do. If `f10` is not on `PATH`,
-say so and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
+no branch for `--after` or `--base`, several branches for the task) and what to do. If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
