@@ -37,6 +37,27 @@ in their own words). You may suggest a better-fitting pipeline for the task's si
 switch without the user's pick. A **(planless)** pipeline skips capture/fetch/plan for
 free-text input (`conventions/context.md`).
 
+**Dependency:** before the first pipeline step, read what `f10 start --after` recorded on the
+branch:
+
+```
+git config --get branch."$(git branch --show-current)".f10-after          # the base task
+git config --get branch."$(git branch --show-current)".f10-after-branch   # its branch
+```
+
+Nothing recorded: nothing changes. Recorded: `git fetch origin`, resolve the base branch
+local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of three:
+- the base is an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
+- the base moved: `git rebase <base>` before implement. A conflict ends the run as a failure
+  (`conventions/failure.md`), the rebase aborted so the tree stays as it was;
+- the base still equals the default branch's commit: the base task has no code yet. Ask once
+  (AskUserQuestion): **wait**, or **proceed on the plan's assumption**. Wait ends the run blocked
+  the way a judge stop does - `f10-state.sh set ship blocked implement`, a `note` naming the base
+  task - and is not a failure. Proceed builds against the base task's plan as the plan file
+  records it, with no fallback for its absence.
+
+The pr step reads the same keys to stack the PR on the base branch (`steps/pr.md`).
+
 Run the pipeline's steps **in the declared order**. The `--all` bundle already carries every
 generic step, and project-defined ones arrived in it as overlays, so read nothing further before
 running them. Any extra text the user adds is steering/notes for the run.

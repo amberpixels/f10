@@ -15,7 +15,10 @@ the phase; `f10-state.sh set plan done` once the plan file is on disk.
    UI component gallery the project treats as canonical - design in terms of what exists
    there, never invent a parallel component. No guardrails declared → skip.
 3. **Produce a staged plan.** Open it with a one-line **Roles** note recording the roles this
-   plan was written under (so `/f10:ship` inherits them instead of re-deriving). Then:
+   plan was written under (so `/f10:ship` inherits them instead of re-deriving). A run whose
+   steering names a base task (`f10 start --after`) adds a **Depends on** line beneath it - the
+   task id and the path of its plan - so a fresh `/f10:ship` agent sees the dependency without
+   the prompt. Then:
    ordered **stages**, the critical files each touches, any data/migration work, the tests to
    add or adjust, and the key tradeoffs / alternatives considered. End with a
    **`## Gaps` section** capturing the real forks that need the
