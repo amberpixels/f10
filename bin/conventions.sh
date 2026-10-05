@@ -3,12 +3,12 @@
 #
 # Cats the six cross-cutting rule files every f10 run obeys. Deliberately inert: no arguments, no
 # git, no filesystem decisions, no probes. Its output is identical on every machine, in every repo,
-# for every step - which is precisely why it is not part of resolve.sh, whose output is none of
+# for every step - which is precisely why it is not part of bundle.sh, whose output is none of
 # those things.
 #
 # That split is what makes the load-once rule statable. Conventions cannot vary, so a second copy in
-# one context window is waste; project resolution can vary mid-conversation (a different worktree, an
-# edited project.md), so resolve.sh is never skipped. Fused, "load the conventions once" could not be
+# one context window is waste; the project bundle can vary mid-conversation (a different worktree, an
+# edited project.md), so bundle.sh is never skipped. Fused, "load the conventions once" could not be
 # said without also skipping facts the run still needed.
 #
 # Usage:  conventions.sh

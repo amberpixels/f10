@@ -69,7 +69,7 @@ func TestParse(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Resolver{Prefix: c.prefix}.parse(c.token, OriginExplicit)
+			got, err := Lookup{Prefix: c.prefix}.parse(c.token, OriginExplicit)
 			if c.wantErr {
 				if err == nil {
 					t.Fatalf("parse(%q) = %+v, want an error", c.token, got)
@@ -142,7 +142,7 @@ func TestMatchBranch(t *testing.T) {
 // The cascade's precedence, exercised through the one path a test can drive
 // end to end without a checkout: explicit beats everything, and the session
 // answers when nothing else does.
-func TestResolveCascade(t *testing.T) {
+func TestLookupCascade(t *testing.T) {
 	dir := t.TempDir()
 	state := []byte("v 1\ntask GH-22\nurl https://x\n")
 
@@ -154,34 +154,34 @@ func TestResolveCascade(t *testing.T) {
 	t.Setenv("F10_SESSION_ID", "sess-1")
 
 	// no branch to find one in: Dir is a temp dir, not a checkout
-	r := Resolver{Prefix: "GH", Dir: dir}
+	r := Lookup{Prefix: "GH", Dir: dir}
 
-	got, err := r.Resolve(t.Context(), "")
+	got, err := r.Find(t.Context(), "")
 	if err != nil {
-		t.Fatalf("Resolve(\"\"): %v", err)
+		t.Fatalf("Find(\"\"): %v", err)
 	}
 
 	if got.ID != "GH-22" || got.Origin != OriginSession {
-		t.Errorf("Resolve(\"\") = %q from %q, want GH-22 from session", got.ID, got.Origin)
+		t.Errorf("Find(\"\") = %q from %q, want GH-22 from session", got.ID, got.Origin)
 	}
 
-	got, err = r.Resolve(t.Context(), "7")
+	got, err = r.Find(t.Context(), "7")
 	if err != nil {
-		t.Fatalf("Resolve(\"7\"): %v", err)
+		t.Fatalf("Find(\"7\"): %v", err)
 	}
 
 	if got.ID != "GH-7" || got.Origin != OriginExplicit {
-		t.Errorf("Resolve(\"7\") = %q from %q, want GH-7 from explicit", got.ID, got.Origin)
+		t.Errorf("Find(\"7\") = %q from %q, want GH-7 from explicit", got.ID, got.Origin)
 	}
 }
 
-func TestResolveExhausted(t *testing.T) {
+func TestLookupExhausted(t *testing.T) {
 	t.Setenv("F10_STATE_DIR", t.TempDir())
 	t.Setenv("F10_SESSION_ID", "nobody")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
 
-	_, err := Resolver{Prefix: "GH", Dir: t.TempDir()}.Resolve(context.Background(), "")
+	_, err := Lookup{Prefix: "GH", Dir: t.TempDir()}.Find(context.Background(), "")
 	if !errors.Is(err, ErrNoReference) {
-		t.Fatalf("Resolve with nothing to find = %v, want ErrNoReference", err)
+		t.Fatalf("Find with every tier empty = %v, want ErrNoReference", err)
 	}
 }

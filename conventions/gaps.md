@@ -1,7 +1,7 @@
 # Convention · gaps - open decisions that need the user
 
 A **gap** is a genuine fork that needs *the user's* call - one that changes scope or is hard to
-reverse - **not** something you should resolve yourself. You still decide ~90% from the code and
+reverse - **not** something you should settle yourself. You still decide ~90% from the code and
 its house style (see `steps/fetch.md`); gaps are only the real forks left over.
 
 Gaps are **recorded, not blocking.** The plan is always complete and shippable on its noted

@@ -1,9 +1,9 @@
-// Package resolve locates the f10 configuration layers for a working
+// Package layout locates the f10 configuration layers for a working
 // directory: the checkout root, the instruction layers in precedence order,
-// their layering mode, and the storage root. bin/resolve.sh is the semantics
+// their layering mode, and the storage root. bin/bundle.sh is the semantics
 // oracle - the parity test in this package runs both against the same
 // fixtures, so a change to either side fails loudly until both move.
-package resolve
+package layout
 
 import (
 	"context"
@@ -29,9 +29,9 @@ type Layer struct {
 	Dir   string `json:"dir"`
 }
 
-// A Resolution names where configuration lives for one working directory.
-// Path fields are physical (symlinks resolved), matching the resolver script.
-type Resolution struct {
+// A Layout names where configuration lives for one working directory.
+// Path fields are physical (symlinks resolved), matching bundle.sh.
+type Layout struct {
 	Cwd              string  // where the run started
 	CheckoutRoot     string  // root of the checkout the run started in
 	MainRoot         string  // root of the main checkout; empty when git cannot name one
@@ -40,14 +40,14 @@ type Resolution struct {
 	Layering         string  // LayeringExtends or LayeringReplaces
 	LayeringDeclared bool    // a worktree project.md carries the Layering line
 	Layers           []Layer // precedence order: later wins
-	Source           string  // human description; wording matches resolve.sh
+	Source           string  // human description; wording matches bundle.sh
 	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
 }
 
-// Resolve resolves the configuration layout for cwd. It never fails -
+// Locate finds the configuration layout for cwd. It never fails -
 // absence is a valid result, same charter as the script.
-func Resolve(ctx context.Context, cwd string) *Resolution {
-	res := &Resolution{Cwd: cwd, Layering: LayeringExtends}
+func Locate(ctx context.Context, cwd string) *Layout {
+	lay := &Layout{Cwd: cwd, Layering: LayeringExtends}
 
 	here := gitx.Out(ctx, cwd, "rev-parse", "--show-toplevel")
 	if here == "" {
@@ -56,18 +56,18 @@ func Resolve(ctx context.Context, cwd string) *Resolution {
 		here = canon(here)
 	}
 
-	res.CheckoutRoot = here
-	res.MainRoot = mainWorktree(ctx, cwd)
+	lay.CheckoutRoot = here
+	lay.MainRoot = mainWorktree(ctx, cwd)
 
 	// the base layer is main's, or simply this checkout's where git cannot
 	// name a main worktree
 	baseLabel, baseRoot := "checkout", here
-	if res.MainRoot != "" {
-		baseLabel, baseRoot = "main", res.MainRoot
+	if lay.MainRoot != "" {
+		baseLabel, baseRoot = "main", lay.MainRoot
 	}
 
-	res.Project = filepath.Base(baseRoot)
-	res.StorageRoot = filepath.Join(here, ".f10")
+	lay.Project = filepath.Base(baseRoot)
+	lay.StorageRoot = filepath.Join(here, ".f10")
 
 	baseInstr := existingDir(filepath.Join(baseRoot, ".f10", "instructions"))
 
@@ -81,59 +81,59 @@ func Resolve(ctx context.Context, cwd string) *Resolution {
 	// project.md - extends it.
 	if wtInstr != "" && baseInstr != "" {
 		if decl := layeringDecl(filepath.Join(wtInstr, "project.md")); decl != "" {
-			res.LayeringDeclared = true
+			lay.LayeringDeclared = true
 			if strings.Contains(decl, "replaces") || strings.Contains(decl, "Replaces") {
-				res.Layering = LayeringReplaces
+				lay.Layering = LayeringReplaces
 			}
 		}
 	}
 
 	switch {
-	case baseInstr != "" && wtInstr != "" && res.Layering == LayeringExtends:
-		res.Layers = []Layer{
+	case baseInstr != "" && wtInstr != "" && lay.Layering == LayeringExtends:
+		lay.Layers = []Layer{
 			{Label: baseLabel, Dir: baseInstr},
 			{Label: "worktree", Dir: wtInstr},
 		}
-		res.Source = "layered - " + baseLabel + " (" + baseRoot + ") + worktree (" + here + ")"
+		lay.Source = "layered - " + baseLabel + " (" + baseRoot + ") + worktree (" + here + ")"
 	case wtInstr != "":
-		res.Layers = []Layer{{Label: "worktree", Dir: wtInstr}}
-		res.Source = "worktree (" + here + ")"
+		lay.Layers = []Layer{{Label: "worktree", Dir: wtInstr}}
+		lay.Source = "worktree (" + here + ")"
 
 		if baseInstr != "" {
-			res.Source += " - replaces main"
+			lay.Source += " - replaces main"
 		}
 	case baseInstr != "":
-		res.Layers = []Layer{{Label: baseLabel, Dir: baseInstr}}
-		res.Source = baseLabel + " (" + baseRoot + ")"
+		lay.Layers = []Layer{{Label: baseLabel, Dir: baseInstr}}
+		lay.Source = baseLabel + " (" + baseRoot + ")"
 
 		if here != baseRoot {
-			res.Source += " via worktree fallback"
+			lay.Source += " via worktree fallback"
 		}
 	default:
 		// out-of-tree is per-project by construction, so it is a single
 		// layer and only a last resort - and finding it moves the whole
 		// storage root, plans included
 		if home, err := os.UserHomeDir(); err == nil {
-			oot := existingDir(filepath.Join(home, ".f10", res.Project, "instructions"))
+			oot := existingDir(filepath.Join(home, ".f10", lay.Project, "instructions"))
 			if oot != "" {
-				res.Layers = []Layer{{Label: "out-of-tree", Dir: oot}}
-				res.Source = "out-of-tree (~/.f10/" + res.Project + ")"
-				res.StorageRoot = filepath.Join(home, ".f10", res.Project)
+				lay.Layers = []Layer{{Label: "out-of-tree", Dir: oot}}
+				lay.Source = "out-of-tree (~/.f10/" + lay.Project + ")"
+				lay.StorageRoot = filepath.Join(home, ".f10", lay.Project)
 			}
 		}
 	}
 
-	if res.Source == "" {
-		res.Source = "none"
+	if lay.Source == "" {
+		lay.Source = "none"
 	}
 
 	// a config below the root is not a per-directory config - note it
 	// rather than pass it over silently
 	if canon(cwd) != here {
-		res.NestedIgnored = existingDir(filepath.Join(cwd, ".f10", "instructions"))
+		lay.NestedIgnored = existingDir(filepath.Join(cwd, ".f10", "instructions"))
 	}
 
-	return res
+	return lay
 }
 
 // mainWorktree returns the main checkout's root: the first worktree git

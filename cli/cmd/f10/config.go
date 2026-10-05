@@ -21,7 +21,7 @@ import (
 type view struct {
 	CheckoutRoot    string        `json:"checkoutRoot"`
 	StorageRoot     string        `json:"storageRoot"`
-	Instructions    string        `json:"instructions"` // source description, resolve.sh wording
+	Instructions    string        `json:"instructions"` // source description, bundle.sh wording
 	NestedIgnored   string        `json:"nestedIgnored,omitempty"`
 	Remote          string        `json:"remote,omitempty"`
 	PlansDir        string        `json:"plansDir"`
@@ -35,7 +35,7 @@ type view struct {
 	IDPrefix        string        `json:"idPrefix,omitempty"`
 	IDPrefixOrigin  string        `json:"idPrefixOrigin,omitempty"`
 	IDPrefixDerived bool          `json:"idPrefixDerived,omitempty"`
-	Roots           []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C resolves paths only
+	Roots           []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
 
 func configCommand() *cli.Command {
@@ -57,13 +57,13 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	res, pb, eff := t.res, t.pb, t.eff
+	lay, pb, eff := t.lay, t.pb, t.eff
 
 	v := &view{
-		CheckoutRoot:    res.CheckoutRoot,
-		StorageRoot:     res.StorageRoot,
-		Instructions:    res.Source,
-		NestedIgnored:   res.NestedIgnored,
+		CheckoutRoot:    lay.CheckoutRoot,
+		StorageRoot:     lay.StorageRoot,
+		Instructions:    lay.Source,
+		NestedIgnored:   lay.NestedIgnored,
 		Remote:          pb.RemoteURL,
 		PlansDir:        pb.PlansDir,
 		Plans:           pb.Plans,
@@ -133,7 +133,7 @@ func renderHuman(w io.Writer, v *view) {
 	}
 
 	// -C takes a path with nothing configured; a bare name needs these
-	projectLookup := "paths only - set " + projects.RootsEnv + " to resolve -C by name"
+	projectLookup := "paths only - set " + projects.RootsEnv + " to find -C by name"
 	if len(v.Roots) > 0 {
 		projectLookup = strings.Join(v.Roots, ", ")
 	}

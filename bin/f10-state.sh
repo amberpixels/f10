@@ -37,7 +37,7 @@
 #
 # The only script here with an f10- prefix, because it is the only one that leaves the plugin: a
 # person types it by hand (`f10-state.sh show`, `doctor`), step prose names it bare, and the
-# statusline symlink points at it. resolve.sh and conventions.sh are plumbing a skill reaches by
+# statusline symlink points at it. bundle.sh and conventions.sh are plumbing a skill reaches by
 # full plugin-root path, so a bare name never meets a reader outside this directory.
 
 set -uo pipefail
@@ -69,7 +69,7 @@ file=""
 # session id, in the order the callers can supply it: an explicit override, the hook payload's
 # value (passed as $1 by the hook dispatcher), then the variable Claude Code exports into every
 # Bash tool call. Empty is a normal outcome - a script run by hand from a plain shell has none.
-resolve_sid() {
+find_sid() {
   sid="${1:-${F10_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}}"
   [ -n "$sid" ] || return 1
   sid="${sid//[^A-Za-z0-9._-]/_}" # it names a file; a session id never needs anything else
@@ -136,8 +136,8 @@ save() {
 # mechanical consequence of the chain's order, which is why it lives here and not in prose.
 #
 # `skipped` is the guess this rule can make on its own: "nobody said, and now it is too late".
-# Where positive evidence arrives that a phase's work exists from before - a task id resolving
-# (cmd_task), the ship skill reusing a saved plan - the phase is upgraded to `prior` instead:
+# Where positive evidence arrives that a phase's work exists from before - a task id the tracker
+# returned (cmd_task), the ship skill reusing a saved plan - the phase is upgraded to `prior` instead:
 # done, just not by this run.
 backfill() {
   case "$1" in
@@ -219,7 +219,7 @@ render() {
     fi
   fi
 
-  resolve_sid "$want" || return 0
+  find_sid "$want" || return 0
   load || return 0
 
   local now
@@ -317,7 +317,7 @@ cmd_set() {
       ;;
   esac
 
-  resolve_sid || exit 0
+  find_sid || exit 0
   load
   backfill "$phase"
   case "$phase" in
@@ -352,7 +352,7 @@ cmd_note() {
     echo "f10-state: note needs a reason" >&2
     exit 2
   }
-  resolve_sid || exit 0
+  find_sid || exit 0
   load
   st_note="$(printf '%s' "$reason" | tr '\n' ' ')"
   st_next="$(printf '%s' "$next" | tr '\n' ' ')"
@@ -370,7 +370,7 @@ cmd_final() {
     echo "f10-state: final needs a step name" >&2
     exit 2
   }
-  resolve_sid || exit 0
+  find_sid || exit 0
   load
   st_final="$step"
   save
@@ -383,11 +383,11 @@ cmd_task() {
     echo "f10-state: task needs an id" >&2
     exit 2
   }
-  resolve_sid || exit 0
+  find_sid || exit 0
   load
   st_task="$id"
   [ -n "$url" ] && st_url="$url"
-  # A task id resolving is positive evidence the task existed before this run - so a capture
+  # A task id the tracker returned is positive evidence the task existed before this run - so a capture
   # nobody reported (pending) or one backfill already wrote off (skipped) becomes `prior`, not a
   # hollow circle. `done` and `running` stay: capture.md reports those itself, in this run.
   case "$st_capture" in
@@ -408,8 +408,8 @@ cmd_task() {
 # whether capture is a phase this run will actually reach.
 #
 # It has to be guessed here because the alternative is worse. Reporting is best-effort, so a phase
-# still `pending` means "nobody said" - not "it did not happen" - and the badge has to resolve that
-# ambiguity in one direction or the other. Resolving it as "skipped" is what made a run that really
+# still `pending` means "nobody said" - not "it did not happen" - and the badge has to settle that
+# ambiguity in one direction or the other. Settling it as "skipped" is what made a run that really
 # did capture show a hollow first glyph. Guessing the route instead is wrong only for arguments no
 # one writes, and the capture step's own report overrides it the moment it speaks.
 is_description() {
@@ -459,7 +459,7 @@ ref_task_of() {
 # one way this badge could actively mislead.
 cmd_seed() {
   local skill="${1:-}" args="${3:-}" cwd="${4:-}"
-  resolve_sid "${2:-}" || exit 0
+  find_sid "${2:-}" || exit 0
 
   # Chained only for plan/ship: capture always mints a new task, so an id argument to it never
   # continues anything. A bare number matches its prefixed form - `ship 1042` continues ABC-1042.
@@ -575,7 +575,7 @@ phase_text() { # phase_text <phase> <status>
 }
 
 cmd_show() {
-  resolve_sid || {
+  find_sid || {
     echo "no session id - nothing to show"
     exit 0
   }
@@ -588,7 +588,7 @@ cmd_show() {
 }
 
 cmd_clear() {
-  resolve_sid || exit 0
+  find_sid || exit 0
   rm -f "$file" 2>/dev/null
   exit 0
 }
@@ -621,7 +621,7 @@ cmd_doctor() {
   local sid_src="none"
   [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && sid_src="CLAUDE_CODE_SESSION_ID"
   [ -n "${F10_SESSION_ID:-}" ] && sid_src="F10_SESSION_ID"
-  resolve_sid
+  find_sid
   echo "=== f10 state ==="
   printf 'state dir   %s\n' "$state_dir"
   printf 'session     %s (from %s)\n' "${sid:--}" "$sid_src"
@@ -708,7 +708,7 @@ cmd_hook() {
         */.f10/plans/*.md) ;;
         *) exit 0 ;;
       esac
-      resolve_sid "$hook_sid" || exit 0
+      find_sid "$hook_sid" || exit 0
       load
       local base="${path##*/}"
       st_task="${base%.md}"
@@ -731,7 +731,7 @@ cmd_hook() {
       # the dropped-last-call case - and otherwise keeps spinning: a mid-pipeline turn end is a
       # pause, and a run that truly died there is the ttl's to retire. No `final` declared (or a
       # leafless running) → the old rule: promote, overstate, cheaper error.
-      resolve_sid "$hook_sid" || exit 0
+      find_sid "$hook_sid" || exit 0
       load || exit 0
       finalize=0
       if [ "$st_capture" = "running" ]; then
@@ -771,7 +771,7 @@ answer_status() {
   local text=""
   if command -v f10 >/dev/null 2>&1; then
     text="$(F10_SESSION_ID="$1" f10 status 2>&1)"
-  elif resolve_sid "$1" && load; then
+  elif find_sid "$1" && load; then
     text="$(print_run)"
   fi
   [ -n "$text" ] || text="no f10 run in this session"

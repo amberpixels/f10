@@ -4,14 +4,14 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
-	"github.com/amberpixels/f10/cli/internal/resolve"
 )
 
 func TestScaffoldSections(t *testing.T) {
 	cases := []struct {
 		name        string
-		res         *resolve.Resolution
+		lay         *layout.Layout
 		pb          *probe.Probes
 		wantSection []string
 		wantOmitted []string
@@ -21,7 +21,7 @@ func TestScaffoldSections(t *testing.T) {
 	}{
 		{
 			name: "github checkout with a stack and a justfile",
-			res:  &resolve.Resolution{Project: "demo", StorageRoot: "/repo/.f10"},
+			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
 			pb: &probe.Probes{
 				Host:   "github.com",
 				CLI:    probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
@@ -44,7 +44,7 @@ func TestScaffoldSections(t *testing.T) {
 		},
 		{
 			name: "gitlab checkout",
-			res:  &resolve.Resolution{Project: "demo", StorageRoot: "/repo/.f10"},
+			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
 			pb: &probe.Probes{
 				Host:  "gitlab.com",
 				CLI:   probe.Signal{Value: "glab", Evidence: "well-known host gitlab.com"},
@@ -61,7 +61,7 @@ func TestScaffoldSections(t *testing.T) {
 		},
 		{
 			name:        "no remote, no markers: only what has a defined default",
-			res:         &resolve.Resolution{Project: "bare", StorageRoot: "/repo/.f10"},
+			lay:         &layout.Layout{Project: "bare", StorageRoot: "/repo/.f10"},
 			pb:          &probe.Probes{CLI: probe.Signal{Value: "none", Evidence: "no origin remote"}},
 			wantSection: []string{"Visibility", "Storage"},
 			wantOmitted: []string{
@@ -72,7 +72,7 @@ func TestScaffoldSections(t *testing.T) {
 		},
 		{
 			name: "unknown routing leaves the tracker to a human",
-			res:  &resolve.Resolution{Project: "demo", StorageRoot: "/repo/.f10"},
+			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
 			pb: &probe.Probes{
 				Host: "git.example.com",
 				CLI:  probe.Signal{Value: "unknown", Evidence: "neither gh nor glab is logged in to git.example.com"},
@@ -82,7 +82,7 @@ func TestScaffoldSections(t *testing.T) {
 		},
 		{
 			name:    "out-of-tree storage names itself and its root",
-			res:     &resolve.Resolution{Project: "demo", StorageRoot: "/home/e/.f10/demo"},
+			lay:     &layout.Layout{Project: "demo", StorageRoot: "/home/e/.f10/demo"},
 			pb:      &probe.Probes{CLI: probe.Signal{Value: "none", Evidence: "no origin remote"}},
 			storage: "out-of-tree",
 			wantIn:  []string{"out-of-tree (/home/e/.f10/demo)"},
@@ -91,12 +91,12 @@ func TestScaffoldSections(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			eff := Build(tc.res, tc.pb)
+			eff := Build(tc.lay, tc.pb)
 			if tc.storage != "" {
 				eff.Storage = tc.storage
 			}
 
-			d := Scaffold(tc.res, tc.pb, eff)
+			d := Scaffold(tc.lay, tc.pb, eff)
 
 			if tc.wantSection != nil && !slices.Equal(d.Sections, tc.wantSection) {
 				t.Errorf("sections = %v, want %v", d.Sections, tc.wantSection)
@@ -132,13 +132,13 @@ func TestScaffoldRoundTrip(t *testing.T) {
 		Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
 	}
 
-	before := Build(&resolve.Resolution{Project: "demo", StorageRoot: "/repo/.f10"}, detected)
-	d := Scaffold(&resolve.Resolution{Project: "demo", StorageRoot: "/repo/.f10"}, detected, before)
+	before := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected)
+	d := Scaffold(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected, before)
 
-	declaring := &resolve.Resolution{
+	declaring := &layout.Layout{
 		Project:     "demo",
 		StorageRoot: "/repo/.f10",
-		Layers:      []resolve.Layer{{Label: "main", Dir: dirWithProjectMD(t, d.Markdown)}},
+		Layers:      []layout.Layer{{Label: "main", Dir: dirWithProjectMD(t, d.Markdown)}},
 	}
 
 	after := Build(declaring, detected)

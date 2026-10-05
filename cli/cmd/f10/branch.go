@@ -184,7 +184,7 @@ func namedRef(ctx context.Context, dir, branch string) (string, string, error) {
 }
 
 // refSHA is the commit a ref points at - a full ref, or a branch name git
-// resolves itself - or "" when there is no such ref.
+// expands itself - or "" when there is no such ref.
 func refSHA(ctx context.Context, dir, r string) string {
 	return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", r)
 }

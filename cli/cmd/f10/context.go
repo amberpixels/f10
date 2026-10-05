@@ -13,21 +13,21 @@ import (
 	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/ref"
-	"github.com/amberpixels/f10/cli/internal/resolve"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// A target is the project a command answers for: the resolved layout, the
+// A target is the project a command answers for: the layout, the
 // probes, and the effective facts. Every noun needs the same three, and -C
-// is the only thing that changes which checkout they describe - the
-// resolver already took a directory, so pointing it elsewhere is the whole
+// is the only thing that changes which checkout they describe - Locate
+// already takes a directory, so pointing it elsewhere is the whole
 // of cross-project support.
 type target struct {
 	dir    string
-	res    *resolve.Resolution
+	lay    *layout.Layout
 	pb     *probe.Probes
 	eff    *facts.Effective
 	scoped bool // -C named another project, which collapses the ref cascade
@@ -39,10 +39,10 @@ func targetFor(ctx context.Context, cmd *cli.Command) (*target, error) {
 		return nil, err
 	}
 
-	res := resolve.Resolve(ctx, dir)
-	pb := probe.Run(ctx, res)
+	lay := layout.Locate(ctx, dir)
+	pb := probe.Run(ctx, lay)
 
-	return &target{dir: dir, res: res, pb: pb, eff: facts.Build(res, pb), scoped: scoped}, nil
+	return &target{dir: dir, lay: lay, pb: pb, eff: facts.Build(lay, pb), scoped: scoped}, nil
 }
 
 // rootDir turns -C into a directory. A path needs no lookup and always
@@ -60,7 +60,7 @@ func rootDir(cmd *cli.Command) (string, bool, error) {
 	}
 
 	if projects.IsName(sel) {
-		dir, err := projects.Resolve(sel)
+		dir, err := projects.Find(sel)
 
 		return dir, true, err
 	}
@@ -76,7 +76,7 @@ func rootDir(cmd *cli.Command) (string, bool, error) {
 
 	dir, err := filepath.Abs(sel)
 	if err != nil {
-		return "", false, fmt.Errorf("resolving %q: %w", sel, err)
+		return "", false, fmt.Errorf("finding %q: %w", sel, err)
 	}
 
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
@@ -86,7 +86,7 @@ func rootDir(cmd *cli.Command) (string, bool, error) {
 	return dir, true, nil
 }
 
-// reference resolves a task reference for this target. Under -C the cascade
+// reference looks up a task reference for this target. Under -C the cascade
 // collapses instead of stretching: the branch and the session task are
 // answers about *this* checkout and this session, so pointing at another
 // project means saying which task.
@@ -96,7 +96,7 @@ func (t *target) reference(ctx context.Context, explicit string) (ref.Ref, error
 			"answer for the checkout you are standing in", filepath.Base(t.dir))
 	}
 
-	return ref.Resolver{Prefix: t.eff.IDPrefix, Dir: t.dir}.Resolve(ctx, explicit)
+	return ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir}.Find(ctx, explicit)
 }
 
 // host is the tracker/host CLI probe routing settled on, bound to this
@@ -115,7 +115,7 @@ func (t *target) host() (host, error) {
 // storage, or "" with in-repo storage, where each worktree keeps its own
 // plans under its .f10/plans.
 func (t *target) sharedPlansDir() string {
-	if t.res.StorageRoot == filepath.Join(t.res.CheckoutRoot, ".f10") {
+	if t.lay.StorageRoot == filepath.Join(t.lay.CheckoutRoot, ".f10") {
 		return ""
 	}
 

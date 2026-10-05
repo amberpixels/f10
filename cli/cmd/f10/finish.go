@@ -76,11 +76,11 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("getwd: %w", err)
 	}
 
-	main := cmp.Or(t.res.MainRoot, t.res.CheckoutRoot)
+	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 
 	return finish(ctx, cmd.Writer, finishInput{
 		main:      main,
-		driver:    driver.Find(t.res.StorageRoot, t.dir),
+		driver:    driver.Find(t.lay.StorageRoot, t.dir),
 		task:      r,
 		suffix:    suffix,
 		host:      h.at(main),
@@ -92,7 +92,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	})
 }
 
-// finishInput is everything finish needs once the target is resolved, so
+// finishInput is everything finish needs once the target is settled, so
 // the flow can be tested without a checkout.
 type finishInput struct {
 	main      string         // the main checkout: host and git commands run here

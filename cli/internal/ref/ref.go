@@ -1,11 +1,11 @@
-// Package ref resolves which task a lookaround command is about. Every noun
+// Package ref looks up which task a lookaround command is about. Every noun
 // takes the same optional reference and falls back the same way, so the
 // cascade lives here once: an explicit id, then the id in the current branch
 // name, then the task this session's f10-state file records.
 //
 // The prefix that makes a branch searchable comes from facts - the task id
 // format a project declares, or the one its host implies. Without a prefix
-// only an explicit reference resolves, because no rule can tell a task
+// only an explicit reference is accepted, because no rule can tell a task
 // number in a branch name from any other number.
 package ref
 
@@ -24,7 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// Where a resolved reference came from. Reported so an error, or a caller
+// Where a looked-up reference came from. Reported so an error, or a caller
 // that wants to say "GH-22, from the branch", can name it.
 const (
 	OriginExplicit = "explicit"
@@ -38,24 +38,24 @@ const (
 // available to them.
 var ErrNoReference = errors.New("no task reference given")
 
-// A Ref is one resolved task reference.
+// A Ref is one looked-up task reference.
 type Ref struct {
 	ID     string // "GH-22": the prefix and number in the project's format
 	Number string // "22": what a host CLI wants
 	Origin string
 }
 
-// A Resolver answers references for one checkout.
-type Resolver struct {
+// A Lookup answers references for one checkout.
+type Lookup struct {
 	Prefix string // id prefix from facts ("ABC", "GH"); empty where nothing declares or implies one
 	Dir    string // checkout root - the branch is read from here
 }
 
-// Resolve walks the cascade. An empty explicit reference falls through to
+// Find walks the cascade. An empty explicit reference falls through to
 // the branch and then to the session; a non-empty one that does not parse
 // is an error rather than a fallthrough, because a typo'd id should say so
 // instead of quietly opening whatever the branch happens to name.
-func (r Resolver) Resolve(ctx context.Context, explicit string) (Ref, error) {
+func (r Lookup) Find(ctx context.Context, explicit string) (Ref, error) {
 	if strings.TrimSpace(explicit) != "" {
 		return r.parse(explicit, OriginExplicit)
 	}
@@ -75,7 +75,7 @@ func (r Resolver) Resolve(ctx context.Context, explicit string) (Ref, error) {
 // the one worth naming out loud: it keys on an agent session's id, so at a
 // human's prompt it is not empty, it is absent - a distinction the old
 // message hid.
-func (r Resolver) exhausted(ctx context.Context) error {
+func (r Lookup) exhausted(ctx context.Context) error {
 	var why []string
 
 	if r.Prefix == "" {
@@ -137,7 +137,7 @@ func lastSegment(raw string) string {
 	return segs[len(segs)-1]
 }
 
-func (r Resolver) parse(token, origin string) (Ref, error) {
+func (r Lookup) parse(token, origin string) (Ref, error) {
 	probe := strings.TrimSpace(token)
 	if isURL(probe) {
 		probe = lastSegment(probe)
@@ -165,7 +165,7 @@ func (r Resolver) parse(token, origin string) (Ref, error) {
 // names carry it in any position and any case - `ABC-2049/dark-mode`,
 // `feature/abc-123-fix-bug` - so the prefix is anchored on a non-word
 // boundary rather than on the start of the string.
-func (r Resolver) fromBranch(ctx context.Context) string {
+func (r Lookup) fromBranch(ctx context.Context) string {
 	if r.Prefix == "" {
 		return ""
 	}

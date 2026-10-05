@@ -18,8 +18,8 @@ not agree because agreeing is cheaper.
    number, url, or the current branch: the diff and the description via the host CLI
    (`gh pr diff` / `gh pr view --comments`, `glab mr diff` / `glab mr view`), or
    `git diff <base>...HEAD` for a branch with no PR yet, plus the task and plan the branch
-   name resolves to. A sha, a range, or "last N commits": `git show <sha>` / `git diff <range>`
-   for the diff and the messages, plus the task and plan those messages or their branch resolve
+   name points to. A sha, a range, or "last N commits": `git show <sha>` / `git diff <range>`
+   for the diff and the messages, plus the task and plan those messages or their branch point
    to - count commits from `git log --oneline`, since `HEAD~N` follows first parents and steps
    over a merged branch. No argument: the thing this conversation is about - name it back in one
    line before judging it, so the user can correct the target. Where the `f10` binary is
@@ -83,8 +83,8 @@ judging something this session produced, where a judge sharing the author's cont
 author's sunk cost. In blind mode the main agent still gathers the subject per point 1, then
 spawns **one fresh `general-purpose` agent - never `fork`, which inherits the whole
 conversation** - whose prompt carries the subject text verbatim, the checkout root, and the
-instruction to load the two context calls (`conventions.sh`, `resolve.sh judge`) and follow this
-step. Project facts and guardrails reach it through the resolver, not through the author. The
+instruction to load the two context calls (`conventions.sh`, `bundle.sh judge`) and follow this
+step. Project facts and guardrails reach it through the bundle, not through the author. The
 main agent relays the returned verdict as given - it may dispute it in one line, never rewrite
 it.
 
@@ -118,6 +118,6 @@ conversation as long as the user wants to argue - that argument is the point. Ta
 the verdict was delivered once, and repeating it on every reply is noise. Only when an argument
 actually moves it does the banner come back, with the new verdict and its one-line reason.
 
-**On failure:** a task id that does not resolve, or a PR the host CLI cannot read, is a failure
+**On failure:** a task id the tracker does not know, or a PR the host CLI cannot read, is a failure
 per `conventions/failure.md` - never judge a subject you could not fetch. A **stop** verdict is
 the step succeeding; report it plainly.

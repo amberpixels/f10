@@ -1,4 +1,4 @@
-// Package probe runs the deterministic detection probes bin/resolve.sh
+// Package probe runs the deterministic detection probes bin/bundle.sh
 // runs: remote host and CLI routing, stack and verify marker files, and the
 // existing plans. Each answer carries the evidence that produced it - the
 // provenance column is the point of the binary.
@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/resolve"
+	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
 // A Signal is one detected value plus the evidence that produced it.
@@ -33,18 +33,18 @@ type Probes struct {
 	PlansDir  string   `json:"plansDir"`
 }
 
-// Run probes the resolved checkout. Read-only, like everything here.
-func Run(ctx context.Context, res *resolve.Resolution) *Probes {
-	p := &Probes{PlansDir: filepath.Join(res.StorageRoot, "plans")}
+// Run probes the located checkout. Read-only, like everything here.
+func Run(ctx context.Context, lay *layout.Layout) *Probes {
+	p := &Probes{PlansDir: filepath.Join(lay.StorageRoot, "plans")}
 
-	p.RemoteURL = gitx.Out(ctx, res.CheckoutRoot, "remote", "get-url", "origin")
+	p.RemoteURL = gitx.Out(ctx, lay.CheckoutRoot, "remote", "get-url", "origin")
 	if p.RemoteURL != "" {
 		p.Host = hostOf(p.RemoteURL)
 	}
 
 	p.CLI = routeCLI(p.RemoteURL, p.Host)
 
-	root := res.CheckoutRoot
+	root := lay.CheckoutRoot
 	for _, m := range []struct{ file, stack string }{
 		{file: "go.mod", stack: "Go"},
 		{file: "Gemfile", stack: "Ruby"},

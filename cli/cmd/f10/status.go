@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/resolve"
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -114,18 +114,18 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 }
 
 // checkoutRoot is the repo a plain terminal asks about: -C's target or the
-// cwd, resolved the way the seed hook resolved it when it recorded root.
+// cwd, in physical form, the way the seed hook recorded root.
 func checkoutRoot(ctx context.Context, cmd *cli.Command) (string, error) {
 	dir, _, err := rootDir(cmd)
 	if err != nil {
 		return "", err
 	}
 
-	return resolve.Resolve(ctx, dir).CheckoutRoot, nil
+	return layout.Locate(ctx, dir).CheckoutRoot, nil
 }
 
 // inRoot keeps the runs recorded against root. The hook stores git's
-// toplevel and the resolver stores the physical path, so both sides are
+// toplevel and the layout package stores the physical path, so both sides are
 // compared in physical form.
 func inRoot(runs []*state.Run, root string) []*state.Run {
 	var kept []*state.Run

@@ -39,7 +39,7 @@ Two calls, with two different lifetimes:
 
 ```
 ${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh                    # once per context
-${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]    # once per run
+${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh <step> [<step> ...]    # once per run
 ```
 
 **`conventions.sh` - the static half.** Cats the six cross-cutting rule files (`context`,
@@ -47,12 +47,12 @@ ${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh <step> [<step> ...]    # once per run
 unless this context already holds it** (its banner makes a copy easy to spot). *Per context*,
 not per conversation: a subagent or a fresh session starts empty and does need it.
 
-**`resolve.sh` - the resolved half.** One call does the lookup, worktree layering, the
+**`bundle.sh` - the loaded half.** One call does the lookup, worktree layering, the
 instructions listing, overlay concatenation, and the inference probes, printing a single
 labelled bundle. Its output **can** change between two runs in one conversation - a different
 worktree, an edited `project.md` - so it is never skipped.
 
-Pass the step(s) this run executes and read the output as the resolved context. The bundle
+Pass the step(s) this run executes and read the output as the loaded context. The bundle
 carries the **generic step files themselves**, so a run never reads the plugin's `steps/` by
 hand. The script only **concatenates and probes**: it never interprets `project.md`
 or binds an adapter, so you still read the prose and decide. Its one exception: it does honour
@@ -62,12 +62,12 @@ the **Layering** declaration below, since composition must be settled before con
 declared in the very `project.md` this call prints, so ship cannot name its steps beforehand.
 `--all` cats every generic step and every overlay each layer holds.
 
-What `resolve.sh` returns (and the contract to implement by hand if it is ever unavailable):
+What `bundle.sh` returns (and the contract to implement by hand if it is ever unavailable):
 
 1. **project.md** - `<storage root>/instructions/project.md`, the project facts file (contract
    below). The **storage root** is the **checkout root** plus `.f10/` (or out-of-tree,
    point 3) - anchored to `git rev-parse --show-toplevel`, never the process cwd, so a run
-   from a subdirectory resolves exactly as one from the top. Reported as an absolute path:
+   from a subdirectory loads exactly as one from the top. Reported as an absolute path:
    use it verbatim, never re-derive one.
 2. **Worktree layering** - a linked worktree and the main checkout (first `git worktree list`
    path) can each hold instructions, and both are read: **main's first, the worktree's on top**.
@@ -75,8 +75,8 @@ What `resolve.sh` returns (and the contract to implement by hand if it is ever u
    instructions are often untracked and don't propagate into fresh worktrees. A worktree whose
    `project.md` declares `Layering - replaces main` gets its own alone - what a branch
    rewriting the stack needs, so main's verify commands cannot red a different-stack worktree.
-   Anything else extends. Plans never layer: they go to the storage root this run resolved. A
-   subdirectory of the main checkout is not a layering case - it resolves against that
+   Anything else extends. Plans never layer: they go to the storage root this run loaded. A
+   subdirectory of the main checkout is not a layering case - it anchors to that
    checkout's root - and a `.f10/instructions/` sitting *below* the root is noted and ignored,
    not a per-directory config.
 3. **Out-of-tree storage** - if neither checkout has `.f10/instructions/`, it tries
@@ -96,7 +96,7 @@ What `resolve.sh` returns (and the contract to implement by hand if it is ever u
    without it a bundle could omit an overlay while asserting nothing is missing - and it is the
    only place a **project-defined step** (a pipeline name like `e2e` whose
    `.f10/instructions/e2e.md` *is* the step) is discoverable at all.
-6. **Adjudicating two layers** - prose you merge, not data the resolver merged for you. A field
+6. **Adjudicating two layers** - prose you merge, not data the loader merged for you. A field
    the worktree layer doesn't mention keeps main's value; a field it does mention wins outright -
    so a worktree layer should state only what it changes. Two layers describing incompatible
    stacks is a `replaces main` situation, not something to reconcile field by field. A genuine
@@ -126,7 +126,7 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   **Always** - applied to every run (e.g. "plan as a senior software architect + Go
   developer"). **Conditional** - attached only when the task touches a named area (e.g.
   "+ senior UI/UX engineer when the task touches user-facing UI; + security engineer on auth
-  or PII"). Missing → each step's base role alone. Conditional roles resolve from the areas
+  or PII"). Missing → each step's base role alone. Conditional roles come from the areas
   `fetch` settles and are recorded in the plan file, so `/f10:ship` inherits them.
 - **Tracker** - kind (Notion / GitHub Issues / GitLab work items / Jira / …), the **task id
   format** (e.g. `ABC-####`, `GH-###`), and the **fetch** / **create** adapters: a skill to
@@ -136,7 +136,7 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   *shape* is the project's to declare; that it carries the task id is not - see `steps/pr.md`.
 - **Ship pipeline(s)** - the ordered steps `/f10:ship` runs after planning, e.g.
   `implement → review (local) → pr → review (CI) → deploy (staging)`; its last step is the
-  run's shipment. Omitted → **`implement → pr`**. Each name resolves to a generic step in the
+  run's shipment. Omitted → **`implement → pr`**. Each name picks a generic step in the
   plugin's `steps/` (extended by its same-named overlay); a name with no generic step (e.g.
   `e2e`) is a **project-defined step** - `.f10/instructions/<name>.md` *is* the step.
   A project may declare **several named pipelines** (e.g. `default`, `direct`,

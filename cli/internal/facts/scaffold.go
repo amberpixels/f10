@@ -3,8 +3,8 @@ package facts
 import (
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
-	"github.com/amberpixels/f10/cli/internal/resolve"
 )
 
 // The write half of the contract. Scaffold renders what detection found as
@@ -26,10 +26,10 @@ type Draft struct {
 
 // Scaffold renders a project.md for a checkout that declares none. Pure:
 // the caller owns the filesystem, this owns the contract.
-func Scaffold(res *resolve.Resolution, pb *probe.Probes, eff *Effective) *Draft {
+func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) *Draft {
 	bodies := map[string]string{
 		"Visibility": eff.Visibility,
-		"Storage":    storageBody(eff, res),
+		"Storage":    storageBody(eff, lay),
 	}
 
 	for name, body := range map[string]string{
@@ -49,7 +49,7 @@ func Scaffold(res *resolve.Resolution, pb *probe.Probes, eff *Effective) *Draft 
 	// open a section the contract does not know, and parseFile keeps those
 	// as unrecognized rather than dropping them
 	b := &strings.Builder{}
-	b.WriteString("# " + res.Project + " · f10 project instructions\n")
+	b.WriteString("# " + lay.Project + " · f10 project instructions\n")
 
 	for _, name := range contractFields() {
 		body, ok := bodies[name]
@@ -134,6 +134,6 @@ func verifyBody(pb *probe.Probes) string {
 
 // storageBody names the mode and the root. The mode's word has to survive
 // into the file: absorb reads it back out of this prose.
-func storageBody(eff *Effective, res *resolve.Resolution) string {
-	return eff.Storage + " (" + res.StorageRoot + ")"
+func storageBody(eff *Effective, lay *layout.Layout) string {
+	return eff.Storage + " (" + lay.StorageRoot + ")"
 }

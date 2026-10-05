@@ -11,11 +11,11 @@ Drive a task end-to-end: plan (if needed) → the project's **ship pipeline** (d
 `project.md`; default `implement → pr` - see `conventions/context.md`).
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh --all`, every run. **`--all`, never a step list**:
+then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all`, every run. **`--all`, never a step list**:
 ship's steps are the pipeline that same call prints, so they cannot be named beforehand
 (`conventions/context.md`).
 
@@ -45,7 +45,7 @@ git config --get branch."$(git branch --show-current)".f10-after          # the 
 git config --get branch."$(git branch --show-current)".f10-after-branch   # its branch
 ```
 
-Nothing recorded: nothing changes. Recorded: `git fetch origin`, resolve the base branch
+Nothing recorded: nothing changes. Recorded: `git fetch origin`, find the base branch
 local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of four:
 - the base exists nowhere: the base task was finished and its branch deleted, so its code is
   in the default branch. `git config --unset` both keys and carry on as if nothing was recorded

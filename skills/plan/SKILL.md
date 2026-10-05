@@ -11,11 +11,11 @@ Take a task from a reference (or a raw description) to a solid, saved plan.
 **Do not implement.**
 
 **Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - resolve and report, execute nothing.
+`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
 
 First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/resolve.sh fetch plan`, every run - prepend `capture` when the
+then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan`, every run - prepend `capture` when the
 argument is free text and the route starts there.
 
 **Route by the argument:**
@@ -29,7 +29,7 @@ argument is free text and the route starts there.
 - Free-text description: run `steps/capture.md` (create the task) → `steps/fetch.md` →
   `steps/plan.md`.
 
-Follow each step file in order - the resolve bundle already carries them, so read nothing further
+Follow each step file in order - the bundle already carries them, so read nothing further
 from `${CLAUDE_PLUGIN_ROOT}/steps/`. Any extra text the user adds is steering/notes for the run.
 
 **The run is only complete once the plan file exists on disk at
