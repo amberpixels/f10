@@ -118,8 +118,11 @@ func fakeDriver(t *testing.T) *driver.Driver {
 
 const (
 	refsLocal  = "git for-each-ref --format=%(refname) refs/heads/GH-1 refs/heads/GH-1-*"
-	refsOn     = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-*"
-	refsOnOrig = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-*"
+	refsAfter  = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-*"
+	refsAfterO = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-*"
+	shaAfter   = "git rev-parse --verify --quiet GH-7/base"
+	cfgTask    = "git config branch.GH-1.f10-after GH-7"
+	cfgBranch  = "git config branch.GH-1.f10-after-branch GH-7/base"
 	worktrees  = "git worktree list --porcelain"
 	shaLocal   = "git rev-parse --verify --quiet refs/heads/release/1.2"
 	shaRemote  = "git rev-parse --verify --quiet refs/remotes/release/1.2"
@@ -216,14 +219,14 @@ func TestBranchNameDriverFailure(t *testing.T) {
 	}
 }
 
-func TestBaseBranch(t *testing.T) {
+func TestTaskBranch(t *testing.T) {
 	t.Run("local branch wins", func(t *testing.T) {
 		f := newFakes(t)
-		f.script(refsOn, heads("GH-7/thing"))
+		f.script(refsAfter, heads("GH-7/thing"))
 
-		got, err := baseBranch(t.Context(), "/code/repo", "GH-7")
+		got, err := taskBranch(t.Context(), "/code/repo", "GH-7")
 		if err != nil || got != "GH-7/thing" {
-			t.Errorf("baseBranch = %q, %v", got, err)
+			t.Errorf("taskBranch = %q, %v", got, err)
 		}
 
 		if f.called("git for-each-ref --format=%(refname) refs/remotes") {
@@ -233,44 +236,44 @@ func TestBaseBranch(t *testing.T) {
 
 	t.Run("origin is the fallback", func(t *testing.T) {
 		f := newFakes(t)
-		f.script(refsOn, "")
-		f.script(refsOnOrig, "refs/remotes/origin/GH-7")
+		f.script(refsAfter, "")
+		f.script(refsAfterO, "refs/remotes/origin/GH-7")
 
-		got, err := baseBranch(t.Context(), "/code/repo", "GH-7")
+		got, err := taskBranch(t.Context(), "/code/repo", "GH-7")
 		if err != nil || got != "origin/GH-7" {
-			t.Errorf("baseBranch = %q, %v", got, err)
+			t.Errorf("taskBranch = %q, %v", got, err)
 		}
 	})
 
 	t.Run("nothing anywhere fails", func(t *testing.T) {
 		f := newFakes(t)
-		f.script(refsOn, "")
-		f.script(refsOnOrig, "")
+		f.script(refsAfter, "")
+		f.script(refsAfterO, "")
 
-		if _, err := baseBranch(t.Context(), "/code/repo", "GH-7"); err == nil {
-			t.Error("baseBranch found a base where none exists")
+		if _, err := taskBranch(t.Context(), "/code/repo", "GH-7"); err == nil {
+			t.Error("taskBranch found a branch where none exists")
 		}
 	})
 
 	t.Run("several is an error naming them", func(t *testing.T) {
 		f := newFakes(t)
-		f.script(refsOn, heads("GH-7", "GH-7-attempt2"))
+		f.script(refsAfter, heads("GH-7", "GH-7-attempt2"))
 
-		_, err := baseBranch(t.Context(), "/code/repo", "GH-7")
+		_, err := taskBranch(t.Context(), "/code/repo", "GH-7")
 		if err == nil || !strings.Contains(err.Error(), "GH-7-attempt2") {
 			t.Errorf("err = %v, want the candidates named", err)
 		}
 	})
 }
 
-func TestBaseRef(t *testing.T) {
+func TestNamedRef(t *testing.T) {
 	t.Run("local branch wins", func(t *testing.T) {
 		f := newFakes(t)
 		f.script(shaLocal, "aaa")
 
-		got, sha, err := baseRef(t.Context(), "/code/repo", "release/1.2")
+		got, sha, err := namedRef(t.Context(), "/code/repo", "release/1.2")
 		if err != nil || got != "release/1.2" || sha != "aaa" {
-			t.Errorf("baseRef = %q, %q, %v", got, sha, err)
+			t.Errorf("namedRef = %q, %q, %v", got, sha, err)
 		}
 
 		if f.called("git rev-parse --verify --quiet refs/remotes") {
@@ -283,9 +286,9 @@ func TestBaseRef(t *testing.T) {
 		f.fail("git rev-parse --verify --quiet refs/heads/origin/main", missing)
 		f.script("git rev-parse --verify --quiet refs/remotes/origin/main", "bbb")
 
-		got, sha, err := baseRef(t.Context(), "/code/repo", "origin/main")
+		got, sha, err := namedRef(t.Context(), "/code/repo", "origin/main")
 		if err != nil || got != "origin/main" || sha != "bbb" {
-			t.Errorf("baseRef = %q, %q, %v", got, sha, err)
+			t.Errorf("namedRef = %q, %q, %v", got, sha, err)
 		}
 	})
 
@@ -295,9 +298,9 @@ func TestBaseRef(t *testing.T) {
 		f.fail(shaRemote, missing)
 		f.script(shaOrigin, "ccc")
 
-		got, sha, err := baseRef(t.Context(), "/code/repo", "release/1.2")
+		got, sha, err := namedRef(t.Context(), "/code/repo", "release/1.2")
 		if err != nil || got != "origin/release/1.2" || sha != "ccc" {
-			t.Errorf("baseRef = %q, %q, %v", got, sha, err)
+			t.Errorf("namedRef = %q, %q, %v", got, sha, err)
 		}
 	})
 
@@ -307,7 +310,7 @@ func TestBaseRef(t *testing.T) {
 		f.fail(shaRemote, missing)
 		f.fail(shaOrigin, missing)
 
-		_, _, err := baseRef(t.Context(), "/code/repo", "release/1.2")
+		_, _, err := namedRef(t.Context(), "/code/repo", "release/1.2")
 		if err == nil || !strings.Contains(err.Error(), "release/1.2") {
 			t.Errorf("err = %v, want the branch named", err)
 		}
@@ -381,9 +384,22 @@ func TestPrompt(t *testing.T) {
 	}
 
 	for mode, want := range cases {
-		if got := prompt(mode, "GH-1"); got != want {
+		if got := prompt(mode, "GH-1", nil); got != want {
 			t.Errorf("prompt(%q) = %q, want %q", mode, got, want)
 		}
+	}
+
+	dep := &dependency{
+		task:    "GH-7",
+		branch:  "GH-7/base",
+		plan:    "/code/repo.GH-7-base/.f10/plans/GH-7.md",
+		planned: true,
+	}
+	want := cases[modePlan] + " && GH-1 depends on GH-7: design against GH-7's planned API as its plan at " +
+		"/code/repo.GH-7-base/.f10/plans/GH-7.md records it, not against this checkout, and write no fallback for its absence"
+
+	if got := prompt(modePlan, "GH-1", dep); got != want {
+		t.Errorf("prompt with a dependency = %q, want %q", got, want)
 	}
 }
 
@@ -431,7 +447,7 @@ func TestStartWithWorktrunk(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
 
 	var out bytes.Buffer
 
@@ -450,26 +466,39 @@ func TestStartWithWorktrunk(t *testing.T) {
 		t.Error("git created the worktree although wt is installed")
 	}
 
+	if f.called("git config") {
+		t.Error("a dependency was recorded although --after was not given")
+	}
+
 	if strings.Contains(strings.Join(f.calls, "\n"), "--wait") {
 		t.Error("the prompt waited on the agent")
 	}
 }
 
 // Without worktrunk, git creates the worktree at the sibling path, and
-// --on swaps the default base for the task's branch.
+// --after swaps the default base for the task's branch and records the
+// dependency. The base task has no checkout here, so the prompt names it
+// without a plan path and the report says why.
 func TestStartWithGitAlone(t *testing.T) {
 	f := newFakes(t)
 	f.script(refsLocal, "")
-	f.script(refsOn, heads("GH-7/base"))
+	f.script(refsAfter, heads("GH-7/base"))
+	f.script(shaAfter, "ccc")
+	f.script(headRef, "origin/main")
+	f.script(shaMain, "bbb")
+	f.script(cfgTask, "")
+	f.script(cfgBranch, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", "")
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeLocal, "GH-1"), "{}")
+
+	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
+	f.script("herdr agent prompt gh-1 "+prompt(modeLocal, "GH-1", dep), "{}")
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, mode: modeLocal, on: "GH-7"})
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, mode: modeLocal, after: "GH-7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,8 +507,157 @@ func TestStartWithGitAlone(t *testing.T) {
 		t.Error("wt was run although it is not installed")
 	}
 
-	if f.called("git symbolic-ref") {
-		t.Error("the default branch was looked up although --on named the base")
+	if !f.called(cfgTask) || !f.called(cfgBranch) {
+		t.Errorf("the dependency was not recorded: %v", f.calls)
+	}
+
+	for _, want := range []string{"after:", "GH-7", "GH-7 has no checkout here"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report missing %q:\n%s", want, out.String())
+		}
+	}
+
+	if strings.Contains(out.String(), "same commit") {
+		t.Errorf("a base that differs from the default was noted as equal:\n%s", out.String())
+	}
+}
+
+// afterFixture scripts a worktrunk run of `start --after GH-7` where GH-7's
+// branch is checked out at dir, and returns the fakes to add the prompt to.
+func afterFixture(t *testing.T, dir, shaBase string) *fakes {
+	t.Helper()
+
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, "")
+	f.script(refsAfter, heads("GH-7/base"))
+	f.script(shaAfter, shaBase)
+	f.script(headRef, "origin/main")
+	f.script(shaMain, "bbb")
+	f.script(cfgTask, "")
+	f.script(cfgBranch, "")
+	f.script(worktrees, porcelain("GH-7/base", dir), porcelain("GH-7/base", dir, "GH-1", "/code/repo.GH-1"))
+	f.script("wt switch --no-cd --yes --format json --create --base GH-7/base GH-1", "{}")
+	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
+
+	return f
+}
+
+// With in-repo storage the base task's plan sits in its own worktree, and
+// the prompt cites that path as the contract to design against.
+func TestStartAfterCitesThePlan(t *testing.T) {
+	dir := t.TempDir()
+	plan := filepath.Join(dir, ".f10", "plans", "GH-7.md")
+
+	if err := os.MkdirAll(filepath.Dir(plan), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(plan, []byte("# GH-7\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	f := afterFixture(t, dir, "ccc")
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", dep), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !f.called("herdr agent prompt gh-1 ") {
+		t.Errorf("the agent was not prompted: %v", f.calls)
+	}
+
+	if strings.Contains(out.String(), "no plan yet") || strings.Contains(out.String(), "out of reach") {
+		t.Errorf("a plan that exists was reported missing:\n%s", out.String())
+	}
+}
+
+// A base task whose plan is not written yet is named with the path the plan
+// is expected at, and the report says it is missing.
+func TestStartAfterWithoutAPlanYet(t *testing.T) {
+	dir := t.TempDir()
+	plan := filepath.Join(dir, ".f10", "plans", "GH-7.md")
+
+	f := afterFixture(t, dir, "ccc")
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan}
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", dep), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := "GH-7 has no plan yet at " + plan; !strings.Contains(out.String(), want) {
+		t.Errorf("report missing %q:\n%s", want, out.String())
+	}
+}
+
+// Out-of-tree storage shares one plans dir, so the plan is reachable
+// whether or not the base task has a checkout.
+func TestStartAfterOutOfTreePlan(t *testing.T) {
+	plans := t.TempDir()
+	plan := filepath.Join(plans, "GH-7.md")
+
+	if err := os.WriteFile(plan, []byte("# GH-7\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	f := afterFixture(t, "/code/repo.GH-7-base", "ccc")
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", dep), "{}")
+
+	err := start(
+		t.Context(),
+		&bytes.Buffer{},
+		startInput{main: "/code/repo", task: gh1, after: "GH-7", plansDir: plans},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A base task whose branch still sits at the default branch's commit has no
+// code yet, and the note says so beneath the report.
+func TestStartAfterEqualsDefault(t *testing.T) {
+	f := afterFixture(t, "/code/repo.GH-7-base", "bbb")
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/code/repo.GH-7-base/.f10/plans/GH-7.md"}
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", dep), "{}")
+
+	var out bytes.Buffer
+
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "--after GH-7: branch GH-7/base is at the same commit as the default branch origin/main, so GH-7 has no code yet"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("report missing %q:\n%s", want, out.String())
+	}
+}
+
+// A --after that resolves to no branch refuses before git, wt or herdr
+// create or record anything.
+func TestStartRefusesMissingAfter(t *testing.T) {
+	f := newFakes(t)
+	f.script(refsAfter, "")
+	f.script(refsAfterO, "")
+
+	err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	if err == nil || !strings.Contains(err.Error(), "no branch") {
+		t.Fatalf("err = %v, want the missing base refused", err)
+	}
+
+	if f.called("wt ") || f.called("git worktree add") || f.called("git config") || f.called("herdr") {
+		t.Errorf("something was created after the refusal: %v", f.calls)
 	}
 }
 
@@ -495,7 +673,7 @@ func TestStartWithBase(t *testing.T) {
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 release/1.2", "")
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
 
 	var out bytes.Buffer
 
@@ -526,7 +704,7 @@ func TestStartBaseEqualsDefault(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create --base main GH-1", "{}")
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
 
 	var out bytes.Buffer
 
@@ -556,7 +734,7 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json GH-1", "{}")
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
 
 	var out bytes.Buffer
 
@@ -593,19 +771,22 @@ func TestStartRefusesMissingBase(t *testing.T) {
 
 // A second run for the same task opens the worktree that exists and does
 // not fail: Herdr already shows it, so its root pane is not at a prompt and
-// no agent is started or prompted. --on is noted as ignored since the
-// branch keeps its base.
+// no agent is started or prompted. --after is noted as ignored for the base
+// since the branch keeps it, and the dependency is recorded all the same.
 func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 	f := newFakes(t)
 	f.has["wt"] = true
 	f.script(refsLocal, heads("GH-1"))
-	f.script(refsOn, heads("GH-7"))
+	f.script(refsAfter, heads("GH-7"))
+	f.script("git rev-parse --verify --quiet GH-7", "ccc")
+	f.script("git config branch.GH-1.f10-after GH-7", "")
+	f.script("git config branch.GH-1.f10-after-branch GH-7", "")
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", reopened)
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, mode: modePlan, on: "GH-7"})
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, mode: modePlan, after: "GH-7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -618,7 +799,16 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 		t.Error("an agent was started in a workspace that already had one")
 	}
 
-	for _, want := range []string{"reused the existing worktree", "--on ignored", "workspace already open"} {
+	if !f.called("git config branch.GH-1.f10-after-branch GH-7") {
+		t.Error("the dependency was not recorded on the existing branch")
+	}
+
+	for _, want := range []string{
+		"reused the existing worktree",
+		"--after ignored for the base",
+		"dependency on GH-7 recorded",
+		"workspace already open",
+	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}
@@ -633,7 +823,7 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
 
 	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1}); err != nil {
 		t.Fatal(err)
@@ -652,7 +842,7 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	f.script("git worktree add /code/repo.GH-1-slug GH-1/slug", "")
 	f.script("herdr worktree open --path /code/repo.GH-1-slug --label GH-1/slug", opened)
 	f.script("herdr agent start gh-1 --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1"), "{}")
+	f.script("herdr agent prompt gh-1 "+prompt(modeDefault, "GH-1", nil), "{}")
 
 	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1}); err != nil {
 		t.Fatal(err)
@@ -697,10 +887,10 @@ func TestStartModesAreExclusive(t *testing.T) {
 	}
 }
 
-func TestStartBaseAndOnAreExclusive(t *testing.T) {
+func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 	f := newFakes(t)
 
-	err := newApp().Run(t.Context(), []string{"f10", "start", "--base", "main", "--on", "7", "42"})
+	err := newApp().Run(t.Context(), []string{"f10", "start", "--base", "main", "--after", "7", "42"})
 	if err == nil || !strings.Contains(err.Error(), "exclusive") {
 		t.Errorf("err = %v, want the flags refused together", err)
 	}

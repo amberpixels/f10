@@ -24,7 +24,7 @@ f10 demo open [id]       # the demo report, in the browser
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
 f10 status [--all] [--json]   # where the run is: this session's, or every live one
 
-f10 start <id>[-suffix] [--plan | --local] [--on <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] [--plan | --local] [--after <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
 ```
 
 A verb means one thing under every noun. `read` writes content, `open` follows an address,
@@ -42,19 +42,32 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default; `--plan`
   prompts the plan alone; `--local` ships through the project's `local` pipeline, so nothing is
   pushed
-- `--on <id>` bases the branch on that task's existing branch, local or on origin, and fails
-  before creating anything when there is none
+- `--after <id>` bases the branch on that task's existing branch, local or on origin, and
+  records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the
+  task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine. The
+  prompt names the base task and the path of its plan as the contract to design against, not
+  the checkout, with no fallback for its absence. With in-repo storage that path lies in the
+  base task's worktree, and a note beneath the report says when no checkout reaches it or the
+  plan is not written yet. A base still at the default branch's commit is noted as a task with
+  no code yet. It fails before creating anything when the task has no branch
 - `--base <branch>` bases the branch on a git ref instead: the local branch, else the one on
   origin (`origin/main` typed as such also resolves). It fails before creating anything when
   neither exists, and notes beneath the report when the base sits at the default branch's
-  commit, since a base that changes nothing is otherwise invisible. Exclusive with `--on`
+  commit, since a base that changes nothing is otherwise invisible. Exclusive with `--after`
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a
   second worktree for one task can live beside the first
 - a task that already has a branch gets its worktree reused, or created when the branch has
-  none, and `--on` or `--base` is noted as ignored since the branch keeps its base; a
-  workspace Herdr already shows keeps its agent, and nothing is prompted twice
+  none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise
+  for the base, while its dependency is recorded all the same; a workspace Herdr already shows
+  keeps its agent, and nothing is prompted twice
 - `--local` refuses before creating anything when `project.md` declares no `local` pipeline,
   since ship never picks a pipeline unasked
+
+A recorded dependency is read back by the ship and pr steps, not by this binary. Before the
+first pipeline step, ship rebases onto the base branch when it moved, and asks once - wait, or
+proceed on the plan's assumption - when it still equals the default branch. The pr step opens
+the PR or MR against the base branch, so it is stacked and the host retargets it when the base
+merges; a base not yet on origin stops that step rather than pushing another task's branch.
 
 It runs inside a Herdr session only. Outside one it stops before touching anything and points
 at https://herdr.dev.

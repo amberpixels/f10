@@ -1,7 +1,8 @@
 // Package gitx is the binary's one door to git. The reads mirror the
 // shell-outs bin/resolve.sh makes - the bash script is the semantics
 // oracle, and shelling out identically keeps the two comparable. The
-// writes are `f10 start`'s: a branch and a worktree, nothing else.
+// writes are `f10 start`'s: a branch, a worktree, and the config entries
+// that record what a branch depends on.
 //
 // Everything goes through Exec, a variable so a test can answer git
 // without a checkout. No go-git.
@@ -124,6 +125,15 @@ func AddWorktree(ctx context.Context, dir, path, branch, base string, create boo
 	}
 
 	_, err := Exec(ctx, dir, args...)
+
+	return err
+}
+
+// SetConfig writes one entry to the repository's local config, replacing
+// any value the key held. Local config never leaves the machine, which is
+// what makes it the place for a per-branch fact in stealth mode.
+func SetConfig(ctx context.Context, dir, key, value string) error {
+	_, err := Exec(ctx, dir, "config", key, value)
 
 	return err
 }

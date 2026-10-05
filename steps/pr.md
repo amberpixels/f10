@@ -16,16 +16,23 @@ Context: per `conventions/context.md` - the PR adapter comes from `project.md â†
    back out of the branch, so a branch without it breaks the chain silently, later, for whoever
    did not open the PR. A run with no task id (a planless pipeline, free-text work) names its
    branch however the project does.
-3. **Open it** via the project's PR adapter - a skill, or plain `gh pr create` /
+3. **A recorded dependency sets the base.** Where `f10 start --after` recorded one on the
+   branch (`git config --get branch."$(git branch --show-current)".f10-after-branch`), the PR
+   targets that branch - `gh pr create --base <branch>` / `glab mr create --target-branch
+   <branch>` - so it is stacked, and the host retargets it when the base merges. The base must
+   already be on origin: when it is not, stop and report (`conventions/failure.md`) with the
+   branch named and `next: push the base task's branch`. Never push another task's branch from
+   this run, and never open against the default branch instead.
+4. **Open it** via the project's PR adapter - a skill, or plain `gh pr create` /
    `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
    An adapter's numbered procedure is a **spec, not a turn budget**: run every step it declares,
    in its order, but collapse consecutive mechanical ones into a single call
    (`conventions/latency.md`), splitting only where an output decides what comes next. Never
    skip, reorder, or substitute a different tool (`conventions/failure.md` rule 4).
    In stealth mode, no f10 traces in the branch name, commits, or PR text (see `conventions/context.md`).
-4. **Never merge.** Opening the PR is yours; merging is a human's action - regardless of
+5. **Never merge.** Opening the PR is yours; merging is a human's action - regardless of
    review state - unless project.md explicitly says otherwise.
-5. **Report** per `conventions/report.md` - a `branch` row and a `pr` row (`mr` on GitLab)
+6. **Report** per `conventions/report.md` - a `branch` row and a `pr` row (`mr` on GitLab)
    carrying the url.
 
 **On failure:** the PR adapter errors - report whether the branch was pushed, so the user knows

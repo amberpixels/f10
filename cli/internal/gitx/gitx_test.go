@@ -113,3 +113,15 @@ func TestAddWorktree(t *testing.T) {
 		})
 	}
 }
+
+func TestSetConfig(t *testing.T) {
+	calls := script(t, map[string]string{"config branch.GH-1/slug.f10-after GH-7": ""})
+
+	if err := SetConfig(t.Context(), ".", "branch.GH-1/slug.f10-after", "GH-7"); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := "config branch.GH-1/slug.f10-after GH-7"; (*calls)[0] != want {
+		t.Errorf("git asked %q, want %q", (*calls)[0], want)
+	}
+}
