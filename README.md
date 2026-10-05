@@ -66,6 +66,7 @@ is an **entry point** into that chain:
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
 | `/f10:start <id> [--plan \| --local] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
+| `/f10:finish <id> [--yes]` | nothing - it runs `f10 finish` | the PR merged, the plan archived, the workspace closed, the worktree and branch gone, main pulled |
 
 ## Install
 
@@ -455,13 +456,32 @@ only; outside one it stops before touching anything and points at https://herdr.
 for one task it opens the worktree that exists and leaves the agent already in it alone, rather
 than failing.
 
+### Finish
+
+Closing a task is the same three tools in reverse, and the two steps people skip - the worktree
+and the pull - leave a graveyard of sibling directories and a main behind the PR it just merged.
+`f10 finish` is start's inverse:
+
+```bash
+f10 finish 1042          # merge the PR, pull main, archive the plan, close the workspace, remove the worktree and branch
+f10 finish 1042 --yes    # the same from inside the task's own workspace, which closes after the report
+```
+
+It merges through `gh pr merge` or `glab mr merge` when the PR is open, or confirms it is already
+merged, and stops with the host's own reason when the host refuses: red CI, a required review, a
+conflict. It never passes `--admin`. Everything after is gated on the merge having landed in the
+local default branch. Refusals come before anything changes: a dirty worktree, named file by
+file, with no `--force`; a PR stacked on another task's branch, which waits for that task; a cwd
+inside the worktree being removed, unless `--yes` was passed. `/f10:finish` is the skill that
+turns that last refusal into one question.
+
 ### Lookaround by design
 
 No uniform storage (everything stays in the files where it lives today; the binary reads and
 pre-computes), no scanning (it answers for the repo it runs in, and walks the filesystem for
-other projects only once you set `F10_ROOTS`), and two writing verbs: `init` creates the two
-files that register a project, `start` creates a branch and a worktree, and nothing else writes
-anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
+other projects only once you set `F10_ROOTS`), and three writing verbs: `init` creates the two
+files that register a project, `start` creates a branch and a worktree, `finish` removes them
+once the work merged, and nothing else writes anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
 process otherwise. `bin/resolve.sh` stays the agent-facing surface - the binary explains to
 humans what the resolver hands to agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never

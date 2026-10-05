@@ -288,12 +288,12 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		}
 	}
 
-	rows := [][2]string{{"task", in.task.ID}, {"branch", name}}
+	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: name}}
 	if dep != nil {
-		rows = append(rows, [2]string{"after", dep.task})
+		rows = append(rows, fact{label: "after", value: dep.task})
 	}
 
-	return writeStartReport(w, append(rows, [2]string{"path", path}, [2]string{"workspace", ws.ID}), notes)
+	return writeReport(w, append(rows, fact{label: "path", value: path}, fact{label: "workspace", value: ws.ID}), notes)
 }
 
 // resolveBase turns --after or --base into the ref the worktree is created
@@ -651,18 +651,31 @@ func dependencyClause(id string, dep *dependency) string {
 	}
 }
 
-// writeStartReport prints the facts block conventions/report.md fixes:
-// labels padded to the widest including its colon, two spaces, the value.
-// None of these values is a url, so the marker cell stays blank. Notes
+// A fact is one row of the facts block: a label, a value, and whether the
+// value is a url, which earns the marker cell.
+type fact struct {
+	label string
+	value string
+	url   bool
+}
+
+// writeReport prints the facts block conventions/report.md fixes: labels
+// padded to the widest including its colon, two spaces, the marker cell
+// (the arrow for a url, blank otherwise), one space, the value. Notes
 // follow as prose beneath the block.
-func writeStartReport(w io.Writer, rows [][2]string, notes []string) error {
+func writeReport(w io.Writer, rows []fact, notes []string) error {
 	width := 0
 	for _, r := range rows {
-		width = max(width, len(r[0])+1)
+		width = max(width, len(r.label)+1)
 	}
 
 	for _, r := range rows {
-		if _, err := fmt.Fprintf(w, "%-*s   %s\n", width, r[0]+":", r[1]); err != nil {
+		marker := " "
+		if r.url {
+			marker = "↗"
+		}
+
+		if _, err := fmt.Fprintf(w, "%-*s  %s %s\n", width, r.label+":", marker, r.value); err != nil {
 			return err
 		}
 	}

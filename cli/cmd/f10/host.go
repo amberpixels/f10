@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The host-issues fallback: what `task` does in a project with no driver.
@@ -146,14 +144,5 @@ func hostIssueSearch(ctx context.Context, t *target, query string) ([]row, error
 }
 
 func runHost(ctx context.Context, t *target, host string, args ...string) (string, error) {
-	res, err := shell.Capture(ctx, t.dir, host, args...)
-	if err != nil {
-		return "", fmt.Errorf("running %s: %w", host, err)
-	}
-
-	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", host, cmp.Or(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
-	}
-
-	return res.Stdout, nil
+	return hostRun(ctx, t.dir, host, args...)
 }

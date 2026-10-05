@@ -1,9 +1,10 @@
 # The `f10` binary
 
-A lookaround, and the command that starts a task. The lookaround verbs explain the resolved
-configuration and read the things it points at, changing nothing. Two verbs write: `init`
-registers a checkout and never overwrites, and `start` creates the branch and worktree a task
-is worked on in, and opens them in Herdr.
+A lookaround, and the commands that start and finish a task. The lookaround verbs explain the
+resolved configuration and read the things it points at, changing nothing. Three verbs write:
+`init` registers a checkout and never overwrites, `start` creates the branch and worktree a task
+is worked on in and opens them in Herdr, and `finish` merges the task's PR and removes what
+start created.
 
 ```bash
 go install github.com/amberpixels/f10/cli/cmd/f10@latest
@@ -25,6 +26,7 @@ f10 pr open              # this branch's PR or MR, gh or glab decided by the rem
 f10 status [--all] [--json]   # where the run is: this session's, or every live one
 
 f10 start <id>[-suffix] [--plan | --local] [--after <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
+f10 finish <id>[-suffix] [--yes]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
 ```
 
 A verb means one thing under every noun. `read` writes content, `open` follows an address,
@@ -71,6 +73,49 @@ merges; a base not yet on origin stops that step rather than pushing another tas
 
 It runs inside a Herdr session only. Outside one it stops before touching anything and points
 at https://herdr.dev.
+
+## Finish
+
+`f10 finish 42` is the inverse of start, in the order that keeps the local side honest. It
+finds the task's branch the way start does (the exact name, else the one `<id>` / `<id>-*`
+branch) and the worktree that has it checked out; without either it stops, since finish removes
+only what start could have created.
+
+1. **Refusals, before anything changes.** A dirty worktree, named file by file, with no
+   `--force`: commit or discard first. A cwd inside the worktree being removed, or a
+   `HERDR_WORKSPACE_ID` naming its workspace, unless `--yes` was passed: the message says the
+   command would close its own workspace. Outside Herdr, as start does.
+2. **The merge.** `gh pr view <branch>` / `glab mr view <branch>` by the branch. Open: merged
+   through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI,
+   a required review, conflicts) its reason is the error and nothing has changed. Already merged:
+   confirmed. Closed without a merge: a refusal. A PR whose base is not the default branch is a
+   refusal too: finish the task that base belongs to first, and the host retargets this PR.
+3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method:
+   squash` (or `merge`, `rebase`, in any case). Absent, the repo's settings decide: on GitHub the
+   one method allowed, else squash; on GitLab the project's squash option, since GitLab fixes the
+   strategy per project.
+4. **The remote branch is deleted** when origin still has it, through the host's API (glab's
+   `--remove-source-branch` usually did it already). On GitHub, deleting the branch is what
+   retargets a PR stacked on it to main. GitLab retargets when the base's MR is merged, so the
+   same stacked flow works there by a different trigger; deleting the branch alone would not.
+5. **Main is pulled** with `--ff-only` when the main checkout is on the default branch, else the
+   default branch is fetched into without touching the checkout, and a note says so. Either way
+   the merge commit must be in the local default branch, or the run stops here with nothing
+   removed.
+6. **The plan is archived**: with in-repo storage `<worktree>/.f10/plans/<ID>.md` moves to
+   main's `.f10/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken, older archived versions
+   first); with out-of-tree storage it moves within the shared root. No plan is a note.
+7. **The report**, then the Herdr workspace closes (the agent goes with it), then the worktree
+   and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else
+   `git worktree remove` and `git branch -D`. With `--yes` from inside the worktree, main's
+   workspace is focused before the close so the user lands at home; the close ends the process,
+   so a worktree still listed afterwards is removed by running `f10 finish <id>` again from main.
+
+Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already
+archived, there is no workspace to close, and only what is left is removed.
+
+Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), local merges,
+a task whose PR was never opened, and worktrees f10 did not start.
 
 ## References
 
