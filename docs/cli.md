@@ -1,10 +1,11 @@
 # The `f10` binary
 
-A lookaround, and the commands that start, reach and finish a task. The lookaround verbs explain
-the loaded configuration and read the things it points at, changing nothing. Four verbs act:
-`init` registers a checkout and never overwrites, `start` creates the branch and worktree a task
-is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already
-has, and `finish` merges the task's PR and removes what start created.
+A lookaround, and the commands that start, reach, drive and finish a task. The lookaround verbs
+explain the loaded configuration and read the things it points at, changing nothing. Five verbs
+act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a
+task is worked on in and opens them in Herdr, `forward` hands a command to the agent a task
+already has, `drive` runs a list of tasks through a chain of skills that way, and `finish` merges
+the task's PR and removes what start created.
 
 ```bash
 go install github.com/amberpixels/f10/cli/cmd/f10@latest
@@ -41,6 +42,7 @@ f10 status [id] [--all] [--json]   # where the run is: this session's, a task's 
 
 f10 start <id>[-suffix] [--plan | --local] [--after <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
+f10 drive <id>... | <id> -- <id> [skill...] [--answer <text>] [--every 15s]   # a list through a chain of skills, one task at a time
 f10 finish <id>[-suffix] [--yes]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
 ```
 
@@ -69,6 +71,12 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   base task's worktree, and a note beneath the report says when no checkout reaches it or the
   plan is not written yet. A base still at the default branch's commit is noted as a task with
   no code yet. It fails before creating anything when the task has no branch
+- with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its
+  line, the last of the body by convention) is read as `--after <id>` when that task has a
+  branch, and noted beneath the report. When the base has no branch and is finished (its issue
+  closed, or its plan in main's `plans/archive/`), the branch is based on the default branch with
+  a note; when it is not finished, start refuses before creating anything. A body that cannot be
+  read is a note, never a refusal
 - `--base <branch>` bases the branch on a git ref instead: the local branch, else the one on
   origin (`origin/main` typed as such is also accepted). It fails before creating anything when
   neither exists, and notes beneath the report when the base sits at the default branch's
@@ -186,6 +194,63 @@ prompt. `/f10:status 42` does both in one go, with the question put to you in be
 
 Out of scope: more than one task or more than one command per call, tailing the remote agent's
 output, and answering Claude Code permission prompts.
+
+## Drive
+
+`f10 drive 42 43 judge ship` runs tasks through a chain of skills, one task at a time, from the
+main session, and exits when every task is through or one needs a human. The driver is this
+binary rather than a Claude session: ordering, prompting and polling are deterministic, and a
+session polling an agent pays a round trip and a slice of context per check.
+
+1. **The arguments.** Task ids first, in the order to run them, or a range `42 -- 47` (every id
+   between, inclusive, at most 50). Then, optionally, the chain: any of `plan`, `judge`, `ship`,
+   `review`, `resolve`, `finish`, each once, `finish` last; arrows and commas between them are
+   ignored. No chain named: `project.md → Drive chain`, else
+   `plan → judge → ship → review → resolve → finish`. `--answer` and `--every` go anywhere. The
+   command parses its own arguments, so the range's `--` survives.
+2. **Validation, before anything is created or prompted.** Outside Herdr it refuses as start
+   does. Every task is looked up on the tracker. In a range, a pull request (GitHub numbers both
+   alike) or an unknown number is skipped with a note; listed by hand, either is an error. A task
+   with no branch whose issue is closed, or whose plan sits in main's `plans/archive/`, is
+   finished and skipped. A body's `After:` line naming a task later in the list, or a task outside
+   the list that is not finished, is refused.
+3. **Per task.** The worktree, workspace and agent are opened as `f10 start` opens them, with the
+   body's `After:` as the base; nothing is prompted at open. The chain runs from the task's
+   position: the last skill the driver saw finish, recorded on the branch as
+   `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan
+   done, ship done). `finish` runs in the driver, exactly as `f10 finish` would from the main
+   checkout. Every other skill is prompted to the agent, marked `--driven`: plan and ship take
+   every gap on its default as start's prompt does, ship reuses the saved plan, a dependent task's
+   plan and ship carry the dependency's contract, and review gets `ci` where `project.md` declares
+   a remote review.
+4. **Waiting.** Every `--every` (15s by default) it reads two signals: Herdr's agent status for the
+   workspace, and the newest live run recorded against the worktree. A turn has begun once Herdr
+   shows the agent working or the run reports after the prompt; Herdr's `done` lasts from the
+   previous turn until someone looks, so it proves nothing. No sign within two minutes halts the
+   task. Once the agent is idle again, the run says how the turn ended:
+   - **blocked with an ask** - the question is printed with its options and the command that
+     answers it, and the driver exits **4**;
+   - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or
+     **partial** - the run's note and next are printed, and the driver exits **5**;
+   - **still running** under plan or ship, a minute after the agent went idle - the agent
+     stopped without reporting, usually a permission dialog in its pane; the driver names the
+     workspace and exits **5**;
+   - anything else - the skill is done, recorded on the branch, and the next one is sent.
+5. **The report.** Progress lines as it goes, then one row per task: `already finished`,
+   `finished`, `done: <chain>`, `asked at <skill>`, `halted at <skill>`, `not reached`. Exit 0
+   when every task went through its chain.
+
+Rerunning the same command is the resume. With `--answer "1. … 2. …"`, the first task stopped on a
+question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer,
+and the driver polls that turn as it would any other. An agent found mid-turn is attached to
+rather than prompted again. A task halted for another reason stays halted until its run changes:
+settle it in that workspace, or send steering through `--answer`.
+
+`/f10:drive` runs the command in the background, puts an exit-4 question to you in one
+questionnaire, reruns the command with the answers, and prints the final report.
+
+Out of scope: running independent tasks at the same time, halting dependents on a stop, catching
+dependents up after a base is finished.
 
 ## Review
 

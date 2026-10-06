@@ -16,6 +16,7 @@ const mainProjectMD = `# demo project
 - **Tracker** - GitHub Issues. Id format ` + "`GH-###`" + `.
   Fetch: ` + "`gh issue view <n> --comments`" + `.
 - **Ship pipelines** - implement → review (local) → pr
+- **Drive chain** - judge → ship → finish
 - **Visibility** - public
 
 ## Custom notes
@@ -42,6 +43,10 @@ func TestParseFile(t *testing.T) {
 	// the alias form maps to the canonical name
 	if pipe := fields["Ship pipeline(s)"]; !contains(pipe.body, "review (local)") {
 		t.Errorf("Ship pipelines alias not mapped: %q", pipe.body)
+	}
+
+	if chain := fields["Drive chain"]; chain.body != "judge → ship → finish" {
+		t.Errorf("Drive chain = %q", chain.body)
 	}
 
 	// an unmatched heading with content is kept; the empty title heading
@@ -150,6 +155,7 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 		"Project":          {origin: OriginDetected, value: "Go (go.mod)"},
 		"Tracker":          {origin: OriginDetected, value: "GitHub Issues (via gh)"},
 		"Ship pipeline(s)": {origin: OriginDefault, value: "implement → pr"},
+		"Drive chain":      {origin: OriginDefault, value: DefaultDriveChain},
 		"Visibility":       {origin: OriginDefault, value: "stealth"},
 		"Roles":            {origin: OriginAbsent, value: ""},
 	} {

@@ -29,7 +29,7 @@ func TestScaffoldSections(t *testing.T) {
 				Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
 			},
 			wantSection: []string{"Project", "Visibility", "Storage", "Tracker", "Hosting & PR", "Verify"},
-			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Review", "Guardrails"},
+			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Drive chain", "Review", "Guardrails"},
 			wantIn: []string{
 				"# demo · f10 project instructions",
 				"GitHub Issues. Task ids `DEM-###`.",
@@ -55,7 +55,7 @@ func TestScaffoldSections(t *testing.T) {
 				},
 			},
 			wantSection: []string{"Visibility", "Storage", "Tracker", "Hosting & PR", "Review"},
-			wantOmitted: []string{"Project", "Roles", "Ship pipeline(s)", "Verify", "Guardrails"},
+			wantOmitted: []string{"Project", "Roles", "Ship pipeline(s)", "Drive chain", "Verify", "Guardrails"},
 			wantIn: []string{
 				"## Review",
 				"- **Reviewer** - bot `claude[bot]`",
@@ -89,7 +89,7 @@ func TestScaffoldSections(t *testing.T) {
 				Stack: []probe.Signal{{Value: "Ruby", Evidence: "Gemfile"}},
 			},
 			wantSection: []string{"Project", "Visibility", "Storage", "Tracker", "Hosting & PR"},
-			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Verify", "Review", "Guardrails"},
+			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails"},
 			wantIn: []string{
 				"GitLab work items. Task ids `DEM-###`.",
 				"`glab issue view <n>`",
@@ -104,7 +104,7 @@ func TestScaffoldSections(t *testing.T) {
 			wantSection: []string{"Visibility", "Storage"},
 			wantOmitted: []string{
 				"Project", "Roles", "Tracker", "Hosting & PR",
-				"Ship pipeline(s)", "Verify", "Review", "Guardrails",
+				"Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails",
 			},
 			wantNotIn: []string{"## Project", "## Tracker", "## Hosting & PR", "## Verify"},
 		},
