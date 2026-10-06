@@ -1,9 +1,10 @@
 // Package herdr is the binary's door to Herdr, the terminal multiplexer
-// `f10 start` opens a task's worktree in and `f10 finish` closes it from.
-// Six calls, all over the herdr CLI: open a worktree as a workspace, start
-// an agent in its root pane, hand that agent a prompt, list the
-// workspaces, focus one, close one. Every answer is JSON, and the ids the
-// next call needs are read from it rather than predicted.
+// `f10 start` opens a task's worktree in, `f10 forward` reaches its agent
+// through and `f10 finish` closes it from. Six calls, all over the herdr
+// CLI: open a worktree as a workspace, start an agent in its root pane, hand
+// that agent a prompt, list the workspaces, focus one, close one. Every
+// answer is JSON, and the ids the next call needs are read from it rather
+// than predicted.
 package herdr
 
 import (
@@ -18,10 +19,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// ErrNotInside is the one refusal: start and finish run inside a Herdr
-// session and nowhere else, by decision rather than by accident of a
+// ErrNotInside is the one refusal: start, finish and forward run inside a
+// Herdr session and nowhere else, by decision rather than by accident of a
 // missing fallback.
-var ErrNotInside = errors.New("f10 start and finish run inside a Herdr session: " +
+var ErrNotInside = errors.New("f10 start, finish and forward run inside a Herdr session: " +
 	"open a pane there, or install it from https://herdr.dev")
 
 // Available reports whether this process can reach Herdr: the session

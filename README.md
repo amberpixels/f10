@@ -63,14 +63,14 @@ is an **entry point** into that chain:
 | `/f10:brainstorm <idea>` | brainstorm | a shape agreed in chat - or the decision not to build |
 | `/f10:judge <idea \| id \| PR \| commit> [--blind]` | judge | a verdict in chat: proceed, proceed with changes, rethink, or stop |
 | `/f10:capture <desc>` | capture | task created (id + url) |
-| `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
-| `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
+| `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code - or, when another worktree's agent has the task, the command handed to it |
+| `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) - or the command handed to the task's own agent |
 | `/f10:review <id \| PR \| this branch> [ci]` | review | a findings file on disk, written by a reviewer that never saw your session - or read in from the CI review on the PR |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | a verdict per finding - fix, skip or ask - fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:catchup` | catchup | the branch on its base - merged or rebased as the project declares - conflicts settled with both sides kept, verify green, nothing pushed |
-| `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
+| `/f10:status [id]` | nothing - a hook answers it; with an id, `f10 status <id>` | the run's status in words, before any model turn; with an id, a task's run in its own worktree, and the question its agent is waiting on relayed to you and answered back |
 | `/f10:start <id> [--plan \| --local] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
 | `/f10:finish <id> [--yes]` | nothing - it runs `f10 finish` | the PR merged, the plan archived, the workspace closed, the worktree and branch gone, main pulled |
 
@@ -336,6 +336,13 @@ is for not having to remember which of those it is: the plugin's own hook answer
 `f10 status` and ends the turn before a model runs, so it costs no tokens. On a machine without
 the binary, `f10-state.sh show` prints the same facts for the current session.
 
+A task id names another run: `f10 status 1042` reads the run reported from the checkout that has
+the task's branch, the worktree `f10 start` opened. An agent prompted there runs **driven**
+([modes/driven.md](modes/driven.md)): it never opens a question in its own pane, where nobody is
+looking, but writes the whole questionnaire to run state as one `ask` row and stops blocked.
+`/f10:status 1042` prints that row, puts the same questions to you, and sends the answers back as
+the agent's next prompt through `f10 forward`.
+
 <details>
 <summary>Why circles-by-fill, and the three Nerd Font exceptions</summary>
 
@@ -397,8 +404,8 @@ empty boxes here for the reason above, but the code spans hold the real U+F015A 
 
 - **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting,
   whether it was typed or the model invoked it, and read the argument to tell a description (which
-  routes through capture) from a task id (which does not); the first also answers `/f10:status`
-  outright, with a blocking verdict on stdout, which is what ends the turn. `PostToolUse` catches
+  routes through capture) from a task id (which does not); the first also answers a bare
+  `/f10:status` outright, with a blocking verdict on stdout, which is what ends the turn. `PostToolUse` catches
   the plan file being written, which is both "plan done" and where the task id comes from. `Stop`
   closes out whatever is still marked running when the turn ends. `SessionStart` prunes dead state
   and refreshes the symlink.
@@ -455,6 +462,7 @@ f10 demo open            # the demo report for it, in the browser
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
 f10 review pick|wait|ack # the remote review on that PR: read it, await it, mark it handled
 f10 status               # where the run is: this session's, or this repo's live ones
+f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
 ```
 
 A reference is an id in any of its shapes - `1042`, `#1042`, `ABC-1042` - or the task's url
@@ -506,7 +514,30 @@ is not. The command returns once the prompt is submitted and never waits on the 
 session inside Herdr can run it too - `/f10:start` is that skill. It runs inside a Herdr session
 only; outside one it stops before touching anything and points at https://herdr.dev. Run twice
 for one task it opens the worktree that exists and leaves the agent already in it alone, rather
-than failing.
+than failing. The prompt ends in `--driven`: the agent asks nothing in a pane nobody watches,
+and routes every question through run state instead ([modes/driven.md](modes/driven.md)).
+
+### Forward
+
+A task started that way lives in three places - its worktree, its workspace, its agent - and a
+`/f10:ship 1042` typed in the main session knows none of them: it would ship on `main`, without
+the plan, which sits in the worktree's own `.f10/`. `f10 forward` is the hand-off the plan and
+ship skills make first:
+
+```bash
+f10 forward 1042 "/f10:ship 1042"      # the command goes to 1042's agent, marked --driven
+f10 forward 1042 "1. reuse 2. proceed"  # an answer to the question that agent stopped on
+```
+
+It resolves the task to its branch, the branch to its worktree, the worktree to the workspace
+showing it and the workspace to the agent start named, and submits the text as that agent's next
+prompt. It returns at submission and prints three rows - task, workspace, sent - since the
+outcome lands in that tab; this session's badge does not move. A task whose branch is checked
+out right here, or nowhere, exits 3 with the reason, and the skill runs the command locally as
+before. An agent Herdr reports idle while its run still says running is waiting on something f10
+cannot see, a Claude Code permission dialog in its pane: forward names the workspace and sends
+nothing. Judge, demo and explain are never forwarded, since they read another worktree's branch
+fine and write nothing.
 
 ### Finish
 

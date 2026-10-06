@@ -5,14 +5,15 @@
 //
 // The lookaround verbs change nothing - no file they did not read, no
 // tracker item, no cache - and act on the reader's behalf only by handing a
-// url to a browser or a file to an editor. Three verbs write: `init` creates
+// url to a browser or a file to an editor. Four verbs act: `init` creates
 // the two files that register a project and never overwrites either,
 // `start` creates a branch and a worktree, opens them in Herdr and prompts
-// an agent there, and `finish` undoes start once the work merged: the PR
-// merged on the host, the plan archived, the workspace closed, the worktree
-// and branch removed, main pulled. bin/bundle.sh stays the agent-facing
-// surface for a pipeline run; this is the surface for a person, and for the
-// commands an agent runs to read a task, start the next one or finish this one.
+// an agent there, `forward` hands a command to the agent a task already has,
+// and `finish` undoes start once the work merged: the PR merged on the host,
+// the plan archived, the workspace closed, the worktree and branch removed,
+// main pulled. bin/bundle.sh stays the agent-facing surface for a pipeline
+// run; this is the surface for a person, and for the commands an agent runs
+// to read a task, start the next one, reach another or finish this one.
 //
 // A verb means one thing under every noun: `read` writes content, `open`
 // follows an address, `search` finds by description. The matrix is sparse
@@ -42,7 +43,7 @@ func main() {
 func newApp() *cli.Command {
 	return &cli.Command{
 		Name:    "f10",
-		Usage:   "look around a project's f10 configuration, tasks and plans, start a task and finish it",
+		Usage:   "look around a project's f10 configuration, tasks and plans, start a task, reach its agent and finish it",
 		Version: version(debug.ReadBuildInfo()),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -61,6 +62,7 @@ func newApp() *cli.Command {
 			reviewCommand(),
 			statusCommand(),
 			startCommand(),
+			forwardCommand(),
 			finishCommand(),
 		},
 	}

@@ -35,11 +35,11 @@ func TestLoad(t *testing.T) {
 	}{
 		{
 			name: "full file",
-			body: "v 1\ntask GH-26\nurl https://x/26\nroot /r\ncapture prior\nplan done\nship blocked\nleaf judge\nfinal pr\nnote stop: why\nnext do this\nupdated " + stamp + "\n",
+			body: "v 1\ntask GH-26\nurl https://x/26\nroot /r\ncapture prior\nplan done\nship blocked\nleaf judge\nfinal pr\nnote stop: why\nnext do this\nask 1. which? [a | b]\nupdated " + stamp + "\n",
 			want: Run{
 				Task: "GH-26", URL: "https://x/26", Root: "/r",
 				Capture: "prior", Plan: "done", Ship: "blocked",
-				Leaf: "judge", Final: "pr", Note: "stop: why", Next: "do this",
+				Leaf: "judge", Final: "pr", Note: "stop: why", Next: "do this", Ask: "1. which? [a | b]",
 				Updated: time.Unix(now.Unix(), 0),
 			},
 		},
@@ -192,6 +192,7 @@ func TestShowParity(t *testing.T) {
 	run("set", "ship", "running", "judge")
 	run("set", "ship", "blocked", "judge")
 	run("note", "stop: the change patches the symptom", "move the retry into the client")
+	run("ask", "1. keep the retry? [no | yes]\n2. where? [client | server]")
 
 	r, err := Load(Path(dir, "parity"))
 	if err != nil {
@@ -206,7 +207,12 @@ func TestShowParity(t *testing.T) {
 		"ship":    r.PhaseText("ship"),
 		"note":    r.Note,
 		"next":    r.Next,
+		"ask":     r.Ask,
 		"final":   r.Final,
+	}
+
+	if want := "1. keep the retry? [no | yes] 2. where? [client | server]"; r.Ask != want {
+		t.Errorf("ask = %q, want the newline folded: %q", r.Ask, want)
 	}
 
 	seen := 0

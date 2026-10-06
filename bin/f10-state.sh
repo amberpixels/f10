@@ -17,6 +17,7 @@
 #   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
+#   f10-state.sh ask <text>             the question a driven run stopped on, options included
 #   f10-state.sh final <step>           declare the ship pipeline's last step
 #   f10-state.sh seed <skill>           begin a fresh run - hooks call this, steps do not
 #   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
@@ -58,6 +59,7 @@ st_leaf=""
 st_final=""
 st_note=""
 st_next=""
+st_ask=""
 st_updated=0
 st_capture="pending"
 st_plan="pending"
@@ -88,6 +90,7 @@ load() {
       final) st_final="$v" ;;
       note) st_note="$v" ;;
       next) st_next="$v" ;;
+      ask) st_ask="$v" ;;
       updated) st_updated="$v" ;;
       capture) st_capture="$v" ;;
       plan) st_plan="$v" ;;
@@ -125,6 +128,7 @@ save() {
     echo "final $st_final"
     echo "note $st_note"
     echo "next $st_next"
+    echo "ask $st_ask"
     echo "updated $(date +%s)"
   } >"$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
 }
@@ -328,12 +332,14 @@ cmd_set() {
   # The leaf belongs to a step that is running - or to the step a run stopped on. A stop state
   # keeps it (the argument when given, else the one the last `running` recorded), because "ship
   # blocked" is the badge and "blocked at judge" is the answer; clearing it here is how a run once
-  # forgot who blocked it. A phase starting over retires the earlier stop's reason with it.
+  # forgot who blocked it. A phase starting over retires the earlier stop's reason with it, and
+  # the question a driven run stopped on: a step that runs again has its answer.
   case "$status" in
     running)
       st_leaf="$leaf"
       st_note=""
       st_next=""
+      st_ask=""
       ;;
     failed | partial | blocked) [ -n "$leaf" ] && st_leaf="$leaf" ;;
     *) st_leaf="" ;;
@@ -356,6 +362,24 @@ cmd_note() {
   load
   st_note="$(printf '%s' "$reason" | tr '\n' ' ')"
   st_next="$(printf '%s' "$next" | tr '\n' ' ')"
+  save
+  exit 0
+}
+
+# The question a driven run stopped on (modes/driven.md): an agent prompted from another session
+# has no one in its pane to answer a dialog, so it writes the whole questionnaire here - numbered
+# questions, each with its options, the default first - and ends its turn blocked. The session
+# that drives it reads the line through `f10 status <task-id>`, asks the user, and sends the
+# answer back as the agent's next prompt. One line, like note: a newline would be a second key.
+cmd_ask() {
+  local text="${1:-}"
+  [ -n "$text" ] || {
+    echo "f10-state: ask needs the question" >&2
+    exit 2
+  }
+  find_sid || exit 0
+  load
+  st_ask="$(printf '%s' "$text" | tr '\n' ' ')"
   save
   exit 0
 }
@@ -477,6 +501,7 @@ cmd_seed() {
   st_final=""
   st_note=""
   st_next=""
+  st_ask=""
   st_ship="pending"
   # The checkout this run is about, so a terminal with no session id can still find its runs.
   # The hook payload's cwd is wherever the session was launched; the checkout root is what a
@@ -555,6 +580,7 @@ print_run() {
   done
   [ -n "$st_note" ] && printf 'note     %s\n' "$st_note"
   [ -n "$st_next" ] && printf 'next     %s\n' "$st_next"
+  [ -n "$st_ask" ] && printf 'ask      %s\n' "$st_ask"
   [ -n "$st_final" ] && printf 'final    %s\n' "$st_final"
   printf 'updated  %ss ago\n' "$(($(date +%s) - st_updated))"
   return 0
@@ -662,9 +688,9 @@ cmd_doctor() {
 # One entry point for every hook event, dispatching on the payload's own hook_event_name rather
 # than on an argument, so hooks.json registers the same command everywhere and a new event costs a
 # case arm instead of a new script. Nothing here fails a run: a badge is never a reason to
-# interrupt one. The exception is `/f10:status`, which is not a run - it is a question, and the
-# answer is the interruption: a blocking verdict ends the turn before the model runs and puts the
-# status in the chat, so it costs no model turn at all.
+# interrupt one. The exception is a bare `/f10:status`, which is not a run - it is a question, and
+# the answer is the interruption: a blocking verdict ends the turn before the model runs and puts
+# the status in the chat, so it costs no model turn at all.
 cmd_hook() {
   [ -t 0 ] && exit 0
   json="$(cat)"
@@ -682,10 +708,12 @@ cmd_hook() {
   case "$event" in
     UserPromptExpansion)
       # the typed path: /f10:ship reaches the model as an expansion, never as a Skill tool call
+      # bare only: `/f10:status <task-id>` asks about another worktree's run and may have a
+      # question to relay to the user, which takes a model turn - the skill handles that form
       local name
       name="$(json_get command_name)"
       case "$name" in
-        f10:status | status) answer_status "$hook_sid" ;;
+        f10:status | status) [ -n "$(json_get command_args)" ] || answer_status "$hook_sid" ;;
       esac
       skill="$(f10_skill_of "$name")"
       [ -n "$skill" ] || exit 0
@@ -839,6 +867,10 @@ case "${1:-}" in
     shift
     cmd_note "$@"
     ;;
+  ask)
+    shift
+    cmd_ask "$@"
+    ;;
   final)
     shift
     cmd_final "$@"
@@ -863,6 +895,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
   task <id> [<url>]        record the task this run is about
   note <reason> [<next>]   why a run stopped, and what unblocks it
+  ask <text>               the question a driven run stopped on, options included
   final <step>             declare the ship pipeline's last step
   seed <skill>             begin a fresh run - hooks call this, steps do not
   render [<session id>]    the status-line segment; status-line JSON on stdin

@@ -222,29 +222,14 @@ func appendNote(notes []string, note string) []string {
 // finishTarget is the task's branch and the worktree that has it checked
 // out. Both must exist: finish removes only what start could have created.
 func finishTarget(ctx context.Context, in finishInput) (string, string, error) {
-	// no title lookup: the branch exists, so the id narrows the search by
-	// itself and a slug would cost a host call for nothing
-	want, _, err := branchName(ctx, in.driver, in.task, in.suffix, nil)
-	if err != nil {
-		return "", "", err
-	}
+	name, path, err := taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
 
-	name, err := existingBranch(ctx, in.main, want, in.task.ID, in.suffix)
-	if err != nil {
+	switch {
+	case err != nil:
 		return "", "", err
-	}
-
-	if name == "" {
+	case name == "":
 		return "", "", fmt.Errorf("%s has no branch here: nothing to finish", in.task.ID)
-	}
-
-	wts, err := gitx.Worktrees(ctx, in.main)
-	if err != nil {
-		return "", "", err
-	}
-
-	path := worktreeOf(wts, name)
-	if path == "" {
+	case path == "":
 		return "", "", fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name)
 	}
 

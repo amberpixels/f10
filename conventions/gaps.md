@@ -43,6 +43,11 @@ Offer - always declinable - at these checkpoints:
   defaults you'll use.
 - **On demand:** the user can ask to fill gaps at any point.
 
+**Driven** (`modes/driven.md` - the run was prompted from another session): the same batch, a
+different transport. No `AskUserQuestion`; the whole questionnaire goes into one
+`f10-state.sh ask` line, the run stops blocked, and the answers arrive as the next prompt. A
+steering line that already settles the gaps ("take defaults for all gaps") raises no ask at all.
+
 When answers come in: update each gap's status to **Resolved**, fold the decision into the
 relevant plan stages, and re-save the plan file. If an answer differs from the default the code
 was already built on (implementation happened first), say so plainly - that's a

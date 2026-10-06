@@ -110,6 +110,14 @@ in the `conventions/failure.md` sense - nothing broke, so no FAILED block and no
   or **block** - as stop above, the note carrying this verdict's word and reason. The judge
   still writes nothing; the plan edit is the ship skill's.
 
+**Driven** (`modes/driven.md` - nobody is in this pane to discuss with): **proceed** and
+**proceed with changes** continue, the named changes folded into the plan file by the ship skill
+without asking, the verdict and the changes one line each in the report. **Rethink** becomes an
+ask: the objections as numbered questions, the judge's preferred answer first and **block the
+run** among the options, then `set ship blocked judge` and the turn ends; the answers return as
+the next prompt and the ship skill folds them in as above. **Stop** ends the run blocked exactly
+as it does today.
+
 **It writes nothing.** No plan edits, no tracker comment, no code, no scratch file. The one
 line it leaves behind is the badge's, not an artifact: `f10-state.sh note` lands in the
 session's state file, outside every repo and gone with the TTL, so that `f10 status` can say

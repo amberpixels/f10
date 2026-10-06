@@ -423,7 +423,7 @@ func agentName(id, suffix string) string {
 // prompt is what the agent is told. A dependency adds the contract it must
 // design against: the base task's plan, not the checkout, since the base
 // task's code may not exist yet and a fallback for its absence is the one
-// thing the dependent must not write.
+// thing the dependent must not write. The driven marker closes it.
 func prompt(mode, id string, dep *dependency) string {
 	var p string
 
@@ -440,7 +440,9 @@ func prompt(mode, id string, dep *dependency) string {
 		p += " && " + dependencyClause(id, dep)
 	}
 
-	return p
+	// the agent is prompted from here, not by someone in its pane: driven
+	// from its first turn, every question goes through run state
+	return driven(p)
 }
 
 func dependencyClause(id string, dep *dependency) string {
