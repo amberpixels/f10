@@ -402,11 +402,13 @@ func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 }
 
 // releaseDependents clears the dependency other branches recorded on the
-// finished one with `start --after`. Its code is in the default branch
-// now, so a dependent's ship and pr steps act as if nothing was recorded
-// and target the default branch; the note says so, since the dependent's
-// agent is not told otherwise. Without this the dependents would point at
-// a branch that no longer exists anywhere.
+// finished one with `start --after`, and marks each landed. Its code is in
+// the default branch now, so a dependent's pr targets the default branch;
+// but the dependent branched before that code existed, so the mark has its
+// next ship or catchup bring the default branch in first. Without the
+// release the dependents would point at a branch that no longer exists
+// anywhere; without the mark, ship would implement on a tree missing the
+// base's change.
 func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, error) {
 	var notes []string
 
@@ -416,15 +418,21 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 		}
 
 		dependent := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgAfterBranch)
+		section := "branch." + dependent + "."
+		base := gitx.Out(ctx, dir, "config", "--get", section+cfgAfter)
 
 		for _, key := range []string{cfgAfter, cfgAfterBranch} {
-			if err := gitx.UnsetConfig(ctx, dir, "branch."+dependent+"."+key); err != nil {
+			if err := gitx.UnsetConfig(ctx, dir, section+key); err != nil {
 				return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
 			}
 		}
 
-		notes = append(notes, fmt.Sprintf("%s depended on %s: the dependency is cleared, its ship and pr target %s now",
-			dependent, branch, def))
+		if err := gitx.SetConfig(ctx, dir, section+cfgLanded, cmp.Or(base, branch)); err != nil {
+			return nil, fmt.Errorf("marking %s landed on %s: %w", dependent, def, err)
+		}
+
+		notes = append(notes, fmt.Sprintf("%s depended on %s: the dependency is cleared and its pr targets %s now; "+
+			"its next ship or /f10:catchup brings %s in first", dependent, branch, def, def))
 	}
 
 	return notes, nil

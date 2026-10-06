@@ -65,32 +65,42 @@ is also how `f10 start --local` sends `/f10:ship local: <id>` - or in their own 
 switch without the user's pick. A **(planless)** pipeline skips capture/fetch/plan for
 free-text input (`conventions/context.md`).
 
-**Dependency:** before the first pipeline step, read what `f10 start --after` recorded on the
-branch:
+**Dependency:** before the first pipeline step, read what `f10 start --after` and `f10 finish`
+recorded on the branch:
 
 ```
 git config --get branch."$(git branch --show-current)".f10-after          # the base task
 git config --get branch."$(git branch --show-current)".f10-after-branch   # its branch
+git config --get branch."$(git branch --show-current)".f10-landed         # a base finished since
 ```
 
-Nothing recorded: nothing changes. Recorded: `git fetch origin`, find the base branch
-local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of four:
-- the base exists nowhere: the base task was finished and its branch deleted, so its code is
-  in the default branch. `git config --unset` both keys and carry on as if nothing was recorded
-  (`f10 finish` does this itself; this is the fallback for a base merged by hand);
+**`f10-landed` recorded:** `f10 finish` merged the base task and released this branch, which
+branched before the base's code existed. The base's code is in the default branch and not in
+this one, so catch up with the default branch before implement, as described below the list.
+On success, `git config --unset` the mark.
+
+Nothing recorded: nothing changes. `f10-after` recorded: `git fetch origin`, find the base
+branch local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of four:
+- the base exists nowhere: the base task was finished and its branch deleted by hand, without
+  `f10 finish` leaving the mark. Its code is in the default branch, so treat it as landed:
+  `git config --unset` both keys, then catch up with the default branch;
 - the base is an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
-- the base moved: bring the branch up to date before implement, the way `steps/catchup.md`
-  does - `git rebase <base>`, or `git merge --no-edit <base>` where `project.md → Hosting & PR`
-  declares `catchup: merge`. A conflict ends the run as a failure (`conventions/failure.md`),
-  the operation aborted so the tree stays as it was, and the report's `next` row names
-  `/f10:catchup`: it settles the conflicts with both sides kept, after which this run can be
-  re-issued. Ship never settles conflicts itself - an implement step over a half-merged tree
-  is the outcome the failure convention exists to prevent;
+- the base moved: catch up with `<base>`;
 - the base still equals the default branch's commit: the base task has no code yet. Ask once
   (AskUserQuestion): **wait**, or **proceed on the plan's assumption**. Wait ends the run blocked
   the way a judge stop does - `f10-state.sh set ship blocked implement`, a `note` naming the base
   task - and is not a failure. Proceed builds against the base task's plan as the plan file
   records it, with no fallback for its absence.
+
+**Catching up** works the same for the base branch and the default branch: before implement,
+the way `steps/catchup.md` does, with the target taken as `origin/<default>` after the fetch
+for the default branch. Run `git rebase <target>`, or `git merge --no-edit <target>` where
+`project.md → Hosting & PR` declares `catchup: merge`. A conflict ends the run as a failure
+(`conventions/failure.md`). The operation is aborted so the tree stays as it was, any mark is
+left in place, and the report's `next` row names `/f10:catchup`: it settles the conflicts with
+both sides kept, after which this run can be re-issued. Ship never settles conflicts itself,
+because an implement step over a half-merged tree is the outcome the failure convention exists
+to prevent.
 
 The pr step reads the same keys to stack the PR on the base branch (`steps/pr.md`).
 
