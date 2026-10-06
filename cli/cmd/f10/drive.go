@@ -23,8 +23,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The drive verb runs a list of tasks through a chain of skills, one task
-// at a time, and exits when every task is through or one needs a human.
+// The drive verb runs a list of tasks through a chain of skills and exits
+// when every task is through, or one needs a human. The tasks run as their
+// dependencies allow: each waits for its one base to finish, and every task
+// whose base is finished runs at once, since each agent is its own session.
 // It is Go rather than a Claude session because ordering, prompting and
 // polling are deterministic, and a session polling an agent pays a round
 // trip and a slice of context per check.
@@ -37,17 +39,19 @@ import (
 //
 // Rerunning the same command is the resume. A finished task is skipped, a
 // started one reads its position from its branch, and an ask is answered
-// by the same command with --answer.
+// by the same command with --answer, one per asking task.
 func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
-		Usage: "run a list of tasks through a chain of skills, one task at a time, stopping when an agent asks",
+		Usage: "run a list of tasks through a chain of skills, each once its base is finished, stopping when an agent asks",
 		ArgsUsage: "<id>... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
-			"[--answer TEXT] [--every DURATION]",
+			"[--answer [ID=]TEXT ...] [--every DURATION]",
 		Description: "The chain defaults to project.md's Drive chain, else " +
 			"plan → judge → ship → review → resolve → finish.\n" +
+			"A task's base is its branch's recorded --after, else its body's After: line; " +
+			"every task whose base is finished runs at once, and a halt stops only its dependents.\n" +
 			"Exit 0: every task went through its chain. 4: an agent asks; rerun with --answer. " +
-			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting).",
+			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
 		SkipFlagParsing: true,
 		Action:          runDrive,
@@ -150,11 +154,11 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 // driveArgs is the command line, parsed by hand so `--` survives.
 type driveArgs struct {
-	tasks  []string // as typed; with span, the two ends of a range
-	span   bool
-	chain  []string
-	answer string
-	every  time.Duration
+	tasks   []string // as typed; with span, the two ends of a range
+	span    bool
+	chain   []string
+	answers []string // each --answer as typed: `GH-1=text` for one task, or bare text
+	every   time.Duration
 }
 
 // parseDriveArgs reads tasks, then skills, with --answer and --every
@@ -225,7 +229,9 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 
 func (a *driveArgs) set(name, value string) error {
 	if name == "--answer" {
-		a.answer = strings.TrimSpace(value)
+		if value = strings.TrimSpace(value); value != "" {
+			a.answers = append(a.answers, value)
+		}
 
 		return nil
 	}
@@ -307,7 +313,8 @@ type driveInput struct {
 	now      func() time.Time
 	sleep    func(context.Context, time.Duration) error
 
-	answer string // --answer, until a stopped task takes it
+	answer  string            // a bare --answer, until the first task stopped on a question takes it
+	answers map[string]string // --answer ID=text, by task id, until that task takes it
 }
 
 // A driveTask is one task of the list, as the validation pass found it.
@@ -315,69 +322,237 @@ type driveTask struct {
 	ref      ref.Ref
 	suffix   string
 	info     taskInfo
+	branch   string // the task's local branch, or "" before it started
 	after    string // the base the body's After: line names, as an id
+	base     string // the base the drive waits for: the branch's record, else after
 	finished bool
 }
 
 // A driveResult is how one task ended: its row in the report, and when it
-// stopped the list, the exit code and the lines beneath the report.
+// stopped, the exit code and the lines beneath the report.
 type driveResult struct {
 	row   string
 	code  int
 	lines []string
 }
 
-// drive runs the flow: resolve and validate every task, then each in
-// order, then the report. Nothing is created or prompted before every task
-// passed validation.
-func drive(ctx context.Context, w io.Writer, in *driveInput) error {
-	in.answer = in.args.answer
+// A driveRun is one task on its way through the drive: pending until its
+// base is through, then active with one chain element in flight, then
+// ended with its row.
+type driveRun struct {
+	task      driveTask
+	o         openedTask
+	opened    bool
+	pos       int    // the chain element in flight, or the next one
+	skill     string // what is in flight: a chain skill, or catchup
+	sentAt    time.Time
+	begun     bool
+	idleSince time.Time
+	end       *driveResult
+}
 
+func (r *driveRun) active() bool { return r.opened && r.end == nil }
+
+// through reports a task done with for its dependents: finished, or its
+// whole chain run.
+func (r *driveRun) through() bool { return r.end != nil && r.end.code == 0 }
+
+// drive runs the flow: resolve every task, read the graph, start every
+// task whose base is through, then poll them all until each is through, or
+// one asks, or nothing can move. Nothing is created or prompted before the
+// graph passed validation.
+func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	tasks, notes, err := in.resolveTasks(ctx)
 	if err != nil {
 		return err
 	}
 
-	if err := in.checkOrder(ctx, tasks); err != nil {
+	order, graphNotes, err := in.graph(ctx, tasks)
+	if err != nil {
 		return err
 	}
 
+	notes = append(notes, graphNotes...)
+
+	if err := in.takeAnswers(tasks); err != nil {
+		return err
+	}
+
+	runs := make([]*driveRun, 0, len(order))
+	byID := map[string]*driveRun{}
+
+	for _, i := range order {
+		r := &driveRun{task: tasks[i]}
+		if r.task.finished {
+			r.end = &driveResult{row: "already finished"}
+		}
+
+		runs = append(runs, r)
+
+		if _, seen := byID[r.task.ref.ID]; !seen {
+			byID[r.task.ref.ID] = r
+		}
+	}
+
+	if err := in.startRunnable(ctx, w, runs, byID); err != nil {
+		return err
+	}
+
+	for !stopping(runs) {
+		if err := in.sleep(ctx, in.args.every); err != nil {
+			return err
+		}
+
+		wss, live, err := in.lookAll(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, r := range runs {
+			if !r.active() {
+				continue
+			}
+
+			if err := in.poll(ctx, w, r, wss, live); err != nil {
+				return fmt.Errorf("%s: %w", r.task.ref.ID, err)
+			}
+		}
+
+		if err := in.startRunnable(ctx, w, runs, byID); err != nil {
+			return err
+		}
+	}
+
+	return in.report(w, runs, notes)
+}
+
+// stopping reports whether the drive ends: a task asks, which only a human
+// can answer, or no task is active, so nothing can change.
+func stopping(runs []*driveRun) bool {
+	active := false
+
+	for _, r := range runs {
+		if r.end != nil && r.end.code == exitAsk {
+			return true
+		}
+
+		active = active || r.active()
+	}
+
+	return !active
+}
+
+// startRunnable opens every pending task whose base is through and sends
+// its first element. Runs are in graph order, so a base finished earlier in
+// the same pass releases its dependents in it.
+func (in *driveInput) startRunnable(
+	ctx context.Context,
+	w io.Writer,
+	runs []*driveRun,
+	byID map[string]*driveRun,
+) error {
+	for _, r := range runs {
+		if r.opened || r.end != nil {
+			continue
+		}
+
+		// a base outside the list was refused unless finished
+		if b := byID[r.task.base]; b != nil && !b.through() {
+			continue
+		}
+
+		if err := in.open(ctx, w, r); err != nil {
+			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
+		}
+
+		if err := in.next(ctx, w, r); err != nil {
+			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// takeAnswers sorts the --answer values: `ID=text` naming a listed task is
+// that task's, anything else is the bare answer, of which there is one.
+func (in *driveInput) takeAnswers(tasks []driveTask) error {
+	in.answer, in.answers = "", map[string]string{}
+
+	for _, a := range in.args.answers {
+		if key, text, ok := strings.Cut(a, "="); ok {
+			if i := slices.IndexFunc(tasks, func(t driveTask) bool {
+				return strings.EqualFold(t.ref.ID, strings.TrimSpace(key))
+			}); i >= 0 {
+				in.answers[tasks[i].ref.ID] = strings.TrimSpace(text)
+
+				continue
+			}
+		}
+
+		if in.answer != "" {
+			return errors.New("several --answer values name no task: key each one, --answer GH-1=\"1. …\"")
+		}
+
+		in.answer = a
+	}
+
+	return nil
+}
+
+// report prints a row per task in graph order, then what stopped the
+// drive, and exits with the code the rows add up to: an ask first, since
+// answering it is what resumes the drive, then a halt.
+func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) error {
 	var (
-		rows []fact
-		stop *driveResult
+		rows   []fact
+		lines  []string
+		asking []string
+		code   int
 	)
 
-	for _, task := range tasks {
+	halted := map[string]bool{}
+
+	for _, r := range runs {
+		id := r.task.ref.ID
+
 		switch {
-		case stop != nil:
-			rows = append(rows, fact{label: task.ref.ID, value: "not reached"})
+		case r.end != nil:
+			rows = append(rows, fact{label: id, value: r.end.row})
+			lines = append(lines, r.end.lines...)
 
-			continue
-		case task.finished:
-			rows = append(rows, fact{label: task.ref.ID, value: "already finished"})
+			if r.end.code == exitAsk {
+				asking = append(asking, id)
+			}
 
-			continue
+			halted[id] = r.end.code == exitHalted
+			code = max(code, r.end.code)
+		case r.active():
+			rows = append(rows, fact{label: id, value: "running " + r.skill})
+		case halted[r.task.base]:
+			rows = append(rows, fact{label: id, value: "halted: base " + r.task.base + " halted"})
+			halted[id] = true
+			code = max(code, exitHalted)
+		default:
+			rows = append(rows, fact{label: id, value: "not reached"})
 		}
+	}
 
-		res, err := in.runTask(ctx, w, task)
-		if err != nil {
-			return fmt.Errorf("%s: %w", task.ref.ID, err)
-		}
-
-		rows = append(rows, fact{label: task.ref.ID, value: res.row})
-
-		if res.code != 0 {
-			stop = &res
-		}
+	if len(asking) > 0 {
+		code = exitAsk
+		lines = append(lines, "answer with: "+resumeCommand(in.argv)+answerFlags(asking))
 	}
 
 	if in.answer != "" {
 		notes = append(notes, "--answer went unused: no task was stopped on a question")
 	}
 
-	if stop != nil {
-		notes = append(notes, stop.lines...)
+	for _, r := range runs {
+		if _, left := in.answers[r.task.ref.ID]; left {
+			notes = append(notes, "--answer for "+r.task.ref.ID+" went unused: it was not stopped on a question")
+		}
 	}
+
+	notes = append(notes, lines...)
 
 	if len(rows) > 0 {
 		fmt.Fprintln(w)
@@ -387,11 +562,26 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		return err
 	}
 
-	if stop != nil {
-		return cli.Exit("", stop.code)
+	if code != 0 {
+		return cli.Exit("", code)
 	}
 
 	return nil
+}
+
+// answerFlags is the --answer part of the resume command: bare for one
+// asking task, keyed by task when several ask.
+func answerFlags(asking []string) string {
+	if len(asking) == 1 {
+		return ` --answer "1. … 2. …"`
+	}
+
+	var b strings.Builder
+	for _, id := range asking {
+		b.WriteString(` --answer "` + id + `=1. … 2. …"`)
+	}
+
+	return b.String()
 }
 
 // resolveTasks turns the arguments into tasks with what the tracker says
@@ -440,6 +630,17 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		branched, err := hasTaskBranch(ctx, in.main, r.ID)
 		if err != nil {
 			return err
+		}
+
+		if branched {
+			local, err := branchesFor(ctx, in.main, "refs/heads/", r.ID, suffix)
+			if err != nil {
+				return err
+			}
+
+			if len(local) == 1 {
+				task.branch = local[0]
+			}
 		}
 
 		task.finished = finishedTask(info, in.tracker.archive, r.ID, branched)
@@ -533,47 +734,7 @@ func prefixOf(r ref.Ref) string {
 	return strings.TrimSuffix(r.ID, r.Number)
 }
 
-// checkOrder refuses a list whose dependencies cannot hold: a task whose
-// base comes later in the list, or whose base is outside it and not
-// finished. The order given is the order run.
-func (in *driveInput) checkOrder(ctx context.Context, tasks []driveTask) error {
-	index := map[string]int{}
-	for i, t := range tasks {
-		index[t.ref.ID] = i
-	}
-
-	for i, t := range tasks {
-		if t.finished || t.after == "" {
-			continue
-		}
-
-		if j, listed := index[t.after]; listed {
-			if j >= i {
-				return fmt.Errorf(
-					"%s is After: %s, which comes later in the list: put %s first",
-					t.ref.ID,
-					t.after,
-					t.after,
-				)
-			}
-
-			continue
-		}
-
-		done, err := in.baseFinished(ctx, t.after)
-		if err != nil {
-			return err
-		}
-
-		if !done {
-			return fmt.Errorf("%s is After: %s, which is not in the list and not finished: "+
-				"add %s before %s, or finish it first", t.ref.ID, t.after, t.after, t.ref.ID)
-		}
-	}
-
-	return nil
-}
-
+// baseFinished reports whether a base outside the list is done with.
 func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error) {
 	base, err := in.tracker.resolve(ctx, id)
 	if err != nil {
@@ -593,14 +754,14 @@ func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error)
 	return finishedTask(info, in.tracker.archive, base.ID, false), nil
 }
 
-// runTask opens the task's checkout and agent, then runs the chain from
-// where the task stands.
-func (in *driveInput) runTask(ctx context.Context, w io.Writer, task driveTask) (driveResult, error) {
-	id := task.ref.ID
+// open opens the task's checkout and agent, and reads where in the chain it
+// stands.
+func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error {
+	task := r.task
 
 	after, note, err := bodyAfter(ctx, in.tracker, in.main, task.ref, task.info.body)
 	if err != nil {
-		return driveResult{}, err
+		return err
 	}
 
 	var title func(context.Context) (string, error)
@@ -618,10 +779,10 @@ func (in *driveInput) runTask(ctx context.Context, w io.Writer, task driveTask) 
 		title:    title,
 	})
 	if err != nil {
-		return driveResult{}, err
+		return err
 	}
 
-	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s\n", id, o.branch, o.path, o.ws.ID)
+	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s\n", task.ref.ID, o.branch, o.path, o.ws.ID)
 
 	for _, n := range appendNote(o.notes, note) {
 		fmt.Fprintf(w, "  %s\n", n)
@@ -629,25 +790,12 @@ func (in *driveInput) runTask(ctx context.Context, w io.Writer, task driveTask) 
 
 	pos, err := in.position(ctx, o)
 	if err != nil {
-		return driveResult{}, err
+		return err
 	}
 
-	for _, skill := range in.chain[pos:] {
-		if skill == "finish" {
-			return in.runFinish(ctx, w, task), nil
-		}
+	r.o, r.opened, r.pos = o, true, pos
 
-		res, err := in.agentStep(ctx, w, task, o, skill)
-		if err != nil || res.code != 0 {
-			return res, err
-		}
-
-		if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgDrive, skill); err != nil {
-			return driveResult{}, fmt.Errorf("recording %s done: %w", skill, err)
-		}
-	}
-
-	return driveResult{row: "done: " + strings.Join(in.chain, " ")}, nil
+	return nil
 }
 
 // position is how many chain skills the task is past: the last one drive
@@ -680,6 +828,31 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 	return pos, nil
 }
 
+// next sends the task its next element: none left ends it, finish runs in
+// this process, and a branch its finished base marked landed is caught up
+// with the default branch before any skill runs on it.
+func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
+	if r.pos >= len(in.chain) {
+		r.end = &driveResult{row: "done: " + strings.Join(in.chain, " ")}
+
+		return nil
+	}
+
+	skill := in.chain[r.pos]
+
+	switch {
+	case skill == "finish":
+		res := in.runFinish(ctx, w, r.task)
+		r.end = &res
+
+		return nil
+	case in.landed(ctx, r):
+		skill = "catchup"
+	}
+
+	return in.send(ctx, w, r, skill)
+}
+
 // runFinish runs finish in this process. Its refusals halt the task with
 // the reason; its report is indented under the progress lines.
 func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask) driveResult {
@@ -695,160 +868,210 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 	}
 
 	if err != nil {
-		return driveResult{
-			row:   "halted at finish",
-			code:  exitHalted,
-			lines: []string{fmt.Sprintf("%s halted at finish: %v", task.ref.ID, err)},
-		}
+		return halted(task.ref.ID, "finish", err.Error())
 	}
 
 	return driveResult{row: "finished"}
 }
 
-// agentStep runs one skill in the task's agent: attach to a turn already
-// running, answer a question it stopped on, or prompt the skill; then wait
-// for the turn to end and read how it ended.
-func (in *driveInput) agentStep(
-	ctx context.Context,
-	w io.Writer,
-	task driveTask,
-	o openedTask,
-	skill string,
-) (driveResult, error) {
-	id := task.ref.ID
-	agent := agentName(id, task.suffix)
+// send runs one element in the task's agent: attach to a turn already
+// running, answer a question it stopped on, or prompt the element. The
+// poll reads how it ends.
+func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill string) error {
+	id := r.task.ref.ID
+	agent := agentName(id, r.task.suffix)
 
-	ws, run, err := in.look(ctx, o.path)
+	ws, run, err := in.look(ctx, r.o.path)
 	if err != nil {
-		return driveResult{}, err
+		return err
 	}
 
-	sentAt := in.now()
-	attach := false
+	r.skill, r.sentAt, r.begun, r.idleSince = skill, in.now(), false, time.Time{}
 
 	switch {
 	case ws.Agent == "working":
-		attach = true
+		r.begun = true
 
 		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
 	case run != nil && stoppedRun(run):
-		if in.answer == "" {
-			return in.verdict(task, skill, run), nil
+		answer := in.takeAnswer(id)
+		if answer == "" {
+			res := in.verdict(r.task, skill, run)
+			r.end = &res
+
+			return nil
 		}
 
-		if err := herdr.Prompt(ctx, o.path, agent, in.answer); err != nil {
-			return driveResult{}, err
+		if err := herdr.Prompt(ctx, r.o.path, agent, answer); err != nil {
+			return err
 		}
-
-		in.answer = ""
 
 		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
 	default:
-		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: sentAt}
-		if err := refuseStalled(fwd, ws, agent, o.path); err != nil {
-			return halted(id, skill, err.Error()), nil
+		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt}
+		if err := refuseStalled(fwd, ws, agent, r.o.path); err != nil {
+			res := halted(id, skill, err.Error())
+			r.end = &res
+
+			return nil
 		}
 
-		if err := herdr.Prompt(ctx, o.path, agent, skillPrompt(skill, id, o.dep, in.remote)); err != nil {
-			return driveResult{}, err
+		if err := herdr.Prompt(ctx, r.o.path, agent, skillPrompt(skill, id, r.o.dep, in.remote)); err != nil {
+			return err
 		}
 
 		fmt.Fprintf(w, "%s %s: sent\n", id, skill)
 	}
 
-	return in.await(ctx, w, task, o, skill, sentAt, attach)
+	return nil
 }
 
-// await polls until the turn ends. A turn has begun once Herdr shows the
-// agent working or its run reports after the prompt: Herdr's `done` lasts
-// from the previous turn until someone looks, so it proves nothing. Once
-// the agent is idle again, the run says how the turn ended.
-func (in *driveInput) await(
-	ctx context.Context,
-	w io.Writer,
-	task driveTask,
-	o openedTask,
-	skill string,
-	sentAt time.Time,
-	begun bool,
-) (driveResult, error) {
-	id := task.ref.ID
-	since := sentAt.Truncate(time.Second) // the state file keeps whole seconds
+// takeAnswer is the answer for a task stopped on a question: its own keyed
+// one, else the bare one. Either is taken once.
+func (in *driveInput) takeAnswer(id string) string {
+	if a, ok := in.answers[id]; ok {
+		delete(in.answers, id)
 
-	var idleSince time.Time
-
-	for {
-		if err := in.sleep(ctx, in.args.every); err != nil {
-			return driveResult{}, err
-		}
-
-		ws, run, err := in.look(ctx, o.path)
-		if err != nil {
-			return driveResult{}, err
-		}
-
-		now := in.now()
-		recent := run != nil && !run.Updated.Before(since)
-
-		switch ws.Agent {
-		case "working":
-			begun, idleSince = true, time.Time{}
-
-			continue
-		case "idle", "done":
-		default:
-			continue // Herdr has not placed the agent yet
-		}
-
-		if !begun && !recent {
-			if now.Sub(sentAt) > startWindow {
-				return halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
-					cmp.Or(ws.Label, ws.ID), startWindow)), nil
-			}
-
-			continue
-		}
-
-		begun = true
-
-		if recent && stoppedRun(run) {
-			return in.verdict(task, skill, run), nil
-		}
-
-		// plan and ship own a phase; one still running with the agent idle
-		// is a turn that ended without reporting, once the Stop hook had time
-		if (skill == "plan" || skill == "ship") && run != nil && run.Status(skill) == "running" {
-			if idleSince.IsZero() {
-				idleSince = now
-			}
-
-			if now.Sub(idleSince) < stallGrace {
-				continue
-			}
-
-			return halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
-				"it stopped without reporting, answer it in that pane", agentName(id, task.suffix),
-				cmp.Or(ws.Label, ws.ID), skill, run.PhaseText(skill))), nil
-		}
-
-		fmt.Fprintf(w, "%s %s: done\n", id, skill)
-
-		return driveResult{}, nil
+		return a
 	}
+
+	a := in.answer
+	in.answer = ""
+
+	return a
+}
+
+// poll reads one task's turn from this tick's look. A turn has begun once
+// Herdr shows the agent working or its run reports after the prompt:
+// Herdr's `done` lasts from the previous turn until someone looks, so it
+// proves nothing. Once the agent is idle again, the run says how the turn
+// ended.
+func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []herdr.Listed, live []*state.Run) error {
+	id, skill := r.task.ref.ID, r.skill
+
+	ws := workspaceAt(wss, r.o.path)
+	if ws == nil {
+		return fmt.Errorf("no Herdr workspace shows %s any more", r.o.path)
+	}
+
+	var run *state.Run
+	if runs := inRoot(live, r.o.path); len(runs) > 0 {
+		run = runs[0]
+	}
+
+	now := in.now()
+	since := r.sentAt.Truncate(time.Second) // the state file keeps whole seconds
+	recent := run != nil && !run.Updated.Before(since)
+
+	switch ws.Agent {
+	case "working":
+		r.begun, r.idleSince = true, time.Time{}
+
+		return nil
+	case "idle", "done":
+	default:
+		return nil // Herdr has not placed the agent yet
+	}
+
+	if !r.begun && !recent {
+		if now.Sub(r.sentAt) > startWindow {
+			res := halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
+				cmp.Or(ws.Label, ws.ID), startWindow))
+			r.end = &res
+		}
+
+		return nil
+	}
+
+	r.begun = true
+
+	if recent && stoppedRun(run) {
+		res := in.verdict(r.task, skill, run)
+		r.end = &res
+
+		return nil
+	}
+
+	// plan and ship own a phase; one still running with the agent idle is a
+	// turn that ended without reporting, once the Stop hook had time
+	if (skill == "plan" || skill == "ship") && run != nil && run.Status(skill) == "running" {
+		if r.idleSince.IsZero() {
+			r.idleSince = now
+		}
+
+		if now.Sub(r.idleSince) >= stallGrace {
+			res := halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
+				"it stopped without reporting, answer it in that pane", agentName(id, r.task.suffix),
+				cmp.Or(ws.Label, ws.ID), skill, run.PhaseText(skill)))
+			r.end = &res
+		}
+
+		return nil
+	}
+
+	fmt.Fprintf(w, "%s %s: done\n", id, skill)
+
+	if skill == "catchup" {
+		if reason := in.unsettled(ctx, r); reason != "" {
+			res := halted(id, skill, "the catchup did not end clean: "+reason)
+			r.end = &res
+
+			return nil
+		}
+
+		return in.next(ctx, w, r)
+	}
+
+	if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
+		return fmt.Errorf("recording %s done: %w", skill, err)
+	}
+
+	r.pos++
+
+	return in.next(ctx, w, r)
+}
+
+// landed reports whether finish marked the task's branch: its base's code
+// is in the default branch and not yet in this one.
+func (in *driveInput) landed(ctx context.Context, r *driveRun) bool {
+	return gitx.Out(ctx, in.main, "config", "--get", "branch."+r.o.branch+"."+cfgLanded) != ""
+}
+
+// unsettled says why a catchup that ended without a stop did not bring the
+// branch up to date, or "" when it did. Catchup owns no phase, so its
+// success is read from git: the landed mark gone, which catchup clears only
+// once verify is green, no merge or rebase left open, and a clean tree.
+func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
+	switch {
+	case in.landed(ctx, r):
+		return "the branch is still marked " + cfgLanded
+	case gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "MERGE_HEAD") != "":
+		return "a merge is still in progress in " + r.o.path
+	case gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "REBASE_HEAD") != "":
+		return "a rebase is still in progress in " + r.o.path
+	}
+
+	dirty, err := gitx.Status(ctx, r.o.path)
+
+	switch {
+	case err != nil:
+		return err.Error()
+	case len(dirty) > 0:
+		return fmt.Sprintf("%d uncommitted paths in %s", len(dirty), r.o.path)
+	}
+
+	return ""
 }
 
 // verdict reads a stopped run: an ask goes to the user, anything else halts.
-func (in *driveInput) verdict(task driveTask, skill string, run *state.Run) driveResult {
+func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveResult {
 	id := task.ref.ID
 
 	if run.Ask != "" {
 		return driveResult{
-			row:  "asked at " + skill,
-			code: exitAsk,
-			lines: []string{
-				fmt.Sprintf("%s asks at %s: %s", id, skill, run.Ask),
-				"answer with: " + resumeCommand(in.argv) + ` --answer "1. … 2. …"`,
-			},
+			row:   "asked at " + skill,
+			code:  exitAsk,
+			lines: []string{fmt.Sprintf("%s asks at %s: %s", id, skill, run.Ask)},
 		}
 	}
 
@@ -902,6 +1125,22 @@ func (in *driveInput) look(ctx context.Context, path string) (*herdr.Listed, *st
 	return ws, run, err
 }
 
+// lookAll is one tick's view: every workspace Herdr shows and every live
+// run, read once for all the tasks in flight.
+func (in *driveInput) lookAll(ctx context.Context) ([]herdr.Listed, []*state.Run, error) {
+	wss, err := herdr.Workspaces(ctx, in.main)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	live, err := state.List(in.stateDir, in.now(), in.ttl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return wss, live, nil
+}
+
 // run is the newest live run recorded against the checkout, or nil.
 func (in *driveInput) run(path string) (*state.Run, error) {
 	live, err := state.List(in.stateDir, in.now(), in.ttl)
@@ -919,7 +1158,8 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 // skillPrompt is what the agent is told for one skill, marked driven. Plan
 // and ship take every gap on its default, as start's prompt does, and ship
 // reuses the plan the chain wrote rather than asking; both carry the
-// dependency's contract when the task has a base.
+// dependency's contract when the task has a base. catchup is not a chain
+// skill: drive sends it to a branch its finished base marked landed.
 func skillPrompt(skill, id string, dep *dependency, remote bool) string {
 	var p string
 
@@ -933,6 +1173,8 @@ func skillPrompt(skill, id string, dep *dependency, remote bool) string {
 		if remote {
 			p += " ci"
 		}
+	case "catchup":
+		p = "/f10:catchup" // it catches up the branch its session stands on, and takes no id
 	default:
 		p = "/f10:" + skill + " " + id
 	}

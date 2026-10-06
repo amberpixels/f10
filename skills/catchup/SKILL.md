@@ -27,6 +27,11 @@ then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh catchup`, every run. Then follow the *
 that bundle just printed - it carries the step file, so there is nothing left to read from
 `steps/`.
 
+**Driven:** if the argument contains `--driven`, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
+alongside the step. No `AskUserQuestion`: an ambiguous conflict becomes the run's one ask, as the
+step's **Driven** paragraph says. `f10 drive` sends it this way to a dependent whose base it
+just finished.
+
 **No routing.** The subject is always the branch checked out here; a task id or a PR is not an
 argument this skill takes, since the branch to catch up is the one the session stands on. Any
 text the user adds is steering for the run - "take theirs for the lockfile", "ask me before

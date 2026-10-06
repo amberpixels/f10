@@ -26,7 +26,8 @@ A driven run never opens `AskUserQuestion`, and never ends a turn on a question 
 place the steps and conventions call for one - the gaps questionnaire before implementing
 (`conventions/gaps.md`), **reuse this plan or re-plan?** (`skills/ship`), **wait or proceed** on
 a base task with no code yet, a judge's rethink (`steps/judge.md`), an `ask` verdict in resolve
-(`steps/resolve.md`), a deploy confirmation - goes through run state instead:
+(`steps/resolve.md`), a conflict catchup cannot settle from the diff (`steps/catchup.md`), a
+deploy confirmation - goes through run state instead:
 
 1. **Write the whole batch as one ask.** `f10-state.sh ask "<text>"` - one line, numbered
    questions, each with its options in brackets, the default or recommended answer first:
@@ -52,7 +53,8 @@ user, and sends the answers back with `f10 forward <task-id> "<answers>"`, numbe
 ask was. They arrive as this agent's **next prompt**, plain text, no slash command. Under
 `f10 drive` the driver is the driving session: it reads the ask from run state itself, exits so
 `/f10:drive` can put it to the user, and sends the answers back the same way when rerun with
-`--answer`.
+`--answer`. Several tasks can be asking at once. Each answer is then keyed by its task
+(`--answer GH-12="1. …"`) and reaches that task's agent alone.
 
 On that prompt: `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the
 answers in exactly as the gaps convention folds a filled questionnaire - gaps flipped to

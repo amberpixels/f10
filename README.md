@@ -72,7 +72,7 @@ is an **entry point** into that chain:
 | `/f10:catchup` | catchup | the branch on its base - merged or rebased as the project declares - conflicts settled with both sides kept, verify green, nothing pushed |
 | `/f10:status [id]` | nothing - a hook answers it; with an id, `f10 status <id>` | the run's status in words, before any model turn; with an id, a task's run in its own worktree, and the question its agent is waiting on relayed to you and answered back |
 | `/f10:start <id> [--plan \| --local] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
-| `/f10:drive <ids \| id -- id> [skills...]` | nothing - it runs `f10 drive` in the background | every task through its chain - plan, judge, ship, review, resolve, finish by default - one at a time; an agent's question relayed to you and answered back |
+| `/f10:drive <ids \| id -- id> [skills...]` | nothing - it runs `f10 drive` in the background | every task through its chain - plan, judge, ship, review, resolve, finish by default - each once its base task is finished, independent ones together; an agent's question relayed to you and answered back |
 | `/f10:finish <id> [--yes]` | nothing - it runs `f10 finish` | the PR merged, the plan archived, the workspace closed, the worktree and branch gone, main pulled |
 
 ## Install
@@ -546,24 +546,28 @@ fine and write nothing.
 One command still moves one task one step. `f10 drive` moves a list, from the main session:
 
 ```bash
-f10 drive 1042 1043                  # each task through project.md's Drive chain, in this order
+f10 drive 1042 1043                  # each task through project.md's Drive chain, bases first
 f10 drive 1042 -- 1047 judge ship    # every id from 1042 to 1047, through judge and ship only
 f10 drive 1042 1043 --answer "1. proceed"   # the same command, answering the question it stopped on
 ```
 
-Per task it opens the worktree, workspace and agent as `f10 start` does, then prompts the agent one
-skill at a time and polls until the turn ends: Herdr's agent status says when the turn starts and
+Each task waits for its one base, and every task whose base is finished runs at once. Per task
+it opens the worktree, workspace and agent as `f10 start` does, then prompts the agent one skill at
+a time and polls until the turn ends: Herdr's agent status says when the turn starts and
 stops, the task's run state says how it ended. `finish` runs in the driver itself. The chain is
 `plan → judge → ship → review → resolve → finish` unless `project.md` declares a **Drive chain** or
 the command names one; review after ship reads the remote review where one is declared. The run
 pauses only when an agent asks: the driver prints the question and exits 4, and `/f10:drive` puts it
-to you and reruns the command with the answer. A judge stop or a failure exits 5. Rerunning the same
+to you and reruns the command with the answer, one per asking task. A judge stop or a failure halts
+that task and the ones waiting on it, while the rest run on, and exits 5. A started task whose base
+`finish` just merged is caught up with main by `/f10:catchup` before its next skill. Rerunning the same
 command is the resume: a finished task is skipped, and a started one carries on from the last skill
 the driver recorded on its branch.
 
 A task that builds on another says so in its body: a last line `After: 1042`. Capture writes it,
-`f10 start` takes it as the default `--after`, and `f10 drive` refuses a list that puts the base
-after its dependent, or depends on a task outside the list that is not finished.
+`f10 start` takes it as the default `--after`, and `f10 drive` runs the base first wherever it is
+listed. It refuses a dependency on a task outside the list that is not finished, and tasks that
+wait on each other in a circle.
 
 ### Finish
 
