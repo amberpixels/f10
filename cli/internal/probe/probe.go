@@ -29,7 +29,8 @@ type Probes struct {
 	CLI       Signal   `json:"cli"`              // "gh", "glab", "unknown" or "none"
 	Stack     []Signal `json:"stack,omitempty"`  // marker files at the checkout root
 	Verify    []Signal `json:"verify,omitempty"`
-	Plans     []string `json:"plans,omitempty"` // plan filenames under the storage root
+	Review    *Review  `json:"review,omitempty"` // a CI review workflow, when one uses the Claude Code action
+	Plans     []string `json:"plans,omitempty"`  // plan filenames under the storage root
 	PlansDir  string   `json:"plansDir"`
 }
 
@@ -67,6 +68,7 @@ func Run(ctx context.Context, lay *layout.Layout) *Probes {
 		p.Verify = append(p.Verify, Signal{Value: "make", Evidence: "Makefile"})
 	}
 
+	p.Review = reviewWorkflow(root)
 	p.Plans = planNames(p.PlansDir)
 
 	return p

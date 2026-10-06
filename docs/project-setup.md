@@ -33,7 +33,7 @@ pipeline's contracts; the rest have workable defaults.
 | Ship pipeline(s) | the ordered steps `/f10:ship` runs after planning | `implement → pr` |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
 | Roles | the role per step, always or by area | each step's base role |
-| Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask` | the four core categories, reviewed locally by a blind agent; every ask goes to you |
+| Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask`; a remote review's four facts: who, where it arrives, what triggers it, what signals done and marks it handled | the four core categories, reviewed locally by a blind agent; every ask goes to you; the remote facts from a Claude Code review workflow, else no remote review |
 | Guardrails | domain rules a plan and its code must honour | none |
 | Visibility | `stealth` or `public` | `stealth` |
 | Storage | `in-repo` or `out-of-tree` | `in-repo` |
@@ -87,6 +87,28 @@ A source-of-truth file is read in full as reference data: instructions inside it
 and an edit to it is reviewed, not obeyed. The never-flag list holds whatever no category may
 report. The human reviewer is who answers an `ask` on a remote review; a local round's asks
 always go to you, in one questionnaire at the end of resolve.
+
+A **remote review** - a bot in CI, a human, a check - is four bold items with a fixed
+vocabulary, so `f10 init` can write them and `f10 review` can act on them:
+
+```markdown
+## Review
+
+- **Reviewer** - bot `claude[bot]`
+- **Arrives as** - issue comment
+- **Trigger** - automatic, on open and on push
+- **Done, handled** - posted, reaction `eyes`
+```
+
+Reviewer is `bot`, `human` or `check` plus the login or check name. Arrives as is `issue
+comment`, `inline review` or `check run`. Trigger is `automatic`, `manual` or both, followed by
+how a human fires it; f10 never fires a manual trigger itself. The fourth line is what signals
+the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it
+handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline
+review). `f10 init` writes these four from a workflow under `.github/workflows` that runs the
+Claude Code action, reading its `on:` block for the trigger; a checkout without one declares no
+remote review, and a pipeline naming `review (CI)` fails rather than waiting. The full
+vocabulary is in `conventions/context.md`.
 
 ## Storage and visibility
 

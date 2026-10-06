@@ -49,7 +49,13 @@ a finding meant: the block says what is wrong, where, and the fix, and that is w
      PR or MR (`gh pr comment` / `glab mr note`), which is outward-facing: it posts under the
      authorization a ship run carries, and a standalone `/f10:resolve` asks once before the
      first post. Its text reads as the user's own, bound by stealth mode like a commit message:
-     no f10, no round, no findings file named.
+     no f10, no round, no findings file named. Where the file carries a `review:` url, the reply
+     goes on that review - a reply in its thread for an inline review, a PR/MR comment quoting
+     the finding's title otherwise. **A CI round's skip replies by default**: a re-review replaces
+     its sticky comment and knows round one only through the thread its prompt reads, so a
+     `skip` without `+reply` is re-raised next round. In a round whose `reviewer:` is a remote
+     bot, write `skip +reply` unless the user said `skip` alone; a human reviewer's round takes
+     `+reply` only where the verdict names it.
 5. **Round two's prior section.** Each prior block in a round-two file is settled like a
    finding: `fixed` and `explanation accepted` need nothing; `still open`, `fix introduced a
    problem` and `explanation disputed` take a verdict. After round two these three cannot go to

@@ -35,6 +35,7 @@ type view struct {
 	IDPrefix        string        `json:"idPrefix,omitempty"`
 	IDPrefixOrigin  string        `json:"idPrefixOrigin,omitempty"`
 	IDPrefixDerived bool          `json:"idPrefixDerived,omitempty"`
+	Review          facts.Review  `json:"review,omitzero"` // the remote review's four facts, zero when none is declared
 	Roots           []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
 
@@ -76,6 +77,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		IDPrefix:        eff.IDPrefix,
 		IDPrefixOrigin:  eff.IDPrefixOrigin,
 		IDPrefixDerived: eff.IDPrefixDerived,
+		Review:          eff.Review,
 		Roots:           projects.Roots(),
 	}
 

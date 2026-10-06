@@ -43,6 +43,44 @@ func TestScaffoldSections(t *testing.T) {
 			wantNotIn: []string{"go.mod", "justfile", "(via gh)", "TODO"},
 		},
 		{
+			name: "github checkout with a Claude review workflow",
+			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
+			pb: &probe.Probes{
+				Host: "github.com",
+				CLI:  probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
+				Review: &probe.Review{
+					Reviewer: "claude[bot]",
+					Trigger:  "automatic",
+					Workflow: ".github/workflows/review.yml",
+				},
+			},
+			wantSection: []string{"Visibility", "Storage", "Tracker", "Hosting & PR", "Review"},
+			wantOmitted: []string{"Project", "Roles", "Ship pipeline(s)", "Verify", "Guardrails"},
+			wantIn: []string{
+				"## Review",
+				"- **Reviewer** - bot `claude[bot]`",
+				"- **Arrives as** - issue comment",
+				"- **Trigger** - automatic, on open and on push",
+				"- **Done, handled** - posted, reaction `eyes`",
+			},
+			wantNotIn: []string{"review.yml", "@claude"},
+		},
+		{
+			name: "manual review workflow names the mention",
+			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
+			pb: &probe.Probes{
+				Host: "github.com",
+				CLI:  probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
+				Review: &probe.Review{
+					Reviewer: "github-actions[bot]",
+					Trigger:  "manual",
+					Mention:  "@reviewbot",
+					Workflow: "w.yml",
+				},
+			},
+			wantIn: []string{"bot `github-actions[bot]`", "- **Trigger** - manual, comment `@reviewbot` on the PR"},
+		},
+		{
 			name: "gitlab checkout",
 			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
 			pb: &probe.Probes{
@@ -130,6 +168,12 @@ func TestScaffoldRoundTrip(t *testing.T) {
 		CLI:    probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
 		Stack:  []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
 		Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
+		Review: &probe.Review{
+			Reviewer: "claude[bot]",
+			Trigger:  "automatic, manual",
+			Mention:  "@claude",
+			Workflow: "w.yml",
+		},
 	}
 
 	before := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected)
@@ -152,6 +196,10 @@ func TestScaffoldRoundTrip(t *testing.T) {
 	if after.TrackerKind != before.TrackerKind || after.IDPrefix != before.IDPrefix {
 		t.Errorf("tracker sub-facts drifted: %q/%q, want %q/%q",
 			after.TrackerKind, after.IDPrefix, before.TrackerKind, before.IDPrefix)
+	}
+
+	if after.Review != before.Review {
+		t.Errorf("review facts drifted:\n got %+v\nwant %+v", after.Review, before.Review)
 	}
 
 	if after.Visibility != before.Visibility || after.Storage != before.Storage {

@@ -34,6 +34,9 @@ f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor
 f10 demo open [id]       # the demo report, in the browser
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
+f10 review pick [n] [--json]                          # the latest unhandled remote review, as markdown
+f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
+f10 review ack [n]                                    # leave the declared handled marker on it
 f10 status [--all] [--json]   # where the run is: this session's, or every live one
 
 f10 start <id>[-suffix] [--plan | --local] [--after <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
@@ -145,6 +148,31 @@ archived, there is no workspace to close, and only what is left is removed.
 
 Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), local merges,
 a task whose PR was never opened, and worktrees f10 did not start.
+
+## Review
+
+`f10 review` reads the remote review a project declares under `project.md → Review` - four
+facts: who posts it, where it arrives on the PR or MR, what triggers it, what signals done and
+marks it handled ([project setup](project-setup.md#review)) - off the current branch's request,
+or the one `[n]` names. Nothing declared, or a fact outside the vocabulary, is a refusal naming
+the line to fix; the trigger is never performed, and `pick` says `the trigger is manual (<how>)`
+when it finds nothing on a manual project.
+
+- `pick` writes the newest review by the reviewer that nobody handled: a title, a meta line (url,
+  the sha it reviewed, posted at, done, handled), the body verbatim. `--json` emits the struct.
+  An issue comment stores no sha, so its sha is the request's last commit before it was posted;
+  an inline review carries its own, a check run its head.
+- `wait` polls `pick` every `--every` until the review is done, and gives up at `--budget`
+  (10 minutes by default) with the last reason quoted. It returns within the budget whatever the
+  host does, so one agent call covers it.
+- `ack` leaves the declared handled marker: a reaction, a marker appended to the text, the first
+  checkbox ticked, or the inline review's threads resolved. It is the one verb here that writes
+  to the host. A review already handled is confirmed, not marked twice; a check run has no
+  marker and ack says so. A reaction counts as handled only when it is newer than the review's
+  last edit, so a sticky comment re-edited by a re-review reads as unhandled again.
+
+Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's notes,
+discussions and pipeline jobs.
 
 ## References
 

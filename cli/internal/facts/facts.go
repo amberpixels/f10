@@ -5,7 +5,7 @@
 //
 // Interpretation is deliberately shallow: only the sub-facts with a fixed
 // vocabulary (Layering, Visibility, Storage, the tracker kind and its id
-// prefix) become
+// prefix, the remote review's four facts) become
 // structure; everything else is presented as the declared prose, attributed
 // but unparsed. The binary may be incomplete, never wrong - what it cannot
 // place it shows as-is instead of guessing.
@@ -57,6 +57,10 @@ type Effective struct {
 	IDPrefix        string `json:"idPrefix,omitempty"`        // "ABC", "F10" - the task id format's letters
 	IDPrefixOrigin  string `json:"idPrefixOrigin,omitempty"`  // "declared (<layer>)" or "derived from project name <name>"
 	IDPrefixDerived bool   `json:"idPrefixDerived,omitempty"` // the prefix came from the project's name, not a declaration
+
+	// The remote review's four facts (review.go); zero when Review declares
+	// no remote reviewer.
+	Review Review `json:"review"`
 }
 
 // contractFields is the project.md contract. The order is presentation
@@ -204,6 +208,8 @@ func (e *Effective) absorb(f Field, pb *probe.Probes) {
 		if e.IDPrefix = idPrefix(f.Value); e.IDPrefix != "" {
 			e.IDPrefixOrigin = f.Origin
 		}
+	case "Review":
+		e.Review = parseReview(f.Value)
 	}
 }
 
@@ -359,7 +365,15 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 		return Field{Name: name, Value: "stealth", Origin: OriginDefault}
 	case "Storage":
 		return storageField(name, lay)
-	default: // Roles, Review, Guardrails: nothing infers them
+	case "Review":
+		// a CI workflow running the Claude Code action is a remote review
+		// detection can name; the local half has nothing to infer
+		if body := reviewBody(pb); body != "" {
+			return Field{Name: name, Value: body, Prose: true, Origin: OriginDetected, Source: pb.Review.Workflow}
+		}
+
+		return Field{Name: name, Origin: OriginAbsent}
+	default: // Roles, Guardrails: nothing infers them
 		return Field{Name: name, Origin: OriginAbsent}
 	}
 }

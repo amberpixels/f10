@@ -1,8 +1,8 @@
 ---
 name: review
-description: "f10 review skill - a blind local review of a change: a fresh agent reads the diff against base and writes a findings file, one block per finding with a concrete fix. Use when the user says \"/f10:review <task-id | PR | this branch>\", asks for a code review of a branch or PR, or wants bugs found before a PR is opened. Settling the findings is /f10:resolve."
-allowed-tools: Bash, Read, Write, Grep, Glob, Agent
-argument-hint: "<task-id | PR number or url | this branch>"
+description: "f10 review skill - a blind local review of a change: a fresh agent reads the diff against base and writes a findings file, one block per finding with a concrete fix. With ci, reads the remote review that arrived on the PR or MR instead. Use when the user says \"/f10:review <task-id | PR | this branch> [ci]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, or wants the CI review's findings read in. Settling the findings is /f10:resolve."
+allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion
+argument-hint: "<task-id | PR number or url | this branch> [ci]"
 ---
 
 # f10 · review
@@ -20,6 +20,12 @@ First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two 
 then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review`, every run. Then follow the **review** step
 that bundle just printed - it carries the step file, so there is nothing left to read from
 `steps/`.
+
+**Remote:** if the argument contains the word `ci`, strip it and run the step's remote half -
+the review the declared reviewer left on the PR or MR, read through `f10 review pick|wait|ack`
+per the four facts under `project.md → Review`, written in the same findings shape. A project
+declaring no remote review ends in the step's failure, not a local review in its place. The
+trigger is never performed from here: a manual one is named back to you.
 
 **Route by the argument.** The change reviewed is always the one checked out here - the step
 diffs this working tree and writes under this checkout's storage root - so the argument names

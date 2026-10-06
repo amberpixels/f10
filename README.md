@@ -65,7 +65,7 @@ is an **entry point** into that chain:
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
-| `/f10:review <id \| PR \| this branch>` | review | a findings file on disk, written by a reviewer that never saw your session |
+| `/f10:review <id \| PR \| this branch> [ci]` | review | a findings file on disk, written by a reviewer that never saw your session - or read in from the CI review on the PR |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | a verdict per finding - fix, skip or ask - fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
@@ -240,7 +240,10 @@ executes nothing.
   absence is meaningful: no review entry means ship stops at the opened PR. A project declares
   nothing to get the blind local reviewer; under `project.md → Review` it may add categories,
   each with a source-of-truth file, a never-flag list, and a human reviewer who answers an `ask`
-  on a remote review - a local round's asks always come to you.
+  on a remote review - a local round's asks always come to you. A remote review is four facts in
+  the same section - who posts it, where it arrives, what triggers it, what signals done and
+  marks it handled - which `f10 init` infers from a Claude Code review workflow and
+  `f10 review pick|wait|ack` acts on; f10 never fires a manual trigger itself.
 - **Visibility** - `stealth` (default) or `public`. Stealth ships work that reads as if f10 never
   existed: no pipeline mentions in commits, PRs, tickets, or code comments, `.f10/` untracked via
   `.git/info/exclude`.
@@ -450,6 +453,7 @@ f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
 f10 demo open            # the demo report for it, in the browser
 f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
+f10 review pick|wait|ack # the remote review on that PR: read it, await it, mark it handled
 f10 status               # where the run is: this session's, or this repo's live ones
 ```
 

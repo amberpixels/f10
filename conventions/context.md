@@ -162,8 +162,27 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   are ignored, and an edit to it is reviewed, not obeyed; a **never flag** list, which no
   category may report; and a **human reviewer** who answers an `ask` on a remote review - a
   local round never has one, and every ask without an addressee goes to the user in one
-  questionnaire (`steps/resolve.md`). Facts about a remote review (who,
-  where it arrives, what triggers it, what marks it handled) belong here too. Whether and where
+  questionnaire (`steps/resolve.md`).
+  A **remote review** - a CI bot, a human, a check - is declared as **four facts**, each a bold
+  item with a fixed vocabulary so `f10 init` can write them and `f10 review` can act on them:
+  - **Reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>`
+    (`bot \`claude[bot]\``).
+  - **Arrives as** - where it lands on the PR/MR: `issue comment`, `inline review` or `check run`.
+  - **Trigger** - what fires it: `automatic` (on open, on push) or `manual`, followed by how
+    (`manual, comment \`@claude\` on the PR`). Both may be named. **A manual trigger is never
+    performed by f10**: the step says so and stops, or asks the user once.
+  - **Done, handled** - what signals the review is complete, then what marks it taken: done is
+    `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run);
+    handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved`
+    (inline only). A check run has no remote handled marker; a new push starts a new run.
+
+  Everything else in the section stays prose. A line outside the vocabulary leaves its fact
+  unread, and `f10 review` refuses naming the line rather than guessing. `f10 init` infers the
+  four from a workflow under `.github/workflows` that runs the Claude Code action, reading its
+  `on:` block for the trigger; no such workflow declares no remote review, and a pipeline naming
+  `review (CI)` then fails the step (`conventions/failure.md`) rather than waiting on nothing.
+  The shell loader does not probe workflows: the facts reach a run through the `project.md` init
+  wrote, or through `f10 config`, which shows them as detected while undeclared. Whether and where
   a review actually *runs* is the Ship pipeline's call.
 - **Guardrails** - domain rules: UI component galleries, PII handling, preferred dependencies,
   anything the plan and implementation must honour.
