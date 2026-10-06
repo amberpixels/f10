@@ -10,8 +10,9 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 
 - **skill** - an entry point the user invokes: `/f10:brainstorm`, `/f10:capture`, `/f10:plan`,
   `/f10:ship`, `/f10:judge`, `/f10:review`, `/f10:resolve`, `/f10:demo`, `/f10:explain`,
-  `/f10:catchup`. `/f10:status` is the one that runs no step: a hook answers it from `f10 status` before any
-  model turn.
+  `/f10:catchup`. `/f10:status` is the one that runs no step: bare, a hook answers it from
+  `f10 status` before any model turn; with a task id it reads another worktree's run and relays
+  the question a driven agent stopped on (`modes/driven.md`).
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
   `explain`, `catchup`, `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`,
   `deploy` (`steps/*.md`). A skill runs one or more steps.

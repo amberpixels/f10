@@ -212,6 +212,36 @@ func existingBranch(ctx context.Context, dir, want, id, suffix string) (string, 
 	}
 }
 
+// taskCheckout is where a task is being worked on: its branch, found the way
+// start would find it, and the checkout that has the branch checked out.
+// Both are "" when the task has no branch; the path alone is "" when the
+// branch is checked out nowhere. No title lookup: the branch exists or it
+// does not, and a slug would cost a host call for nothing.
+func taskCheckout(
+	ctx context.Context,
+	main string,
+	d *driver.Driver,
+	task ref.Ref,
+	suffix string,
+) (string, string, error) {
+	want, _, err := branchName(ctx, d, task, suffix, nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	name, err := existingBranch(ctx, main, want, task.ID, suffix)
+	if err != nil || name == "" {
+		return "", "", err
+	}
+
+	wts, err := gitx.Worktrees(ctx, main)
+	if err != nil {
+		return "", "", err
+	}
+
+	return name, worktreeOf(wts, name), nil
+}
+
 // defaultBranch is what origin points HEAD at (`origin/main`), or "" to
 // let git use the current HEAD - the same default worktrunk applies.
 func defaultBranch(ctx context.Context, dir string) string {

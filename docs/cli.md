@@ -1,10 +1,10 @@
 # The `f10` binary
 
-A lookaround, and the commands that start and finish a task. The lookaround verbs explain the
-loaded configuration and read the things it points at, changing nothing. Three verbs write:
+A lookaround, and the commands that start, reach and finish a task. The lookaround verbs explain
+the loaded configuration and read the things it points at, changing nothing. Four verbs act:
 `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task
-is worked on in and opens them in Herdr, and `finish` merges the task's PR and removes what
-start created.
+is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already
+has, and `finish` merges the task's PR and removes what start created.
 
 ```bash
 go install github.com/amberpixels/f10/cli/cmd/f10@latest
@@ -37,9 +37,10 @@ f10 pr open              # this branch's PR or MR, gh or glab decided by the rem
 f10 review pick [n] [--json]                          # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it
-f10 status [--all] [--json]   # where the run is: this session's, or every live one
+f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 
 f10 start <id>[-suffix] [--plan | --local] [--after <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
+f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 finish <id>[-suffix] [--yes]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
 ```
 
@@ -56,9 +57,10 @@ checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/wor
 path - opens it as a Herdr workspace, starts a claude agent in its root pane and prompts it.
 The command returns as soon as the prompt is submitted; the work happens in the new workspace.
 
-- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default; `--plan`
-  prompts the plan alone; `--local` ships through the project's `local` pipeline, so nothing is
-  pushed
+- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by
+  `--driven`, the marker that tells the agent it is prompted from outside and routes every
+  question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan
+  alone; `--local` ships through the project's `local` pipeline, so nothing is pushed
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and
   records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the
   task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine. The
@@ -148,6 +150,42 @@ archived, there is no workspace to close, and only what is left is removed.
 
 Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), local merges,
 a task whose PR was never opened, and worktrees f10 did not start.
+
+## Forward
+
+`f10 forward 42 "/f10:ship 42"` hands a command to the agent already working on a task. The plan
+and ship skills run it first whenever their argument is a task id, because a task started with
+`f10 start` has its branch, its plan and its agent in a worktree of its own, and running the
+command anywhere else would run it on the wrong branch without the plan.
+
+1. **The lookup.** The task's branch, found the way start and finish find it (the exact name,
+   else the one `<id>` / `<id>-*` branch); the worktree that has it checked out; the Herdr
+   workspace showing that worktree; the agent named `<id>` lowercased, with the suffix when the
+   token carried one, which is the name start gave it. A task started with a suffix is forwarded
+   to with the same suffix.
+2. **Three outcomes.** Exit 0: the command was submitted, and the report has three rows - `task`,
+   `workspace`, `sent`. The command returns at submission, since Herdr's prompt call does, and the
+   outcome lands in that tab; nothing here waits or tails. Exit 3: the task is in this checkout
+   (its branch is checked out here, or nowhere, or it has no branch) and the command runs
+   locally; a one-line reason says which. Anything else is a failure: outside Herdr, with
+   start's own refusal; no workspace shows the worktree; the agent is idle and not reporting;
+   Herdr refused the prompt.
+3. **The marker.** Text that begins with `/f10:` and does not already carry `--driven` gets it
+   appended, so the agent knows from its first turn that it is driven ([driven
+   mode](../modes/driven.md)). Plain text, an answer or a steering note, is sent as it is.
+4. **Idle and not reporting.** When Herdr lists the workspace's agent as `idle` while a live run
+   recorded against the worktree still says `running`, the agent is waiting on something f10
+   cannot see - a Claude Code permission dialog in its pane, a question asked outside driven
+   mode. Forward names the agent, the workspace and the step, and sends nothing; a prompt
+   submitted behind that dialog would wait with it. An idle agent on a `blocked` run is the
+   driven state this verb exists for, and is sent to.
+
+The answer path: `f10 status 42` reads the run the worktree's agent reports, its `ask` row
+included; `f10 forward 42 "1. reuse 2. proceed"` sends the answers back as that agent's next
+prompt. `/f10:status 42` does both in one go, with the question put to you in between.
+
+Out of scope: more than one task or more than one command per call, tailing the remote agent's
+output, and answering Claude Code permission prompts.
 
 ## Review
 

@@ -39,7 +39,9 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | `󰜺` | blocked: a judge verdict ended the run |
 
 A stopped run adds the step it stopped on, so `◉ ● 󰜺 judge` reads "blocked at judge". The
-rest, the task, the reason, what unblocks it, is `f10 status`.
+rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on
+(`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own
+worktree.
 
 The keycap, partial and blocked glyphs are Nerd Font codepoints. On an unpatched font they
 show as an empty box while the circles still read. `F10_STATE_GLYPHS` replaces the set if one

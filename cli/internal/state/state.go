@@ -53,6 +53,7 @@ type Run struct {
 	Final   string    `json:"final,omitempty"` // the ship pipeline's declared last step
 	Note    string    `json:"note,omitempty"`  // why the run stopped
 	Next    string    `json:"next,omitempty"`  // what unblocks it
+	Ask     string    `json:"ask,omitempty"`   // the question a driven run stopped on, options included
 	Updated time.Time `json:"updated"`
 }
 
@@ -137,6 +138,8 @@ func Load(path string) (*Run, error) {
 			r.Note = value
 		case "next":
 			r.Next = value
+		case "ask":
+			r.Ask = value
 		case "updated":
 			// the one field anything does maths on: garbage reads as the
 			// zero time, which is stale under any ttl, never an error

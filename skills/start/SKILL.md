@@ -8,8 +8,11 @@ argument-hint: "<task-id>[-suffix] [--plan | --local] [--after <task-id> | --bas
 # f10 · start
 
 Start a task beside this one: `f10 start` creates the branch and worktree, opens them as a
-Herdr workspace, starts a claude agent in its root pane and prompts it. This skill only runs the
-command and relays what it printed - it runs no step and never waits on the new agent.
+Herdr workspace, starts a claude agent in its root pane and prompts it. The prompt carries
+`--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): the new agent asks nothing in its own pane,
+and a question it cannot settle reaches this session through `/f10:status <task-id>`. This skill
+only runs the command and relays what it printed - it runs no step and never waits on the new
+agent.
 
 Run, with the user's arguments verbatim:
 
