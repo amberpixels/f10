@@ -37,6 +37,7 @@ func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) *Draft {
 		"Tracker":      trackerBody(eff, pb),
 		"Hosting & PR": hostingBody(pb),
 		"Verify":       verifyBody(pb),
+		"Review":       reviewBody(pb),
 	} {
 		if body != "" {
 			bodies[name] = body

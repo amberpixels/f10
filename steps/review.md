@@ -40,9 +40,10 @@ tree that is not here.
   it. In `implement → review → pr` the review runs before any commit, so HEAD alone cannot name
   the tree reviewed.
 - `base:` the base branch and its sha.
-- `reviewer:` `local` for the blind agent below, else the name the overlay gives a remote
-  reviewer. Resolve reads this line to tell whether an `ask` or a `+reply` has anyone on the
-  other end: `local` never does.
+- `reviewer:` `local` for the blind agent below, else the identity `project.md → Review`
+  declares for the remote reviewer (`claude[bot]`, `octocat`). Resolve reads this line to tell
+  whether an `ask` or a `+reply` has anyone on the other end: `local` never does.
+- `review:` remote rounds only - the url of the review pick returned, where a `+reply` posts.
 - `verdict:` `clean` when every category found nothing, else `findings`.
 
 **`## Prior round`** - round two only, and before anything new. One block per finding of round
@@ -185,12 +186,52 @@ the entry after one round, and a fix the user chose in the final questionnaire o
 The entry's `ask` verdicts, both rounds together, go to the user in resolve's one questionnaire
 before the next pipeline step.
 
-**External / CI / human review** (post-PR) is the same step placed after `pr`: follow the
-overlay's protocol - how the review arrives, how to wait (poll with `ScheduleWakeup`, foreground
-`sleep` is disabled, bounded re-checks) - and write what it returns in the findings file shape
-above, so resolve never knows which reviewer it got. If triggering another review requires a
-manual action (a comment, a button), **never perform it yourself**: the user does it, or you ask
-the user first. Never merge the PR (see `steps/pr.md`).
+## The remote review
+
+**`review (CI)` in a pipeline, `/f10:review ci` standalone**: the same step placed after `pr`,
+reading a review that arrived on the PR or MR instead of spawning one. The four facts under
+`project.md → Review` (`conventions/context.md`: Reviewer, Arrives as, Trigger, Done, handled)
+are the whole protocol, and the binary applies them - `f10 review pick|wait|ack`, over `gh` or
+`glab` as the remote decides. A Review section without them declares no remote review, and this
+half **fails** (`conventions/failure.md`): there is nothing to wait for, and the pipeline entry
+was a mistake to declare.
+
+1. **Pick.** `f10 review pick` writes the latest review by the declared reviewer that nobody
+   handled yet: a title, one meta line (url, the sha it reviewed, posted at, done or not,
+   handled or not), then the body as the reviewer wrote it; `--json` for the same as a struct.
+   A review that is not done yet, or none at all, with an **automatic** trigger: `f10 review wait
+   --budget 8m` once, a second time when the first expired, then stop as a failure - the declared
+   reviewer never returned. The binary polls in-process and returns within its budget, so one
+   Bash call covers it; keep the call's timeout above the budget. **A manual trigger** (pick's
+   refusal says `the trigger is manual (<how>)`): never perform it. Say what the user does, in the
+   declared words, and stop - or, in a ship run, ask once (AskUserQuestion) whether they have
+   triggered it and wait only on yes.
+2. **Stale?** A picked review whose sha equals the previous round's `reviewed:` sha is the round
+   already written: say so in one line and stop, a normal end. This is the only staleness rule
+   and it covers every arrival kind, a check run included, which carries no handled marker.
+3. **Shape it into the findings file.** The reviewer wrote prose; the blocks above are what
+   resolve reads. One block per finding it raised, with `where:` from the review's own
+   `path:line` where it gave one, `category:` mapped to the four core ones (or the project's)
+   where it named none, and its concrete fix in the detail. A review that raised nothing is a
+   `clean` verdict. The header's `reviewed:` is the sha pick printed, `reviewer:` is the declared
+   identity (`claude[bot]`, `octocat`), and one more line, `review:`, carries the picked url - the
+   address `+reply` posts to. In round two the `## Prior round` section is written as the local
+   reviewer writes it, judged against the new remote body: a prior finding the remote review no
+   longer raises is `fixed` when the code shows the fix, else `still open`. Where the body is not
+   in the findings shape, say once that the blind reviewer's brief in this file can be pasted into
+   the workflow so both reviewers produce one shape; f10 does not print it.
+4. **Ack.** With the file on disk, `f10 review ack`: the declared handled marker lands on the
+   review (a reaction, a marker in the text, a ticked checkbox, resolved threads). Handled means
+   consumed into the findings file, not settled - resolve's replies are separate - so a run that
+   dies during resolve never re-picks what it already wrote down. Ack is outward-facing and runs
+   under the authorization the ship run or the user's `/f10:review ci` carries; in stealth mode it
+   reads as the user's own.
+
+Round two on the remote side is the reviewer's re-review, replacing or following its first:
+pick returns it once its marker is fresh (a reaction older than the comment's last edit does not
+count). What the re-reviewer knows of round one is only what was posted on the PR: a `skip` that
+stayed in the file is re-raised, which is why resolve replies to CI skips by default
+(`steps/resolve.md`). Never merge the PR (see `steps/pr.md`).
 
 **Report** per `conventions/report.md` - a `findings` row with the file's path. The verdict and
 the count per category follow as prose, in the reviewer's words.

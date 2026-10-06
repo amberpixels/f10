@@ -222,3 +222,57 @@ func canonical(t *testing.T, path string) string {
 
 	return p
 }
+
+// The remote review's four facts come from the CI workflow when one runs the
+// Claude Code action, and from nowhere otherwise: a checkout without one
+// declares no remote review rather than a guessed one.
+func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
+	isolateEnv(t)
+
+	bare := mkRepo(t)
+
+	out, err := runInitIn(t, bare)
+	if err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	written, _ := os.ReadFile(filepath.Join(bare, ".f10", "instructions", "project.md"))
+	if strings.Contains(string(written), "## Review") {
+		t.Errorf("a checkout without a review workflow declared one:\n%s", written)
+	}
+
+	if !strings.Contains(out, "Review") {
+		t.Errorf("the report's left-out row does not name Review:\n%s", out)
+	}
+
+	repo := mkRepo(t)
+	dir := filepath.Join(repo, ".github", "workflows")
+
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	workflow := "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  review:\n    runs-on: ubuntu-latest\n" +
+		"    steps:\n      - uses: anthropics/claude-code-action@v1\n        with:\n          prompt: review\n"
+	if err := os.WriteFile(filepath.Join(dir, "claude-review.yml"), []byte(workflow), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runInitIn(t, repo); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	written, _ = os.ReadFile(filepath.Join(repo, ".f10", "instructions", "project.md"))
+
+	for _, want := range []string{
+		"## Review",
+		"- **Reviewer** - bot `claude[bot]`",
+		"- **Arrives as** - issue comment",
+		"- **Trigger** - automatic, on open and on push",
+		"- **Done, handled** - posted, reaction `eyes`",
+	} {
+		if !strings.Contains(string(written), want) {
+			t.Errorf("project.md missing %q:\n%s", want, written)
+		}
+	}
+}
