@@ -186,14 +186,18 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 }
 
 // A branch another task started with --after on this one loses its
-// dependency once this one merged: both keys go, the note says so, and a
-// dependency on some other branch is left alone.
+// dependency once this one merged: both keys go, the branch is marked
+// landed with the base task's id so its next ship or catchup brings main
+// in, the note says so, and a dependency on some other branch is left
+// alone.
 func TestFinishReleasesDependents(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	fx.f.script(cfgDeps, "branch.GH-8/slug.f10-after-branch GH-1\nbranch.GH-9.f10-after-branch GH-2")
+	fx.f.script("git config --get branch.GH-8/slug.f10-after", "GH-1")
 	fx.f.script("git config --unset branch.GH-8/slug.f10-after", "")
 	fx.f.script("git config --unset branch.GH-8/slug.f10-after-branch", "")
+	fx.f.script("git config branch.GH-8/slug.f10-landed GH-1", "")
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -203,19 +207,21 @@ func TestFinishReleasesDependents(t *testing.T) {
 	for _, want := range []string{
 		"git config --unset branch.GH-8/slug.f10-after",
 		"git config --unset branch.GH-8/slug.f10-after-branch",
+		"git config branch.GH-8/slug.f10-landed GH-1",
 	} {
 		if !fx.f.called(want) {
 			t.Errorf("%q did not run: %v", want, fx.f.calls)
 		}
 	}
 
-	if fx.f.called("git config --unset branch.GH-9") {
-		t.Error("a dependency on another branch was cleared")
+	if fx.f.called("git config --unset branch.GH-9") || fx.f.called("git config branch.GH-9") {
+		t.Error("a dependency on another branch was touched")
 	}
 
 	if !strings.Contains(
 		out,
-		"GH-8/slug depended on GH-1: the dependency is cleared, its ship and pr target main now",
+		"GH-8/slug depended on GH-1: the dependency is cleared and its pr targets main now; "+
+			"its next ship or /f10:catchup brings main in first",
 	) {
 		t.Errorf("the release note is missing:\n%s", out)
 	}

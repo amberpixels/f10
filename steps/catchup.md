@@ -30,13 +30,18 @@ says so and names the push the user can run.
    rebase), say which operation it is and whose side ours and theirs are, and go straight to
    point 4 with that operation as the one to finish.
 
-2. **Find the base.** The branch `f10 start --after` recorded first:
+2. **Find the base.** First the mark `f10 finish` leaves on a dependent once its base task
+   merged, then the branch `f10 start --after` recorded:
 
    ```
+   git config --get branch."$(git branch --show-current)".f10-landed
    git config --get branch."$(git branch --show-current)".f10-after-branch
    ```
 
-   Recorded: `git fetch origin`, then local-first - `refs/heads/<branch>`, else
+   `f10-landed` recorded: the base task's code is in the default branch and not in this one,
+   so the base is the default branch, found as below. Clear the mark with `git config --unset`
+   only once verify is green (point 5), so a stopped catchup leaves it for the next one.
+   `f10-after-branch` recorded: `git fetch origin`, then local-first - `refs/heads/<branch>`, else
    `origin/<branch>` - exactly as `skills/ship/SKILL.md` does. A base that exists nowhere was
    finished and deleted, so its code is in the default branch: `git config --unset` both
    `f10-after` and `f10-after-branch` and carry on against the default branch. Nothing
@@ -44,7 +49,7 @@ says so and names the push the user can run.
    `git symbolic-ref --quiet --short refs/remotes/origin/HEAD` with `origin/` stripped (else
    `main`), taken as `origin/<default>` after the fetch, or the local branch where the repo has
    no remote. Say in one line which base this run integrates and how it was found - the
-   recorded dependency, or the default branch - before anything moves.
+   landed mark, the recorded dependency, or the default branch - before anything moves.
 
 3. **Pick the strategy and integrate.** `project.md → Hosting & PR` may carry the phrase
    `catchup: merge` or `catchup: rebase`, in any case. Absent, **rebase**, which is what ship's
@@ -104,6 +109,16 @@ says so and names the push the user can run.
    not run. A run that found no conflict says so in one line; a run with nothing to bring in
    says that, with the base named. Where the strategy was the default, one line names
    `catchup: merge | rebase` under Hosting & PR as the way to declare it.
+
+**Driven** (`modes/driven.md`, the run was prompted from another session, which `f10 drive`
+does once a dependent's base is finished): catchup still owns no phase, but its stops go
+through run state so the driving session can see them. On entry, note the ship status the run
+holds (`f10-state.sh show`). A genuine ambiguity in point 4 is the run's one ask:
+`f10-state.sh ask "<the questions>"; f10-state.sh set ship blocked catchup`. A failure is
+`f10-state.sh set ship failed catchup` with a `note`. A clean end that followed one of those
+puts the noted ship status back, so neither the badge nor a driver's position reading stays on
+`catchup`. A clean end that never stopped writes nothing: the driver reads success from git,
+from the mark gone, no merge or rebase in progress, and a clean tree.
 
 **On failure:** the base does not resolve to any ref, the operation cannot start, or verify
 stays red after the settling. Abort the operation (`git merge --abort` / `git rebase --abort`)

@@ -64,10 +64,14 @@ const (
 // The keys --after writes under `branch.<name>.` in the local git config:
 // the base task's id, and its branch as a bare name, so the ship skill and
 // the pr step read both with `git config --get` and look up nothing.
-// finish clears them from every dependent once the base branch merged.
+// finish clears them from every dependent once the base branch merged, and
+// marks the dependent landed with the base's id: the base's code is in the
+// default branch and not yet in this one, so ship and catchup bring the
+// default branch in before anything else runs, then clear the mark.
 const (
 	cfgAfter       = "f10-after"
 	cfgAfterBranch = "f10-after-branch"
+	cfgLanded      = "f10-landed"
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
