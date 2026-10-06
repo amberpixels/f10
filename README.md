@@ -19,7 +19,7 @@ f10 (f-ten) is a set of skills over one step chain. Three of them carry it: **ca
 freely written idea into a tracked task, **plan** turns that task into an architect-grade plan on
 disk, and **ship** turns the plan into code and, optionally, a release. The rest are optional and
 sit around that chain rather than in it - **brainstorm** ahead of it, **judge** at any point of
-it, **demo** and **explain** after it.
+it, **review** and **resolve** before the PR, **demo** and **explain** after it.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app, or a Terraform
 repo. f10 either **infers** what it needs (git remote → `gh`/`glab`, build files → verify commands)
@@ -37,7 +37,7 @@ flowchart LR
     plan -->|".f10/plans/&lt;TASK-ID&gt;.md"| implement
     subgraph shippipe ["ship pipeline - declared per project (default: implement → pr)"]
         implement[implement] --> pr[pr]
-        implement -.-> revL["review (local)"] -.-> pr
+        implement -.-> revL["review (local, both halves)"] -.-> pr
         pr -.-> revC["review (CI / human)"] -.-> deploy["deploy / e2e / …"]
     end
     idea -.-> judge[judge]
@@ -62,6 +62,8 @@ is an **entry point** into that chain:
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture →) fetch → plan | plan file saved, before any code |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing → the ship pipeline | end of the declared pipeline (an open PR by default) |
+| `/f10:review <id \| PR \| this branch>` | review | a findings file on disk, written by a reviewer that never saw your session |
+| `/f10:resolve <id \| PR \| this branch>` | resolve | a verdict per finding - fix, skip or ask - fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
@@ -99,6 +101,12 @@ much or as little as you like; anything you leave out stays inferred.
 /f10:ship fix the flaky retry test
 # → or skip the ceremony: capture-plan-ship a small chore in one go
 
+/f10:review
+# → a reviewer that never saw this session reads the branch's diff, writes .f10/reviews/ABC-1042/1.md
+
+/f10:resolve
+# → fix, skip or ask per finding; fixes verified; every ask in one questionnaire at the end
+
 /f10:explain
 # → what this branch was and what it is now, in a few lines. Nothing run, nothing written
 
@@ -131,6 +139,21 @@ executes nothing.
   them. A project may also name `judge` inside its ship pipeline: proceed continues, stop ends
   the run blocked, and rethink or proceed with changes open a discussion that ends in the
   user's call to continue or block. Creates nothing.
+- **Review** - the bug hunt, in two halves that never guess each other. `review` hands the full
+  diff against base to a **blind** reviewer, a fresh agent that never saw the session which
+  wrote the code, with a generic brief: four core categories (correctness and logic,
+  architecture and guidelines, security and performance, tests and docs), at most three
+  findings each, style skipped unless it affects correctness, "none found" said per category.
+  A project adds categories under `project.md → Review`, each pointing at a source-of-truth
+  file read as reference data, plus what never to flag. The reviewer writes a **findings file**
+  and stops. `resolve` reads that file and records a verdict per finding - `fix`, `skip` or
+  `ask`, with `+note` for a comment in the code and `+reply` for a word back to the reviewer -
+  re-runs verify after fixes, and puts every `ask` to you in one questionnaire at the end. The
+  user's stated choice beats the reviewer: a finding that would undo what the task asked for is
+  a skip citing the ask. A second round knows the first: it reports a status per prior finding
+  (fixed, still open, the fix introduced a problem, explanation accepted or disputed) before
+  anything new, and there is no third - what is still open goes to you. A `review` entry in a
+  ship pipeline runs both halves.
 - **Demo** - the optional answer to *what was built*, for the moment before you merge a PR whose
   code you did not write. It **says what changed** in plain words - what the app did before, what
   it does now - and derives a **demo script** that confirms it: entry point, the state it needs,
@@ -154,7 +177,7 @@ executes nothing.
   it costs a read of the diff instead of a seeded app, which is what makes it the thing you run
   before deciding whether a change is worth demoing at all. Creates nothing.
 - **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, plus
-  ship-pipeline steps `implement`, `commit`, `pr`, `push`, `review`, `demo`, `deploy`
+  ship-pipeline steps `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `deploy`
   (`steps/*.md`). Skills are thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
   `implement → pr`). A name with no generic step (e.g. `e2e`) is project-defined:
@@ -176,6 +199,11 @@ executes nothing.
 - **Plan file** - `<storage root>/plans/<TASK-ID>.md`, the handoff contract between plan and ship.
   The storage root is anchored to the checkout root, so the launch directory does not matter. A
   plan that exists only in chat is a failed run; superseded plans are archived, never edited.
+- **Findings file** - `<storage root>/reviews/<TASK-ID>/<round>.md`, the contract between review
+  and resolve: the reviewed sha, then one block per finding with title, summary, file and line,
+  category, and a concrete fix. Resolve appends its verdict under each block and never edits the
+  reviewer's text, so a second round reads both sides. One file per round, two rounds at most.
+  The rounds live with the checkout's `.f10/`; `f10 finish` archives the plan, not them.
 - **Gap** - an open decision only the user can make. Recorded, not blocking: every gap carries a
   default, so a plan is always shippable. Filling them is an optional batched questionnaire.
 - **Shipment** - what a ship run leaves behind, named by the pipeline's last step: verified code
@@ -196,7 +224,10 @@ executes nothing.
   a skill to invoke, or a plain CLI command. f10 names the capability, the project supplies the
   adapter. That is what keeps it stack-agnostic.
 - **Review** - a step, local (pre-PR) or CI/human (post-PR), placed or omitted per pipeline. Its
-  absence is meaningful: no review entry means ship stops at the opened PR.
+  absence is meaningful: no review entry means ship stops at the opened PR. A project declares
+  nothing to get the blind local reviewer; under `project.md → Review` it may add categories,
+  each with a source-of-truth file, a never-flag list, and a human reviewer who answers an `ask`
+  on a remote review - a local round's asks always come to you.
 - **Visibility** - `stealth` (default) or `public`. Stealth ships work that reads as if f10 never
   existed: no pipeline mentions in commits, PRs, tickets, or code comments, `.f10/` untracked via
   `.git/info/exclude`.
@@ -210,8 +241,8 @@ executes nothing.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge,demo,explain}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,implement,commit,pr,push,review,demo,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,implement,commit,pr,push,review,resolve,demo,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end
@@ -219,10 +250,12 @@ flowchart TB
         proj["instructions/project.md - facts & adapters"]
         over["instructions/&lt;step&gt;.md - overlays"]
         plans2["plans/&lt;TASK-ID&gt;.md - output"]
+        reviews2["reviews/&lt;TASK-ID&gt;/&lt;round&gt;.md - output"]
     end
     gsteps -- "1· load facts" --> proj
     gsteps -- "2· apply overlay (later wins)" --> over
     gsteps -- "3· write" --> plans2
+    gsteps -- "3· write" --> reviews2
 ```
 
 Resolution order (full contract in `conventions/context.md`): generic step → `main/project.md` →
@@ -525,7 +558,7 @@ when the repo went hybrid, so every recipe is hand-owned now.
 ## Status
 
 Skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, `judge`,
-`demo` and `explain`. Project facts come from `.f10/instructions/` through the loader,
+`review`, `resolve`, `demo` and `explain`. Project facts come from `.f10/instructions/` through the loader,
 worktree-layered, with inferred defaults where nothing is declared. Six conventions bind every
 run: what it costs, how it fails, how it reports, how it talks, where open decisions go, and how
 context loads. A status-line badge tracks the run through capture, plan and ship, `f10 status`
