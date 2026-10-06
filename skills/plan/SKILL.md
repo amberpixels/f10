@@ -58,7 +58,7 @@ Follow each step file in order - the bundle already carries them, so read nothin
 from `${CLAUDE_PLUGIN_ROOT}/steps/`. Any extra text the user adds is steering/notes for the run.
 
 **The run is only complete once the plan file exists on disk at
-`<storage root>/plans/<TASK-ID>.md`**, the root context resolution reported. Do not end with
+`<storage root>/plans/<TASK-ID>.md`**, the root the bundle reported. Do not end with
 the plan only in chat, and do not stop at analysis - in Plan /
 read-only mode, use `ExitPlanMode` to get the go-ahead to write it. Then present the plan,
 report the saved path per `conventions/report.md`, and - if it has open **gaps** - offer to

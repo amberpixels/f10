@@ -68,8 +68,9 @@ a finding meant: the block says what is wrong, where, and the fix, and that is w
    `local` and `project.md → Review` names who answers there; then the question goes to them on
    the review, and the finding waits: the entry ends there as a normal end, the badge
    `partial` on `review` with a `note` naming the finding (`conventions/failure.md` rule 7, the
-   PR exists), and no later pipeline step runs until the answer arrives, which the remote
-   review's protocol reads. Otherwise every `ask` goes to the user in **one
+   PR exists) naming `/f10:resolve` as the next step, and no later pipeline step runs until the
+   user brings the answer back through it. That run rewrites the parked block's `verdict:` to
+   the answer as below; the review step never reads a reply. Otherwise every `ask` goes to the user in **one
    `AskUserQuestion`**, one question per finding, the reviewer's fix as the first option unless
    the task text contradicts it, in which case skip comes first with the ask cited. It fires at
    the end of the entry's **last** resolve: standalone, that is this one; inside a pipeline, a

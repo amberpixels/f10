@@ -51,7 +51,7 @@ ship's steps are the pipeline that same call prints, so they cannot be named bef
 - A **plan file** (`*.md` path): skip planning - run the ship pipeline with that plan.
 - A **task id** (project id format / id / url): run `steps/fetch.md`, then look for the saved
   plan at **`<storage root>/plans/<TASK-ID>.md`** - the exact path `/f10:plan` writes, under
-  the root context resolution reported. Glob the plans dir if the exact name misses:
+  the root the bundle reported. Glob the plans dir if the exact name misses:
   - exists → ask the user **reuse this plan or re-plan?** (AskUserQuestion). Reuse → straight
     to the pipeline; re-plan → `steps/plan.md` first.
   - missing → run `steps/plan.md`.

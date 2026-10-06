@@ -39,7 +39,7 @@ the phase; `f10-state.sh set plan done` once the plan file is on disk.
      you're writing an essay - collapse it. List real tradeoffs, not filler risk tables.
 4. **Save the plan - this IS the deliverable, not optional polish.** Write it with the `Write`
    tool to **`<storage root>/plans/<TASK-ID>.md`** - `<storage root>` taken verbatim from the
-   `storage root:` line context resolution reported (never re-derive it from your cwd - see
+   `storage root:` line the bundle reported (never re-derive it from your cwd - see
    `conventions/context.md`), `<TASK-ID>` the task's exact tracker id, uppercased, in the
    project's id format (e.g. `<storage root>/plans/ABC-2049.md`); no tracker id → a short
    kebab slug. This exact path is the handoff contract `/f10:ship` reads, so do not vary it.

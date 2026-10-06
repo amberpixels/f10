@@ -4,7 +4,10 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -64,4 +67,33 @@ func (h host) decode(ctx context.Context, v any, args ...string) error {
 	}
 
 	return nil
+}
+
+// decodePages runs a `api --paginate` call and reads every page into one
+// list. gh merges the pages of an array into one array; glab may print one
+// document per page, so every document in the output is read in turn.
+func decodePages[T any](ctx context.Context, h host, path string) ([]T, error) {
+	out, err := h.run(ctx, "api", "--paginate", path)
+	if err != nil {
+		return nil, err
+	}
+
+	var all []T
+
+	dec := json.NewDecoder(strings.NewReader(out))
+
+	for {
+		var page []T
+
+		err := dec.Decode(&page)
+		if errors.Is(err, io.EOF) {
+			return all, nil
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s output: %w", h.name, err)
+		}
+
+		all = append(all, page...)
+	}
 }

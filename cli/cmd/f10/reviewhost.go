@@ -37,6 +37,11 @@ type remoteReview struct {
 	Done      bool      `json:"done"`
 	Handled   bool      `json:"handled"`
 
+	// stored is the text as the host keeps it on the object ack edits. Body
+	// differs for an inline review, which folds its comments in for the
+	// reader; writing that back would copy every comment into the summary.
+	stored string
+
 	threads   []string // inline review: the threads a `thread resolved` ack resolves
 	commentID string   // inline review: the comment a reaction or marker lands on
 	pending   bool     // inline review: not yet submitted
@@ -140,12 +145,13 @@ func (rv *reviewer) loadMergeRequest(ctx context.Context, number string) error {
 
 	rv.pull = reviewPull{Number: strconv.Itoa(mr.IID), HeadSHA: mr.SHA, URL: mr.WebURL}
 
-	var commits []struct {
+	type mrCommit struct {
 		ID            string    `json:"id"`
 		CommittedDate time.Time `json:"committed_date"`
 	}
 
-	if err := rv.h.decode(ctx, &commits, "api", rv.mrPath("commits?per_page=100")); err != nil {
+	commits, err := decodePages[mrCommit](ctx, rv.h, rv.mrPath("commits?per_page=100"))
+	if err != nil {
 		return err
 	}
 
@@ -172,13 +178,30 @@ func (rv *reviewer) mrPath(tail string) string {
 	return "projects/:fullpath/merge_requests/" + rv.pull.Number + "/" + tail
 }
 
-// sameLogin matches a declared identity against a login the host returned:
-// case-insensitive, and `claude` matches `claude[bot]`.
+// sameLogin matches a declared identity against a login the host returned,
+// case-insensitive. A bare `claude` also matches `claude[bot]`, but a
+// declared `claude[bot]` never matches a bare `claude`: only an app's login
+// can carry the suffix, so dropping it on the host's side would let a user
+// who registered the bare name post as the declared bot.
 func sameLogin(declared, login string) bool {
-	d := strings.ToLower(strings.TrimSuffix(declared, "[bot]"))
-	l := strings.ToLower(strings.TrimSuffix(login, "[bot]"))
+	d, l := strings.ToLower(declared), strings.ToLower(login)
+	if d == "" {
+		return false
+	}
 
-	return d != "" && d == l
+	return d == l || d+"[bot]" == l
+}
+
+// isReviewer is login matching the declared reviewer. GitLab names a bot
+// by its username alone, with no suffix anyone could forge or omit, so a
+// declared `[bot]` is dropped there; on GitHub sameLogin's rule stands.
+func (rv *reviewer) isReviewer(login string) bool {
+	declared := rv.facts.Reviewer
+	if rv.h.glab() {
+		declared = strings.TrimSuffix(declared, "[bot]")
+	}
+
+	return sameLogin(declared, login)
 }
 
 // candidates lists every review the reviewer left, newest update first,
@@ -229,14 +252,44 @@ func (rv *reviewer) pick(ctx context.Context) (remoteReview, error) {
 			errNoReview, rv.facts.Reviewer, rv.pull.URL, rv.manualHint())
 	}
 
-	for _, r := range found {
-		if !r.Handled {
-			return r, nil
-		}
+	if r, ok := firstUnhandled(found); ok {
+		return r, nil
 	}
 
 	return remoteReview{}, fmt.Errorf("%w left unhandled from %s: the latest (%s) is handled%s",
 		errNoReview, rv.facts.Reviewer, found[0].URL, rv.manualHint())
+}
+
+// ackTarget is the review ack marks: the one pick returns, or with every
+// review handled the newest, which ack confirms rather than marks twice.
+func (rv *reviewer) ackTarget(ctx context.Context) (remoteReview, error) {
+	found, err := rv.candidates(ctx)
+	if err != nil {
+		return remoteReview{}, err
+	}
+
+	if len(found) == 0 {
+		return remoteReview{}, fmt.Errorf("nothing to acknowledge: %w from %s on %s",
+			errNoReview, rv.facts.Reviewer, rv.pull.URL)
+	}
+
+	if r, ok := firstUnhandled(found); ok {
+		return r, nil
+	}
+
+	return found[0], nil
+}
+
+// firstUnhandled is the newest of found that nobody handled. pick returns
+// it and ack marks it, so the two verbs always name the same review.
+func firstUnhandled(found []remoteReview) (remoteReview, bool) {
+	for _, r := range found {
+		if !r.Handled {
+			return r, true
+		}
+	}
+
+	return remoteReview{}, false
 }
 
 // manualHint names the boundary f10 stops at: the trigger is a human's.
@@ -281,9 +334,9 @@ func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error)
 	case facts.HandledReaction:
 		return rv.hasFreshReaction(ctx, r)
 	case facts.HandledMarker:
-		return rv.facts.HandledText != "" && strings.Contains(r.Body, rv.facts.HandledText), nil
+		return rv.facts.HandledText != "" && strings.Contains(r.stored, rv.facts.HandledText), nil
 	case facts.HandledCheckbox:
-		m := checkboxRE.FindStringSubmatch(r.Body)
+		m := checkboxRE.FindStringSubmatch(r.stored)
 
 		return len(m) > 1 && m[1] != " ", nil
 	case facts.HandledThread:
@@ -394,16 +447,16 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 	case facts.HandledReaction:
 		return rv.react(ctx, r)
 	case facts.HandledMarker:
-		return rv.patchBody(ctx, r, strings.TrimRight(r.Body, "\n")+"\n\n"+rv.facts.HandledText, "marker appended")
+		return rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+rv.facts.HandledText, "marker appended")
 	case facts.HandledCheckbox:
-		if !checkboxRE.MatchString(r.Body) {
+		// the first box only: isHandled reads the first, and the rest may be
+		// the reviewer's own list, which ticking would read as all fixed
+		m := checkboxRE.FindStringSubmatchIndex(r.stored)
+		if m == nil {
 			return "", errors.New("the review carries no checkbox to tick")
 		}
 
-		body := checkboxRE.ReplaceAllStringFunc(
-			r.Body,
-			func(s string) string { return strings.Replace(s, "[ ]", "[x]", 1) },
-		)
+		body := r.stored[:m[2]] + "x" + r.stored[m[3]:]
 
 		return rv.patchBody(ctx, r, body, "checkbox ticked")
 	case facts.HandledThread:
@@ -485,7 +538,7 @@ func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string,
 				"api",
 				"graphql",
 				"-f",
-				"query=mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }",
+				"query="+resolveThreadMutation,
 				"-F",
 				"id="+id,
 			)
@@ -501,7 +554,7 @@ func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string,
 
 // comments lists the request's issue-level comments by the reviewer.
 func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
-	var notes []struct {
+	type note struct {
 		ID        int64     `json:"id"`
 		Body      string    `json:"body"`
 		HTMLURL   string    `json:"html_url"`
@@ -521,7 +574,10 @@ func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 		path = rv.mrPath("notes?per_page=100")
 	}
 
-	if err := rv.h.decode(ctx, &notes, "api", path); err != nil {
+	// every page: the oldest come first, so a review past the first page is
+	// the newest one
+	notes, err := decodePages[note](ctx, rv.h, path)
+	if err != nil {
 		return nil, err
 	}
 
@@ -529,7 +585,7 @@ func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 
 	for _, n := range notes {
 		login := cmp.Or(n.User.Login, n.Author.Username)
-		if n.System || !sameLogin(rv.facts.Reviewer, login) {
+		if n.System || !rv.isReviewer(login) {
 			continue
 		}
 
@@ -541,6 +597,7 @@ func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 			URL:       cmp.Or(n.HTMLURL, rv.pull.URL+"#note_"+id),
 			Author:    login,
 			Body:      n.Body,
+			stored:    n.Body,
 			SHA:       rv.pull.shaBefore(n.CreatedAt),
 			CreatedAt: n.CreatedAt,
 			UpdatedAt: cmp.Or(n.UpdatedAt, n.CreatedAt),
@@ -557,7 +614,7 @@ func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
 		return rv.discussions(ctx)
 	}
 
-	var reviews []struct {
+	type pullReview struct {
 		ID          int64     `json:"id"`
 		Body        string    `json:"body"`
 		State       string    `json:"state"`
@@ -569,19 +626,15 @@ func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
 		} `json:"user"`
 	}
 
-	if err := rv.h.decode(
-		ctx,
-		&reviews,
-		"api",
-		rv.issuePath("pulls/"+rv.pull.Number+"/reviews?per_page=100"),
-	); err != nil {
+	reviews, err := decodePages[pullReview](ctx, rv.h, rv.issuePath("pulls/"+rv.pull.Number+"/reviews?per_page=100"))
+	if err != nil {
 		return nil, err
 	}
 
 	var found []remoteReview
 
 	for _, r := range reviews {
-		if !sameLogin(rv.facts.Reviewer, r.User.Login) {
+		if !rv.isReviewer(r.User.Login) {
 			continue
 		}
 
@@ -591,6 +644,7 @@ func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
 			URL:       r.HTMLURL,
 			Author:    r.User.Login,
 			Body:      r.Body,
+			stored:    r.Body,
 			SHA:       r.CommitID,
 			CreatedAt: r.SubmittedAt,
 			UpdatedAt: r.SubmittedAt,
@@ -608,7 +662,7 @@ func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
 }
 
 func (rv *reviewer) foldReviewComments(ctx context.Context, review *remoteReview) error {
-	var comments []struct {
+	type reviewComment struct {
 		ID        int64     `json:"id"`
 		Path      string    `json:"path"`
 		Line      int       `json:"line"`
@@ -616,10 +670,9 @@ func (rv *reviewer) foldReviewComments(ctx context.Context, review *remoteReview
 		UpdatedAt time.Time `json:"updated_at"`
 	}
 
-	err := rv.h.decode(
+	comments, err := decodePages[reviewComment](
 		ctx,
-		&comments,
-		"api",
+		rv.h,
 		rv.issuePath("pulls/"+rv.pull.Number+"/reviews/"+review.ID+"/comments?per_page=100"),
 	)
 	if err != nil {
@@ -672,6 +725,15 @@ func (rv *reviewer) threadsOf(ctx context.Context, reviewID string) []string {
 	return ids
 }
 
+// The two GraphQL documents: GitHub exposes review threads nowhere else.
+const (
+	reviewThreadsQuery = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
+		"{ pullRequest(number: $number) { reviewThreads(first: 100) { nodes { id isResolved " +
+		"comments(first: 1) { nodes { pullRequestReview { databaseId } } } } } } } }"
+
+	resolveThreadMutation = "mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }"
+)
+
 type reviewThread struct {
 	id       string
 	review   string
@@ -705,11 +767,7 @@ func (rv *reviewer) reviewThreads(ctx context.Context) ([]reviewThread, error) {
 		} `json:"data"`
 	}
 
-	query := "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
-		"{ pullRequest(number: $number) { reviewThreads(first: 100) { nodes { id isResolved " +
-		"comments(first: 1) { nodes { pullRequestReview { databaseId } } } } } } } }"
-
-	err := rv.h.decode(ctx, &payload, "api", "graphql", "-f", "query="+query,
+	err := rv.h.decode(ctx, &payload, "api", "graphql", "-f", "query="+reviewThreadsQuery,
 		"-F", "owner="+rv.owner, "-F", "name="+rv.repo, "-F", "number="+rv.pull.Number)
 	if err != nil {
 		return nil, err
@@ -781,7 +839,7 @@ func (rv *reviewer) threadsResolved(ctx context.Context, r remoteReview) (bool, 
 // discussion ids. GitLab has no review object grouping them, so "the latest
 // review" is the set of discussions still open.
 func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
-	var discussions []struct {
+	type discussion struct {
 		ID    string `json:"id"`
 		Notes []struct {
 			ID         int64     `json:"id"`
@@ -802,7 +860,8 @@ func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
 		} `json:"notes"`
 	}
 
-	if err := rv.h.decode(ctx, &discussions, "api", rv.mrPath("discussions?per_page=100")); err != nil {
+	discussions, err := decodePages[discussion](ctx, rv.h, rv.mrPath("discussions?per_page=100"))
+	if err != nil {
 		return nil, err
 	}
 
@@ -816,16 +875,19 @@ func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
 		}
 
 		first := d.Notes[0]
-		if first.System || !first.Resolvable || !sameLogin(rv.facts.Reviewer, first.Author.Username) {
+		if first.System || !first.Resolvable || !rv.isReviewer(first.Author.Username) {
 			continue
 		}
 
 		review.threads = append(review.threads, d.ID)
 		review.concluded = review.concluded && first.Resolved
 
+		// a marker or checkbox lands on this note, so its own text is the
+		// one ack edits
 		if review.commentID == "" {
 			review.commentID = strconv.FormatInt(first.ID, 10)
 			review.ID = d.ID
+			review.stored = first.Body
 		}
 
 		if first.CreatedAt.After(review.CreatedAt) {

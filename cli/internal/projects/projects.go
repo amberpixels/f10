@@ -30,7 +30,7 @@ var ErrDisabled = errors.New("finding a project by name needs " + RootsEnv +
 	" set to a colon-separated list of globs (for example ~/code/github.com/*/*); a path such as -C ../r3 always works")
 
 // Roots is the configured glob list, with a leading ~ expanded. Empty means
-// name resolution is off.
+// name lookup is off.
 func Roots() []string {
 	raw := strings.TrimSpace(os.Getenv(RootsEnv))
 	if raw == "" {

@@ -106,9 +106,13 @@ comment`, `inline review` or `check run`. Trigger is `automatic`, `manual` or bo
 how a human fires it; f10 never fires a manual trigger itself. The fourth line is what signals
 the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it
 handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline
-review). `f10 init` writes these four from a workflow under `.github/workflows` that runs the
-Claude Code action, reading its `on:` block for the trigger; a checkout without one declares no
-remote review, and a pipeline naming `review (CI)` fails rather than waiting. The full
+review). The handled checkbox is the first one in the review's text; the rest are the
+reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches
+only an app's login. On GitLab the username alone names a bot. `f10 init` writes these four
+from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that
+fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger;
+a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails
+rather than waiting. The full
 vocabulary is in `conventions/context.md`.
 
 ## Storage and visibility

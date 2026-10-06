@@ -200,7 +200,7 @@ executes nothing.
 - **Convention** - a cross-cutting rule every step obeys, in `conventions/`: `context.md` (config
   loading, pipelines, stealth), `latency.md` (turns, not commands), `gaps.md` (open decisions),
   `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how
-  it talks). They load as one fixed bundle, once per context, unlike project resolution, which
+  it talks). They load as one fixed bundle, once per context, unlike the project bundle, which
   reruns every run.
 - **Mode** - an alternate run in `modes/` that replaces execution rather than adding a rule.
   `dry-run.md` is the only one, loaded when `--dry-run` fires.
@@ -275,7 +275,7 @@ flowchart TB
     gsteps -- "3· write" --> reviews2
 ```
 
-Resolution order (full contract in `conventions/context.md`): generic step → `main/project.md` →
+Precedence (full contract in `conventions/context.md`): generic step → `main/project.md` →
 `main/<step>.md` → `worktree/project.md` → `worktree/<step>.md` → inferred defaults. Later wins,
 scope ahead of specificity. It all arrives in one bundle, generic step files included, so a run
 never reads `steps/` by hand. A linked worktree layers on top of main's instructions, takes them

@@ -44,9 +44,13 @@ var (
 	mentionRE = regexp.MustCompile(`contains\(\s*github\.event\.(?:comment|review|issue)\.body\s*,\s*['"](@[\w-]+)['"]`)
 )
 
-// reviewWorkflow finds the first workflow using the Claude Code action, or
-// nil. Files are read in name order; a file yaml cannot parse is skipped,
-// since a broken workflow is CI's problem to report, not detection's.
+// reviewWorkflow finds the workflow using the Claude Code action, or nil.
+// The action's stock setup installs two: one that reviews on pull_request
+// and one that answers an `@claude` comment. So the first that fires on its
+// own wins, whatever the file names, and the first match of any trigger
+// stands only when none does. Files are read in name order; a file yaml
+// cannot parse is skipped, since a broken workflow is CI's problem to
+// report, not detection's.
 func reviewWorkflow(root string) *Review {
 	dir := filepath.Join(root, ".github", "workflows")
 
@@ -59,25 +63,36 @@ func reviewWorkflow(root string) *Review {
 
 	sort.Strings(files)
 
+	var first *Review
+
 	for _, file := range files {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			continue
 		}
 
-		if rv := parseWorkflow(data); rv != nil {
-			rel, err := filepath.Rel(root, file)
-			if err != nil {
-				rel = file
-			}
+		rv := parseWorkflow(data)
+		if rv == nil {
+			continue
+		}
 
-			rv.Workflow = rel
+		rel, err := filepath.Rel(root, file)
+		if err != nil {
+			rel = file
+		}
 
+		rv.Workflow = rel
+
+		if strings.Contains(rv.Trigger, "automatic") {
 			return rv
+		}
+
+		if first == nil {
+			first = rv
 		}
 	}
 
-	return nil
+	return first
 }
 
 // parseWorkflow reads one workflow. nil when no step uses the action.

@@ -116,3 +116,28 @@ func TestReviewWorkflowPicksTheReviewFile(t *testing.T) {
 		t.Error("a checkout without workflows declared a review")
 	}
 }
+
+// The stock pair: an assistant answering `@claude` sorts before the review
+// that fires on pull_request, and the review still wins. With only the
+// assistant, it stands as the manual review.
+func TestReviewWorkflowPrefersTheAutomaticOne(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".github", "workflows")
+
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	writeFile(t, filepath.Join(dir, "claude.yml"), manualWorkflow)
+
+	if got := reviewWorkflow(root); got == nil || got.Trigger != "manual" {
+		t.Fatalf("assistant alone = %+v, want the manual workflow", got)
+	}
+
+	writeFile(t, filepath.Join(dir, "review.yml"), automaticWorkflow)
+
+	got := reviewWorkflow(root)
+	if got == nil || got.Trigger != "automatic" || got.Workflow != filepath.Join(".github", "workflows", "review.yml") {
+		t.Errorf("with both = %+v, want review.yml, automatic", got)
+	}
+}

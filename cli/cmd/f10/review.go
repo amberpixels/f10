@@ -181,18 +181,10 @@ func runReviewAck(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	found, err := rv.candidates(ctx)
+	r, err := rv.ackTarget(ctx)
 	if err != nil {
 		return err
 	}
-
-	if len(found) == 0 {
-		return fmt.Errorf("nothing to acknowledge: %w from %s on %s", errNoReview, rv.facts.Reviewer, rv.pull.URL)
-	}
-
-	// the newest review is the one pick returns while unhandled; once
-	// handled, ack confirms rather than marks it twice
-	r := found[0]
 
 	what, err := rv.ack(ctx, r)
 	if err != nil {

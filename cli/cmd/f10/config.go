@@ -116,7 +116,7 @@ func renderHuman(w io.Writer, v *view) {
 	headerRow(w, "instructions", v.Instructions, limit, plain)
 
 	if v.NestedIgnored != "" {
-		note := "ignoring nested " + v.NestedIgnored + " - resolution is anchored to the checkout root"
+		note := "ignoring nested " + v.NestedIgnored + " - the layout is anchored to the checkout root"
 		headerRow(w, "note", note, limit, faint)
 	}
 
