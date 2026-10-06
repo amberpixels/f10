@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -37,7 +38,7 @@ func startCommand() *cli.Command {
 			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local pipeline: commits, nothing pushed"},
 			&cli.StringFlag{
 				Name:  "after",
-				Usage: "base the branch on `TASK-ID`'s branch and record the dependency: ship rebases onto it, the PR stacks on it",
+				Usage: "base the branch on `TASK-ID`'s branch and record the dependency: ship rebases onto it, the PR stacks on it; default: the task body's After: line",
 			},
 			&cli.StringFlag{
 				Name:  "base",
@@ -117,13 +118,19 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		title:    titleLookup(t, r.Number),
 	}
 
-	if after != "" {
+	switch {
+	case after != "":
 		afterRef, err := t.reference(ctx, after)
 		if err != nil {
 			return fmt.Errorf("--after: %w", err)
 		}
 
 		in.after = afterRef.ID
+	case base == "":
+		// no flag names a base: the body's After: line may
+		if in.after, in.notes, err = afterFromBody(ctx, t.tracker(), in.main, r); err != nil {
+			return err
+		}
 	}
 
 	return start(ctx, cmd.Writer, in)
@@ -156,6 +163,22 @@ func declaresPipeline(t *target, name string) bool {
 	return false
 }
 
+// afterFromBody reads the task's body for an After: line. A body that
+// cannot be read is a note, never a refusal: --after stays the explicit way.
+func afterFromBody(ctx context.Context, tr tracker, main string, task ref.Ref) (string, []string, error) {
+	info, err := tr.info(ctx, task)
+	if err != nil {
+		return "", []string{fmt.Sprintf("no body read for %s (%v), so no After: line applies", task.ID, err)}, nil
+	}
+
+	after, note, err := bodyAfter(ctx, tr, main, task, info.body)
+	if err != nil || note == "" {
+		return after, nil, err
+	}
+
+	return after, []string{note}, nil
+}
+
 // startInput is everything start needs once the target is settled, so
 // the flow can be tested without a checkout.
 type startInput struct {
@@ -168,6 +191,7 @@ type startInput struct {
 	base     string                                // branch whose ref is the base, or ""
 	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
+	notes    []string                              // notes settled before the flow, printed beneath the report
 }
 
 // titleLookup asks the host for the task's title. A checkout with no host
@@ -202,27 +226,74 @@ type dependency struct {
 	planned bool   // the plan exists at that path
 }
 
-// start runs the flow: branch name, base, existing branch, worktree,
-// dependency, workspace, agent, prompt, report. Every lookup that can
-// refuse runs before the first thing is created, and the first thing
-// created is the worktree.
+// start runs the flow: the checkout and its agent, the prompt, the report.
+// A workspace Herdr already showed keeps its agent, and nothing is
+// prompted twice.
 func start(ctx context.Context, w io.Writer, in startInput) error {
-	name, slugNote, err := branchName(ctx, in.driver, in.task, in.suffix, in.title)
+	o, err := openTask(ctx, in)
 	if err != nil {
 		return err
+	}
+
+	if o.fresh {
+		if err := herdr.Prompt(
+			ctx,
+			o.path,
+			agentName(in.task.ID, in.suffix),
+			prompt(in.mode, in.task.ID, o.dep),
+		); err != nil {
+			return err
+		}
+	} else {
+		o.notes = append(o.notes, "workspace already open: its agent left as it was, nothing prompted")
+	}
+
+	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: o.branch}}
+	if o.dep != nil {
+		rows = append(rows, fact{label: "after", value: o.dep.task})
+	}
+
+	return writeReport(
+		w,
+		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
+		o.notes,
+	)
+}
+
+// An openedTask is what openTask leaves behind: the branch, its worktree,
+// the workspace showing it, the dependency recorded, and whether the agent
+// in it was started by this call and so waits for its first prompt.
+type openedTask struct {
+	branch string
+	path   string
+	ws     herdr.Workspace
+	dep    *dependency
+	fresh  bool
+	notes  []string
+}
+
+// openTask runs everything start does short of the prompt: branch name,
+// base, existing branch, worktree, dependency, workspace, agent. Every
+// lookup that can refuse runs before the first thing is created, and the
+// first thing created is the worktree. drive prompts the agent itself, one
+// skill at a time.
+func openTask(ctx context.Context, in startInput) (openedTask, error) {
+	name, slugNote, err := branchName(ctx, in.driver, in.task, in.suffix, in.title)
+	if err != nil {
+		return openedTask{}, err
 	}
 
 	base, dep, err := baseFor(ctx, in)
 	if err != nil {
-		return err
+		return openedTask{}, err
 	}
 
 	existing, err := existingBranch(ctx, in.main, name, in.task.ID, in.suffix)
 	if err != nil {
-		return err
+		return openedTask{}, err
 	}
 
-	var notes []string
+	notes := slices.Clone(in.notes)
 
 	// the bare-id note explains a name this run gives; a branch that exists
 	// keeps the name it has, whatever the title would have said
@@ -240,7 +311,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 
 	wts, err := gitx.Worktrees(ctx, in.main)
 	if err != nil {
-		return err
+		return openedTask{}, err
 	}
 
 	if dep != nil {
@@ -254,7 +325,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		notes = append(notes, "reused the existing worktree")
 	case existing != "":
 		if path, err = checkout(ctx, in.main, name, "", false); err != nil {
-			return err
+			return openedTask{}, err
 		}
 	default:
 		// a base at the default branch's commit changes nothing, which is
@@ -264,7 +335,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		}
 
 		if path, err = checkout(ctx, in.main, name, base.ref, true); err != nil {
-			return err
+			return openedTask{}, err
 		}
 	}
 
@@ -273,37 +344,30 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	// without --after can still be stacked by running start again with it
 	if dep != nil {
 		if err := recordDependency(ctx, in.main, name, dep); err != nil {
-			return err
+			return openedTask{}, err
 		}
 	}
 
 	ws, err := herdr.OpenWorktree(ctx, in.main, path, name)
 	if err != nil {
-		return err
+		return openedTask{}, err
 	}
+
+	o := openedTask{branch: name, path: path, ws: ws, dep: dep}
 
 	// a workspace Herdr already showed has its agent in the root pane, or
 	// whatever the user left there - starting another would be refused
-	if ws.AlreadyOpen {
-		notes = append(notes, "workspace already open: its agent left as it was, nothing prompted")
-	} else {
-		agent := agentName(in.task.ID, in.suffix)
-
-		if err := herdr.StartAgent(ctx, path, agent, agentKind, ws.RootPane); err != nil {
-			return err
+	if !ws.AlreadyOpen {
+		if err := herdr.StartAgent(ctx, path, agentName(in.task.ID, in.suffix), agentKind, ws.RootPane); err != nil {
+			return openedTask{}, err
 		}
 
-		if err := herdr.Prompt(ctx, path, agent, prompt(in.mode, in.task.ID, dep)); err != nil {
-			return err
-		}
+		o.fresh = true
 	}
 
-	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: name}}
-	if dep != nil {
-		rows = append(rows, fact{label: "after", value: dep.task})
-	}
+	o.notes = notes
 
-	return writeReport(w, append(rows, fact{label: "path", value: path}, fact{label: "workspace", value: ws.ID}), notes)
+	return o, nil
 }
 
 // baseFor turns --after or --base into the ref the worktree is created

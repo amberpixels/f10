@@ -10,6 +10,9 @@ phase - and `f10-state.sh task <id> <url>` once the tracker returns it.
 1. **Fetch the task** via the project's fetch adapter - a skill to invoke, or a CLI command
    such as `gh issue view <n> --comments` / `glab issue view <n>`. Read the full task,
    including comments.
+   A body line `After: <id>` names the base task this one builds on. Carry it into the brief:
+   the plan step records it as the plan's **Depends on** line, as it does for a run started with
+   `f10 start --after`, and designs against the base task's plan rather than this checkout.
 2. **Investigate the code - but only the genuine unknowns.** The task text and anything already
    established in this conversation are **ground truth**: never spend investigation
    re-verifying a premise the task or the user already gave you. Start from what's settled and

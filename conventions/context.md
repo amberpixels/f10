@@ -10,7 +10,8 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 
 - **skill** - an entry point the user invokes: `/f10:brainstorm`, `/f10:capture`, `/f10:plan`,
   `/f10:ship`, `/f10:judge`, `/f10:review`, `/f10:resolve`, `/f10:demo`, `/f10:explain`,
-  `/f10:catchup`. `/f10:status` is the one that runs no step: bare, a hook answers it from
+  `/f10:catchup`. `/f10:start`, `/f10:drive` and `/f10:finish` run the binary and no step.
+  `/f10:status` is the one that runs no step: bare, a hook answers it from
   `f10 status` before any model turn; with a task id it reads another worktree's run and relays
   the question a driven agent stopped on (`modes/driven.md`).
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
@@ -155,6 +156,15 @@ step fails (`conventions/failure.md`), never substitute a different tool.
   self-select one; for tiny work you may *suggest* and let the user pick. `f10 start --local`
   selects `local` by name. A pipeline marked **(planless)** skips capture/fetch/plan
   for free-text input: no task, no plan file - a brief inline plan in chat is enough.
+- **Drive chain** - the skills `f10 drive` runs each task through, in order, from the main
+  session: `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, any subset, each at most once,
+  `finish` last. `start` is never written: every task gets its worktree first. Omitted →
+  **`plan → judge → ship → review → resolve → finish`**: review after ship reads the remote
+  review where **Review** declares one and runs the local reviewer otherwise, and resolve settles
+  it before finish merges. A project whose ship pipeline already reviews drops `review` and
+  `resolve` here, so no change is reviewed twice by the same rule. The chain is skills, the
+  pipeline is steps: the review a pipeline runs stays where the pipeline put it. A chain typed
+  after the tasks (`f10 drive GH-12 GH-15 judge ship`) replaces this one for that run.
 - **Verify** - the exact lint/test commands, plus any "never run X" rules.
 - **Review** - facts about the project's review(s). None are required: with the section absent
   the local reviewer runs blind with its four core categories (`steps/review.md`). A project may

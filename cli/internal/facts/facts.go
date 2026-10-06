@@ -63,13 +63,18 @@ type Effective struct {
 	Review Review `json:"review"`
 }
 
+// DefaultDriveChain is the chain `f10 drive` runs each task through when
+// project.md declares none: review after ship reviews the shipment, and
+// resolve settles it before finish merges.
+const DefaultDriveChain = "plan → judge → ship → review → resolve → finish"
+
 // contractFields is the project.md contract. The order is presentation
 // order, not the contract's listing order: the short identity facts
 // (Project, Visibility, Storage, Layering) lead, the prose fields follow.
 func contractFields() []string {
 	return []string{
 		"Project", "Visibility", "Storage", "Layering", "Roles", "Tracker",
-		"Hosting & PR", "Ship pipeline(s)", "Verify", "Review", "Guardrails",
+		"Hosting & PR", "Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails",
 	}
 }
 
@@ -96,6 +101,8 @@ func canonicalName(declared string) string {
 		"shippipelines": "Ship pipeline(s)",
 		"pipeline":      "Ship pipeline(s)",
 		"pipelines":     "Ship pipeline(s)",
+		"drivechain":    "Drive chain",
+		"chain":         "Drive chain",
 		"verify":        "Verify",
 		"review":        "Review",
 		"guardrails":    "Guardrails",
@@ -359,6 +366,8 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 		}
 	case "Ship pipeline(s)":
 		return Field{Name: name, Value: "implement → pr", Origin: OriginDefault}
+	case "Drive chain":
+		return Field{Name: name, Value: DefaultDriveChain, Origin: OriginDefault}
 	case "Verify":
 		return detectedList(name, pb.Verify)
 	case "Visibility":

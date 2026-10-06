@@ -72,6 +72,7 @@ is an **entry point** into that chain:
 | `/f10:catchup` | catchup | the branch on its base - merged or rebased as the project declares - conflicts settled with both sides kept, verify green, nothing pushed |
 | `/f10:status [id]` | nothing - a hook answers it; with an id, `f10 status <id>` | the run's status in words, before any model turn; with an id, a task's run in its own worktree, and the question its agent is waiting on relayed to you and answered back |
 | `/f10:start <id> [--plan \| --local] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
+| `/f10:drive <ids \| id -- id> [skills...]` | nothing - it runs `f10 drive` in the background | every task through its chain - plan, judge, ship, review, resolve, finish by default - one at a time; an agent's question relayed to you and answered back |
 | `/f10:finish <id> [--yes]` | nothing - it runs `f10 finish` | the PR merged, the plan archived, the workspace closed, the worktree and branch gone, main pulled |
 
 ## Install
@@ -502,6 +503,7 @@ f10 start 1042                # branch, worktree, Herdr workspace, claude prompt
 f10 start 1042 --plan         # prompt the plan only
 f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
 f10 start 1042 --after 1040   # base the branch on that task's branch, record the dependency, stack the PR
+                              # (no flag: the task body's `After:` line, when it has one)
 f10 start 1042 --base rel/2   # base the branch on a git ref: the local branch, else origin's
 f10 start 1042-attempt2       # a second worktree for the same task, beside the first
 ```
@@ -539,6 +541,30 @@ cannot see, a Claude Code permission dialog in its pane: forward names the works
 nothing. Judge, demo and explain are never forwarded, since they read another worktree's branch
 fine and write nothing.
 
+### Drive
+
+One command still moves one task one step. `f10 drive` moves a list, from the main session:
+
+```bash
+f10 drive 1042 1043                  # each task through project.md's Drive chain, in this order
+f10 drive 1042 -- 1047 judge ship    # every id from 1042 to 1047, through judge and ship only
+f10 drive 1042 1043 --answer "1. proceed"   # the same command, answering the question it stopped on
+```
+
+Per task it opens the worktree, workspace and agent as `f10 start` does, then prompts the agent one
+skill at a time and polls until the turn ends: Herdr's agent status says when the turn starts and
+stops, the task's run state says how it ended. `finish` runs in the driver itself. The chain is
+`plan → judge → ship → review → resolve → finish` unless `project.md` declares a **Drive chain** or
+the command names one; review after ship reads the remote review where one is declared. The run
+pauses only when an agent asks: the driver prints the question and exits 4, and `/f10:drive` puts it
+to you and reruns the command with the answer. A judge stop or a failure exits 5. Rerunning the same
+command is the resume: a finished task is skipped, and a started one carries on from the last skill
+the driver recorded on its branch.
+
+A task that builds on another says so in its body: a last line `After: 1042`. Capture writes it,
+`f10 start` takes it as the default `--after`, and `f10 drive` refuses a list that puts the base
+after its dependent, or depends on a task outside the list that is not finished.
+
 ### Finish
 
 Closing a task is the same three tools in reverse, and the two steps people skip - the worktree
@@ -564,9 +590,10 @@ refusal into one question.
 
 No uniform storage (everything stays in the files where it lives today; the binary reads and
 pre-computes), no scanning (it answers for the repo it runs in, and walks the filesystem for
-other projects only once you set `F10_ROOTS`), and three writing verbs: `init` creates the two
-files that register a project, `start` creates a branch and a worktree, `finish` removes them
-once the work merged, and nothing else writes anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
+other projects only once you set `F10_ROOTS`), and four writing verbs: `init` creates the two
+files that register a project, `start` creates a branch and a worktree, `drive` does what start
+does for each task in a list and records each task's last finished skill in local git config,
+`finish` removes them once the work merged, and nothing else writes anywhere - handing a url to a browser or a file to an editor is the whole of what leaves the
 process otherwise. `bin/bundle.sh` stays the agent-facing surface - the binary explains to
 humans what the loader hands to agents, and it is the one component allowed to interpret `project.md` prose. What it cannot
 place it shows as-is under an `unrecognized` marker rather than guessing: incomplete, never

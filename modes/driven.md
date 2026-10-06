@@ -1,10 +1,10 @@
 # Convention · driven - a run prompted from another session
 
 A **driven** run is one nobody is watching in its own pane. `f10 start` prompts an agent in a
-worktree of its own, and `f10 forward` hands a command to that agent from wherever the user
-typed it. The user is in the session that sent the command, not in the agent's pane, so an
-interactive question asked there is a question nobody sees: the run stalls on a dialog until
-someone switches tabs to find it.
+worktree of its own, `f10 forward` hands a command to that agent from wherever the user typed
+it, and `f10 drive` prompts it skill by skill from the main session. The user is in the session
+that sent the command, not in the agent's pane, so an interactive question asked there is a
+question nobody sees: the run stalls on a dialog until someone switches tabs to find it.
 
 Driven mode changes one thing: **the transport of every question.** The steps, the plan, the
 pipeline, the reports are the same.
@@ -13,9 +13,9 @@ pipeline, the reports are the same.
 
 Any f10 skill runs driven when its argument contains the token **`--driven`** (anywhere in it,
 like `--dry-run`). `f10 start` and `f10 forward` append it to every f10 command they send, so an
-agent is driven from its first turn. Driven is for the whole run: a skill that chains into
-another (`/f10:plan ... && /f10:ship ...`) passes the token on when it invokes the next skill,
-and nothing downstream drops it.
+agent is driven from its first turn; `f10 drive` marks every skill it sends the same way. Driven
+is for the whole run: a skill that chains into another (`/f10:plan ... && /f10:ship ...`) passes
+the token on when it invokes the next skill, and nothing downstream drops it.
 
 Strip the token, route the argument exactly as normal, follow the steps as written, and apply
 the rules below wherever a step calls for a question.
@@ -49,7 +49,10 @@ settle in advance.
 
 The driving session reads the ask with `f10 status <task-id>`, puts the same questions to the
 user, and sends the answers back with `f10 forward <task-id> "<answers>"`, numbered the way the
-ask was. They arrive as this agent's **next prompt**, plain text, no slash command.
+ask was. They arrive as this agent's **next prompt**, plain text, no slash command. Under
+`f10 drive` the driver is the driving session: it reads the ask from run state itself, exits so
+`/f10:drive` can put it to the user, and sends the answers back the same way when rerun with
+`--answer`.
 
 On that prompt: `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the
 answers in exactly as the gaps convention folds a filled questionnaire - gaps flipped to

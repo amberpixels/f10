@@ -31,6 +31,7 @@ pipeline's contracts; the rest have workable defaults.
 | Tracker | kind, task id format, fetch and create adapters | host issues via `gh` or `glab`; ids prefixed from the project's name |
 | Hosting & PR | where code lives, how to open a PR or MR; optionally `merge method: squash` (or `merge`, `rebase`) for `f10 finish`, and `catchup: merge` (or `rebase`) for how a branch is brought up to date with its base | from the git remote; the merge method the repo allows, else squash; catchup by rebase |
 | Ship pipeline(s) | the ordered steps `/f10:ship` runs after planning | `implement → pr` |
+| Drive chain | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
 | Roles | the role per step, always or by area | each step's base role |
 | Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask`; a remote review's four facts: who, where it arrives, what triggers it, what signals done and marks it handled | the four core categories, reviewed locally by a blind agent; every ask goes to you; the remote facts from a Claude Code review workflow, else no remote review |

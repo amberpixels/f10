@@ -31,6 +31,11 @@ come from `project.md` (+ same-named overlay).
      - **No effort or time estimates.** No hours, no story points, no sizing.
      - **No acceptance criteria that restate the scope** in the future tense - drop them and
        keep the scope.
+   - **A dependency is a fixed last line.** When the order is known - the user names a task this
+     one builds on, or capture creates tasks meant to run in sequence - the body ends with
+     `After: <id>`, one id in the project's format, alone on its line. `f10 start` takes it as the
+     default `--after` and `f10 drive` checks it against its list, so the word and the shape are
+     fixed. No known order, no line.
    - **Markup follows the tracker's renderer** - **markdown is not a safe default**. The
      create adapter says which renderer this is:
      - **GitHub / GitLab** - GFM, but **one line per paragraph, never hard-wrapped**: a single

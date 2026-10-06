@@ -19,10 +19,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// ErrNotInside is the one refusal: start, finish and forward run inside a
+// ErrNotInside is the one refusal: start, forward, drive and finish run inside a
 // Herdr session and nowhere else, by decision rather than by accident of a
 // missing fallback.
-var ErrNotInside = errors.New("f10 start, finish and forward run inside a Herdr session: " +
+var ErrNotInside = errors.New("f10 start, forward, drive and finish run inside a Herdr session: " +
 	"open a pane there, or install it from https://herdr.dev")
 
 // Available reports whether this process can reach Herdr: the session
