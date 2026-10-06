@@ -19,7 +19,8 @@ f10 (f-ten) is a set of skills over one step chain. Three of them carry it: **ca
 freely written idea into a tracked task, **plan** turns that task into an architect-grade plan on
 disk, and **ship** turns the plan into code and, optionally, a release. The rest are optional and
 sit around that chain rather than in it - **brainstorm** ahead of it, **judge** at any point of
-it, **review** and **resolve** before the PR, **demo** and **explain** after it.
+it, **review** and **resolve** before the PR, **demo** and **explain** after it, **catchup**
+whenever the base moved.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app, or a Terraform
 repo. f10 either **infers** what it needs (git remote → `gh`/`glab`, build files → verify commands)
@@ -49,10 +50,12 @@ flowchart LR
     demo -.->|"screenshots · a scenario to click"| evidence(["what it does"])
     pr -.-> expl[explain]
     expl -.->|"what it was · what it is"| told(["what changed"])
+    implement -.->|"base moved"| catch[catchup]
+    catch -.->|"merge or rebase · conflicts settled"| uptodate(["on its base"])
 ```
 
 Solid arrows are the default pipeline; dashed ones are optional - `brainstorm`, `judge`,
-`demo` and `explain` when you ask for them, the rest where a project declares them. Each skill
+`demo`, `explain` and `catchup` when you ask for them, the rest where a project declares them. Each skill
 is an **entry point** into that chain:
 
 | Skill | Runs | Stops at |
@@ -66,6 +69,7 @@ is an **entry point** into that chain:
 | `/f10:resolve <id \| PR \| this branch>` | resolve | a verdict per finding - fix, skip or ask - fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | evidence of what the change does - screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
+| `/f10:catchup` | catchup | the branch on its base - merged or rebased as the project declares - conflicts settled with both sides kept, verify green, nothing pushed |
 | `/f10:status` | nothing - a hook answers it | the run's status in words, before any model turn |
 | `/f10:start <id> [--plan \| --local] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
 | `/f10:finish <id> [--yes]` | nothing - it runs `f10 finish` | the PR merged, the plan archived, the workspace closed, the worktree and branch gone, main pulled |
@@ -176,9 +180,18 @@ executes nothing.
   four sentences from the code. Nothing run, nothing written either way. Where `demo` shows, `explain` tells:
   it costs a read of the diff instead of a seeded app, which is what makes it the thing you run
   before deciding whether a change is worth demoing at all. Creates nothing.
-- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, plus
-  ship-pipeline steps `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `deploy`
-  (`steps/*.md`). Skills are thin routers over steps.
+- **Catchup** - the one verb for a branch that fell behind its base: the branch `f10 start
+  --after` recorded, else the default branch. By merge or by rebase, as `project.md` declares
+  (`catchup: merge | rebase` under Hosting & PR; rebase when it says nothing), so a merge-flow
+  project and a rebase-flow project run the same command. Conflicts are settled by keeping both
+  sides' intent - the incoming change and the branch's own - with lock files regenerated from
+  their source and only the genuinely ambiguous files put to you, in one questionnaire. Verify
+  runs after, and a red verify on a clean integration is a semantic conflict settled the same
+  way. A catchup with nothing to settle is a correct run, not a no-op. It is where ship's
+  pre-implement integration hands off when it hits a conflict. Nothing is pushed.
+- **Step** - the unit of work: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`,
+  `catchup`, plus ship-pipeline steps `implement`, `commit`, `pr`, `push`, `review`, `resolve`,
+  `demo`, `deploy` (`steps/*.md`). Skills are thin routers over steps.
 - **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default
   `implement → pr`). A name with no generic step (e.g. `e2e`) is project-defined:
   `.f10/instructions/<name>.md` *is* the step. A project may declare several **named pipelines**;
@@ -241,8 +254,8 @@ executes nothing.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,implement,commit,pr,push,review,resolve,demo,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain,catchup}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,commit,pr,push,review,resolve,demo,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/dry-run.md"]
     end
@@ -558,7 +571,7 @@ when the repo went hybrid, so every recipe is hand-owned now.
 ## Status
 
 Skills over one step file per unit of work: `brainstorm`, `capture`, `plan`, `ship`, `judge`,
-`review`, `resolve`, `demo` and `explain`. Project facts come from `.f10/instructions/` through the loader,
+`review`, `resolve`, `demo`, `explain` and `catchup`. Project facts come from `.f10/instructions/` through the loader,
 worktree-layered, with inferred defaults where nothing is declared. Six conventions bind every
 run: what it costs, how it fails, how it reports, how it talks, where open decisions go, and how
 context loads. A status-line badge tracks the run through capture, plan and ship, `f10 status`

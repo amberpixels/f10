@@ -51,8 +51,13 @@ local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of four:
   in the default branch. `git config --unset` both keys and carry on as if nothing was recorded
   (`f10 finish` does this itself; this is the fallback for a base merged by hand);
 - the base is an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
-- the base moved: `git rebase <base>` before implement. A conflict ends the run as a failure
-  (`conventions/failure.md`), the rebase aborted so the tree stays as it was;
+- the base moved: bring the branch up to date before implement, the way `steps/catchup.md`
+  does - `git rebase <base>`, or `git merge --no-edit <base>` where `project.md → Hosting & PR`
+  declares `catchup: merge`. A conflict ends the run as a failure (`conventions/failure.md`),
+  the operation aborted so the tree stays as it was, and the report's `next` row names
+  `/f10:catchup`: it settles the conflicts with both sides kept, after which this run can be
+  re-issued. Ship never settles conflicts itself - an implement step over a half-merged tree
+  is the outcome the failure convention exists to prevent;
 - the base still equals the default branch's commit: the base task has no code yet. Ask once
   (AskUserQuestion): **wait**, or **proceed on the plan's assumption**. Wait ends the run blocked
   the way a judge stop does - `f10-state.sh set ship blocked implement`, a `note` naming the base

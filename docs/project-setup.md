@@ -29,7 +29,7 @@ pipeline's contracts; the rest have workable defaults.
 |---|---|---|
 | Project | one line: what this is, and the stack | detected from build files |
 | Tracker | kind, task id format, fetch and create adapters | host issues via `gh` or `glab`; ids prefixed from the project's name |
-| Hosting & PR | where code lives, how to open a PR or MR; optionally `merge method: squash` (or `merge`, `rebase`) for `f10 finish` | from the git remote; the merge method the repo allows, else squash |
+| Hosting & PR | where code lives, how to open a PR or MR; optionally `merge method: squash` (or `merge`, `rebase`) for `f10 finish`, and `catchup: merge` (or `rebase`) for how a branch is brought up to date with its base | from the git remote; the merge method the repo allows, else squash; catchup by rebase |
 | Ship pipeline(s) | the ordered steps `/f10:ship` runs after planning | `implement → pr` |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
 | Roles | the role per step, always or by area | each step's base role |

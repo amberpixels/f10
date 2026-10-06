@@ -65,6 +65,10 @@ actually consumes; a fact nothing on the path uses is noise:
 - **resolve**: instructions source, role, the findings file it would read and how many findings
   there lack a verdict, verify, and that every `ask` would end in one questionnaire to the user
   (or go to the declared human reviewer).
+- **catchup**: instructions source, role, the base it would integrate and how it was found
+  (the recorded dependency, else the default branch), the strategy and its source
+  (`catchup:` under Hosting & PR, or the rebase default), the integration command quoted and
+  not run, and verify. No adapter is bound and nothing is pushed.
 - **capture**: instructions source, role, the **create** adapter + id format, visibility - not
   verify, the fetch adapter, guardrails, or the ship pipeline.
 - **plan** (fetch → plan): the above plus the **fetch** adapter, guardrails, and the plan
