@@ -83,9 +83,11 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - `--local` refuses before creating anything when `project.md` declares no `local` pipeline,
   since ship never picks a pipeline unasked
 
-A recorded dependency is read back by the ship and pr steps, not by this binary. Before the
-first pipeline step, ship rebases onto the base branch when it moved, and asks once - wait, or
-proceed on the plan's assumption - when it still equals the default branch. The pr step opens
+A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
+Before the first pipeline step, ship brings the branch up to date with the base when it moved -
+a rebase, or a merge where `project.md` declares `catchup: merge` - and asks once - wait, or
+proceed on the plan's assumption - when it still equals the default branch. A conflict there
+stops ship and hands off to `/f10:catchup`, which settles it with both sides kept. The pr step opens
 the PR or MR against the base branch, so it is stacked and the host retargets it when the base
 merges; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is

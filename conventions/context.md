@@ -9,12 +9,12 @@ commands, PR flow, review flow, domain guardrails - lives in the project, under
 **Units of work** - three tiers, never interchangeable:
 
 - **skill** - an entry point the user invokes: `/f10:brainstorm`, `/f10:capture`, `/f10:plan`,
-  `/f10:ship`, `/f10:judge`, `/f10:review`, `/f10:resolve`, `/f10:demo`, `/f10:explain`.
-  `/f10:status` is the one that runs no step: a hook answers it from `f10 status` before any
+  `/f10:ship`, `/f10:judge`, `/f10:review`, `/f10:resolve`, `/f10:demo`, `/f10:explain`,
+  `/f10:catchup`. `/f10:status` is the one that runs no step: a hook answers it from `f10 status` before any
   model turn.
 - **step** - a unit of work the plugin runs: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
-  `explain`, `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `deploy`
-  (`steps/*.md`). A skill runs one or more steps.
+  `explain`, `catchup`, `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`,
+  `deploy` (`steps/*.md`). A skill runs one or more steps.
 - **stage** - one ordered unit *inside* a plan. Never a step, never a skill.
 
 **What a run produces** - four, in pipeline order:
@@ -138,6 +138,10 @@ step fails (`conventions/failure.md`), never substitute a different tool.
 - **Hosting & PR** - where the code lives and how to open a PR/MR: a skill, or plain
   `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee). The branch's
   *shape* is the project's to declare; that it carries the task id is not - see `steps/pr.md`.
+  Two mechanism phrases live here too, in any case: `merge method: squash | merge | rebase`,
+  which `f10 finish` reads, and `catchup: merge | rebase`, how a branch is brought up to date
+  with its base (`steps/catchup.md`, and ship's pre-implement integration). Absent, catchup
+  rebases.
 - **Ship pipeline(s)** - the ordered steps `/f10:ship` runs after planning, e.g.
   `implement → review (local) → pr → review (CI) → deploy (staging)`; its last step is the
   run's shipment. Omitted → **`implement → pr`**. Each name picks a generic step in the
