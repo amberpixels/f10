@@ -83,9 +83,11 @@ type Workspace struct {
 }
 
 // OpenWorktree turns the checkout at path into a workspace labelled label,
-// or returns the one already showing it.
+// or returns the one already showing it. dir is the main checkout, passed as
+// --cwd: without it Herdr takes the repo from the focused workspace, and
+// refuses when that one shows a linked worktree.
 func OpenWorktree(ctx context.Context, dir, path, label string) (Workspace, error) {
-	res, err := call(ctx, dir, "worktree", "open", "--path", path, "--label", label)
+	res, err := call(ctx, dir, "worktree", "open", "--cwd", dir, "--path", path, "--label", label)
 	if err != nil {
 		return Workspace{}, err
 	}

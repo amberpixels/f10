@@ -72,7 +72,7 @@ func TestOpenWorktreeReadsIds(t *testing.T) {
 		t.Errorf("OpenWorktree = %+v, want ws:3/pane:7, not already open", ws)
 	}
 
-	if want := "herdr worktree open --path /repo.GH-1 --label GH-1"; (*calls)[0] != want {
+	if want := "herdr worktree open --cwd /repo --path /repo.GH-1 --label GH-1"; (*calls)[0] != want {
 		t.Errorf("called %q, want %q", (*calls)[0], want)
 	}
 }

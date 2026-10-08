@@ -569,7 +569,7 @@ func TestStartWithWorktrunk(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1")) // git knows the worktree once wt ran
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil), "{}")
 
@@ -614,7 +614,7 @@ func TestStartWithGitAlone(t *testing.T) {
 	f.script(cfgBranch, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", "")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
 	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
@@ -668,7 +668,7 @@ func afterFixture(t *testing.T, dir, shaBase string) *fakes {
 	f.script(cfgBranch, "")
 	f.script(worktrees, porcelain("GH-7/base", dir), porcelain("GH-7/base", dir, "GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create --base GH-7/base GH-1", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
 	return f
@@ -801,7 +801,7 @@ func TestStartWithBase(t *testing.T) {
 	f.script(shaMain, "bbb")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 release/1.2", "")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil), "{}")
 
@@ -832,7 +832,7 @@ func TestStartBaseEqualsDefault(t *testing.T) {
 	f.script(shaMain, "aaa")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create --base main GH-1", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil), "{}")
 
@@ -862,7 +862,7 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json GH-1", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil), "{}")
 
@@ -912,7 +912,7 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 	f.script("git config branch.GH-1.f10-after GH-7", "")
 	f.script("git config branch.GH-1.f10-after-branch GH-7", "")
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", reopened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", reopened)
 	f.script("herdr agent get pane:7", agentFound)
 
 	var out bytes.Buffer
@@ -982,7 +982,7 @@ func TestStartRecoversAWorkspaceWithNoAgent(t *testing.T) {
 	f.has["wt"] = true
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", reopened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", reopened)
 	f.fail("herdr agent get pane:7", shell.Result{
 		Code:   1,
 		Stderr: `{"error":{"code":"agent_not_found","message":"agent target gh-1 not found"}}`,
@@ -1014,7 +1014,7 @@ func TestStartLeavesABusyPaneAlone(t *testing.T) {
 	f.has["wt"] = true
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", reopened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", reopened)
 	f.fail("herdr agent get pane:7", shell.Result{
 		Code:   1,
 		Stderr: `{"error":{"code":"agent_not_found","message":"agent target gh-1 not found"}}`,
@@ -1050,7 +1050,7 @@ func TestStartWaitsForTheShell(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.answers["herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7"] = []shell.Result{
 		{
 			Code:   1,
@@ -1088,7 +1088,10 @@ func TestStartSlugsTheBranch(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1/add-dark-mode", "/code/repo.GH-1-add-dark-mode"))
 	f.script("wt switch --no-cd --yes --format json --create GH-1/add-dark-mode", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1-add-dark-mode --label GH-1/add-dark-mode", opened)
+	f.script(
+		"herdr worktree open --cwd /code/repo --path /code/repo.GH-1-add-dark-mode --label GH-1/add-dark-mode",
+		opened,
+	)
 	f.script(
 		"herdr agent start "+agentName("GH-1", "", "/code/repo.GH-1-add-dark-mode")+" --kind claude --pane pane:7",
 		"{}",
@@ -1132,7 +1135,7 @@ func TestStartWithoutATitle(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil), "{}")
 
@@ -1156,7 +1159,7 @@ func TestStartReusesABareBranchOverTheSlug(t *testing.T) {
 	f.has["wt"] = true
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", reopened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", reopened)
 	f.script("herdr agent get pane:7", agentFound)
 
 	var out bytes.Buffer
@@ -1185,7 +1188,7 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 	f.has["wt"] = true
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
-	f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil), "{}")
 
@@ -1204,7 +1207,7 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	f.script(refsLocal, heads("GH-1/slug"))
 	f.script(worktrees, porcelain(), porcelain("GH-1/slug", "/code/repo.GH-1-slug"))
 	f.script("git worktree add /code/repo.GH-1-slug GH-1/slug", "")
-	f.script("herdr worktree open --path /code/repo.GH-1-slug --label GH-1/slug", opened)
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1-slug --label GH-1/slug", opened)
 	f.script("herdr agent start "+agentName("GH-1", "", "/code/repo.GH-1-slug")+" --kind claude --pane pane:7", "{}")
 	f.script(
 		"herdr agent prompt "+agentName("GH-1", "", "/code/repo.GH-1-slug")+" "+prompt(modeDefault, "GH-1", nil),

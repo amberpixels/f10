@@ -113,7 +113,7 @@ func (fx *driveFixture) opens(id, ws, pane string) {
 	agent := agentOf(id)
 
 	fx.f.script("wt switch --no-cd --yes --format json --create "+id, "{}")
-	fx.f.script("herdr worktree open --path /code/repo."+id+" --label "+id,
+	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id,
 		`{"result":{"workspace":{"workspace_id":"`+ws+`"},"root_pane":{"pane_id":"`+pane+`"},"already_open":false}}`)
 	fx.f.script("herdr agent start "+agent+" --kind claude --pane "+pane, "{}")
 }
@@ -290,7 +290,7 @@ func TestDriveResumesWithTheAnswer(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "--answer", "1. proceed")
 	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
-	fx.f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1",
+	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
 	fx.f.script("herdr agent get pane:1", agentFound)
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")
@@ -375,7 +375,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	fx.task("GH-2", taskInfo{body: "y\nAfter: GH-1"}, heads("GH-2"))
 	fx.f.script("git config --get branch.GH-2."+cfgDrive, "judge")
 	fx.f.script(worktrees, porcelain("GH-2", "/code/repo.GH-2"))
-	fx.f.script("herdr worktree open --path /code/repo.GH-2 --label GH-2",
+	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-2 --label GH-2",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-2"},"root_pane":{"pane_id":"pane:2"},"already_open":true}}`)
 	fx.f.script("herdr agent get pane:2", agentFound)
 	fx.expects("GH-2", "ship")
@@ -987,7 +987,7 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		fx.task("GH-2", taskInfo{body: "b"}, heads("GH-2"))
 
 		for _, id := range ids {
-			fx.f.script("herdr worktree open --path /code/repo."+id+" --label "+id,
+			fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id,
 				`{"result":{"workspace":{"workspace_id":"ws:`+id+`"},"root_pane":{"pane_id":"p"},"already_open":true}}`)
 			fx.f.script("herdr agent get p", agentFound)
 			fx.f.script("git config branch."+id+"."+cfgDrive+" judge", "")
