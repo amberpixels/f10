@@ -131,15 +131,13 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 		return fmt.Errorf("no Herdr workspace shows %s (branch %s): open it with f10 start %s", path, name, in.task.ID)
 	}
 
-	agent := agentName(in.task.ID, in.suffix)
-
-	if err := refuseStalled(in, ws, agent, path); err != nil {
+	if err := refuseStalled(in, ws, agentName(in.task.ID, in.suffix, path), path); err != nil {
 		return err
 	}
 
 	text := driven(in.text)
 
-	if err := herdr.Prompt(ctx, path, agent, text); err != nil {
+	if err := promptAgent(ctx, path, in.task.ID, in.suffix, text); err != nil {
 		return err
 	}
 

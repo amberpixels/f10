@@ -89,14 +89,18 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   the report
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a
   second worktree for one task can live beside the first
+- the agent is named `<id>` lowercased, with the suffix, then six hex characters hashed from the
+  worktree path (`gh-12-3e78d4`): Herdr's agent names are one namespace across every project,
+  so the same id in two repositories never collides
 - a task that already has a branch gets its worktree reused, or created when the branch has
   none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise
   for the base, while its dependency is recorded all the same; a workspace Herdr already shows
-  keeps its agent, and nothing is prompted twice. One with no agent under the task's name (a
-  start that failed earlier) gets one started and prompted when its root pane is an idle shell;
-  a pane running anything else is left alone
+  keeps its agent, and nothing is prompted twice. One with no agent in its root pane (a start
+  that failed earlier) gets one started and prompted when that pane is an idle shell; a pane
+  running anything else is left alone
 - a fresh pane whose shell is still running its rc files refuses the agent as busy; start
-  retries for up to 20s before failing with Herdr's error
+  retries every 200ms for up to 5s before failing with Herdr's error, and prints a line to
+  stderr at least every second while it waits
 - `--local` refuses before creating anything when `project.md` declares no `local` pipeline,
   since ship never picks a pipeline unasked
 
@@ -174,9 +178,9 @@ command anywhere else would run it on the wrong branch without the plan.
 
 1. **The lookup.** The task's branch, found the way start and finish find it (the exact name,
    else the one `<id>` / `<id>-*` branch); the worktree that has it checked out; the Herdr
-   workspace showing that worktree; the agent named `<id>` lowercased, with the suffix when the
-   token carried one, which is the name start gave it. A task started with a suffix is forwarded
-   to with the same suffix.
+   workspace showing that worktree; the agent under the name start gave it (below), or under
+   `<id>` lowercased with the suffix alone, the name an agent started by an older f10 carries. A
+   task started with a suffix is forwarded to with the same suffix.
 2. **Three outcomes.** Exit 0: the command was submitted, and the report has three rows - `task`,
    `workspace`, `sent`. The command returns at submission, since Herdr's prompt call does, and the
    outcome lands in that tab; nothing here waits or tails. Exit 3: the task is in this checkout

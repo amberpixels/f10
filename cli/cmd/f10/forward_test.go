@@ -12,6 +12,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -96,7 +97,7 @@ func exitCode(err error) int {
 // and the report carries the three rows.
 func TestForwardSubmitsToTheTasksAgent(t *testing.T) {
 	fx := newForwardFixture(t)
-	fx.f.script("herdr agent prompt gh-1 "+fwdText+" --driven", "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+fwdText+" --driven", "{}")
 
 	out, err := fx.forward(t)
 	if err != nil {
@@ -110,6 +111,25 @@ func TestForwardSubmitsToTheTasksAgent(t *testing.T) {
 	}
 }
 
+// An agent started before names carried the path hash answers to its bare
+// name: forward reaches it there.
+func TestForwardReachesAnAgentByItsBareName(t *testing.T) {
+	fx := newForwardFixture(t)
+	fx.f.fail("herdr agent prompt "+agentOf("GH-1")+" "+fwdText+" --driven", shell.Result{
+		Code:   1,
+		Stderr: `{"error":{"code":"agent_not_found","message":"agent target not found"}}`,
+	})
+	fx.f.script("herdr agent prompt gh-1 "+fwdText+" --driven", "{}")
+
+	if _, err := fx.forward(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called("herdr agent prompt gh-1 ") {
+		t.Error("the bare name was not tried")
+	}
+}
+
 // An answer is plain text: it is sent as it is, and a suffix reaches the
 // agent the suffix named.
 func TestForwardSendsPlainTextUnmarked(t *testing.T) {
@@ -118,7 +138,7 @@ func TestForwardSendsPlainTextUnmarked(t *testing.T) {
 	fx.in.text = "1. no 2. client"
 	fx.f.script(refsLocal, heads("GH-1-v2"))
 	fx.f.script(worktrees, porcelain("GH-1-v2", fwdWT))
-	fx.f.script("herdr agent prompt gh-1-v2 1. no 2. client", "{}")
+	fx.f.script("herdr agent prompt "+agentName("GH-1", "v2", fwdWT)+" 1. no 2. client", "{}")
 
 	out, err := fx.forward(t)
 	if err != nil {
@@ -234,7 +254,7 @@ func TestForwardSendsToAnIdleAgentThatIsBlocked(t *testing.T) {
 	fx.f.script(wsList, fx.workspaces("idle"))
 	fx.run(t, "blocked", "implement")
 	fx.in.text = "1. no"
-	fx.f.script("herdr agent prompt gh-1 1. no", "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. no", "{}")
 
 	if _, err := fx.forward(t); err != nil {
 		t.Fatal(err)
@@ -243,7 +263,7 @@ func TestForwardSendsToAnIdleAgentThatIsBlocked(t *testing.T) {
 	// and an idle agent with no live run at all is simply idle
 	fx = newForwardFixture(t)
 	fx.f.script(wsList, fx.workspaces("idle"))
-	fx.f.script("herdr agent prompt gh-1 "+fwdText+" --driven", "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+fwdText+" --driven", "{}")
 
 	if _, err := fx.forward(t); err != nil {
 		t.Fatal(err)

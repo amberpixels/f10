@@ -113,7 +113,7 @@ func TestFailureCarriesHerdrsMessage(t *testing.T) {
 		},
 	)
 
-	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7")
+	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7", nil)
 	if err == nil || !strings.Contains(err.Error(), "worktree_open_failed: not a git worktree") {
 		t.Errorf("err = %v, want herdr's code and message", err)
 	}
@@ -200,7 +200,7 @@ func TestErrorCarriesCodeAndMessage(t *testing.T) {
 	fake(t, busy)
 	shortWait(t, 0)
 
-	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7")
+	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7", nil)
 
 	var he *Error
 	if !errors.As(err, &he) {
@@ -224,7 +224,7 @@ func TestStartAgentWaitsOutABusyPane(t *testing.T) {
 	calls := fake(t, busy, busy, shell.Result{Stdout: `{"result":{}}`})
 	shortWait(t, time.Minute)
 
-	if err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7"); err != nil {
+	if err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -237,7 +237,7 @@ func TestStartAgentGivesUpAtTheDeadline(t *testing.T) {
 	calls := fake(t, busy)
 	shortWait(t, 20*time.Millisecond)
 
-	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7")
+	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7", nil)
 	if !IsCode(err, CodePaneBusy) {
 		t.Errorf("err = %v, want herdr's busy error", err)
 	}
@@ -251,7 +251,7 @@ func TestStartAgentReturnsOtherErrorsAtOnce(t *testing.T) {
 	calls := fake(t, shell.Result{Code: 1, Stderr: `{"error":{"code":"pane_not_found","message":"no pane pane:7"}}`})
 	shortWait(t, time.Minute)
 
-	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7")
+	err := StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7", nil)
 	if !IsCode(err, "pane_not_found") || len(*calls) != 1 {
 		t.Errorf("err = %v after %d calls, want pane_not_found after one", err, len(*calls))
 	}
@@ -264,7 +264,7 @@ func TestStartAgentStopsWithTheContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	err := StartAgent(ctx, "/repo", "gh-1", "claude", "pane:7")
+	err := StartAgent(ctx, "/repo", "gh-1", "claude", "pane:7", nil)
 	if !errors.Is(err, context.Canceled) || !IsCode(err, CodePaneBusy) {
 		t.Errorf("err = %v, want the busy error joined with the cancellation", err)
 	}
@@ -320,5 +320,47 @@ func TestPaneIdleShell(t *testing.T) {
 
 	if idle, _ := PaneIdleShell(t.Context(), "/repo", "pane:7"); idle {
 		t.Error("a pane with no process info read as an idle shell")
+	}
+}
+
+func TestStartAgentReportsTheWait(t *testing.T) {
+	fake(t, busy)
+	shortWait(t, 300*time.Millisecond)
+
+	prevPoll, prevReport := StartPoll, StartReport
+	StartPoll, StartReport = 5*time.Millisecond, 50*time.Millisecond
+
+	t.Cleanup(func() { StartPoll, StartReport = prevPoll, prevReport })
+
+	var waits []time.Duration
+
+	_ = StartAgent(t.Context(), "/repo", "gh-1", "claude", "pane:7", func(d time.Duration) { waits = append(waits, d) })
+
+	if len(waits) < 3 {
+		t.Fatalf("reported %v, want the first busy answer and one per StartReport after it", waits)
+	}
+
+	for i := 1; i < len(waits); i++ {
+		if gap := waits[i] - waits[i-1]; gap > StartReport {
+			t.Errorf("reports %v and %v are %v apart, want at most %v", waits[i-1], waits[i], gap, StartReport)
+		}
+	}
+
+	fake(t, shell.Result{Stdout: `{"result":{}}`})
+
+	waits = nil
+	if err := StartAgent(
+		t.Context(),
+		"/repo",
+		"gh-1",
+		"claude",
+		"pane:7",
+		func(d time.Duration) { waits = append(waits, d) },
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(waits) != 0 {
+		t.Errorf("reported %v for a pane that was never busy", waits)
 	}
 }
