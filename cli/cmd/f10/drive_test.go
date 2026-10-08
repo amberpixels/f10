@@ -109,7 +109,7 @@ func (fx *driveFixture) task(id string, info taskInfo, branches string) {
 
 // opens scripts start's create path for a new task under worktrunk.
 func (fx *driveFixture) opens(id, ws, pane string) {
-	agent := strings.ToLower(id)
+	agent := agentOf(id)
 
 	fx.f.script("wt switch --no-cd --yes --format json --create "+id, "{}")
 	fx.f.script("herdr worktree open --path /code/repo."+id+" --label "+id,
@@ -119,7 +119,7 @@ func (fx *driveFixture) opens(id, ws, pane string) {
 
 // expects scripts the prompt for one skill and the record of it done.
 func (fx *driveFixture) expects(id, skill string) {
-	fx.f.script("herdr agent prompt "+strings.ToLower(id)+" "+skillPrompt(skill, id, nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf(id)+" "+skillPrompt(skill, id, nil, false), "{}")
 	fx.f.script("git config branch."+id+"."+cfgDrive+" "+skill, "")
 }
 
@@ -205,11 +205,11 @@ func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 
 	want := []string{
 		"--create GH-1",
-		"gh-1 /f10:judge",
+		agentOf("GH-1") + " /f10:judge",
 		"--create GH-2",
-		"gh-2 /f10:judge",
-		"gh-1 /f10:ship",
-		"gh-2 /f10:ship",
+		agentOf("GH-2") + " /f10:judge",
+		agentOf("GH-1") + " /f10:ship",
+		agentOf("GH-2") + " /f10:ship",
 	}
 	fx.assertOrder(t, want, "herdr agent prompt", "wt switch")
 
@@ -255,7 +255,7 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt gh-1 "+skillPrompt("judge", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
 	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
@@ -288,8 +288,9 @@ func TestDriveResumesWithTheAnswer(t *testing.T) {
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
+	fx.f.script("herdr agent get pane:1", agentFound)
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")
-	fx.f.script("herdr agent prompt gh-1 1. proceed", "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. proceed", "{}")
 	fx.f.script("git config branch.GH-1."+cfgDrive+" judge", "")
 	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
@@ -302,7 +303,7 @@ func TestDriveResumesWithTheAnswer(t *testing.T) {
 		t.Errorf("output = %s", fx.out.String())
 	}
 
-	if fx.f.called("herdr agent prompt gh-1 /f10:judge") {
+	if fx.f.called("herdr agent prompt " + agentOf("GH-1") + " /f10:judge") {
 		t.Error("the skill was prompted again instead of answered")
 	}
 }
@@ -315,7 +316,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt gh-1 "+skillPrompt("judge", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
 	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
@@ -343,7 +344,7 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt gh-1 "+skillPrompt("ship", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, false), "{}")
 	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() { fx.writeRun(t, "running", "implement", "", "") }
 
@@ -372,6 +373,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	fx.f.script(worktrees, porcelain("GH-2", "/code/repo.GH-2"))
 	fx.f.script("herdr worktree open --path /code/repo.GH-2 --label GH-2",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-2"},"root_pane":{"pane_id":"pane:2"},"already_open":true}}`)
+	fx.f.script("herdr agent get pane:2", agentFound)
 	fx.expects("GH-2", "ship")
 	fx.f.script(wsList, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
 
@@ -395,7 +397,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 		}
 	}
 
-	if fx.f.called("herdr agent prompt gh-2 /f10:judge") ||
+	if fx.f.called("herdr agent prompt "+agentOf("GH-2")+" /f10:judge") ||
 		fx.f.called("wt switch --no-cd --yes --format json --create GH-1") {
 		t.Errorf("calls = %q", fx.f.calls)
 	}
@@ -794,10 +796,10 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 	}
 
 	fx.assertOrder(t, []string{
-		"gh-11 /f10:judge", "finish GH-11",
-		"gh-12 /f10:judge", "gh-13 /f10:judge", "gh-14 /f10:judge",
+		agentOf("GH-11") + " /f10:judge", "finish GH-11",
+		agentOf("GH-12") + " /f10:judge", agentOf("GH-13") + " /f10:judge", agentOf("GH-14") + " /f10:judge",
 		"finish GH-12", "finish GH-13", "finish GH-14",
-		"gh-15 /f10:judge", "finish GH-15",
+		agentOf("GH-15") + " /f10:judge", "finish GH-15",
 	}, "herdr agent prompt", "finish")
 
 	for _, id := range ids {
@@ -840,7 +842,8 @@ func TestDriveScopesAStopToItsDependents(t *testing.T) {
 		}
 	}
 
-	if fx.f.called("herdr agent prompt gh-13 /f10:ship") || fx.f.called("herdr agent prompt gh-15") {
+	if fx.f.called("herdr agent prompt "+agentOf("GH-13")+" /f10:ship") ||
+		fx.f.called("herdr agent prompt "+agentOf("GH-15")) {
 		t.Errorf("a halted task or its dependent was prompted: %q", fx.f.calls)
 	}
 }
@@ -861,7 +864,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.opens("GH-2", "ws:GH-2", "pane:2")
 			fx.expects("GH-1", "judge")
 			fx.expects("GH-2", "judge")
-			fx.f.script("herdr agent prompt gh-2 /f10:catchup --driven", "{}")
+			fx.f.script("herdr agent prompt "+agentOf("GH-2")+" /f10:catchup --driven", "{}")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
@@ -899,7 +902,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 					t.Fatalf("err = %v\n%s", err, fx.out.String())
 				}
 
-				if fx.f.called("herdr agent prompt gh-2 /f10:judge") {
+				if fx.f.called("herdr agent prompt " + agentOf("GH-2") + " /f10:judge") {
 					t.Error("judge ran on a branch the catchup left unsettled")
 				}
 
@@ -911,7 +914,13 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			}
 
 			fx.assertOrder(t, []string{
-				"gh-1 /f10:judge", "finish GH-1", "gh-2 /f10:catchup --driven", "gh-2 /f10:judge", "finish GH-2",
+				agentOf(
+					"GH-1",
+				) + " /f10:judge",
+				"finish GH-1",
+				agentOf("GH-2") + " /f10:catchup --driven",
+				agentOf("GH-2") + " /f10:judge",
+				"finish GH-2",
 			}, "herdr agent prompt", "finish")
 
 			if fx.f.called("git config branch.GH-2." + cfgDrive + " catchup") {
@@ -973,13 +982,14 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		for _, id := range ids {
 			fx.f.script("herdr worktree open --path /code/repo."+id+" --label "+id,
 				`{"result":{"workspace":{"workspace_id":"ws:`+id+`"},"root_pane":{"pane_id":"p"},"already_open":true}}`)
+			fx.f.script("herdr agent get p", agentFound)
 			fx.f.script("git config branch."+id+"."+cfgDrive+" judge", "")
 		}
 
 		fx.writeRunFor(t, "GH-1", "blocked", "judge", "", "1. Rethink: [proceed | stop]")
 		fx.writeRunFor(t, "GH-2", "blocked", "judge", "", "1. Split it? [yes | no]")
-		fx.f.script("herdr agent prompt gh-1 1. proceed", "{}")
-		fx.f.script("herdr agent prompt gh-2 1. no", "{}")
+		fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. proceed", "{}")
+		fx.f.script("herdr agent prompt "+agentOf("GH-2")+" 1. no", "{}")
 		fx.f.script(wsList, all("idle", ids...), all("idle", ids...), all("working", ids...), all("idle", ids...))
 		fx.onTick[2] = func() {
 			fx.writeRunFor(t, "GH-1", "done", "", "", "")
@@ -994,7 +1004,7 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 			t.Errorf("an answer went unused:\n%s", fx.out.String())
 		}
 
-		fx.assertOrder(t, []string{"gh-1 1. proceed", "gh-2 1. no"}, "herdr agent prompt")
+		fx.assertOrder(t, []string{agentOf("GH-1") + " 1. proceed", agentOf("GH-2") + " 1. no"}, "herdr agent prompt")
 	})
 
 	t.Run("two bare answers", func(t *testing.T) {

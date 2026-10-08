@@ -3,6 +3,8 @@ package main
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
@@ -137,6 +140,8 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	in.progress = cmd.ErrWriter
+
 	return start(ctx, cmd.Writer, in)
 }
 
@@ -196,6 +201,7 @@ type startInput struct {
 	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
+	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
 }
 
 // titleLookup asks the host for the task's title. A checkout with no host
@@ -232,7 +238,7 @@ type dependency struct {
 
 // start runs the flow: the checkout and its agent, the prompt, the report.
 // A workspace Herdr already showed keeps its agent, and nothing is
-// prompted twice.
+// prompted twice; one left with no agent gets its agent and its prompt.
 func start(ctx context.Context, w io.Writer, in startInput) error {
 	o, err := openTask(ctx, in)
 	if err != nil {
@@ -243,13 +249,11 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		if err := herdr.Prompt(
 			ctx,
 			o.path,
-			agentName(in.task.ID, in.suffix),
+			agentName(in.task.ID, in.suffix, o.path),
 			prompt(in.mode, in.task.ID, o.dep),
 		); err != nil {
 			return err
 		}
-	} else {
-		o.notes = append(o.notes, "workspace already open: its agent left as it was, nothing prompted")
 	}
 
 	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: o.branch}}
@@ -359,19 +363,80 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	o := openedTask{branch: name, path: path, ws: ws, dep: dep}
 
-	// a workspace Herdr already showed has its agent in the root pane, or
-	// whatever the user left there - starting another would be refused
-	if !ws.AlreadyOpen {
-		if err := herdr.StartAgent(ctx, path, agentName(in.task.ID, in.suffix), agentKind, ws.RootPane); err != nil {
+	agent := agentName(in.task.ID, in.suffix, path)
+
+	launch, note, err := needsAgent(ctx, path, ws)
+	if err != nil {
+		return openedTask{}, err
+	}
+
+	if launch {
+		if err := herdr.StartAgent(
+			ctx,
+			path,
+			agent,
+			agentKind,
+			ws.RootPane,
+			shellWait(in.progress, ws.RootPane),
+		); err != nil {
 			return openedTask{}, err
 		}
 
 		o.fresh = true
 	}
 
+	if note != "" {
+		notes = append(notes, note)
+	}
+
 	o.notes = notes
 
 	return o, nil
+}
+
+// shellWait reports a wait for the pane's shell to finish starting, so a
+// slow rc file reads as progress rather than a hang. A nil w reports nothing.
+func shellWait(w io.Writer, pane string) func(time.Duration) {
+	if w == nil {
+		return nil
+	}
+
+	return func(waited time.Duration) {
+		fmt.Fprintf(w, "waiting for the shell in pane %s to finish starting: %.1fs of %s\n",
+			pane, waited.Seconds(), herdr.StartDeadline)
+	}
+}
+
+// needsAgent decides whether the workspace gets an agent started in its
+// root pane. A fresh one always does. One Herdr already showed keeps the
+// agent in that pane, whatever its name; with none, as after a start that
+// failed on a busy pane, an idle shell gets one and anything else the user
+// runs there is left alone.
+func needsAgent(ctx context.Context, dir string, ws herdr.Workspace) (bool, string, error) {
+	if !ws.AlreadyOpen {
+		return true, "", nil
+	}
+
+	exists, err := herdr.AgentExists(ctx, dir, ws.RootPane)
+	if err != nil {
+		return false, "", err
+	}
+
+	if exists {
+		return false, "workspace already open: its agent left as it was, nothing prompted", nil
+	}
+
+	idle, err := herdr.PaneIdleShell(ctx, dir, ws.RootPane)
+	if err != nil {
+		return false, "", err
+	}
+
+	if !idle {
+		return false, fmt.Sprintf("workspace already open with no agent, and pane %s runs something "+
+			"other than an idle shell: left alone, nothing prompted", ws.RootPane), nil
+	}
+
+	return true, "workspace already open with no agent: started one in its idle shell", nil
 }
 
 // baseFor turns --after or --base into the ref the worktree is created
@@ -477,15 +542,38 @@ func recordDependency(ctx context.Context, dir, branch string, dep *dependency) 
 	return nil
 }
 
-// agentName is unique while the task's agent lives: the id lowercased,
-// with the suffix so two attempts on one task can both run.
-func agentName(id, suffix string) string {
+// agentName names the task's agent. Herdr's live agent names share one
+// namespace across every project, capped at 32 characters, so the bare
+// name is cut to leave room for a short hash of the worktree path: the same
+// id in two checkouts never collides.
+func agentName(id, suffix, path string) string {
+	sum := sha256.Sum256([]byte(path))
+	base := bareAgentName(id, suffix)
+
+	return base[:min(len(base), 25)] + "-" + hex.EncodeToString(sum[:3])
+}
+
+// bareAgentName is the id lowercased, with the suffix so two attempts on one
+// task can both run: the whole name of an agent started before names carried
+// the path hash.
+func bareAgentName(id, suffix string) string {
 	name := strings.ToLower(id)
 	if suffix != "" {
 		name += "-" + strings.ToLower(suffix)
 	}
 
 	return name
+}
+
+// promptAgent prompts the task's agent in the worktree at path, falling back
+// to the bare name an agent started before the path hash still answers to.
+func promptAgent(ctx context.Context, path, id, suffix, text string) error {
+	err := herdr.Prompt(ctx, path, agentName(id, suffix, path), text)
+	if herdr.IsCode(err, herdr.CodeAgentNotFound) {
+		return herdr.Prompt(ctx, path, bareAgentName(id, suffix), text)
+	}
+
+	return err
 }
 
 // prompt is what the agent is told. A dependency adds the contract it must

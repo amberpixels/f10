@@ -777,6 +777,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		after:    after,
 		plansDir: in.plansDir,
 		title:    title,
+		progress: w,
 	})
 	if err != nil {
 		return err
@@ -879,7 +880,6 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 // poll reads how it ends.
 func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill string) error {
 	id := r.task.ref.ID
-	agent := agentName(id, r.task.suffix)
 
 	ws, run, err := in.look(ctx, r.o.path)
 	if err != nil {
@@ -902,21 +902,27 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			return nil
 		}
 
-		if err := herdr.Prompt(ctx, r.o.path, agent, answer); err != nil {
+		if err := promptAgent(ctx, r.o.path, id, r.task.suffix, answer); err != nil {
 			return err
 		}
 
 		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
 	default:
 		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt}
-		if err := refuseStalled(fwd, ws, agent, r.o.path); err != nil {
+		if err := refuseStalled(fwd, ws, agentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
 			res := halted(id, skill, err.Error())
 			r.end = &res
 
 			return nil
 		}
 
-		if err := herdr.Prompt(ctx, r.o.path, agent, skillPrompt(skill, id, r.o.dep, in.remote)); err != nil {
+		if err := promptAgent(
+			ctx,
+			r.o.path,
+			id,
+			r.task.suffix,
+			skillPrompt(skill, id, r.o.dep, in.remote),
+		); err != nil {
 			return err
 		}
 
@@ -1001,7 +1007,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 
 		if now.Sub(r.idleSince) >= stallGrace {
 			res := halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
-				"it stopped without reporting, answer it in that pane", agentName(id, r.task.suffix),
+				"it stopped without reporting, answer it in that pane", agentName(id, r.task.suffix, r.o.path),
 				cmp.Or(ws.Label, ws.ID), skill, run.PhaseText(skill)))
 			r.end = &res
 		}
