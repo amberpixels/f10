@@ -356,10 +356,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		}
 	}
 
-	ws, err := herdr.OpenWorktree(ctx, in.main, path, name)
+	ws, wsNotes, err := openWorkspace(ctx, in.main, path, name)
 	if err != nil {
 		return openedTask{}, err
 	}
+
+	notes = append(notes, wsNotes...)
 
 	o := openedTask{branch: name, path: path, ws: ws, dep: dep}
 
@@ -392,6 +394,60 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	o.notes = notes
 
 	return o, nil
+}
+
+// openWorkspace is the workspace showing the checkout at path. One Herdr
+// already shows is adopted rather than opened again, since `worktree open`
+// can answer with a second workspace beside it: the first with an agent in
+// a pane wins, else the first. Any other is named in a note, never closed,
+// since its panes may hold the user's own work.
+func openWorkspace(ctx context.Context, dir, path, label string) (herdr.Workspace, []string, error) {
+	wss, err := herdr.Workspaces(ctx, dir)
+	if err != nil {
+		return herdr.Workspace{}, nil, err
+	}
+
+	shown := workspacesAt(wss, path)
+	if len(shown) == 0 {
+		ws, err := herdr.OpenWorktree(ctx, dir, path, label)
+
+		return ws, nil, err
+	}
+
+	var adopted herdr.Workspace
+
+	for _, l := range shown {
+		panes, err := herdr.Panes(ctx, dir, l.ID)
+		if err != nil {
+			return herdr.Workspace{}, nil, err
+		}
+
+		if i := slices.IndexFunc(panes, func(p herdr.Pane) bool { return p.Agent != "" }); i >= 0 {
+			adopted = herdr.Workspace{ID: l.ID, RootPane: panes[i].ID, AlreadyOpen: true}
+
+			break
+		}
+
+		if adopted.ID == "" && len(panes) > 0 {
+			adopted = herdr.Workspace{ID: l.ID, RootPane: panes[0].ID, AlreadyOpen: true}
+		}
+	}
+
+	if adopted.ID == "" {
+		return herdr.Workspace{}, nil, fmt.Errorf("herdr shows %s in workspace %s, which has no pane",
+			path, shown[0].ID)
+	}
+
+	var notes []string
+
+	for _, l := range shown {
+		if l.ID != adopted.ID {
+			notes = append(notes, fmt.Sprintf("workspace %s also shows this checkout and was left open: "+
+				"close it with herdr workspace close %s", cmp.Or(l.Label, l.ID), l.ID))
+		}
+	}
+
+	return adopted, notes, nil
 }
 
 // shellWait reports a wait for the pane's shell to finish starting, so a

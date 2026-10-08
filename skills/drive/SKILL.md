@@ -46,7 +46,9 @@ When it exits, read its output and act on the exit code:
   working while the driver was down; rows reading `running <skill>` are those, and the rerun
   picks them up where they stand.
 - **5** - a task halted: a judge stop, a failed step, a refused finish, a catchup that did not
-  end clean, an agent idle while its run still says running (a permission dialog in its pane).
+  end clean, an agent idle while its run still says running (a permission dialog in its pane, or
+  a cancelled run: the line says to quit that agent and rerun), a workspace where no agent
+  appeared within two minutes.
   Its dependents read `halted: base <id> halted`, and every other task ran on. Print the report
   block and the lines beneath it verbatim, and stop. The user settles it in that workspace, then
   reruns the same command, which resumes where each task stands.

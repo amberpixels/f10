@@ -270,6 +270,31 @@ func workspaceAt(wss []herdr.Listed, path string) *herdr.Listed {
 	return nil
 }
 
+// workspacesAt is every workspace showing the checkout at path, in Herdr's
+// order: more than one when something opened the checkout twice.
+func workspacesAt(wss []herdr.Listed, path string) []herdr.Listed {
+	var shown []herdr.Listed
+
+	for _, ws := range wss {
+		if ws.Path != "" && samePath(ws.Path, path) {
+			shown = append(shown, ws)
+		}
+	}
+
+	return shown
+}
+
+// workspaceByID is the workspace with id, or nil once Herdr no longer shows it.
+func workspaceByID(wss []herdr.Listed, id string) *herdr.Listed {
+	for i := range wss {
+		if wss[i].ID == id {
+			return &wss[i]
+		}
+	}
+
+	return nil
+}
+
 func workspaceLabel(ws *herdr.Listed) string {
 	if ws == nil {
 		return ""

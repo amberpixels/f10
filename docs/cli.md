@@ -95,7 +95,9 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - a task that already has a branch gets its worktree reused, or created when the branch has
   none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise
   for the base, while its dependency is recorded all the same; a workspace Herdr already shows
-  keeps its agent, and nothing is prompted twice. One with no agent in its root pane (a start
+  is adopted rather than opened again, keeps its agent, and nothing is prompted twice. Where
+  several workspaces show the checkout, the one with an agent is adopted, else the first, and
+  each other one is named in a note with the command that closes it; none is closed. One with no agent in its root pane (a start
   that failed earlier) gets one started and prompted when that pane is an idle shell; a pane
   running anything else is left alone
 - a fresh pane whose shell is still running its rc files refuses the agent as busy; start
@@ -235,7 +237,11 @@ session polling an agent pays a round trip and a slice of context per check.
    the chain has no `finish`. Every task that is ready starts in the same pass, since each agent
    is its own session. The worktree, workspace and agent are opened as `f10 start` opens them,
    with the body's `After:` as the base: a base still on its branch stacks the new one on it,
-   and a finished base leaves it on the default branch. Nothing is prompted at open. The chain runs from the task's
+   and a finished base leaves it on the default branch. A checkout Herdr already shows, as an
+   earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle
+   shell. Run state recorded before the driver started that new agent was written by one that is
+   gone, and halts nothing. From then on the task's workspace is the one opened, by id, whatever
+   else shows the same checkout. Nothing is prompted at open. The chain runs from the task's
    position: the last skill the driver saw finish, recorded on the branch as
    `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan
    done, ship done). `finish` runs in the driver, exactly as `f10 finish` would from the main
@@ -253,7 +259,7 @@ session polling an agent pays a round trip and a slice of context per check.
    worktree. A turn has begun once Herdr
    shows the agent working or the run reports after the prompt; Herdr's `done` lasts from the
    previous turn until someone looks, so it proves nothing. No sign within two minutes halts the
-   task. Once the agent is idle again, the run says how the turn ended:
+   task, and so does a workspace that still shows no agent status by then. Once the agent is idle again, the run says how the turn ended:
    - **blocked with an ask** - the question is printed with its options. At the end of that
      poll the driver prints every task's ask and the command that answers them all, and exits
      **4**. The other agents keep working in their own panes;
@@ -262,9 +268,12 @@ session polling an agent pays a round trip and a slice of context per check.
      waits on it. Every other task runs on, and the driver exits **5** once nothing can move;
    - **still running** under plan or ship, a minute after the agent went idle - the agent
      stopped without reporting, usually a permission dialog in its pane; the task halts naming
-     the workspace;
+     the workspace. Found at prompt time on an agent the driver did not start, the same halt
+     also says how to leave a cancelled run: quit that agent and rerun, and a new one is
+     started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
-7. **The report.** Progress lines as it goes, then one row per task in graph order:
+7. **The report.** Progress lines as it goes, an end included: a halt or an ask is printed the
+   moment the driver sees it, not only beneath the report. Then one row per task in graph order:
    `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the
    driver exited on an ask), `asked at <skill>`, `halted at <skill>`,
    `halted: base <id> halted`, `not reached`. Exit 0 when every task went through its chain, 4
