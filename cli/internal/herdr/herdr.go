@@ -221,6 +221,33 @@ func Workspaces(ctx context.Context, dir string) ([]Listed, error) {
 	return list, nil
 }
 
+// A Pane is one pane of a workspace as `pane list` reports it. Agent is the
+// kind of agent the pane hosts, or "" for none.
+type Pane struct {
+	ID    string
+	Agent string
+}
+
+// Panes lists the panes of one workspace, in Herdr's order.
+func Panes(ctx context.Context, dir, workspace string) ([]Pane, error) {
+	res, err := call(ctx, dir, "pane", "list", "--workspace", workspace)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, _ := res["panes"].([]any)
+
+	list := make([]Pane, 0, len(raw))
+
+	for _, item := range raw {
+		if obj, ok := item.(map[string]any); ok {
+			list = append(list, Pane{ID: field(obj, "pane_id"), Agent: field(obj, "agent")})
+		}
+	}
+
+	return list, nil
+}
+
 // FocusWorkspace brings the workspace to the front.
 func FocusWorkspace(ctx context.Context, dir, id string) error {
 	_, err := call(ctx, dir, "workspace", "focus", id)

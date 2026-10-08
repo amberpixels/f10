@@ -157,6 +157,29 @@ func TestWorkspacesReadsTheListing(t *testing.T) {
 	}
 }
 
+func TestPanesReadsTheListing(t *testing.T) {
+	calls := fake(
+		t,
+		shell.Result{Stdout: `{"id":"cli:pane:list","result":{"type":"pane_list","panes":[` +
+			`{"pane_id":"wM6:p1","agent":"claude","agent_status":"idle","workspace_id":"wM6"},` +
+			`{"pane_id":"wM6:p2","workspace_id":"wM6"}]}}`},
+	)
+
+	panes, err := Panes(t.Context(), "/code/f10", "wM6")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []Pane{{ID: "wM6:p1", Agent: "claude"}, {ID: "wM6:p2"}}
+	if len(panes) != len(want) || panes[0] != want[0] || panes[1] != want[1] {
+		t.Errorf("Panes = %+v, want %+v", panes, want)
+	}
+
+	if want := "herdr pane list --workspace wM6"; (*calls)[0] != want {
+		t.Errorf("called %q, want %q", (*calls)[0], want)
+	}
+}
+
 func TestFocusAndCloseAddressTheWorkspace(t *testing.T) {
 	calls := fake(t, shell.Result{Stdout: `{"result":{}}`})
 

@@ -36,6 +36,8 @@ func newFakes(t *testing.T) *fakes {
 	t.Helper()
 
 	f := &fakes{t: t, answers: map[string][]shell.Result{}, has: map[string]bool{"herdr": true}}
+	// Herdr shows no workspace until a test says otherwise
+	f.script("herdr workspace list", `{"result":{"workspaces":[]}}`)
 
 	prevExec, prevCapture, prevHas := gitx.Exec, shell.Capture, shell.Has
 
@@ -938,6 +940,35 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 		"dependency on GH-7 recorded",
 		"workspace already open",
 	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A second start on a checkout Herdr already shows adopts that workspace
+// instead of asking Herdr to open it, which can answer with a duplicate.
+func TestStartAdoptsTheWorkspaceHerdrShows(t *testing.T) {
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, heads("GH-1"))
+	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("herdr workspace list", `{"result":{"workspaces":[`+
+		`{"workspace_id":"ws:3","label":"GH-1","worktree":{"checkout_path":"/code/repo.GH-1"}}]}}`)
+	f.script("herdr pane list --workspace ws:3", `{"result":{"panes":[{"pane_id":"pane:7","agent":"claude"}]}}`)
+	f.script("herdr agent get pane:7", agentFound)
+
+	var out bytes.Buffer
+
+	if err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1}); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.called("herdr worktree open") || f.called("herdr agent start") || f.called("herdr agent prompt") {
+		t.Errorf("calls = %q", f.calls)
+	}
+
+	for _, want := range []string{"ws:3", "workspace already open"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}

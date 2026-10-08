@@ -102,6 +102,7 @@ type forwardInput struct {
 	stateDir string        // where run state lives, for the idle check
 	ttl      time.Duration // how long a run counts as live
 	now      time.Time
+	since    time.Time // runs last updated before it are not read: the agent that wrote them is gone
 }
 
 // forward runs the flow: branch and checkout, the here-check, Herdr, the
@@ -179,13 +180,18 @@ func refuseStalled(in forwardInput, ws *herdr.Listed, agent, root string) error 
 	}
 
 	for _, r := range inRoot(live, root) {
+		if r.Updated.Before(in.since) {
+			continue
+		}
+
 		for _, p := range state.Phases {
 			if r.Status(p) != "running" {
 				continue
 			}
 
 			return fmt.Errorf("agent %s in workspace %s is idle while its run says %s %s: "+
-				"it is waiting on something in its own pane, answer it there",
+				"it is waiting on something in its own pane: answer it there, or if that run was cancelled, "+
+				"quit that agent and rerun f10 start or f10 drive, which start a new one in its place",
 				agent, cmp.Or(ws.Label, ws.ID), p, r.PhaseText(p))
 		}
 	}

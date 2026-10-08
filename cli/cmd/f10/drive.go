@@ -349,9 +349,22 @@ type driveRun struct {
 	begun     bool
 	idleSince time.Time
 	end       *driveResult
+	// freshAt is when this drive started the task's agent: run state last
+	// updated before it was written by an agent that is gone, and is not read
+	freshAt time.Time
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
+
+// current is run unless its agent is gone, as for a run a cancelled start
+// left behind in a checkout this drive gave a new agent.
+func (r *driveRun) current(run *state.Run) *state.Run {
+	if run == nil || run.Updated.Before(r.freshAt) {
+		return nil
+	}
+
+	return run
+}
 
 // through reports a task done with for its dependents: finished, or its
 // whole chain run.
@@ -384,7 +397,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	for _, i := range order {
 		r := &driveRun{task: tasks[i]}
 		if r.task.finished {
-			r.end = &driveResult{row: "already finished"}
+			in.end(w, r, driveResult{row: "already finished"})
 		}
 
 		runs = append(runs, r)
@@ -795,6 +808,9 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	r.o, r.opened, r.pos = o, true, pos
+	if o.fresh {
+		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
+	}
 
 	return nil
 }
@@ -834,7 +850,7 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 // with the default branch before any skill runs on it.
 func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
 	if r.pos >= len(in.chain) {
-		r.end = &driveResult{row: "done: " + strings.Join(in.chain, " ")}
+		in.end(w, r, driveResult{row: "done: " + strings.Join(in.chain, " ")})
 
 		return nil
 	}
@@ -843,8 +859,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	switch {
 	case skill == "finish":
-		res := in.runFinish(ctx, w, r.task)
-		r.end = &res
+		in.end(w, r, in.runFinish(ctx, w, r.task))
 
 		return nil
 	case in.landed(ctx, r):
@@ -881,11 +896,12 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill string) error {
 	id := r.task.ref.ID
 
-	ws, run, err := in.look(ctx, r.o.path)
+	ws, run, err := in.look(ctx, r)
 	if err != nil {
 		return err
 	}
 
+	run = r.current(run)
 	r.skill, r.sentAt, r.begun, r.idleSince = skill, in.now(), false, time.Time{}
 
 	switch {
@@ -896,8 +912,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
-			res := in.verdict(r.task, skill, run)
-			r.end = &res
+			in.end(w, r, in.verdict(r.task, skill, run))
 
 			return nil
 		}
@@ -908,10 +923,9 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
 	default:
-		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt}
+		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
 		if err := refuseStalled(fwd, ws, agentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
-			res := halted(id, skill, err.Error())
-			r.end = &res
+			in.end(w, r, halted(id, skill, err.Error()))
 
 			return nil
 		}
@@ -955,14 +969,14 @@ func (in *driveInput) takeAnswer(id string) string {
 func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []herdr.Listed, live []*state.Run) error {
 	id, skill := r.task.ref.ID, r.skill
 
-	ws := workspaceAt(wss, r.o.path)
+	ws := workspaceByID(wss, r.o.ws.ID)
 	if ws == nil {
-		return fmt.Errorf("no Herdr workspace shows %s any more", r.o.path)
+		return workspaceGone(r)
 	}
 
 	var run *state.Run
 	if runs := inRoot(live, r.o.path); len(runs) > 0 {
-		run = runs[0]
+		run = r.current(runs[0])
 	}
 
 	now := in.now()
@@ -976,14 +990,19 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 		return nil
 	case "idle", "done":
 	default:
-		return nil // Herdr has not placed the agent yet
+		// Herdr shows no agent yet: the start window bounds this wait too
+		if !r.begun && now.Sub(r.sentAt) > startWindow {
+			in.end(w, r, halted(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
+				"check its pane, then rerun this drive", workspaceName(ws), startWindow)))
+		}
+
+		return nil
 	}
 
 	if !r.begun && !recent {
 		if now.Sub(r.sentAt) > startWindow {
-			res := halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
-				cmp.Or(ws.Label, ws.ID), startWindow))
-			r.end = &res
+			in.end(w, r, halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
+				workspaceName(ws), startWindow)))
 		}
 
 		return nil
@@ -992,8 +1011,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 	r.begun = true
 
 	if recent && stoppedRun(run) {
-		res := in.verdict(r.task, skill, run)
-		r.end = &res
+		in.end(w, r, in.verdict(r.task, skill, run))
 
 		return nil
 	}
@@ -1006,10 +1024,9 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 		}
 
 		if now.Sub(r.idleSince) >= stallGrace {
-			res := halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
+			in.end(w, r, halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
 				"it stopped without reporting, answer it in that pane", agentName(id, r.task.suffix, r.o.path),
-				cmp.Or(ws.Label, ws.ID), skill, run.PhaseText(skill)))
-			r.end = &res
+				workspaceName(ws), skill, run.PhaseText(skill))))
 		}
 
 		return nil
@@ -1019,8 +1036,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
-			res := halted(id, skill, "the catchup did not end clean: "+reason)
-			r.end = &res
+			in.end(w, r, halted(id, skill, "the catchup did not end clean: "+reason))
 
 			return nil
 		}
@@ -1100,6 +1116,22 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 	return res
 }
 
+// end ends the task with res and prints it now: a halt or an ask found
+// mid-drive is on screen when it happens, not only in the final report.
+func (*driveInput) end(w io.Writer, r *driveRun, res driveResult) {
+	r.end = &res
+
+	if len(res.lines) == 0 {
+		fmt.Fprintf(w, "%s: %s\n", r.task.ref.ID, res.row)
+
+		return
+	}
+
+	for _, l := range res.lines {
+		fmt.Fprintln(w, l)
+	}
+}
+
 func halted(id, skill, reason string) driveResult {
 	return driveResult{
 		row:   "halted at " + skill,
@@ -1113,22 +1145,36 @@ func stoppedRun(r *state.Run) bool {
 	return slices.ContainsFunc(state.Phases, func(p string) bool { return state.Stopped(r.Status(p)) })
 }
 
-// look is the workspace showing the checkout and the newest run reported
-// from it. A workspace gone mid-run is an error: the agent went with it.
-func (in *driveInput) look(ctx context.Context, path string) (*herdr.Listed, *state.Run, error) {
+// look is the task's workspace, by the id open settled on, since a
+// checkout can show in more than one, and the newest run reported from the
+// checkout. A workspace gone mid-run is an error: the agent went with it.
+func (in *driveInput) look(ctx context.Context, r *driveRun) (*herdr.Listed, *state.Run, error) {
 	wss, err := herdr.Workspaces(ctx, in.main)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ws := workspaceAt(wss, path)
+	ws := workspaceByID(wss, r.o.ws.ID)
 	if ws == nil {
-		return nil, nil, fmt.Errorf("no Herdr workspace shows %s any more", path)
+		return nil, nil, workspaceGone(r)
 	}
 
-	run, err := in.run(path)
+	run, err := in.run(r.o.path)
 
 	return ws, run, err
+}
+
+func workspaceGone(r *driveRun) error {
+	return fmt.Errorf("herdr no longer shows workspace %s, which showed %s", r.o.ws.ID, r.o.path)
+}
+
+// workspaceName is a workspace as a halt names it: its label and its id.
+func workspaceName(ws *herdr.Listed) string {
+	if ws.Label == "" || ws.Label == ws.ID {
+		return ws.ID
+	}
+
+	return ws.Label + " (" + ws.ID + ")"
 }
 
 // lookAll is one tick's view: every workspace Herdr shows and every live

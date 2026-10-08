@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -149,6 +150,9 @@ func (fx *driveFixture) writeRunFor(t *testing.T, id, ship, leaf, note, ask stri
 	}
 }
 
+// unopened is the listing open reads for a checkout Herdr does not show yet.
+var unopened = listing()
+
 // listing is Herdr's workspace list: main's, then one per task with its
 // agent status.
 func listing(agents ...string) string {
@@ -194,7 +198,7 @@ func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 	// the looks before the two judge prompts, a tick mid-turn, a tick after
 	// with the looks before the two ship prompts, then the same for ship
 	fx.f.script(wsList,
-		listing("GH-1", "idle"), listing("GH-1", "idle", "GH-2", "idle"),
+		unopened, listing("GH-1", "idle"), unopened, listing("GH-1", "idle", "GH-2", "idle"),
 		listing("GH-1", "working", "GH-2", "working"), listing("GH-1", "idle", "GH-2", "idle"),
 		listing("GH-1", "idle", "GH-2", "idle"), listing("GH-1", "idle", "GH-2", "idle"),
 		listing("GH-1", "working", "GH-2", "working"), listing("GH-1", "idle", "GH-2", "idle"))
@@ -256,7 +260,7 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
-	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
 	err := fx.drive(t)
@@ -292,7 +296,7 @@ func TestDriveResumesWithTheAnswer(t *testing.T) {
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. proceed", "{}")
 	fx.f.script("git config branch.GH-1."+cfgDrive+" judge", "")
-	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
 
 	if err := fx.drive(t); err != nil {
@@ -317,7 +321,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
-	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
 	err := fx.drive(t)
@@ -345,7 +349,7 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, false), "{}")
-	fx.f.script(wsList, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() { fx.writeRun(t, "running", "implement", "", "") }
 
 	err := fx.drive(t)
@@ -375,7 +379,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 		`{"result":{"workspace":{"workspace_id":"ws:GH-2"},"root_pane":{"pane_id":"pane:2"},"already_open":true}}`)
 	fx.f.script("herdr agent get pane:2", agentFound)
 	fx.expects("GH-2", "ship")
-	fx.f.script(wsList, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
+	fx.f.script(wsList, unopened, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
 
 	var finished []string
 
@@ -784,11 +788,12 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 	fx := wave(t, "GH-11", "GH-12", "GH-13", "GH-14", "GH-15", "judge", "finish")
 
 	fx.f.script(wsList,
-		all("idle", ids...),                         // before GH-11's judge
+		unopened, all("idle", ids...), // GH-11's open, then the look before its judge
 		all("working", ids...), all("idle", ids...), // GH-11's turn, then it finishes
-		all("idle", ids...), all("idle", ids...), all("idle", ids...), // before the second wave's judges
+		unopened, all("idle", ids...), unopened, all("idle", ids...), // the second wave's opens and looks
+		unopened, all("idle", ids...),
 		all("working", ids...), all("idle", ids...), // the second wave's turns
-		all("idle", ids...), // before GH-15's judge
+		unopened, all("idle", ids...), // GH-15's open, then the look before its judge
 		all("working", ids...), all("idle", ids...))
 
 	if err := fx.drive(t); err != nil {
@@ -817,7 +822,8 @@ func TestDriveScopesAStopToItsDependents(t *testing.T) {
 	fx.infos["GH-11"] = taskInfo{closed: true}
 
 	fx.f.script(wsList,
-		all("idle", ids...), all("idle", ids...), all("idle", ids...), // before the three judges
+		unopened, all("idle", ids...), unopened, all("idle", ids...), // the three opens and looks
+		unopened, all("idle", ids...),
 		all("working", ids...), all("idle", ids...), // the judges' turns
 		all("idle", ids...), all("idle", ids...), // before GH-12's and GH-14's ships
 		all("working", ids...), all("idle", ids...))
@@ -887,9 +893,9 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 
 			ids := []string{"GH-1", "GH-2"}
 			fx.f.script(wsList,
-				all("idle", ids...),
+				unopened, all("idle", ids...),
 				all("working", ids...), all("idle", ids...), // GH-1's judge, then finish
-				all("idle", ids...),                         // before GH-2's catchup
+				unopened, all("idle", ids...), // GH-2's open, then the look before its catchup
 				all("working", ids...), all("idle", ids...), // the catchup
 				all("idle", ids...), // before GH-2's judge
 				all("working", ids...), all("idle", ids...))
@@ -952,7 +958,8 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		fx.opens("GH-2", "ws:GH-2", "pane:2")
 		fx.expects("GH-1", "judge")
 		fx.expects("GH-2", "judge")
-		fx.f.script(wsList, all("idle", ids...), all("idle", ids...), all("working", ids...), all("idle", ids...))
+		fx.f.script(wsList,
+			unopened, all("idle", ids...), unopened, all("idle", ids...), all("working", ids...), all("idle", ids...))
 		fx.onTick[2] = func() {
 			fx.writeRunFor(t, "GH-1", "blocked", "judge", "", "1. Rethink: [proceed | stop]")
 			fx.writeRunFor(t, "GH-2", "blocked", "judge", "", "1. Split it? [yes | no]")
@@ -990,7 +997,8 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		fx.writeRunFor(t, "GH-2", "blocked", "judge", "", "1. Split it? [yes | no]")
 		fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. proceed", "{}")
 		fx.f.script("herdr agent prompt "+agentOf("GH-2")+" 1. no", "{}")
-		fx.f.script(wsList, all("idle", ids...), all("idle", ids...), all("working", ids...), all("idle", ids...))
+		fx.f.script(wsList,
+			unopened, all("idle", ids...), unopened, all("idle", ids...), all("working", ids...), all("idle", ids...))
 		fx.onTick[2] = func() {
 			fx.writeRunFor(t, "GH-1", "done", "", "", "")
 			fx.writeRunFor(t, "GH-2", "done", "", "", "")
@@ -1015,4 +1023,156 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 			t.Errorf("err = %v", err)
 		}
 	})
+}
+
+// shownTwice is Herdr's list with the checkout of GH-1 in two workspaces: a
+// leftover first, then the one with the agent.
+func shownTwice(leftover, agent string) string {
+	return `{"result":{"workspaces":[` +
+		`{"workspace_id":"ws:old","label":"GH-1","agent_status":"` + leftover +
+		`","worktree":{"checkout_path":"/code/repo.GH-1"}},` +
+		`{"workspace_id":"ws:GH-1","label":"GH-1","agent_status":"` + agent +
+		`","worktree":{"checkout_path":"/code/repo.GH-1"}}]}}`
+}
+
+// staleRun records a run against GH-1's worktree a minute before now, as a
+// cancelled start's agent leaves it.
+func (fx *driveFixture) staleRun(t *testing.T, ship, leaf string) {
+	t.Helper()
+
+	now := fx.clock
+	fx.clock = now.Add(-time.Minute)
+	fx.writeRun(t, ship, leaf, "", "")
+	fx.clock = now
+}
+
+// existing scripts a started GH-1: its branch and worktree, and nothing
+// recorded on the branch.
+func (fx *driveFixture) existing() {
+	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
+}
+
+const agentMissing = `{"error":{"code":"agent_not_found","message":"agent target pane:1 not found"}}`
+
+// FT-28's case: an earlier start left a workspace with no agent and a run
+// that still says running. The drive opens no second workspace, starts the
+// agent in the leftover's idle shell, and prompts it: the old run's agent
+// is gone, so its state halts nothing.
+func TestDriveAdoptsAWorkspaceAnEarlierStartLeft(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge")
+	fx.existing()
+	fx.staleRun(t, "running", "implement")
+	fx.f.script("herdr pane list --workspace ws:GH-1", `{"result":{"panes":[{"pane_id":"pane:1"}]}}`)
+	fx.f.fail("herdr agent get pane:1", shell.Result{Code: 1, Stderr: agentMissing})
+	fx.f.script("herdr pane process-info --pane pane:1",
+		`{"result":{"process_info":{"foreground_process_group_id":42,"shell_pid":42}}}`)
+	fx.f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:1", "{}")
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList,
+		listing("GH-1", "unknown"), listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if fx.f.called("herdr worktree open") {
+		t.Error("a second workspace was opened on a checkout Herdr already shows")
+	}
+
+	for _, want := range []string{
+		"GH-1: branch GH-1 at /code/repo.GH-1, workspace ws:GH-1",
+		"GH-1 judge: sent",
+		"GH-1:    done: judge",
+	} {
+		if !strings.Contains(fx.out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, fx.out.String())
+		}
+	}
+}
+
+// Two workspaces on one checkout: the one with the agent is adopted, the
+// other is named, and the turn is read from the adopted one although the
+// leftover comes first in Herdr's list.
+func TestDriveAdoptsTheWorkspaceWithTheAgent(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge")
+	fx.existing()
+	fx.f.script("herdr pane list --workspace ws:old", `{"result":{"panes":[{"pane_id":"pane:9"}]}}`)
+	fx.f.script("herdr pane list --workspace ws:GH-1",
+		`{"result":{"panes":[{"pane_id":"pane:2"},{"pane_id":"pane:1","agent":"claude"}]}}`)
+	fx.f.script("herdr agent get pane:1", agentFound)
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, shownTwice("unknown", "idle"), shownTwice("idle", "idle"),
+		shownTwice("idle", "working"), shownTwice("idle", "idle"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	for _, want := range []string{
+		"workspace ws:GH-1",
+		"workspace GH-1 also shows this checkout and was left open: close it with herdr workspace close ws:old",
+		"GH-1:    done: judge",
+	} {
+		if !strings.Contains(fx.out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, fx.out.String())
+		}
+	}
+
+	if fx.f.called("herdr agent start") || fx.f.called("herdr workspace close") {
+		t.Errorf("calls = %q", fx.f.calls)
+	}
+}
+
+// An agent that was already there, idle under a run that says running, may
+// sit on a dialog: the task halts, and the halt is on screen before the
+// report, naming the way out of a cancelled run.
+func TestDrivePrintsAHaltWhenItHappens(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge")
+	fx.existing()
+	fx.staleRun(t, "running", "implement")
+	fx.f.script("herdr pane list --workspace ws:GH-1",
+		`{"result":{"panes":[{"pane_id":"pane:1","agent":"claude"}]}}`)
+	fx.f.script("herdr agent get pane:1", agentFound)
+	fx.f.script(wsList, listing("GH-1", "idle"))
+
+	err := fx.drive(t)
+	if exitCode(err) != exitHalted {
+		t.Fatalf("err = %v, want exit %d", err, exitHalted)
+	}
+
+	out := fx.out.String()
+	line, row := strings.Index(out, "GH-1 halted at judge: agent"), strings.Index(out, "GH-1:    halted at judge")
+
+	if line < 0 || row < 0 || line > row {
+		t.Errorf("the halt is not printed before the report:\n%s", out)
+	}
+
+	if !strings.Contains(out, "quit that agent and rerun") {
+		t.Errorf("the halt names no way out of a cancelled run:\n%s", out)
+	}
+}
+
+// A workspace whose agent Herdr never places halts the task once the start
+// window is out, instead of being polled until the drive ends.
+func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge")
+	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
+	fx.f.script(wsList, unopened, listing("GH-1", "unknown"))
+
+	err := fx.drive(t)
+	if exitCode(err) != exitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, fx.out.String())
+	}
+
+	if !strings.Contains(fx.out.String(), "workspace GH-1 (ws:GH-1) shows no agent") {
+		t.Errorf("output = %s", fx.out.String())
+	}
+
+	if limit := int(startWindow/defaultEvery) + 2; fx.sleeps > limit {
+		t.Errorf("polled %d times, past the start window's %d", fx.sleeps, limit)
+	}
 }
