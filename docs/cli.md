@@ -92,7 +92,11 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - a task that already has a branch gets its worktree reused, or created when the branch has
   none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise
   for the base, while its dependency is recorded all the same; a workspace Herdr already shows
-  keeps its agent, and nothing is prompted twice
+  keeps its agent, and nothing is prompted twice. One with no agent under the task's name (a
+  start that failed earlier) gets one started and prompted when its root pane is an idle shell;
+  a pane running anything else is left alone
+- a fresh pane whose shell is still running its rc files refuses the agent as busy; start
+  retries for up to 20s before failing with Herdr's error
 - `--local` refuses before creating anything when `project.md` declares no `local` pipeline,
   since ship never picks a pipeline unasked
 

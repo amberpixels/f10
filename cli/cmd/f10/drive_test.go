@@ -288,6 +288,7 @@ func TestDriveResumesWithTheAnswer(t *testing.T) {
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.script("herdr worktree open --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
+	fx.f.script("herdr agent get gh-1", agentFound)
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")
 	fx.f.script("herdr agent prompt gh-1 1. proceed", "{}")
 	fx.f.script("git config branch.GH-1."+cfgDrive+" judge", "")
@@ -372,6 +373,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	fx.f.script(worktrees, porcelain("GH-2", "/code/repo.GH-2"))
 	fx.f.script("herdr worktree open --path /code/repo.GH-2 --label GH-2",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-2"},"root_pane":{"pane_id":"pane:2"},"already_open":true}}`)
+	fx.f.script("herdr agent get gh-2", agentFound)
 	fx.expects("GH-2", "ship")
 	fx.f.script(wsList, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
 
@@ -973,6 +975,7 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		for _, id := range ids {
 			fx.f.script("herdr worktree open --path /code/repo."+id+" --label "+id,
 				`{"result":{"workspace":{"workspace_id":"ws:`+id+`"},"root_pane":{"pane_id":"p"},"already_open":true}}`)
+			fx.f.script("herdr agent get "+strings.ToLower(id), agentFound)
 			fx.f.script("git config branch."+id+"."+cfgDrive+" judge", "")
 		}
 

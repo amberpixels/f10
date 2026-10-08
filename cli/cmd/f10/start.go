@@ -232,7 +232,7 @@ type dependency struct {
 
 // start runs the flow: the checkout and its agent, the prompt, the report.
 // A workspace Herdr already showed keeps its agent, and nothing is
-// prompted twice.
+// prompted twice; one left with no agent gets its agent and its prompt.
 func start(ctx context.Context, w io.Writer, in startInput) error {
 	o, err := openTask(ctx, in)
 	if err != nil {
@@ -248,8 +248,6 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		); err != nil {
 			return err
 		}
-	} else {
-		o.notes = append(o.notes, "workspace already open: its agent left as it was, nothing prompted")
 	}
 
 	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: o.branch}}
@@ -359,9 +357,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	o := openedTask{branch: name, path: path, ws: ws, dep: dep}
 
-	// a workspace Herdr already showed has its agent in the root pane, or
-	// whatever the user left there - starting another would be refused
-	if !ws.AlreadyOpen {
+	launch, note, err := needsAgent(ctx, path, agentName(in.task.ID, in.suffix), ws)
+	if err != nil {
+		return openedTask{}, err
+	}
+
+	if launch {
 		if err := herdr.StartAgent(ctx, path, agentName(in.task.ID, in.suffix), agentKind, ws.RootPane); err != nil {
 			return openedTask{}, err
 		}
@@ -369,9 +370,44 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		o.fresh = true
 	}
 
+	if note != "" {
+		notes = append(notes, note)
+	}
+
 	o.notes = notes
 
 	return o, nil
+}
+
+// needsAgent decides whether the workspace gets an agent started in its
+// root pane. A fresh one always does. One Herdr already showed keeps the
+// agent it has; with none, as after a start that failed on a busy pane, an
+// idle shell gets one and anything else the user runs there is left alone.
+func needsAgent(ctx context.Context, dir, name string, ws herdr.Workspace) (bool, string, error) {
+	if !ws.AlreadyOpen {
+		return true, "", nil
+	}
+
+	exists, err := herdr.AgentExists(ctx, dir, name)
+	if err != nil {
+		return false, "", err
+	}
+
+	if exists {
+		return false, "workspace already open: its agent left as it was, nothing prompted", nil
+	}
+
+	idle, err := herdr.PaneIdleShell(ctx, dir, ws.RootPane)
+	if err != nil {
+		return false, "", err
+	}
+
+	if !idle {
+		return false, fmt.Sprintf("workspace already open with no agent, and pane %s runs something "+
+			"other than an idle shell: left alone, nothing prompted", ws.RootPane), nil
+	}
+
+	return true, "workspace already open with no agent: started one in its idle shell", nil
 }
 
 // baseFor turns --after or --base into the ref the worktree is created

@@ -1,10 +1,10 @@
 // Package herdr is the binary's door to Herdr, the terminal multiplexer
 // `f10 start` opens a task's worktree in, `f10 forward` reaches its agent
-// through and `f10 finish` closes it from. Six calls, all over the herdr
-// CLI: open a worktree as a workspace, start an agent in its root pane, hand
-// that agent a prompt, list the workspaces, focus one, close one. Every
-// answer is JSON, and the ids the next call needs are read from it rather
-// than predicted.
+// through and `f10 finish` closes it from. All over the herdr CLI: open a
+// worktree as a workspace, start an agent in its root pane, hand that agent
+// a prompt, look an agent up, read what a pane runs, list the workspaces,
+// focus one, close one. Every answer is JSON, and the ids the next call
+// needs are read from it rather than predicted.
 package herdr
 
 import (
@@ -15,9 +15,46 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
+
+// The error codes this package acts on. Herdr answers agent_pane_busy while
+// the pane runs anything but an idle shell, its rc files included.
+const (
+	CodePaneBusy      = "agent_pane_busy"
+	CodeAgentNotFound = "agent_not_found"
+)
+
+// How long StartAgent waits for a pane whose shell is still starting, and
+// how often it asks. Variables so tests need not wait.
+var (
+	StartDeadline = 20 * time.Second
+	StartPoll     = 250 * time.Millisecond
+)
+
+// An Error is herdr's own refusal: the error envelope it printed on stderr.
+type Error struct {
+	Op      string // the command, as `herdr <verb> <sub>`
+	Code    string
+	Message string
+}
+
+func (e *Error) Error() string {
+	if e.Code == "" {
+		return e.Op + ": " + e.Message
+	}
+
+	return e.Op + ": " + e.Code + ": " + e.Message
+}
+
+// IsCode reports whether err is herdr's refusal with code.
+func IsCode(err error, code string) bool {
+	var he *Error
+
+	return errors.As(err, &he) && he.Code == code
+}
 
 // ErrNotInside is the one refusal: start, forward, drive and finish run inside a
 // Herdr session and nowhere else, by decision rather than by accident of a
@@ -67,12 +104,59 @@ func OpenWorktree(ctx context.Context, dir, path, label string) (Workspace, erro
 	return ws, nil
 }
 
-// StartAgent launches an agent of kind in pane under name. It returns once
-// Herdr sees the agent ready for input, which is herdr's own wait, not ours.
+// StartAgent launches an agent of kind in pane under name. A pane whose
+// shell is still running its rc files answers busy, so that one refusal is
+// retried until StartDeadline; past it, herdr's error stands. Once started,
+// waiting for the agent to be ready for input is herdr's wait, not ours.
 func StartAgent(ctx context.Context, dir, name, kind, pane string) error {
-	_, err := call(ctx, dir, "agent", "start", name, "--kind", kind, "--pane", pane)
+	deadline := time.Now().Add(StartDeadline)
 
-	return err
+	for {
+		_, err := call(ctx, dir, "agent", "start", name, "--kind", kind, "--pane", pane)
+		if err == nil || !IsCode(err, CodePaneBusy) || !time.Now().Before(deadline) {
+			return err
+		}
+
+		timer := time.NewTimer(StartPoll)
+
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
+		}
+	}
+}
+
+// AgentExists reports whether an agent is registered under name.
+func AgentExists(ctx context.Context, dir, name string) (bool, error) {
+	_, err := call(ctx, dir, "agent", "get", name)
+
+	switch {
+	case err == nil:
+		return true, nil
+	case IsCode(err, CodeAgentNotFound):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// PaneIdleShell reports whether pane sits at its shell's prompt: the shell
+// owns the terminal's foreground process group. Anything the shell runs,
+// an rc child or a program, owns a group of its own.
+func PaneIdleShell(ctx context.Context, dir, pane string) (bool, error) {
+	res, err := call(ctx, dir, "pane", "process-info", "--pane", pane)
+	if err != nil {
+		return false, err
+	}
+
+	info, _ := res["process_info"].(map[string]any)
+	shellPID, _ := info["shell_pid"].(float64)
+	group, _ := info["foreground_process_group_id"].(float64)
+
+	return shellPID != 0 && shellPID == group, nil
 }
 
 // Prompt submits text to the named agent and returns as soon as it is
@@ -148,11 +232,11 @@ func call(ctx context.Context, dir string, args ...string) (map[string]any, erro
 	what := "herdr " + strings.Join(args[:min(2, len(args))], " ")
 
 	if res.Code != 0 {
-		return nil, fmt.Errorf(
-			"%s: %s",
-			what,
-			cmp.Or(failure(res.Stderr), res.Stderr, fmt.Sprintf("exit %d", res.Code)),
-		)
+		if he := failure(what, res.Stderr); he != nil {
+			return nil, he
+		}
+
+		return nil, fmt.Errorf("%s: %s", what, cmp.Or(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
 	}
 
 	var env struct {
@@ -166,8 +250,8 @@ func call(ctx context.Context, dir string, args ...string) (map[string]any, erro
 	return env.Result, nil
 }
 
-// failure reads herdr's error envelope, or returns "" when stderr is not one.
-func failure(stderr string) string {
+// failure reads herdr's error envelope, or returns nil when stderr is not one.
+func failure(op, stderr string) *Error {
 	var env struct {
 		Error struct {
 			Code    string `json:"code"`
@@ -175,15 +259,14 @@ func failure(stderr string) string {
 		} `json:"error"`
 	}
 
-	if json.Unmarshal([]byte(stderr), &env) != nil || env.Error.Message == "" {
-		return ""
+	// stderr that is not JSON is not herdr's envelope: the caller quotes it raw
+	_ = json.Unmarshal([]byte(stderr), &env)
+
+	if env.Error.Message == "" {
+		return nil
 	}
 
-	if env.Error.Code == "" {
-		return env.Error.Message
-	}
-
-	return env.Error.Code + ": " + env.Error.Message
+	return &Error{Op: op, Code: env.Error.Code, Message: env.Error.Message}
 }
 
 // field walks a nested object and returns the string at the path, or "".
