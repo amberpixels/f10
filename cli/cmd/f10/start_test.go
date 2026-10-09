@@ -519,8 +519,9 @@ func TestPrompt(t *testing.T) {
 // pane, so it never carries the driven marker.
 func TestDiscussPrompt(t *testing.T) {
 	got := prompt(modeDiscuss, "GH-1", nil)
-	want := "Fetch task GH-1 through the project's fetch adapter, as f10's fetch step does: " +
-		"read it in full with its comments, and summarise what it asks in a few lines. " +
+	want := "Run `f10 task read GH-1` and read the task in full with its comments, " +
+		"opening every image it links; if that command fails, fetch the task through " +
+		"the project's fetch adapter instead. Summarise what it asks in a few lines. " +
 		"Then stop and wait: we discuss it before any plan. " +
 		"Do not plan, investigate further, write code or change files until I say so."
 

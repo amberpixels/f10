@@ -675,10 +675,14 @@ func prompt(mode, id string, dep *dependency) string {
 
 // discussPrompt fetches the task and stops. It is plain text, not an f10
 // command, so it carries no driven marker: the user talks to this agent in
-// its own pane, and its questions belong there.
+// its own pane, and its questions belong there. `f10 task read` names the
+// read outright, so the agent does not spend its first turn finding the
+// fetch adapter; the adapter stays as the fallback for a project with
+// neither a driver nor a host.
 func discussPrompt(id string, dep *dependency) string {
-	p := fmt.Sprintf("Fetch task %s through the project's fetch adapter, as f10's fetch step does: "+
-		"read it in full with its comments, and summarise what it asks in a few lines.", id)
+	p := fmt.Sprintf("Run `f10 task read %s` and read the task in full with its comments, "+
+		"opening every image it links; if that command fails, fetch the task through "+
+		"the project's fetch adapter instead. Summarise what it asks in a few lines.", id)
 
 	if dep != nil {
 		p += " For context: " + dependencyClause(id, dep) + "."
