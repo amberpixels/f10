@@ -7,35 +7,22 @@ argument-hint: "<idea | task-id | PR number or url | this branch | commit or ran
 
 # f10 · judge
 
-Step back and judge the thing, not the highlighted spots: the real problem, symptom or cause,
-what already exists, the longer-lived shape. **Creates nothing** - no task, no plan edit, no
-tracker comment, no code. It ends in a one-word verdict with the argument under it.
+Judge the whole thing, not the highlighted spots: the real problem, symptom or cause, what
+already exists, the longer-lived shape. **Creates nothing**: no task, no plan edit, no tracker
+comment, no code. It ends in a one-word verdict with the argument under it.
 
-**Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
+**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
-**Blind:** if the argument contains `--blind`, strip the token and judge in a fresh subagent per
-the step's blind mode - the subject and the repo, never this conversation.
+**Blind:** with `--blind` in the argument, strip the token and judge in a fresh subagent per the
+step's blind mode: the subject and the repo, never this conversation.
 
-First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge`, every run. Then follow the **judge** step
-that bundle just printed - it carries the step file, so there is nothing left to read from
-`steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge` every run. Follow the **judge** step it prints,
+routing the stripped argument by its point 1; read nothing from `steps/`. With no argument, do
+not ask what to judge.
 
-**Route by the stripped argument:**
-- **Free text**: the idea as written is the subject.
-- **A task id** (the project's id format, an id, or a tracker url): the task via the fetch
-  adapter, plus the saved plan at `<storage root>/plans/<TASK-ID>.md` when it exists.
-- **A PR / MR** (number, url, or "this branch"): the diff and description via the host CLI, plus
-  the task and plan the branch name points to.
-- **A commit or range** (a sha, `<a>..<b>`, or "last N commits"): the diff and messages via
-  `git show` / `git diff`, plus the task and plan the commits' branch or messages point to.
-- **No argument**: whatever this conversation is about. Do not ask what to judge - name the
-  target in one line and judge it.
-
-Stay in the discussion until the user closes it, talking normally: the verdict was delivered
-once, and the step's banner returns only when an argument changes it. Where the verdict implies
-a next f10 skill, offer it in one line - `/f10:capture` after
-**proceed** on a raw idea, `/f10:plan` after **rethink** on a task - and leave the call to the
-user. Never roll on into capturing, planning, or writing code.
+Stay in the discussion until the user closes it, per the step. Where the verdict implies a next
+f10 skill, offer it in one line (`/f10:capture` after **proceed** on a raw idea, `/f10:plan`
+after **rethink** on a task) and leave the call to the user. Never roll on into capturing,
+planning, or writing code.

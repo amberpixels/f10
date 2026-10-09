@@ -10,7 +10,7 @@ argument-hint: "<task-id>[-suffix] [--yes] [-C <project>]"
 Finish a task: `f10 finish` merges the PR or MR through the host CLI (or confirms it is already
 merged), deletes the remote branch, pulls main and confirms the merge is in it, moves the task's
 plan into main's `plans/archive/`, closes the Herdr workspace and removes the worktree and its
-local branch. This skill only runs the command and relays what it printed - it runs no step.
+local branch. This skill only runs the command and relays its output; it runs no step.
 
 Run, with the user's arguments verbatim:
 
@@ -19,13 +19,12 @@ f10 finish <arguments>
 ```
 
 Then print the command's report block in a fenced `yaml` block (`conventions/report.md`) and any
-line it printed beneath it, and stop.
+line beneath it, and stop.
 
 **One refusal is a question.** When the command refuses because it would close its own
-workspace (the message says so and names the workspace), ask the user once with
-`AskUserQuestion`: close this workspace and finish, or stop. On yes, run the same command again
-with `--yes` appended and relay its report; the workspace closes right after it, which ends this
-session. On no, stop.
+workspace (the message names the workspace), ask the user once with `AskUserQuestion`: close
+this workspace and finish, or stop. On yes, rerun the same command with `--yes` appended and
+relay its report; the workspace then closes, ending this session. On no, stop.
 
 Every other refusal is final: print the message verbatim and stop. It names the cause (outside
 Herdr, a dirty worktree file by file, no branch or worktree for the task, the host's reason for

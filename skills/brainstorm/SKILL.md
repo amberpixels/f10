@@ -7,24 +7,21 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 
 # f10 · brainstorm
 
-Think an idea through with someone who has read the code. **Creates nothing** - no task, no plan
+Think an idea through with someone who has read the code. **Creates nothing**: no task, no plan
 file, no code. It ends in a shape the user can hand to `/f10:capture`, or in the decision not to
 build.
 
-**Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
+**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
-First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm`, every run. The project facts are what
-keep the options honest - the stack, the guardrails, the roles this project attaches. Then
-follow the **brainstorm** step that bundle just printed, with the user's argument as the idea;
-it carries the step file, so there is nothing left to read from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm` every run, for the stack, guardrails and roles
+the options must respect. Follow the **brainstorm** step it prints, with the user's argument as
+the idea; read nothing from `steps/`.
 
 **No argument:** the idea is whatever the conversation is already about. Do not ask what to
-brainstorm - name what you take the open question to be and start on it.
+brainstorm: name the open question as you understand it and start.
 
 Stay in the discussion until the user closes it. When the shape settles, **stop there**: name
-it, offer `/f10:capture` in one line, and do not roll on into capturing, planning, or writing
-code. Those are the user's calls, and the moment before they are made is the entire point of
-this skill.
+it, offer `/f10:capture` in one line, and never roll on into capturing, planning, or writing
+code. Those are the user's calls.

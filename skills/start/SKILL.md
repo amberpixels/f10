@@ -11,10 +11,9 @@ Start a task beside this one: `f10 start` creates the branch and worktree, opens
 Herdr workspace, starts a claude agent in its root pane and prompts it. The prompt carries
 `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): the new agent asks nothing in its own pane,
 and a question it cannot settle reaches this session through `/f10:status <task-id>`.
-`--discuss` is the exception: the agent only fetches the task, summarises it and waits, unmarked,
-for the user to talk it through in its own pane before anything is planned. This skill
-only runs the command and relays what it printed - it runs no step and never waits on the new
-agent.
+`--discuss` is the exception: the agent only fetches the task, summarises it and waits,
+unmarked, for the user to talk it through in its pane before anything is planned. This skill
+only runs the command and relays its output; it runs no step and never waits on the new agent.
 
 Run, with the user's arguments verbatim:
 
@@ -23,7 +22,7 @@ f10 start <arguments>
 ```
 
 Then print the command's report block in a fenced `yaml` block (`conventions/report.md`) and any
-line it printed beneath it, and stop. Add nothing: the work now happens in the other workspace.
+line beneath it, and stop. Add nothing.
 
 If the command fails, print its message verbatim and stop - it names the cause (outside Herdr,
 no branch for `--after` or `--base`, several branches for the task) and what to do. If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.

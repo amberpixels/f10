@@ -1,83 +1,44 @@
 # Convention · dry-run - load and report, change nothing
 
-A **dry run** makes f10's loading observable: it does all the reading a real run does,
-prints what it loaded and what *would* fire, then stops - executing nothing. It's
-how a repo's f10 binding (or its inferred defaults) is validated before trusting a real run.
+With **`--dry-run`** anywhere in the argument (`/f10:ship 1042 --dry-run`), strip it, route as
+normal, and follow this file instead of the steps: load everything, execute nothing.
 
-## Activation
+**Never**: fetch a task (print the fetch adapter / `gh`/`glab` command instead); create a task,
+investigate the codebase, draft a task body, or write a plan; implement, commit, push, open a
+PR/MR, review, or deploy; create directories, touch `.git/info/exclude`, or write anything.
+**May** read what loading needs: `.f10/instructions/*` (both layers), `git worktree list`, and
+cheap inference signals (does `go.mod` / `justfile` / a remote exist), preferring facts already
+known over shelling out. Never run an adapter.
 
-Any f10 skill triggers a dry run when its argument contains the token **`--dry-run`**
-(anywhere in it - `/f10:ship 1042 --dry-run`). Strip the token, then route the remaining
-argument exactly as normal - but follow *this* file instead of executing the steps.
+1. **Load context** with the two calls (`--all` for ship), noting *how* each fact loaded: which
+   instructions (main, worktree, layered, out-of-tree, or none and inferred), which overlays,
+   each inferred default and its signal.
+2. **Settle routing**: the entry step, how the argument was read, where the run would stop.
+3. **Name each step that would run**: its adapter, *quoted, not executed*; whether an overlay
+   applies; its concrete output (e.g. the exact `<storage root>/plans/<TASK-ID>.md`, and any
+   archive to `archive/<TASK-ID>.<N>.md`). For ship, the selected pipeline, step by step.
+4. **Report** in the format below and **stop**. Never offer to proceed for real; the user re-runs
+   without `--dry-run`.
 
-## Principle: load everything, execute nothing
+**Show only facts a step on *this* path consumes**, one per line, commands quoted; mark each
+`inferred` that did not come from `project.md`. Per skill, beyond instructions source and role:
 
-Do the reads f10 always does to figure out *what* it would do, but perform **no side effect
-and no work-producing step**. In a dry run you must **not**:
-
-- fetch a task (don't invoke the tracker's fetch adapter / `gh`/`glab` - print the
-  command instead),
-- create a task, investigate the codebase, draft task bodies, or write a plan file,
-- implement, commit, push, open a PR/MR, review, or deploy,
-- create directories, touch `.git/info/exclude`, or write anything to disk.
-
-You **may** read what's needed to *load*: `.f10/instructions/*` (both layers where both
-exist), `git worktree list`, and cheap repo signals for inference (does `go.mod` / `justfile` /
-a remote exist). Prefer already-known facts over shelling out. Never run the adapters
-themselves.
-
-## Procedure
-
-1. **Load context** per `conventions/context.md` - its two calls (`--all` for a ship dry run).
-   This is the point of the exercise, so read the bundle for *how* each fact
-   loaded: which instructions (main, worktree, layered, out-of-tree, or none → inference),
-   which overlays exist, and every inferred default with its signal.
-2. **Settle routing** - apply the invoking skill's routing rules to the stripped argument:
-   which entry step, what the argument was interpreted as, and where the run would stop.
-3. **Name each step that would run** - its adapter (skill or CLI command, *quoted, not
-   executed*), whether a same-named overlay applies, and its concrete output (e.g. the exact
-   `<storage root>/plans/<TASK-ID>.md` path, and whether an existing file would be archived
-   first and to what `archive/<TASK-ID>.<N>.md`). For ship, name the selected pipeline and
-   list its steps in order with each one's adapter.
-4. **Report** in the format below, then **stop**. Do not offer to proceed for real - the user
-   re-runs without `--dry-run` when they want the real thing.
-
-## Report format
-
-Adapt to the invoking skill; omit sections that don't apply. One fact per line, commands
-quoted verbatim.
-
-**Scope the context to the run's path** - surface only the facts a step on *this* path
-actually consumes; a fact nothing on the path uses is noise:
-
-- **brainstorm**: instructions source, role, guardrails, stack - and no adapter at all, since
-  it binds none and creates nothing.
-- **judge**: instructions source, role, guardrails, and - only for the input kind the argument
-  routed to - the **fetch** adapter and the plan path for a task id, or the PR-read command
-  (`gh pr diff` / `glab mr diff`) for a PR or `git show` / `git diff` for a commit or range,
-  quoted and not run. Blind mode is a routing fact:
-  say whether the judgment would run in a fresh subagent. It creates nothing.
-- **review**: instructions source, role, the categories (the four core ones, plus each project
-  category with its source-of-truth file and the never-flag list, or "none declared"), the
-  base and the diff command quoted and not run, and the exact findings path with its round
-  number (`<storage root>/reviews/<TASK-ID>/<round>.md`, or the decline at a third round).
-  The reviewer always runs in a fresh subagent; that is a fact to state, not a mode to test.
-- **resolve**: instructions source, role, the findings file it would read and how many findings
-  there lack a verdict, verify, and that every `ask` would end in one questionnaire to the user
-  (or go to the declared human reviewer).
-- **catchup**: instructions source, role, the base it would integrate and how it was found
-  (the recorded dependency, else the default branch), the strategy and its source
-  (`catchup:` under Hosting & PR, or the rebase default), the integration command quoted and
-  not run, and verify. No adapter is bound and nothing is pushed.
-- **capture**: instructions source, role, the **create** adapter + id format, visibility - not
-  verify, the fetch adapter, guardrails, or the ship pipeline.
-- **plan** (fetch → plan): the above plus the **fetch** adapter, guardrails, and the plan
-  output path - still not verify or the PR/deploy adapters.
-- **ship**: whatever its selected pipeline touches - verify (implement), the PR/push adapter,
-  review, deploy, guardrails, visibility - listed per step.
-
-Mark `inferred` on every fact that came from inference rather than `project.md`, but only for
-facts on the path.
+- **brainstorm**: guardrails, stack. No adapter.
+- **judge**: guardrails; for the routed input only, the **fetch** adapter and plan path, or
+  `gh pr diff` / `glab mr diff`, or `git show` / `git diff`; whether blind mode would spawn a
+  fresh subagent.
+- **review**: the categories (four core, project ones with source-of-truth files and the
+  never-flag list, or "none declared"), the base and diff command, the findings path with its
+  round (`<storage root>/reviews/<TASK-ID>/<round>.md`, or the decline at a third round), and
+  that the reviewer always runs in a fresh subagent.
+- **resolve**: the findings file, how many findings lack a verdict, verify, and where each
+  `ask` would go (one questionnaire, or the declared human reviewer).
+- **catchup**: the base and how it was found, the strategy and its source (`catchup:` under
+  Hosting & PR, or the rebase default), the integration command, verify. Nothing pushed.
+- **capture**: the **create** adapter, id format, visibility.
+- **plan**: capture's facts plus the **fetch** adapter, guardrails, the plan path.
+- **ship**: per pipeline step, what it touches (verify, the PR/push adapter, review, deploy,
+  guardrails, visibility).
 
 ```
 f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
@@ -107,9 +68,5 @@ Step: <name>
 Not executed: <the first real side effect this run would have performed>
 ```
 
-## Faithfulness note
-
-A dry run is accurate for **structural** loading - paths, adapters, routing, which overlays
-exist and which one wins, worktree layering, out-of-tree storage, the ship pipeline and its
-order. It does not predict free-text content (a drafted task body, the plan's prose) -
-producing that *is* the work a dry run skips. Report structure, not invented content.
+Report structure (paths, adapters, routing, overlays, layering, storage, the pipeline), never
+invented content such as a task body or plan prose.

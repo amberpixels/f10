@@ -1,6 +1,6 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each once its base task is finished and independent ones together: each task gets its worktree and agent, the agent is prompted skill by skill, and the run pauses only when an agent asks. Use when the user says \"/f10:drive <ids | id -- id> [skills...]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each in its own worktree and agent, dependents after their base, pausing only when an agent asks. Use when the user says \"/f10:drive <ids | id -- id> [skills...]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "<id>... | <id> -- <id> [plan|judge|ship|review|resolve|finish ...] [--every <duration>] [-C <project>]"
 ---
@@ -8,17 +8,17 @@ argument-hint: "<id>... | <id> -- <id> [plan|judge|ship|review|resolve|finish ..
 # f10 · drive
 
 Run tasks through a chain from here. `f10 drive` reads each task's one base: the `--after` its
-branch recorded, else its body's `After:` line. It starts every task whose base is finished, and
-those run together, each in its own worktree and agent opened the way `f10 start` does. Each
-agent is prompted one skill at a time (`--driven`, per `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
-The driver polls Herdr and every task's run state until each turn ends, runs `finish` itself,
-catches a started dependent up with `/f10:catchup` once its base is finished, and starts the
-dependents that finish releases. The chain is the user's inline skills,
-else `project.md → Drive chain`, else `plan → judge → ship → review → resolve → finish`. This
-skill only runs the command, relays its questions and prints its report. It runs no step.
+branch recorded, else its body's `After:` line. It starts every task whose base is finished, in
+parallel, each in its own worktree and agent as `f10 start` opens them. Each agent is prompted
+one skill at a time (`--driven`, per `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`). The driver polls
+Herdr and every task's run state until each turn ends, runs `finish` itself, catches a started
+dependent up with `/f10:catchup` once its base is finished, and starts the dependents that
+finish releases. The chain is the user's inline skills, else `project.md → Drive chain`, else
+`plan → judge → ship → review → resolve → finish`. This skill only runs the command, relays its
+questions and prints its report; it runs no step.
 
-Run it **in the background** (`run_in_background`), with the user's arguments verbatim: a list
-can take hours, and the command's exit is what wakes this session.
+Run it **in the background** (`run_in_background`) with the user's arguments verbatim: a list
+can take hours, and the command's exit wakes this session.
 
 ```
 f10 drive <arguments>
@@ -42,20 +42,17 @@ When it exits, read its output and act on the exit code:
   ```
 
   The output's `answer with:` line is that command. The driver sends each answer to its own
-  task's agent and carries on from there. Repeat on every exit 4. The other tasks' agents kept
-  working while the driver was down; rows reading `running <skill>` are those, and the rerun
-  picks them up where they stand.
+  task's agent and carries on. Repeat on every exit 4. Other agents kept working while the
+  driver was down (rows reading `running <skill>`); the rerun picks them up where they stand.
 - **5** - a task halted: a judge stop, a failed step, a refused finish, a catchup that did not
-  end clean, an agent idle while its run still says running (a permission dialog in its pane, or
-  a cancelled run: the line says to quit that agent and rerun), a workspace where no agent
-  appeared within two minutes.
-  Its dependents read `halted: base <id> halted`, and every other task ran on. Print the report
-  block and the lines beneath it verbatim, and stop. The user settles it in that workspace, then
-  reruns the same command, which resumes where each task stands.
+  end clean, an agent idle while its run still says running (a permission dialog in its pane,
+  or a cancelled run: the line says to quit that agent and rerun), a workspace where no agent
+  appeared within two minutes. Its dependents read `halted: base <id> halted`; every other task
+  ran on. Print the report block and the lines beneath it verbatim, and stop. The user settles
+  it in that workspace, then reruns the same command, which resumes where each task stands.
 - **anything else** - the command refused before or while running: outside Herdr, a task the
-  tracker does not know, a dependency the list cannot satisfy (a base outside the list that is
-  not finished, or tasks that wait on each other in a circle). Print the message verbatim and
-  stop.
+  tracker does not know, a dependency the list cannot satisfy (an unfinished base outside the
+  list, or tasks that wait on each other in a circle). Print the message verbatim and stop.
 
 If `f10` is not on `PATH`, or `f10 drive` is an unknown command, the binary is missing or older
 than this plugin: say so, quote `f10 --version` where it ran, and point at

@@ -1,16 +1,10 @@
 # Convention · gaps - open decisions that need the user
 
-A **gap** is a genuine fork that needs *the user's* call - one that changes scope or is hard to
-reverse - **not** something you should settle yourself. You still decide ~90% from the code and
-its house style (see `steps/fetch.md`); gaps are only the real forks left over.
+A **gap** is a fork that needs *the user's* call because it changes scope or is hard to reverse.
+Settle everything else yourself (~90%, per `steps/fetch.md`). Gaps are **recorded, not
+blocking**: the plan is shippable on its defaults, and filling gaps is optional at any stage.
 
-Gaps are **recorded, not blocking.** The plan is always complete and shippable on its noted
-defaults; filling gaps is always optional and can happen at any stage.
-
-## Where gaps live
-
-In the plan (`<storage root>/plans/<TASK-ID>.md`), as a section at the end. Keep it lean - same
-altitude as the rest of the plan (prose, no code):
+The last section of the plan (`<storage root>/plans/<TASK-ID>.md`), prose, no code:
 
 ```
 ## Gaps - need your call
@@ -21,35 +15,20 @@ _The plan proceeds on the **default** for each open gap unless you answer otherw
    Default: <what the plan does if you don't answer>. - **Open**
 ```
 
-When a gap is answered, flip its status in place and fold the decision into the plan body:
+An answered gap flips in place, and the decision folds into the plan stages:
 
 ```
 1. **<short title>** - … Default: <…>. - **Resolved: <the answer>**
 ```
 
-If there are no real forks, write `## Gaps - none` and move on. Don't pad the list.
+No real forks: `## Gaps - none`. Don't pad the list.
 
-## Filling gaps (the questionnaire)
+**Filling** is one **`AskUserQuestion`**: a question per open gap, the default first and
+recommended; never one at a time across turns. Offer it, declinable, after `/f10:plan` saves
+the file (list open gaps by title), before `/f10:ship` implements (*fill now, or proceed on the
+defaults?*, naming the defaults), and whenever the user asks. **Driven** runs send the batch as
+one ask (`modes/driven.md`).
 
-To fill, use **`AskUserQuestion`** - batch all open gaps into one questionnaire (one question
-per gap, with the default as the first / recommended option). Never ask them one-at-a-time
-across turns.
-
-Offer - always declinable - at these checkpoints:
-- **After planning** (`/f10:plan`): once the file is saved, list the open gaps by title in one
-  line each and ask whether to fill them now.
-- **Before implementing** (`/f10:ship`): if the loaded plan has open gaps, surface them and ask
-  *fill now, or proceed on the defaults?* Proceeding on defaults is a valid choice - say which
-  defaults you'll use.
-- **On demand:** the user can ask to fill gaps at any point.
-
-**Driven** (`modes/driven.md` - the run was prompted from another session): the same batch, a
-different transport. No `AskUserQuestion`; the whole questionnaire goes into one
-`f10-state.sh ask` line, the run stops blocked, and the answers arrive as the next prompt. A
-steering line that already settles the gaps ("take defaults for all gaps") raises no ask at all.
-
-When answers come in: update each gap's status to **Resolved**, fold the decision into the
-relevant plan stages, and re-save the plan file. If an answer differs from the default the code
-was already built on (implementation happened first), say so plainly - that's a
-redesign/refactor pass, not a silent edit. Leave resolved gaps in the file so the decisions
-stay auditable and revisitable.
+On answers: mark each **Resolved**, fold it into the stages, and re-save the plan file. If an
+answer differs from a default the code already built on, say so: that is a redesign pass, not a
+silent edit. Keep resolved gaps in the file.

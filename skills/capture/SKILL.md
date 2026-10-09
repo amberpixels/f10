@@ -9,15 +9,13 @@ argument-hint: "<free-text task description>"
 
 Create a well-scoped task from a description. Runs the **capture** step only.
 
-**Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
+**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
-First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture`, every run. Then follow the **capture** step
-that bundle just printed, with the user's argument as the description - it carries the step
-file, so there is nothing left to read from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run. Follow the **capture** step it prints,
+with the user's argument as the description; read nothing from `steps/`.
 
-Stop once the task is created and report it - task id and url - per
-`${CLAUDE_PLUGIN_ROOT}/conventions/report.md`. Do not plan or implement - that's `/f10:plan` and
+Stop once the task is created and report its id and url per
+`${CLAUDE_PLUGIN_ROOT}/conventions/report.md`. Do not plan or implement; that is `/f10:plan` and
 `/f10:ship`.

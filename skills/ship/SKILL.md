@@ -7,63 +7,53 @@ argument-hint: "<task-id | path/to/plan.md | free-text description>"
 
 # f10 · ship
 
-Drive a task end-to-end: plan (if needed) → the project's **ship pipeline** (declared in
-`project.md`; default `implement → pr` - see `conventions/context.md`).
+Take a task through planning, if needed, then the project's **ship pipeline** (declared in
+`project.md`; default `implement → pr`, per `conventions/context.md`).
 
-**Dry run:** if the argument contains `--dry-run`, follow
-`${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` - load and report, execute nothing.
+**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
-**Driven:** if the argument contains `--driven`, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
-alongside this skill - no interactive question, every ask through run state. The questions this
-skill asks - reuse or re-plan, wait or proceed on a base with no code, a judge's rethink - each
-become one `ask` there.
+**Driven:** with `--driven` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
+alongside this skill. Its questions (reuse or re-plan, wait or proceed on a base with no code, a
+judge's rethink) each become one `ask` there.
 
-**Forward first, when the argument is a task id.** A task started with `f10 start` has a
-worktree, a workspace and an agent of its own, and its plan sits in that worktree's storage
-root; shipping it here would ship it on the wrong branch, without the plan. Before loading
-anything, one call:
+**Forward first, when the argument is a task id.** A task started with `f10 start` has its own
+worktree, workspace and agent, and its plan sits in that worktree's storage root; shipping it
+here would use the wrong branch and no plan. Before loading anything, one call:
 
 ```
 f10 forward <task-id> "/f10:ship <the argument verbatim>"
 ```
 
 - **exit 0** - another checkout holds the task's branch and the command went to its agent.
-  Print the block the command printed (task, workspace, sent) in a fenced `yaml` block, add
-  nothing, and stop: the outcome lands in that tab. Join `f10-state.sh clear` to the same call
-  so this session's badge, seeded when the command was typed, retires - this session has no run.
-- **exit 3** - the task is here (its branch is this checkout's, or it has no worktree): the
-  message says so on stderr. Continue below.
-- anything else is a failure per `${CLAUDE_PLUGIN_ROOT}/conventions/failure.md`: outside Herdr,
-  no workspace shows the worktree, the agent is idle and not reporting. Report it and stop.
+  Print the command's block (task, workspace, sent) in a fenced `yaml` block, add nothing, and
+  stop. Join `f10-state.sh clear` to the same call to retire the badge seeded when the command
+  was typed: this session has no run.
+- **exit 3** - the task is here (its branch is this checkout's, or it has no worktree), as
+  stderr says. Continue below.
+- anything else is a failure per `${CLAUDE_PLUGIN_ROOT}/conventions/failure.md` (outside Herdr,
+  no workspace shows the worktree, the agent is idle and not reporting). Report it and stop.
 
-Without the `f10` binary on `PATH`, read `git worktree list --porcelain` once: a worktree other
-than this checkout whose branch is `<id>`, `<id>/...` or `<id>-...` means the task is elsewhere
-and this session cannot reach it - fail, pointing at
-`go install github.com/amberpixels/f10/cli/cmd/f10@latest`; otherwise continue.
+Without the `f10` binary on `PATH`, read `git worktree list --porcelain` once. A worktree other
+than this checkout whose branch is `<id>`, `<id>/...` or `<id>-...` holds the task out of reach:
+fail, pointing at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`. Otherwise continue.
 
-First load the context per `${CLAUDE_PLUGIN_ROOT}/conventions/context.md` - two calls:
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` (skip if this context already holds the bundle),
-then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all`, every run. **`--all`, never a step list**:
-ship's steps are the pipeline that same call prints, so they cannot be named beforehand
-(`conventions/context.md`).
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all` every run. **`--all`, never a step list**: the
+pipeline is declared in what that call prints.
 
 **Route by the argument:**
-- A **plan file** (`*.md` path): skip planning - run the ship pipeline with that plan.
-- A **task id** (project id format / id / url): run `steps/fetch.md`, then look for the saved
-  plan at **`<storage root>/plans/<TASK-ID>.md`** - the exact path `/f10:plan` writes, under
-  the root the bundle reported. Glob the plans dir if the exact name misses:
-  - exists → ask the user **reuse this plan or re-plan?** (AskUserQuestion). Reuse → straight
-    to the pipeline; re-plan → `steps/plan.md` first.
-  - missing → run `steps/plan.md`.
-  Then run the ship pipeline.
-- A **free-text description**: full run - `steps/capture.md` → `steps/fetch.md` →
-  `steps/plan.md` → the ship pipeline.
+- A **plan file** (`*.md` path): run the pipeline with it.
+- A **task id** (project id format / id / url): `steps/fetch.md`, then look for
+  **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses). Found:
+  ask **reuse this plan or re-plan?** (AskUserQuestion); re-plan runs `steps/plan.md`. Missing:
+  run `steps/plan.md`. Then the pipeline.
+- A **free-text description**: `steps/capture.md`, `steps/fetch.md`, `steps/plan.md`, then the
+  pipeline.
 
-**Pipeline selection:** if the project declares several named pipelines, run `default` unless
-the user named another (as a word in the argument - e.g. `/f10:ship direct: fix typo …`, which
-is also how `f10 start --local` sends `/f10:ship local: <id>` - or in their own words). You may suggest a better-fitting pipeline for the task's size, but never
-switch without the user's pick. A **(planless)** pipeline skips capture/fetch/plan for
-free-text input (`conventions/context.md`).
+**Pipeline selection:** run `default` unless the user named another, as a word in the argument
+(`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`) or in their
+own words. Suggest a better fit if you like; never switch without the user's pick.
 
 **Dependency:** before the first pipeline step, read what `f10 start --after` and `f10 finish`
 recorded on the branch:
@@ -74,65 +64,39 @@ git config --get branch."$(git branch --show-current)".f10-after-branch   # its 
 git config --get branch."$(git branch --show-current)".f10-landed         # a base finished since
 ```
 
-**`f10-landed` recorded:** `f10 finish` merged the base task and released this branch, which
-branched before the base's code existed. The base's code is in the default branch and not in
-this one, so catch up with the default branch before implement, as described below the list.
-On success, `git config --unset` the mark.
+- **`f10-landed`**: the base task merged after this branch began. Catch up with the default
+  branch, then `git config --unset` the mark.
+- **`f10-after`**: `git fetch origin`, find the base local-first (`refs/heads/<branch>`, else
+  `origin/<branch>`), then:
+  - exists nowhere: the base was finished; `git config --unset` both keys and catch up with the
+    default branch;
+  - an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
+  - moved: catch up with `<base>`;
+  - still at the default branch's commit (no code yet): ask once (AskUserQuestion) **wait**, or
+    **proceed on the plan's assumption**. Wait ends the run blocked
+    (`f10-state.sh set ship blocked implement`, a `note` naming the base task). Proceed builds
+    against the base task's plan as the plan file records it, with no fallback if it is absent.
+- Nothing recorded: nothing to do.
 
-Nothing recorded: nothing changes. `f10-after` recorded: `git fetch origin`, find the base
-branch local-first (`refs/heads/<branch>`, else `origin/<branch>`), then one of four:
-- the base exists nowhere: the base task was finished and its branch deleted by hand, without
-  `f10 finish` leaving the mark. Its code is in the default branch, so treat it as landed:
-  `git config --unset` both keys, then catch up with the default branch;
-- the base is an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
-- the base moved: catch up with `<base>`;
-- the base still equals the default branch's commit: the base task has no code yet. Ask once
-  (AskUserQuestion): **wait**, or **proceed on the plan's assumption**. Wait ends the run blocked
-  the way a judge stop does - `f10-state.sh set ship blocked implement`, a `note` naming the base
-  task - and is not a failure. Proceed builds against the base task's plan as the plan file
-  records it, with no fallback for its absence.
+**Catching up** happens just before implement (target: the base, or `origin/<default>` after
+the fetch): `git rebase <target>`,
+or `git merge --no-edit <target>` where `project.md → Hosting & PR` declares `catchup: merge`. A
+conflict fails the run: abort so the tree is unchanged, keep any mark, and name `/f10:catchup`
+in the `next` row. Ship never settles conflicts or implements over a half-merged tree.
 
-**Catching up** works the same for the base branch and the default branch: before implement,
-the way `steps/catchup.md` does, with the target taken as `origin/<default>` after the fetch
-for the default branch. Run `git rebase <target>`, or `git merge --no-edit <target>` where
-`project.md → Hosting & PR` declares `catchup: merge`. A conflict ends the run as a failure
-(`conventions/failure.md`). The operation is aborted so the tree stays as it was, any mark is
-left in place, and the report's `next` row names `/f10:catchup`: it settles the conflicts with
-both sides kept, after which this run can be re-issued. Ship never settles conflicts itself,
-because an implement step over a half-merged tree is the outcome the failure convention exists
-to prevent.
+Run the pipeline's steps **in the declared order**, from the bundle. Extra user text is
+steering. A plan written this run needs no re-confirming. A `judge` step routes the run by its
+verdict (`steps/judge.md`); never continue past anything but proceed on your own.
 
-The pr step reads the same keys to stack the PR on the base branch (`steps/pr.md`).
+**Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected;
+`f10-state.sh set ship running <step>` before each step, named as the pipeline names it;
+`f10-state.sh set ship done` after the last. A plan from an earlier run (plan file, or reuse)
+adds `f10-state.sh set plan prior`. Stopping mid-way with durable artifacts is
+`set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
-Run the pipeline's steps **in the declared order**. The `--all` bundle already carries every
-generic step, and project-defined ones arrived in it as overlays, so read nothing further before
-running them. Any extra text the user adds is steering/notes for the run.
-For a plan you just wrote this run, proceed without re-confirming; open gaps are surfaced by
-the implement step (`conventions/gaps.md`).
+**Final report**: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, as
+produced), then review status ("stopped at PR" is a normal end), deploy status, what changed,
+and a one-line reminder of gaps left on their defaults.
 
-**A `judge` step routes the run by its verdict** (`steps/judge.md`): proceed continues; stop
-ends the run blocked - `f10-state.sh set ship blocked judge`, the verdict as the report, no
-FAILED block; rethink or proceed with changes open a discussion whose gaps you put to the user
-in one questionnaire. If they choose to continue, fold the answers into the plan file the way
-you fold answered gaps, then run the next step; if they block, end as stop does. Never continue
-past anything but proceed on your own.
-
-**Badge** (`conventions/report.md`): once the pipeline is selected, declare its last step -
-`f10-state.sh final <step>` - so a turn ending mid-pipeline keeps its spinning glyph. Then
-`f10-state.sh set ship running <step>` before each pipeline step, named as the pipeline names
-it, and `f10-state.sh set ship done` after the last. Where the plan came from an earlier run -
-the plan-file route, or the reuse branch
-above - add `f10-state.sh set plan prior`. Where the pipeline stops mid-way but durable
-artifacts exist - commits, an open PR, a deploy - report `set ship partial <step>` rather
-than `failed`, per `conventions/failure.md` rule 7, and `note` what stopped it and what
-unblocks it in the same call.
-
-**Final report:** lead with the facts block per `conventions/report.md`, carrying the run's
-**shipment** - the branch, the PR/MR url where the pipeline opened one, the sha where it
-committed or pushed, the deploy url where it deployed. Then, as prose: review status as far as
-the pipeline goes ("stopped at PR" is a normal end), deploy status if it deploys, a short note of what changed,
-and - if any gaps stayed on their defaults - a one-line reminder that they're recorded in the
-plan.
-
-Note: running this skill is the user's explicit go-ahead to push and open the PR
-(`steps/pr.md`); deploy steps carry their own confirmation rules (`steps/deploy.md`).
+Running this skill authorizes the push and the PR (`steps/pr.md`); deploy has its own
+confirmation (`steps/deploy.md`).
