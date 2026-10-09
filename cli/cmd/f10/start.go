@@ -38,6 +38,10 @@ func startCommand() *cli.Command {
 		ArgsUsage: "<task-id>[-suffix]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "plan", Usage: "prompt only the plan"},
+			&cli.BoolFlag{
+				Name:  "discuss",
+				Usage: "prompt only the task's fetch: the agent summarises it and waits to discuss it before any plan",
+			},
 			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local pipeline: commits, nothing pushed"},
 			&cli.StringFlag{
 				Name:  "after",
@@ -54,11 +58,13 @@ func startCommand() *cli.Command {
 
 // The prompt per mode. The default is the whole flow with every gap on
 // its default; --plan stops after the plan; --local is the default flow
-// with the ship routed through the `local` pipeline.
+// with the ship routed through the `local` pipeline; --discuss stops after
+// the fetch, for a task the user talks through in the agent's own pane.
 const (
 	modeDefault = ""
 	modePlan    = "plan"
 	modeLocal   = "local"
+	modeDiscuss = "discuss"
 
 	agentKind = "claude"
 	defaults  = "take defaults for all gaps; we review them at the end"
@@ -146,15 +152,21 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 }
 
 func startMode(cmd *cli.Command) (string, error) {
-	switch {
-	case cmd.Bool("plan") && cmd.Bool("local"):
-		return "", errors.New("--plan and --local are exclusive: a plan-only run ships nothing")
-	case cmd.Bool("plan"):
-		return modePlan, nil
-	case cmd.Bool("local"):
-		return modeLocal, nil
-	default:
+	var set []string
+
+	for _, m := range []string{modePlan, modeLocal, modeDiscuss} {
+		if cmd.Bool(m) {
+			set = append(set, "--"+m)
+		}
+	}
+
+	switch len(set) {
+	case 0:
 		return modeDefault, nil
+	case 1:
+		return strings.TrimPrefix(set[0], "--"), nil
+	default:
+		return "", fmt.Errorf("%s are exclusive: each names how far the agent runs", strings.Join(set, " and "))
 	}
 }
 
@@ -637,6 +649,10 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 // task's code may not exist yet and a fallback for its absence is the one
 // thing the dependent must not write. The driven marker closes it.
 func prompt(mode, id string, dep *dependency) string {
+	if mode == modeDiscuss {
+		return discussPrompt(id, dep)
+	}
+
 	var p string
 
 	switch mode {
@@ -655,6 +671,21 @@ func prompt(mode, id string, dep *dependency) string {
 	// the agent is prompted from here, not by someone in its pane: driven
 	// from its first turn, every question goes through run state
 	return driven(p)
+}
+
+// discussPrompt fetches the task and stops. It is plain text, not an f10
+// command, so it carries no driven marker: the user talks to this agent in
+// its own pane, and its questions belong there.
+func discussPrompt(id string, dep *dependency) string {
+	p := fmt.Sprintf("Fetch task %s through the project's fetch adapter, as f10's fetch step does: "+
+		"read it in full with its comments, and summarise what it asks in a few lines.", id)
+
+	if dep != nil {
+		p += " For context: " + dependencyClause(id, dep) + "."
+	}
+
+	return p + " Then stop and wait: we discuss it before any plan. " +
+		"Do not plan, investigate further, write code or change files until I say so."
 }
 
 func dependencyClause(id string, dep *dependency) string {

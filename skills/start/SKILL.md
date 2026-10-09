@@ -1,8 +1,8 @@
 ---
 name: start
-description: "f10 start skill - start the next task without leaving this session: a worktree, a Herdr workspace and a claude agent in it, already prompted. Use when the user says \"/f10:start <task-id> [--plan | --local] [--after <task-id> | --base <branch>]\" or asks to start a task in a new worktree or workspace."
+description: "f10 start skill - start the next task without leaving this session: a worktree, a Herdr workspace and a claude agent in it, already prompted. Use when the user says \"/f10:start <task-id> [--plan | --local | --discuss] [--after <task-id> | --base <branch>]\" or asks to start a task in a new worktree or workspace, including one to discuss before planning."
 allowed-tools: Bash
-argument-hint: "<task-id>[-suffix] [--plan | --local] [--after <task-id> | --base <branch>] [-C <project>]"
+argument-hint: "<task-id>[-suffix] [--plan | --local | --discuss] [--after <task-id> | --base <branch>] [-C <project>]"
 ---
 
 # f10 · start
@@ -10,7 +10,9 @@ argument-hint: "<task-id>[-suffix] [--plan | --local] [--after <task-id> | --bas
 Start a task beside this one: `f10 start` creates the branch and worktree, opens them as a
 Herdr workspace, starts a claude agent in its root pane and prompts it. The prompt carries
 `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): the new agent asks nothing in its own pane,
-and a question it cannot settle reaches this session through `/f10:status <task-id>`. This skill
+and a question it cannot settle reaches this session through `/f10:status <task-id>`.
+`--discuss` is the exception: the agent only fetches the task, summarises it and waits, unmarked,
+for the user to talk it through in its own pane before anything is planned. This skill
 only runs the command and relays what it printed - it runs no step and never waits on the new
 agent.
 

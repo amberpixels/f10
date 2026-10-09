@@ -515,6 +515,31 @@ func TestPrompt(t *testing.T) {
 	}
 }
 
+// The discuss prompt is plain text the user follows up on in the agent's
+// pane, so it never carries the driven marker.
+func TestDiscussPrompt(t *testing.T) {
+	got := prompt(modeDiscuss, "GH-1", nil)
+	want := "Fetch task GH-1 through the project's fetch adapter, as f10's fetch step does: " +
+		"read it in full with its comments, and summarise what it asks in a few lines. " +
+		"Then stop and wait: we discuss it before any plan. " +
+		"Do not plan, investigate further, write code or change files until I say so."
+
+	if got != want {
+		t.Errorf("prompt(discuss) = %q, want %q", got, want)
+	}
+
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/plans/GH-7.md", planned: true}
+
+	got = prompt(modeDiscuss, "GH-1", dep)
+	if !strings.Contains(got, "For context: GH-1 depends on GH-7: design against GH-7's planned API") {
+		t.Errorf("prompt(discuss) with a dependency = %q, want the dependency named", got)
+	}
+
+	if strings.Contains(got, drivenMarker) {
+		t.Errorf("prompt(discuss) = %q, want no driven marker", got)
+	}
+}
+
 func TestSiblingPathAndAgentName(t *testing.T) {
 	if got, want := siblingPath("/code/repo", "GH-1/slug"), "/code/repo.GH-1-slug"; got != want {
 		t.Errorf("siblingPath = %q, want %q", got, want)
@@ -1251,9 +1276,13 @@ func TestStartRefusesOutsideHerdr(t *testing.T) {
 func TestStartModesAreExclusive(t *testing.T) {
 	newFakes(t)
 
-	err := newApp().Run(t.Context(), []string{"f10", "start", "--plan", "--local", "42"})
-	if err == nil || !strings.Contains(err.Error(), "exclusive") {
-		t.Errorf("err = %v, want the flags refused together", err)
+	for _, flags := range [][]string{{"--plan", "--local"}, {"--discuss", "--plan"}, {"--local", "--discuss"}} {
+		args := append(append([]string{"f10", "start"}, flags...), "42")
+
+		err := newApp().Run(t.Context(), args)
+		if err == nil || !strings.Contains(err.Error(), "exclusive") {
+			t.Errorf("%v: err = %v, want the flags refused together", flags, err)
+		}
 	}
 }
 

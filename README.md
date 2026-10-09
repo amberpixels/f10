@@ -71,7 +71,7 @@ is an **entry point** into that chain:
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and what it is now; a thing: what it is, in a few sentences |
 | `/f10:catchup` | catchup | the branch on its base - merged or rebased as the project declares - conflicts settled with both sides kept, verify green, nothing pushed |
 | `/f10:status [id]` | nothing - a hook answers it; with an id, `f10 status <id>` | the run's status in words, before any model turn; with an id, a task's run in its own worktree, and the question its agent is waiting on relayed to you and answered back |
-| `/f10:start <id> [--plan \| --local] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
+| `/f10:start <id> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>]` | nothing - it runs `f10 start` | a new worktree, a Herdr workspace and a prompted agent; this session stays where it is |
 | `/f10:drive <ids \| id -- id> [skills...]` | nothing - it runs `f10 drive` in the background | every task through its chain - plan, judge, ship, review, resolve, finish by default - each once its base task is finished, independent ones together; an agent's question relayed to you and answered back |
 | `/f10:finish <id> [--yes]` | nothing - it runs `f10 finish` | the PR merged, the plan archived, the workspace closed, the worktree and branch gone, main pulled |
 
@@ -502,6 +502,7 @@ prompt typed by hand. Each hand-off was a place to lose the branch suffix, the b
 f10 start 1042                # branch, worktree, Herdr workspace, claude prompted with plan + ship
 f10 start 1042 --plan         # prompt the plan only
 f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
+f10 start 1042 --discuss      # fetch the task and wait: talk it through in the new pane before any plan
 f10 start 1042 --after 1040   # base the branch on that task's branch, record the dependency, stack the PR
                               # (no flag: the task body's `After:` line, when it has one)
 f10 start 1042 --base rel/2   # base the branch on a git ref: the local branch, else origin's
