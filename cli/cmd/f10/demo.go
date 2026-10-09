@@ -11,11 +11,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// The demo noun: the second one behind no driver and no network, and the
-// first whose file is a page. A report is named after its task exactly as a
-// plan is, so the same reference reaches both - but it is HTML, so it goes
-// to the browser rather than the editor, and `read` stays absent rather
-// than being redefined to mean "cat some markup at a terminal".
+// The demo noun: no driver and no network behind it, like plan. A report is
+// named after its task as a plan is, so one reference reaches both, but it
+// is HTML: it opens in the browser, and there is no `read`, since markup
+// printed to a terminal serves no one.
 func demoCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "demo",

@@ -17,10 +17,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
-// init is the one verb in this binary that writes, and the whole of what it
-// writes is the two files that register a project: the project.md detection
-// can fill, and the exclude entry that keeps it out of sight. The file's
-// existence is the membership rule - no filesystem heuristic tells a
+// init writes only the two files that register a project: the project.md
+// detection can fill, and the exclude entry that keeps it out of sight. The
+// file's existence is the membership rule - no filesystem heuristic tells a
 // vendored fork from a checkout someone works in, so the act is explicit.
 
 // excludeLine is the entry stealth needs, written exactly as a repo that

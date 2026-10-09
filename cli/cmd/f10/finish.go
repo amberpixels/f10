@@ -18,12 +18,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
-// The finish verb is start's inverse. Closing a task by hand is the same
-// three tools in reverse - the host CLI, git, Herdr - and the two steps
-// people skip, the worktree and the pull, leave sibling directories behind
-// and a main that is behind the PR it just merged. With in-repo storage the
-// worktree also holds the task's plan, so removing it by hand deletes the
-// only record of the plan.
+// The finish verb is start's inverse across the host CLI, git and Herdr.
+// By hand, the skipped steps (the worktree, the pull) leave sibling
+// directories and a main behind its own merge; with in-repo storage, a
+// worktree removed by hand takes the only copy of the plan with it.
 //
 // Everything after the merge is gated on the merge having landed: the
 // merge commit must be in the local default branch before anything local
@@ -427,13 +425,10 @@ func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 }
 
 // releaseDependents clears the dependency other branches recorded on the
-// finished one with `start --after`, and marks each landed. Its code is in
-// the default branch now, so a dependent's pr targets the default branch;
-// but the dependent branched before that code existed, so the mark has its
-// next ship or catchup bring the default branch in first. Without the
-// release the dependents would point at a branch that no longer exists
-// anywhere; without the mark, ship would implement on a tree missing the
-// base's change.
+// finished one with `start --after`, so their pr targets the default branch
+// instead of a deleted one, and marks each landed: a dependent branched
+// before the base's code existed, so its next ship or catchup brings the
+// default branch in first.
 func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, error) {
 	var notes []string
 

@@ -70,16 +70,14 @@ func newApp() *cli.Command {
 	}
 }
 
-// version is what `f10 --version` prints, read from the build rather than
-// kept in a constant that drifts from the plugin's. The binary and the
-// skills are one contract - the skills describe the flags the binary takes
-// - so the binary carries the plugin's version: the `cli/vX.Y.Z` tag each
-// release puts beside `f10--vX.Y.Z`, which is the tag Go reads for a module
-// under cli/. A release install (`go install ...@v0.25.0`) prints the bare
-// number. A build from the checkout prints what Go stamped instead - the
-// commit and its date, dirty when the tree was - even at the tag, since Go
-// derives a version from tags only for a module at the repository root; so
-// a dev binary never claims to be a release.
+// version is what `f10 --version` prints, read from the build rather than a
+// constant that drifts. The skills describe the binary's flags, so the binary
+// carries the plugin's version: the `cli/vX.Y.Z` tag each release puts beside
+// `f10--vX.Y.Z`, which Go reads for a module under cli/. A release install
+// (`go install ...@v0.25.0`) prints the bare number. A checkout build prints
+// the commit, its date and a dirty mark, even at the tag, since Go derives a
+// version from tags only for a module at the repository root; so a dev
+// binary never claims to be a release.
 func version(bi *debug.BuildInfo, ok bool) string {
 	if !ok || bi == nil {
 		return "unknown"

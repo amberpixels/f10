@@ -3,12 +3,11 @@
 // effective value to its origin. It is the one component of f10 allowed to
 // interpret instruction prose - bin/bundle.sh stays a concatenator.
 //
-// Interpretation is deliberately shallow: only the sub-facts with a fixed
-// vocabulary (Layering, Visibility, Storage, the tracker kind and its id
-// prefix, the remote review's four facts) become
-// structure; everything else is presented as the declared prose, attributed
-// but unparsed. The binary may be incomplete, never wrong - what it cannot
-// place it shows as-is instead of guessing.
+// Interpretation stays shallow: only the sub-facts with a fixed vocabulary
+// (Layering, Visibility, Storage, the tracker kind and its id prefix, the
+// remote review's four facts) become structure; everything else is shown as
+// the declared prose, attributed but unparsed. The binary may be incomplete,
+// never wrong - what it cannot place it shows as-is instead of guessing.
 //
 // It writes that prose too, in scaffold.go: `f10 init` renders detection as
 // a project.md. Reader and writer share a package so the vocabulary one
@@ -49,7 +48,7 @@ type Effective struct {
 	Fields       []Field `json:"fields"`
 	Unrecognized []Field `json:"unrecognized,omitempty"`
 
-	// The fixed-vocabulary sub-facts v1 extracts.
+	// The fixed-vocabulary sub-facts.
 	Layering        string `json:"layering"`
 	Visibility      string `json:"visibility"`
 	Storage         string `json:"storage"`
@@ -220,15 +219,10 @@ func (e *Effective) absorb(f Field, pb *probe.Probes) {
 	}
 }
 
-// The two shapes a declared task id format takes. The contract's own
-// placeholder form comes first and is trusted outright; a literal sample
-// (`ABC-1234`) is the fallback, because that shape also fits things nobody
-// means as an id - UTF-8, ISO-8601 - and preferring the placeholder keeps
-// those from winning where a project wrote its format properly.
-//
-// Neither pattern ends on a word boundary after the placeholders: `#` is
-// not a word character, so a trailing \b could never match `**`ABC-####`**`,
-// which is exactly how a project.md writes it.
+// The two shapes a declared task id format takes. The contract's placeholder
+// form (`ABC-####`) is trusted first; a literal sample (`ABC-1234`) is the
+// fallback, since that shape also fits UTF-8 or ISO-8601. Neither ends on \b:
+// `#` is not a word character, so `**`ABC-####`**` would never match.
 var (
 	idPlaceholderRE = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-#+`)
 	idSampleRE      = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-\d+\b`)
@@ -262,12 +256,11 @@ const (
 
 // projectPrefix derives a task id prefix from the project's name, for a
 // project that declares no id format. The host's letters would name every
-// GitLab project GL and say nothing about the task; the project's own name
-// says which project and reads as one in a branch or a plan filename. A
-// short name with a digit keeps its letters (f10 -> F10, r3 -> R3), several
-// segments give initials (git-undo -> GU, notion-sdk-go -> NSG), one word
+// GitLab project GL; the project's own name says which project in a branch
+// or a plan filename. A short name with a digit keeps its letters (f10 ->
+// F10, r3 -> R3), several segments give initials (git-undo -> GU), one word
 // gives its first three characters (herdr -> HER). A name that yields
-// nothing usable - one letter, a leading digit - derives no prefix, so only
+// nothing usable (one letter, a leading digit) derives no prefix, so only
 // explicit ids are accepted and f10 init leaves the Tracker section to a human.
 func projectPrefix(name string) string {
 	segments := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
@@ -440,15 +433,13 @@ func storageField(name string, lay *layout.Layout) Field {
 	return Field{Name: name, Value: "in-repo (" + lay.StorageRoot + ")", Origin: OriginDefault}
 }
 
-// parseFile splits one project.md into contract sections. Three declared
-// shapes open one: a markdown heading (`## Tracker`), an unindented bold
-// list item naming a contract field (`- **Tracker** - …`), and a plain
-// label naming one (`Roles: plan as …`) - the shapes real files actually
-// use. A bold item the contract does not know stays inside the open
-// section's body (`- **Fetch:** …` under Tracker, a named pipeline under
-// Ship pipelines) instead of hijacking it. Unknown headings are returned
-// separately, not dropped; an empty one - a document title - says nothing
-// and is skipped.
+// parseFile splits one project.md into contract sections. Three shapes open
+// one: a markdown heading (`## Tracker`), an unindented bold list item naming
+// a contract field (`- **Tracker** - …`), and a plain label naming one
+// (`Roles: plan as …`). A bold item the contract does not know stays in the
+// open section's body (`- **Fetch:** …` under Tracker, a named pipeline under
+// Ship pipelines). Unknown headings are returned separately, not dropped; an
+// empty one (a document title) is skipped.
 func parseFile(path, layer string) (map[string]section, []section) {
 	data, err := os.ReadFile(path)
 	if err != nil {

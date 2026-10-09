@@ -28,9 +28,8 @@ import (
 // replaces three hand-offs across three tools, each a place to lose the
 // branch suffix, the base branch or the "keep it local" words.
 //
-// Herdr is a hard dependency. Outside it the command refuses before
-// touching anything: a fallback that execs claude in the current terminal
-// is a later decision, not a silent degrade.
+// Herdr is a hard dependency: outside it the command refuses before
+// touching anything rather than degrade to claude in the current terminal.
 func startCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "start",
@@ -71,12 +70,10 @@ const (
 )
 
 // The keys --after writes under `branch.<name>.` in the local git config:
-// the base task's id, and its branch as a bare name, so the ship skill and
-// the pr step read both with `git config --get` and look up nothing.
-// finish clears them from every dependent once the base branch merged, and
-// marks the dependent landed with the base's id: the base's code is in the
-// default branch and not yet in this one, so ship and catchup bring the
-// default branch in before anything else runs, then clear the mark.
+// the base task's id and its bare branch name, which ship and the pr step
+// read with `git config --get`. Once the base merges, finish clears both and
+// sets f10-landed to the base's id, so ship and catchup bring the default
+// branch in before anything else runs, then clear the mark.
 const (
 	cfgAfter       = "f10-after"
 	cfgAfterBranch = "f10-after-branch"
@@ -673,12 +670,10 @@ func prompt(mode, id string, dep *dependency) string {
 	return driven(p)
 }
 
-// discussPrompt fetches the task and stops. It is plain text, not an f10
-// command, so it carries no driven marker: the user talks to this agent in
-// its own pane, and its questions belong there. `f10 task read` names the
-// read outright, so the agent does not spend its first turn finding the
-// fetch adapter; the adapter stays as the fallback for a project with
-// neither a driver nor a host.
+// discussPrompt fetches the task and stops. It is plain text with no driven
+// marker: the user talks to this agent in its own pane, and its questions
+// belong there. The fetch adapter is the fallback for a project where
+// `f10 task read` has neither a driver nor a host to read from.
 func discussPrompt(id string, dep *dependency) string {
 	p := fmt.Sprintf("Run `f10 task read %s` and read the task in full with its comments, "+
 		"opening every image it links; if that command fails, fetch the task through "+

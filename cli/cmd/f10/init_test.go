@@ -10,9 +10,8 @@ import (
 	"testing"
 )
 
-// init is the binary's only writing verb, so these run the real command
-// tree against real repos: what it creates, and the three cases where it
-// creates nothing.
+// init writes into a real repo, so these run the real command tree against
+// real repos: what it creates, and the three cases where it creates nothing.
 
 func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 	isolateEnv(t)

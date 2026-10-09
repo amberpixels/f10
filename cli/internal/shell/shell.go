@@ -1,7 +1,7 @@
 // Package shell is the binary's door to every external command that is not
 // git: a tracker CLI, a project's driver, a pager, an editor, the OS
-// opener. gitx stays separate because it mirrors the three calls
-// bin/bundle.sh makes; this is everything that script never runs.
+// opener. gitx stays separate because its reads mirror bin/bundle.sh's git
+// calls; this is everything that script never runs.
 //
 // Both entry points are variables so tests can substitute them - nothing
 // here should launch a browser or block on a pager during `go test`.

@@ -111,8 +111,8 @@ func TestForwardSubmitsToTheTasksAgent(t *testing.T) {
 	}
 }
 
-// An agent started before names carried the path hash answers to its bare
-// name: forward reaches it there.
+// An agent whose name lacks the path hash answers to its bare name: forward
+// reaches it there.
 func TestForwardReachesAnAgentByItsBareName(t *testing.T) {
 	fx := newForwardFixture(t)
 	fx.f.fail("herdr agent prompt "+agentOf("GH-1")+" "+fwdText+" --driven", shell.Result{

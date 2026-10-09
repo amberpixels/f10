@@ -1177,9 +1177,9 @@ func TestStartWithoutATitle(t *testing.T) {
 	}
 }
 
-// A task whose branch predates the slug default keeps that branch: git
-// cannot hold GH-1 and GH-1/<slug> at once, and the existing one is the
-// work. The title is not even mentioned.
+// A task with a bare-id branch keeps it over the slug: git cannot hold GH-1
+// and GH-1/<slug> at once, and the existing one is the work. No bare-id
+// note either, since this run named nothing.
 func TestStartReusesABareBranchOverTheSlug(t *testing.T) {
 	f := newFakes(t)
 	f.has["wt"] = true

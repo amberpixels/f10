@@ -743,7 +743,7 @@ func all(status string, ids ...string) string {
 	return listing(pairs...)
 }
 
-// wave is the fixture for the issue's five tasks: GH-12, GH-13 and GH-14
+// wave is the fixture for five tasks: GH-12, GH-13 and GH-14
 // after GH-11, GH-15 after GH-13, every worktree already listed so each
 // open reuses one, and finish recorded among the calls and closing the
 // task the way the tracker would.
@@ -780,7 +780,7 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	return fx
 }
 
-// The issue's acceptance shape runs as three waves: GH-11 alone, then
+// The five-task graph runs as three waves: GH-11 alone, then
 // GH-12, GH-13 and GH-14 prompted together once GH-11 finished, then GH-15
 // once its base GH-13 finished.
 func TestDriveRunsTheGraphInWaves(t *testing.T) {

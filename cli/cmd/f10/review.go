@@ -13,17 +13,15 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
-// The review noun: the remote review a project declares under
-// `project.md → Review`, read off the branch's pull or merge request. `pick`
-// returns the latest review nobody handled, `wait` polls it to done within a
-// budget, `ack` leaves the handled marker. The four facts the section
-// declares - who, where it arrives, what triggers it, what signals done and
-// marks it handled - are the whole configuration; nothing here knows what a
-// Claude workflow or a human reviewer does beyond them.
+// The review noun: the remote review declared in the Review section of
+// project.md, read off the branch's pull or merge request. `pick` returns the
+// latest review nobody handled, `wait` polls it to done within a budget, `ack`
+// leaves the handled marker. The section's four facts (who, where it arrives,
+// what triggers it, what signals done and marks it handled) are the whole
+// configuration.
 //
-// pick and wait read; ack is the one that writes to the host, and the
-// trigger is never performed here: a manual trigger is a human's action, and
-// pick says so when nothing is there.
+// Only ack writes to the host, and the trigger is never performed here: a
+// manual trigger is a human's action, and pick says so when nothing is there.
 func reviewCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "review",

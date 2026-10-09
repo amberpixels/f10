@@ -128,8 +128,7 @@ func TestReviewPickNamesTheManualTriggerWhenNothingIsUnhandled(t *testing.T) {
 	}
 }
 
-// The second acceptance criterion: a review that never completes returns
-// within the budget and says so.
+// A review that never completes returns within the budget and says so.
 func TestAwaitReviewGivesUpWithinBudget(t *testing.T) {
 	f := newFakes(t)
 	rv := ghReviewer(t, f, stickyFacts())

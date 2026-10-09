@@ -160,12 +160,9 @@ func isTerminal(w io.Writer) bool {
 }
 
 // writeDoc emits a markdown document the way its reader can use it: a
-// terminal gets $PAGER when one is set, and everything else - a pipe, a
-// redirect, an agent's Bash tool call - gets the markdown raw.
-//
-// No renderer is bundled and none is required; f10 leans only on what a
-// stock machine already has. Rendering through glow, bat or an editor stays
-// the user's call, and it composes for free, because a pipe is not a
+// terminal gets $PAGER when one is set, and everything else (a pipe, a
+// redirect, an agent's Bash tool call) gets the markdown raw. No renderer is
+// bundled: glow, bat or an editor compose for free, since a pipe is not a
 // terminal and so receives exactly the markdown those tools want.
 func writeDoc(ctx context.Context, w io.Writer, dir, doc string) error {
 	doc = strings.TrimRight(doc, "\n") + "\n"

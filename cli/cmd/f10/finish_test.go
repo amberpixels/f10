@@ -115,7 +115,7 @@ func (fx *finishFixture) run(t *testing.T) (string, error) {
 }
 
 // The happy path from main's checkout: view, merge, view again, delete the
-// remote branch, pull, confirm, archive, report, close, remove, delete.
+// remote branch, pull, confirm, archive, report, remove, delete, close.
 func TestFinishMergesAndCleansUp(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()

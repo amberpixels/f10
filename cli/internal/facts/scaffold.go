@@ -7,14 +7,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
-// The write half of the contract. Scaffold renders what detection found as
-// declared prose, so a value that was `detected` this run reads `declared`
-// the next one - the promotion nothing else in f10 performs.
-//
-// Every value here is written in the vocabulary the parsers above key on -
-// the `GH-###` placeholder idPrefix prefers, the words trackerKind and
-// absorb match - because a file that parses back weaker than the detection
-// it replaced would be a demotion wearing a promotion's clothes.
+// The write half of the contract. Scaffold renders detection as declared
+// prose, so a value `detected` this run reads `declared` the next. Every
+// value uses the vocabulary the parsers key on (the `GH-###` placeholder
+// idPrefix prefers, the words trackerKind and absorb match), so the file
+// never parses back weaker than the detection it replaced.
 
 // A Draft is one rendered project.md: the markdown, the contract sections
 // it carries, and the ones left out because nothing detected them.

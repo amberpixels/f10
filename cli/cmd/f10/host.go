@@ -9,11 +9,9 @@ import (
 	"strings"
 )
 
-// The host-issues fallback: what `task` does in a project with no driver.
-// It exists so a repo needs no .f10/ at all to answer - most libraries
-// track their work as issues on the host their code already lives on - and
-// so the driver contract stays something you adopt when the tracker moves
-// somewhere a CLI cannot reach.
+// The host-issues fallback: what `task` does in a project with no driver,
+// so a repo tracking its work as issues on its own host needs no .f10/ at
+// all. A driver is for a tracker no host CLI can reach.
 //
 // Both CLIs are asked for JSON and the answer is composed into markdown
 // here, so a driver's `read` and this fallback hand `writeDoc` the same

@@ -105,12 +105,11 @@ func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 var mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|merge|rebase)\b`)
 
 // mergeMethod is the flag the host CLI takes for this repo's merge: the
-// method project.md declares, else the one the repo allows. On GitLab the
-// server fixes the strategy per project and squash is the request's only
-// call, so the absent case reads the project's squash option and "" means
-// a plain merge. On GitHub a repo allowing several methods gets squash,
-// and the note says so: a default that rewrites history is not taken in
-// silence.
+// method project.md declares, else the one the repo allows. GitLab fixes
+// the strategy per project and leaves only squash to the request, so the
+// project's squash option decides and "" means a plain merge. A GitHub repo
+// allowing several gets squash with a note, since a default that rewrites
+// history is not taken in silence.
 func (h host) mergeMethod(ctx context.Context, hosting string) (string, string, error) {
 	if m := mergeMethodRe.FindStringSubmatch(hosting); m != nil {
 		method := strings.ToLower(m[1])

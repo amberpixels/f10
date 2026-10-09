@@ -45,12 +45,11 @@ var (
 )
 
 // reviewWorkflow finds the workflow using the Claude Code action, or nil.
-// The action's stock setup installs two: one that reviews on pull_request
-// and one that answers an `@claude` comment. So the first that fires on its
-// own wins, whatever the file names, and the first match of any trigger
-// stands only when none does. Files are read in name order; a file yaml
-// cannot parse is skipped, since a broken workflow is CI's problem to
-// report, not detection's.
+// The stock setup installs two (a pull_request review and an `@claude`
+// answerer), so the first that fires on its own wins whatever the file names,
+// and the first of any trigger stands only when none does. Files are read in
+// name order; one yaml cannot parse is skipped, a broken workflow being CI's
+// problem to report.
 func reviewWorkflow(root string) *Review {
 	dir := filepath.Join(root, ".github", "workflows")
 

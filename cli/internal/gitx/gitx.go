@@ -19,7 +19,7 @@ import (
 
 // Exec runs git with args in dir and returns trimmed stdout. A failure
 // carries git's own stderr, which names the cause better than any wrapper
-// could. It is a variable so tests can script answers instead of running git.
+// could.
 var Exec = func(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir

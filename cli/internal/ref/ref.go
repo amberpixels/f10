@@ -4,7 +4,7 @@
 // name, then the task this session's f10-state file records.
 //
 // The prefix that makes a branch searchable comes from facts - the task id
-// format a project declares, or the one its host implies. Without a prefix
+// format a project declares, or the one its name derives. Without a prefix
 // only an explicit reference is accepted, because no rule can tell a task
 // number in a branch name from any other number.
 package ref
@@ -73,8 +73,7 @@ func (r Lookup) Find(ctx context.Context, explicit string) (Ref, error) {
 
 // exhausted explains which tier came up empty and why. The session tier is
 // the one worth naming out loud: it keys on an agent session's id, so at a
-// human's prompt it is not empty, it is absent - a distinction the old
-// message hid.
+// human's prompt it is not empty, it is absent.
 func (r Lookup) exhausted(ctx context.Context) error {
 	var why []string
 

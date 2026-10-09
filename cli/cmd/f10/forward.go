@@ -19,13 +19,11 @@ import (
 )
 
 // The forward verb hands a command to the agent already working on a task.
-// A task started with `f10 start` lives in a worktree of its own, with a
-// Herdr workspace showing it and an agent in that workspace; a `/f10:ship`
-// for that task typed anywhere else would run on the wrong branch, without
-// the plan. So the skills call this first: it resolves the task to its
-// branch, the branch to its worktree, the worktree to the workspace and the
-// workspace to the agent start named, and submits the text as that agent's
-// next prompt. It returns at submission; the outcome lands in that tab.
+// A `/f10:ship` typed outside the task's `f10 start` worktree would run on
+// the wrong branch, without the plan, so the skills call this first: it
+// resolves task to branch, branch to worktree, worktree to Herdr workspace
+// and workspace to the agent start named, and submits the text as that
+// agent's next prompt. It returns at submission; the outcome lands in that tab.
 //
 // Three outcomes, told apart by exit code so a skill can branch on one
 // call: 0, forwarded, with the report; 3, the task is here (or has no
