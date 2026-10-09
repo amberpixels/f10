@@ -538,6 +538,38 @@ func TestReviewInlineFoldsCommentsAndAcksTheSummaryOnly(t *testing.T) {
 	}
 }
 
+// A thread lookup that fails still picks the review, and the thread ack
+// reports the lookup's failure instead of claiming there are no threads.
+func TestReviewInlineThreadLookupFailureReachesTheAck(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Arrives, rf.Done, rf.Handled = facts.ArrivesInline, facts.DoneSubmitted, facts.HandledThread
+	rv := ghReviewer(t, f, rf)
+
+	f.script("gh api --paginate repos/{owner}/{repo}/pulls/5/reviews?per_page=100", `[
+	  {"id":11,"body":"two things","state":"COMMENTED","commit_id":"c2","html_url":"x",
+	   "submitted_at":"2026-10-06T13:00:00Z","user":{"login":"claude[bot]"}}
+	]`)
+	f.script("gh api --paginate repos/{owner}/{repo}/pulls/5/reviews/11/comments?per_page=100", `[
+	  {"id":901,"path":"a.go","line":3,"body":"nil map","updated_at":"2026-10-06T13:00:00Z"}
+	]`)
+	f.script("gh repo view --json owner,name", `{"name":"r","owner":{"login":"o"}}`)
+	f.fail("gh api graphql -f query="+reviewThreadsQuery+" -F owner=o -F name=r -F number=5",
+		shell.Result{Code: 1, Stderr: "GraphQL: rate limited"})
+
+	r, err := rv.pick(t.Context())
+	if err != nil {
+		t.Fatalf("pick: %v", err)
+	}
+
+	_, err = rv.ack(t.Context(), r)
+	if err == nil || !strings.Contains(err.Error(), "reading the review's threads") ||
+		!strings.Contains(err.Error(), "rate limited") {
+		t.Errorf("thread ack error = %v", err)
+	}
+}
+
 // A check run is done when it concluded, and its body is its output.
 func TestReviewCheckRun(t *testing.T) {
 	f := newFakes(t)
@@ -566,7 +598,8 @@ func TestReviewCheckRun(t *testing.T) {
 func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 	t.Helper()
 
-	f.script("glab mr view -F json", `{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7","sha":"d2"}`)
+	f.script("glab mr view -F json",
+		`{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7","sha":"d2","head_pipeline":{"id":77,"sha":"d2"}}`)
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
@@ -645,8 +678,7 @@ func TestReviewGlabPipelineJob(t *testing.T) {
 	rf.Done, rf.Handled, rf.HandledText = facts.DoneConcluded, "", ""
 	rv := glabReviewer(t, f, rf)
 
-	f.script("glab api projects/:fullpath/merge_requests/7/pipelines?per_page=1", `[{"id":77,"sha":"d2"}]`)
-	f.script("glab api projects/:fullpath/pipelines/77/jobs?per_page=100", `[
+	f.script("glab api --paginate projects/:fullpath/pipelines/77/jobs?per_page=100", `[
 	  {"id":1,"name":"test","status":"success"},
 	  {"id":2,"name":"claude-review","status":"success","web_url":"https://gitlab.com/g/p/-/jobs/2",
 	   "created_at":"2026-10-06T13:00:00Z","finished_at":"2026-10-06T13:10:00Z"}

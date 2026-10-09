@@ -42,19 +42,28 @@ type remoteReview struct {
 	// reader; writing that back would copy every comment into the summary.
 	stored string
 
-	threads   []string // inline review: the threads a `thread resolved` ack resolves
-	commentID string   // inline review: the comment a reaction or marker lands on
-	pending   bool     // inline review: not yet submitted
-	concluded bool     // check run: finished
+	threads    []string // inline review: the threads a `thread resolved` ack resolves
+	threadsErr error    // inline review: why threads could not be read, reported by the ack
+	commentID  string   // inline review: the comment a reaction or marker lands on
+	pending    bool     // inline review: not yet submitted
+	concluded  bool     // check run: finished
 }
 
 // A reviewPull is the request the reviews sit on, with the commits a
 // comment's sha is derived from (an issue comment stores none).
 type reviewPull struct {
-	Number  string
-	HeadSHA string
-	URL     string
-	Commits []pullCommit
+	Number   string
+	HeadSHA  string
+	URL      string
+	Commits  []pullCommit
+	Pipeline *headPipeline // glab only; nil until a pipeline has run
+}
+
+// headPipeline is the merge request's latest pipeline, as GitLab records it
+// on the request itself: the pipelines listing has no sort order to ask for.
+type headPipeline struct {
+	ID  int64  `json:"id"`
+	SHA string `json:"sha"`
 }
 
 type pullCommit struct {
@@ -134,16 +143,22 @@ func (rv *reviewer) loadPull(ctx context.Context, number string) error {
 
 func (rv *reviewer) loadMergeRequest(ctx context.Context, number string) error {
 	var mr struct {
-		IID    int    `json:"iid"`
-		WebURL string `json:"web_url"`
-		SHA    string `json:"sha"`
+		IID          int           `json:"iid"`
+		WebURL       string        `json:"web_url"`
+		SHA          string        `json:"sha"`
+		HeadPipeline *headPipeline `json:"head_pipeline"`
 	}
 
 	if err := rv.h.decode(ctx, &mr, rv.h.prArgs(number, "-F", "json")...); err != nil {
 		return err
 	}
 
-	rv.pull = reviewPull{Number: strconv.Itoa(mr.IID), HeadSHA: mr.SHA, URL: mr.WebURL}
+	rv.pull = reviewPull{
+		Number:   strconv.Itoa(mr.IID),
+		HeadSHA:  mr.SHA,
+		URL:      mr.WebURL,
+		Pipeline: mr.HeadPipeline,
+	}
 
 	type mrCommit struct {
 		ID            string    `json:"id"`
@@ -523,6 +538,10 @@ func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string,
 		)
 	}
 
+	if r.threadsErr != nil {
+		return "", fmt.Errorf("reading the review's threads: %w", r.threadsErr)
+	}
+
 	if len(r.threads) == 0 {
 		return "", errors.New("the review opened no threads to resolve")
 	}
@@ -698,7 +717,9 @@ func (rv *reviewer) foldReviewComments(ctx context.Context, review *remoteReview
 	review.Body = strings.TrimSpace(b.String())
 
 	if len(comments) > 0 {
-		review.threads = rv.threadsOf(ctx, review.ID)
+		// a lookup problem must not fail a pick: the error is kept for the
+		// thread ack to report, the only step that needs the ids
+		review.threads, review.threadsErr = rv.threadsOf(ctx, review.ID)
 	}
 
 	return nil
@@ -706,12 +727,11 @@ func (rv *reviewer) foldReviewComments(ctx context.Context, review *remoteReview
 
 // threadsOf is the node ids of the review's threads, with their resolved
 // state read later by threadsResolved. GraphQL is the only place GitHub
-// exposes a thread; failure here leaves the list empty and the thread ack
-// says so, since a lookup problem must not fail a pick.
-func (rv *reviewer) threadsOf(ctx context.Context, reviewID string) []string {
+// exposes a thread.
+func (rv *reviewer) threadsOf(ctx context.Context, reviewID string) ([]string, error) {
 	threads, err := rv.reviewThreads(ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	var ids []string
@@ -722,7 +742,7 @@ func (rv *reviewer) threadsOf(ctx context.Context, reviewID string) []string {
 		}
 	}
 
-	return ids
+	return ids, nil
 }
 
 // The two GraphQL documents: GitHub exposes review threads nowhere else.
@@ -973,22 +993,12 @@ func (rv *reviewer) checkRuns(ctx context.Context) ([]remoteReview, error) {
 }
 
 func (rv *reviewer) pipelineJobs(ctx context.Context) ([]remoteReview, error) {
-	var pipelines []struct {
-		ID  int64  `json:"id"`
-		SHA string `json:"sha"`
-	}
-
-	if err := rv.h.decode(ctx, &pipelines, "api", rv.mrPath("pipelines?per_page=1")); err != nil {
-		return nil, err
-	}
-
-	if len(pipelines) == 0 {
+	pipeline := rv.pull.Pipeline
+	if pipeline == nil {
 		return nil, nil
 	}
 
-	pipeline := pipelines[0]
-
-	var jobs []struct {
+	type job struct {
 		ID         int64     `json:"id"`
 		Name       string    `json:"name"`
 		Status     string    `json:"status"`
@@ -997,8 +1007,12 @@ func (rv *reviewer) pipelineJobs(ctx context.Context) ([]remoteReview, error) {
 		FinishedAt time.Time `json:"finished_at"`
 	}
 
-	path := "projects/:fullpath/pipelines/" + strconv.FormatInt(pipeline.ID, 10) + "/jobs?per_page=100"
-	if err := rv.h.decode(ctx, &jobs, "api", path); err != nil {
+	jobs, err := decodePages[job](
+		ctx,
+		rv.h,
+		"projects/:fullpath/pipelines/"+strconv.FormatInt(pipeline.ID, 10)+"/jobs?per_page=100",
+	)
+	if err != nil {
 		return nil, err
 	}
 
