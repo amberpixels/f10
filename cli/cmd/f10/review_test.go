@@ -598,8 +598,10 @@ func TestReviewCheckRun(t *testing.T) {
 func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 	t.Helper()
 
-	f.script("glab mr view -F json",
-		`{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7","sha":"d2","head_pipeline":{"id":77,"sha":"d2"}}`)
+	f.script(
+		"glab mr view -F json",
+		`{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7","sha":"d2","head_pipeline":{"id":77,"sha":"d2"}}`,
+	)
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 

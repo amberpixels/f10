@@ -7,7 +7,7 @@
 # standardgo carries the ruleset and the golangci-lint engine in one binary, so this
 # module holds no lint config of its own. It is run via `go run`, not a go.mod tool
 # directive, to keep golangci-lint's dependency tree out of this module's graph.
-standardgo := "github.com/amberpixels/standardgo/cmd/standardgo@v0.2.1"
+standardgo := "github.com/amberpixels/standardgo/cmd/standardgo@v0.2.2"
 
 # Default recipe: format (rewrites, decides nothing; `just fix` is the mutable one)
 default: fmt
