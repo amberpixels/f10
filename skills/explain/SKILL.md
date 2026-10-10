@@ -7,11 +7,7 @@ argument-hint: "<this branch | PR | task-id | commit or range | local | concept 
 
 # f10 · explain
 
-Explain one thing to someone who knows the project but not this thing. A change: what it
-**was** and what it **is** now. A concept, a file, a package, a function: what it **is**, in a
-few sentences from the code. **Creates nothing**: no file, no tracker comment, no code, no PR
-comment. It reaches no verdict (`/f10:judge`), hunts no bugs (`/f10:review`) and runs nothing
-(`/f10:demo`).
+Explain a change, or a concept, file, package or function, to someone who knows the project.
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 

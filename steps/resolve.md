@@ -34,8 +34,7 @@ what the block says is wrong, where, and its fix.
    - **`+reply`** - sends `reason:` to the reviewer. With `reviewer: local` it stays in the
      file. A remote reply posts on the PR or MR (`gh pr comment` / `glab mr note`): on the
      `review:` url's thread for an inline review, else a comment quoting the finding's title.
-     It is outward-facing: a ship run authorizes it, a standalone `/f10:resolve` asks once
-     before the first post. It reads as the user's own: no f10, no round, no findings file.
+     It is outward-facing, under the run's authorization. It reads as the user's own: no f10, no round, no findings file.
      **A remote bot's skip replies by default** (`skip +reply` unless the user said `skip`
      alone), since a CI re-review sees only the thread and re-raises a silent skip. A human
      reviewer gets `+reply` only where the verdict names it.

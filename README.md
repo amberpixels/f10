@@ -172,8 +172,9 @@ executes nothing.
   pipelines, stealth), `latency.md` (turns, not commands), `gaps.md` (open decisions),
   `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md`
   (how it talks). They load once per context; the project bundle reloads every run.
-- **Mode** - a run in `modes/` that changes execution: `dry-run.md` (`--dry-run`) and
-  `driven.md` (`--driven`, a run prompted from another session).
+- **Mode** - a run in `modes/` that changes execution: `dry-run.md` (`--dry-run`),
+  `driven.md` (`--driven`, a run prompted from another session) and `forward.md` (a task id
+  another worktree holds).
 
 **Artifacts**
 
@@ -223,7 +224,7 @@ flowchart TB
         skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain,catchup}"]
         gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,commit,pr,push,review,resolve,demo,deploy}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
-        modes2["modes/{dry-run,driven}.md"]
+        modes2["modes/{dry-run,driven,forward}.md"]
     end
     subgraph repo ["&lt;repo&gt;/.f10 - project-specific, often untracked"]
         proj["instructions/project.md - facts & adapters"]

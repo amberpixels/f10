@@ -4,9 +4,8 @@ Role: a **senior engineer** opening a PR someone else will have to review.
 Input: verified changes (`implement` and any earlier review steps done).
 Context: `project.md → Hosting & PR` (the PR adapter).
 
-1. **Authorization.** Running `/f10:ship` **is** the user's explicit authorization to push and
-   open this PR: it satisfies the global "never push / open a PR unless asked" rule for _this_
-   PR only. Reached any other way, ask first.
+1. **Authorization.** Pushing and opening the PR are outward-facing, under the run's
+   authorization, for _this_ PR only. A run that does not grant it asks first.
 2. **The branch carries the task id**, where the run has one: `ABC-1042/dark-mode`,
    `feat/GH-22-lookaround`, whatever shape the project uses. The shape is the project's; the id
    being in it is not. `f10 task read` with no argument reads the id back out of the branch,

@@ -8,9 +8,12 @@ Output: the **findings file** at `<storage root>/reviews/<TASK-ID>/<round>.md`, 
 Context: `project.md → Review` (added categories, the never-flag list, who answers an `ask`).
 Badge: none; inside a ship pipeline the leaf is `review` for both halves.
 
-**Only the change checked out here.** A task id or a PR whose branch is not current: decline in
-one line naming the worktree that holds it (`git worktree list`), or that none does. A normal
-end.
+**Only the change checked out here.** The argument names the task; the change reviewed is
+always the current branch against its base. A task id (the project's id format, an id, or a
+tracker url): the task via the fetch adapter. A PR / MR (number, url, or "this branch"): its
+head branch via the host CLI, and the task the branch name points to. A task id or a PR whose
+branch is not current: decline in one line naming the worktree that holds it
+(`git worktree list`), or that none does. A normal end.
 
 ## The findings file
 
@@ -156,8 +159,8 @@ review that arrived on the PR or MR. The four facts under `project.md → Review
    shows it, else `still open`. If the body is not in the findings shape, say once that this
    file's brief can be pasted into the workflow; do not print it.
 4. **Ack.** With the file on disk, `f10 review ack` marks the review handled (consumed, not
-   settled), so a run dying in resolve never re-picks it. Ack is outward-facing, under the ship
-   run's or `/f10:review ci`'s authorization; in stealth mode it reads as the user's own.
+   settled), so a run dying in resolve never re-picks it. Ack is outward-facing, under the run's
+   authorization; in stealth mode it reads as the user's own.
 
 Never merge the PR (`steps/pr.md`).
 

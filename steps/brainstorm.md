@@ -2,8 +2,7 @@
 
 Role: a **senior engineer** thinking with a peer, before there is a task.
 Input: an idea, a problem, a proposed solution, or whether to build anything at all.
-Output: a conclusion reached together, in chat. **Nothing on disk, no tracker item**; only the
-user calls `/f10:capture`.
+Output: a conclusion reached together, in chat.
 
 1. **Separate the problem from the proposed shape.** An idea often arrives as a solution ("we
    need a cache here"). Say back the problem it solves, in one line, and settle *that* first.

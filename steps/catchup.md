@@ -8,7 +8,6 @@ Nothing pushed, no task, no plan, no tracker comment.
 Context: `project.md → Hosting & PR` (strategy), `project.md → Verify`.
 Badge: none, and it never retires or overwrites a badge a ship run left.
 
-Invoking `/f10:catchup` authorizes the merge commit or rebased commits it produces, nothing else.
 Never push or force-push. No conflict, or nothing to bring in, is a **correct run**.
 
 1. **Preconditions.** A dirty tree: stop, name the dirty files one per line, touch nothing.

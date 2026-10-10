@@ -7,9 +7,7 @@ argument-hint: "<idea | task-id | PR number or url | this branch | commit or ran
 
 # f10 · judge
 
-Judge the whole thing, not the highlighted spots: the real problem, symptom or cause, what
-already exists, the longer-lived shape. **Creates nothing**: no task, no plan edit, no tracker
-comment, no code. It ends in a one-word verdict with the argument under it.
+A verdict on an idea, a task, a plan or a change: proceed, proceed with changes, rethink, or stop.
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
@@ -22,7 +20,7 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 routing the stripped argument by its point 1; read nothing from `steps/`. With no argument, do
 not ask what to judge.
 
-Stay in the discussion until the user closes it, per the step. Where the verdict implies a next
+Stay in the discussion until the user closes it, talking normally while they argue. Where the verdict implies a next
 f10 skill, offer it in one line (`/f10:capture` after **proceed** on a raw idea, `/f10:plan`
 after **rethink** on a task) and leave the call to the user. Never roll on into capturing,
 planning, or writing code.

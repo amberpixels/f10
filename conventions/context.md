@@ -10,7 +10,9 @@ Every f10 run starts by loading it.
   `/f10:finish` and `/f10:status` run the binary and no step.
 - **step** - a unit of work in `steps/*.md`: `brainstorm`, `capture`, `fetch`, `plan`, `judge`,
   `explain`, `catchup`, `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`,
-  `deploy`. A skill runs one or more.
+  `deploy`. A skill runs one or more. A skill owns the invocation (argument, modes,
+  authorization, where the session stops); a step owns the work. Where they disagree, the
+  skill wins on the invocation and the step on the work.
 - **stage** - one ordered unit *inside* a plan. Never a step or a skill.
 - **task id** - the tracker id, in the project's format. It names the plan file, the branch and
   the report's rows. A planless pipeline has none, and no step may invent one.

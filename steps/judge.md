@@ -2,9 +2,9 @@
 
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
-Output: a verdict in chat, the argument under it. **Nothing on disk, no tracker comment, no
-code.** Name a bug only where it changes the verdict. **Proceed** is a full outcome, but never
-agree because agreeing is cheaper.
+Output: a verdict in chat, the argument under it. **It writes nothing**: no plan edit (folding
+is the ship skill's), no tracker comment, no code, no scratch file; the badge note lives in the
+session's state file, outside every repo. Name a bug only where it changes the verdict. **Proceed** is a full outcome, but never agree because agreeing is cheaper.
 
 1. **Gather the subject.** Free text: as written. A task id: the task via the fetch adapter,
    plus `<storage root>/plans/<TASK-ID>.md` if it exists. A PR number, url, or the current
@@ -51,8 +51,8 @@ agree because agreeing is cheaper.
    ```
 
    Under it, points 2 to 6 in a few short paragraphs grounded in what you read, then the
-   smallest thing that would change the verdict. Afterwards, talk normally as long as the user
-   argues; the banner returns only when the verdict changes.
+   smallest thing that would change the verdict. In later replies, the banner returns only when
+   the verdict changes.
 
 **Blind** (`--blind`): for work this session produced. Gather the subject per point 1, then
 spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole
@@ -79,9 +79,6 @@ the run; none is a failure:
 the changes in without asking; the verdict and the changes are one line each in the report.
 Rethink becomes one ask (objections numbered, the judge's answer
 first, **block the run** among the options), then `set ship blocked judge`. Stop ends blocked.
-
-**It writes nothing**: no plan edit (folding is the ship skill's), no tracker comment, no code,
-no scratch file. The badge note lives in the session's state file, outside every repo.
 
 **On failure:** an unknown task id or an unreadable PR: never judge a subject you could not
 fetch. A **stop** verdict is success.

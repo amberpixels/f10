@@ -7,8 +7,7 @@ argument-hint: "<task-id | PR number or url | this branch>"
 
 # f10 · resolve
 
-Settle what a review found: a verdict per finding (fix, skip or ask), the fixes made and
-verified, every ask in one questionnaire at the end. Never reviews; that is `/f10:review`.
+Settle the findings a review wrote. Producing them is `/f10:review`.
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
@@ -22,10 +21,9 @@ branch") to the findings under `<storage root>/reviews/<TASK-ID>/`.
 **No argument**: the current branch. Do not ask which review: name the file in one line and
 settle it.
 
-A task with no findings file, or whose findings all carry a verdict, is a normal end: say so in
-one line with `/f10:review` as the next step.
+With nothing left to settle, offer `/f10:review` in one line as the next step.
 
 Stop once the verdicts are written and verify is green, and report per
-`${CLAUDE_PLUGIN_ROOT}/conventions/report.md`. Nothing is committed or pushed from here. The one
-thing that can leave the machine is a `+reply` on a PR or MR (`gh pr comment` /
-`glab mr note`), which this skill does not authorize: the step asks once before the first post.
+`${CLAUDE_PLUGIN_ROOT}/conventions/report.md`. Nothing is committed or pushed from here. This
+skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note`): ask once before
+the first post.

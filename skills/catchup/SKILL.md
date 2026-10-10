@@ -7,10 +7,8 @@ argument-hint: "(no argument - the base is the recorded dependency, else the def
 
 # f10 · catchup
 
-Bring the current branch up to date with its base (the branch `f10 start --after` recorded,
-else the default branch) and settle what that raises, keeping both sides' intent. **Creates
-nothing** and **pushes nothing**. Running this skill authorizes the merge commit or rebased
-commits it produces, nothing else.
+Bring the current branch up to date with its base. Running this skill authorizes the merge
+commit or rebased commits it produces, nothing else.
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
@@ -26,9 +24,6 @@ just finished.
 **No routing.** The subject is always the branch checked out here; the skill takes no task id or
 PR. Any text the user adds is steering ("take theirs for the lockfile", "ask me before touching
 the migration").
-
-**Three ends, all normal:** nothing to bring in, a clean integration, or conflicts settled with
-verify green. Report each per `${CLAUDE_PLUGIN_ROOT}/conventions/report.md` with the base named.
 
 Where the run was reached from ship's failure report, say in one line that `/f10:ship <id>`
 can be re-issued now that the branch is on its base.

@@ -7,9 +7,7 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 
 # f10 · brainstorm
 
-Think an idea through with someone who has read the code. **Creates nothing**: no task, no plan
-file, no code. It ends in a shape the user can hand to `/f10:capture`, or in the decision not to
-build.
+Think an idea through with someone who has read the code.
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
@@ -22,6 +20,5 @@ the idea; read nothing from `steps/`.
 **No argument:** the idea is whatever the conversation is already about. Do not ask what to
 brainstorm: name the open question as you understand it and start.
 
-Stay in the discussion until the user closes it. When the shape settles, **stop there**: name
-it, offer `/f10:capture` in one line, and never roll on into capturing, planning, or writing
-code. Those are the user's calls.
+Stay in the discussion until the user closes it. Never roll on into capturing, planning, or
+writing code; those are the user's calls.

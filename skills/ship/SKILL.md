@@ -16,26 +16,8 @@ Take a task through planning, if needed, then the project's **ship pipeline** (d
 alongside this skill. Its questions (reuse or re-plan, wait or proceed on a base with no code, a
 judge's rethink) each become one `ask` there.
 
-**Forward first, when the argument is a task id.** A task started with `f10 start` has its own
-worktree, workspace and agent, and its plan sits in that worktree's storage root; shipping it
-here would use the wrong branch and no plan. Before loading anything, one call:
-
-```
-f10 forward <task-id> "/f10:ship <the argument verbatim>"
-```
-
-- **exit 0** - another checkout holds the task's branch and the command went to its agent.
-  Print the command's block (task, workspace, sent) in a fenced `yaml` block, add nothing, and
-  stop. Join `f10-state.sh clear` to the same call to retire the badge seeded when the command
-  was typed: this session has no run.
-- **exit 3** - the task is here (its branch is this checkout's, or it has no worktree), as
-  stderr says. Continue below.
-- anything else is a failure per `${CLAUDE_PLUGIN_ROOT}/conventions/failure.md` (outside Herdr,
-  no workspace shows the worktree, the agent is idle and not reporting). Report it and stop.
-
-Without the `f10` binary on `PATH`, read `git worktree list --porcelain` once. A worktree other
-than this checkout whose branch is `<id>`, `<id>/...` or `<id>-...` holds the task out of reach:
-fail, pointing at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`. Otherwise continue.
+**Forward first:** with a task id as the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md`
+before loading anything.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
@@ -55,34 +37,19 @@ pipeline is declared in what that call prints.
 (`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`) or in their
 own words. Suggest a better fit if you like; never switch without the user's pick.
 
-**Dependency:** before the first pipeline step, read what `f10 start --after` and `f10 finish`
-recorded on the branch:
+**Catch up with the base** just before implement, only where `f10 start --after` or
+`f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded,
+nothing to do). Run `steps/catchup.md` points 2 and 3, with three differences:
 
-```
-git config --get branch."$(git branch --show-current)".f10-after          # the base task
-git config --get branch."$(git branch --show-current)".f10-after-branch   # its branch
-git config --get branch."$(git branch --show-current)".f10-landed         # a base finished since
-```
-
-- **`f10-landed`**: the base task merged after this branch began. Catch up with the default
-  branch, then `git config --unset` the mark.
-- **`f10-after`**: `git fetch origin`, find the base local-first (`refs/heads/<branch>`, else
-  `origin/<branch>`), then:
-  - exists nowhere: the base was finished; `git config --unset` both keys and catch up with the
-    default branch;
-  - an ancestor of HEAD (`git merge-base --is-ancestor <base> HEAD`): nothing to do;
-  - moved: catch up with `<base>`;
-  - still at the default branch's commit (no code yet): ask once (AskUserQuestion) **wait**, or
-    **proceed on the plan's assumption**. Wait ends the run blocked
-    (`f10-state.sh set ship blocked implement`, a `note` naming the base task). Proceed builds
-    against the base task's plan as the plan file records it, with no fallback if it is absent.
-- Nothing recorded: nothing to do.
-
-**Catching up** happens just before implement (target: the base, or `origin/<default>` after
-the fetch): `git rebase <target>`,
-or `git merge --no-edit <target>` where `project.md → Hosting & PR` declares `catchup: merge`. A
-conflict fails the run: abort so the tree is unchanged, keep any mark, and name `/f10:catchup`
-in the `next` row. Ship never settles conflicts or implements over a half-merged tree.
+- **A base with no code yet** (its branch still at the default branch's commit): before
+  integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
+  Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the
+  base task). Proceed builds against the base task's plan as the plan file records it, with no
+  fallback if it is absent.
+- **A conflict fails the run**: abort so the tree is unchanged, keep any mark, and name
+  `/f10:catchup` in the `next` row. Ship never settles conflicts or implements over a
+  half-merged tree.
+- **`f10-landed`** is unset once the integration is clean; implement's verify covers it.
 
 Run the pipeline's steps **in the declared order**, from the bundle. Extra user text is
 steering. A plan written this run needs no re-confirming. A `judge` step routes the run by its
@@ -98,5 +65,7 @@ adds `f10-state.sh set plan prior`. Stopping mid-way with durable artifacts is
 produced), then review status ("stopped at PR" is a normal end), deploy status, what changed,
 and a one-line reminder of gaps left on their defaults.
 
-Running this skill authorizes the push and the PR (`steps/pr.md`); deploy has its own
+Running this skill **is** the user's explicit authorization to push and open this task's PR
+(`steps/pr.md`), satisfying the global "never push / open a PR unless asked" rule for that PR
+only, and to post resolve's `+reply` and review's `f10 review ack`. Deploy has its own
 confirmation (`steps/deploy.md`).

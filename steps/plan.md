@@ -2,7 +2,7 @@
 
 Role: a **senior software architect** in the project's stack, plus the conditional roles the
 fetch brief's areas trigger.
-Input: the fetch step's investigation brief (run `steps/fetch.md` first if it hasn't been).
+Input: the fetch step's investigation brief.
 Context: `project.md` guardrails and house style.
 Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phase;
 `f10-state.sh set plan done` once the plan file is on disk.
