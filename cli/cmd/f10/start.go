@@ -169,11 +169,12 @@ func startMode(cmd *cli.Command) (string, error) {
 
 // declaresPipeline reports whether project.md names a pipeline: a line of
 // the Ship pipeline(s) fact that opens with the name and a colon, in the
-// shape docs/project-setup.md shows (`- local: implement -> commit`).
+// shape docs/project-setup.md shows (`- local: implement -> commit`). The
+// name may carry markdown emphasis or code marks (`**local**:`).
 func declaresPipeline(t *target, name string) bool {
 	for line := range strings.SplitSeq(t.fact("Ship pipeline(s)"), "\n") {
 		line = strings.TrimLeft(strings.TrimSpace(line), "-* ")
-		if head, _, ok := strings.Cut(line, ":"); ok && strings.EqualFold(strings.TrimSpace(head), name) {
+		if head, _, ok := strings.Cut(line, ":"); ok && strings.EqualFold(strings.Trim(head, "*_` "), name) {
 			return true
 		}
 	}

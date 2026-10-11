@@ -585,6 +585,19 @@ func TestDeclaresPipeline(t *testing.T) {
 	if declaresPipeline(&target{eff: &facts.Effective{}}, "local") {
 		t.Error("a project with no pipelines declares local")
 	}
+
+	for _, line := range []string{
+		"- **local**: `implement → commit`",
+		"- **local:** implement -> commit",
+		"- `local`: implement -> commit",
+		"- *local*: implement -> commit",
+		"- _local_: implement -> commit",
+	} {
+		marked := &facts.Effective{Fields: []facts.Field{{Name: "Ship pipeline(s)", Value: line, Prose: true}}}
+		if !declaresPipeline(&target{eff: marked}, "local") {
+			t.Errorf("%q: a local pipeline with a marked-up name was not found", line)
+		}
+	}
 }
 
 // The whole flow with worktrunk present: wt creates, git is asked for the
