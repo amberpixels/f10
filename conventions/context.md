@@ -30,12 +30,12 @@ A step's `Role:` is its base role; add the project's `project.md → Roles` on t
 ## Loading order (do this at the start of any f10 run)
 
 ```
-${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh                    # once per context
 ${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh <step> [<step> ...]    # once per run
 ```
 
-**`conventions.sh`** prints these six convention files, the same everywhere; a skill skips it only while an earlier call's output is still in context word for word.
-A subagent or a fresh session starts empty: its prompt says to run both calls.
+**The conventions** (these six files, `conventions.sh`'s output) arrive through the plugin's hooks, never through a skill: a session's first f10 skill, typed or called through the `Skill` tool, gets them, and a `SessionStart` after compaction gets them again.
+No skill decides whether the context still holds them; `f10-state.sh` keeps a per-session marker and the hooks read it.
+A subagent or a fresh session starts empty and no hook feeds it: its prompt says to run `conventions.sh`, then `bundle.sh`.
 
 **`bundle.sh`** prints the project's instructions, layered, and the requested **generic step files**: never read the plugin's `steps/` by hand, and never skip the call (its output changes with the worktree).
 It concatenates; you interpret `project.md` and bind adapters.

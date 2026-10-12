@@ -157,7 +157,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   Of several **named pipelines**, only the user picks a non-default one.
   A *(planless)* one skips ticket and plan file.
 - **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, pipelines, stealth), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how it talks).
-  They load once per context; the project bundle reloads every run.
+  The plugin's hooks inject them when a skill starts and again after compaction; the project bundle reloads every run.
 - **Mode** - a run in `modes/` that changes execution: `help.md` (`--help`), `dry-run.md` (`--dry-run`), `driven.md` (`--driven`, a run prompted from another session) and `forward.md` (a task id another worktree holds).
 
 **Artifacts**
@@ -310,6 +310,7 @@ Overriding `F10_STATE_GLYPHS` takes all eight positions; the last two hold the r
 <summary>How the badge stays current: two writers</summary>
 
 - **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting, typed or model-invoked, and read the argument to tell a description (routed through capture) from a task id; the first also answers a bare `/f10:status` with a blocking verdict on stdout, ending the turn.
+  The same two events, and `SessionStart` after a compaction, inject the conventions, in chunks under Claude Code's per-hook cap, once per session and again when compaction dropped them; a per-session marker says whether the session holds them.
   `PostToolUse` catches the plan file being written: "plan done", and the task id.
   `Stop` closes out whatever is still running.
   `SessionStart` prunes dead state and refreshes the symlink.
@@ -452,7 +453,7 @@ The parity suite in `cli/internal/layout` runs every fixture through both.
 ## Development
 
 The executable surface is `bin/` plus `cli/`.
-`bin/conventions.sh` cats the six convention files (identical everywhere, loaded once per context); `bin/bundle.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
+`bin/conventions.sh` cats the six convention files (identical everywhere; the hooks inject it in chunks, a subagent runs it); `bin/bundle.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
 `cli/` is the lookaround binary, its own Go module (`github.com/amberpixels/f10/cli`) with `cmd/f10` as its main, kept in this repo because its parity tests run the scripts in `bin/`.
 
 ```bash

@@ -10,6 +10,26 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "f10:(brainstorm|capture|catchup|demo|explain|judge|plan|resolve|review|ship)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 2",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 3",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -19,6 +39,26 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh hook",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 2",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 3",
             "timeout": 5
           }
         ]
@@ -57,6 +97,25 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh hook",
             "timeout": 10,
             "async": true
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 2",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 3",
+            "timeout": 5
           }
         ]
       }
