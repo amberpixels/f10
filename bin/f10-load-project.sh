@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # f10 · load-project - one-shot deterministic context loading.
 #
-# The project-specific half of conventions/context.md's loading order, in one call: locate
+# The project-specific half of a run's context, in one call (read per conventions/context.md): locate
 # .f10/instructions/ (a linked worktree's layered on main's), list each layer, cat the generic
 # steps this run executes plus each layer's project.md and overlays in precedence order, and run
 # the inference probes (remote host, stack, verify tooling). It never fails; absence is a result.

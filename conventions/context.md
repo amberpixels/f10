@@ -18,8 +18,8 @@ Every f10 run starts by loading it.
   It names the plan file, the branch and the report's rows.
   A planless pipeline has none, and no step may invent one.
 - **plan** - `<storage root>/plans/<TASK-ID>.md`.
-  Bare `plan` is ambiguous: write `/f10:plan` for the skill, `steps/plan.md` for the step.
-  "Run `steps/plan.md`" means execute its instructions, never re-invoke the skill.
+  Bare `plan` is ambiguous: write `/f10:plan` for the skill, the **plan** step for the step.
+  "Run the **plan** step" means execute its instructions, never re-invoke the skill.
 - **findings** - `<storage root>/reviews/<TASK-ID>/<round>.md` (`steps/review.md`).
 - **shipment** - what the ship pipeline leaves, named by its **last step**: verified code (`implement`), local commits (`commit`), pushed commits (`push`), an open PR/MR (`pr`), a running environment (`deploy`), or a project-defined step's output.
 
@@ -27,22 +27,12 @@ Every f10 run starts by loading it.
 A step's `Role:` is its base role; add the project's `project.md → Roles` on top, including conditional roles the plan recorded.
 `Context:` names the `project.md` sections the step reads; its same-named overlay (`.f10/instructions/<step>.md`) extends it.
 
-## Loading order (do this at the start of any f10 run)
+## Reading the project load
 
-```
-f10-load-conventions.sh                  # when f10-inject.sh says so
-f10-load-project.sh <step> [<step> ...]  # once per run
-```
-
-**`f10-load-conventions.sh`** prints these six convention files.
-Run it when the plugin's hook says this context does not hold them: on a session's first f10 skill, typed or called through the `Skill` tool, and after compaction.
-No skill decides whether the context still holds them; `f10-inject.sh` keeps a per-session marker and decides.
-A subagent starts empty and no hook reaches it: its prompt says to run `f10-load-conventions.sh`, then `f10-load-project.sh`.
-
-**`f10-load-project.sh`** prints the project's instructions, layered, the inference probes, and the requested **generic step files**: never read the plugin's `steps/` by hand, and never skip the call (its output changes with the worktree).
+`f10-load-project.sh` prints the project's instructions, layered, the inference probes, the generic steps the skill named, and each layer's overlays for them.
+Steps come only from it, never from the plugin's `steps/` read by hand.
 It concatenates; you interpret `project.md` and bind adapters.
-**`/f10:ship` passes `--all`**: its pipeline is declared in the `project.md` the call prints.
-Reading the project load (and, if `f10-load-project.sh` is ever unavailable, what to do by hand):
+If it is ever unavailable, the points below say what to do by hand:
 
 1. **`storage root:`** is absolute, anchored to the checkout root (`git rev-parse --show-toplevel`), never the cwd.
    Use it verbatim, never re-derive it.
