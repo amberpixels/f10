@@ -10,11 +10,12 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `<idea>`: the idea to think through.
-- No argument: the open question this conversation is on. Say in one line which question you
-  took, then start.
-- No idea at all (empty with nothing open, or only an invitation to talk): ask for it in one
-  line and wait.
+- `<idea>`: the idea to think through. An argument that names no idea ("let's brainstorm")
+  counts as none.
+- No argument:
+  - An open question in this conversation: that is the idea. Say in one line which question
+    you took, then start.
+  - Nothing open: ask for the idea in one line and wait.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then

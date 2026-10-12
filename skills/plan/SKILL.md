@@ -16,12 +16,12 @@ argument-hint: "<task-id | free-text description>"
   and `steps/plan.md`.
 - A **free-text description**: run `steps/capture.md` (create the task), `steps/fetch.md`, then
   `steps/plan.md`.
-- **No argument, but a task is already in this conversation** (e.g. the user just fetched and
-  discussed it): the task and the design agreed in chat are settled. **Skip `capture` and the
-  `fetch` investigation**; go to `steps/plan.md` with at most a few targeted reads of the code
-  you'll mirror or touch.
-- No task at all (empty with none in the conversation, or only an invitation): ask for one in
-  one line and wait.
+- **No argument** (an argument that names no task, like "let's plan something", counts as none):
+  - **A task already in this conversation** (e.g. the user just fetched and discussed it): the
+    task and the design agreed in chat are settled. **Skip `capture` and the `fetch`
+    investigation**; go to `steps/plan.md` with at most a few targeted reads of the code you'll
+    mirror or touch.
+  - No task in the conversation: ask for one in one line and wait.
 - Extra text beside a task id is steering for the run.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):

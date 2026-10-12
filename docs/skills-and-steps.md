@@ -34,10 +34,10 @@ skill that runs it, except where its behavior differs by caller.
    skill that only runs the binary says what the command does here.
 4. **`**Arguments**`**, a list, before anything loads: `--help`, `--dry-run`, the skill's other
    flags as `` `token`: effect ``, then one item per case of what remains: a `<placeholder>`
-   item per positional argument, a **No argument** item (the conversation's open question, or
-   a default such as the current branch), and, where no default exists, an item that asks in
-   one line and waits when nothing names a subject. Route by what the argument says, not by
-   whether there is one: "let's judge something" names no subject. Every token in
+   item per positional argument, then a **No argument** item: a default such as the current
+   branch, or, where none exists, sub-items split by context (the conversation's open
+   question; nothing open, so ask in one line and wait). Route by what the argument says, not
+   by whether there is one: "let's judge something" names no subject and counts as none. Every token in
    `argument-hint` has an item here; `--help` prints this list.
 5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
 6. **The skill's own content.**
