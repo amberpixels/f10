@@ -447,13 +447,13 @@ Refusals come before any change: a dirty worktree (file by file, no `--force`), 
 
 Files stay where they live; it scans other repos only once you set `F10_ROOTS`.
 Only `init`, `start`, `drive` (which records each task's last skill in local git config) and `finish` write.
-`bin/f10-load.sh` stays the agents' loader; the binary may interpret `project.md` prose, showing what it cannot place as `unrecognized`.
+`bin/f10-load-project.sh` stays the agents' loader; the binary may interpret `project.md` prose, showing what it cannot place as `unrecognized`.
 The parity suite in `cli/internal/layout` runs every fixture through both.
 
 ## Development
 
 The executable surface is `bin/` plus `cli/`.
-`bin/f10-rules.sh` cats the six convention files (identical everywhere; run when `bin/f10-inject.sh`, a hook, says the context lacks them, and by subagents); `bin/f10-load.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
+`bin/f10-load-conventions.sh` cats the six convention files (identical everywhere; run when `bin/f10-inject.sh`, a hook, says the context lacks them, and by subagents); `bin/f10-load-project.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
 All four are on the Bash tool's `PATH`, so prose names them bare.
 `cli/` is the lookaround binary, its own Go module (`github.com/amberpixels/f10/cli`) with `cmd/f10` as its main, kept in this repo because its parity tests run the scripts in `bin/`.
 
@@ -461,7 +461,7 @@ All four are on the Bash tool's `PATH`, so prose names them bare.
 just lint   # shell + Go findings, change nothing (with `just test`, what CI runs)
 just fmt    # rewrite shell + Go to canonical form
 just fix    # apply everything auto-fixable - run on a clean tree, read the diff
-just test   # go test ./..., the f10-load.sh parity suite included
+just test   # go test ./..., the f10-load-project.sh parity suite included
 just build  # go build ./...
 ```
 

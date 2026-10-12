@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# f10 · inject - tell the model when to load the rules, so no model decides whether it holds them.
+# f10 · inject - tell the model when to load the conventions, so no model decides whether it holds them.
 #
 # A hook, JSON on stdin. A session's first f10 skill that runs a step, typed (UserPromptExpansion)
-# or model-invoked (PreToolUse on Skill), gets one line of context: run f10-rules.sh. So does a
+# or model-invoked (PreToolUse on Skill), gets one line of context: run f10-load-conventions.sh. So does a
 # SessionStart with source `compact` in a session that had them, since compaction drops the text.
 # The model cannot judge that itself: after compaction the summary remembers the load, not the text.
 #
-# One line, not the rules themselves: Claude Code caps one hook's context at 10,000 characters and
-# the rules are over twice that.
+# One line, not the conventions themselves: Claude Code caps one hook's context at 10,000 characters and
+# the conventions are over twice that.
 #
 # Whether the session holds them is a marker beside the run state, `<session>.conventions`.
 # f10-state.sh's seed and clear never touch it (a new run is not a new context); its prune and
@@ -20,12 +20,12 @@ set -uo pipefail
 
 state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
 
-# The skills that run a step and so read the rules. status, start, drive and finish run the binary
+# The skills that run a step and so read the conventions. status, start, drive and finish run the binary
 # alone; --help loads nothing (modes/help.md).
 skills="brainstorm capture catchup demo explain judge plan resolve review ship"
 
 # shellcheck disable=SC2016 # the backticks are markdown for the model, not a command
-line='This context does not hold the f10 rules: run `f10-rules.sh` before anything else.'
+line='This context does not hold the f10 conventions: run `f10-load-conventions.sh` before anything else.'
 
 json=""
 json_get() { # json_get <key> [<parent object>], jq where it exists, sed otherwise
@@ -42,7 +42,7 @@ json_get() { # json_get <key> [<parent object>], jq where it exists, sed otherwi
     sed -n "s/.*\"$k\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
 }
 
-skill_of() { # the skill a payload names, as `f10:plan` or `plan`, if it reads the rules
+skill_of() { # the skill a payload names, as `f10:plan` or `plan`, if it reads the conventions
   local n="${1#f10:}"
   case " $skills " in *" $n "*) printf '%s' "$n" ;; esac
 }

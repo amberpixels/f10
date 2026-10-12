@@ -10,14 +10,14 @@ import (
 	"testing"
 )
 
-// f10-rules.sh walks a fixed list, not a glob, so a file added to
+// f10-load-conventions.sh walks a fixed list, not a glob, so a file added to
 // conventions/ without a list entry would never load. This pins the two.
 func TestConventionsListMatchesDir(t *testing.T) {
 	bin := filepath.Dir(scriptPath(t))
 
-	out, err := exec.Command(filepath.Join(bin, "f10-rules.sh")).Output()
+	out, err := exec.Command(filepath.Join(bin, "f10-load-conventions.sh")).Output()
 	if err != nil {
-		t.Fatalf("f10-rules.sh: %v", err)
+		t.Fatalf("f10-load-conventions.sh: %v", err)
 	}
 
 	var carried []string
@@ -28,7 +28,7 @@ func TestConventionsListMatchesDir(t *testing.T) {
 	}
 
 	if strings.Contains(string(out), "MISSING - ") {
-		t.Errorf("f10-rules.sh names a file that does not exist:\n%s", out)
+		t.Errorf("f10-load-conventions.sh names a file that does not exist:\n%s", out)
 	}
 
 	files, err := filepath.Glob(filepath.Join(bin, "..", "conventions", "*.md"))
@@ -45,11 +45,11 @@ func TestConventionsListMatchesDir(t *testing.T) {
 	listed := slices.Sorted(slices.Values(carried))
 
 	if !slices.Equal(listed, onDisk) {
-		t.Errorf("f10-rules.sh carries %v, conventions/ holds %v", listed, onDisk)
+		t.Errorf("f10-load-conventions.sh carries %v, conventions/ holds %v", listed, onDisk)
 	}
 }
 
-// f10-inject.sh tells the model to run f10-rules.sh: on a session's first f10
+// f10-inject.sh tells the model to run f10-load-conventions.sh: on a session's first f10
 // skill, typed or model-invoked, and after compaction. This pins its wiring:
 // one synchronous entry on each of those events, since an async one would
 // arrive a turn late.

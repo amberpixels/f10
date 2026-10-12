@@ -51,7 +51,7 @@ Name a bug only where it changes the verdict.
    In later replies, the banner returns only when the verdict changes.
 
 **Blind** (`--blind`): for work this session produced.
-Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-rules.sh`, `f10-load.sh judge`) and follow this step.
+Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`) and follow this step.
 Relay its verdict unchanged; you may dispute it in one line.
 
 **In a ship pipeline** (`plan → judge → implement`, `implement → judge → pr`), the verdict routes the run; none is a failure:

@@ -12,7 +12,7 @@
 // `drive` runs a list of tasks through a chain of skills that way, and
 // `finish` undoes start once the work merged: the PR merged on the host,
 // the plan archived, the workspace closed, the worktree and branch removed,
-// main pulled. bin/f10-load.sh stays the agent-facing surface for a pipeline
+// main pulled. bin/f10-load-project.sh stays the agent-facing surface for a pipeline
 // run; this is the surface for a person, and for the commands an agent runs
 // to read a task, start the next one, reach another or finish this one.
 //

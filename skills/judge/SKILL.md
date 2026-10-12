@@ -21,7 +21,7 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
   - Nothing open: ask for the subject in one line and wait.
 
 **Run**
-- `f10-load.sh judge`, every run.
+- `f10-load-project.sh judge`, every run.
 - Follow the **judge** step it prints; read nothing from `steps/`.
 
 **Exit**

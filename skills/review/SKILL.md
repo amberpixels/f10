@@ -21,7 +21,7 @@ Running `/f10:review ci` authorizes the `f10 review ack` the remote half makes.
   Say in one line which branch and base you took, then start.
 
 **Run**
-- `f10-load.sh review`, every run.
+- `f10-load-project.sh review`, every run.
 - Follow the **review** step it prints; read nothing from `steps/`.
 
 **Exit**

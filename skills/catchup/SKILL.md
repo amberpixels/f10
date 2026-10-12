@@ -19,7 +19,7 @@ Running this skill authorizes the merge commit or rebased commits it produces, n
 - No argument: catch the branch checked out here up with its base.
 
 **Run**
-- `f10-load.sh catchup`, every run.
+- `f10-load-project.sh catchup`, every run.
 - Follow the **catchup** step it prints; read nothing from `steps/`.
 
 **Exit**

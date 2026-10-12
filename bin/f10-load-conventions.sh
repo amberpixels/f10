@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# f10 · rules - the static half of a run's context.
+# f10 · load-conventions - the static half of a run's context.
 #
 # Cats the six convention files every f10 run obeys. No arguments, git or probes, so the output is
 # identical everywhere. f10-inject.sh tells the model to run it, on a session's first f10 skill and
-# again after compaction; a subagent's prompt says to run it. f10-load.sh, whose output varies by
+# again after compaction; a subagent's prompt says to run it. f10-load-project.sh, whose output varies by
 # worktree and step, reloads every run.
 #
-# Usage:  f10-rules.sh
-#   Arguments are ignored, not rejected: a caller passing a stale step name still gets the rules.
+# Usage:  f10-load-conventions.sh
+#   Arguments are ignored, not rejected: a caller passing a stale step name still gets them all.
 
 set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 convs=(context latency failure gaps report voice)
 
-echo "=== f10 rules (conventions/) - static, identical every run ==="
+echo "=== f10 conventions - static, identical every run ==="
 echo "carries: ${convs[*]}"
 echo
 for c in "${convs[@]}"; do
@@ -26,4 +26,4 @@ for c in "${convs[@]}"; do
   fi
   echo
 done
-echo "=== end f10 rules - in this context now; the hooks say when to run this again ==="
+echo "=== end f10 conventions - in this context now; the hooks say when to run this again ==="

@@ -27,7 +27,7 @@ Deploy has its own confirmation (`steps/deploy.md`).
 - Extra text beside the subject is steering.
 
 **Run**
-- `f10-load.sh --all`, every run: the pipeline is declared in what it prints.
+- `f10-load-project.sh --all`, every run: the pipeline is declared in what it prints.
 - Follow the steps it prints, in the order the Arguments item and the pipeline give; read nothing from `steps/`.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
@@ -39,7 +39,7 @@ Run `steps/catchup.md` points 2 and 3, with three differences:
 - **A conflict fails the run**: abort so the tree is unchanged, keep any mark, and name `/f10:catchup` in the `next` row.
 - **`f10-landed`** is unset once the integration is clean; implement's verify covers it.
 
-Run the pipeline's steps **in the declared order**, from what `f10-load.sh` printed.
+Run the pipeline's steps **in the declared order**, from what `f10-load-project.sh` printed.
 A plan written this run needs no re-confirming.
 A `judge` step routes the run by its verdict (`steps/judge.md`).
 

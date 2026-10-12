@@ -250,7 +250,7 @@ func TestShowParity(t *testing.T) {
 	}
 }
 
-// f10-inject.sh tells the model to run f10-rules.sh, gated by a per-session
+// f10-inject.sh tells the model to run f10-load-conventions.sh, gated by a per-session
 // marker. This pins the gate: a session's first skill is told, a later prompt
 // is not, --help and the step-less skills never are, and a compaction tells
 // again only where the session had them.
@@ -318,9 +318,9 @@ func TestInject(t *testing.T) {
 		return `{"session_id":"` + sid + `","hook_event_name":"SessionStart","source":"` + source + `"}`
 	}
 
-	// the first skill of a session is told to run f10-rules.sh
-	if got := inject(typed("s1", "p1", "f10:plan", "GH-1")); !strings.Contains(got, "f10-rules.sh") {
-		t.Errorf("first skill: got %q, want a line naming f10-rules.sh", got)
+	// the first skill of a session is told to run f10-load-conventions.sh
+	if got := inject(typed("s1", "p1", "f10:plan", "GH-1")); !strings.Contains(got, "f10-load-conventions.sh") {
+		t.Errorf("first skill: got %q, want a line naming f10-load-conventions.sh", got)
 	}
 
 	// a later prompt in the same session, typed or model-invoked: the session holds them

@@ -1,6 +1,6 @@
 // Package layout locates the f10 configuration layers for a working
 // directory: the checkout root, the instruction layers in precedence order,
-// their layering mode, and the storage root. bin/f10-load.sh is the semantics
+// their layering mode, and the storage root. bin/f10-load-project.sh is the semantics
 // oracle - the parity test in this package runs both against the same
 // fixtures, so a change to either side fails loudly until both move.
 package layout
@@ -33,7 +33,7 @@ type Layer struct {
 }
 
 // A Layout names where configuration lives for one working directory.
-// Path fields are physical (symlinks resolved), matching f10-load.sh.
+// Path fields are physical (symlinks resolved), matching f10-load-project.sh.
 type Layout struct {
 	Cwd              string  // where the run started
 	CheckoutRoot     string  // root of the checkout the run started in
@@ -44,7 +44,7 @@ type Layout struct {
 	LayeringDeclared bool    // a worktree project.md declares Layering
 	LayeringFrom     string  // "frontmatter" or "prose", when declared
 	Layers           []Layer // precedence order: later wins
-	Source           string  // human description; wording matches f10-load.sh
+	Source           string  // human description; wording matches f10-load-project.sh
 	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
 }
 

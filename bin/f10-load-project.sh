@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# f10 · load - one-shot deterministic context loading.
+# f10 · load-project - one-shot deterministic context loading.
 #
 # The project-specific half of conventions/context.md's loading order, in one call: locate
 # .f10/instructions/ (a linked worktree's layered on main's), list each layer, cat the generic
@@ -9,13 +9,14 @@
 # It concatenates and probes, never interprets, except for the worktree layer's `Layering`
 # declaration, which decides what gets concatenated.
 #
-# Conventions live in f10-rules.sh because they are universal and load once per context. Steps
-# are static prose too but selected per run, so they print here rather than cost a third call.
+# Conventions live in f10-load-conventions.sh because they are universal and load once per
+# context. Steps are static prose too but selected per run, so they print here rather than cost a
+# third call.
 #
-# Usage:  f10-load.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
-#         f10-load.sh --all               cat every generic step + project.md + every overlay
-#         f10-load.sh                     facts, layering, listing and probes only, no steps
-#   e.g.  f10-load.sh capture  |  f10-load.sh fetch plan  |  f10-load.sh --all
+# Usage:  f10-load-project.sh <step> [<step> ...]   the named generic steps + project.md + overlays
+#         f10-load-project.sh --all                 every generic step + project.md + every overlay
+#         f10-load-project.sh                       facts, layering, listing and probes, no steps
+#   e.g.  f10-load-project.sh capture  |  f10-load-project.sh fetch plan  |  f10-load-project.sh --all
 #
 # --all exists for /f10:ship, whose steps are the pipeline declared in the project.md this script
 # prints, so ship cannot name them before the call. Do not replace it with a fixed step list.
@@ -202,7 +203,7 @@ supplied() { # supplied <file.md>
   return 1
 }
 
-echo "=== f10 load @ $cwd ==="
+echo "=== f10 project @ $cwd ==="
 echo "checkout root: $here"
 if [ "$all" = 1 ]; then
   echo "steps requested: --all (every overlay each layer holds)"
@@ -322,4 +323,4 @@ if [ -d "$storage/plans" ]; then
   echo "existing plans: ${#plans[@]} file(s) in $storage/plans/"
 fi
 echo
-echo "=== end f10 load (nothing was fetched, written, or created) ==="
+echo "=== end f10 project (nothing was fetched, written, or created) ==="

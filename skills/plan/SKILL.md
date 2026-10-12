@@ -21,7 +21,7 @@ argument-hint: "<task-id | free-text description>"
 - Extra text beside a task id is steering for the run.
 
 **Run**
-- `f10-load.sh fetch plan`, every run, with `capture` first when the argument is free text.
+- `f10-load-project.sh fetch plan`, every run, with `capture` first when the argument is free text.
 - Follow each step it prints, in the order the Arguments item gives; read nothing from `steps/`.
 
 **Exit**

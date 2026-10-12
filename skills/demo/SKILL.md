@@ -21,7 +21,7 @@ No `allowed-tools` on purpose: the executor is whatever the `demo` overlay binds
   Say in one line which branch and base you took, then start.
 
 **Run**
-- `f10-load.sh demo`, every run.
+- `f10-load-project.sh demo`, every run.
 - Follow the **demo** step it prints; read nothing from `steps/`.
 
 **Exit**

@@ -1,7 +1,7 @@
 # Skills and steps
 
 A **skill** (`skills/<name>/SKILL.md`) is what Claude Code registers and the user invokes as `/f10:<name>`.
-A **step** (`steps/<name>.md`) is a unit of work, reached only through `bin/f10-load.sh`.
+A **step** (`steps/<name>.md`) is a unit of work, reached only through `bin/f10-load-project.sh`.
 A skill runs zero or more steps; a step can be run by several skills and by the ship pipeline, and a project can extend it with an overlay (`.f10/instructions/<step>.md`).
 A skill cannot be extended.
 
@@ -12,7 +12,7 @@ A skill cannot be extended.
 | Skill | Step |
 |---|---|
 | The argument: flags to strip, the no-argument default, which steps to run and in what order | Role, input, output, the procedure |
-| Context loading (`f10-load.sh <steps>`; a hook says when to run `f10-rules.sh`) | What the step produces, and nothing else |
+| Context loading (`f10-load-project.sh <steps>`; a hook says when to run `f10-load-conventions.sh`) | What the step produces, and nothing else |
 | Modes: `--help`, `--dry-run`, `--driven`, forward | How the step behaves in a pipeline or a mode, where it differs |
 | Authorization: what running this skill permits (a push, a PR, a merge commit) or must ask for | That an action is outward-facing and needs the run's authorization |
 | The session: stay in the discussion, offer the next `/f10:*` skill, never roll on into another | What counts as failure, and which ends are normal |
@@ -35,7 +35,7 @@ A step never names the skill that runs it, except where its behavior differs by 
    Read the argument by what it says, not by whether there is one: "let's judge something" names no subject and counts as none.
    A mode item says where the run ends, read top to bottom like early returns: `... and stop` (`--help`, `--dry-run`, forward when it forwards), or `everything below still runs` (`--driven`).
    Every token in `argument-hint` has an item here; `--help` prints this list.
-5. **`**Run**`**, a list: `f10-load.sh <steps>`, then which step to follow. The rules are not the skill's call: a hook says when to run `f10-rules.sh`.
+5. **`**Run**`**, a list: `f10-load-project.sh <steps>`, then which step to follow. The conventions are not the skill's call: a hook says when to run `f10-load-conventions.sh`.
 6. **The skill's own content.**
 7. **`**Exit**`**, a list: where the run ends (stop at an artifact, or stay in the conversation) and, where one follows, a `Next:` skill with its condition.
    `conventions/report.md` says how it is offered.

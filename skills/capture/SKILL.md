@@ -20,7 +20,7 @@ Runs the **capture** step only: no plan, no code.
   - Nothing settled: ask for the description in one line and wait.
 
 **Run**
-- `f10-load.sh capture`, every run.
+- `f10-load-project.sh capture`, every run.
 - Follow the **capture** step it prints; read nothing from `steps/`.
 
 **Exit**

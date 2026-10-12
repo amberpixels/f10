@@ -16,7 +16,7 @@ argument-hint: "<PR | task-id | this branch | concept | symbol>"
   Say in one line which branch and base you took, then start.
 
 **Run**
-- `f10-load.sh explain`, every run.
+- `f10-load-project.sh explain`, every run.
 - Follow the **explain** step it prints; read nothing from `steps/`.
 
 **Exit**
