@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The parity suite pins this package to bin/bundle.sh, the semantics
+// The parity suite pins this package to bin/f10-load.sh, the semantics
 // oracle. Every fixture runs both and compares the script's header lines
 // with the Go layout, so a semantic change to either side fails here
 // until both move.
@@ -174,7 +174,7 @@ func TestParity(t *testing.T) {
 	}
 }
 
-// scriptPath locates bin/bundle.sh relative to this source file.
+// scriptPath locates bin/f10-load.sh relative to this source file.
 func scriptPath(t *testing.T) string {
 	t.Helper()
 
@@ -183,19 +183,19 @@ func scriptPath(t *testing.T) string {
 		t.Fatal("cannot locate this source file")
 	}
 
-	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "bundle.sh"))
+	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-load.sh"))
 	if err != nil {
 		t.Fatalf("abs: %v", err)
 	}
 
 	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("bundle.sh not found at %s: %v", path, err)
+		t.Fatalf("f10-load.sh not found at %s: %v", path, err)
 	}
 
 	return path
 }
 
-// runScript runs bin/bundle.sh in dir with an overridden HOME and parses
+// runScript runs bin/f10-load.sh in dir with an overridden HOME and parses
 // the three header facts this suite compares.
 func runScript(t *testing.T, script, dir, home string) scriptFacts {
 	t.Helper()
@@ -213,7 +213,7 @@ func runScript(t *testing.T, script, dir, home string) scriptFacts {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("bundle.sh failed: %v\n%s", err, out)
+		t.Fatalf("f10-load.sh failed: %v\n%s", err, out)
 	}
 
 	var facts scriptFacts

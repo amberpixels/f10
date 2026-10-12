@@ -16,17 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 1",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 2",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 3",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-inject.sh",
             "timeout": 5
           }
         ]
@@ -48,17 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 1",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 2",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 3",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-inject.sh",
             "timeout": 5
           }
         ]
@@ -104,17 +84,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 1",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 2",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-state.sh inject 3",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-inject.sh",
             "timeout": 5
           }
         ]

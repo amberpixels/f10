@@ -30,17 +30,19 @@ A step's `Role:` is its base role; add the project's `project.md → Roles` on t
 ## Loading order (do this at the start of any f10 run)
 
 ```
-${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh <step> [<step> ...]    # once per run
+f10-rules.sh                   # when f10-inject.sh says so
+f10-load.sh <step> [<step> ...]  # once per run
 ```
 
-**The conventions** (these six files, `conventions.sh`'s output) arrive through the plugin's hooks, never through a skill: a session's first f10 skill, typed or called through the `Skill` tool, gets them, and a `SessionStart` after compaction gets them again.
-No skill decides whether the context still holds them; `f10-state.sh` keeps a per-session marker and the hooks read it.
-A subagent or a fresh session starts empty and no hook feeds it: its prompt says to run `conventions.sh`, then `bundle.sh`.
+**`f10-rules.sh`** prints these six convention files.
+Run it when the plugin's hook says this context does not hold them: on a session's first f10 skill, typed or called through the `Skill` tool, and after compaction.
+No skill decides whether the context still holds them; `f10-inject.sh` keeps a per-session marker and decides.
+A subagent starts empty and no hook reaches it: its prompt says to run `f10-rules.sh`, then `f10-load.sh`.
 
-**`bundle.sh`** prints the project's instructions, layered, and the requested **generic step files**: never read the plugin's `steps/` by hand, and never skip the call (its output changes with the worktree).
+**`f10-load.sh`** prints the project's instructions, layered, and the requested **generic step files**: never read the plugin's `steps/` by hand, and never skip the call (its output changes with the worktree).
 It concatenates; you interpret `project.md` and bind adapters.
 **`/f10:ship` passes `--all`**: its pipeline is declared in the `project.md` the call prints.
-Reading the bundle (and, if `bundle.sh` is ever unavailable, what to do by hand):
+Reading its output (and, if `f10-load.sh` is ever unavailable, what to do by hand):
 
 1. **`storage root:`** is absolute, anchored to the checkout root (`git rev-parse --show-toplevel`), never the cwd.
    Use it verbatim, never re-derive it.

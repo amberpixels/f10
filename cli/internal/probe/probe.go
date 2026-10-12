@@ -1,4 +1,4 @@
-// Package probe runs the deterministic detection probes bin/bundle.sh
+// Package probe runs the deterministic detection probes bin/f10-load.sh
 // runs: remote host and CLI routing, stack and verify marker files, and the
 // existing plans. Each answer carries the evidence that produced it - the
 // provenance column is the point of the binary.

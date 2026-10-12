@@ -21,7 +21,6 @@
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
 #   f10-state.sh doctor                 is any of this actually wired up?
 #   f10-state.sh hook                   dispatch one hook event; hook JSON on stdin
-#   f10-state.sh inject <n>             add chunk n of the conventions to the context; hook JSON on stdin
 #
 # A fixed path, not ${CLAUDE_PLUGIN_DATA}: the renderer runs from the user's `statusLine` command,
 # which never sees that variable, so writers and reader would disagree on the file.
@@ -29,18 +28,9 @@
 # Keyed by session, not repo: two sessions over one checkout are two runs, and `/clear` mints a new
 # id that retires the badge. Kept outside the repo for stealth mode (conventions/context.md).
 #
-# The only script with an f10- prefix because it leaves the plugin: people type it, step prose
-# names it bare, and the statusline symlink points at it.
-#
-# `inject` is the other hook job: the conventions (conventions.sh) reach the model through hooks,
-# never through a skill deciding whether the context still holds them, which it cannot know after
-# compaction. A session's first f10 skill gets them, typed (UserPromptExpansion) or model-invoked
-# (PreToolUse on Skill), and a SessionStart with source `compact` gets them again. Whether the
-# session holds them is a marker file beside the run state, `<session>.conventions`, which `seed`
-# and `clear` never touch: a new run is not a new context. The text goes in chunks, one hook entry
-# each, because Claude Code caps one hook's context at 10,000 characters; chunk hooks of one
-# event run in parallel, so the marker holds the prompt id of the injection and every chunk of
-# that prompt reaches the same verdict without waiting for the others.
+# People type it, step prose names it bare, and the statusline symlink points at it. The
+# `<session>.conventions` marker beside the run state belongs to f10-inject.sh; prune and doctor
+# read it here, seed and clear never touch it.
 
 set -uo pipefail
 
@@ -583,9 +573,9 @@ cmd_doctor() {
   fi
   printf 'ttl         %ss\n' "$ttl"
   if [ -n "$sid" ] && [ -f "$state_dir/$sid.conventions" ]; then
-    printf 'conventions injected (prompt %s)\n' "$(cat "$state_dir/$sid.conventions" 2>/dev/null)"
+    printf 'rules       told to load (f10-inject.sh)\n'
   else
-    printf 'conventions not injected in this session - the first f10 skill does it\n'
+    printf 'rules       not told yet in this session - the first f10 skill does it\n'
   fi
   printf 'jq          %s\n' "$(command -v jq >/dev/null 2>&1 && echo present || echo absent)"
   if [ -d "$state_dir" ]; then
@@ -611,71 +601,6 @@ cmd_doctor() {
   echo "In your settings.json statusLine command, after stdin is read into \$input:"
   echo "  f10=\$(printf '%s' \"\$input\" | \"\$HOME/.claude/f10/statusline\" 2>/dev/null)"
   echo "then append \"\$f10\" to what it prints. See the README's Status line section."
-  exit 0
-}
-
-# --- conventions injection -------------------------------------------------------------------------
-# The skills that run a step and so read the conventions. status, start, drive and finish run the
-# binary alone; --help loads nothing (modes/help.md).
-inject_skills="brainstorm capture catchup demo explain judge plan resolve review ship"
-
-inject_skill_of() { # the skill a payload names, as `f10:plan` or `plan`, if it takes conventions
-  local n="${1#f10:}"
-  case " $inject_skills " in *" $n "*) printf '%s' "$n" ;; esac
-}
-
-emit_chunk() { # emit_chunk <event> <n>: one hook verdict carrying chunk n, nothing else
-  local text
-  text="$("$(dirname "$0")/conventions.sh" "$2" 2>/dev/null)"
-  [ -n "$text" ] || return 1
-  printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":"%s"}}\n' \
-    "$1" "$(json_string "$text")"
-}
-
-cmd_inject() {
-  local chunk="${1:-}"
-  [ -n "$chunk" ] || exit 0
-  [ -t 0 ] && exit 0
-  json="$(cat)"
-  [ -n "$json" ] || exit 0
-
-  local event hook_sid skill="" args="" pid marker
-  event="$(json_get hook_event_name)"
-  hook_sid="$(json_get session_id)"
-  find_sid "$hook_sid" || exit 0
-  marker="$state_dir/$sid.conventions"
-
-  case "$event" in
-    UserPromptExpansion)
-      skill="$(inject_skill_of "$(json_get command_name)")"
-      args="$(json_get command_args)"
-      ;;
-    PreToolUse)
-      [ "$(json_get tool_name)" = "Skill" ] || exit 0
-      skill="$(inject_skill_of "$(json_get skill tool_input)")"
-      args="$(json_get args tool_input)"
-      ;;
-    SessionStart)
-      # compaction dropped the text but kept the session: only a session that had it gets it back
-      [ "$(json_get source)" = "compact" ] || exit 0
-      [ -f "$marker" ] || exit 0
-      emit_chunk "$event" "$chunk"
-      exit 0
-      ;;
-    *) exit 0 ;;
-  esac
-  [ -n "$skill" ] || exit 0
-  case " $args " in *" --help "*) exit 0 ;; esac
-
-  # the marker's prompt id is this prompt's: a sibling chunk already decided, and so do we; any
-  # other id means the session holds the text from an earlier prompt
-  pid="$(json_get prompt_id)"
-  if [ -f "$marker" ] && [ "$(cat "$marker" 2>/dev/null)" != "$pid" ]; then
-    exit 0
-  fi
-  emit_chunk "$event" "$chunk" || exit 0
-  mkdir -p "$state_dir" 2>/dev/null || exit 0
-  printf '%s' "$pid" >"$marker.$$" 2>/dev/null && mv -f "$marker.$$" "$marker" 2>/dev/null
   exit 0
 }
 
@@ -857,10 +782,6 @@ case "${1:-}" in
   prune) cmd_prune ;;
   doctor) cmd_doctor ;;
   hook) cmd_hook ;;
-  inject)
-    shift
-    cmd_inject "$@"
-    ;;
   *)
     cat >&2 <<'USAGE'
 f10-state.sh - where an f10 run is right now, for the status line to render.
@@ -876,7 +797,6 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   clear | prune            drop this session's state | drop long-dead sessions
   doctor                   is any of this actually wired up?
   hook                     dispatch one hook event; hook JSON on stdin
-  inject <n>               add chunk n of the conventions to the context; hook JSON on stdin
 USAGE
     exit 2
     ;;

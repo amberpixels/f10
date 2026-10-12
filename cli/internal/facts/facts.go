@@ -1,7 +1,7 @@
 // Package facts interprets the declared project.md layers, merges them with
 // the detection probes and the contract's defaults, and attributes every
 // effective value to its origin. It is the one component of f10 allowed to
-// interpret instruction prose - bin/bundle.sh stays a concatenator.
+// interpret instruction prose - bin/f10-load.sh stays a concatenator.
 //
 // Interpretation stays shallow: only the sub-facts with a fixed vocabulary
 // (Layering, Visibility, Storage, the tracker kind and its id prefix, the

@@ -157,7 +157,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   Of several **named pipelines**, only the user picks a non-default one.
   A *(planless)* one skips ticket and plan file.
 - **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, pipelines, stealth), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how it talks).
-  The plugin's hooks inject them when a skill starts and again after compaction; the project bundle reloads every run.
+  A hook tells the model to load them when a skill starts and again after compaction; the project's instructions reload every run.
 - **Mode** - a run in `modes/` that changes execution: `help.md` (`--help`), `dry-run.md` (`--dry-run`), `driven.md` (`--driven`, a run prompted from another session) and `forward.md` (a task id another worktree holds).
 
 **Artifacts**
@@ -447,20 +447,21 @@ Refusals come before any change: a dirty worktree (file by file, no `--force`), 
 
 Files stay where they live; it scans other repos only once you set `F10_ROOTS`.
 Only `init`, `start`, `drive` (which records each task's last skill in local git config) and `finish` write.
-`bin/bundle.sh` stays the agents' loader; the binary may interpret `project.md` prose, showing what it cannot place as `unrecognized`.
+`bin/f10-load.sh` stays the agents' loader; the binary may interpret `project.md` prose, showing what it cannot place as `unrecognized`.
 The parity suite in `cli/internal/layout` runs every fixture through both.
 
 ## Development
 
 The executable surface is `bin/` plus `cli/`.
-`bin/conventions.sh` cats the six convention files (identical everywhere; the hooks inject it in chunks, a subagent runs it); `bin/bundle.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
+`bin/f10-rules.sh` cats the six convention files (identical everywhere; run when `bin/f10-inject.sh`, a hook, says the context lacks them, and by subagents); `bin/f10-load.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
+All four are on the Bash tool's `PATH`, so prose names them bare.
 `cli/` is the lookaround binary, its own Go module (`github.com/amberpixels/f10/cli`) with `cmd/f10` as its main, kept in this repo because its parity tests run the scripts in `bin/`.
 
 ```bash
 just lint   # shell + Go findings, change nothing (with `just test`, what CI runs)
 just fmt    # rewrite shell + Go to canonical form
 just fix    # apply everything auto-fixable - run on a clean tree, read the diff
-just test   # go test ./..., the bundle.sh parity suite included
+just test   # go test ./..., the f10-load.sh parity suite included
 just build  # go build ./...
 ```
 

@@ -1,6 +1,6 @@
 // Package shell is the binary's door to every external command that is not
 // git: a tracker CLI, a project's driver, a pager, an editor, the OS
-// opener. gitx stays separate because its reads mirror bin/bundle.sh's git
+// opener. gitx stays separate because its reads mirror bin/f10-load.sh's git
 // calls; this is everything that script never runs.
 //
 // Both entry points are variables so tests can substitute them - nothing

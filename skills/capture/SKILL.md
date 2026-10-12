@@ -20,8 +20,7 @@ Runs the **capture** step only: no plan, no code.
   - Nothing settled: ask for the description in one line and wait.
 
 **Run**
-- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
-- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture`, every run.
+- `f10-load.sh capture`, every run.
 - Follow the **capture** step it prints; read nothing from `steps/`.
 
 **Exit**

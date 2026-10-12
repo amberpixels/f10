@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// bin/bundle.sh derives the same prefix for the steps that the binary
+// bin/f10-load.sh derives the same prefix for the steps that the binary
 // derives for its verbs, in shell. Both are held to one table here, so a
 // rule that moves on one side fails until the other follows.
 func TestProjectPrefixParity(t *testing.T) {
@@ -31,7 +31,7 @@ func TestProjectPrefixParity(t *testing.T) {
 
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("bundle.sh failed: %v\n%s", err, out)
+				t.Fatalf("f10-load.sh failed: %v\n%s", err, out)
 			}
 
 			var printed string
@@ -43,7 +43,7 @@ func TestProjectPrefixParity(t *testing.T) {
 			}
 
 			if want := projectPrefix(name); printed != want {
-				t.Errorf("bundle.sh printed prefix %q, projectPrefix(%q) = %q", printed, name, want)
+				t.Errorf("f10-load.sh printed prefix %q, projectPrefix(%q) = %q", printed, name, want)
 			}
 		})
 	}
@@ -57,13 +57,13 @@ func bundleScript(t *testing.T) string {
 		t.Fatal("cannot locate this source file")
 	}
 
-	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "bundle.sh"))
+	path, err := filepath.Abs(filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-load.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("bundle.sh not found at %s: %v", path, err)
+		t.Fatalf("f10-load.sh not found at %s: %v", path, err)
 	}
 
 	return path

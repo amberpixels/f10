@@ -21,7 +21,7 @@ import (
 type view struct {
 	CheckoutRoot    string              `json:"checkoutRoot"`
 	StorageRoot     string              `json:"storageRoot"`
-	Instructions    string              `json:"instructions"` // source description, bundle.sh wording
+	Instructions    string              `json:"instructions"` // source description, f10-load.sh wording
 	NestedIgnored   string              `json:"nestedIgnored,omitempty"`
 	Remote          string              `json:"remote,omitempty"`
 	PlansDir        string              `json:"plansDir"`

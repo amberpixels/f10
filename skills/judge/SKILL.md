@@ -21,8 +21,7 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
   - Nothing open: ask for the subject in one line and wait.
 
 **Run**
-- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
-- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge`, every run.
+- `f10-load.sh judge`, every run.
 - Follow the **judge** step it prints; read nothing from `steps/`.
 
 **Exit**

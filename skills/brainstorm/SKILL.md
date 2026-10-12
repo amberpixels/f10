@@ -19,8 +19,7 @@ argument-hint: "<idea, problem, or half-formed proposal>"
   - Nothing open: ask for the idea in one line and wait.
 
 **Run**
-- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
-- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm`, every run.
+- `f10-load.sh brainstorm`, every run.
 - Follow the **brainstorm** step it prints; read nothing from `steps/`.
 
 **Exit**

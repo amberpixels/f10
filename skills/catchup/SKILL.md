@@ -19,8 +19,7 @@ Running this skill authorizes the merge commit or rebased commits it produces, n
 - No argument: catch the branch checked out here up with its base.
 
 **Run**
-- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
-- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh catchup`, every run.
+- `f10-load.sh catchup`, every run.
 - Follow the **catchup** step it prints; read nothing from `steps/`.
 
 **Exit**

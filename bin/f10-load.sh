@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# f10 · bundle - one-shot deterministic context loading.
+# f10 · load - one-shot deterministic context loading.
 #
 # The project-specific half of conventions/context.md's loading order, in one call: locate
 # .f10/instructions/ (a linked worktree's layered on main's), list each layer, cat the generic
@@ -9,13 +9,13 @@
 # It concatenates and probes, never interprets, except for the worktree layer's `Layering`
 # declaration, which decides what gets concatenated.
 #
-# Conventions live in conventions.sh because they are universal and load once per context. Steps
+# Conventions live in f10-rules.sh because they are universal and load once per context. Steps
 # are static prose too but selected per run, so they print here rather than cost a third call.
 #
-# Usage:  bundle.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
-#         bundle.sh --all                 cat every generic step + project.md + every overlay
-#         bundle.sh                       facts, layering, listing and probes only, no steps
-#   e.g.  bundle.sh capture  |  bundle.sh fetch plan  |  bundle.sh --all
+# Usage:  f10-load.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
+#         f10-load.sh --all               cat every generic step + project.md + every overlay
+#         f10-load.sh                     facts, layering, listing and probes only, no steps
+#   e.g.  f10-load.sh capture  |  f10-load.sh fetch plan  |  f10-load.sh --all
 #
 # --all exists for /f10:ship, whose steps are the pipeline declared in the project.md this script
 # prints, so ship cannot name them before the call. Do not replace it with a fixed step list.
@@ -105,7 +105,7 @@ wt_instr=""
 [ "$here" != "$base_root" ] && [ -d "$here/.f10/instructions" ] && wt_instr="$here/.f10/instructions"
 
 # frontmatter_key <file> <key>: a top-level key's value from the leading `---` block, or nothing.
-# Matches layout.layeringDecl; plain awk, so the bundle needs neither the binary nor yq.
+# Matches layout.layeringDecl; plain awk, so the loader needs neither the binary nor yq.
 frontmatter_key() {
   awk -v key="$2" 'NR == 1 && $0 !~ /^---[[:space:]]*$/ { exit }
     NR > 1 && /^---[[:space:]]*$/ { exit }
@@ -202,7 +202,7 @@ supplied() { # supplied <file.md>
   return 1
 }
 
-echo "=== f10 bundle @ $cwd ==="
+echo "=== f10 load @ $cwd ==="
 echo "checkout root: $here"
 if [ "$all" = 1 ]; then
   echo "steps requested: --all (every overlay each layer holds)"
@@ -240,7 +240,7 @@ if [ "$all" = 1 ] || [ -n "$steps" ]; then
   echo "--- generic steps (plugin prose; the instructions below extend them, later wins) ---"
   echo
   if [ "$all" = 1 ]; then
-    # all of them: ship's pipeline is declared by this bundle, and a free-text ship runs capture,
+    # all of them: ship's pipeline is declared in this output, and a free-text ship runs capture,
     # fetch and plan before the pipeline names the rest
     shopt -s nullglob
     for f in "$root"/steps/*.md; do
@@ -255,7 +255,7 @@ if [ "$all" = 1 ] || [ -n "$steps" ]; then
   fi
 fi
 
-# --- the instructions, in precedence order: later in this bundle wins ---
+# --- the instructions, in precedence order: later in this output wins ---
 if [ -z "$l1_dir" ]; then
   echo "--- instructions ---"
   echo "ABSENT - no .f10/instructions/ found. Infer from the signals below; suggest \`f10 init\`,"
@@ -322,4 +322,4 @@ if [ -d "$storage/plans" ]; then
   echo "existing plans: ${#plans[@]} file(s) in $storage/plans/"
 fi
 echo
-echo "=== end bundle (nothing was fetched, written, or created) ==="
+echo "=== end f10 load (nothing was fetched, written, or created) ==="

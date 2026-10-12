@@ -21,8 +21,7 @@ argument-hint: "<task-id | free-text description>"
 - Extra text beside a task id is steering for the run.
 
 **Run**
-- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
-- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan`, every run, with `capture` first when the argument is free text.
+- `f10-load.sh fetch plan`, every run, with `capture` first when the argument is free text.
 - Follow each step it prints, in the order the Arguments item gives; read nothing from `steps/`.
 
 **Exit**
