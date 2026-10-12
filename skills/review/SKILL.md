@@ -11,12 +11,14 @@ argument-hint: "<task-id | PR | this branch> [ci]"
 `/f10:review ci` authorizes the `f10 review ack` the remote half makes.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
+- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
+  are asked.
 - `ci`: strip it and run the step's remote half.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here**
-  paragraph routes it.
+  paragraph reads it.
 - No argument: the current branch against its base. Say in one line which branch and base you
   took, then start.
 

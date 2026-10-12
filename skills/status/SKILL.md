@@ -11,7 +11,7 @@ Where a run is, in words: the task, the three phases, the step a stopped run sto
 reason, and what unblocks it. The status-line badge draws the same facts as three glyphs.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - No argument: the answer is below, already run. Print it verbatim in a fenced block and stop.
 - A task id: another run, the one the task's agent reports from the checkout that has its
   branch, usually a worktree `f10 start` opened. The hook lets this form through, because the

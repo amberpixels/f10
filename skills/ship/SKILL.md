@@ -13,15 +13,18 @@ only, and to post resolve's `+reply` and review's `f10 review ack`. Deploy has i
 confirmation (`steps/deploy.md`).
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
+- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
+  are asked.
 - A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends
   `/f10:ship local: <id>`), or named in the user's own words: run that pipeline. Otherwise
   `default` (declared in `project.md`; `implement → pr` per `conventions/context.md`).
 - A **plan file** (`*.md` path): run the pipeline with it.
-- A **task id** (project id format / id / url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md`
-  before loading anything. Then `steps/fetch.md`, and look for
+- A **task id** (project id format / id / url): follow
+  `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards
+  the task. Otherwise `steps/fetch.md`, and look for
   **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses). Found:
   ask **reuse this plan or re-plan?** (AskUserQuestion); re-plan runs `steps/plan.md`. Missing:
   run `steps/plan.md`. Then the pipeline.

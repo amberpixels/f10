@@ -8,12 +8,14 @@ argument-hint: "<task-id | free-text description>"
 # f10 · plan
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
+- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
+  are asked.
 - A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): follow
-  `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` before loading anything, then run `steps/fetch.md`
-  and `steps/plan.md`.
+  `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the
+  task, otherwise run `steps/fetch.md` and `steps/plan.md`.
 - A **free-text description**: run `steps/capture.md` (create the task), `steps/fetch.md`, then
   `steps/plan.md`.
 - **No argument** (an argument that names no task, like "let's plan something", counts as none):

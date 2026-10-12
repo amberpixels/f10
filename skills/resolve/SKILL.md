@@ -11,10 +11,12 @@ Producing the findings is `/f10:review`. This skill does not authorize a remote 
 (`gh pr comment` / `glab mr note`): ask once before the first post.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
-- `<subject>`: a task id, PR or branch; the step's point 1 routes it.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
+- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
+  are asked.
+- `<subject>`: a task id, PR or branch; the step's point 1 reads it.
 - No argument: the current branch. Say in one line which findings file you took, then start.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):

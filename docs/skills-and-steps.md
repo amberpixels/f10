@@ -36,9 +36,11 @@ skill that runs it, except where its behavior differs by caller.
    flags as `` `token`: effect ``, then one item per case of what remains: a `<placeholder>`
    item per positional argument, then a **No argument** item: a default such as the current
    branch, or, where none exists, sub-items split by context (the conversation's open
-   question; nothing open, so ask in one line and wait). Route by what the argument says, not
-   by whether there is one: "let's judge something" names no subject and counts as none. Every token in
-   `argument-hint` has an item here; `--help` prints this list.
+   question; nothing open, so ask in one line and wait). Read the argument by what it says,
+   not by whether there is one: "let's judge something" names no subject and counts as none.
+   A mode item says where the run ends, read top to bottom like early returns: `... and stop`
+   (`--help`, `--dry-run`, forward when it forwards), or `everything below runs` (`--driven`).
+   Every token in `argument-hint` has an item here; `--help` prints this list.
 5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
 6. **The skill's own content.**
 7. **`**Exit**`**, a list: where the run ends (stop at an artifact, or stay in the conversation)

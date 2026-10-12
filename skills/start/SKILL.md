@@ -14,7 +14,7 @@ Herdr workspace, starts a claude agent in its root pane and prompts it, marked `
 and relays its output; it runs no step and never waits on the new agent.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - Everything else goes to `f10 start` verbatim.
 
 ```

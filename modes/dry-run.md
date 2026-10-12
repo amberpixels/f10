@@ -1,54 +1,23 @@
-# Convention · dry-run - load and report, change nothing
+# Mode · dry-run - load and report, change nothing
 
-With **`--dry-run`** anywhere in the argument (`/f10:ship 1042 --dry-run`), strip it, route as
-normal, and follow this file instead of the steps: load everything, execute nothing.
+Load as normal (`--all` for ship), read the argument as the skill's Arguments items do, and report
+what the run would do. Execute nothing.
 
-Read only what loading needs: `.f10/instructions/*` (both layers), `git worktree list`, and
-cheap inference signals (does `go.mod` / `justfile` / a remote exist), preferring facts already
-known over shelling out. Every adapter and command a step would run is printed, quoted, not run;
-nothing is written.
+**Reads stop at loading**: the instructions, `git worktree list`, and cheap checks (does `go.mod`,
+a `justfile`, a remote exist). Nothing is fetched (no `gh issue view`, no `f10 task read`),
+written or created. Every command a step would run is printed, quoted, not run.
 
-1. **Load context** with the two calls (`--all` for ship), noting *how* each fact loaded: which
-   instructions (main, worktree, layered, out-of-tree, or none and inferred), which overlays,
-   each inferred default and its signal.
-2. **Settle routing**: the entry step, how the argument was read, where the run would stop.
-3. **Name each step that would run**: its adapter, *quoted, not executed*; whether an overlay
-   applies; its concrete output (e.g. the exact `<storage root>/plans/<TASK-ID>.md`, and any
-   archive to `archive/<TASK-ID>.<N>.md`). For ship, the selected pipeline, step by step.
-4. **Report** in the format below and **stop**; the user re-runs without `--dry-run`.
+**Context** is `f10 config`, printed verbatim: where each fact came from, `declared` or
+`default`. Without the binary, the bundle's header lines and its inferred signals instead, each
+default marked `inferred`.
 
-**Show only facts a step on *this* path consumes**, one per line, commands quoted; mark each
-`inferred` that did not come from `project.md`. Per skill, beyond instructions source and role:
-
-- **brainstorm**: guardrails, stack. No adapter.
-- **judge**: guardrails; for the routed input only, the **fetch** adapter and plan path, or
-  `gh pr diff` / `glab mr diff`, or `git show` / `git diff`; whether blind mode would spawn a
-  fresh subagent.
-- **review**: the categories (four core, project ones with source-of-truth files and the
-  never-flag list, or "none declared"), the base and diff command, the findings path with its
-  round (`<storage root>/reviews/<TASK-ID>/<round>.md`, or the decline at a third round), and
-  that the reviewer always runs in a fresh subagent.
-- **resolve**: the findings file, how many findings lack a verdict, verify, and where each
-  `ask` would go (one questionnaire, or the declared human reviewer).
-- **catchup**: the base and how it was found, the strategy and its source (the `catchup`
-  frontmatter key, or the rebase default), the integration command, verify. Nothing pushed.
-- **capture**: the **create** adapter, id format, visibility.
-- **plan**: capture's facts plus the **fetch** adapter, guardrails, the plan path.
-- **ship**: per pipeline step, what it touches (verify, the PR/push adapter, review, deploy,
-  guardrails, visibility).
+**The path**, in the format below: how the argument was read, the steps in order, and per step
+its adapter, any overlay, and its exact output (the plan path, an archive move, the findings
+round). Only facts a step on this path consumes; never invented content such as a task body or
+plan prose.
 
 ```
 f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
-
-Context loaded     (only facts this run's path uses)
-  instructions    <path(s), or "none - inferring">   (<main | worktree | layered, main + worktree>)
-  overlays        <the .md files each layer holds, per the bundle's `instructions files:` line>
-  role            <role adopted this run>
-  tracker         <kind>, id format <FMT>   (<create | fetch> adapter shown under Step below)
-  verify          <commands, or inferred source>          - ship only (implement/verify steps)
-  visibility      <stealth | public>  → <one-line implication>
-  storage         <the absolute root the bundle reported>   (in-repo | out-of-tree; plans land under it)
-  inferred        <each inferred default ← the signal>   (only for facts on the path)
 
 Routing
   arg "<stripped>"  → <interpretation, e.g. matches ABC-#### → ABC-1042 | free-text | plan file>
@@ -59,11 +28,9 @@ Step: <name>
   adapter         <skill to invoke | CLI command, quoted - NOT run>
   overlay         <APPLIED .f10/instructions/<name>.md | none>
   would produce   <output path / action, e.g. write <storage root>/plans/ABC-1042.md>
-  archive first?  <yes → plans/archive/ABC-1042.1.md | n/a>
-  (repeat per step on the path; for ship, one block per pipeline step in order)
+  (one block per step on the path; for ship, per pipeline step in order)
 
 Not executed: <the first real side effect this run would have performed>
 ```
 
-Report structure (paths, adapters, routing, overlays, layering, storage, the pipeline), never
-invented content such as a task body or plan prose.
+Then stop; the user re-runs without `--dry-run`.

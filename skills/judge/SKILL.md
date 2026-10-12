@@ -8,12 +8,13 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
 # f10 · judge
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` and the step's **Driven**
-  paragraph.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
+- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` and the step's
+  **Driven** paragraph change how questions are asked.
 - `--blind`: strip it and follow the step's **Blind** paragraph.
-- `<subject>`: an idea, task id, PR, branch, sha or range; the step's point 1 routes it. An
+- `<subject>`: an idea, task id, PR, branch, sha or range; the step's point 1 reads it. An
   argument that names no subject ("let's judge something") counts as none.
 - No argument:
   - A subject in this conversation: judge that. Say in one line which subject you took, then

@@ -14,7 +14,7 @@ one task's, which wins. This skill only runs the command, relays its questions a
 report; it runs no step.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - Everything else goes to `f10 drive` verbatim.
 
 Run it **in the background** (`run_in_background`): a list can take hours, and the command's

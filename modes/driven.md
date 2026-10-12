@@ -1,4 +1,4 @@
-# Convention · driven - a run prompted from another session
+# Mode · driven - a run prompted from another session
 
 A **driven** run has nobody watching its pane: `f10 start`, `f10 forward` or `f10 drive`
 prompted it from another session. A question asked here stalls until someone finds it, so driven

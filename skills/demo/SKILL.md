@@ -12,11 +12,12 @@ No `allowed-tools` on purpose: the executor is whatever the `demo` overlay binds
 server, a project skill, a plain command), and a fixed list would disable it.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
 - `--hands-on`: strip it and run the step's hands-on execution.
 - `--publish` / `--local`: strip it; the step's point 10 acts on it.
-- `<subject>`: a PR / MR, "this branch", or a task id; the step routes it.
+- `<subject>`: a PR / MR, "this branch", or a task id; the step reads it.
 - No argument: the current branch against its base. Say in one line which branch and base you
   took, then start.
 

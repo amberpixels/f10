@@ -12,7 +12,7 @@ removes its worktree and branch. This skill only runs the command and relays its
 runs no step.
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - Everything else goes to `f10 finish` verbatim.
 
 ```

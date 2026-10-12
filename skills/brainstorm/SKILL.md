@@ -8,8 +8,9 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 # f10 · brainstorm
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
 - `<idea>`: the idea to think through. An argument that names no idea ("let's brainstorm")
   counts as none.
 - No argument:

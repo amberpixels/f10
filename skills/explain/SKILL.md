@@ -8,9 +8,10 @@ argument-hint: "<PR | task-id | this branch | concept | symbol>"
 # f10 · explain
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- `<subject>`: a change or a concept, path or symbol; the step's **Route** paragraph routes it.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
+  and stop. It reports which steps the rest of the argument would run.
+- `<subject>`: a change or a concept, path or symbol; the step's **Route** paragraph reads it.
 - No argument: the current branch against its base. Say in one line which branch and base you
   took, then start.
 
