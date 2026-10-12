@@ -14,7 +14,7 @@ Producing the findings is `/f10:review`. This skill does not authorize a remote 
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 - `<subject>`: a task id, PR or branch; the step's point 1 routes it.
-- No argument: the current branch; name the findings file in one line.
+- No argument: the current branch. Say in one line which findings file you took, then start.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then

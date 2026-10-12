@@ -12,7 +12,8 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 - `--blind`: strip it and follow the step's **Blind** paragraph.
 - `<subject>`: an idea, task id, PR, branch, sha or range; the step's point 1 routes it.
-- No argument: what this conversation is about, named back in one line.
+- No argument: what this conversation is about. Say in one line which subject you took, then
+  start.
 - No subject at all (empty with nothing open, or only an invitation): ask for it in one line
   and wait.
 

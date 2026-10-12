@@ -11,7 +11,8 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 - `<idea>`: the idea to think through.
-- No argument: the open question this conversation is on, named back in one line.
+- No argument: the open question this conversation is on. Say in one line which question you
+  took, then start.
 - No idea at all (empty with nothing open, or only an invitation to talk): ask for it in one
   line and wait.
 

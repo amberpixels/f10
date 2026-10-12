@@ -17,7 +17,8 @@ server, a project skill, a plain command), and a fixed list would disable it.
 - `--hands-on`: strip it and run the step's hands-on execution.
 - `--publish` / `--local`: strip it; the step's point 10 acts on it.
 - `<subject>`: a PR / MR, "this branch", or a task id; the step routes it.
-- No argument: the current branch against its base, named in one line.
+- No argument: the current branch against its base. Say in one line which branch and base you
+  took, then start.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
