@@ -16,8 +16,7 @@ confirmation (`steps/deploy.md`).
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
   and stop. It reports which steps the rest of the argument would run.
-- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
-  are asked.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends
   `/f10:ship local: <id>`), or named in the user's own words: run that pipeline. Otherwise
   `default` (declared in `project.md`; `implement → pr` per `conventions/context.md`).

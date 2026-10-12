@@ -14,8 +14,7 @@ argument-hint: "<task-id | PR | this branch> [ci]"
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
   and stop. It reports which steps the rest of the argument would run.
-- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
-  are asked.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - `ci`: strip it and run the step's remote half.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here**
   paragraph reads it.

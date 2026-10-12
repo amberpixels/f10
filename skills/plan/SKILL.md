@@ -11,8 +11,7 @@ argument-hint: "<task-id | free-text description>"
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
   and stop. It reports which steps the rest of the argument would run.
-- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` changes how questions
-  are asked.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): follow
   `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the
   task, otherwise run `steps/fetch.md` and `steps/plan.md`.

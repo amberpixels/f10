@@ -39,7 +39,7 @@ skill that runs it, except where its behavior differs by caller.
    question; nothing open, so ask in one line and wait). Read the argument by what it says,
    not by whether there is one: "let's judge something" names no subject and counts as none.
    A mode item says where the run ends, read top to bottom like early returns: `... and stop`
-   (`--help`, `--dry-run`, forward when it forwards), or `everything below runs` (`--driven`).
+   (`--help`, `--dry-run`, forward when it forwards), or `everything below still runs` (`--driven`).
    Every token in `argument-hint` has an item here; `--help` prints this list.
 5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
 6. **The skill's own content.**

@@ -2,12 +2,13 @@
 
 A **driven** run has nobody watching its pane: `f10 start`, `f10 forward` or `f10 drive`
 prompted it from another session. A question asked here stalls until someone finds it, so driven
-mode changes one thing: **the transport of every question.** Steps, plan, pipeline and reports
-stay the same.
+mode mostly changes **how questions travel.** Steps, plan, pipeline and reports stay the same.
 
-**Activation:** the token **`--driven`** anywhere in the argument. Strip it and route as normal.
-It holds for the whole run: a skill that chains into another (`/f10:plan ... && /f10:ship ...`)
-passes it on.
+**Activation:** the token **`--driven`** anywhere in the argument. Strip it and read the argument
+as normal. It holds for the whole run: a skill that chains into another
+(`/f10:plan ... && /f10:ship ...`) passes it on.
+
+A step with a **Driven** paragraph (judge, catchup) adds to this file for that step; follow both.
 
 ## No interactive question, ever
 

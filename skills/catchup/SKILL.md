@@ -13,10 +13,10 @@ Running this skill authorizes the merge commit or rebased commits it produces, n
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
   and stop. It reports which steps the rest of the argument would run.
-- `--driven`: everything below runs; `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` and the step's
-  **Driven** paragraph change how questions are asked.
-- No routing: the subject is the branch checked out here. Any other text is steering ("take
-  theirs for the lockfile", "ask me before touching the migration").
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
+- `<steering>`: how to settle the run ("take theirs for the lockfile", "ask me before touching
+  the migration"). The subject is always the branch checked out here.
+- No argument: catch the branch checked out here up with its base.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
