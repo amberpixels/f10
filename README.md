@@ -195,9 +195,9 @@ executes nothing.
 
 **Project binding**
 
-- **Project instructions** - `<checkout root>/.f10/instructions/`: `project.md` (the facts) plus
-  optional per-step **overlays**. A linked worktree's instructions layer on main's unless they
-  declare `Layering - replaces main`.
+- **Project instructions** - `<checkout root>/.f10/instructions/`: `project.md` (typed facts in
+  its frontmatter, prose below) plus optional per-step **overlays**. A linked worktree's
+  instructions layer on main's unless they declare `layering: replaces`.
 - **Role** - a base role per step, plus **conditional** roles by area (`+ senior UI/UX engineer`
   when the task touches user-facing UI). Fetch settles the areas; the plan file records the roles
   for ship.
@@ -242,7 +242,7 @@ Precedence (full contract in `conventions/context.md`), later winning: the gener
 `main/project.md`, `main/<step>.md`, `worktree/project.md`, `worktree/<step>.md`, then inferred
 defaults. It all arrives in one bundle, generic step files included, so a run never reads
 `steps/` by hand. A linked worktree layers on main's instructions, takes them wholesale when it
-has none, or shuts them out with `Layering - replaces main`. Plans always land in the current
+has none, or shuts them out with `layering: replaces`. Plans always land in the current
 worktree.
 
 ## Status line

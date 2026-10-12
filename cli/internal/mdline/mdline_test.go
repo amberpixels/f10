@@ -46,6 +46,7 @@ func TestCut(t *testing.T) {
 			"posted, reaction `eyes`",
 			true,
 		},
+		{"**direct** (planless): `implement → push`", []string{":"}, "direct (planless)", "`implement → push`", true},
 		{"no separator here", []string{":"}, "", "", false},
 		{": no key", []string{":"}, "", "no key", false},
 	}

@@ -105,7 +105,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 	chain := a.chain
 	if len(chain) == 0 {
-		if chain, err = parseChain(t.fact("Drive chain")); err != nil {
+		if chain, err = parseChain(t.eff.DriveChain); err != nil {
 			return fmt.Errorf("project.md Drive chain: %w", err)
 		}
 	}
@@ -139,7 +139,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				driver:    drv,
 				task:      task,
 				host:      h.at(main),
-				hosting:   t.fact("Hosting & PR"),
+				method:    t.eff.MergeMethod,
 				cwd:       cwd,
 				workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 				plansDir:  t.sharedPlansDir(),
@@ -250,20 +250,11 @@ func isArrow(tok string) bool {
 	return tok == "→" || tok == "->" || tok == ","
 }
 
-// parseChain reads a declared chain: the skills in order, separated by
-// arrows, commas or spaces, a list bullet allowed in front.
-func parseChain(text string) ([]string, error) {
-	r := strings.NewReplacer("→", " ", "->", " ", ",", " ")
-
-	var chain []string
-
-	for tok := range strings.FieldsSeq(r.Replace(text)) {
-		tok = strings.ToLower(strings.Trim(tok, "`*"))
-		if tok == "" || tok == "-" {
-			continue
-		}
-
-		chain = append(chain, tok)
+// parseChain checks a declared chain: the skills in order, in any case.
+func parseChain(declared []string) ([]string, error) {
+	chain := make([]string, 0, len(declared))
+	for _, s := range declared {
+		chain = append(chain, strings.ToLower(s))
 	}
 
 	if len(chain) == 0 {

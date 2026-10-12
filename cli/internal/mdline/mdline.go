@@ -31,8 +31,13 @@ func Item(line string) (string, bool) {
 // whether a non-empty key was found.
 func Cut(line string, seps ...string) (string, string, bool) {
 	if rest, bold := strings.CutPrefix(line, "**"); bold {
-		if label, after, closed := strings.Cut(rest, "**"); closed && !containsAny(label, seps) {
-			return Bare(label), trimSep(strings.TrimSpace(after), seps), Bare(label) != ""
+		label, after, closed := strings.Cut(rest, "**")
+		after = strings.TrimSpace(after)
+
+		// the label is the key only when a separator follows it at once, or
+		// none comes at all; `**direct** (planless): ...` cuts at its colon
+		if closed && !containsAny(label, seps) && (startsWithSep(after, seps) || !containsAny(after, seps)) {
+			return Bare(label), trimSep(after, seps), Bare(label) != ""
 		}
 	}
 
@@ -47,7 +52,7 @@ func Cut(line string, seps ...string) (string, string, bool) {
 		return "", "", false
 	}
 
-	key := Bare(line[:at])
+	key := Bare(Unmark(line[:at]))
 
 	return key, trimLeftover(strings.TrimSpace(line[at+width:])), key != ""
 }
@@ -66,6 +71,16 @@ func Unmark(s string) string {
 func containsAny(s string, subs []string) bool {
 	for _, sub := range subs {
 		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func startsWithSep(s string, seps []string) bool {
+	for _, sep := range seps {
+		if strings.HasPrefix(s, strings.TrimSpace(sep)) {
 			return true
 		}
 	}

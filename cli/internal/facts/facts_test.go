@@ -27,7 +27,7 @@ Free prose the contract does not know.
 func TestParseFile(t *testing.T) {
 	path := writeProjectMD(t, mainProjectMD)
 
-	fields, unknown := parseFile(path, "main")
+	fields, unknown := parseFile(readFile(t, path), path, "main")
 
 	for _, want := range []string{"Project", "Tracker", "Ship pipeline(s)", "Visibility"} {
 		if _, ok := fields[want]; !ok {
@@ -72,7 +72,8 @@ const headingProjectMD = "# acme · f10 project instructions\n\n" +
 	"## Visibility\nstealth\n"
 
 func TestParseFileHeadingShape(t *testing.T) {
-	fields, unknown := parseFile(writeProjectMD(t, headingProjectMD), "main")
+	path := writeProjectMD(t, headingProjectMD)
+	fields, unknown := parseFile(readFile(t, path), path, "main")
 
 	// the empty title heading is skipped, and nothing else is unknown
 	if len(unknown) != 0 {
@@ -270,4 +271,15 @@ func TestBuildUnusableProjectName(t *testing.T) {
 	if eff.IDPrefix != "" || eff.IDPrefixOrigin != "" {
 		t.Errorf("id prefix = %q (%s), want none", eff.IDPrefix, eff.IDPrefixOrigin)
 	}
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return data
 }

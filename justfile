@@ -9,6 +9,9 @@
 
 mod cli
 
+# machine-local recipes, untracked; absent is fine
+import? 'justfile.local'
+
 # Default recipe: format (rewrites, decides nothing; `just fix` is the mutable one)
 default: fmt
 

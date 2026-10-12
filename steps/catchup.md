@@ -5,7 +5,7 @@ keeping both sides' intent.
 Input: the current branch, in this checkout.
 Output: the branch on top of (or merged with) its base, every conflict settled, verify green.
 Nothing pushed, no task, no plan, no tracker comment.
-Context: `project.md → Hosting & PR` (strategy), `project.md → Verify`.
+Context: the `catchup` frontmatter key (strategy), `project.md → Verify`.
 Badge: none, and it never retires or overwrites a badge a ship run left.
 
 Never push or force-push. No conflict, or nothing to bring in, is a **correct run**.
@@ -34,8 +34,8 @@ Never push or force-push. No conflict, or nothing to bring in, is a **correct ru
 
    Say in one line which base and how it was found, before anything moves.
 
-3. **Integrate.** Strategy: `catchup: merge` or `catchup: rebase` under
-   `project.md → Hosting & PR`, any case; absent, **rebase**.
+3. **Integrate.** Strategy: `catchup: merge` or `catchup: rebase` in the frontmatter (or, from
+   an older file, under Hosting & PR); absent, **rebase**.
    - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in;
      report and stop;
    - merge: `git merge --no-edit <base>`; rebase: `git rebase <base>`.
@@ -72,7 +72,7 @@ Never push or force-push. No conflict, or nothing to bring in, is a **correct ru
    commits brought in, each file's resolution (kept both / merged intent / took one side,
    because / regenerated / asked), verify green, and after a rebase that the next push needs
    `--force-with-lease`, not run here. If the strategy was the default, name
-   `catchup: merge | rebase` under Hosting & PR as the way to declare it.
+   the `catchup: merge | rebase` frontmatter key as the way to declare it.
 
 **Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished): on entry,
 note the ship status (`f10-state.sh show`). The ambiguity question is the run's one ask:

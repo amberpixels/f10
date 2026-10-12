@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
@@ -60,6 +61,22 @@ type Effective struct {
 	// The remote review's four facts (review.go); zero when Review declares
 	// no remote reviewer.
 	Review Review `json:"review"`
+
+	// The rest of the typed facts (resolve.go). MergeMethod "" means none
+	// declared: finish asks the repo.
+	MergeMethod string              `json:"mergeMethod,omitempty"`
+	Catchup     string              `json:"catchup"`
+	Pipelines   map[string][]string `json:"pipelines"`
+	Planless    []string            `json:"planless,omitempty"`
+	DriveChain  []string            `json:"driveChain"`
+
+	// Facts is every typed value with its origin; Problems what is wrong
+	// with how they were declared.
+	Facts    []Fact    `json:"facts"`
+	Problems []Problem `json:"problems,omitempty"`
+
+	proseRead [][2]string // file, key: a fact settled from prose
+	twice     [][2]string // file, key: a fact both places declare alike
 }
 
 // DefaultDriveChain is the chain `f10 drive` runs each task through when
@@ -126,14 +143,38 @@ type section struct {
 func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 	declared := map[string]section{}
 
-	var unknown []section
+	var (
+		unknown  []section
+		fm       layered
+		problems []Problem
+	)
 
 	// field-level merge: a field a later layer mentions wins outright,
-	// silence keeps the earlier layer's value (conventions/context.md)
+	// silence keeps the earlier layer's value (conventions/context.md); the
+	// frontmatter merges key by key on the same rule
 	for _, layer := range lay.Layers {
 		file := filepath.Join(layer.Dir, "project.md")
 
-		fields, unrec := parseFile(file, layer.Label)
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+
+		block, body, ok := frontmatter.Split(data)
+		if ok {
+			d, err := decodeDeclared(block)
+			if err != nil {
+				problems = append(problems, Problem{Error: true, Message: file + " frontmatter: " + err.Error()})
+			}
+
+			for _, bad := range d.check() {
+				problems = append(problems, Problem{Error: true, Message: file + " frontmatter: " + bad})
+			}
+
+			fm.merge(d, layer.Label)
+		}
+
+		fields, unrec := parseFile(body, file, layer.Label)
 		maps.Copy(declared, fields)
 
 		unknown = append(unknown, unrec...)
@@ -143,6 +184,7 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 		Layering:   lay.Layering,
 		Visibility: "stealth",
 		Storage:    "in-repo",
+		Problems:   problems,
 	}
 
 	for _, sec := range unknown {
@@ -179,44 +221,11 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 		}
 
 		eff.Fields = append(eff.Fields, field)
-		eff.absorb(field, pb)
 	}
 
-	// no declared id format, in the Tracker prose or at all: the project's
-	// own name settles the prefix, until f10 init writes it down
-	if eff.IDPrefix == "" {
-		if eff.IDPrefix = projectPrefix(lay.Project); eff.IDPrefix != "" {
-			eff.IDPrefixOrigin = "derived from project name " + lay.Project
-			eff.IDPrefixDerived = true
-		}
-	}
+	eff.resolve(&fm, declared, lay, pb)
 
 	return eff
-}
-
-// absorb folds a field's fixed-vocabulary sub-facts into the
-// structured summary.
-func (e *Effective) absorb(f Field, pb *probe.Probes) {
-	lower := strings.ToLower(f.Value)
-
-	switch f.Name {
-	case "Visibility":
-		if strings.Contains(lower, "public") {
-			e.Visibility = "public"
-		}
-	case "Storage":
-		if strings.Contains(lower, "out-of-tree") {
-			e.Storage = "out-of-tree"
-		}
-	case "Tracker":
-		e.TrackerKind = trackerKind(lower, pb)
-
-		if e.IDPrefix = idPrefix(f.Value); e.IDPrefix != "" {
-			e.IDPrefixOrigin = f.Origin
-		}
-	case "Review":
-		e.Review = parseReview(f.Value)
-	}
 }
 
 // The two shapes a declared task id format takes. The contract's placeholder
@@ -303,30 +312,6 @@ func projectPrefix(name string) string {
 	}
 
 	return prefix
-}
-
-// trackerKind extracts the tracker's kind from declared prose, falling back
-// to what the CLI routing implies.
-func trackerKind(declared string, pb *probe.Probes) string {
-	for _, k := range []struct{ needle, kind string }{
-		{needle: "notion", kind: "Notion"},
-		{needle: "github", kind: "GitHub Issues"},
-		{needle: "gitlab", kind: "GitLab work items"},
-		{needle: "jira", kind: "Jira"},
-	} {
-		if strings.Contains(declared, k.needle) {
-			return k.kind
-		}
-	}
-
-	switch pb.CLI.Value {
-	case "gh":
-		return "GitHub Issues"
-	case "glab":
-		return "GitLab work items"
-	}
-
-	return ""
 }
 
 // fallbackFor answers for a contract field no layer declared: detection
@@ -439,13 +424,9 @@ func storageField(name string, lay *layout.Layout) Field {
 // (`Roles: plan as …`). A bold item the contract does not know stays in the
 // open section's body (`- **Fetch:** …` under Tracker, a named pipeline under
 // Ship pipelines). Unknown headings are returned separately, not dropped; an
-// empty one (a document title) is skipped.
-func parseFile(path, layer string) (map[string]section, []section) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, nil
-	}
-
+// empty one (a document title) is skipped. data is the file below any
+// frontmatter.
+func parseFile(data []byte, path, layer string) (map[string]section, []section) {
 	boldItem := regexp.MustCompile(`^[-*]\s+\*\*([^*]+)\*\*\s*[-:]?\s*(.*)$`)
 	heading := regexp.MustCompile(`^#{1,6}\s+(.+?)\s*$`)
 	plainLabel := regexp.MustCompile(`^\s{0,3}([A-Za-z][A-Za-z &()/]{0,30}):\s*(.*)$`)

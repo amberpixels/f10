@@ -1,60 +1,80 @@
 package facts
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
-// The write half of the contract. Scaffold renders detection as declared
+// The write half of the contract. Scaffold renders detection as a declared
+// project.md: the facts the binary acts on as frontmatter, the rest as
 // prose, so a value `detected` this run reads `declared` the next. Every
-// value uses the vocabulary the parsers key on (the `GH-###` placeholder
-// idPrefix prefers, the words trackerKind and absorb match), so the file
-// never parses back weaker than the detection it replaced.
+// value uses the vocabulary the readers key on, so the file never parses
+// back weaker than the detection it replaced.
 
-// A Draft is one rendered project.md: the markdown, the contract sections
-// it carries, and the ones left out because nothing detected them.
+// A Draft is one rendered project.md: the markdown, the frontmatter keys and
+// prose sections it carries, and the sections left out because nothing
+// detected them.
 type Draft struct {
 	Markdown string
+	Keys     []string
 	Sections []string
 	Omitted  []string
 }
 
 // Scaffold renders a project.md for a checkout that declares none. Pure:
 // the caller owns the filesystem, this owns the contract.
-func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) *Draft {
-	bodies := map[string]string{
-		"Visibility": eff.Visibility,
-		"Storage":    storageBody(eff, lay),
+func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) (*Draft, error) {
+	d := &Draft{}
+
+	decl := Declared{Visibility: eff.Visibility, Storage: eff.Storage}
+	d.Keys = append(d.Keys, "visibility", "storage")
+
+	// no CLI settled: which tracker this repo uses is a human's answer
+	if eff.TrackerKind != "" && eff.IDPrefix != "" {
+		decl.Tracker = TrackerDecl{Kind: kindKey(eff.TrackerKind), ID: eff.IDPrefix + "-###"}
+		d.Keys = append(d.Keys, "tracker")
 	}
+
+	if review := detectedReview(pb); review != (ReviewDecl{}) {
+		decl.Review = review
+		d.Keys = append(d.Keys, "review")
+	}
+
+	block, err := renderDeclared(decl)
+	if err != nil {
+		return nil, err
+	}
+
+	bodies := map[string]string{}
 
 	for name, body := range map[string]string{
 		"Project":      stackBody(pb),
 		"Tracker":      trackerBody(eff, pb),
 		"Hosting & PR": hostingBody(pb),
 		"Verify":       verifyBody(pb),
-		"Review":       reviewBody(pb),
 	} {
 		if body != "" {
 			bodies[name] = body
 		}
 	}
 
-	d := &Draft{}
-
 	// the title heading carries no body on purpose: prose under it would
 	// open a section the contract does not know, and parseFile keeps those
 	// as unrecognized rather than dropping them
 	b := &strings.Builder{}
+	b.WriteString(block)
 	b.WriteString("# " + lay.Project + " · f10 project instructions\n")
 
 	for _, name := range contractFields() {
 		body, ok := bodies[name]
 		if !ok {
 			// Layering is a linked worktree's line, and init refuses to be
-			// one, so it is not a section this checkout is missing
-			if name != "Layering" {
+			// one; Visibility, Storage and Review went into the frontmatter
+			if !slices.Contains([]string{"Layering", "Visibility", "Storage"}, name) &&
+				(name != "Review" || decl.Review == (ReviewDecl{})) {
 				d.Omitted = append(d.Omitted, name)
 			}
 
@@ -67,7 +87,7 @@ func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) *Draft {
 
 	d.Markdown = b.String()
 
-	return d
+	return d, nil
 }
 
 // stackBody is the Project section: the stack the markers named, and not a
@@ -86,12 +106,11 @@ func stackBody(pb *probe.Probes) string {
 	return strings.Join(values, ", ") + "."
 }
 
-// trackerBody is the section the pipeline's contracts actually need: the
-// kind, the id format in the contract's placeholder shape, and the two
-// adapters as the host CLI's own commands.
+// trackerBody is the Tracker section's prose half: the two adapters as the
+// host CLI's own commands. The kind and the id format are frontmatter.
 func trackerBody(eff *Effective, pb *probe.Probes) string {
 	if eff.TrackerKind == "" || eff.IDPrefix == "" {
-		return "" // no CLI settled: which tracker this repo uses is a human's answer
+		return ""
 	}
 
 	view := "issue view <n> --comments"
@@ -99,8 +118,7 @@ func trackerBody(eff *Effective, pb *probe.Probes) string {
 		view = "issue view <n>"
 	}
 
-	return eff.TrackerKind + ". Task ids `" + eff.IDPrefix + "-###`.\n\n" +
-		"- **Fetch** - `" + pb.CLI.Value + " " + view + "`\n" +
+	return "- **Fetch** - `" + pb.CLI.Value + " " + view + "`\n" +
 		"- **Create** - `" + pb.CLI.Value + " issue create`"
 }
 
@@ -128,10 +146,4 @@ func verifyBody(pb *probe.Probes) string {
 	}
 
 	return strings.Join(commands, " / ")
-}
-
-// storageBody names the mode and the root. The mode's word has to survive
-// into the file: absorb reads it back out of this prose.
-func storageBody(eff *Effective, lay *layout.Layout) string {
-	return eff.Storage + " (" + lay.StorageRoot + ")"
 }

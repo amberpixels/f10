@@ -26,6 +26,7 @@ reinstall it.
 
 ```bash
 f10 init                 # register this checkout: write project.md from detection
+f10 init --migrate       # move the facts an older project.md declares in prose into its frontmatter
 f10 config [--json]      # the effective configuration, with the origin of every value
 
 f10 task read [id]       # the task as markdown

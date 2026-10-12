@@ -1,20 +1,13 @@
 #!/usr/bin/env bash
 # f10 · conventions - the static half of a run's context.
 #
-# Cats the six cross-cutting rule files every f10 run obeys. Deliberately inert: no arguments, no
-# git, no filesystem decisions, no probes. Its output is identical on every machine, in every repo,
-# for every step - which is precisely why it is not part of bundle.sh, whose output is none of
-# those things.
-#
-# That split is what makes the load-once rule statable. Conventions cannot vary, so a second copy in
-# one context window is waste; the project bundle can vary mid-conversation (a different worktree, an
-# edited project.md), so bundle.sh is never skipped. Fused, "load the conventions once" could not be
-# said without also skipping facts the run still needed.
+# Cats the six cross-cutting rule files every f10 run obeys. No arguments, git or probes, so the
+# output is identical everywhere: that is what lets a caller load it once per context while
+# bundle.sh, whose output varies by worktree and step, reloads every run.
 #
 # Usage:  conventions.sh
-#   Arguments are ignored rather than rejected - a caller passing a stale step name should get the
-#   conventions, not an error. There is nothing to select: every path but capture-only already
-#   needed all of them, so selecting cost a rule to follow and saved one file.
+#   Arguments are ignored, not rejected: a caller passing a stale step name still gets the
+#   conventions. Nothing is selectable; nearly every path needs all six.
 
 set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

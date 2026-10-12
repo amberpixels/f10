@@ -12,6 +12,9 @@ import (
 	"regexp"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
+
+	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -38,7 +41,8 @@ type Layout struct {
 	Project          string  // basename of the main checkout, or of the cwd outside git
 	StorageRoot      string  // where plans (and in-repo instructions) live
 	Layering         string  // LayeringExtends or LayeringReplaces
-	LayeringDeclared bool    // a worktree project.md carries the Layering line
+	LayeringDeclared bool    // a worktree project.md declares Layering
+	LayeringFrom     string  // "frontmatter" or "prose", when declared
 	Layers           []Layer // precedence order: later wins
 	Source           string  // human description; wording matches bundle.sh
 	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
@@ -80,8 +84,8 @@ func Locate(ctx context.Context, cwd string) *Layout {
 	// main's place wholesale; anything else - another value, no line, no
 	// project.md - extends it.
 	if wtInstr != "" && baseInstr != "" {
-		if decl := layeringDecl(filepath.Join(wtInstr, "project.md")); decl != "" {
-			lay.LayeringDeclared = true
+		if decl, from := layeringDecl(filepath.Join(wtInstr, "project.md")); decl != "" {
+			lay.LayeringDeclared, lay.LayeringFrom = true, from
 			if strings.Contains(decl, "replaces") || strings.Contains(decl, "Replaces") {
 				lay.Layering = LayeringReplaces
 			}
@@ -167,21 +171,33 @@ func existingDir(path string) string {
 	return ""
 }
 
-// layeringDecl returns the first Layering declaration line in the file, or
-// "". The pattern matches the script's grep: list markers and emphasis or
-// code marks tolerated, `-` or `:` after the word.
-func layeringDecl(projectMD string) string {
+// layeringDecl returns the file's Layering declaration and where it was
+// found: the frontmatter's `layering:` key, else the first prose line. The
+// patterns match the script's greps; the prose one tolerates list markers
+// and emphasis or code marks, `-` or `:` after the word.
+func layeringDecl(projectMD string) (string, string) {
 	data, err := os.ReadFile(projectMD)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 
-	line := regexp.MustCompile("(?i)^\\s*[-*#]*\\s*[*_`]*layering[*_`]*\\s*[-:]")
-	for l := range strings.SplitSeq(string(data), "\n") {
-		if line.MatchString(l) {
-			return l
+	block, body, ok := frontmatter.Split(data)
+	if ok {
+		var fm struct {
+			Layering string `yaml:"layering"`
+		}
+
+		if yaml.Unmarshal(block, &fm) == nil && fm.Layering != "" {
+			return fm.Layering, "frontmatter"
 		}
 	}
 
-	return ""
+	line := regexp.MustCompile("(?i)^\\s*[-*#]*\\s*[*_`]*layering[*_`]*\\s*[-:]")
+	for l := range strings.SplitSeq(string(body), "\n") {
+		if line.MatchString(l) {
+			return l, "prose"
+		}
+	}
+
+	return "", ""
 }
