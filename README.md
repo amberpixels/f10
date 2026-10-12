@@ -453,7 +453,7 @@ the task's worktree. So the plan and ship skills first hand off with `f10 forwar
 
 ```bash
 f10 forward 1042 "/f10:ship 1042"      # the command goes to 1042's agent, marked --driven
-f10 forward 1042 "1. reuse 2. proceed"  # an answer to the question that agent stopped on
+f10 forward 1042 "1. proceed 2. keep ours"  # an answer to the question that agent stopped on
 ```
 
 It resolves task, branch, worktree, workspace and agent, submits the text as the agent's next

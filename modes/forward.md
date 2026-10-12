@@ -12,8 +12,7 @@ f10 forward <task-id> "/f10:<skill> <the argument verbatim>"
 ```
 
 - **exit 0** - another checkout holds the task's branch and the command went to its agent.
-  Print the command's block (task, workspace, sent) in a fenced `yaml` block, add nothing, and
-  stop. Join `f10-state.sh clear` to the same call to retire the badge seeded when the command
+  Print the command's block (task, workspace, sent) in a fenced `yaml` block and stop. Join `f10-state.sh clear` to the same call to retire the badge seeded when the command
   was typed: this session has no run.
 - **exit 3** - the task is here (its branch is this checkout's, or it has no worktree), as
   stderr says. Continue with the skill.

@@ -17,8 +17,7 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 the options must respect. Follow the **brainstorm** step it prints, with the user's argument as
 the idea; read nothing from `steps/`.
 
-**No argument:** the idea is whatever the conversation is already about. Do not ask what to
-brainstorm: name the open question as you understand it and start.
+**No argument:** the idea is whatever the conversation is already about: name the open
+question as you understand it and start.
 
-Stay in the discussion until the user closes it. Never roll on into capturing, planning, or
-writing code; those are the user's calls.
+Stay in the discussion until the user closes it; capturing or planning it is their call.

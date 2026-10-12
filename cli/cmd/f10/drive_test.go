@@ -626,8 +626,8 @@ func TestSkillPrompt(t *testing.T) {
 	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
 
 	cases := map[string]string{
-		skillPrompt("plan", "GH-1", nil, false):   "/f10:plan GH-1 && " + defaults + " --driven",
-		skillPrompt("ship", "GH-1", nil, false):   "/f10:ship GH-1 && reuse the saved plan && " + defaults + " --driven",
+		skillPrompt("plan", "GH-1", nil, false):   "/f10:plan GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, false):   "/f10:ship GH-1 --driven",
 		skillPrompt("review", "GH-1", nil, true):  "/f10:review GH-1 ci --driven",
 		skillPrompt("review", "GH-1", nil, false): "/f10:review GH-1 --driven",
 		skillPrompt("judge", "GH-1", dep, false):  "/f10:judge GH-1 --driven",

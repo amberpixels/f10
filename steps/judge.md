@@ -2,19 +2,19 @@
 
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
-Output: a verdict in chat, the argument under it. **It writes nothing**: no plan edit (folding
-is the ship skill's), no tracker comment, no code, no scratch file; the badge note lives in the
-session's state file, outside every repo. Name a bug only where it changes the verdict. **Proceed** is a full outcome, but never agree because agreeing is cheaper.
+Output: a verdict in chat, the argument under it. **It writes nothing** (folding a verdict into
+the plan is the ship skill's; the badge note lives outside every repo). Name a bug only where
+it changes the verdict. **Proceed** is a full outcome, but never agree because agreeing is
+cheaper.
 
-1. **Gather the subject.** Free text: as written. A task id: the task via the fetch adapter,
-   plus `<storage root>/plans/<TASK-ID>.md` if it exists. A PR number, url, or the current
+1. **Gather the subject.** Free text: as written. A task id: `f10 task read <id>`, plus
+   `f10 plan read <id>` where a plan exists. A PR number, url, or the current
    branch: diff and description via the host CLI (`gh pr diff` / `gh pr view --comments`,
    `glab mr diff` / `glab mr view`), or `git diff <base>...HEAD` without a PR, plus the task and
    plan the branch name points to. A sha, a range, or "last N commits": `git show <sha>` /
    `git diff <range>`, plus the task and plan the messages or branch point to; count commits
    with `git log --oneline` (`HEAD~N` skips merged branches). No argument: what this
-   conversation is about, named back in one line first. `f10 task read` and `f10 plan read`
-   do these lookups where the binary is installed.
+   conversation is about, named back in one line first.
 2. **Restate the problem, then find it in the code** with a few targeted `Read`/`Grep` calls in
    one message. Where the stated problem and the real one differ, build the judgment on that.
 3. **Symptom or cause.** For a symptom, name where the cause lives and what fixing it takes.
@@ -57,8 +57,7 @@ session's state file, outside every repo. Name a bug only where it changes the v
 **Blind** (`--blind`): for work this session produced. Gather the subject per point 1, then
 spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole
 conversation**, with the subject verbatim, the checkout root, and the instruction to load the
-two context calls (`conventions.sh`, `bundle.sh judge`) and follow this step; project facts
-reach it through the bundle, never through the author. Relay its verdict
+two context calls (`conventions.sh`, `bundle.sh judge`) and follow this step. Relay its verdict
 unchanged; you may dispute it in one line.
 
 **In a ship pipeline** (`plan → judge → implement`, `implement → judge → pr`), the verdict routes
@@ -68,7 +67,6 @@ the run; none is a failure:
 - **stop** - end **blocked**: `f10-state.sh set ship blocked judge` and, in the same call,
   `f10-state.sh note "stop: <the reason, one line>" "<the smallest thing that would change the
   verdict>"`; then the verdict as the report, naming any durable work (commits, an open PR).
-  Never continue on your own.
 - **rethink** / **proceed with changes** - discuss as brainstorm does (`steps/brainstorm.md`
   points 3 to 6). Each change or objection becomes a gap in one `AskUserQuestion`
   (`conventions/gaps.md`), the judge's answer first, **block the run** a real option. On
@@ -80,5 +78,5 @@ the changes in without asking; the verdict and the changes are one line each in 
 Rethink becomes one ask (objections numbered, the judge's answer
 first, **block the run** among the options), then `set ship blocked judge`. Stop ends blocked.
 
-**On failure:** an unknown task id or an unreadable PR: never judge a subject you could not
-fetch. A **stop** verdict is success.
+**On failure:** an unknown task id or an unreadable PR (`conventions/failure.md`). A **stop**
+verdict is success.

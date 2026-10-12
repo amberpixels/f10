@@ -23,8 +23,7 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 nothing from `steps/`. The step routes the stripped argument (a PR / MR, "this branch", a task
 id).
 
-**No argument**: the current branch against its base. Do not ask what to demo: name the change
-in one line and demo it.
+**No argument**: the current branch against its base, named in one line.
 
-**Publish / local:** `--publish` or `--local` in the argument overrides, for this run, where the
-overlay sends the report (step point 10). Strip the token.
+**Publish / local:** strip `--publish` or `--local` from the argument; the step's point 10 acts
+on it.

@@ -7,15 +7,10 @@ argument-hint: "<id>... | <id> -- <id> [plan|judge|ship|review|resolve|finish ..
 
 # f10 · drive
 
-Run tasks through a chain from here. `f10 drive` reads each task's one base: the `--after` its
-branch recorded, else its body's `After:` line. It starts every task whose base is finished, in
-parallel, each in its own worktree and agent as `f10 start` opens them. Each agent is prompted
-one skill at a time (`--driven`, per `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`). The driver polls
-Herdr and every task's run state until each turn ends, runs `finish` itself, catches a started
-dependent up with `/f10:catchup` once its base is finished, and starts the dependents that
-finish releases. The chain is the user's inline skills, else `project.md → Drive chain`, else
-`plan → judge → ship → review → resolve → finish`. This skill only runs the command, relays its
-questions and prints its report; it runs no step.
+Run tasks through a chain from here: `f10 drive` opens each task as `f10 start` does, dependents
+after their base, and prompts each agent one skill at a time, marked `--driven`
+(`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`). This skill only runs the command, relays its questions
+and prints its report; it runs no step.
 
 Run it **in the background** (`run_in_background`) with the user's arguments verbatim: a list
 can take hours, and the command's exit wakes this session.
@@ -32,27 +27,13 @@ When it exits, read its output and act on the exit code:
   asking task: numbered questions, each with its options in brackets, the first the default.
   Put every asking task's questions to the user in **one `AskUserQuestion`**: one question per
   numbered item, its header carrying the task id, the bracketed options as the choices, the
-  first marked recommended. Then run the command again in the background, the same arguments
-  plus the answers, numbered the way each ask was. One asking task takes a bare answer; several
-  take one answer per task, keyed by its id:
-
-  ```
-  f10 drive <arguments> --answer "1. <answer> 2. <answer>"
-  f10 drive <arguments> --answer "GH-12=1. <answer>" --answer "GH-14=1. <answer> 2. <answer>"
-  ```
-
-  The output's `answer with:` line is that command. The driver sends each answer to its own
-  task's agent and carries on. Repeat on every exit 4. Other agents kept working while the
-  driver was down (rows reading `running <skill>`); the rerun picks them up where they stand.
-- **5** - a task halted: a judge stop, a failed step, a refused finish, a catchup that did not
-  end clean, an agent idle while its run still says running (a permission dialog in its pane,
-  or a cancelled run: the line says to quit that agent and rerun), a workspace where no agent
-  appeared within two minutes. Its dependents read `halted: base <id> halted`; every other task
-  ran on. Print the report block and the lines beneath it verbatim, and stop. The user settles
-  it in that workspace, then reruns the same command, which resumes where each task stands.
-- **anything else** - the command refused before or while running: outside Herdr, a task the
-  tracker does not know, a dependency the list cannot satisfy (an unfinished base outside the
-  list, or tasks that wait on each other in a circle). Print the message verbatim and stop.
+  first marked recommended. Then run the output's `answer with:` line in the background, its
+  placeholders filled with the answers, numbered the way each ask was. Repeat on every exit 4.
+- **5** - a task halted; the lines beneath the report say which and why. Print the report block
+  and those lines verbatim, and stop. The user settles it in that workspace, then reruns the
+  same command, which resumes where each task stands.
+- **anything else** - the command refused; its message names the cause. Print it verbatim and
+  stop.
 
 If `f10` is not on `PATH`, or `f10 drive` is an unknown command, the binary is missing or older
 than this plugin: say so, quote `f10 --version` where it ran, and point at

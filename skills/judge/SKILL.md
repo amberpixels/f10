@@ -11,16 +11,14 @@ A verdict on an idea, a task, a plan or a change: proceed, proceed with changes,
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
-**Blind:** with `--blind` in the argument, strip the token and judge in a fresh subagent per the
-step's blind mode: the subject and the repo, never this conversation.
+**Blind:** with `--blind` in the argument, strip the token and follow the step's **Blind**
+paragraph.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge` every run. Follow the **judge** step it prints,
-routing the stripped argument by its point 1; read nothing from `steps/`. With no argument, do
-not ask what to judge.
+routing the stripped argument by its point 1; read nothing from `steps/`.
 
-Stay in the discussion until the user closes it, talking normally while they argue. Where the verdict implies a next
-f10 skill, offer it in one line (`/f10:capture` after **proceed** on a raw idea, `/f10:plan`
-after **rethink** on a task) and leave the call to the user. Never roll on into capturing,
-planning, or writing code.
+Stay in the discussion until the user closes it, talking normally while they argue. Where the
+verdict implies a next f10 skill, offer it in one line (`/f10:capture` after **proceed** on a
+raw idea, `/f10:plan` after **rethink** on a task); the call is the user's.

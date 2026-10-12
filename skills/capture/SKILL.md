@@ -16,6 +16,4 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run. Follow the **capture** step it prints,
 with the user's argument as the description; read nothing from `steps/`.
 
-Stop once the task is created and report its id and url per
-`${CLAUDE_PLUGIN_ROOT}/conventions/report.md`. Do not plan or implement; that is `/f10:plan` and
-`/f10:ship`.
+Stop once the task is created; `/f10:plan` takes it from there.

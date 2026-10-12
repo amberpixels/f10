@@ -204,7 +204,7 @@ command anywhere else would run it on the wrong branch without the plan.
    driven state this verb exists for, and is sent to.
 
 The answer path: `f10 status 42` reads the run the worktree's agent reports, its `ask` row
-included; `f10 forward 42 "1. reuse 2. proceed"` sends the answers back as that agent's next
+included; `f10 forward 42 "1. proceed 2. keep ours"` sends the answers back as that agent's next
 prompt. `/f10:status 42` does both in one go, with the question put to you in between.
 
 Out of scope: more than one task or more than one command per call, tailing the remote agent's
@@ -248,10 +248,9 @@ session polling an agent pays a round trip and a slice of context per check.
    position: the last skill the driver saw finish, recorded on the branch as
    `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan
    done, ship done). `finish` runs in the driver, exactly as `f10 finish` would from the main
-   checkout. Every other skill is prompted to the agent, marked `--driven`: plan and ship take
-   every gap on its default as start's prompt does, ship reuses the saved plan, a dependent task's
-   plan and ship carry the dependency's contract, and review gets `ci` where `project.md` declares
-   a remote review.
+   checkout. Every other skill is prompted to the agent, marked `--driven` (which takes every
+   gap on its default and reuses a saved plan): a dependent task's plan and ship name the base
+   task and its plan, and review gets `ci` where `project.md` declares a remote review.
 5. **Catchup after finish.** `finish` marks each branch that depended on the finished task
    `f10-landed`. Before a marked task's next skill, the driver sends it `/f10:catchup --driven`.
    The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is

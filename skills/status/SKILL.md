@@ -10,10 +10,8 @@ argument-hint: "[task-id]"
 Where a run is, in words: the task, the three phases, the step a stopped run stopped on, the
 reason, and what unblocks it. The status-line badge draws the same facts as three glyphs.
 
-**Bare `/f10:status`** normally never reaches you: the plugin's `UserPromptExpansion` hook
-answers it from `f10 status` and ends the turn before a model runs. With no argument, the hook
-did not fire. The answer is below, already run: print it verbatim in a fenced block, add
-nothing, and stop.
+**Bare `/f10:status`**: the answer is below, already run. Print it verbatim in a fenced block
+and stop.
 
 !`command -v f10 >/dev/null 2>&1 && f10 status || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
 
@@ -21,9 +19,8 @@ nothing, and stop.
 checkout that has its branch, usually a worktree `f10 start` opened. The hook lets this form
 through, because the answer may need you.
 
-1. Run `f10 status <task-id>` and print its output verbatim in a fenced block. A failure (`f10`
-   missing, no branch for the task, no live run there) is printed as is, since it names the
-   cause, and ends the turn.
+1. Run `f10 status <task-id>` and print its output verbatim in a fenced block. A failure is
+   printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven
    (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question. Put it to the user in
    **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the

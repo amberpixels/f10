@@ -1198,19 +1198,15 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 	return nil, nil
 }
 
-// skillPrompt is what the agent is told for one skill, marked driven. Plan
-// and ship take every gap on its default, as start's prompt does, and ship
-// reuses the plan the chain wrote rather than asking; both carry the
-// dependency's contract when the task has a base. catchup is not a chain
-// skill: drive sends it to a branch its finished base marked landed.
+// skillPrompt is what the agent is told for one skill, marked driven. Driven
+// mode takes every gap on its default and reuses a saved plan, so plan and
+// ship are the bare skill; both name the dependency when the task has a
+// base. catchup is not a chain skill: drive sends it to a branch its finished
+// base marked landed.
 func skillPrompt(skill, id string, dep *dependency, remote bool) string {
 	var p string
 
 	switch skill {
-	case "plan":
-		p = fmt.Sprintf("/f10:plan %s && %s", id, defaults)
-	case "ship":
-		p = fmt.Sprintf("/f10:ship %s && reuse the saved plan && %s", id, defaults)
 	case "review":
 		p = "/f10:review " + id
 		if remote {

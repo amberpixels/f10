@@ -7,7 +7,7 @@ argument-hint: "<task-id | free-text description>"
 
 # f10 · plan
 
-Take a task from a reference (or a raw description) to a saved plan. **Do not implement.**
+Take a task from a reference (or a raw description) to a saved plan.
 
 **Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 
@@ -26,7 +26,7 @@ argument is free text.
 - **No argument, but a task is already in this conversation** (e.g. the user just fetched and
   discussed it): the task and the design agreed in chat are settled. **Skip `capture` and the
   `fetch` investigation**; go to `steps/plan.md` with at most a few targeted reads of the code
-  you'll mirror or touch. Never re-investigate from scratch or re-verify givens.
+  you'll mirror or touch.
 - A task id (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): run
   `steps/fetch.md`, then `steps/plan.md`.
 - Free-text description: run `steps/capture.md` (create the task), `steps/fetch.md`, then
@@ -35,5 +35,4 @@ argument is free text.
 Follow each step file in order from the bundle; read nothing from `${CLAUDE_PLUGIN_ROOT}/steps/`.
 Extra text from the user is steering for the run.
 
-Driven, make no gaps offer: the gaps stay on their defaults, listed in the report, and the run
-continues. Stop before writing implementation code; hand off to `/f10:ship`.
+Stop at the saved plan; `/f10:ship` implements it.

@@ -8,7 +8,7 @@ Nothing pushed, no task, no plan, no tracker comment.
 Context: the `catchup` frontmatter key (strategy), `project.md → Verify`.
 Badge: none, and it never retires or overwrites a badge a ship run left.
 
-Never push or force-push. No conflict, or nothing to bring in, is a **correct run**.
+No conflict, or nothing to bring in, is a **correct run**.
 
 1. **Preconditions.** A dirty tree: stop, name the dirty files one per line, touch nothing.
    **Never stash**, never `--autostash` (the stash is shared across worktrees). A merge or rebase
@@ -47,7 +47,7 @@ Never push or force-push. No conflict, or nothing to bring in, is a **correct ru
    - Under a merge, ours is the branch and theirs the base; under a rebase they are **swapped**.
      Say which once, before touching a file.
    - Triage with `git diff --name-status --diff-filter=U`: `UU` is textual; `AA`, `DU`, `UD`,
-     `AU`, `UA` are structural and get decided, never silently dropped. Never hand-merge
+     `AU`, `UA` are structural and get decided. Never hand-merge
      generated files (lock files, schema dumps, compiled assets): settle the source, then
      regenerate with the project's command, asking first if it is slow or has side effects.
    - Read the whole file, and where the hunk is unclear, each side's history since

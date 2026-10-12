@@ -12,9 +12,8 @@ passes it on.
 ## No interactive question, ever
 
 Never open `AskUserQuestion`, never end a turn on a question in chat. Every question the steps
-call for (the gaps questionnaire, **reuse this plan or re-plan?**, **wait or proceed** on a base
-with no code, a judge's rethink, a resolve `ask`, a conflict catchup cannot settle, a deploy
-confirmation) goes through run state:
+call for (**wait or proceed** on a base with no code, a judge's rethink, a resolve `ask`, a
+conflict catchup cannot settle, a deploy confirmation) goes through run state:
 
 1. **The whole batch as one ask**: `f10-state.sh ask "<text>"`, one line, numbered questions,
    options in brackets, the default or recommended answer first:
@@ -24,8 +23,9 @@ confirmation) goes through run state:
 3. **End the turn**, printing the ask once under a facts block carrying the task.
    `f10 status <task-id>` reads it from any session.
 
-Steering that settles the gaps in advance ("take defaults for all gaps", in `f10 start`'s own
-prompt) raises no gaps ask.
+Two questions never become asks: a driven run takes every gap on its default, listing the open
+ones in its report (`conventions/gaps.md`), and ships a saved plan as it stands rather than
+asking **reuse or re-plan**.
 
 ## The answer
 

@@ -32,7 +32,7 @@ preserved       <the content the step had produced, if any>
 next            <the smallest thing the user can do to unblock it>
 ```
 
-Then stop. Do not offer to continue, and do not ask a question you could have answered yourself.
+Then stop, without a question you could have answered yourself.
 
 **A step that correctly declines is a normal end**, reported as an outcome: ship stopping at an
 open PR because the pipeline declares no review, a gap left on its default, review findings you

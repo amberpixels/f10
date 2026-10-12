@@ -3,12 +3,10 @@
 With **`--dry-run`** anywhere in the argument (`/f10:ship 1042 --dry-run`), strip it, route as
 normal, and follow this file instead of the steps: load everything, execute nothing.
 
-**Never**: fetch a task (print the fetch adapter / `gh`/`glab` command instead); create a task,
-investigate the codebase, draft a task body, or write a plan; implement, commit, push, open a
-PR/MR, review, or deploy; create directories, touch `.git/info/exclude`, or write anything.
-**May** read what loading needs: `.f10/instructions/*` (both layers), `git worktree list`, and
+Read only what loading needs: `.f10/instructions/*` (both layers), `git worktree list`, and
 cheap inference signals (does `go.mod` / `justfile` / a remote exist), preferring facts already
-known over shelling out. Never run an adapter.
+known over shelling out. Every adapter and command a step would run is printed, quoted, not run;
+nothing is written.
 
 1. **Load context** with the two calls (`--all` for ship), noting *how* each fact loaded: which
    instructions (main, worktree, layered, out-of-tree, or none and inferred), which overlays,
@@ -17,8 +15,7 @@ known over shelling out. Never run an adapter.
 3. **Name each step that would run**: its adapter, *quoted, not executed*; whether an overlay
    applies; its concrete output (e.g. the exact `<storage root>/plans/<TASK-ID>.md`, and any
    archive to `archive/<TASK-ID>.<N>.md`). For ship, the selected pipeline, step by step.
-4. **Report** in the format below and **stop**. Never offer to proceed for real; the user re-runs
-   without `--dry-run`.
+4. **Report** in the format below and **stop**; the user re-runs without `--dry-run`.
 
 **Show only facts a step on *this* path consumes**, one per line, commands quoted; mark each
 `inferred` that did not come from `project.md`. Per skill, beyond instructions source and role:

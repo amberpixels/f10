@@ -18,12 +18,10 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 read nothing from `steps/`.
 
 **Driven:** with `--driven` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
-and the step's **Driven** paragraph. `f10 drive` sends it this way to a dependent whose base it
-just finished.
+and the step's **Driven** paragraph.
 
-**No routing.** The subject is always the branch checked out here; the skill takes no task id or
-PR. Any text the user adds is steering ("take theirs for the lockfile", "ask me before touching
-the migration").
+**No routing.** The subject is the branch checked out here; any text the user adds is steering
+("take theirs for the lockfile", "ask me before touching the migration").
 
 Where the run was reached from ship's failure report, say in one line that `/f10:ship <id>`
 can be re-issued now that the branch is on its base.

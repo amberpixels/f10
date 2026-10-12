@@ -66,7 +66,6 @@ const (
 	modeDiscuss = "discuss"
 
 	agentKind = "claude"
-	defaults  = "take defaults for all gaps; we review them at the end"
 )
 
 // The keys --after writes under `branch.<name>.` in the local git config:
@@ -638,10 +637,10 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 	return err
 }
 
-// prompt is what the agent is told. A dependency adds the contract it must
-// design against: the base task's plan, not the checkout, since the base
-// task's code may not exist yet and a fallback for its absence is the one
-// thing the dependent must not write. The driven marker closes it.
+// prompt is what the agent is told: the skills, the dependency where the
+// task has one, and the driven marker. Driven mode takes every gap on its
+// default and the fetch step carries the dependency's contract, so the
+// prompt states neither.
 func prompt(mode, id string, dep *dependency) string {
 	if mode == modeDiscuss {
 		return discussPrompt(id, dep)
@@ -653,9 +652,9 @@ func prompt(mode, id string, dep *dependency) string {
 	case modePlan:
 		p = "/f10:plan " + id
 	case modeLocal:
-		p = fmt.Sprintf("/f10:plan %s && /f10:ship local: %s && %s", id, id, defaults)
+		p = fmt.Sprintf("/f10:plan %s && /f10:ship local: %s", id, id)
 	default:
-		p = fmt.Sprintf("/f10:plan %s && /f10:ship %s && %s", id, id, defaults)
+		p = fmt.Sprintf("/f10:plan %s && /f10:ship %s", id, id)
 	}
 
 	if dep != nil {
@@ -682,23 +681,16 @@ func discussPrompt(id string, dep *dependency) string {
 	return p + " Then stop and wait."
 }
 
+// dependencyClause names the base task and where its plan is. What to do
+// with that (design against the plan, not this checkout, with no fallback
+// for its absence) is the fetch step's rule, so the prompt does not repeat it.
 func dependencyClause(id string, dep *dependency) string {
-	const contract = "not against this checkout, and write no fallback for its absence"
-
 	switch {
 	case dep.planned:
-		return fmt.Sprintf("%s depends on %s: design against %s's planned API as its plan at %s records it, %s",
-			id, dep.task, dep.task, dep.plan, contract)
+		return fmt.Sprintf("%s depends on %s, whose plan is at %s", id, dep.task, dep.plan)
 	case dep.plan != "":
-		return fmt.Sprintf("%s depends on %s: its plan is not written yet (expected at %s), "+
-			"so design against %s's task as planned, %s", id, dep.task, dep.plan, dep.task, contract)
+		return fmt.Sprintf("%s depends on %s, whose plan is not written yet (expected at %s)", id, dep.task, dep.plan)
 	default:
-		return fmt.Sprintf(
-			"%s depends on %s: its plan is out of reach here, so design against %s's task as planned, %s",
-			id,
-			dep.task,
-			dep.task,
-			contract,
-		)
+		return fmt.Sprintf("%s depends on %s, whose plan is out of reach here", id, dep.task)
 	}
 }

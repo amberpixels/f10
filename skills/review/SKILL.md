@@ -18,12 +18,8 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 routing the argument by its **Only the change checked out here** paragraph; read nothing from
 `steps/`. Running `/f10:review ci` authorizes the `f10 review ack` the remote half makes.
 
-**Remote:** with the word `ci` in the argument, strip it and run the step's remote half. Never
-run a local review in its place.
+**Remote:** with the word `ci` in the argument, strip it and run the step's remote half.
 
-**No argument**: the current branch against its base. Do not ask what to review: name the
-change in one line and review it.
+**No argument**: the current branch against its base, named in one line.
 
-Stop once the file is written and report it per `${CLAUDE_PLUGIN_ROOT}/conventions/report.md`.
-Then offer `/f10:resolve` in one line and leave the call to the user. Never fix a finding from
-here.
+Stop once the file is written, offer `/f10:resolve` in one line and leave the call to the user.

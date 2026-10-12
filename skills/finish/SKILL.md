@@ -7,10 +7,9 @@ argument-hint: "<task-id>[-suffix] [--yes] [-C <project>]"
 
 # f10 · finish
 
-Finish a task: `f10 finish` merges the PR or MR through the host CLI (or confirms it is already
-merged), deletes the remote branch, pulls main and confirms the merge is in it, moves the task's
-plan into main's `plans/archive/`, closes the Herdr workspace and removes the worktree and its
-local branch. This skill only runs the command and relays its output; it runs no step.
+Finish a task: `f10 finish` merges its PR or MR, archives its plan, closes its workspace and
+removes its worktree and branch. This skill only runs the command and relays its output; it
+runs no step.
 
 Run, with the user's arguments verbatim:
 
@@ -26,6 +25,5 @@ workspace (the message names the workspace), ask the user once with `AskUserQues
 this workspace and finish, or stop. On yes, rerun the same command with `--yes` appended and
 relay its report; the workspace then closes, ending this session. On no, stop.
 
-Every other refusal is final: print the message verbatim and stop. It names the cause (outside
-Herdr, a dirty worktree file by file, no branch or worktree for the task, the host's reason for
-not merging, a PR stacked on another task's branch, a closed PR) and what to do. If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
+Every other refusal is final: print the message verbatim and stop; it names the cause and what
+to do. If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.

@@ -16,8 +16,7 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain` every run. Follow the **explain** step it prints,
 routing by its **Route** paragraph; read nothing from `steps/`.
 
-**No argument**: the current branch against its base. Do not ask what to explain: name the
-subject in one line and explain it.
+**No argument**: the current branch against its base, named in one line.
 
 Stay in the conversation afterwards, talking normally: a follow-up question is a question, not
 a request to explain again. Where it leads somewhere (a doubt about the shape, a bug worth

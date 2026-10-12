@@ -8,8 +8,8 @@ edit, no new file.
 Context: `project.md → Verify`; `project.md → Review` for who answers an `ask`.
 Badge: none; inside a ship pipeline the leaf stays `review`.
 
-Settle every file the same way, whoever wrote it, and never guess what a finding meant: settle
-what the block says is wrong, where, and its fix.
+Settle every file the same way, whoever wrote it: what the block says is wrong, where, and its
+fix.
 
 1. **Find the file.** A task id or PR whose branch is not current: one line naming the worktree
    that holds it (`git worktree list`), or that none does; a normal end. The directory is named

@@ -524,9 +524,9 @@ func TestExistingBranch(t *testing.T) {
 
 func TestPrompt(t *testing.T) {
 	cases := map[string]string{
-		modeDefault: "/f10:plan GH-1 && /f10:ship GH-1 && take defaults for all gaps; we review them at the end --driven",
+		modeDefault: "/f10:plan GH-1 && /f10:ship GH-1 --driven",
 		modePlan:    "/f10:plan GH-1 --driven",
-		modeLocal:   "/f10:plan GH-1 && /f10:ship local: GH-1 && take defaults for all gaps; we review them at the end --driven",
+		modeLocal:   "/f10:plan GH-1 && /f10:ship local: GH-1 --driven",
 	}
 
 	for mode, want := range cases {
@@ -541,9 +541,8 @@ func TestPrompt(t *testing.T) {
 		plan:    "/code/repo.GH-7-base/.f10/plans/GH-7.md",
 		planned: true,
 	}
-	want := "/f10:plan GH-1 && GH-1 depends on GH-7: design against GH-7's planned API as its plan at " +
-		"/code/repo.GH-7-base/.f10/plans/GH-7.md records it, not against this checkout, and write no fallback for its absence" +
-		" --driven"
+	want := "/f10:plan GH-1 && GH-1 depends on GH-7, whose plan is at " +
+		"/code/repo.GH-7-base/.f10/plans/GH-7.md --driven"
 
 	if got := prompt(modePlan, "GH-1", dep); got != want {
 		t.Errorf("prompt with a dependency = %q, want %q", got, want)
@@ -564,7 +563,7 @@ func TestDiscussPrompt(t *testing.T) {
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/plans/GH-7.md", planned: true}
 
 	got = prompt(modeDiscuss, "GH-1", dep)
-	if !strings.Contains(got, "For context: GH-1 depends on GH-7: design against GH-7's planned API") {
+	if !strings.Contains(got, "For context: GH-1 depends on GH-7, whose plan is at /plans/GH-7.md.") {
 		t.Errorf("prompt(discuss) with a dependency = %q, want the dependency named", got)
 	}
 

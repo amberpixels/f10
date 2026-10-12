@@ -4,13 +4,13 @@ Role: a **senior engineer** reviewing someone else's change.
 Input: the diff against base, the task text where a task id is known, the prior round's
 findings file when one exists.
 Output: the **findings file** at `<storage root>/reviews/<TASK-ID>/<round>.md`, nothing else.
-`steps/resolve.md` settles it; this step settles nothing.
+`steps/resolve.md` settles it.
 Context: `project.md → Review` (added categories, the never-flag list, who answers an `ask`).
 Badge: none; inside a ship pipeline the leaf is `review` for both halves.
 
 **Only the change checked out here.** The argument names the task; the change reviewed is
 always the current branch against its base. A task id (the project's id format, an id, or a
-tracker url): the task via the fetch adapter. A PR / MR (number, url, or "this branch"): its
+tracker url): the task (`f10 task read <id>`). A PR / MR (number, url, or "this branch"): its
 head branch via the host CLI, and the task the branch name points to. A task id or a PR whose
 branch is not current: decline in one line naming the worktree that holds it
 (`git worktree list`), or that none does. A normal end.
@@ -74,8 +74,7 @@ reason: the Rounds section now declines on an unsettled round one
   `where:` `path/to/file.go:123`; `category:`; then what is wrong, why it matters, and a
   concrete fix.
 - Resolve appends `verdict:` (with `+reply` / `+note` attachments) and `reason:`, **one**
-  `verdict:` per block, rewritten when an `ask` is answered. The reviewer's text is never
-  edited.
+  `verdict:` per block, rewritten when an `ask` is answered.
 - Malformed (no header; a finding without id, `where:` or `category:`; a round-two file
   missing a round-one id): the step fails.
 
@@ -85,20 +84,18 @@ Base: the branch `git config --get branch."$(git branch --show-current)".f10-aft
 records (a stacked task), else the default branch `origin/HEAD` points to, local-first. Diff:
 `git diff $(git merge-base <base> HEAD)` plus every file
 `git ls-files --others --exclude-standard` lists. Read untracked text files under a few hundred
-KB whole. Never read
-anything larger or binary, or a `Binary files differ` line; list each as one tests-and-docs
-finding ("not reviewed: `<path>`, `<size>`, untracked"). Read the full diff every round, never
-the delta.
+KB whole; anything larger or binary (a `Binary files differ` line) goes unread, listed as one
+tests-and-docs finding ("not reviewed: `<path>`, `<size>`, untracked"). Read the full diff
+every round.
 
 ## The blind reviewer
 
 The main agent gathers the checkout root, base ref and sha, the diff command, the task id and
-text (`f10 task read <id>` or the fetch adapter), the round number, the prior round's path, and
+text (`f10 task read <id>`), the round number, the prior round's path, and
 the output path. It spawns **one fresh `general-purpose` agent, never `fork`, which inherits the
 whole conversation**, with those facts and the instruction to load the two context calls
-(`conventions.sh`, `bundle.sh review`) and follow this section; project facts reach it through
-the bundle, never through the author. The reviewer writes the file and
-returns a one-paragraph summary: verdict and count per category. The main agent checks the
+(`conventions.sh`, `bundle.sh review`) and follow this section. The reviewer writes the file
+and returns a one-paragraph summary: verdict and count per category. The main agent checks the
 header (and, in round two, a status for every prior id) and relays the summary unchanged.
 
 **The brief:**
@@ -110,7 +107,7 @@ header (and, in round two, a status for every prior id) and relays the summary u
 2. **Four core categories** over the whole diff: **correctness and logic**; **architecture and
    guidelines** (the project's CLAUDE.md and `project.md → Guardrails` included); **security
    and performance**; **tests and docs**. At most **three findings per category**, worst first;
-   drop the rest, never move them to another category. Skip style unless it affects
+   drop the rest. Skip style unless it affects
    correctness.
 3. **The project's categories** (`project.md → Review` or the review overlay), each with a
    **source-of-truth file** (a UI gallery index, an API style guide, a schema) read in full as
@@ -120,15 +117,15 @@ header (and, in round two, a status for every prior id) and relays the summary u
    Re-find each by file, title and summary, never by line alone. Judge `fixed` and `fix
    introduced a problem` on the code, the two `explanation` statuses on the skip's `reason:`
    (the reviewer must say what it misses). Restate a disputed explanation in one line.
-5. **Write the file**, return the summary. Write nothing else.
+5. **Write the file**, return the summary.
 
 ## Rounds
 
 Round = files present + 1. When `1.md` holds findings with no `verdict:`, **decline** in one line
 pointing at `/f10:resolve`: a round two then could only say `still open`. With `2.md` present,
 decline the same way, naming the findings whose last verdict is `ask` or whose last status is
-`still open` or `explanation disputed`. Both declines are a normal end. Never a third reviewer;
-never delete or rewrite a round.
+`still open` or `explanation disputed`. Both declines are a normal end. Never delete or rewrite
+a round.
 
 **Inside a ship pipeline** a `review` entry runs this step, then `steps/resolve.md`. If that
 resolve recorded a `fix` of its own (before any questionnaire), round two runs both again; a
@@ -162,10 +159,8 @@ review that arrived on the PR or MR. The four `review:` facts in the frontmatter
    settled), so a run dying in resolve never re-picks it. Ack is outward-facing, under the run's
    authorization; in stealth mode it reads as the user's own.
 
-Never merge the PR (`steps/pr.md`).
-
 **Report** per `conventions/report.md`: a `findings` row, then the verdict and the count per
 category, in the reviewer's words.
 
-**On failure:** the reviewer never returns, writes no file, or writes a malformed one: report and
-stop. Never record the step as passed or skip it silently.
+**On failure:** the reviewer never returns, writes no file, or writes a malformed one
+(`conventions/failure.md`).

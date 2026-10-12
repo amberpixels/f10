@@ -21,16 +21,14 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
      auth, …) plainly, since later steps key conditional roles off it. A small body carries no
      note; `fetch` derives the areas from the code.
    - **Altitude: write for the engineer who will pick this up, not a stranger to the codebase.**
-     - **No code walkthroughs, no pasted diffs.** A snippet only when the shape *is* the ask (a
-       required output format, a wire payload). Name the file and say what is wrong with it.
+     - **A snippet only when the shape *is* the ask** (a required output format, a wire
+       payload); otherwise name the file and say what is wrong with it.
      - **Repro detail stops at what reproduces it**, not the session that found it.
-     - **No effort or time estimates.** No hours, no story points, no sizing.
-     - **No acceptance criteria that restate the scope** in the future tense; keep the scope.
+     - **No effort estimates.**
    - **A dependency is a fixed last line.** When the order is known (the user names a task this
      one builds on, or capture creates tasks meant to run in sequence), the body ends with
-     `After: <id>`, one id in the project's format, alone on its line. `f10 start` takes it as
-     the default `--after` and `f10 drive` checks it against its list, so the word and the
-     shape are fixed. No known order, no line.
+     `After: <id>`, one id in the project's format, alone on its line; `f10 start` and
+     `f10 drive` read it, so the word and the shape are fixed. No known order, no line.
    - **Markup follows the tracker's renderer; markdown is not a safe default.** The create
      adapter says which renderer this is:
      - **GitHub / GitLab** - GFM, but **one line per paragraph, never hard-wrapped**: a single
@@ -46,5 +44,4 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
 
 Keep PII out of anything logged: ids, not names or emails.
 
-**On failure:** the create adapter errors or is missing: report the drafted title and body
-verbatim, and create the task by no other route (`conventions/failure.md`).
+**On failure:** the create adapter errors or is missing (`conventions/failure.md`).

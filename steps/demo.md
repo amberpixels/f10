@@ -21,7 +21,7 @@ a static report carries the script and the live url too.
 3. **Derive the demo script**: entry point, needed state, ordered steps, what to look for at
    each. The task's **claims** say which effects matter, the diff says which exist; where they
    disagree, follow the diff and report the difference.
-4. **Pick the executor** from the `demo` overlay, never inferred: how to launch the app, seed
+4. **Pick the executor** from the `demo` overlay: how to launch the app, seed
    baseline state, the base url, test credentials. A project skill that launches and drives the
    app, declared there, *is* the executor.
 
@@ -33,19 +33,18 @@ a static report carries the script and the live url too.
    - **how to launch it** - the dev-server recipe in the `justfile`, `Makefile`, `package.json`
      scripts or `Procfile`, and its port.
    - **how to create what a script needs** (when no existing record fits) - the test suite's
-     console, runner or factory, the app's own forms, a seed task. Never ask about reuse or
-     cleanup.
+     console, runner or factory, the app's own forms, a seed task.
    - **how to authenticate** - the test user, the dev-login route, or the header or marker the
      project's CLAUDE.md documents.
 
    Then **one** `AskUserQuestion`: a question per fact, your finding first (the conservative
-   choice where you found nothing), plus **where the report should go** (point 10). Never
-   invent a declined answer. Show the overlay, write `.f10/instructions/demo.md`, and continue
+   choice where you found nothing), plus **where the report should go** (point 10). Show the
+   overlay, write `.f10/instructions/demo.md`, and continue
    the run; later runs never ask again. If the user declines, the run **degrades to hands-on**,
    naming the missing fact: a normal end.
 5. **Set the state up, out loud.** Reuse a record that already fits. Otherwise **create** the
-   delta through the overlay's mechanism, never an improvised database route, never in a
-   database the overlay did not name. **Say what you will create first.** Created records stay:
+   delta through the overlay's mechanism, in the database it names. **Say what you will create
+   first.** Created records stay:
    the report names each with its id, and removal is the user's call.
 6. **Execute, or hand over.** Static: run the script, capture as you go, note anything that
    behaved unlike the script. Hands-on: seed, leave the app running, print the script with urls
@@ -54,16 +53,14 @@ a static report carries the script and the live url too.
    existed**: same script, same seeded state, each side's commit named. Otherwise skip and say
    why in one line (a new surface has no before but an empty page or a 404; a migration cannot hold the same state on both
    sides).
-8. **One artifact per user-visible claim**, never a target count. A button that grew and
+8. **One artifact per user-visible claim.** A button that grew and
    changed colour is one shot; five screens earn more. A hands-on scenario is the shortest path
    touching every claim, a few minutes at most.
 9. **Claim only what you captured.** Every behaviour sentence points at an artifact this run
-   produced; list what could not be demonstrated, with why. Never present behaviour read from
-   the diff as observed; point 2 is the only diff-derived statement, phrased as what the change
-   *does*.
+   produced; list what could not be demonstrated, with why. Point 2 is the only diff-derived
+   statement, phrased as what the change *does*.
 10. **Report, in two places.** In chat, per `conventions/report.md`: the task, the PR url, and
-    **only the artifacts this run wrote** (no capture, no `evidence` row; no page, no `report`
-    row). Then prose, in order: what changed, what was demonstrated, what was not and why, what
+    **only the artifacts this run wrote**. Then prose, in order: what changed, what was demonstrated, what was not and why, what
     the run created and left, the script. Close with `f10 demo open <TASK-ID>` when there is a
     file.
 

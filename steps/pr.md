@@ -16,19 +16,16 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    that branch (`gh pr create --base <branch>` / `glab mr create --target-branch <branch>`), so
    it is stacked and the host retargets it when the base merges. The base must already be on
    origin; when it is not, stop and report (`conventions/failure.md`) with the branch named and
-   `next: push the base task's branch`. Never push another task's branch from this run, and
-   never open against the default branch instead. One exception: a base that exists neither
+   `next: push the base task's branch`. One exception: a base that exists neither
    locally nor on origin was finished and deleted, so its code is in the default branch:
    `git config --unset` both keys and open against the default branch.
 4. **Open it** via the project's PR adapter: a skill, or plain `gh pr create` /
-   `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md). Run the
-   adapter's numbered procedure as a spec, not a turn budget (`conventions/latency.md`). In
+   `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md). In
    stealth mode, no f10 traces in the branch name, commits, or PR text
    (`conventions/context.md`).
-5. **Never merge**, whatever the review state, unless project.md explicitly says otherwise.
-   Merging is a human's action.
+5. **Never merge** unless project.md explicitly says otherwise; merging is a human's action.
 6. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab)
    carrying the url.
 
-**On failure:** the PR adapter errors: report whether the branch was pushed, and open the PR by
-no other route (`conventions/failure.md`).
+**On failure:** the PR adapter errors: report whether the branch was pushed
+(`conventions/failure.md`).
