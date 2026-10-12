@@ -9,19 +9,15 @@ argument-hint: "<PR | task-id | this branch | concept | symbol>"
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
-  and stop. It reports which steps the rest of the argument would run.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
+  It reports which steps the rest of the argument would run.
 - `<subject>`: a change or a concept, path or symbol; the step's **Route** paragraph reads it.
-- No argument: the current branch against its base. Say in one line which branch and base you
-  took, then start.
+- No argument: the current branch against its base.
+  Say in one line which branch and base you took, then start.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain` every run. Follow the **explain** step it prints;
-read nothing from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain` every run.
+Follow the **explain** step it prints; read nothing from `steps/`.
 
 **Exit**
-- Stay in the conversation, talking normally: a follow-up question is a question, not a request
-  to explain again.
-- Next: `/f10:judge` for a doubt about the shape, `/f10:review` for a bug worth confirming,
-  `/f10:demo` for a thing worth seeing run.
+- Stay in the conversation, talking normally: a follow-up question is a question, not a request to explain again.
+- Next: `/f10:judge` for a doubt about the shape, `/f10:review` for a bug worth confirming, `/f10:demo` for a thing worth seeing run.

@@ -11,19 +11,16 @@ Runs the **capture** step only: no plan, no code.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
-  and stop. It reports which steps the rest of the argument would run.
-- `<description>`: the task to create. An argument that describes no task ("let's capture
-  something") counts as none.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
+  It reports which steps the rest of the argument would run.
+- `<description>`: the task to create.
+  An argument that describes no task ("let's capture something") counts as none.
 - No argument:
-  - A shape this conversation settled (a brainstorm's closing statement): that is the
-    description.
+  - A shape this conversation settled (a brainstorm's closing statement): that is the description.
   - Nothing settled: ask for the description in one line and wait.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run. Follow the **capture** step it prints;
-read nothing from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run.
+Follow the **capture** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stop once the task is created.

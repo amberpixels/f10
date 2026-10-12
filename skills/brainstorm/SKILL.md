@@ -9,19 +9,17 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
-  and stop. It reports which steps the rest of the argument would run.
-- `<idea>`: the idea to think through. An argument that names no idea ("let's brainstorm")
-  counts as none.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
+  It reports which steps the rest of the argument would run.
+- `<idea>`: the idea to think through.
+  An argument that names no idea ("let's brainstorm") counts as none.
 - No argument:
-  - An open question in this conversation: that is the idea. Say in one line which question
-    you took, then start.
+  - An open question in this conversation: that is the idea.
+    Say in one line which question you took, then start.
   - Nothing open: ask for the idea in one line and wait.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm` every run, for the stack, guardrails and roles
-the options must respect. Follow the **brainstorm** step it prints; read nothing from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm` every run, for the stack, guardrails and roles the options must respect.
+Follow the **brainstorm** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stay in the discussion until the user closes it.

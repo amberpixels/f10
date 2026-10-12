@@ -9,27 +9,19 @@ argument-hint: "<task-id | free-text description>"
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
-  and stop. It reports which steps the rest of the argument would run.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
+  It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): follow
-  `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the
-  task, otherwise run `steps/fetch.md` and `steps/plan.md`.
-- A **free-text description**: run `steps/capture.md` (create the task), `steps/fetch.md`, then
-  `steps/plan.md`.
+- A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task, otherwise run `steps/fetch.md` and `steps/plan.md`.
+- A **free-text description**: run `steps/capture.md` (create the task), `steps/fetch.md`, then `steps/plan.md`.
 - **No argument** (an argument that names no task, like "let's plan something", counts as none):
-  - **A task already in this conversation** (e.g. the user just fetched and discussed it): the
-    task and the design agreed in chat are settled. **Skip `capture` and the `fetch`
-    investigation**; go to `steps/plan.md` with at most a few targeted reads of the code you'll
-    mirror or touch.
+  - **A task already in this conversation** (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.
+    **Skip `capture` and the `fetch` investigation**; go to `steps/plan.md` with at most a few targeted reads of the code you'll mirror or touch.
   - No task in the conversation: ask for one in one line and wait.
 - Extra text beside a task id is steering for the run.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan` every run, with `capture` prepended when the
-argument is free text. Follow each step file in order from the bundle; read nothing from
-`${CLAUDE_PLUGIN_ROOT}/steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan` every run, with `capture` prepended when the argument is free text.
+Follow each step file in order from the bundle; read nothing from `${CLAUDE_PLUGIN_ROOT}/steps/`.
 
 **Exit**
 - Stop at the saved plan.

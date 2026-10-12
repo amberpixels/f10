@@ -1,20 +1,16 @@
 # The f10 driver contract
 
-`f10 task` and `f10 start` need to reach your tracker. Where that tracker is the host's own
-issues, it already can: the git remote says GitHub or GitLab and `gh` / `glab` do the rest, with
-nothing to declare. Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route
-to, and that is what a driver is for.
+`f10 task` and `f10 start` need to reach your tracker.
+Where that tracker is the host's own issues, it already can: the git remote says GitHub or GitLab and `gh` / `glab` do the rest, with nothing to declare.
+Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route to, and that is what a driver is for.
 
-**f10 specifies this contract and implements none of it.** What a driver talks to is your
-project's business, and so is the language it is written in - a shell script dispatching to what
-you already have is the usual shape. f10 fixes only the shape of the conversation.
+**f10 specifies this contract and implements none of it.**
+What a driver talks to is your project's business, and so is the language it is written in - a shell script dispatching to what you already have is the usual shape. f10 fixes only the shape of the conversation.
 
 ## Where it lives
 
-An executable at `<storage root>/driver` - normally `.f10/driver`, or `~/.f10/<project>/driver`
-under out-of-tree storage. f10 runs it with the checkout root as the working directory. A file
-that is missing, is a directory, or has no execute bit is simply "no driver", and `f10 task`
-falls back to the host's issues.
+An executable at `<storage root>/driver` - normally `.f10/driver`, or `~/.f10/<project>/driver` under out-of-tree storage. f10 runs it with the checkout root as the working directory.
+A file that is missing, is a directory, or has no execute bit is simply "no driver", and `f10 task` falls back to the host's issues.
 
 ## Calling convention
 
@@ -31,14 +27,13 @@ Four verbs, each writing its answer to stdout:
 | `search` | a query string | a JSON array of task rows |
 | `branch` | task number | one branch name, alone on a line |
 
-The argument for `read`, `url` and `branch` is the **number**, not the prefixed id: f10 has
-already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
+The argument for `read`, `url` and `branch` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 
-`branch` is where a project encodes its branch shape - `feat/1042-short-slug`, or whatever
-`project.md` declares under Hosting & PR. `f10 start` creates that branch; a driver without the
-verb gets the default, `<ID>/<slug>`, the slug cut from the title the host CLI returns.
+`branch` is where a project encodes its branch shape - `feat/1042-short-slug`, or whatever `project.md` declares under Hosting & PR.
+`f10 start` creates that branch; a driver without the verb gets the default, `<ID>/<slug>`, the slug cut from the title the host CLI returns.
 
-A `search` row carries at least these four fields. Extra fields are allowed and ignored:
+A `search` row carries at least these four fields.
+Extra fields are allowed and ignored:
 
 ```json
 [{ "id": "ABC-1042", "title": "Fix order search timeout", "status": "In Progress", "url": "https://…" }]
@@ -52,26 +47,23 @@ A `search` row carries at least these four fields. Extra fields are allowed and 
 | `3` | this driver does not implement that verb |
 | anything else | it failed; stderr is shown to the user verbatim |
 
-Code `3` is a normal answer, not an error. A driver may implement `read` without `search`, and
-f10 falls back to the host's issues rather than failing; a driver without `branch` gets the
-default `<ID>/<slug>` branch name. Every other non-zero exit is a real failure, and f10 surfaces your
-stderr rather than paraphrasing a tracker error it cannot interpret.
+Code `3` is a normal answer, not an error.
+A driver may implement `read` without `search`, and f10 falls back to the host's issues rather than failing; a driver without `branch` gets the default `<ID>/<slug>` branch name.
+Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Two rules worth knowing
 
-**Return data, never act.** A driver prints a url; f10 opens it. A driver prints a branch name;
-f10 creates the branch. That separation is what lets `open` mean the same thing for a task as it
-does for a pull request, where no driver is involved at all - and it keeps `f10 task open
---print` pipeable.
+**Return data, never act.**
+A driver prints a url; f10 opens it.
+A driver prints a branch name; f10 creates the branch.
+That separation is what lets `open` mean the same thing for a task as it does for a pull request, where no driver is involved at all - and it keeps `f10 task open --print` pipeable.
 
-**Print the whole task.** `read` includes the task's comments after its body, as the host path
-does: an agent reads the task through this verb alone, and a decision made in a comment is part
-of what it asks.
+**Print the whole task.**
+`read` includes the task's comments after its body, as the host path does: an agent reads the task through this verb alone, and a decision made in a comment is part of what it asks.
 
-**Print markdown, not a rendering.** `read` writes plain markdown and stops. f10 decides
-presentation from whether it is writing to a terminal, so the same command serves a person at a
-prompt and an agent capturing stdout. A driver that pipes through `glow` or a pager itself breaks
-both.
+**Print markdown, not a rendering.**
+`read` writes plain markdown and stops. f10 decides presentation from whether it is writing to a terminal, so the same command serves a person at a prompt and an agent capturing stdout.
+A driver that pipes through `glow` or a pager itself breaks both.
 
 ## A driver in full
 
@@ -89,5 +81,4 @@ case "${1:-}" in
 esac
 ```
 
-The `*)` arm is the contract's whole growth story: every verb you have not written yet declines
-correctly, so a driver is useful from its first line.
+The `*)` arm is the contract's whole growth story: every verb you have not written yet declines correctly, so a driver is useful from its first line.

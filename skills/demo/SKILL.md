@@ -8,23 +8,20 @@ argument-hint: "<PR | task-id | this branch> [--hands-on]"
 
 Evidence of what a change does: not a verdict (`/f10:judge`), not a bug hunt (`/f10:review`).
 
-No `allowed-tools` on purpose: the executor is whatever the `demo` overlay binds (a browser MCP
-server, a project skill, a plain command), and a fixed list would disable it.
+No `allowed-tools` on purpose: the executor is whatever the `demo` overlay binds (a browser MCP server, a project skill, a plain command), and a fixed list would disable it.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
-  and stop. It reports which steps the rest of the argument would run.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
+  It reports which steps the rest of the argument would run.
 - `--hands-on`: strip it and run the step's hands-on execution.
 - `--publish` / `--local`: strip it; the step's point 10 acts on it.
 - `<subject>`: a PR / MR, "this branch", or a task id; the step reads it.
-- No argument: the current branch against its base. Say in one line which branch and base you
-  took, then start.
+- No argument: the current branch against its base.
+  Say in one line which branch and base you took, then start.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh demo` every run. Follow the **demo** step it prints; read
-nothing from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh demo` every run.
+Follow the **demo** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stop once the report is written; a hands-on run leaves the app running.

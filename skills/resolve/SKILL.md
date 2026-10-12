@@ -7,22 +7,20 @@ argument-hint: "<task-id | PR | this branch>"
 
 # f10 · resolve
 
-Producing the findings is `/f10:review`. This skill does not authorize a remote `+reply`
-(`gh pr comment` / `glab mr note`): ask once before the first post.
+Producing the findings is `/f10:review`.
+This skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note`): ask once before the first post.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything,
-  and stop. It reports which steps the rest of the argument would run.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
+  It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - `<subject>`: a task id, PR or branch; the step's point 1 reads it.
-- No argument: the current branch. Say in one line which findings file you took, then start.
+- No argument: the current branch.
+  Say in one line which findings file you took, then start.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review resolve` every run: **both steps**, since the
-findings file's shape lives in the review step. Follow the **resolve** step it prints; read
-nothing from `steps/`.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review resolve` every run: **both steps**, since the findings file's shape lives in the review step.
+Follow the **resolve** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stop once the verdicts are written and verify is green.

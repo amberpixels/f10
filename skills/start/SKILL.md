@@ -7,11 +7,9 @@ argument-hint: "<task-id> [--plan | --local | --discuss]"
 
 # f10 · start
 
-Start a task beside this one: `f10 start` creates the branch and worktree, opens them as a
-Herdr workspace, starts a claude agent in its root pane and prompts it, marked `--driven`
-(`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) unless `--discuss`. `--model` picks the agent's model
-(`opus`, `fable`, `opus-5.5`); the command corrects near misses. This skill only runs the command
-and relays its output; it runs no step and never waits on the new agent.
+Start a task beside this one: `f10 start` creates the branch and worktree, opens them as a Herdr workspace, starts a claude agent in its root pane and prompts it, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) unless `--discuss`.
+`--model` picks the agent's model (`opus`, `fable`, `opus-5.5`); the command corrects near misses.
+This skill only runs the command and relays its output; it runs no step and never waits on the new agent.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -21,7 +19,8 @@ and relays its output; it runs no step and never waits on the new agent.
 f10 start <arguments>
 ```
 
-Then print the command's report block in a fenced `yaml` block (`conventions/report.md`) and any
-line beneath it, and stop. A line starting `!!!` goes first, verbatim, above the block.
+Then print the command's report block in a fenced `yaml` block (`conventions/report.md`) and any line beneath it, and stop.
+A line starting `!!!` goes first, verbatim, above the block.
 
-If the command fails, print its message verbatim and stop; it names the cause and what to do. If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
+If the command fails, print its message verbatim and stop; it names the cause and what to do.
+If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.

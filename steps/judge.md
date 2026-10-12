@@ -2,36 +2,33 @@
 
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
-Output: a verdict in chat, the argument under it. **It writes nothing** (folding a verdict into
-the plan is the ship skill's; the badge note lives outside every repo). Name a bug only where
-it changes the verdict. **Proceed** is a full outcome, but never agree because agreeing is
-cheaper.
+Output: a verdict in chat, the argument under it.
+**It writes nothing** (folding a verdict into the plan is the ship skill's; the badge note lives outside every repo).
+Name a bug only where it changes the verdict.
+**Proceed** is a full outcome, but never agree because agreeing is cheaper.
 
-1. **Gather the subject.** Free text: as written. A task id: `f10 task read <id>`, plus
-   `f10 plan read <id>` where a plan exists. A PR number, url, or the current
-   branch: diff and description via the host CLI (`gh pr diff` / `gh pr view --comments`,
-   `glab mr diff` / `glab mr view`), or `git diff <base>...HEAD` without a PR, plus the task and
-   plan the branch name points to. A sha, a range, or "last N commits": `git show <sha>` /
-   `git diff <range>`, plus the task and plan the messages or branch point to; count commits
-   with `git log --oneline` (`HEAD~N` skips merged branches). No argument: what this
-   conversation is about; say in one line which subject you took before judging it.
-2. **Restate the problem, then find it in the code** with a few targeted `Read`/`Grep` calls in
-   one message. Where the stated problem and the real one differ, build the judgment on that.
-3. **Symptom or cause.** For a symptom, name where the cause lives and what fixing it takes.
+1. **Gather the subject.**
+   Free text: as written.
+   A task id: `f10 task read <id>`, plus `f10 plan read <id>` where a plan exists.
+   A PR number, url, or the current branch: diff and description via the host CLI (`gh pr diff` / `gh pr view --comments`, `glab mr diff` / `glab mr view`), or `git diff <base>...HEAD` without a PR, plus the task and plan the branch name points to.
+   A sha, a range, or "last N commits": `git show <sha>` / `git diff <range>`, plus the task and plan the messages or branch point to; count commits with `git log --oneline` (`HEAD~N` skips merged branches).
+   No argument: what this conversation is about; say in one line which subject you took before judging it.
+2. **Restate the problem, then find it in the code** with a few targeted `Read`/`Grep` calls in one message.
+   Where the stated problem and the real one differ, build the judgment on that.
+3. **Symptom or cause.**
+   For a symptom, name where the cause lives and what fixing it takes.
 4. **What already exists**: in the codebase, a dependency, or an open tracker task.
-5. **The longer-lived shape**: the one design you would build instead, if any, grounded in what
-   you read, its cost now against reaching it later. A quick hack is a hack only if a better
-   shape is reachable now.
+5. **The longer-lived shape**: the one design you would build instead, if any, grounded in what you read, its cost now against reaching it later.
+   A quick hack is a hack only if a better shape is reachable now.
 6. **For code: keep, reshape, or discard**, and which parts.
 7. **Verdict**, one of four:
    - **proceed** - the problem is real, the shape is right, build it as it stands.
    - **proceed with changes** - the shape is right; the named changes fold in.
-   - **rethink** - the problem is real, this shape is wrong. For existing code, the refactor
-     verdict.
+   - **rethink** - the problem is real, this shape is wrong.
+     For existing code, the refactor verdict.
    - **stop** - do not build it: not real, already solved, or not worth the cost.
 
-   Open the reply with its **banner**, a `diff`-tagged block (the terminal colors `+` green, `-`
-   red); line two is the reason, under 80 characters:
+   Open the reply with its **banner**, a `diff`-tagged block (the terminal colors `+` green, `-` red); line two is the reason, under 80 characters:
 
    ```diff
    + ✔ PROCEED
@@ -50,33 +47,24 @@ cheaper.
    - ▌ <the reason, one line - what already solves it, or what it costs>
    ```
 
-   Under it, points 2 to 6 in a few short paragraphs grounded in what you read, then the
-   smallest thing that would change the verdict. In later replies, the banner returns only when
-   the verdict changes.
+   Under it, points 2 to 6 in a few short paragraphs grounded in what you read, then the smallest thing that would change the verdict.
+   In later replies, the banner returns only when the verdict changes.
 
-**Blind** (`--blind`): for work this session produced. Gather the subject per point 1, then
-spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole
-conversation**, with the subject verbatim, the checkout root, and the instruction to load the
-two context calls (`conventions.sh`, `bundle.sh judge`) and follow this step. Relay its verdict
-unchanged; you may dispute it in one line.
+**Blind** (`--blind`): for work this session produced.
+Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`conventions.sh`, `bundle.sh judge`) and follow this step.
+Relay its verdict unchanged; you may dispute it in one line.
 
-**In a ship pipeline** (`plan → judge → implement`, `implement → judge → pr`), the verdict routes
-the run; none is a failure:
+**In a ship pipeline** (`plan → judge → implement`, `implement → judge → pr`), the verdict routes the run; none is a failure:
 
 - **proceed** - continue; the verdict is one line in the report.
-- **stop** - end **blocked**: `f10-state.sh set ship blocked judge` and, in the same call,
-  `f10-state.sh note "stop: <the reason, one line>" "<the smallest thing that would change the
-  verdict>"`; then the verdict as the report, naming any durable work (commits, an open PR).
-- **rethink** / **proceed with changes** - discuss as brainstorm does (`steps/brainstorm.md`
-  points 3 to 6). Each change or objection becomes a gap in one `AskUserQuestion`
-  (`conventions/gaps.md`), the judge's answer first, **block the run** a real option. On
-  **continue**, the ship skill folds the answers into the plan file (stages and Gaps) and runs
-  the next step; on **block**, end as stop, with this verdict in the note.
+- **stop** - end **blocked**: `f10-state.sh set ship blocked judge` and, in the same call, `f10-state.sh note "stop: <the reason, one line>" "<the smallest thing that would change the verdict>"`; then the verdict as the report, naming any durable work (commits, an open PR).
+- **rethink** / **proceed with changes** - discuss as brainstorm does (`steps/brainstorm.md` points 3 to 6).
+  Each change or objection becomes a gap in one `AskUserQuestion` (`conventions/gaps.md`), the judge's answer first, **block the run** a real option.
+  On **continue**, the ship skill folds the answers into the plan file (stages and Gaps) and runs the next step; on **block**, end as stop, with this verdict in the note.
 
-**Driven** (`modes/driven.md`): proceed and proceed with changes continue, the ship skill folding
-the changes in without asking; the verdict and the changes are one line each in the report.
-Rethink becomes one ask (objections numbered, the judge's answer
-first, **block the run** among the options), then `set ship blocked judge`. Stop ends blocked.
+**Driven** (`modes/driven.md`): proceed and proceed with changes continue, the ship skill folding the changes in without asking; the verdict and the changes are one line each in the report.
+Rethink becomes one ask (objections numbered, the judge's answer first, **block the run** among the options), then `set ship blocked judge`.
+Stop ends blocked.
 
-**On failure:** an unknown task id or an unreadable PR (`conventions/failure.md`). A **stop**
-verdict is success.
+**On failure:** an unknown task id or an unreadable PR (`conventions/failure.md`).
+A **stop** verdict is success.
