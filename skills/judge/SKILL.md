@@ -23,6 +23,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge` every run. Follow the **judge** step it prints; read
 nothing from `steps/`.
 
-Stay in the discussion until the user closes it, talking normally while they argue. Where the
-verdict implies a next f10 skill, offer it in one line (`/f10:capture` after **proceed** on a
-raw idea, `/f10:plan` after **rethink** on a task); the call is the user's.
+**Exit**
+- Stay in the discussion until the user closes it, talking normally while they argue.
+- Next: `/f10:capture` after **proceed** on a raw idea, `/f10:plan` after **rethink** on a task.

@@ -22,4 +22,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm` every run, for the stack, guardrails and roles
 the options must respect. Follow the **brainstorm** step it prints; read nothing from `steps/`.
 
-Stay in the discussion until the user closes it; capturing or planning it is their call.
+**Exit**
+- Stay in the discussion until the user closes it.
+- Next: `/f10:capture`, once a shape is settled.

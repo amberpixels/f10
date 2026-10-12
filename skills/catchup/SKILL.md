@@ -22,5 +22,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh catchup` every run. Follow the **catchup** step it prints;
 read nothing from `steps/`.
 
-Where the run was reached from ship's failure report, say in one line that `/f10:ship <id>`
-can be re-issued now that the branch is on its base.
+**Exit**
+- Stop once the branch is on its base and verify is green; nothing is pushed.
+- Next: `/f10:ship <id>`, when the run came from ship's failure report.

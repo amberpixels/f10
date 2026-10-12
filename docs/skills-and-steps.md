@@ -41,7 +41,10 @@ skill that runs it, except where its behavior differs by caller.
    `argument-hint` has an item here; `--help` prints this list.
 5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
 6. **The skill's own content.**
-7. **The exit**: where the session stops and what it offers next.
+7. **`**Exit**`**, a list: where the run ends (stop at an artifact, or stay in the conversation)
+   and, where one follows, a `Next:` skill with its condition. `conventions/report.md` says how
+   it is offered. Skills that only run the binary keep their ending in the procedure, since it
+   follows the command's exit codes.
 
 ## Edge cases
 

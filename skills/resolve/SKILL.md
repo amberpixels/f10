@@ -22,6 +22,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 findings file's shape lives in the review step. Follow the **resolve** step it prints; read
 nothing from `steps/`.
 
-With nothing left to settle, offer `/f10:review` in one line as the next step.
-
-Stop once the verdicts are written and verify is green.
+**Exit**
+- Stop once the verdicts are written and verify is green.
+- Next: `/f10:review`, when nothing is left to settle.

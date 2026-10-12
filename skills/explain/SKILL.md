@@ -19,7 +19,8 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain` every run. Follow the **explain** step it prints;
 read nothing from `steps/`.
 
-Stay in the conversation afterwards, talking normally: a follow-up question is a question, not
-a request to explain again. Where it leads somewhere (a doubt about the shape, a bug worth
-confirming, a thing worth seeing run), offer the skill in one line (`/f10:judge`,
-`/f10:review`, `/f10:demo`) and leave the call to the user.
+**Exit**
+- Stay in the conversation, talking normally: a follow-up question is a question, not a request
+  to explain again.
+- Next: `/f10:judge` for a doubt about the shape, `/f10:review` for a bug worth confirming,
+  `/f10:demo` for a thing worth seeing run.

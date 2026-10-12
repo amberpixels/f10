@@ -30,4 +30,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 argument is free text. Follow each step file in order from the bundle; read nothing from
 `${CLAUDE_PLUGIN_ROOT}/steps/`.
 
-Stop at the saved plan; `/f10:ship` implements it.
+**Exit**
+- Stop at the saved plan.
+- Next: `/f10:ship <id>`.

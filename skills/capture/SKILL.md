@@ -24,4 +24,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run. Follow the **capture** step it prints;
 read nothing from `steps/`.
 
-Stop once the task is created; `/f10:plan` takes it from there.
+**Exit**
+- Stop once the task is created.
+- Next: `/f10:plan <id>`.

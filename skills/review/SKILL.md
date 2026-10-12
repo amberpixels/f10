@@ -24,4 +24,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review` every run. Follow the **review** step it prints;
 read nothing from `steps/`.
 
-Stop once the file is written, offer `/f10:resolve` in one line and leave the call to the user.
+**Exit**
+- Stop once the findings file is written.
+- Next: `/f10:resolve`.

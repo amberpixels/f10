@@ -24,3 +24,6 @@ Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh demo` every run. Follow the **demo** step it prints; read
 nothing from `steps/`.
+
+**Exit**
+- Stop once the report is written; a hands-on run leaves the app running.
