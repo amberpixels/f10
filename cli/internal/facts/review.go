@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
@@ -83,23 +84,28 @@ const (
 )
 
 var (
-	reviewItemRE = regexp.MustCompile(`^[-*]\s+\*\*([^*]+)\*\*\s*[-:]?\s*(.*)$`)
-	codeSpanRE   = regexp.MustCompile("`([^`]+)`")
-	quotedRE     = regexp.MustCompile(`"([^"]+)"`)
+	codeSpanRE = regexp.MustCompile("`([^`]+)`")
+	quotedRE   = regexp.MustCompile(`"([^"]+)"`)
 )
 
-// parseReview reads the four items out of a Review section's body.
+// parseReview reads the four items out of a Review section's body. Only
+// list items count, so a prose line opening with "Done ..." is never read
+// as the Done fact; the key may be bold or plain.
 func parseReview(body string) Review {
 	var r Review
 
 	for line := range strings.SplitSeq(body, "\n") {
-		m := reviewItemRE.FindStringSubmatch(strings.TrimSpace(line))
-		if m == nil {
+		item, isItem := mdline.Item(line)
+		if !isItem {
 			continue
 		}
 
-		key := strings.ToLower(strings.Join(strings.Fields(m[1]), " "))
-		value := strings.TrimSpace(m[2])
+		label, value, ok := mdline.Cut(item, " - ", ":")
+		if !ok {
+			continue
+		}
+
+		key := strings.ToLower(strings.Join(strings.Fields(label), " "))
 
 		switch {
 		case key == "reviewer":

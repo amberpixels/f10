@@ -129,7 +129,8 @@ wt_instr=""
 # main's stack into a worktree that deliberately rewrote it.
 layering="extends"
 if [ -n "$wt_instr" ] && [ -n "$base_instr" ]; then
-  decl="$(grep -im1 -E '^[[:space:]]*[-*#]*[[:space:]]*\**Layering\**[[:space:]]*[-:]' \
+  # shellcheck disable=SC2016 # deliberate: the backtick is a literal code mark around the word
+  decl="$(grep -im1 -E '^[[:space:]]*[-*#]*[[:space:]]*[*_`]*Layering[*_`]*[[:space:]]*[-:]' \
     "$wt_instr/project.md" 2>/dev/null)"
   case "$decl" in *[Rr]eplaces*) layering="replaces" ;; esac
 fi

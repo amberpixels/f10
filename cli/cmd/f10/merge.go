@@ -5,6 +5,8 @@ import (
 	"context"
 	"regexp"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/mdline"
 )
 
 // The host's side of `f10 finish`: read a branch's pull or merge request,
@@ -101,7 +103,8 @@ func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 }
 
 // mergeMethodRe is the phrase project.md may carry under Hosting & PR:
-// `merge method: squash`, `merge: rebase`, in any case.
+// `merge method: squash`, `merge: rebase`, in any case, matched with
+// markdown marks dropped since it may sit mid-paragraph.
 var mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|merge|rebase)\b`)
 
 // mergeMethod is the flag the host CLI takes for this repo's merge: the
@@ -111,7 +114,7 @@ var mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|
 // allowing several gets squash with a note, since a default that rewrites
 // history is not taken in silence.
 func (h host) mergeMethod(ctx context.Context, hosting string) (string, string, error) {
-	if m := mergeMethodRe.FindStringSubmatch(hosting); m != nil {
+	if m := mergeMethodRe.FindStringSubmatch(mdline.Unmark(hosting)); m != nil {
 		method := strings.ToLower(m[1])
 		if h.glab() && method == "merge" {
 			return "", "", nil

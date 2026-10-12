@@ -168,15 +168,15 @@ func existingDir(path string) string {
 }
 
 // layeringDecl returns the first Layering declaration line in the file, or
-// "". The pattern matches the script's grep: list markers and bold
-// asterisks tolerated, `-` or `:` after the word.
+// "". The pattern matches the script's grep: list markers and emphasis or
+// code marks tolerated, `-` or `:` after the word.
 func layeringDecl(projectMD string) string {
 	data, err := os.ReadFile(projectMD)
 	if err != nil {
 		return ""
 	}
 
-	line := regexp.MustCompile(`(?i)^\s*[-*#]*\s*\**layering\**\s*[-:]`)
+	line := regexp.MustCompile("(?i)^\\s*[-*#]*\\s*[*_`]*layering[*_`]*\\s*[-:]")
 	for l := range strings.SplitSeq(string(data), "\n") {
 		if line.MatchString(l) {
 			return l

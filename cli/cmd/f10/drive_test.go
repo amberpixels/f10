@@ -663,6 +663,11 @@ func TestAfterIn(t *testing.T) {
 		"  After: GH-12":            "",
 		"After: GH-12 and GH-13\n":  "",
 		"no line at all, After: x ": "",
+		"**After:** GH-12":          "GH-12",
+		"`After:` GH-12":            "GH-12",
+		"After: **GH-12**":          "GH-12",
+		"After: `GH-12`":            "GH-12",
+		"- After: GH-12":            "",
 	}
 
 	for body, want := range cases {
