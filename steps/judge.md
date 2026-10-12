@@ -14,7 +14,7 @@ cheaper.
    plan the branch name points to. A sha, a range, or "last N commits": `git show <sha>` /
    `git diff <range>`, plus the task and plan the messages or branch point to; count commits
    with `git log --oneline` (`HEAD~N` skips merged branches). No argument: what this
-   conversation is about, named back in one line first.
+   conversation is about; say in one line which subject you took before judging it.
 2. **Restate the problem, then find it in the code** with a few targeted `Read`/`Grep` calls in
    one message. Where the stated problem and the real one differ, build the judgment on that.
 3. **Symptom or cause.** For a symptom, name where the cause lives and what fixing it takes.

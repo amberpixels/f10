@@ -10,14 +10,14 @@ argument-hint: "[task-id]"
 Where a run is, in words: the task, the three phases, the step a stopped run stopped on, the
 reason, and what unblocks it. The status-line badge draws the same facts as three glyphs.
 
-**Bare `/f10:status`**: the answer is below, already run. Print it verbatim in a fenced block
-and stop.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- No argument: the answer is below, already run. Print it verbatim in a fenced block and stop.
+- A task id: another run, the one the task's agent reports from the checkout that has its
+  branch, usually a worktree `f10 start` opened. The hook lets this form through, because the
+  answer may need you. Follow the numbered points below.
 
 !`command -v f10 >/dev/null 2>&1 && f10 status || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
-
-**`/f10:status <task-id>`** asks about another run: the one the task's agent reports from the
-checkout that has its branch, usually a worktree `f10 start` opened. The hook lets this form
-through, because the answer may need you.
 
 1. Run `f10 status <task-id>` and print its output verbatim in a fenced block. A failure is
    printed as is and ends the turn.

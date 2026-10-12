@@ -2,39 +2,37 @@
 name: ship
 description: "f10 ship skill (full run) - take a task through the project's ship pipeline: implement, then whatever the project declares (review, commit, PR/MR, deploy). Use when the user says \"/f10:ship <task-id | plan-file.md | description>\". Fetches and plans as needed, then runs the ship pipeline end to end."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ScheduleWakeup, ExitPlanMode
-argument-hint: "<task-id | path/to/plan.md | free-text description>"
+argument-hint: "<task-id | plan.md | description>"
 ---
 
 # f10 · ship
 
-Take a task through planning, if needed, then the project's **ship pipeline** (declared in
-`project.md`; default `implement → pr`, per `conventions/context.md`).
+Running this skill **is** the user's explicit authorization to push and open this task's PR
+(`steps/pr.md`), satisfying the global "never push / open a PR unless asked" rule for that PR
+only, and to post resolve's `+reply` and review's `f10 review ack`. Deploy has its own
+confirmation (`steps/deploy.md`).
 
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-
-**Driven:** with `--driven` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
-alongside this skill.
-
-**Forward first:** with a task id as the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md`
-before loading anything.
-
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
-`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all` every run: the pipeline is declared in what that
-call prints.
-
-**Route by the argument:**
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
+- A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends
+  `/f10:ship local: <id>`), or named in the user's own words: run that pipeline. Otherwise
+  `default` (declared in `project.md`; `implement → pr` per `conventions/context.md`).
 - A **plan file** (`*.md` path): run the pipeline with it.
-- A **task id** (project id format / id / url): `steps/fetch.md`, then look for
+- A **task id** (project id format / id / url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md`
+  before loading anything. Then `steps/fetch.md`, and look for
   **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses). Found:
   ask **reuse this plan or re-plan?** (AskUserQuestion); re-plan runs `steps/plan.md`. Missing:
   run `steps/plan.md`. Then the pipeline.
 - A **free-text description**: `steps/capture.md`, `steps/fetch.md`, `steps/plan.md`, then the
   pipeline.
+- Extra text beside the subject is steering.
 
-**Pipeline selection:** run `default` unless the user named another, as a word in the argument
-(`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`) or in their
-own words.
+Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
+`${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all` every run: the pipeline is declared in what that
+call prints.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or
 `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded,
@@ -49,9 +47,8 @@ nothing to do). Run `steps/catchup.md` points 2 and 3, with three differences:
   `/f10:catchup` in the `next` row.
 - **`f10-landed`** is unset once the integration is clean; implement's verify covers it.
 
-Run the pipeline's steps **in the declared order**, from the bundle. Extra user text is
-steering. A plan written this run needs no re-confirming. A `judge` step routes the run by its
-verdict (`steps/judge.md`).
+Run the pipeline's steps **in the declared order**, from the bundle. A plan written this run
+needs no re-confirming. A `judge` step routes the run by its verdict (`steps/judge.md`).
 
 **Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected;
 `f10-state.sh set ship running <step>` before each step, named as the pipeline names it;
@@ -59,11 +56,8 @@ verdict (`steps/judge.md`).
 adds `f10-state.sh set plan prior`. Stopping mid-way with durable artifacts is
 `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
-**Final report**: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, as
-produced), then review status ("stopped at PR" is a normal end), deploy status, what changed,
-and a one-line reminder of gaps left on their defaults.
-
-Running this skill **is** the user's explicit authorization to push and open this task's PR
-(`steps/pr.md`), satisfying the global "never push / open a PR unless asked" rule for that PR
-only, and to post resolve's `+reply` and review's `f10 review ack`. Deploy has its own
-confirmation (`steps/deploy.md`).
+**Exit**
+- Stop after the pipeline's last step, with the final report: the facts block with the
+  **shipment** (branch, PR/MR url, sha, deploy url, as produced), then review status ("stopped
+  at PR" is a normal end), deploy status, what changed, and a one-line reminder of gaps left on
+  their defaults.

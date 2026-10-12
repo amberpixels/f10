@@ -7,17 +7,21 @@ argument-hint: "<idea, problem, or half-formed proposal>"
 
 # f10 · brainstorm
 
-Think an idea through with someone who has read the code.
-
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `<idea>`: the idea to think through. An argument that names no idea ("let's brainstorm")
+  counts as none.
+- No argument:
+  - An open question in this conversation: that is the idea. Say in one line which question
+    you took, then start.
+  - Nothing open: ask for the idea in one line and wait.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm` every run, for the stack, guardrails and roles
-the options must respect. Follow the **brainstorm** step it prints, with the user's argument as
-the idea; read nothing from `steps/`.
+the options must respect. Follow the **brainstorm** step it prints; read nothing from `steps/`.
 
-**No argument:** the idea is whatever the conversation is already about: name the open
-question as you understand it and start.
-
-Stay in the discussion until the user closes it; capturing or planning it is their call.
+**Exit**
+- Stay in the discussion until the user closes it.
+- Next: `/f10:capture`, once a shape is settled.

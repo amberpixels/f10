@@ -7,13 +7,23 @@ argument-hint: "<free-text task description>"
 
 # f10 · capture
 
-Create a well-scoped task from a description. Runs the **capture** step only.
+Runs the **capture** step only: no plan, no code.
 
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `<description>`: the task to create. An argument that describes no task ("let's capture
+  something") counts as none.
+- No argument:
+  - A shape this conversation settled (a brainstorm's closing statement): that is the
+    description.
+  - Nothing settled: ask for the description in one line and wait.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run. Follow the **capture** step it prints,
-with the user's argument as the description; read nothing from `steps/`.
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run. Follow the **capture** step it prints;
+read nothing from `steps/`.
 
-Stop once the task is created; `/f10:plan` takes it from there.
+**Exit**
+- Stop once the task is created.
+- Next: `/f10:plan <id>`.

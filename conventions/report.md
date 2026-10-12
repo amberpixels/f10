@@ -32,6 +32,11 @@ A step that produces nothing addressable (`implement`) reports in prose. Skills 
 run the same way. `conventions/failure.md` and `modes/dry-run.md` use the same label column and
 bare urls, but **plain-fenced and colonless**, with no marker cell: their values are prose.
 
+## The next skill
+
+A skill's **Exit** block may name a `Next:` skill. Offer it in one line under the report, with
+its condition where the item gives one, and leave the call to the user: never run it.
+
 ## The status-line badge
 
 Three glyphs in the status line (capture, plan, ship) track a running run:

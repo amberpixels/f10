@@ -2,7 +2,7 @@
 name: finish
 description: "f10 finish skill - close a task without leaving this session: merge its PR or MR, archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main. Use when the user says \"/f10:finish <task-id> [--yes]\" or asks to finish, close out or clean up a merged task."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "<task-id>[-suffix] [--yes] [-C <project>]"
+argument-hint: "<task-id>"
 ---
 
 # f10 · finish
@@ -11,7 +11,9 @@ Finish a task: `f10 finish` merges its PR or MR, archives its plan, closes its w
 removes its worktree and branch. This skill only runs the command and relays its output; it
 runs no step.
 
-Run, with the user's arguments verbatim:
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- Everything else goes to `f10 finish` verbatim.
 
 ```
 f10 finish <arguments>
