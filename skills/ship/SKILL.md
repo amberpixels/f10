@@ -27,7 +27,7 @@ Deploy has its own confirmation (`steps/deploy.md`).
 - Extra text beside the subject is steering.
 
 **Run**
-- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
 - `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all`, every run: the pipeline is declared in what it prints.
 - Follow the steps it prints, in the order the Arguments item and the pipeline give; read nothing from `steps/`.
 

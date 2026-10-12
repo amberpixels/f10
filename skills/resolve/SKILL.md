@@ -20,7 +20,7 @@ This skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note
   Say in one line which findings file you took, then start.
 
 **Run**
-- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- The conventions are in this context already: the plugin's hooks inject them when a skill starts and again after compaction. Never run `conventions.sh` here.
 - `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review resolve`, every run: both steps, since the findings file's shape lives in the review step.
 - Follow the **resolve** step it prints; read nothing from `steps/`.
 

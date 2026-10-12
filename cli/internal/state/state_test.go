@@ -1,11 +1,13 @@
 package state
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -245,5 +247,145 @@ func TestShowParity(t *testing.T) {
 
 	if seen != len(ours) {
 		t.Errorf("script printed %d of the %d shared labels", seen, len(ours))
+	}
+}
+
+// The conventions reach the model through `f10-state.sh inject`, one chunk per
+// hook entry, gated by a per-session marker holding the prompt id of the
+// injection. This pins the gate: a session's first skill injects, every chunk
+// of that prompt injects, a later prompt does not, --help and the step-less
+// skills never do, and a compaction re-injects only where the session had them.
+func TestInjectParity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash script")
+	}
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate this source file")
+	}
+
+	bin := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin")
+	script := filepath.Join(bin, "f10-state.sh")
+	if _, err := os.Stat(script); err != nil {
+		t.Fatalf("f10-state.sh not found: %v", err)
+	}
+
+	dir := t.TempDir()
+	env := append(os.Environ(), dirEnv+"="+dir)
+
+	inject := func(chunk, payload string) string {
+		t.Helper()
+
+		cmd := exec.Command(script, "inject", chunk)
+		cmd.Env = env
+		cmd.Stdin = strings.NewReader(payload)
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("inject %s: %v\n%s", chunk, err, out)
+		}
+
+		if len(out) == 0 {
+			return ""
+		}
+
+		var verdict struct {
+			Out struct {
+				Event   string `json:"hookEventName"`
+				Context string `json:"additionalContext"`
+			} `json:"hookSpecificOutput"`
+		}
+		if err := json.Unmarshal(out, &verdict); err != nil {
+			t.Fatalf("inject %s printed no JSON verdict: %v\n%s", chunk, err, out)
+		}
+
+		if verdict.Out.Event == "" || verdict.Out.Context == "" {
+			t.Fatalf("inject %s: incomplete verdict\n%s", chunk, out)
+		}
+
+		return verdict.Out.Context
+	}
+
+	chunk1, err := exec.Command(filepath.Join(bin, "conventions.sh"), "1").Output()
+	if err != nil {
+		t.Fatalf("conventions.sh 1: %v", err)
+	}
+
+	typed := func(sid, prompt, name, args string) string {
+		return `{"session_id":"` + sid + `","prompt_id":"` + prompt + `","hook_event_name":"UserPromptExpansion","command_name":"` + name + `","command_args":"` + args + `"}`
+	}
+	called := func(sid, prompt, skill, args string) string {
+		return `{"session_id":"` + sid + `","prompt_id":"` + prompt + `","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"` + skill + `","args":"` + args + `"}}`
+	}
+	started := func(sid, source string) string {
+		return `{"session_id":"` + sid + `","hook_event_name":"SessionStart","source":"` + source + `"}`
+	}
+
+	// the first skill of a session: every chunk of that prompt goes through
+	got := inject("1", typed("s1", "p1", "f10:plan", "GH-1"))
+	if strings.TrimSpace(got) != strings.TrimSpace(string(chunk1)) {
+		t.Errorf("first skill: chunk 1 differs from conventions.sh 1 (%d vs %d chars)", len(got), len(chunk1))
+	}
+
+	if got := inject("2", typed("s1", "p1", "f10:plan", "GH-1")); got == "" {
+		t.Error("first skill: a sibling chunk of the same prompt was skipped")
+	}
+
+	// a later prompt in the same session, typed or model-invoked: the session holds them
+	if got := inject("1", typed("s1", "p2", "f10:ship", "GH-1")); got != "" {
+		t.Error("second prompt: injected again")
+	}
+
+	if got := inject("1", called("s1", "p3", "f10:ship", "GH-1 --driven")); got != "" {
+		t.Error("second prompt via Skill: injected again")
+	}
+
+	// compaction dropped the text: back it comes, in this session only
+	if got := inject("1", started("s1", "compact")); got == "" {
+		t.Error("compact: not re-injected")
+	}
+
+	if got := inject("1", started("s1", "startup")); got != "" {
+		t.Error("startup: injected")
+	}
+
+	if got := inject("1", started("s9", "compact")); got != "" {
+		t.Error("compact in a session that never ran f10: injected")
+	}
+
+	// nothing to read the conventions: help, and the skills that only run the binary
+	for name, payload := range map[string]string{
+		"--help":         typed("s2", "p1", "f10:plan", "--help"),
+		"status":         typed("s2", "p1", "f10:status", ""),
+		"start":          called("s2", "p1", "f10:start", "GH-1"),
+		"not a skill":    called("s2", "p1", "frontend", ""),
+		"not Skill tool": `{"session_id":"s2","prompt_id":"p1","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}`,
+	} {
+		if got := inject("1", payload); got != "" {
+			t.Errorf("%s: injected", name)
+		}
+	}
+
+	// the model-invoked path injects for a session's first skill too
+	if got := inject("1", called("s3", "p1", "plan", "GH-1")); got == "" {
+		t.Error("first skill via Skill: not injected")
+	}
+
+	// a new run (seed) and a dropped badge (clear) are not a new context
+	for _, args := range [][]string{{"seed", "plan", "s3", "GH-2", dir}, {"clear"}} {
+		cmd := exec.Command(script, args...)
+		cmd.Env = append(slices.Clone(env), sessionEnv+"=s3")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+
+	if got := inject("1", typed("s3", "p2", "f10:plan", "GH-2")); got != "" {
+		t.Error("after seed and clear: injected again")
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "s3.conventions")); err != nil {
+		t.Errorf("marker gone after seed and clear: %v", err)
 	}
 }

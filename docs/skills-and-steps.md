@@ -12,7 +12,7 @@ A skill cannot be extended.
 | Skill | Step |
 |---|---|
 | The argument: flags to strip, the no-argument default, which steps to run and in what order | Role, input, output, the procedure |
-| Context loading (`conventions.sh`, `bundle.sh <steps>`) | What the step produces, and nothing else |
+| Context loading (`bundle.sh <steps>`; the conventions arrive by hook) | What the step produces, and nothing else |
 | Modes: `--help`, `--dry-run`, `--driven`, forward | How the step behaves in a pipeline or a mode, where it differs |
 | Authorization: what running this skill permits (a push, a PR, a merge commit) or must ask for | That an action is outward-facing and needs the run's authorization |
 | The session: stay in the discussion, offer the next `/f10:*` skill, never roll on into another | What counts as failure, and which ends are normal |
@@ -35,7 +35,7 @@ A step never names the skill that runs it, except where its behavior differs by 
    Read the argument by what it says, not by whether there is one: "let's judge something" names no subject and counts as none.
    A mode item says where the run ends, read top to bottom like early returns: `... and stop` (`--help`, `--dry-run`, forward when it forwards), or `everything below still runs` (`--driven`).
    Every token in `argument-hint` has an item here; `--help` prints this list.
-5. **`**Run**`**, a list: `conventions.sh` (skipped only while an earlier call's output is still in context word for word), `bundle.sh <steps>`, then which step to follow.
+5. **`**Run**`**, a list: the conventions, already in context (the hooks inject them; a skill never runs `conventions.sh`), `bundle.sh <steps>`, then which step to follow.
 6. **The skill's own content.**
 7. **`**Exit**`**, a list: where the run ends (stop at an artifact, or stay in the conversation) and, where one follows, a `Next:` skill with its condition.
    `conventions/report.md` says how it is offered.
