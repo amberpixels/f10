@@ -18,8 +18,10 @@ argument-hint: "<idea, problem, or half-formed proposal>"
     Say in one line which question you took, then start.
   - Nothing open: ask for the idea in one line and wait.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm` every run, for the stack, guardrails and roles the options must respect.
-Follow the **brainstorm** step it prints; read nothing from `steps/`.
+**Run**
+- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh brainstorm`, every run.
+- Follow the **brainstorm** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stay in the discussion until the user closes it.

@@ -20,8 +20,10 @@ argument-hint: "<task-id | free-text description>"
   - No task in the conversation: ask for one in one line and wait.
 - Extra text beside a task id is steering for the run.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan` every run, with `capture` prepended when the argument is free text.
-Follow each step file in order from the bundle; read nothing from `${CLAUDE_PLUGIN_ROOT}/steps/`.
+**Run**
+- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan`, every run, with `capture` first when the argument is free text.
+- Follow each step it prints, in the order the Arguments item gives; read nothing from `steps/`.
 
 **Exit**
 - Stop at the saved plan.

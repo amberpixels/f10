@@ -34,8 +34,8 @@ ${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh                    # once per context
 ${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh <step> [<step> ...]    # once per run
 ```
 
-**`conventions.sh`** prints these six convention files.
-**Load it unless this context already holds it**; a subagent or a fresh session starts empty.
+**`conventions.sh`** prints these six convention files, the same everywhere; a skill skips it only while an earlier call's output is still in context word for word.
+A subagent or a fresh session starts empty: its prompt says to run both calls.
 
 **`bundle.sh`** prints the project's instructions, layered, and the requested **generic step files**: never read the plugin's `steps/` by hand, and never skip the call (its output changes with the worktree).
 It concatenates; you interpret `project.md` and bind adapters.

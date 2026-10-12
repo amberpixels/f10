@@ -26,7 +26,10 @@ Deploy has its own confirmation (`steps/deploy.md`).
 - A **free-text description**: `steps/capture.md`, `steps/fetch.md`, `steps/plan.md`, then the pipeline.
 - Extra text beside the subject is steering.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all` every run: the pipeline is declared in what that call prints.
+**Run**
+- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh --all`, every run: the pipeline is declared in what it prints.
+- Follow the steps it prints, in the order the Arguments item and the pipeline give; read nothing from `steps/`.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
 Run `steps/catchup.md` points 2 and 3, with three differences:

@@ -20,8 +20,10 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
     Say in one line which subject you took, then start.
   - Nothing open: ask for the subject in one line and wait.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge` every run.
-Follow the **judge** step it prints; read nothing from `steps/`.
+**Run**
+- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh judge`, every run.
+- Follow the **judge** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stay in the discussion until the user closes it, talking normally while they argue.

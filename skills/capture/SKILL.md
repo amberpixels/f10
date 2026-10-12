@@ -19,8 +19,10 @@ Runs the **capture** step only: no plan, no code.
   - A shape this conversation settled (a brainstorm's closing statement): that is the description.
   - Nothing settled: ask for the description in one line and wait.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture` every run.
-Follow the **capture** step it prints; read nothing from `steps/`.
+**Run**
+- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh capture`, every run.
+- Follow the **capture** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stop once the task is created.

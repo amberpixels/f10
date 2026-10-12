@@ -35,7 +35,7 @@ A step never names the skill that runs it, except where its behavior differs by 
    Read the argument by what it says, not by whether there is one: "let's judge something" names no subject and counts as none.
    A mode item says where the run ends, read top to bottom like early returns: `... and stop` (`--help`, `--dry-run`, forward when it forwards), or `everything below still runs` (`--driven`).
    Every token in `argument-hint` has an item here; `--help` prints this list.
-5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
+5. **`**Run**`**, a list: `conventions.sh` (skipped only while an earlier call's output is still in context word for word), `bundle.sh <steps>`, then which step to follow.
 6. **The skill's own content.**
 7. **`**Exit**`**, a list: where the run ends (stop at an artifact, or stay in the conversation) and, where one follows, a `Next:` skill with its condition.
    `conventions/report.md` says how it is offered.

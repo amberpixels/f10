@@ -18,8 +18,10 @@ Running this skill authorizes the merge commit or rebased commits it produces, n
   The subject is always the branch checked out here.
 - No argument: catch the branch checked out here up with its base.
 
-Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`): `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh catchup` every run.
-Follow the **catchup** step it prints; read nothing from `steps/`.
+**Run**
+- `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh`, unless an earlier call's output is still in this context word for word; a summary of it does not count.
+- `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh catchup`, every run.
+- Follow the **catchup** step it prints; read nothing from `steps/`.
 
 **Exit**
 - Stop once the branch is on its base and verify is green; nothing is pushed.
