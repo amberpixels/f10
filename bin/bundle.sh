@@ -1,43 +1,30 @@
 #!/usr/bin/env bash
 # f10 · bundle - one-shot deterministic context loading.
 #
-# Does, in a single call, the project-specific half of conventions/context.md's loading order:
-# locate .f10/instructions/ (layering a linked worktree's on top of main's), list what each layer
-# holds, cat the generic step files this run executes plus each layer's project.md and the
-# per-step overlays in precedence order, and run the inference probes (remote host, stack, verify
-# tooling). A skill runs this once per run and reads the bundle, instead of spending five round
-# trips reading/globbing/greping by hand. It never fails - absence is a valid result.
+# The project-specific half of conventions/context.md's loading order, in one call: locate
+# .f10/instructions/ (a linked worktree's layered on main's), list each layer, cat the generic
+# steps this run executes plus each layer's project.md and overlays in precedence order, and run
+# the inference probes (remote host, stack, verify tooling). It never fails; absence is a result.
 #
-# It concatenates and probes; it does not interpret. The single exception is the worktree layer's
-# `Layering` declaration, which has to be read before anything can be concatenated.
+# It concatenates and probes, never interprets, except for the worktree layer's `Layering`
+# declaration, which decides what gets concatenated.
 #
-# The conventions are bin/conventions.sh's job, not this script's. They are static plugin prose,
-# identical on every machine and every run, while everything below varies by repo, worktree and
-# step. Keeping them apart is what lets a caller load them once per context and still reload
-# project facts on every run.
-#
-# The generic step files are printed here anyway, and they are static prose too - so the line is
-# static-and-universal (load once per context) against static-but-selected (load every run),
-# not prose against facts. *Which* steps a run executes is selected per run, and conventions.sh takes no
-# arguments precisely so it can never select anything. The alternative is a third call, which is
-# the round trip this exists to remove.
+# Conventions live in conventions.sh because they are universal and load once per context. Steps
+# are static prose too but selected per run, so they print here rather than cost a third call.
 #
 # Usage:  bundle.sh <step> [<step> ...]   cat the named generic steps + project.md + their overlays
 #         bundle.sh --all                 cat every generic step + project.md + every overlay
 #         bundle.sh                       facts, layering, listing and probes only, no steps
 #   e.g.  bundle.sh capture  |  bundle.sh fetch plan  |  bundle.sh --all
 #
-# --all exists for /f10:ship, whose step list *is* the ship pipeline - and the pipeline is declared
-# in the project.md this script prints. Ship cannot name its steps until after the call, so it names
-# none. Do not "simplify" it back into a fixed step list: that is the circularity, not a shortcut.
+# --all exists for /f10:ship, whose steps are the pipeline declared in the project.md this script
+# prints, so ship cannot name them before the call. Do not replace it with a fixed step list.
 
 set -uo pipefail
 cwd="$(pwd)"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# --all anywhere in the arguments means "every overlay present"; everything else is a step name.
-# Kept as a string rather than an array: bash 3.2 trips over "${empty[*]}" under `set -u`, and the
-# rest of the script already walks $steps unquoted.
+# A string, not an array: bash 3.2 trips over "${empty[*]}" under `set -u`.
 all=0
 steps=""
 for a in "$@"; do
@@ -51,9 +38,8 @@ done
 # compared below
 canon() { if [ -d "$1" ]; then (cd "$1" && pwd -P); else printf '%s\n' "$1"; fi; }
 
-# hostname of a git remote url - scp-like (git@host:path), ssh://, https://, userinfo and port
-# all handled. Matching the whole url instead would route a gitlab remote whose *path* happens to
-# contain "github.com" to gh, picking the wrong adapter silently.
+# hostname of a git remote url (scp-like, ssh://, https://, userinfo, port). Matching the whole
+# url would send a gitlab remote whose path contains "github.com" to gh.
 host_of() {
   local h="$1"
   h="${h#*://}"
@@ -62,22 +48,18 @@ host_of() {
   printf '%s\n' "${h%%:*}"
 }
 
-# Is this host one the CLI is already logged in to? gh lists each host as a top-level key of
-# hosts.yml, glab nests them under `hosts:` in config.yml. That covers GitHub Enterprise and
-# self-hosted GitLab without an allowlist of hostnames.
-# Both files hold OAuth tokens, so this matches and returns a status - never cat them into the
-# bundle, however much the rest of this script cats things.
+# Is the CLI logged in to this host? Covers GitHub Enterprise and self-hosted GitLab with no
+# hostname allowlist. Both files hold OAuth tokens: match and return a status, never cat them.
 knows_host() {
   [ -f "$1" ] || return 1
   local esc="${2//./\\.}"
   grep -qE "^[[:space:]]*${esc}:" "$1"
 }
 
-# project_prefix <name> - the task id prefix a project with no declared id format gets, from its
-# own name: a short name with a digit as is (f10 -> F10), initials across segments (git-undo ->
-# GU, notion-sdk-go -> NSG), the first three characters of one word (herdr -> HER). Nothing
-# usable - one letter, a leading digit - prints nothing. Must answer exactly as
-# facts.projectPrefix in cli/ does; the parity test there holds both to the same names.
+# project_prefix <name> - the task id prefix for a project with no declared id format: a short
+# name with a digit as is (f10 -> F10), initials across segments (git-undo -> GU), else the first
+# three characters (herdr -> HER). One letter or a leading digit prints nothing. Must match
+# facts.projectPrefix in cli/; a parity test there holds both to the same names.
 project_prefix() {
   local lower seg n=0 first="" initials="" out=""
   lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -- '-_.' '   ')"
@@ -101,11 +83,9 @@ project_prefix() {
 }
 
 # --- locate the instructions layer(s): main's, a linked worktree's, or both ---
-# Everything anchors to `here`, the root of the checkout the run started in (main or a linked
-# worktree), so a run from a subdirectory reads and writes the same root a run from the top does.
-# Both in-tree layers are read when both exist - main's first, the worktree's on top - unless the
-# worktree declares that it replaces main. Out-of-tree is per-project by construction, so it is a
-# single layer and only a last resort.
+# Anchored to `here`, the checkout root, so a run from a subdirectory sees what one from the top
+# does. Both in-tree layers load (main's, then the worktree's) unless the worktree replaces main.
+# Out-of-tree is a single layer and a last resort.
 src="none"
 here="$(git rev-parse --show-toplevel 2>/dev/null)"
 here="$(canon "${here:-$(pwd -P)}")"
@@ -124,9 +104,8 @@ wt_instr=""
 [ -d "$base_root/.f10/instructions" ] && base_instr="$base_root/.f10/instructions"
 [ "$here" != "$base_root" ] && [ -d "$here/.f10/instructions" ] && wt_instr="$here/.f10/instructions"
 
-# `Layering - replaces main` in the worktree's own project.md takes main's place wholesale;
-# anything else - another value, no line, no project.md - extends it. Always-extend would leak
-# main's stack into a worktree that deliberately rewrote it.
+# `Layering - replaces main` in the worktree's project.md drops main's layer; anything else
+# extends it. Always extending would leak main's stack into a worktree that rewrote it.
 layering="extends"
 if [ -n "$wt_instr" ] && [ -n "$base_instr" ]; then
   # shellcheck disable=SC2016 # deliberate: the backtick is a literal code mark around the word
@@ -162,10 +141,9 @@ elif [ -d "$HOME/.f10/$proj/instructions" ]; then
   storage="$HOME/.f10/$proj"
 fi
 
-# the .md basenames a layer holds - what exists, independent of what this run asked for. Without
-# it a present-but-unrequested overlay is invisible: the layer blocks print only requested names
-# and `absent:` reports only on those same names, so a bundle can omit an overlay while claiming
-# nothing is missing. It is also the only way a project-defined step is discoverable at all.
+# the .md basenames a layer holds, requested or not. Without it an unrequested overlay is
+# invisible (layer blocks and `absent:` cover only requested names), and so is any
+# project-defined step.
 list_md() {
   local out=""
   shopt -s nullglob
@@ -174,8 +152,7 @@ list_md() {
   printf '%s\n' "${out:-none}"
 }
 
-# print one layer: its project.md, then its overlays - every one under --all, otherwise the
-# requested ones. Existing files only, either way.
+# print one layer: its project.md, then its overlays (all under --all, else the requested ones)
 print_layer() {
   echo "--- layer: $1 ($2) ---"
   if [ -f "$2/project.md" ]; then
@@ -204,8 +181,7 @@ print_layer() {
   fi
 }
 
-# supplied <file.md> - did any layer supply it?
-supplied() {
+supplied() { # supplied <file.md>
   { [ -n "$l1_dir" ] && [ -f "$l1_dir/$1" ]; } && return 0
   { [ -n "$l2_dir" ] && [ -f "$l2_dir/$1" ]; } && return 0
   return 1
@@ -232,9 +208,8 @@ fi
 echo
 
 # --- the generic steps this run executes: the base every overlay extends ---
-# Ahead of the instructions, because that is where they sit in the precedence chain. Printed at
-# all because the alternative is every skill spending a round trip on `cat steps/<name>.md`
-# before it can start - the one extra turn guaranteed on every f10 run (conventions/latency.md).
+# Ahead of the instructions, matching precedence. Printed here so no skill spends a round trip
+# on `cat steps/<name>.md` before it starts (conventions/latency.md).
 print_step() {
   if [ -f "$root/steps/$1.md" ]; then
     echo "--- step: $1 (generic) ---"
@@ -250,9 +225,8 @@ if [ "$all" = 1 ] || [ -n "$steps" ]; then
   echo "--- generic steps (plugin prose; the instructions below extend them, later wins) ---"
   echo
   if [ "$all" = 1 ]; then
-    # every one of them, since --all's caller is /f10:ship, whose pipeline this same bundle is
-    # what declares - and all of them are reachable from it: a free-text ship runs capture, fetch
-    # and plan before the pipeline names any of the rest.
+    # all of them: ship's pipeline is declared by this bundle, and a free-text ship runs capture,
+    # fetch and plan before the pipeline names the rest
     shopt -s nullglob
     for f in "$root"/steps/*.md; do
       b="${f##*/}"
@@ -314,8 +288,8 @@ if [ -n "${origin:-}" ]; then
 else
   echo "remote: none (no origin)"
 fi
-# the prefix is load-bearing: it names plan files and is how a branch is searched for its task,
-# so once a plan has used it, declare it (f10 init writes it) rather than let a rename move it
+# the prefix names plan files and finds a branch's task, so once used it should be declared
+# (f10 init writes it) rather than move with a rename
 prefix="$(project_prefix "$proj")"
 if [ -n "$prefix" ]; then
   echo "task id prefix: $prefix  (derived from the project name \"$proj\"; applies where project.md declares no id format; \`f10 init\` freezes it)"

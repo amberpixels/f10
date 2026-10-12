@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 # f10 · state - where a run is right now, so the status line can show it.
 #
-# f10's three skills are one chain - capture → plan → ship - but a run leaves no trace of its
-# position anywhere a terminal can see. The plan file lands on disk only at the end, the tracker
-# knows nothing until capture is done, and everything in between is prose scrolling past. This
-# script is that missing trace: steps write a phase as they enter and leave it, and the status
-# line reads the same file back and renders three glyphs.
+# Steps write a phase of the capture, plan, ship chain as they enter and leave it; the status line
+# reads the file back as three glyphs. Without it a run's position is invisible until the plan file
+# lands.
 #
-# **Cosmetic by construction.** Nothing in the pipeline reads this state back to decide anything,
-# so a missing file, a stale one, or a write that fails is never an error - the badge simply does
-# not show. Every subcommand that cannot do its job exits 0 and prints nothing. The one exception
-# is a malformed *call* (a phase or status that is not one), which exits 2: that is a typo in a
-# step's prose, not a runtime condition, and a silent typo would leave a badge frozen forever.
+# **Cosmetic by construction.** Nothing in the pipeline reads this state, so a missing, stale or
+# unwritable file exits 0 silently. Only a malformed call (an unknown phase or status) exits 2:
+# that is a typo in step prose, and staying silent would freeze the badge.
 #
 # Usage:
 #   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
@@ -26,20 +22,14 @@
 #   f10-state.sh doctor                 is any of this actually wired up?
 #   f10-state.sh hook                   dispatch one hook event; hook JSON on stdin
 #
-# Where the state lives is a fixed path, deliberately, and not ${CLAUDE_PLUGIN_DATA}: the renderer
-# runs from the *user's* `statusLine` command, which is not a plugin context and never sees that
-# variable. A plugin-relative root would have the writers and the reader disagree about where the
-# file is, with nothing to show for it either way.
+# A fixed path, not ${CLAUDE_PLUGIN_DATA}: the renderer runs from the user's `statusLine` command,
+# which never sees that variable, so writers and reader would disagree on the file.
 #
-# Keyed by session rather than by repo, because two sessions over one checkout are two runs - and
-# `/clear` mints a new session id, which retires the badge for free. It lives outside the repo,
-# which is also what stealth mode wants (conventions/context.md): nothing f10-shaped inside the
-# project directory, not even untracked.
+# Keyed by session, not repo: two sessions over one checkout are two runs, and `/clear` mints a new
+# id that retires the badge. Kept outside the repo for stealth mode (conventions/context.md).
 #
-# The only script here with an f10- prefix, because it is the only one that leaves the plugin: a
-# person types it by hand (`f10-state.sh show`, `doctor`), step prose names it bare, and the
-# statusline symlink points at it. bundle.sh and conventions.sh are plumbing a skill reaches by
-# full plugin-root path, so a bare name never meets a reader outside this directory.
+# The only script with an f10- prefix because it leaves the plugin: people type it, step prose
+# names it bare, and the statusline symlink points at it.
 
 set -uo pipefail
 
@@ -48,9 +38,8 @@ ttl="${F10_STATE_TTL:-86400}" # a badge older than this reads as stale and rende
 phases="capture plan ship"
 
 # --- the state file: `key value` lines, one per key ---------------------------------------------
-# Flat text rather than JSON, because the reader is a status line: it runs on every assistant
-# message and on every refresh tick, and a `while read` loop costs no process where `jq` costs one.
-# Parsed, never sourced - a half-written file should produce a wrong badge, not run as shell.
+# Flat text, not JSON: the status line reads it on every message and refresh tick, and a `while
+# read` loop costs no process. Parsed, never sourced, so a half-written file cannot run as shell.
 
 st_task=""
 st_url=""
@@ -68,9 +57,8 @@ st_ship="pending"
 sid=""
 file=""
 
-# session id, in the order the callers can supply it: an explicit override, the hook payload's
-# value (passed as $1 by the hook dispatcher), then the variable Claude Code exports into every
-# Bash tool call. Empty is a normal outcome - a script run by hand from a plain shell has none.
+# session id: the hook payload's ($1), then the F10_SESSION_ID override, then the one Claude Code
+# exports into every Bash call. Empty is normal for a run by hand from a plain shell.
 find_sid() {
   sid="${1:-${F10_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}}"
   [ -n "$sid" ] || return 1
@@ -97,21 +85,18 @@ load() {
       ship) st_ship="$v" ;;
     esac
   done <"$file"
-  # A truncated or hand-edited file must degrade to a stale badge, never to an arithmetic error on
-  # the status line's stdout - so the one field anything does maths on is checked on the way in.
+  # A truncated or hand-edited file must degrade to a stale badge, not an arithmetic error on the
+  # status line, so the one numeric field is checked here.
   case "$st_updated" in '' | *[!0-9]*) st_updated=0 ;; esac
   return 0
 }
 
-# Whole-file rewrite through a temp file: the file is six lines, and a torn read from the status
-# line - which polls this thing - would flicker a half-updated badge.
+# Whole-file rewrite through a temp file, so the polling status line never reads a torn file.
 save() {
   [ -n "$file" ] || return 1
   mkdir -p "$state_dir" 2>/dev/null || return 1
-  # The root is the seed's to record, from the hook payload - but a run seeded before there was
-  # a root key, or by hand, has none, and every later call runs where the session runs: a step's
-  # Bash call and a hook alike have the checkout as their cwd. So the first save after the seed
-  # fills it in, and a file that predates the key catches up on its next badge call.
+  # The seed records the root; a run seeded by hand has none. Steps and hooks both run with the
+  # checkout as cwd, so the first save fills it in.
   if [ -z "$st_root" ]; then
     st_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)"
   fi
@@ -133,16 +118,9 @@ save() {
   } >"$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
 }
 
-# Entering a phase retires the ones before it. A run reached from a task id never captures, and a
-# run handed a plan file never plans, so those phases are not pending - they happened elsewhere, or
-# they will not happen. Without this rule every route but the full free-text one would leave
-# leading circles that never fill, and no step would ever be the obvious place to say so. It is a
-# mechanical consequence of the chain's order, which is why it lives here and not in prose.
-#
-# `skipped` is the guess this rule can make on its own: "nobody said, and now it is too late".
-# Where positive evidence arrives that a phase's work exists from before - a task id the tracker
-# returned (cmd_task), the ship skill reusing a saved plan - the phase is upgraded to `prior` instead:
-# done, just not by this run.
+# Entering a phase retires the pending ones before it: a run from a task id never captures, one
+# from a plan file never plans, and their leading circles would never fill. `skipped` means
+# "nobody said"; positive evidence of earlier work (cmd_task, a saved plan) upgrades to `prior`.
 backfill() {
   case "$1" in
     plan)
@@ -157,28 +135,18 @@ backfill() {
 }
 
 # --- rendering --------------------------------------------------------------------------------
-# Glyph first, color second. A status line is read at a glance, often in a daltonized theme, and
-# red/green is precisely the pair that collapses there - so each status carries its own shape and
-# the color only reinforces it. NO_COLOR and F10_STATE_COLOR=0 drop the color and keep the shapes.
+# Glyph first, color second: red/green collapses in daltonized themes, so each status has its own
+# shape. NO_COLOR and F10_STATE_COLOR=0 drop the color and keep the shapes.
 
-# The glyphs are one list, and which seven they are was decided by what terminal fonts actually
-# contain. A codepoint the font lacks does not fail - the OS quietly substitutes another font, whose
-# baseline and advance width are its own, and the badge renders as circles that do not sit on one
-# line. U+25D0 ◐, the obvious "half done" mark, is missing from JetBrains Mono, Fira Code and Hack
-# alike, which is how this list ended up circles-by-fill instead: ring, double ring, solid, dotted,
-# a cross, and a fisheye (U+25C9, a dot inside a ring - "done, just not here"), all six present in
-# the common programming fonts. The seventh, partial ("stopped, but the work survived"), is the
-# label's bet rather than the circles': no crossed-circle codepoint exists across those same fonts,
-# so it is Material Design's md-close-circle-outline (U+F015A), which every Nerd Font carries.
-# The eighth, blocked ("stopped by a decision, not by breakage" - a judge verdict inside a ship
-# pipeline), takes the same bet for the same reason: no slashed-circle codepoint survives those
-# fonts either (U+2298 is missing even from the Nerd Fonts), so it is md-cancel (U+F073A).
+# Chosen by what terminal fonts contain: a missing codepoint is silently drawn from another font
+# with its own baseline and width. ◐ (U+25D0) is missing from JetBrains Mono, Fira Code and Hack,
+# so the first six are circles-by-fill those fonts all carry. partial (U+F015A) and blocked
+# (U+F073A) have no portable circle, so they bet on Nerd Font Material Design icons.
 # Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior> <partial> <blocked>".
 read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺}"
 
-# These two assign to a global instead of printing, and are called rather than substituted. Render
-# needs both for each of three phases, on every assistant message and every refresh tick, and
-# `$(glyph …)` would fork a subshell for each one - six processes to draw six characters.
+# These two set globals instead of printing: render calls them per phase on every refresh, and
+# `$(glyph_for ...)` would fork a subshell each time.
 _glyph=""
 _color=""
 
@@ -209,10 +177,8 @@ color_for() {
 
 render() {
   local want="${1:-}"
-  # The status line pipes its own JSON in, and the session id it carries is the authoritative one
-  # for the window being drawn - the environment is only the fallback that makes `render` useful by
-  # hand. Pulled out with bash string operations rather than the json_get below, which would spend a
-  # whole `jq` process on one flat field, every assistant message and every refresh tick.
+  # The piped status-line JSON carries the authoritative session id; the environment is the
+  # by-hand fallback. Parsed with string operations, not json_get, to spare a `jq` per refresh.
   if [ -z "$want" ] && [ ! -t 0 ]; then
     local blob rest
     blob="$(cat 2>/dev/null)"
@@ -250,22 +216,16 @@ render() {
     fi
   done
 
-  # The label: an F10 keycap icon, so the three circles read as f10's and not some other plugin's.
-  # Nothing else - no task id, no step name - because the segment sits inline in a status line's
-  # first row, where every column it takes is a column the branch loses. The icon is Material
-  # Design's md-keyboard_f10 (U+F12B4), which every Nerd Font carries; that is a narrower bet than
-  # the circles' but the same shape of bet, since a status line dense enough to want this badge is
-  # overwhelmingly already on a patched font. On anything else it degrades to one substituted or
-  # tofu cell, not a broken badge. Task and leaf still surface in `show`, which is where a human
-  # who wants the detail already is.
+  # An F10 keycap (md-keyboard_f10, U+F12B4, Nerd Fonts) marks the circles as f10's. No task id
+  # or step: every column here is one the branch loses; `show` has the detail. Without a Nerd Font
+  # it degrades to one tofu cell.
   local label="󱊴"
   if [ "$color" = 1 ]; then
     label=$'\033[2m'"$label$reset"
   fi
 
-  # The one word the three glyphs cannot say, and only when a human is about to ask for it: a
-  # run that stopped shows the step it stopped on. A normal run stays three glyphs wide, so the
-  # column argument for the label above holds where it matters; `f10 status` carries the reason.
+  # A stopped run shows the step it stopped on; a normal run stays three glyphs wide.
+  # `f10 status` carries the reason.
   local word=""
   if [ -n "$st_leaf" ]; then
     case "$st_capture$st_plan$st_ship" in
@@ -276,16 +236,13 @@ render() {
     esac
   fi
 
-  # A leading space, so a status-line script can concatenate the result unconditionally: empty
-  # means empty, and the segment brings its own separator when it is not.
+  # Leading space, so a status-line script can append the result unconditionally.
   printf ' %s %s%s' "$label" "$icons" "$word"
 }
 
 # --- reading hook payloads ---------------------------------------------------------------------
-# jq where it exists, sed where it does not. Only flat scalar fields are ever read, so the sed
-# fallback's one weakness - a greedy match landing on a later duplicate key - has no field here it
-# can reach. Keeping the fallback means hooks still work on a machine without jq, which is exactly
-# the machine where a hard dependency would fail silently at 5ms into a session.
+# jq where it exists, sed otherwise, so hooks still work without jq. Only flat scalar fields are
+# read, so sed's greedy match on a duplicate key never comes up.
 json=""
 
 json_get() { # json_get <key> [<parent object>]
@@ -329,11 +286,8 @@ cmd_set() {
     plan) st_plan="$status" ;;
     ship) st_ship="$status" ;;
   esac
-  # The leaf belongs to a step that is running - or to the step a run stopped on. A stop state
-  # keeps it (the argument when given, else the one the last `running` recorded), because "ship
-  # blocked" is the badge and "blocked at judge" is the answer; clearing it here is how a run once
-  # forgot who blocked it. A phase starting over retires the earlier stop's reason with it, and
-  # the question a driven run stopped on: a step that runs again has its answer.
+  # A stop state keeps the leaf (the argument, else the last `running` one): "blocked at judge" is
+  # the answer to "ship blocked". A phase running again retires the old note and question.
   case "$status" in
     running)
       st_leaf="$leaf"
@@ -348,10 +302,8 @@ cmd_set() {
   exit 0
 }
 
-# Why a run stopped, and the smallest thing that unblocks it - the two lines a badge cannot hold.
-# Written by whoever stops the run (a judge verdict, a failure report) in the same breath as the
-# stop state. One line each: the file is `key value` per line and the reader takes the rest of the
-# line as the value, so a newline would become a second, unknown key.
+# Why a run stopped and what unblocks it, written alongside the stop state. Newlines are flattened:
+# the file is one `key value` per line, so a newline would start an unknown key.
 cmd_note() {
   local reason="${1:-}" next="${2:-}"
   [ -n "$reason" ] || {
@@ -366,11 +318,9 @@ cmd_note() {
   exit 0
 }
 
-# The question a driven run stopped on (modes/driven.md): an agent prompted from another session
-# has no one in its pane to answer a dialog, so it writes the whole questionnaire here - numbered
-# questions, each with its options, the default first - and ends its turn blocked. The session
-# that drives it reads the line through `f10 status <task-id>`, asks the user, and sends the
-# answer back as the agent's next prompt. One line, like note: a newline would be a second key.
+# The questionnaire a driven run stopped on (modes/driven.md), options included, default first: no
+# one is in its pane to answer. The driving session reads it via `f10 status <task-id>` and sends
+# the answer as the next prompt. Flattened to one line, like note.
 cmd_ask() {
   local text="${1:-}"
   [ -n "$text" ] || {
@@ -384,10 +334,8 @@ cmd_ask() {
   exit 0
 }
 
-# The ship pipeline's last step, declared by the ship skill once pipeline selection settles. It
-# exists for the Stop backstop: with it, "turn ended while ship was running" splits into "on the
-# final step - the classic dropped `set ship done`, promote" and "mid-pipeline - a pause, keep
-# spinning". Best-effort like every badge call; undeclared falls back to promoting either way.
+# The ship pipeline's last step, for the Stop backstop: a turn ending on it is a dropped `set ship
+# done` and promotes; mid-pipeline is a pause. Undeclared, Stop always promotes.
 cmd_final() {
   local step="${1:-}"
   [ -n "$step" ] || {
@@ -411,9 +359,8 @@ cmd_task() {
   load
   st_task="$id"
   [ -n "$url" ] && st_url="$url"
-  # A task id the tracker returned is positive evidence the task existed before this run - so a capture
-  # nobody reported (pending) or one backfill already wrote off (skipped) becomes `prior`, not a
-  # hollow circle. `done` and `running` stay: capture.md reports those itself, in this run.
+  # A tracker task id means the task predates this run, so an unreported capture becomes `prior`.
+  # `done` and `running` stay: capture.md reports those itself.
   case "$st_capture" in
     pending | skipped) st_capture="prior" ;;
   esac
@@ -421,21 +368,10 @@ cmd_task() {
   exit 0
 }
 
-# Does this run's argument read as a description rather than a reference? The first token decides
-# where it can: a task id (ABC-1042, or bare 1042), a plan path, a url - each is a reference no
-# matter what follows it, because the model routinely appends parenthetical context to skill args
-# ("ABC-1042 (Notion task already fetched; ...)"). Counting tokens across the whole argument read
-# every such decorated reference as a description, which is how a run over a pre-existing task once
-# wore a solid green capture it never did. Only when the first token claims nothing does the old
-# tiebreak apply: one token is a reference, a sentence is a description. That is the same
-# distinction the skills themselves route on, and it is the only thing at seed time that knows
-# whether capture is a phase this run will actually reach.
-#
-# It has to be guessed here because the alternative is worse. Reporting is best-effort, so a phase
-# still `pending` means "nobody said" - not "it did not happen" - and the badge has to settle that
-# ambiguity in one direction or the other. Settling it as "skipped" is what made a run that really
-# did capture show a hollow first glyph. Guessing the route instead is wrong only for arguments no
-# one writes, and the capture step's own report overrides it the moment it speaks.
+# Does the argument read as a description (so the run will capture)? A first token that is a task
+# id (ABC-1042, 1042), plan path or url is a reference whatever follows, since the model appends
+# context to skill args ("ABC-1042 (task already fetched; ...)"). Otherwise one token is a
+# reference and a sentence a description, as the skills route; capture's own report overrides it.
 is_description() {
   local a="${1:-}"
   a="${a//--dry-run/}"
@@ -449,10 +385,8 @@ is_description() {
   [ "$#" -gt 1 ]
 }
 
-# What the first token of a run's argument names, where it names a task at all: a task id
-# (ABC-1042, or bare 1042) is itself, a plan path is its basename - the same naming rule the
-# PostToolUse arm relies on. Empty for everything else (a url, a description, no argument),
-# which the caller reads as "the argument claims nothing".
+# The task the argument's first token names: a task id as is, a plan path by basename (the
+# PostToolUse arm's rule). Empty for a url, a description or nothing.
 ref_task_of() {
   local a="${1:-}"
   a="${a//--dry-run/}"
@@ -471,22 +405,15 @@ ref_task_of() {
   return 0
 }
 
-# A skill invocation begins a run, and a run owns the three glyphs for its duration - so seeding
-# resets the phases rather than merging into whatever the last one left behind. With one
-# exception: a chain of invocations over ONE task in one session - plan, then ship, each handing
-# its output to the next - is a single run in stages, and it is detectable right here, because
-# the new argument names the task the state already holds. Wiping there is how a plan this very
-# session had just written once rendered as `skipped` the moment ship started. So a matching
-# reference carries the settled phases (done/prior/partial) forward and resets only what the new
-# skill is about to redo; anything else is a genuinely new run and resets whole - task id
-# included, because keeping it would caption the new run with the old run's task, which is the
-# one way this badge could actively mislead.
+# A skill invocation begins a run and resets the phases, except a chain over one task (plan, then
+# ship) whose argument names the task already held: that carries settled phases (done, prior,
+# partial) forward, or ship would show this session's plan as `skipped`. A new run resets the task
+# id too, so the badge never captions it with the old task.
 cmd_seed() {
   local skill="${1:-}" args="${3:-}" cwd="${4:-}"
   find_sid "${2:-}" || exit 0
 
-  # Chained only for plan/ship: capture always mints a new task, so an id argument to it never
-  # continues anything. A bare number matches its prefixed form - `ship 1042` continues ABC-1042.
+  # Not for capture, which always mints a new task. `ship 1042` continues ABC-1042.
   local ref up_ref up_task chain=0
   ref="$(ref_task_of "$args")"
   if [ "$skill" != "capture" ] && [ -n "$ref" ] && load && [ -n "$st_task" ]; then
@@ -503,15 +430,13 @@ cmd_seed() {
   st_next=""
   st_ask=""
   st_ship="pending"
-  # The checkout this run is about, so a terminal with no session id can still find its runs.
-  # The hook payload's cwd is wherever the session was launched; the checkout root is what a
-  # run from a subdirectory shares with one from the top. Outside git the cwd is the root.
+  # The checkout root, so a terminal with no session id can still find its runs, and a session
+  # launched from a subdirectory matches one from the top. Outside git the cwd is the root.
   if [ -n "$cwd" ]; then
     st_root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$cwd")"
   fi
   if [ "$chain" = 1 ]; then
-    # earlier phases stay where the last invocation left them - if their work is settled; a
-    # leftover `running` or `failed` is stale, not evidence, and resets with the rest
+    # settled phases stay; a leftover `running` or `failed` is stale and resets
     case "$st_capture" in done | prior | partial) ;; *) st_capture="pending" ;; esac
     if [ "$skill" = "plan" ]; then
       st_plan="pending" # the plan skill is here to (re)plan; a kept `done` would lie over it
@@ -525,25 +450,17 @@ cmd_seed() {
     st_plan="pending"
   fi
 
-  # /f10:capture is one phase from end to end. /f10:plan and /f10:ship route on their argument,
-  # and a description routes them through capture first - so the phase opens here, where the
-  # argument is, rather than waiting for a step that may never think to mention it. A reference
-  # (or nothing at all) hands /f10:plan straight to fetch, which is the plan phase already
-  # underway - so plan opens at the seed too, deterministically: the run where fetch never really
-  # happens (the task already sat in context) is exactly the run whose prose-reported `set plan
-  # running` never arrives.
+  # Open the first phase here, where the argument is, rather than trust a step to report it. A
+  # description routes plan and ship through capture; a reference sends plan to fetch, whose
+  # `set plan running` never arrives when the task is already in context.
   case "$skill" in
     capture) st_capture="running" ;;
     plan) if is_description "$args"; then st_capture="running"; else st_plan="running"; fi ;;
     ship) is_description "$args" && st_capture="running" ;;
   esac
-  # A plan-path argument names the task in its basename - that is the naming rule the PostToolUse
-  # arm already relies on - and the plan-file route skips fetch, so no `task` call ever arrives to
-  # record it. This is also the one route where the seed itself holds positive evidence of earlier
-  # work: the file IS the plan phase's output, so plan is `prior` and so is the capture that must
-  # have preceded it - cmd_task's bar, rather than backfill's later "nobody said" shrug of
-  # `skipped`. Only `pending` upgrades: a chain-preserved `done` outranks it (this session did the
-  # work), and under /f10:plan the phase is already `running` toward a rewrite.
+  # A plan path skips fetch, so no `task` call records the task; its basename names it. The file
+  # is evidence of earlier work, so pending capture and plan become `prior`. A chain-kept `done`
+  # outranks it, and under /f10:plan the phase is already `running`.
   if [ "$skill" = "plan" ] || [ "$skill" = "ship" ]; then
     # shellcheck disable=SC2086 # deliberate: the reference, when there is one, is the first token
     set -- ${args//--dry-run/}
@@ -560,10 +477,8 @@ cmd_seed() {
   exit 0
 }
 
-# The loaded run, one `label value` line per fact, in the order `f10 status` prints them - the
-# binary is the fuller surface (every live run, --json), and this is the same facts for the
-# machine that has only the script. A phase carries its step where one is known: `running:
-# implement`, `blocked at judge`.
+# The loaded run, one `label value` line per fact in `f10 status` order, for a machine without the
+# binary. A phase carries its step where known: `running: implement`, `blocked at judge`.
 print_run() {
   printf 'task     %s\n' "${st_task:--}"
   printf 'url      %s\n' "${st_url:--}"
@@ -586,8 +501,7 @@ print_run() {
   return 0
 }
 
-# A status with its step attached, where the step is known and belongs to this status. The leaf
-# is a pipeline step, so only ship ever carries one.
+# A status with its step attached. The leaf is a pipeline step, so only ship carries one.
 phase_text() { # phase_text <phase> <status>
   if [ "$1" != "ship" ] || [ -z "$st_leaf" ]; then
     printf '%s' "$2"
@@ -619,11 +533,9 @@ cmd_clear() {
   exit 0
 }
 
-# The status line is configured once, by hand, in the user's own settings - but the plugin root it
-# would have to name moves with every plugin update (a marketplace install lives under a version
-# directory). So the settings file names a stable path here instead, and every session start
-# re-points that path at whatever the current plugin root is. Invoked under that name, the script
-# renders: see the dispatch at the foot of the file.
+# The plugin root moves with every update (installs live under a version directory), so the user's
+# statusLine names a stable symlink that each session start re-points here. Invoked under that
+# name, the script renders (see the dispatch at the foot of the file).
 link_statusline() {
   local self="$0" link="$HOME/.claude/f10/statusline"
   case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
@@ -634,9 +546,8 @@ link_statusline() {
   return 0
 }
 
-# Sessions end without telling anyone - a window closes, a machine reboots - so nothing deletes a
-# state file at the right moment and every one of them outlives its run. A week is far past the TTL
-# that stops them rendering, so this only reclaims files that already showed nothing.
+# Sessions end without notice, so every state file outlives its run. A week is far past the TTL,
+# so this only reclaims files that already render nothing.
 cmd_prune() {
   [ -d "$state_dir" ] || exit 0
   find "$state_dir" -type f -name '*.state' -mtime +7 -delete 2>/dev/null
@@ -685,12 +596,9 @@ cmd_doctor() {
   exit 0
 }
 
-# One entry point for every hook event, dispatching on the payload's own hook_event_name rather
-# than on an argument, so hooks.json registers the same command everywhere and a new event costs a
-# case arm instead of a new script. Nothing here fails a run: a badge is never a reason to
-# interrupt one. The exception is a bare `/f10:status`, which is not a run - it is a question, and
-# the answer is the interruption: a blocking verdict ends the turn before the model runs and puts
-# the status in the chat, so it costs no model turn at all.
+# One entry point for every hook event, dispatching on the payload's hook_event_name, so a new
+# event is a case arm, not a script. Nothing here fails a run. A bare `/f10:status` is answered by
+# a blocking verdict that ends the turn before the model runs, costing no model turn.
 cmd_hook() {
   [ -t 0 ] && exit 0
   json="$(cat)"
@@ -707,9 +615,8 @@ cmd_hook() {
 
   case "$event" in
     UserPromptExpansion)
-      # the typed path: /f10:ship reaches the model as an expansion, never as a Skill tool call
-      # bare only: `/f10:status <task-id>` asks about another worktree's run and may have a
-      # question to relay to the user, which takes a model turn - the skill handles that form
+      # the typed path: /f10:ship reaches the model as an expansion, never as a Skill tool call.
+      # Bare status only: `/f10:status <task-id>` may relay a question, which needs a model turn.
       local name
       name="$(json_get command_name)"
       case "$name" in
@@ -727,9 +634,8 @@ cmd_hook() {
       cmd_seed "$skill" "$hook_sid" "$(json_get args tool_input)" "$(json_get cwd)"
       ;;
     PostToolUse)
-      # the plan file *is* the plan step's output (conventions/context.md), so writing one is the
-      # one phase transition that needs no one to remember to report it - and its name is the task
-      # id, which is how a run reached from a task id gets its caption for free.
+      # the plan file is the plan step's output (conventions/context.md), so writing one marks
+      # plan done unreported, and its name is the task id
       local path
       path="$(json_get file_path tool_input)"
       case "$path" in
@@ -746,19 +652,10 @@ cmd_hook() {
       save
       ;;
     Stop)
-      # The turn is over - the backstop for the instruction a run is most likely to drop: the
-      # final `set ship done` arrives after the pipeline, the PR and the report, which is
-      # precisely where an agent stops following prose. Left to the steps alone, a finished run
-      # sits on a spinning glyph until the ttl retires it.
-      #
-      # `failed`, `partial` and `blocked` are left alone (failure.md and judge.md mark them
-      # before reporting, and that is the outcome). For capture and plan - single-turn phases - running at turn end means
-      # done. For ship it does not: an interactive run crosses many turn boundaries (a question,
-      # a steering message, a review poll), and promoting at each one painted implement-in-
-      # progress solid green. So ship promotes only when its leaf *is* the declared final step -
-      # the dropped-last-call case - and otherwise keeps spinning: a mid-pipeline turn end is a
-      # pause, and a run that truly died there is the ttl's to retire. No `final` declared (or a
-      # leafless running) → the old rule: promote, overstate, cheaper error.
+      # Backstop for the most-dropped call, the final `set ship done` after the PR and report.
+      # Stop states are left alone. Single-turn capture and plan promote; ship spans many turns,
+      # so it promotes only on the declared final step, or when no `final` or leaf is known
+      # (overstating is the cheaper error). A run that died mid-pipeline is the ttl's to retire.
       find_sid "$hook_sid" || exit 0
       load || exit 0
       finalize=0
@@ -788,13 +685,9 @@ cmd_hook() {
   exit 0
 }
 
-# The answer to `/f10:status` - see cmd_hook. It travels as a blocking verdict on stdout rather
-# than as stderr with exit 2, because exit 2 is the *error* path: the chat wraps that stderr in the
-# hook's own command line and then echoes the prompt back under it, with the status squeezed
-# between the two. The verdict prints the block alone, under one header line that is Claude Code's
-# and not ours to drop. The binary is the full surface and answers when it is on the hook's PATH;
-# the script's own view is the fallback, so a machine without the binary installed still gets an
-# answer rather than a model turn.
+# The answer to a bare `/f10:status`, as a blocking verdict on stdout: exit 2 is the error path,
+# which wraps stderr in the hook command and echoes the prompt. The binary answers when on PATH;
+# print_run is the fallback.
 answer_status() {
   local text=""
   if command -v f10 >/dev/null 2>&1; then
@@ -809,12 +702,9 @@ answer_status() {
   exit 0
 }
 
-# The block under a title of its own. The line Claude Code prints above it says `blocked by hook`
-# about a command the user simply typed, and none of those three words are his: he asked for a
-# status. The title takes that sentence's place as the thing the eye lands on, and the tag on its
-# right answers what the noise above it raises - nothing went wrong, nothing ran, here is the
-# status. Rule width follows the widest row, within bounds a narrow terminal and a long URL both
-# survive.
+# The block under its own title, so the eye lands there and not on Claude Code's `blocked by hook`
+# line; the "no model turn" tag says nothing went wrong. Rule width follows the widest row,
+# clamped to 44-72 columns.
 titled() {
   local w pad rule
   w="$(printf '%s\n' "$1" | awk '
@@ -828,9 +718,8 @@ titled() {
   printf 'f10 · status%*sno model turn\n%s\n%s\n' "$pad" "" "$rule" "$1"
 }
 
-# Text as the body of a JSON string. Three characters in a status block need escaping - backslash,
-# quote, newline - and anything else in the control range is dropped rather than escaped: one raw
-# control byte makes the whole verdict unparseable, and an unparseable verdict costs the answer.
+# Text as the body of a JSON string: backslash, quote and newline escaped, tabs to spaces, other
+# control bytes dropped, since one raw control byte makes the verdict unparseable.
 json_string() {
   printf '%s' "$1" |
     tr '\t' ' ' |
@@ -838,11 +727,8 @@ json_string() {
     awk 'BEGIN { ORS = "" } { if (NR > 1) print "\\n"; print }'
 }
 
-# Which f10 skill a command or Skill-tool name refers to - empty for anything else, which the
-# caller reads as "not ours, do nothing". Both paths carry the plugin's own prefix (`/f10:ship`,
-# `Skill(f10:ship)`), so the prefixed form is what this really matches; the bare form is accepted
-# only because a `capture`/`plan`/`ship` reaching *these* hooks at all is overwhelmingly f10's, and
-# the cost of being wrong is one wrong badge for one turn.
+# Which f10 skill a command or Skill-tool name refers to; empty means not ours. The bare form is
+# accepted too: a wrong match costs one wrong badge for one turn.
 f10_skill_of() {
   case "${1:-}" in
     f10:capture | capture) printf '%s' "capture" ;;
