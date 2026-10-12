@@ -78,7 +78,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 
 	return finish(ctx, cmd.Writer, finishInput{
 		main:      main,
-		driver:    driver.Find(t.lay.StorageRoot, t.dir),
+		driver:    t.driver(),
 		task:      r,
 		suffix:    suffix,
 		host:      h.at(main),

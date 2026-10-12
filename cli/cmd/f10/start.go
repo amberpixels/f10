@@ -119,7 +119,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	in := startInput{
 		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		driver:   driver.Find(t.lay.StorageRoot, t.dir),
+		driver:   t.driver(),
 		task:     r,
 		suffix:   suffix,
 		mode:     mode,
@@ -214,7 +214,7 @@ type startInput struct {
 // CLI answers with the reason, so the note beneath the report can quote it.
 func titleLookup(t *target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		h, err := t.host()
+		h, err := t.issues()
 		if err != nil {
 			return "", err
 		}

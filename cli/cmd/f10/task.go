@@ -11,7 +11,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The task noun goes through the project's driver when it has one, and
@@ -71,7 +70,7 @@ func readTask(ctx context.Context, t *target, token string) (string, error) {
 		return "", err
 	}
 
-	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
+	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
 			return doc, nil
@@ -82,7 +81,7 @@ func readTask(ctx context.Context, t *target, token string) (string, error) {
 		}
 	}
 
-	h, err := t.host()
+	h, err := t.issues()
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +100,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
+	if d := t.driver(); d != nil {
 		url, err := d.Run(ctx, driver.VerbURL, r.Number)
 		if err == nil {
 			return follow(ctx, cmd.Writer, t.dir, strings.TrimSpace(url), cmd.Bool("print"))
@@ -112,23 +111,19 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	h, err := t.host()
+	h, err := t.issues()
 	if err != nil {
 		return err
 	}
 
-	if cmd.Bool("print") {
-		url, err := h.issueURL(ctx, r.Number)
-		if err != nil {
-			return err
-		}
-
-		_, err = fmt.Fprintln(cmd.Writer, url)
-
+	// through the url, never `issue view --web`, which opens a pull request
+	// that shares the number
+	url, err := h.issueURL(ctx, r.Number)
+	if err != nil {
 		return err
 	}
 
-	return shell.Passthrough(ctx, h.dir, h.name, "issue", "view", r.Number, "--web")
+	return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("print"))
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -160,7 +155,7 @@ type row struct {
 }
 
 func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
-	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
+	if d := t.driver(); d != nil {
 		out, err := d.Run(ctx, driver.VerbSearch, query)
 		if err == nil {
 			var rows []row
@@ -176,7 +171,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		}
 	}
 
-	h, err := t.host()
+	h, err := t.issues()
 	if err != nil {
 		return nil, err
 	}

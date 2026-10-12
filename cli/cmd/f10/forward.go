@@ -78,7 +78,7 @@ func runForward(ctx context.Context, cmd *cli.Command) error {
 	return forward(ctx, cmd.Writer, forwardInput{
 		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
 		here:     t.lay.CheckoutRoot,
-		driver:   driver.Find(t.lay.StorageRoot, t.dir),
+		driver:   t.driver(),
 		task:     r,
 		suffix:   suffix,
 		text:     text,

@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -162,7 +161,7 @@ func taskRoot(ctx context.Context, cmd *cli.Command, token string) (string, stri
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 
-	name, path, err := taskCheckout(ctx, main, driver.Find(t.lay.StorageRoot, t.dir), r, suffix)
+	name, path, err := taskCheckout(ctx, main, t.driver(), r, suffix)
 
 	switch {
 	case err != nil:

@@ -111,7 +111,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	drv := driver.Find(t.lay.StorageRoot, t.dir)
+	drv := t.driver()
 	h, hostErr := t.host()
 
 	if slices.Contains(chain, "finish") && hostErr != nil {

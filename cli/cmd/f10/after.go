@@ -73,7 +73,7 @@ func (t *target) tracker() tracker {
 	return tracker{
 		resolve: t.reference,
 		info: func(ctx context.Context, task ref.Ref) (taskInfo, error) {
-			if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
+			if d := t.driver(); d != nil {
 				body, err := d.Run(ctx, driver.VerbRead, task.Number)
 				if err == nil {
 					return taskInfo{body: body}, nil
@@ -84,7 +84,7 @@ func (t *target) tracker() tracker {
 				}
 			}
 
-			h, err := t.host()
+			h, err := t.issues()
 			if err != nil {
 				return taskInfo{}, err
 			}
@@ -94,12 +94,10 @@ func (t *target) tracker() tracker {
 				return taskInfo{}, err
 			}
 
-			url := iss.url()
-
 			return taskInfo{
 				body:   iss.body(),
 				closed: strings.EqualFold(iss.State, "closed"),
-				pull:   strings.Contains(url, "/pull/") || strings.Contains(url, "/merge_requests/"),
+				pull:   iss.pull(),
 			}, nil
 		},
 		archive: []string{archive},
