@@ -7,11 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -116,6 +118,57 @@ func (t *target) host() (host, error) {
 	default:
 		return host{}, errors.New("no host CLI for this checkout: " + t.pb.CLI.Evidence)
 	}
+}
+
+// driverPaths are where a driver may sit, in lookup order: this checkout's
+// storage root, then beside each instruction layer, the last first. A
+// worktree finds main's driver where it finds main's instructions, and one
+// that replaces main's instructions keeps main's driver out too.
+func (t *target) driverPaths() []string {
+	paths := []string{filepath.Join(t.lay.StorageRoot, "driver")}
+
+	for _, layer := range slices.Backward(t.lay.Layers) {
+		if p := filepath.Join(filepath.Dir(layer.Dir), "driver"); !slices.Contains(paths, p) {
+			paths = append(paths, p)
+		}
+	}
+
+	return paths
+}
+
+// driver is the project's tracker driver, or nil when it has none.
+func (t *target) driver() *driver.Driver {
+	for _, p := range t.driverPaths() {
+		if d := driver.Find(filepath.Dir(p), t.dir); d != nil {
+			return d
+		}
+	}
+
+	return nil
+}
+
+// issues is the host for the issue fallback, used when no driver answers.
+// A project declaring a tracker no host CLI reaches is refused rather than
+// read from host issues, where an unrelated issue or PR shares the number.
+func (t *target) issues() (host, error) {
+	if kind := t.eff.TrackerKind; kind != "" && kind != "GitHub Issues" && kind != "GitLab work items" &&
+		t.trackerDeclared() {
+		return host{}, fmt.Errorf("project.md declares a %s tracker, which f10 reads only through a driver, "+
+			"and none was found (looked for %s); see docs/driver-contract.md",
+			kind, strings.Join(t.driverPaths(), ", "))
+	}
+
+	return t.host()
+}
+
+func (t *target) trackerDeclared() bool {
+	for _, f := range t.eff.Facts {
+		if f.Key == "tracker.kind" {
+			return strings.HasPrefix(f.Origin, "declared")
+		}
+	}
+
+	return false
 }
 
 // sharedPlansDir is the plans dir every worktree shares with out-of-tree

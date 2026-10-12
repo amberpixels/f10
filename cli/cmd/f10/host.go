@@ -39,14 +39,34 @@ type issue struct {
 func (i issue) url() string  { return cmp.Or(i.URL, i.WebURL) }
 func (i issue) body() string { return cmp.Or(i.Body, i.Description) }
 
+// pull reports whether the number named a pull request: gh numbers issues
+// and pull requests from one counter, and `gh issue view` answers for both.
+func (i issue) pull() bool {
+	return strings.Contains(i.URL, "/pull/") || strings.Contains(i.WebURL, "/merge_requests/")
+}
+
+// notPull refuses a pull request where an issue was asked for.
+func (i issue) notPull(number string) error {
+	if i.pull() {
+		return fmt.Errorf("#%s is a pull request, not an issue", number)
+	}
+
+	return nil
+}
+
 // gh numbers issues, glab gives them an iid; whichever came back is the one
 // this issue has.
 func (i issue) ident() string { return strconv.Itoa(cmp.Or(i.Number, i.IID)) }
 
-// issue reads one issue. gh is asked for the named fields alone; glab has
-// no field selection and answers with the whole issue.
+// issue reads one issue. gh is asked for the named fields and the url,
+// which tells a pull request apart; glab has no field selection and answers
+// with the whole issue.
 func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 	var iss issue
+
+	if !slices.Contains(strings.Split(fields, ","), "url") {
+		fields += ",url"
+	}
 
 	err := h.decode(ctx, &iss, h.pick(
 		[]string{"issue", "view", number, "--json", fields},
@@ -60,6 +80,10 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
 	iss, err := h.issue(ctx, number, "number,title,state,url,body,comments")
 	if err != nil {
+		return "", err
+	}
+
+	if err := iss.notPull(number); err != nil {
 		return "", err
 	}
 
@@ -88,6 +112,10 @@ func (h host) issueURL(ctx context.Context, number string) (string, error) {
 		return "", err
 	}
 
+	if err := iss.notPull(number); err != nil {
+		return "", err
+	}
+
 	if url := iss.url(); url != "" {
 		return url, nil
 	}
@@ -99,6 +127,10 @@ func (h host) issueURL(ctx context.Context, number string) (string, error) {
 func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 	iss, err := h.issue(ctx, number, "title")
 	if err != nil {
+		return "", err
+	}
+
+	if err := iss.notPull(number); err != nil {
 		return "", err
 	}
 

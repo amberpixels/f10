@@ -119,7 +119,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	in := startInput{
 		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		driver:   driver.Find(t.lay.StorageRoot, t.dir),
+		driver:   t.driver(),
 		task:     r,
 		suffix:   suffix,
 		mode:     mode,
@@ -214,7 +214,7 @@ type startInput struct {
 // CLI answers with the reason, so the note beneath the report can quote it.
 func titleLookup(t *target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		h, err := t.host()
+		h, err := t.issues()
 		if err != nil {
 			return "", err
 		}
@@ -669,19 +669,17 @@ func prompt(mode, id string, dep *dependency) string {
 
 // discussPrompt fetches the task and stops. It is plain text with no driven
 // marker: the user talks to this agent in its own pane, and its questions
-// belong there. The fetch adapter is the fallback for a project where
-// `f10 task read` has neither a driver nor a host to read from.
+// belong there. Comments come with `f10 task read`'s output and the
+// fetch-adapter fallback with its error, so the prompt names neither.
 func discussPrompt(id string, dep *dependency) string {
-	p := fmt.Sprintf("Run `f10 task read %s` and read the task in full with its comments, "+
-		"opening every image it links; if that command fails, fetch the task through "+
-		"the project's fetch adapter instead. Summarise what it asks in a few lines.", id)
+	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines, "+
+		"opening any image it links.", id)
 
 	if dep != nil {
 		p += " For context: " + dependencyClause(id, dep) + "."
 	}
 
-	return p + " Then stop and wait: we discuss it before any plan. " +
-		"Do not plan, investigate further, write code or change files until I say so."
+	return p + " Then stop and wait."
 }
 
 func dependencyClause(id string, dep *dependency) string {

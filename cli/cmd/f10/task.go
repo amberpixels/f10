@@ -11,7 +11,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The task noun goes through the project's driver when it has one, and
@@ -52,33 +51,42 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	doc, err := readTask(ctx, t, cmd.Args().First())
 	if err != nil {
-		return err
-	}
-
-	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
-		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
-		if err == nil {
-			return writeDoc(ctx, cmd.Writer, t.dir, doc)
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return err
-		}
-	}
-
-	h, err := t.host()
-	if err != nil {
-		return err
-	}
-
-	doc, err := h.issueDoc(ctx, r.ID, r.Number)
-	if err != nil {
-		return err
+		// an agent reading this has the project's fetch adapter as its
+		// fallback, and learns of it here, when it applies, not in every prompt
+		return fmt.Errorf("%w\nfetch the task through the project's fetch adapter instead "+
+			"(project.md, Tracker)", err)
 	}
 
 	return writeDoc(ctx, cmd.Writer, t.dir, doc)
+}
+
+// readTask is the task as markdown: the driver's `read`, else the host's
+// issue with its comments.
+func readTask(ctx context.Context, t *target, token string) (string, error) {
+	r, err := t.reference(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	if d := t.driver(); d != nil {
+		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
+		if err == nil {
+			return doc, nil
+		}
+
+		if !errors.Is(err, driver.ErrUnsupported) {
+			return "", err
+		}
+	}
+
+	h, err := t.issues()
+	if err != nil {
+		return "", err
+	}
+
+	return h.issueDoc(ctx, r.ID, r.Number)
 }
 
 func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
@@ -92,7 +100,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
+	if d := t.driver(); d != nil {
 		url, err := d.Run(ctx, driver.VerbURL, r.Number)
 		if err == nil {
 			return follow(ctx, cmd.Writer, t.dir, strings.TrimSpace(url), cmd.Bool("print"))
@@ -103,23 +111,19 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	h, err := t.host()
+	h, err := t.issues()
 	if err != nil {
 		return err
 	}
 
-	if cmd.Bool("print") {
-		url, err := h.issueURL(ctx, r.Number)
-		if err != nil {
-			return err
-		}
-
-		_, err = fmt.Fprintln(cmd.Writer, url)
-
+	// through the url, never `issue view --web`, which opens a pull request
+	// that shares the number
+	url, err := h.issueURL(ctx, r.Number)
+	if err != nil {
 		return err
 	}
 
-	return shell.Passthrough(ctx, h.dir, h.name, "issue", "view", r.Number, "--web")
+	return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("print"))
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -151,7 +155,7 @@ type row struct {
 }
 
 func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
-	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
+	if d := t.driver(); d != nil {
 		out, err := d.Run(ctx, driver.VerbSearch, query)
 		if err == nil {
 			var rows []row
@@ -167,7 +171,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		}
 	}
 
-	h, err := t.host()
+	h, err := t.issues()
 	if err != nil {
 		return nil, err
 	}

@@ -307,10 +307,11 @@ func TestSlugify(t *testing.T) {
 // asked for and the whole issue glab answers with.
 func TestHostIssueTitle(t *testing.T) {
 	f := newFakes(t)
-	f.script("gh issue view 1 --json title", `{"title":"Add dark mode"}`)
+	f.script("gh issue view 1 --json title,url", `{"title":"Add dark mode","url":"https://github.com/o/r/issues/1"}`)
 	f.script("glab issue view 1 -F json", `{"iid":1,"title":"Dunkelmodus","web_url":"https://x"}`)
-	f.fail("gh issue view 2 --json title", shell.Result{Code: 1, Stderr: "no issue 2"})
-	f.script("gh issue view 3 --json title", `{"title":""}`)
+	f.fail("gh issue view 2 --json title,url", shell.Result{Code: 1, Stderr: "no issue 2"})
+	f.script("gh issue view 3 --json title,url", `{"title":""}`)
+	f.script("gh issue view 4 --json title,url", `{"title":"Merged PR","url":"https://github.com/o/r/pull/4"}`)
 
 	for name, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
 		got, err := host{name: name, dir: "/code/repo"}.issueTitle(t.Context(), "1")
@@ -327,6 +328,40 @@ func TestHostIssueTitle(t *testing.T) {
 
 	if _, err := gh.issueTitle(t.Context(), "3"); err == nil || !strings.Contains(err.Error(), "no title") {
 		t.Errorf("err = %v, want no title", err)
+	}
+
+	// gh answers `issue view` for a pull request too: its title would name a
+	// branch after an unrelated PR
+	if _, err := gh.issueTitle(t.Context(), "4"); err == nil || !strings.Contains(err.Error(), "pull request") {
+		t.Errorf("err = %v, want a pull request refused", err)
+	}
+}
+
+// task read and task open refuse a pull request the same way.
+func TestHostRefusesPullRequests(t *testing.T) {
+	f := newFakes(t)
+	pr := `{"number":35,"title":"Merged PR","url":"https://github.com/o/r/pull/35"}`
+	f.script("gh issue view 35 --json number,title,state,url,body,comments", pr)
+	f.script("gh issue view 35 --json url", pr)
+	f.script("glab issue view 7 -F json", `{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7"}`)
+
+	gh := host{name: "gh", dir: "/code/repo"}
+
+	if _, err := gh.issueDoc(
+		t.Context(),
+		"FT-35",
+		"35",
+	); err == nil ||
+		!strings.Contains(err.Error(), "#35 is a pull request") {
+		t.Errorf("issueDoc = %v", err)
+	}
+
+	if _, err := gh.issueURL(t.Context(), "35"); err == nil || !strings.Contains(err.Error(), "pull request") {
+		t.Errorf("issueURL = %v", err)
+	}
+
+	if _, err := (host{name: "glab", dir: "/code/repo"}).issueURL(t.Context(), "7"); err == nil {
+		t.Error("glab merge request taken for an issue")
 	}
 }
 
@@ -519,11 +554,8 @@ func TestPrompt(t *testing.T) {
 // pane, so it never carries the driven marker.
 func TestDiscussPrompt(t *testing.T) {
 	got := prompt(modeDiscuss, "GH-1", nil)
-	want := "Run `f10 task read GH-1` and read the task in full with its comments, " +
-		"opening every image it links; if that command fails, fetch the task through " +
-		"the project's fetch adapter instead. Summarise what it asks in a few lines. " +
-		"Then stop and wait: we discuss it before any plan. " +
-		"Do not plan, investigate further, write code or change files until I say so."
+	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines, " +
+		"opening any image it links. Then stop and wait."
 
 	if got != want {
 		t.Errorf("prompt(discuss) = %q, want %q", got, want)
