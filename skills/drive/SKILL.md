@@ -1,16 +1,17 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each in its own worktree and agent, dependents after their base, pausing only when an agent asks. Use when the user says \"/f10:drive <ids | id -- id> [skills...]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each in its own worktree and agent, dependents after their base, pausing only when an agent asks. Use when the user says \"/f10:drive <ids | id -- id> [skills...] [--model <model>]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "<id>... | <id> -- <id> [plan|judge|ship|review|resolve|finish ...] [--every <duration>] [-C <project>]"
+argument-hint: "<id>[:model]... | <id> -- <id> [plan|judge|ship|review|resolve|finish ...] [--model <model>] [--every <duration>] [-C <project>]"
 ---
 
 # f10 · drive
 
 Run tasks through a chain from here: `f10 drive` opens each task as `f10 start` does, dependents
 after their base, and prompts each agent one skill at a time, marked `--driven`
-(`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`). This skill only runs the command, relays its questions
-and prints its report; it runs no step.
+(`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`). `--model` picks every agent's model, `<id>:<model>`
+one task's, which wins. This skill only runs the command, relays its questions and prints its
+report; it runs no step.
 
 Run it **in the background** (`run_in_background`) with the user's arguments verbatim: a list
 can take hours, and the command's exit wakes this session.
@@ -19,7 +20,8 @@ can take hours, and the command's exit wakes this session.
 f10 drive <arguments>
 ```
 
-When it exits, read its output and act on the exit code:
+When it exits, read its output and act on the exit code. On every exit, a line starting `!!!`
+goes first, verbatim, above everything else.
 
 - **0** - every task went through its chain. Print the report block (one row per task) in a
   fenced `yaml` block and any line beneath it, and stop.
