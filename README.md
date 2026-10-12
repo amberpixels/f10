@@ -70,8 +70,8 @@ Solid arrows are the default pipeline. Dashed ones are optional: `brainstorm`, `
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and is now; a thing: what it is |
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
 | `/f10:status [id]` | nothing: a hook answers it; with an id, `f10 status <id>` | the run's status in words; with an id, another worktree's run and its agent's question, relayed and answered |
-| `/f10:start <id> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent |
-| `/f10:drive <ids \| id -- id> [skills...]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; agents' questions relayed |
+| `/f10:start <id> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent |
+| `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; agents' questions relayed |
 | `/f10:finish <id> [--yes]` | nothing: it runs `f10 finish` | PR merged, plan archived, workspace closed, worktree and branch gone, main pulled |
 
 ## Install

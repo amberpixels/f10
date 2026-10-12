@@ -50,6 +50,11 @@ func startCommand() *cli.Command {
 				Name:  "base",
 				Usage: "base the branch on `BRANCH`, local or on origin, instead of the default branch",
 			},
+			&cli.StringFlag{
+				Name: "model",
+				Usage: "start the agent on `MODEL`: a family (opus, fable), a version (opus-5.5) or a full id; " +
+					"near misses are corrected, and a name that is no model falls back to claude's default",
+			},
 		},
 		Action: runStart,
 	}
@@ -142,6 +147,11 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	var modelLine string
+	if in.model, modelLine = resolveModel(cmd.String("model"), claudeSettingsPath()); modelLine != "" {
+		in.notes = append([]string{modelLine}, in.notes...)
+	}
+
 	in.progress = cmd.ErrWriter
 
 	return start(ctx, cmd.Writer, in)
@@ -206,6 +216,7 @@ type startInput struct {
 	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
+	model    string                                // the agent's --model, resolved, or "" for claude's default
 	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
 }
 
@@ -384,6 +395,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 			agent,
 			agentKind,
 			ws.RootPane,
+			modelArgs(in.model),
 			shellWait(in.progress, ws.RootPane),
 		); err != nil {
 			return openedTask{}, err
@@ -394,6 +406,10 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	if note != "" {
 		notes = append(notes, note)
+	}
+
+	if !launch && in.model != "" {
+		notes = append(notes, "--model "+in.model+" ignored: no agent was started")
 	}
 
 	o.notes = notes

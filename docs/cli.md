@@ -41,9 +41,9 @@ f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a
 f10 review ack [n]                                    # leave the declared handled marker on it
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 
-f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
-f10 drive <id>... | <id> -- <id> [skill...] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
+f10 drive <id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
 f10 finish <id>[-suffix] [--yes]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
 ```
 
@@ -84,6 +84,15 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   origin (`origin/main` typed as such is also accepted). It fails before creating anything when
   neither exists, and notes beneath the report when the base sits at the default branch's
   commit, since a base that changes nothing is otherwise invisible. Exclusive with `--after`
+- `--model <model>` starts the agent on that model, passed to claude as `--model`. A family
+  (`opus`, `fable`) passes as the alias; a family with a version is rebuilt into the full id
+  (`opus5-5`, `Opus 5.5` and `opus-5.5` all become `claude-opus-5-5`); a full `claude-` id passes
+  as typed. A family misspelt by up to two letters is corrected (`fabel` to `fable`) with a note.
+  A name that is no family falls back to claude's own default (the `model` in
+  `~/.claude/settings.json`) and the first line beneath the report is a `!!!` warning naming it.
+  Only families are checked, so a real family with a version that does not exist reaches claude,
+  which refuses it at the agent's first prompt. A workspace whose agent is already running
+  keeps it, and the model is noted as ignored
 - the default branch is `<ID>/<slug>`: the title fetched through `gh` or `glab`, lowercased,
   non-alphanumerics collapsed to single hyphens, cut at 40 characters on a hyphen
   (`F10-8/default-task-ids-from-the-project-name`). The id stays in front, so the branch is
@@ -222,8 +231,13 @@ session polling an agent pays a round trip and a slice of context per check.
    between, inclusive, at most 50). Then, optionally, the chain: any of `plan`, `judge`, `ship`,
    `review`, `resolve`, `finish`, each once, `finish` last; arrows and commas between them are
    ignored. No chain named: `project.md → Drive chain`, else
-   `plan → judge → ship → review → resolve → finish`. `--answer` and `--every` go anywhere. The
-   command parses its own arguments, so the range's `--` survives.
+   `plan → judge → ship → review → resolve → finish`. `--model`, `--answer` and `--every` go
+   anywhere. The command parses its own arguments, so the range's `--` survives.
+   `--model` starts every agent on that model, read as start reads it; `<id>:<model>` starts one
+   task's agent on its own, which wins (`42:sonnet 43 --model opus`). Only a colon with no slash
+   after it is read this way, so a url keeps its own. A range takes the run-wide `--model` only.
+   Each model is read once, and any correction or `!!!` fallback is printed before the first task
+   opens.
 2. **Validation, before anything is created or prompted.** Outside Herdr it refuses as start
    does. Every task is looked up on the tracker. In a range, a pull request (GitHub numbers both
    alike) or an unknown number is skipped with a note; listed by hand, either is an error. A task

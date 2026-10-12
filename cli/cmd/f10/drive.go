@@ -44,12 +44,13 @@ func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
 		Usage: "run a list of tasks through a chain of skills, each once its base is finished, stopping when an agent asks",
-		ArgsUsage: "<id>... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
-			"[--answer [ID=]TEXT ...] [--every DURATION]",
+		ArgsUsage: "<id>[:model]... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
+			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]",
 		Description: "The chain defaults to project.md's Drive chain, else " +
 			"plan → judge → ship → review → resolve → finish.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
 			"every task whose base is finished runs at once, and a halt stops only its dependents.\n" +
+			"--model starts every agent on MODEL; <id>:<model> starts one task's agent on its own, which wins.\n" +
 			"Exit 0: every task went through its chain. 4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
@@ -127,6 +128,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		chain:    chain,
 		remote:   t.eff.Review.Remote(),
 		plansDir: t.sharedPlansDir(),
+		settings: claudeSettingsPath(),
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		finish: func(ctx context.Context, w io.Writer, task ref.Ref) error {
 			cwd, err := os.Getwd()
@@ -154,15 +156,17 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 // driveArgs is the command line, parsed by hand so `--` survives.
 type driveArgs struct {
-	tasks   []string // as typed; with span, the two ends of a range
+	tasks   []string // as typed, any :model cut off; with span, the two ends of a range
+	models  []string // each task's :model as typed, indexed like tasks, "" for none
+	model   string   // --model as typed: every task's model unless its own names one
 	span    bool
 	chain   []string
 	answers []string // each --answer as typed: `GH-1=text` for one task, or bare text
 	every   time.Duration
 }
 
-// parseDriveArgs reads tasks, then skills, with --answer and --every
-// anywhere. A token in the chain vocabulary is a skill; every other one is
+// parseDriveArgs reads tasks, then skills, with --model, --answer and
+// --every anywhere. A token in the chain vocabulary is a skill; every other one is
 // a task, and a task after a skill is refused, since a list and a chain
 // interleaved is a typo more often than a plan.
 func parseDriveArgs(args []string) (driveArgs, error) {
@@ -172,7 +176,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		tok := strings.TrimSpace(args[i])
 
 		name, value, inline := strings.Cut(tok, "=")
-		if name == "--answer" || name == "--every" {
+		if name == "--model" || name == "--answer" || name == "--every" {
 			if !inline {
 				if i+1 >= len(args) {
 					return driveArgs{}, fmt.Errorf("%s needs a value", name)
@@ -205,11 +209,16 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		case slices.Contains(chainSkills, skill):
 			a.chain = append(a.chain, skill)
 		case strings.HasPrefix(tok, "-"):
-			return driveArgs{}, fmt.Errorf("unknown flag %s: drive takes --answer and --every", tok)
+			return driveArgs{}, fmt.Errorf("unknown flag %s: drive takes --model, --answer and --every", tok)
 		case len(a.chain) > 0:
 			return driveArgs{}, fmt.Errorf("%s follows the chain: the tasks come first, then the skills", tok)
 		default:
-			a.tasks = append(a.tasks, tok)
+			task, m, err := splitModel(tok)
+			if err != nil {
+				return driveArgs{}, err
+			}
+
+			a.tasks, a.models = append(a.tasks, task), append(a.models, m)
 		}
 	}
 
@@ -218,6 +227,8 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		return driveArgs{}, errors.New("drive needs the tasks: GH-12 GH-15, or a range GH-12 -- GH-15")
 	case a.span && len(a.tasks) != 2:
 		return driveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")
+	case a.span && slices.ContainsFunc(a.models, func(m string) bool { return m != "" }):
+		return driveArgs{}, errors.New("a range takes the run-wide --model, not one on its ends")
 	}
 
 	if err := checkChain(a.chain); err != nil {
@@ -228,7 +239,18 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 }
 
 func (a *driveArgs) set(name, value string) error {
-	if name == "--answer" {
+	switch name {
+	case "--model":
+		if a.model != "" {
+			return errors.New("--model is given twice: one run-wide model, and <id>:<model> for a task's own")
+		}
+
+		if a.model = strings.TrimSpace(value); a.model == "" {
+			return errors.New("--model needs a value")
+		}
+
+		return nil
+	case "--answer":
 		if value = strings.TrimSpace(value); value != "" {
 			a.answers = append(a.answers, value)
 		}
@@ -244,6 +266,22 @@ func (a *driveArgs) set(name, value string) error {
 	a.every = d
 
 	return nil
+}
+
+// splitModel cuts a task token's :model off. Only the last colon counts,
+// and only when what follows has no slash, so a url's scheme and port stay
+// part of the task.
+func splitModel(tok string) (string, string, error) {
+	i := strings.LastIndex(tok, ":")
+	if i < 0 || strings.Contains(tok[i+1:], "/") {
+		return tok, "", nil
+	}
+
+	if tok[i+1:] == "" {
+		return "", "", fmt.Errorf("%s names no model after the colon: GH-12:opus", tok)
+	}
+
+	return tok[:i], tok[i+1:], nil
 }
 
 func isArrow(tok string) bool {
@@ -297,6 +335,7 @@ type driveInput struct {
 	chain    []string
 	remote   bool   // project.md declares a remote review: review reads it rather than reviewing locally
 	plansDir string // the shared plans dir, or "" for in-repo storage
+	settings string // claude's settings file, which names the model a bad --model falls back to
 	title    func(ref.Ref) func(context.Context) (string, error)
 	finish   func(ctx context.Context, w io.Writer, task ref.Ref) error
 	stateDir string
@@ -306,6 +345,7 @@ type driveInput struct {
 
 	answer  string            // a bare --answer, until the first task stopped on a question takes it
 	answers map[string]string // --answer ID=text, by task id, until that task takes it
+	models  map[string]string // each model as typed, resolved; "" for claude's default
 }
 
 // A driveTask is one task of the list, as the validation pass found it.
@@ -313,6 +353,7 @@ type driveTask struct {
 	ref      ref.Ref
 	suffix   string
 	info     taskInfo
+	model    string // the agent's --model, resolved, or "" for claude's default
 	branch   string // the task's local branch, or "" before it started
 	after    string // the base the body's After: line names, as an id
 	base     string // the base the drive waits for: the branch's record, else after
@@ -366,6 +407,8 @@ func (r *driveRun) through() bool { return r.end != nil && r.end.code == 0 }
 // one asks, or nothing can move. Nothing is created or prompted before the
 // graph passed validation.
 func drive(ctx context.Context, w io.Writer, in *driveInput) error {
+	in.resolveModels(w)
+
 	tasks, notes, err := in.resolveTasks(ctx)
 	if err != nil {
 		return err
@@ -428,6 +471,35 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	}
 
 	return in.report(w, runs, notes)
+}
+
+// resolveModels resolves every model the command line names, once each,
+// and prints what it corrected or fell back on before anything opens.
+func (in *driveInput) resolveModels(w io.Writer) {
+	in.models = map[string]string{}
+
+	for _, raw := range append([]string{in.args.model}, in.args.models...) {
+		if _, done := in.models[raw]; done || raw == "" {
+			continue
+		}
+
+		m, line := resolveModel(raw, in.settings)
+		in.models[raw] = m
+
+		if line != "" {
+			fmt.Fprintln(w, line)
+		}
+	}
+}
+
+// modelFor is the resolved model of the task listed at i: its own, else
+// the run-wide one. A range's tasks have no index of their own, i < 0.
+func (in *driveInput) modelFor(i int) string {
+	if i >= 0 && i < len(in.args.models) && in.args.models[i] != "" {
+		return in.models[in.args.models[i]]
+	}
+
+	return in.models[in.args.model]
 }
 
 // stopping reports whether the drive ends: a task asks, which only a human
@@ -598,7 +670,10 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		notes []string
 	)
 
-	add := func(r ref.Ref, suffix string, ranged bool) error {
+	// listed is the task's place on the command line, -1 for one a range spans
+	add := func(r ref.Ref, suffix string, listed int) error {
+		ranged := listed < 0
+
 		if slices.ContainsFunc(tasks, func(t driveTask) bool { return t.ref.ID == r.ID && t.suffix == suffix }) {
 			return fmt.Errorf("%s is listed twice", r.ID)
 		}
@@ -620,7 +695,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return fmt.Errorf("%s is a pull request, not a task", r.ID)
 		}
 
-		task := driveTask{ref: r, suffix: suffix, info: info}
+		task := driveTask{ref: r, suffix: suffix, info: info, model: in.modelFor(listed)}
 
 		if line := afterIn(info.body); line != "" {
 			base, err := in.tracker.resolve(ctx, line)
@@ -660,7 +735,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		}
 
 		for _, r := range spanRefs(from, to) {
-			if err := add(r, "", true); err != nil {
+			if err := add(r, "", -1); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -668,7 +743,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		return tasks, notes, nil
 	}
 
-	for _, tok := range in.args.tasks {
+	for i, tok := range in.args.tasks {
 		id, suffix := ref.SplitSuffix(tok)
 
 		r, err := in.tracker.resolve(ctx, id)
@@ -676,7 +751,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return nil, nil, err
 		}
 
-		if err := add(r, suffix, false); err != nil {
+		if err := add(r, suffix, i); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -781,6 +856,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		after:    after,
 		plansDir: in.plansDir,
 		title:    title,
+		model:    task.model,
 		progress: w,
 	})
 	if err != nil {

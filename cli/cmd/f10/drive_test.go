@@ -109,12 +109,22 @@ func (fx *driveFixture) task(id string, info taskInfo, branches string) {
 
 // opens scripts start's create path for a new task under worktrunk.
 func (fx *driveFixture) opens(id, ws, pane string) {
+	fx.opensOn(id, ws, pane, "")
+}
+
+// opensOn is opens with the agent started on model, "" for none.
+func (fx *driveFixture) opensOn(id, ws, pane, model string) {
 	agent := agentOf(id)
+
+	start := "herdr agent start " + agent + " --kind claude --pane " + pane
+	if model != "" {
+		start += " -- --model " + model
+	}
 
 	fx.f.script("wt switch --no-cd --yes --format json --create "+id, "{}")
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id,
 		`{"result":{"workspace":{"workspace_id":"`+ws+`"},"root_pane":{"pane_id":"`+pane+`"},"already_open":false}}`)
-	fx.f.script("herdr agent start "+agent+" --kind claude --pane "+pane, "{}")
+	fx.f.script(start, "{}")
 }
 
 // expects scripts the prompt for one skill and the record of it done.
@@ -220,6 +230,65 @@ func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 		if !strings.Contains(fx.out.String(), row) {
 			t.Errorf("report lacks %q:\n%s", row, fx.out.String())
 		}
+	}
+}
+
+// Each agent starts on its task's own model, else the run-wide one; a
+// name that is no model starts claude's default, said once at the top.
+func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
+	cases := []struct {
+		name         string
+		args         []string
+		model1       string
+		model2       string
+		out, notWant string
+	}{
+		{
+			name: "own and run-wide", args: []string{"GH-1:sonnet", "GH-2", "--model", "opus", "judge"},
+			model1: "sonnet", model2: "opus", notWant: "!!!",
+		},
+		{
+			name: "corrected", args: []string{"GH-1:fabel", "GH-2", "judge"},
+			model1: "fable", out: "--model fabel read as fable",
+		},
+		{
+			name: "no model",
+			args: []string{"GH-1", "GH-2", "--model", "xyz", "judge"},
+			out:  "!!! --model xyz is not a model name f10 recognizes: the agent starts on claude's default model instead",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fx := newDriveFixture(t, c.args...)
+			fx.task("GH-1", taskInfo{body: "first"}, "")
+			fx.task("GH-2", taskInfo{body: "second"}, "")
+			fx.f.script(worktrees,
+				porcelain(),
+				porcelain("GH-1", "/code/repo.GH-1"),
+				porcelain("GH-1", "/code/repo.GH-1"),
+				porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
+			fx.opensOn("GH-1", "ws:GH-1", "pane:1", c.model1)
+			fx.opensOn("GH-2", "ws:GH-2", "pane:2", c.model2)
+			fx.expects("GH-1", "judge")
+			fx.expects("GH-2", "judge")
+			fx.f.script(wsList,
+				unopened, listing("GH-1", "idle"), unopened, listing("GH-1", "idle", "GH-2", "idle"),
+				listing("GH-1", "working", "GH-2", "working"), listing("GH-1", "idle", "GH-2", "idle"))
+
+			if err := fx.drive(t); err != nil {
+				t.Fatalf("%v\n%s", err, fx.out.String())
+			}
+
+			out := fx.out.String()
+			if c.out != "" && strings.Count(out, c.out) != 1 {
+				t.Errorf("output carries %q %d times, want once:\n%s", c.out, strings.Count(out, c.out), out)
+			}
+
+			if c.notWant != "" && strings.Contains(out, c.notWant) {
+				t.Errorf("output carries %q:\n%s", c.notWant, out)
+			}
+		})
 	}
 }
 
@@ -558,6 +627,8 @@ func TestParseDriveArgs(t *testing.T) {
 		chain   string
 		answers string
 		every   time.Duration
+		model   string
+		models  string // each task's :model, | between, checked when set
 		wantErr string
 	}{
 		{args: []string{"GH-1", "GH-2", "judge", "ship"}, tasks: "GH-1 GH-2", chain: "judge ship", every: defaultEvery},
@@ -570,6 +641,24 @@ func TestParseDriveArgs(t *testing.T) {
 			args:  []string{"GH-1", "GH-2", "--answer", "GH-1=1. yes", "--answer=GH-2=1. no"},
 			tasks: "GH-1 GH-2", answers: "GH-1=1. yes|GH-2=1. no", every: defaultEvery,
 		},
+		{
+			args:  []string{"GH-1:sonnet", "GH-2", "--model", "opus", "ship"},
+			tasks: "GH-1 GH-2", chain: "ship", model: "opus", models: "sonnet|", every: defaultEvery,
+		},
+		{
+			args:  []string{"--model=fable", "GH-1-retry:opus"},
+			tasks: "GH-1-retry", model: "fable", models: "opus", every: defaultEvery,
+		},
+		{
+			args:   []string{"https://host:8080/o/r/issues/1", "https://github.com/o/r/issues/2:opus"},
+			tasks:  "https://host:8080/o/r/issues/1 https://github.com/o/r/issues/2",
+			models: "|opus", every: defaultEvery,
+		},
+		{args: []string{"GH-1", "--", "GH-4"}, tasks: "GH-1 GH-4", span: true, models: "|", every: defaultEvery},
+		{args: []string{"GH-1:"}, wantErr: "names no model"},
+		{args: []string{"GH-1:opus", "--", "GH-4"}, wantErr: "run-wide --model"},
+		{args: []string{"GH-1", "--model", "opus", "--model", "fable"}, wantErr: "given twice"},
+		{args: []string{"GH-1", "--model"}, wantErr: "needs a value"},
 		{args: []string{"GH-1", "judge", "GH-2"}, wantErr: "follows the chain"},
 		{args: []string{"GH-1", "GH-2", "--", "GH-4"}, wantErr: "a range is one id"},
 		{args: []string{"judge"}, wantErr: "needs the tasks"},
@@ -598,7 +687,8 @@ func TestParseDriveArgs(t *testing.T) {
 		}
 
 		if strings.Join(a.tasks, " ") != c.tasks || a.span != c.span || strings.Join(a.chain, " ") != c.chain ||
-			strings.Join(a.answers, "|") != c.answers || a.every != c.every {
+			strings.Join(a.answers, "|") != c.answers || a.every != c.every || a.model != c.model ||
+			(c.models != "" && strings.Join(a.models, "|") != c.models) {
 			t.Errorf("%q = %+v", c.args, a)
 		}
 	}
@@ -1122,6 +1212,32 @@ func TestDriveAdoptsTheWorkspaceWithTheAgent(t *testing.T) {
 	}
 
 	if fx.f.called("herdr agent start") || fx.f.called("herdr workspace close") {
+		t.Errorf("calls = %q", fx.f.calls)
+	}
+}
+
+// A model for a workspace whose agent is already running is said to be
+// ignored, never applied by starting a second agent.
+func TestDriveSaysAModelWasIgnored(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "--model", "opus", "judge")
+	fx.existing()
+	fx.f.script("herdr pane list --workspace ws:old", `{"result":{"panes":[{"pane_id":"pane:9"}]}}`)
+	fx.f.script("herdr pane list --workspace ws:GH-1",
+		`{"result":{"panes":[{"pane_id":"pane:2"},{"pane_id":"pane:1","agent":"claude"}]}}`)
+	fx.f.script("herdr agent get pane:1", agentFound)
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, shownTwice("unknown", "idle"), shownTwice("idle", "idle"),
+		shownTwice("idle", "working"), shownTwice("idle", "idle"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if want := "--model opus ignored: no agent was started"; !strings.Contains(fx.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
+	}
+
+	if fx.f.called("herdr agent start") {
 		t.Errorf("calls = %q", fx.f.calls)
 	}
 }

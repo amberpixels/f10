@@ -105,20 +105,30 @@ func OpenWorktree(ctx context.Context, dir, path, label string) (Workspace, erro
 	return ws, nil
 }
 
-// StartAgent launches an agent of kind in pane under name. A pane whose
-// shell is still running its rc files answers busy, so that one refusal is
-// retried until StartDeadline; past it, herdr's error stands. While it
+// StartAgent launches an agent of kind in pane under name, with args on
+// the agent's own command line. A pane whose shell is still running its rc
+// files answers busy, so that one refusal is retried until StartDeadline; past it, herdr's error stands. While it
 // waits, waiting (when not nil) hears how long it has waited: on the first
 // busy answer, then within StartReport of the last. Once started,
 // waiting for the agent to be ready for input is herdr's wait, not ours.
-func StartAgent(ctx context.Context, dir, name, kind, pane string, waiting func(waited time.Duration)) error {
+func StartAgent(
+	ctx context.Context,
+	dir, name, kind, pane string,
+	args []string,
+	waiting func(waited time.Duration),
+) error {
+	cmd := []string{"agent", "start", name, "--kind", kind, "--pane", pane}
+	if len(args) > 0 {
+		cmd = append(append(cmd, "--"), args...)
+	}
+
 	begun := time.Now()
 	deadline := begun.Add(StartDeadline)
 
 	var reported time.Time
 
 	for {
-		_, err := call(ctx, dir, "agent", "start", name, "--kind", kind, "--pane", pane)
+		_, err := call(ctx, dir, cmd...)
 		if err == nil || !IsCode(err, CodePaneBusy) || !time.Now().Before(deadline) {
 			return err
 		}
