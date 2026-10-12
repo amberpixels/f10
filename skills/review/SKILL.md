@@ -2,24 +2,24 @@
 name: review
 description: "f10 review skill - a blind local review of a change into a findings file; with ci, reads in the remote review on the PR or MR. Use when the user says \"/f10:review <task-id | PR | this branch> [ci]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, or wants the CI review's findings read in. Settling the findings is /f10:resolve."
 allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion
-argument-hint: "<task-id | PR number or url | this branch> [ci]"
+argument-hint: "<task-id | PR | this branch> [ci]"
 ---
 
 # f10 · review
 
-Find the bugs in a change, into a findings file. `/f10:resolve` settles them; `/f10:judge` is
-the verdict on the shape.
+`/f10:resolve` settles the findings; `/f10:judge` is the verdict on the shape. Running
+`/f10:review ci` authorizes the `f10 review ack` the remote half makes.
 
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `ci`: strip it and run the step's remote half.
+- The step's **Only the change checked out here** paragraph routes what remains. No argument:
+  the current branch against its base, named in one line.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review` every run. Follow the **review** step it prints,
-routing the argument by its **Only the change checked out here** paragraph; read nothing from
-`steps/`. Running `/f10:review ci` authorizes the `f10 review ack` the remote half makes.
-
-**Remote:** with the word `ci` in the argument, strip it and run the step's remote half.
-
-**No argument**: the current branch against its base, named in one line.
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh review` every run. Follow the **review** step it prints;
+read nothing from `steps/`.
 
 Stop once the file is written, offer `/f10:resolve` in one line and leave the call to the user.

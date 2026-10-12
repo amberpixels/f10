@@ -2,7 +2,7 @@
 name: start
 description: "f10 start skill - start the next task without leaving this session: a worktree, a Herdr workspace and a claude agent in it, already prompted. Use when the user says \"/f10:start <task-id> [--plan | --local | --discuss] [--after <task-id> | --base <branch>] [--model <model>]\" or asks to start a task in a new worktree or workspace, including one to discuss before planning or one on another model."
 allowed-tools: Bash
-argument-hint: "<task-id>[-suffix] [--plan | --local | --discuss] [--after <task-id> | --base <branch>] [--model <model>] [-C <project>]"
+argument-hint: "<task-id> [--plan | --local | --discuss]"
 ---
 
 # f10 · start
@@ -13,7 +13,9 @@ Herdr workspace, starts a claude agent in its root pane and prompts it, marked `
 (`opus`, `fable`, `opus-5.5`); the command corrects near misses. This skill only runs the command
 and relays its output; it runs no step and never waits on the new agent.
 
-Run, with the user's arguments verbatim:
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- Everything else goes to `f10 start` verbatim.
 
 ```
 f10 start <arguments>

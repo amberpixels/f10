@@ -14,14 +14,32 @@ skill cannot be extended.
 |---|---|
 | The argument: flags to strip, the no-argument default, which steps to run and in what order | Role, input, output, the procedure |
 | Context loading (`conventions.sh`, `bundle.sh <steps>`) | What the step produces, and nothing else |
-| Modes: `--dry-run`, `--driven`, forward | How the step behaves in a pipeline or a mode, where it differs |
+| Modes: `--help`, `--dry-run`, `--driven`, forward | How the step behaves in a pipeline or a mode, where it differs |
 | Authorization: what running this skill permits (a push, a PR, a merge commit) or must ask for | That an action is outward-facing and needs the run's authorization |
 | The session: stay in the discussion, offer the next `/f10:*` skill, never roll on into another | What counts as failure, and which ends are normal |
 | The `description` frontmatter, which routes the invocation before any step is loaded | |
 
-A skill says which step to follow and, at most, one line of what the skill is for. It never
+A skill says which step to follow and, at most, one line of scope or authorization. It never
 re-describes what the step does, what it creates, or its normal ends. A step never names the
 skill that runs it, except where its behavior differs by caller.
+
+## Layout of a skill file
+
+1. **Frontmatter.** `description` says what the skill does and when to call it. `argument-hint`
+   is the common call only, under about 50 characters, without `--help`, `--dry-run` or
+   `--driven`; `--help` shows the rest.
+2. **`# f10 · <name>`.**
+3. **At most one line of scope or authorization** the description cannot carry ("Runs the
+   capture step only", what running the skill authorizes). Never the description restated. A
+   skill that only runs the binary says what the command does here.
+4. **`**Arguments**`**, a list, before anything loads: `--help`, `--dry-run`, the skill's other
+   flags as `` `token`: effect ``, then routing of what remains. Route by what the argument
+   says, not by whether there is one: a subject, else the conversation's open question, else a
+   default (the current branch), else ask in one line and wait. Every token in
+   `argument-hint` has an item here; `--help` prints this list.
+5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
+6. **The skill's own content.**
+7. **The exit**: where the session stops and what it offers next.
 
 ## Edge cases
 

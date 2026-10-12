@@ -412,6 +412,8 @@ ref_task_of() {
 cmd_seed() {
   local skill="${1:-}" args="${3:-}" cwd="${4:-}"
   find_sid "${2:-}" || exit 0
+  # --help prints the skill's arguments and runs nothing, so the badge keeps the last real run.
+  case " $args " in *" --help "*) exit 0 ;; esac
 
   # Not for capture, which always mints a new task. `ship 1042` continues ABC-1042.
   local ref up_ref up_task chain=0

@@ -2,21 +2,21 @@
 name: explain
 description: "f10 explain skill - explain a change (what it was, what it is now) or a concept, file, package or function, to a peer who knows the project. Use when the user says \"/f10:explain <this branch | PR | task-id | concept | path | symbol>\", asks what a branch or a PR is about, asks what some term, module or function in this codebase is, or wants catching up without running anything."
 allowed-tools: Bash, Read, Grep, Glob
-argument-hint: "<this branch | PR | task-id | commit or range | local | concept | path | function>"
+argument-hint: "<PR | task-id | this branch | concept | symbol>"
 ---
 
 # f10 · explain
 
-Explain a change, or a concept, file, package or function, to someone who knows the project.
-
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- The step's **Route** paragraph routes the argument. No argument: the current branch against
+  its base, named in one line.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
-`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain` every run. Follow the **explain** step it prints,
-routing by its **Route** paragraph; read nothing from `steps/`.
-
-**No argument**: the current branch against its base, named in one line.
+`${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh explain` every run. Follow the **explain** step it prints;
+read nothing from `steps/`.
 
 Stay in the conversation afterwards, talking normally: a follow-up question is a question, not
 a request to explain again. Where it leads somewhere (a doubt about the shape, a bug worth

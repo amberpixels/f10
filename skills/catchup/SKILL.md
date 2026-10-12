@@ -2,26 +2,25 @@
 name: catchup
 description: "f10 catchup skill - bring the current branch up to date with its base (the branch `f10 start --after` recorded, else the default branch), conflicts settled keeping both sides' intent, verify run after. Use when the user says \"/f10:catchup\", asks to catch up with main, rebase or merge the base in, or is mid-merge or mid-rebase with conflicts to settle. Nothing is pushed."
 allowed-tools: Bash, Read, Edit, Grep, Glob, AskUserQuestion
-argument-hint: "(no argument - the base is the recorded dependency, else the default branch)"
+argument-hint: "[steering]"
 ---
 
 # f10 · catchup
 
-Bring the current branch up to date with its base. Running this skill authorizes the merge
-commit or rebased commits it produces, nothing else.
+Running this skill authorizes the merge commit or rebased commits it produces, nothing else.
 
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` and the step's **Driven**
+  paragraph.
+- No routing: the subject is the branch checked out here. Any other text is steering ("take
+  theirs for the lockfile", "ask me before touching the migration").
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh catchup` every run. Follow the **catchup** step it prints;
 read nothing from `steps/`.
-
-**Driven:** with `--driven` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
-and the step's **Driven** paragraph.
-
-**No routing.** The subject is the branch checked out here; any text the user adds is steering
-("take theirs for the lockfile", "ask me before touching the migration").
 
 Where the run was reached from ship's failure report, say in one line that `/f10:ship <id>`
 can be re-issued now that the branch is on its base.

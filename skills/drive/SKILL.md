@@ -2,7 +2,7 @@
 name: drive
 description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each in its own worktree and agent, dependents after their base, pausing only when an agent asks. Use when the user says \"/f10:drive <ids | id -- id> [skills...] [--model <model>]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "<id>[:model]... | <id> -- <id> [plan|judge|ship|review|resolve|finish ...] [--model <model>] [--every <duration>] [-C <project>]"
+argument-hint: "<id>... [plan|judge|ship|review|resolve|finish ...]"
 ---
 
 # f10 · drive
@@ -13,8 +13,12 @@ after their base, and prompts each agent one skill at a time, marked `--driven`
 one task's, which wins. This skill only runs the command, relays its questions and prints its
 report; it runs no step.
 
-Run it **in the background** (`run_in_background`) with the user's arguments verbatim: a list
-can take hours, and the command's exit wakes this session.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- Everything else goes to `f10 drive` verbatim.
+
+Run it **in the background** (`run_in_background`): a list can take hours, and the command's
+exit wakes this session.
 
 ```
 f10 drive <arguments>

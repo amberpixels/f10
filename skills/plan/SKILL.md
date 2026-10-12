@@ -7,32 +7,25 @@ argument-hint: "<task-id | free-text description>"
 
 # f10 · plan
 
-Take a task from a reference (or a raw description) to a saved plan.
-
-**Dry run:** with `--dry-run` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-
-**Driven:** with `--driven` in the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`
-alongside this skill.
-
-**Forward first:** with a task id as the argument, follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md`
-before loading anything.
+**Arguments**
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
+- `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
+- A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): follow
+  `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` before loading anything, then run `steps/fetch.md`
+  and `steps/plan.md`.
+- A **free-text description**: run `steps/capture.md` (create the task), `steps/fetch.md`, then
+  `steps/plan.md`.
+- **No argument, but a task is already in this conversation** (e.g. the user just fetched and
+  discussed it): the task and the design agreed in chat are settled. **Skip `capture` and the
+  `fetch` investigation**; go to `steps/plan.md` with at most a few targeted reads of the code
+  you'll mirror or touch. No task in the conversation either: ask for one in one line and wait.
+- Extra text beside a task id is steering for the run.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
 `${CLAUDE_PLUGIN_ROOT}/bin/bundle.sh fetch plan` every run, with `capture` prepended when the
-argument is free text.
-
-**Route by the argument:**
-- **No argument, but a task is already in this conversation** (e.g. the user just fetched and
-  discussed it): the task and the design agreed in chat are settled. **Skip `capture` and the
-  `fetch` investigation**; go to `steps/plan.md` with at most a few targeted reads of the code
-  you'll mirror or touch.
-- A task id (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): run
-  `steps/fetch.md`, then `steps/plan.md`.
-- Free-text description: run `steps/capture.md` (create the task), `steps/fetch.md`, then
-  `steps/plan.md`.
-
-Follow each step file in order from the bundle; read nothing from `${CLAUDE_PLUGIN_ROOT}/steps/`.
-Extra text from the user is steering for the run.
+argument is free text. Follow each step file in order from the bundle; read nothing from
+`${CLAUDE_PLUGIN_ROOT}/steps/`.
 
 Stop at the saved plan; `/f10:ship` implements it.
