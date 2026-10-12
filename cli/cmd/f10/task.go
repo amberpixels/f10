@@ -52,33 +52,42 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	doc, err := readTask(ctx, t, cmd.Args().First())
 	if err != nil {
-		return err
+		// an agent reading this has the project's fetch adapter as its
+		// fallback, and learns of it here, when it applies, not in every prompt
+		return fmt.Errorf("%w\nfetch the task through the project's fetch adapter instead "+
+			"(project.md, Tracker)", err)
+	}
+
+	return writeDoc(ctx, cmd.Writer, t.dir, doc)
+}
+
+// readTask is the task as markdown: the driver's `read`, else the host's
+// issue with its comments.
+func readTask(ctx context.Context, t *target, token string) (string, error) {
+	r, err := t.reference(ctx, token)
+	if err != nil {
+		return "", err
 	}
 
 	if d := driver.Find(t.lay.StorageRoot, t.dir); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
-			return writeDoc(ctx, cmd.Writer, t.dir, doc)
+			return doc, nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
-			return err
+			return "", err
 		}
 	}
 
 	h, err := t.host()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	doc, err := h.issueDoc(ctx, r.ID, r.Number)
-	if err != nil {
-		return err
-	}
-
-	return writeDoc(ctx, cmd.Writer, t.dir, doc)
+	return h.issueDoc(ctx, r.ID, r.Number)
 }
 
 func runTaskOpen(ctx context.Context, cmd *cli.Command) error {

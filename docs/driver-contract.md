@@ -26,7 +26,7 @@ Four verbs, each writing its answer to stdout:
 
 | verb | argument | stdout |
 |---|---|---|
-| `read` | task number | the task as markdown |
+| `read` | task number | the task as markdown, comments included |
 | `url` | task number | one url, alone on a line |
 | `search` | a query string | a JSON array of task rows |
 | `branch` | task number | one branch name, alone on a line |
@@ -63,6 +63,10 @@ stderr rather than paraphrasing a tracker error it cannot interpret.
 f10 creates the branch. That separation is what lets `open` mean the same thing for a task as it
 does for a pull request, where no driver is involved at all - and it keeps `f10 task open
 --print` pipeable.
+
+**Print the whole task.** `read` includes the task's comments after its body, as the host path
+does: an agent reads the task through this verb alone, and a decision made in a comment is part
+of what it asks.
 
 **Print markdown, not a rendering.** `read` writes plain markdown and stops. f10 decides
 presentation from whether it is writing to a terminal, so the same command serves a person at a
