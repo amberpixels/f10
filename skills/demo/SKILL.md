@@ -21,8 +21,8 @@ No `allowed-tools` on purpose: the executor is whatever the `demo` overlay binds
   Say in one line which branch and base you took, then start.
 
 **Run**
-- `f10-load-project.sh demo`, every run.
-- Follow the **demo** step it prints; read nothing from `steps/`.
+1. Run `f10-load-project.sh demo` first, on every call of this skill.
+2. Follow the **demo** step it prints.
 
 **Exit**
 - Stop once the report is written; a hands-on run leaves the app running.

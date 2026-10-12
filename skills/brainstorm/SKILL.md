@@ -19,8 +19,8 @@ argument-hint: "<idea, problem, or half-formed proposal>"
   - Nothing open: ask for the idea in one line and wait.
 
 **Run**
-- `f10-load-project.sh brainstorm`, every run.
-- Follow the **brainstorm** step it prints; read nothing from `steps/`.
+1. Run `f10-load-project.sh brainstorm` first, on every call of this skill.
+2. Follow the **brainstorm** step it prints.
 
 **Exit**
 - Stay in the discussion until the user closes it.

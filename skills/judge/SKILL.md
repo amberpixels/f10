@@ -21,8 +21,8 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
   - Nothing open: ask for the subject in one line and wait.
 
 **Run**
-- `f10-load-project.sh judge`, every run.
-- Follow the **judge** step it prints; read nothing from `steps/`.
+1. Run `f10-load-project.sh judge` first, on every call of this skill.
+2. Follow the **judge** step it prints.
 
 **Exit**
 - Stay in the discussion until the user closes it, talking normally while they argue.

@@ -16,8 +16,8 @@ argument-hint: "<PR | task-id | this branch | concept | symbol>"
   Say in one line which branch and base you took, then start.
 
 **Run**
-- `f10-load-project.sh explain`, every run.
-- Follow the **explain** step it prints; read nothing from `steps/`.
+1. Run `f10-load-project.sh explain` first, on every call of this skill.
+2. Follow the **explain** step it prints.
 
 **Exit**
 - Stay in the conversation, talking normally: a follow-up question is a question, not a request to explain again.

@@ -7,8 +7,8 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open this task's PR (`steps/pr.md`), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply` and review's `f10 review ack`.
-Deploy has its own confirmation (`steps/deploy.md`).
+Running this skill **is** the user's explicit authorization to push and open this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply` and review's `f10 review ack`.
+Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -19,19 +19,19 @@ Deploy has its own confirmation (`steps/deploy.md`).
   Otherwise `default` (declared in `project.md`; `implement → pr` per `conventions/context.md`).
 - A **plan file** (`*.md` path): run the pipeline with it.
 - A **task id** (project id format / id / url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
-  Otherwise `steps/fetch.md`, and look for **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses).
-  Found: ask **reuse this plan or re-plan?** (AskUserQuestion); re-plan runs `steps/plan.md`.
-  Missing: run `steps/plan.md`.
+  Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses).
+  Found: ask **reuse this plan or re-plan?** (AskUserQuestion); re-plan runs the **plan** step.
+  Missing: run the **plan** step.
   Then the pipeline.
-- A **free-text description**: `steps/capture.md`, `steps/fetch.md`, `steps/plan.md`, then the pipeline.
+- A **free-text description**: the **capture**, **fetch** and **plan** steps, then the pipeline.
 - Extra text beside the subject is steering.
 
 **Run**
-- `f10-load-project.sh --all`, every run: the pipeline is declared in what it prints.
-- Follow the steps it prints, in the order the Arguments item and the pipeline give; read nothing from `steps/`.
+1. Run `f10-load-project.sh --all` first, on every call of this skill: the pipeline is declared in what it prints.
+2. Follow the steps it prints, in the order the Arguments item and the pipeline give.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
-Run `steps/catchup.md` points 2 and 3, with three differences:
+Run the **catchup** step's points 2 and 3, with three differences:
 
 - **A base with no code yet** (its branch still at the default branch's commit): before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
@@ -41,7 +41,7 @@ Run `steps/catchup.md` points 2 and 3, with three differences:
 
 Run the pipeline's steps **in the declared order**, from what `f10-load-project.sh` printed.
 A plan written this run needs no re-confirming.
-A `judge` step routes the run by its verdict (`steps/judge.md`).
+A `judge` step routes the run by its verdict (the **judge** step).
 
 **Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected; `f10-state.sh set ship running <step>` before each step, named as the pipeline names it; `f10-state.sh set ship done` after the last.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.

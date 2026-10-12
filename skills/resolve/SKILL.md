@@ -20,8 +20,8 @@ This skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note
   Say in one line which findings file you took, then start.
 
 **Run**
-- `f10-load-project.sh review resolve`, every run: both steps, since the findings file's shape lives in the review step.
-- Follow the **resolve** step it prints; read nothing from `steps/`.
+1. Run `f10-load-project.sh review resolve` first, on every call of this skill: both steps, since the findings file's shape lives in the review step.
+2. Follow the **resolve** step it prints.
 
 **Exit**
 - Stop once the verdicts are written and verify is green.

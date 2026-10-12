@@ -20,8 +20,8 @@ Runs the **capture** step only: no plan, no code.
   - Nothing settled: ask for the description in one line and wait.
 
 **Run**
-- `f10-load-project.sh capture`, every run.
-- Follow the **capture** step it prints; read nothing from `steps/`.
+1. Run `f10-load-project.sh capture` first, on every call of this skill.
+2. Follow the **capture** step it prints.
 
 **Exit**
 - Stop once the task is created.
