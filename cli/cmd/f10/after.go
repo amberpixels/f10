@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -19,16 +19,27 @@ import (
 // against the list before prompting anything. Git config stays the
 // per-branch copy once the branch exists.
 
-var afterLineRE = regexp.MustCompile(`(?m)^After:[ \t]*(\S+)[ \t]*\r?$`)
-
-// afterIn is the id the body's After: line names, or "".
+// afterIn is the id the body's After: line names, or "". The line starts
+// at column 0 and names one id; emphasis or code marks around either part
+// (`**After:** GH-12`) do not change it.
 func afterIn(body string) string {
-	m := afterLineRE.FindStringSubmatch(body)
-	if m == nil {
-		return ""
+	for line := range strings.SplitSeq(body, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" || line[0] == ' ' || line[0] == '\t' {
+			continue
+		}
+
+		key, value, ok := mdline.Cut(line, ":")
+		if !ok || !strings.EqualFold(key, "after") {
+			continue
+		}
+
+		if id := mdline.Bare(value); id != "" && !strings.ContainsAny(id, " \t") {
+			return id
+		}
 	}
 
-	return m[1]
+	return ""
 }
 
 // A taskInfo is what the tracker says about a task beyond its branch.

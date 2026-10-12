@@ -664,6 +664,9 @@ func TestMergeMethod(t *testing.T) {
 		{"declared squash", "gh", "github.com. Merge method: squash.", "", "--squash", false},
 		{"declared rebase, any case", "gh", "merge: REBASE", "", "--rebase", false},
 		{"declared merge on gitlab is plain", "glab", "merge method: merge", "", "", false},
+		{"bold phrase", "gh", "- **merge method**: squash", "", "--squash", false},
+		{"marked value", "gh", "merge method: **rebase**", "", "--rebase", false},
+		{"code value", "gh", "Open PRs with gh. merge method: `squash`.", "", "--squash", false},
 		{
 			"one allowed",
 			"gh",

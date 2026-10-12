@@ -63,6 +63,23 @@ func TestParseReview(t *testing.T) {
 				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction",
 			want: Review{Trigger: TriggerAutomatic, Done: DonePosted, Handled: HandledReaction, HandledText: "eyes"},
 		},
+		{
+			name: "plain keys read as the bold ones do",
+			body: "- Reviewer - bot `claude[bot]`\n" +
+				"- Arrives as: issue comment\n" +
+				"- *Trigger* - automatic, on open and on push\n" +
+				"- `Done, handled` - posted, reaction `eyes`",
+			want: Review{
+				Reviewer: "claude[bot]", ReviewerKind: ReviewerBot, Arrives: ArrivesComment,
+				Trigger: TriggerAutomatic, TriggerHow: "on open and on push",
+				Done: DonePosted, Handled: HandledReaction, HandledText: "eyes",
+			},
+		},
+		{
+			name: "prose lines are never read as facts",
+			body: "Done when the bot replies - posted.\nReviewer: nobody in particular",
+			want: Review{},
+		},
 	}
 
 	for _, c := range cases {
