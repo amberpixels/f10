@@ -60,6 +60,6 @@ skill that runs it, except where its behavior differs by caller.
 ## Where a line belongs
 
 Ask: if a second skill ran this step, would the line still hold? Yes: the step. No: the skill.
-"Capturing or planning it is the user's call" fails that test (a skill that runs brainstorm,
-then capture, would drop it), so it goes in the skill. "It writes nothing" holds for any caller,
+brainstorm's `Next: /f10:capture, once a shape is settled` fails that test (a skill that runs
+brainstorm, then capture, would drop it), so it goes in the skill. "It writes nothing" holds for any caller,
 so it goes in the step.

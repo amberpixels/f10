@@ -10,6 +10,8 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` and the step's **Driven**
+  paragraph.
 - `--blind`: strip it and follow the step's **Blind** paragraph.
 - `<subject>`: an idea, task id, PR, branch, sha or range; the step's point 1 routes it. An
   argument that names no subject ("let's judge something") counts as none.

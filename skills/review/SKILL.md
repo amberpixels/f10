@@ -13,6 +13,7 @@ argument-hint: "<task-id | PR | this branch> [ci]"
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
 - `ci`: strip it and run the step's remote half.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here**
   paragraph routes it.

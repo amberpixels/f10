@@ -13,6 +13,7 @@ Producing the findings is `/f10:review`. This skill does not authorize a remote 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md` alongside this skill.
 - `<subject>`: a task id, PR or branch; the step's point 1 routes it.
 - No argument: the current branch. Say in one line which findings file you took, then start.
 
