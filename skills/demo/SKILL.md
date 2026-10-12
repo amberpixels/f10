@@ -16,8 +16,8 @@ server, a project skill, a plain command), and a fixed list would disable it.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 - `--hands-on`: strip it and run the step's hands-on execution.
 - `--publish` / `--local`: strip it; the step's point 10 acts on it.
-- The step routes what remains (a PR / MR, "this branch", a task id). No argument: the current
-  branch against its base, named in one line.
+- `<subject>`: a PR / MR, "this branch", or a task id; the step routes it.
+- No argument: the current branch against its base, named in one line.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then

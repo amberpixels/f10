@@ -33,9 +33,11 @@ skill that runs it, except where its behavior differs by caller.
    capture step only", what running the skill authorizes). Never the description restated. A
    skill that only runs the binary says what the command does here.
 4. **`**Arguments**`**, a list, before anything loads: `--help`, `--dry-run`, the skill's other
-   flags as `` `token`: effect ``, then routing of what remains. Route by what the argument
-   says, not by whether there is one: a subject, else the conversation's open question, else a
-   default (the current branch), else ask in one line and wait. Every token in
+   flags as `` `token`: effect ``, then one item per case of what remains: a `<placeholder>`
+   item per positional argument, a **No argument** item (the conversation's open question, or
+   a default such as the current branch), and, where no default exists, an item that asks in
+   one line and waits when nothing names a subject. Route by what the argument says, not by
+   whether there is one: "let's judge something" names no subject. Every token in
    `argument-hint` has an item here; `--help` prints this list.
 5. **Load**: `conventions.sh`, `bundle.sh <steps>`.
 6. **The skill's own content.**

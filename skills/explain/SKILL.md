@@ -10,8 +10,8 @@ argument-hint: "<PR | task-id | this branch | concept | symbol>"
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- The step's **Route** paragraph routes the argument. No argument: the current branch against
-  its base, named in one line.
+- `<subject>`: a change or a concept, path or symbol; the step's **Route** paragraph routes it.
+- No argument: the current branch against its base, named in one line.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then

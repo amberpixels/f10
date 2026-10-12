@@ -12,8 +12,10 @@ Runs the **capture** step only: no plan, no code.
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
-- The description is the argument, else the shape this conversation settled (a brainstorm's
-  closing statement). Neither holds one: ask for it in one line and wait.
+- `<description>`: the task to create.
+- No argument: the shape this conversation settled (a brainstorm's closing statement).
+- No description at all (empty with nothing settled, or only an invitation): ask for it in one
+  line and wait.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then

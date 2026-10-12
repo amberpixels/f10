@@ -11,8 +11,9 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 - `--blind`: strip it and follow the step's **Blind** paragraph.
-- The step's point 1 routes what remains, the conversation's subject included. Neither the
-  argument nor the conversation names one (empty, or only an invitation): ask for it in one line
+- `<subject>`: an idea, task id, PR, branch, sha or range; the step's point 1 routes it.
+- No argument: what this conversation is about, named back in one line.
+- No subject at all (empty with nothing open, or only an invitation): ask for it in one line
   and wait.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):

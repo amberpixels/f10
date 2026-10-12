@@ -14,8 +14,9 @@ argument-hint: "<task-id | PR | this branch> [ci]"
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md`.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md`.
 - `ci`: strip it and run the step's remote half.
-- The step's **Only the change checked out here** paragraph routes what remains. No argument:
-  the current branch against its base, named in one line.
+- `<subject>`: a task id, PR or branch; the step's **Only the change checked out here**
+  paragraph routes it.
+- No argument: the current branch against its base, named in one line.
 
 Load the context (`${CLAUDE_PLUGIN_ROOT}/conventions/context.md`):
 `${CLAUDE_PLUGIN_ROOT}/bin/conventions.sh` unless this context already holds it, then
