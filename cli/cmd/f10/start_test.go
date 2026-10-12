@@ -568,11 +568,10 @@ func TestSiblingPathAndAgentName(t *testing.T) {
 }
 
 func TestDeclaresPipeline(t *testing.T) {
-	eff := &facts.Effective{Fields: []facts.Field{{
-		Name:  "Ship pipeline(s)",
-		Value: "- default: implement -> review (local) -> pr\n- Local: implement -> commit\n",
-		Prose: true,
-	}}}
+	eff := &facts.Effective{Pipelines: map[string][]string{
+		"default": {"implement", "review (local)", "pr"},
+		"Local":   {"implement", "commit"},
+	}}
 
 	if !declaresPipeline(&target{eff: eff}, "local") {
 		t.Error("a declared local pipeline was not found")
@@ -584,19 +583,6 @@ func TestDeclaresPipeline(t *testing.T) {
 
 	if declaresPipeline(&target{eff: &facts.Effective{}}, "local") {
 		t.Error("a project with no pipelines declares local")
-	}
-
-	for _, line := range []string{
-		"- **local**: `implement → commit`",
-		"- **local:** implement -> commit",
-		"- `local`: implement -> commit",
-		"- *local*: implement -> commit",
-		"- _local_: implement -> commit",
-	} {
-		marked := &facts.Effective{Fields: []facts.Field{{Name: "Ship pipeline(s)", Value: line, Prose: true}}}
-		if !declaresPipeline(&target{eff: marked}, "local") {
-			t.Errorf("%q: a local pipeline with a marked-up name was not found", line)
-		}
 	}
 }
 

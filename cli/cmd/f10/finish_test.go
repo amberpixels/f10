@@ -654,19 +654,16 @@ func TestFinishRefusesOutsideHerdr(t *testing.T) {
 
 func TestMergeMethod(t *testing.T) {
 	cases := []struct {
-		name    string
-		host    string
-		hosting string
-		repo    string
-		want    string
-		noted   bool // the method was a default worth saying
+		name     string
+		host     string
+		declared string
+		repo     string
+		want     string
+		noted    bool // the method was a default worth saying
 	}{
-		{"declared squash", "gh", "github.com. Merge method: squash.", "", "--squash", false},
-		{"declared rebase, any case", "gh", "merge: REBASE", "", "--rebase", false},
-		{"declared merge on gitlab is plain", "glab", "merge method: merge", "", "", false},
-		{"bold phrase", "gh", "- **merge method**: squash", "", "--squash", false},
-		{"marked value", "gh", "merge method: **rebase**", "", "--rebase", false},
-		{"code value", "gh", "Open PRs with gh. merge method: `squash`.", "", "--squash", false},
+		{"declared squash", "gh", "squash", "", "--squash", false},
+		{"declared rebase, any case", "gh", "REBASE", "", "--rebase", false},
+		{"declared merge on gitlab is plain", "glab", "merge", "", "", false},
 		{
 			"one allowed",
 			"gh",
@@ -686,7 +683,7 @@ func TestMergeMethod(t *testing.T) {
 			f.script(ghRepo, c.repo)
 			f.script("glab repo view -F json", c.repo)
 
-			got, note, err := host{name: c.host, dir: "/repo"}.mergeMethod(t.Context(), c.hosting)
+			got, note, err := host{name: c.host, dir: "/repo"}.mergeMethod(t.Context(), c.declared)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -699,7 +696,7 @@ func TestMergeMethod(t *testing.T) {
 				t.Errorf("note = %q, noted = %v", note, c.noted)
 			}
 
-			if c.hosting != "" && f.called(c.host+" repo view") {
+			if c.declared != "" && f.called(c.host+" repo view") {
 				t.Error("the repo was asked although project.md declares the method")
 			}
 		})

@@ -28,8 +28,14 @@ const excludeLine = ".f10/"
 
 func initCommand() *cli.Command {
 	return &cli.Command{
-		Name:   "init",
-		Usage:  "register this checkout: write .f10/instructions/project.md from what detection found",
+		Name:  "init",
+		Usage: "register this checkout: write .f10/instructions/project.md from what detection found",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "migrate",
+				Usage: "move the facts an existing project.md declares in prose into its frontmatter; deletes nothing",
+			},
+		},
 		Action: runInit,
 	}
 }
@@ -42,12 +48,19 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 
 	lay := t.lay
 
+	if cmd.Bool("migrate") {
+		return runMigrate(cmd.Writer, filepath.Join(lay.StorageRoot, "instructions", "project.md"))
+	}
+
 	path, err := destination(lay)
 	if err != nil {
 		return err
 	}
 
-	draft := facts.Scaffold(lay, t.pb, t.eff)
+	draft, err := facts.Scaffold(lay, t.pb, t.eff)
+	if err != nil {
+		return err
+	}
 
 	// the exclude entry first, so `.f10/` is already invisible to git by
 	// the time anything appears inside it
@@ -177,4 +190,67 @@ func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	}
 
 	headerRow(w, "next", "write the Project line: what this project is, in a sentence", limit, plain)
+}
+
+// runMigrate puts a frontmatter block on top of a prose-only project.md and
+// says which prose it supersedes. The prose stays: it is the user's text,
+// and deleting it is theirs to do once the block reads right.
+func runMigrate(w io.Writer, path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("%s: nothing to migrate - f10 init writes a new one", path)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	m, err := facts.Migrate(data, path)
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+
+	limit := termWidth(w)
+
+	if len(m.Moved) == 0 {
+		headerRow(w, "unchanged", path+" declares no fact in prose", limit, lipgloss.NewStyle())
+
+		return nil
+	}
+
+	if err := rewrite(path, m.Content, info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	headerRow(w, "wrote", path, limit, lipgloss.NewStyle())
+	headerRow(w, "moved", strings.Join(m.Moved, ", "), limit, lipgloss.NewStyle())
+
+	for i, where := range m.Superseded {
+		label := ""
+		if i == 0 {
+			label = "delete"
+		}
+
+		headerRow(w, label, where, limit, lipgloss.NewStyle().Faint(true))
+	}
+
+	headerRow(w, "next", "delete that prose, then `f10 config` should show no warning", limit, lipgloss.NewStyle())
+
+	return nil
+}
+
+// rewrite replaces an existing file's content, keeping its mode.
+func rewrite(path, content string, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return fmt.Errorf("opening %s: %w", path, err)
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(content); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+
+	return f.Close()
 }

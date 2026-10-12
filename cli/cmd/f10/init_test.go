@@ -30,7 +30,7 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 		t.Fatalf("reading what init wrote: %v", err)
 	}
 
-	for _, want := range []string{"## Visibility", "## Storage", "## Tracker", "DEM-###"} {
+	for _, want := range []string{"visibility: stealth", "storage: in-repo", "## Tracker", "id: DEM-###"} {
 		if !strings.Contains(string(written), want) {
 			t.Errorf("project.md missing %q:\n%s", want, written)
 		}
@@ -141,7 +141,7 @@ func TestInitWritesOutOfTreeWithoutTouchingTheRepo(t *testing.T) {
 
 // runInitIn runs `f10 -C <dir> init` through the real command tree and
 // returns what the command printed.
-func runInitIn(t *testing.T, dir string) (string, error) {
+func runInitIn(t *testing.T, dir string, flags ...string) (string, error) {
 	t.Helper()
 
 	var out bytes.Buffer
@@ -149,7 +149,7 @@ func runInitIn(t *testing.T, dir string) (string, error) {
 	app := newApp()
 	app.Writer = &out
 
-	err := app.Run(context.Background(), []string{"f10", "-C", dir, "init"})
+	err := app.Run(context.Background(), append([]string{"f10", "-C", dir, "init"}, flags...))
 
 	return out.String(), err
 }
@@ -264,14 +264,88 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 	written, _ = os.ReadFile(filepath.Join(repo, ".f10", "instructions", "project.md"))
 
 	for _, want := range []string{
-		"## Review",
-		"- **Reviewer** - bot `claude[bot]`",
-		"- **Arrives as** - issue comment",
-		"- **Trigger** - automatic, on open and on push",
-		"- **Done, handled** - posted, reaction `eyes`",
+		"review:",
+		"reviewer: bot `claude[bot]`",
+		"arrives: issue comment",
+		"trigger: automatic, on open and on push",
+		"done: posted, reaction `eyes`",
 	} {
 		if !strings.Contains(string(written), want) {
 			t.Errorf("project.md missing %q:\n%s", want, written)
 		}
+	}
+}
+
+func TestInitMigrate(t *testing.T) {
+	isolateEnv(t)
+
+	repo := mkRepo(t)
+	path := filepath.Join(repo, ".f10", "instructions", "project.md")
+	prose := "# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n\n" +
+		"## Ship pipelines\n\n- **local**: `implement → commit`\n"
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte(prose), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runInitIn(t, repo, "--migrate")
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	written, _ := os.ReadFile(path)
+	if !strings.HasPrefix(string(written), "---\n") || !strings.HasSuffix(string(written), prose) {
+		t.Errorf("want a block above the untouched prose:\n%s", written)
+	}
+
+	for _, want := range []string{"moved", "pipelines", "delete"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report missing %q:\n%s", want, out)
+		}
+	}
+
+	if _, err := runInitIn(t, repo, "--migrate"); err == nil || !strings.Contains(err.Error(), "already has") {
+		t.Errorf("a second migrate = %v", err)
+	}
+}
+
+// A fact the two places declare differently stops the commands that act on
+// facts; config still runs, since it is how the problem is seen.
+func TestDeclarationErrorStopsCommands(t *testing.T) {
+	isolateEnv(t)
+
+	repo := mkRepo(t)
+	path := filepath.Join(repo, ".f10", "instructions", "project.md")
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	md := "---\nmerge_method: rebase\n---\n## Hosting & PR\n\nmerge method: squash\n"
+	if err := os.WriteFile(path, []byte(md), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(args ...string) (string, error) {
+		var out bytes.Buffer
+
+		app := newApp()
+		app.Writer = &out
+		err := app.Run(context.Background(), append([]string{"f10", "-C", repo}, args...))
+
+		return out.String(), err
+	}
+
+	if _, err := run("task", "read", "1"); err == nil || !strings.Contains(err.Error(), "merge_method") {
+		t.Errorf("task read = %v, want the declaration error", err)
+	}
+
+	out, err := run("config")
+	if err != nil || !strings.Contains(out, "error: merge_method") {
+		t.Errorf("config = %v:\n%s", err, out)
 	}
 }

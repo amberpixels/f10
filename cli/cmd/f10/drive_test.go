@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -606,19 +605,17 @@ func TestParseDriveArgs(t *testing.T) {
 }
 
 func TestParseChain(t *testing.T) {
-	chain, err := parseChain(facts.DefaultDriveChain)
+	chain, err := parseChain(strings.Fields("plan judge ship review resolve finish"))
 	if err != nil || strings.Join(chain, " ") != "plan judge ship review resolve finish" {
 		t.Errorf("default = %q, %v", chain, err)
 	}
 
-	if chain, err := parseChain(
-		"- `judge` -> ship, finish",
-	); err != nil ||
+	if chain, err := parseChain([]string{"Judge", "ship", "finish"}); err != nil ||
 		strings.Join(chain, " ") != "judge ship finish" {
 		t.Errorf("declared = %q, %v", chain, err)
 	}
 
-	for _, bad := range []string{"", "start → ship", "ship → deploy"} {
+	for _, bad := range [][]string{nil, {"start", "ship"}, {"ship", "deploy"}} {
 		if _, err := parseChain(bad); err == nil {
 			t.Errorf("%q parsed", bad)
 		}

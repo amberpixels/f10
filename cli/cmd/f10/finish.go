@@ -82,7 +82,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		task:      r,
 		suffix:    suffix,
 		host:      h.at(main),
-		hosting:   t.fact("Hosting & PR"),
+		method:    t.eff.MergeMethod,
 		cwd:       cwd,
 		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 		yes:       cmd.Bool("yes"),
@@ -98,7 +98,7 @@ type finishInput struct {
 	task      ref.Ref
 	suffix    string
 	host      host
-	hosting   string // the Hosting & PR fact, read for a declared merge method
+	method    string // the merge method project.md declares, "" for none
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
 	yes       bool
@@ -360,7 +360,7 @@ func landPull(ctx context.Context, in finishInput, name, def string) (pull, []st
 			)
 		}
 
-		method, note, err := in.host.mergeMethod(ctx, in.hosting)
+		method, note, err := in.host.mergeMethod(ctx, in.method)
 		if err != nil {
 			return pull{}, nil, err
 		}

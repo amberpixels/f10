@@ -3,10 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
-	"regexp"
 	"strings"
-
-	"github.com/amberpixels/f10/cli/internal/mdline"
 )
 
 // The host's side of `f10 finish`: read a branch's pull or merge request,
@@ -102,20 +99,15 @@ func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 	return err
 }
 
-// mergeMethodRe is the phrase project.md may carry under Hosting & PR:
-// `merge method: squash`, `merge: rebase`, in any case, matched with
-// markdown marks dropped since it may sit mid-paragraph.
-var mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|merge|rebase)\b`)
-
 // mergeMethod is the flag the host CLI takes for this repo's merge: the
 // method project.md declares, else the one the repo allows. GitLab fixes
 // the strategy per project and leaves only squash to the request, so the
 // project's squash option decides and "" means a plain merge. A GitHub repo
 // allowing several gets squash with a note, since a default that rewrites
 // history is not taken in silence.
-func (h host) mergeMethod(ctx context.Context, hosting string) (string, string, error) {
-	if m := mergeMethodRe.FindStringSubmatch(mdline.Unmark(hosting)); m != nil {
-		method := strings.ToLower(m[1])
+func (h host) mergeMethod(ctx context.Context, declared string) (string, string, error) {
+	if declared != "" {
+		method := strings.ToLower(declared)
 		if h.glab() && method == "merge" {
 			return "", "", nil
 		}

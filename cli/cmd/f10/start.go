@@ -19,7 +19,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
-	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -168,14 +167,10 @@ func startMode(cmd *cli.Command) (string, error) {
 	}
 }
 
-// declaresPipeline reports whether project.md names a pipeline: a line of
-// the Ship pipeline(s) fact that opens with the name and a colon, in the
-// shape docs/project-setup.md shows (`- local: implement -> commit`), marks
-// around the name included (`**local**:`).
+// declaresPipeline reports whether project.md names a pipeline, in any case.
 func declaresPipeline(t *target, name string) bool {
-	for line := range strings.SplitSeq(t.fact("Ship pipeline(s)"), "\n") {
-		item, _ := mdline.Item(line)
-		if key, _, ok := mdline.Cut(item, ":"); ok && strings.EqualFold(key, name) {
+	for declared := range t.eff.Pipelines {
+		if strings.EqualFold(declared, name) {
 			return true
 		}
 	}

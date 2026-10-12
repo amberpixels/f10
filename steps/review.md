@@ -62,7 +62,7 @@ reason: the Rounds section now declines on an unsettled round one
 - **Header**, in this order: `task:` (id, or the branch name), `round:` `1` or `2`,
   `reviewed:` HEAD's sha plus `dirty` when the tree differed (in `implement → review → pr` the
   review precedes any commit), `base:` branch and sha, `reviewer:` `local` or the remote
-  identity `project.md → Review` declares (`claude[bot]`, `octocat`), `review:` remote rounds
+  identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`), `review:` remote rounds
   only, the url where a `+reply` posts, `verdict:` `clean` when every category found nothing,
   else `findings`.
 - **`## Prior round`**, round two only, first: one block per round-one id, its title, ` - ` and
@@ -139,7 +139,7 @@ questionnaire before the next pipeline step.
 ## The remote review
 
 **`review (CI)` in a pipeline, `/f10:review ci` standalone**: placed after `pr`, it reads the
-review that arrived on the PR or MR. The four facts under `project.md → Review`
+review that arrived on the PR or MR. The four `review:` facts in the frontmatter
 (`conventions/context.md`) are the protocol, applied by `f10 review pick|wait|ack` over `gh` or
 `glab`. Without them this half **fails**: there is nothing to wait for.
 

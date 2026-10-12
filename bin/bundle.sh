@@ -104,13 +104,25 @@ wt_instr=""
 [ -d "$base_root/.f10/instructions" ] && base_instr="$base_root/.f10/instructions"
 [ "$here" != "$base_root" ] && [ -d "$here/.f10/instructions" ] && wt_instr="$here/.f10/instructions"
 
-# `Layering - replaces main` in the worktree's project.md drops main's layer; anything else
-# extends it. Always extending would leak main's stack into a worktree that rewrote it.
+# frontmatter_key <file> <key>: a top-level key's value from the leading `---` block, or nothing.
+# Matches layout.layeringDecl; plain awk, so the bundle needs neither the binary nor yq.
+frontmatter_key() {
+  awk -v key="$2" 'NR == 1 && $0 !~ /^---[[:space:]]*$/ { exit }
+    NR > 1 && /^---[[:space:]]*$/ { exit }
+    NR > 1 && index($0, key ":") == 1 { sub("^" key ":[[:space:]]*", ""); print; exit }' "$1" 2>/dev/null
+}
+
+# `layering: replaces` in the worktree's frontmatter (or, for one release, a `Layering - replaces
+# main` prose line) drops main's layer; anything else extends it. Always extending would leak
+# main's stack into a worktree that rewrote it.
 layering="extends"
 if [ -n "$wt_instr" ] && [ -n "$base_instr" ]; then
-  # shellcheck disable=SC2016 # deliberate: the backtick is a literal code mark around the word
-  decl="$(grep -im1 -E '^[[:space:]]*[-*#]*[[:space:]]*[*_`]*Layering[*_`]*[[:space:]]*[-:]' \
-    "$wt_instr/project.md" 2>/dev/null)"
+  decl="$(frontmatter_key "$wt_instr/project.md" layering)"
+  if [ -z "$decl" ]; then
+    # shellcheck disable=SC2016 # deliberate: the backtick is a literal code mark around the word
+    decl="$(grep -im1 -E '^[[:space:]]*[-*#]*[[:space:]]*[*_`]*Layering[*_`]*[[:space:]]*[-:]' \
+      "$wt_instr/project.md" 2>/dev/null)"
+  fi
   case "$decl" in *[Rr]eplaces*) layering="replaces" ;; esac
 fi
 
@@ -159,6 +171,9 @@ print_layer() {
     echo "--- project.md ---"
     cat "$2/project.md"
     echo
+    if [ "$(head -n1 "$2/project.md" | tr -d '[:space:]')" != "---" ]; then
+      echo "note: this project.md has no frontmatter; the binary reads its facts from prose for one release (\`f10 init --migrate\`)"
+    fi
   fi
   if [ "$all" = 1 ]; then
     shopt -s nullglob

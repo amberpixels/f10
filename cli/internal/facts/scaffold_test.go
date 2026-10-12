@@ -28,16 +28,18 @@ func TestScaffoldSections(t *testing.T) {
 				Stack:  []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
 				Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
 			},
-			wantSection: []string{"Project", "Visibility", "Storage", "Tracker", "Hosting & PR", "Verify"},
+			wantSection: []string{"Project", "Tracker", "Hosting & PR", "Verify"},
 			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Drive chain", "Review", "Guardrails"},
 			wantIn: []string{
 				"# demo · f10 project instructions",
-				"GitHub Issues. Task ids `DEM-###`.",
+				"visibility: stealth",
+				"kind: github",
+				"id: DEM-###",
 				"`gh issue view <n> --comments`",
 				"`gh issue create`",
 				"github.com. Open PRs with `gh pr create`.",
 				"`just lint` / `just test`",
-				"in-repo (/repo/.f10)",
+				"storage: in-repo",
 			},
 			// the evidence that found a value is a provenance column, never a declared fact
 			wantNotIn: []string{"go.mod", "justfile", "(via gh)", "TODO"},
@@ -54,16 +56,16 @@ func TestScaffoldSections(t *testing.T) {
 					Workflow: ".github/workflows/review.yml",
 				},
 			},
-			wantSection: []string{"Visibility", "Storage", "Tracker", "Hosting & PR", "Review"},
+			wantSection: []string{"Tracker", "Hosting & PR"},
 			wantOmitted: []string{"Project", "Roles", "Ship pipeline(s)", "Drive chain", "Verify", "Guardrails"},
 			wantIn: []string{
-				"## Review",
-				"- **Reviewer** - bot `claude[bot]`",
-				"- **Arrives as** - issue comment",
-				"- **Trigger** - automatic, on open and on push",
-				"- **Done, handled** - posted, reaction `eyes`",
+				"review:",
+				"reviewer: bot `claude[bot]`",
+				"arrives: issue comment",
+				"trigger: automatic, on open and on push",
+				"done: posted, reaction `eyes`",
 			},
-			wantNotIn: []string{"review.yml", "@claude"},
+			wantNotIn: []string{"review.yml", "@claude", "## Review"},
 		},
 		{
 			name: "manual review workflow names the mention",
@@ -78,7 +80,7 @@ func TestScaffoldSections(t *testing.T) {
 					Workflow: "w.yml",
 				},
 			},
-			wantIn: []string{"bot `github-actions[bot]`", "- **Trigger** - manual, comment `@reviewbot` on the PR"},
+			wantIn: []string{"bot `github-actions[bot]`", "trigger: manual, comment `@reviewbot` on the PR"},
 		},
 		{
 			name: "gitlab checkout",
@@ -88,10 +90,11 @@ func TestScaffoldSections(t *testing.T) {
 				CLI:   probe.Signal{Value: "glab", Evidence: "well-known host gitlab.com"},
 				Stack: []probe.Signal{{Value: "Ruby", Evidence: "Gemfile"}},
 			},
-			wantSection: []string{"Project", "Visibility", "Storage", "Tracker", "Hosting & PR"},
+			wantSection: []string{"Project", "Tracker", "Hosting & PR"},
 			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails"},
 			wantIn: []string{
-				"GitLab work items. Task ids `DEM-###`.",
+				"kind: gitlab",
+				"id: DEM-###",
 				"`glab issue view <n>`",
 				"Open MRs with `glab mr create`.",
 				"Ruby.",
@@ -101,7 +104,8 @@ func TestScaffoldSections(t *testing.T) {
 			name:        "no remote, no markers: only what has a defined default",
 			lay:         &layout.Layout{Project: "bare", StorageRoot: "/repo/.f10"},
 			pb:          &probe.Probes{CLI: probe.Signal{Value: "none", Evidence: "no origin remote"}},
-			wantSection: []string{"Visibility", "Storage"},
+			wantSection: []string{},
+			wantIn:      []string{"visibility: stealth", "storage: in-repo"},
 			wantOmitted: []string{
 				"Project", "Roles", "Tracker", "Hosting & PR",
 				"Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails",
@@ -115,7 +119,7 @@ func TestScaffoldSections(t *testing.T) {
 				Host: "git.example.com",
 				CLI:  probe.Signal{Value: "unknown", Evidence: "neither gh nor glab is logged in to git.example.com"},
 			},
-			wantSection: []string{"Visibility", "Storage"},
+			wantSection: []string{},
 			wantNotIn:   []string{"## Tracker", "## Hosting & PR", "neither gh nor glab"},
 		},
 		{
@@ -123,7 +127,7 @@ func TestScaffoldSections(t *testing.T) {
 			lay:     &layout.Layout{Project: "demo", StorageRoot: "/home/e/.f10/demo"},
 			pb:      &probe.Probes{CLI: probe.Signal{Value: "none", Evidence: "no origin remote"}},
 			storage: "out-of-tree",
-			wantIn:  []string{"out-of-tree (/home/e/.f10/demo)"},
+			wantIn:  []string{"storage: out-of-tree"},
 		},
 	}
 
@@ -134,7 +138,10 @@ func TestScaffoldSections(t *testing.T) {
 				eff.Storage = tc.storage
 			}
 
-			d := Scaffold(tc.lay, tc.pb, eff)
+			d, err := Scaffold(tc.lay, tc.pb, eff)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if tc.wantSection != nil && !slices.Equal(d.Sections, tc.wantSection) {
 				t.Errorf("sections = %v, want %v", d.Sections, tc.wantSection)
@@ -177,7 +184,10 @@ func TestScaffoldRoundTrip(t *testing.T) {
 	}
 
 	before := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected)
-	d := Scaffold(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected, before)
+	d, err := Scaffold(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected, before)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	declaring := &layout.Layout{
 		Project:     "demo",
@@ -205,6 +215,11 @@ func TestScaffoldRoundTrip(t *testing.T) {
 	if after.Visibility != before.Visibility || after.Storage != before.Storage {
 		t.Errorf("visibility/storage drifted: %q/%q, want %q/%q",
 			after.Visibility, after.Storage, before.Visibility, before.Storage)
+	}
+
+	// what init writes reads back clean: nothing from prose, nothing twice
+	if len(after.Problems) > 0 {
+		t.Errorf("init wrote a file with problems: %+v", after.Problems)
 	}
 
 	// the title heading carries no body, so it opens no section the

@@ -36,5 +36,5 @@ Then stop. Do not offer to continue, and do not ask a question you could have an
 
 **A step that correctly declines is a normal end**, reported as an outcome: ship stopping at an
 open PR because the pipeline declares no review, a gap left on its default, review findings you
-then fixed, a `(planless)` pipeline skipping the plan file, a judge verdict that ends a ship run
+then fixed, a planless pipeline skipping the plan file, a judge verdict that ends a ship run
 (`steps/judge.md`; badge `blocked`, never `failed`).

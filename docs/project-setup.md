@@ -11,34 +11,77 @@ f10 init
 ```
 
 Writes `.f10/instructions/project.md` from what detection found and adds `.f10/` to
-`.git/info/exclude`. It never overwrites, so re-running is safe. The `Project` one-liner is left
+`.git/info/exclude`. It never overwrites, so re-running is safe. A `project.md` written before
+the frontmatter existed is moved over with `f10 init --migrate`: it puts the facts the file
+declares in prose into a frontmatter block above it, deletes nothing, and names the prose you
+can now delete. The `Project` one-liner is left
 for you: no probe knows what a project *is*.
 
 Run it before the first plan. With nothing declared, task ids take a prefix derived from the
 checkout's name (`f10` → `F10`, `git-undo` → `GU`, `herdr` → `HER`), and that prefix names every
 plan file and is how a branch is searched for its task. `f10 init` writes it down, so a rename
 or a changed rule later cannot leave two eras of plan files side by side. A two-letter
-abbreviation of a one-word name is your choice to make, in the Tracker line.
+abbreviation of a one-word name is your choice to make, in `tracker.id`.
 
 ## `project.md`
 
-Free-form markdown under these headings. Prose, not YAML. Only **Tracker** matters for the
-pipeline's contracts; the rest have workable defaults.
+Two halves. A YAML **frontmatter** block holds the facts the `f10` binary acts on, typed, so a
+typo is an error rather than a silent default. Free-form markdown under the headings below holds
+everything else, for the model. Only **Tracker** matters for the pipeline's contracts; the rest
+have workable defaults.
+
+```markdown
+---
+visibility: stealth
+tracker: {kind: github, id: GH-###}
+merge_method: squash
+pipelines:
+  default: implement → review (local) → pr
+  local: [implement, commit]
+---
+# my-project · f10 project instructions
+
+## Project
+
+Go service for invoices.
+
+## Tracker
+
+- **Fetch** - `gh issue view <n> --comments`
+- **Create** - `gh issue create`
+
+## Verify
+
+`just lint` / `just test`
+```
+
+| frontmatter key | what it declares | default |
+|---|---|---|
+| `visibility` | `stealth` or `public` | `stealth` |
+| `storage` | `in-repo` or `out-of-tree` | `in-repo` |
+| `layering` | `extends` or `replaces`, in a linked worktree only | `extends` |
+| `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`) and `id`, the task id format | host issues via `gh` or `glab`; ids prefixed from the project's name |
+| `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
+| `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
+| `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
+| `planless` | the pipelines that skip capture and the plan file | none |
+| `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
+| `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done` | from a Claude Code review workflow, else none |
+
+An unknown key or a value outside its vocabulary stops every `f10` command except `f10 config`,
+which shows each fact with where it came from, and `f10 init`.
 
 | heading | what it declares | default |
 |---|---|---|
+| heading | what it declares | default |
+|---|---|---|
 | Project | one line: what this is, and the stack | detected from build files |
-| Tracker | kind, task id format, fetch and create adapters | host issues via `gh` or `glab`; ids prefixed from the project's name |
-| Hosting & PR | where code lives, how to open a PR or MR; optionally `merge method: squash` (or `merge`, `rebase`) for `f10 finish`, and `catchup: merge` (or `rebase`) for how a branch is brought up to date with its base | from the git remote; the merge method the repo allows, else squash; catchup by rebase |
-| Ship pipeline(s) | the ordered steps `/f10:ship` runs after planning | `implement → pr` |
-| Drive chain | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
+| Tracker | the fetch and create adapters | the host CLI's issue commands |
+| Hosting & PR | where code lives, how to open a PR or MR | from the git remote |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
 | Roles | the role per step, always or by area | each step's base role |
-| Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask`; a remote review's four facts: who, where it arrives, what triggers it, what signals done and marks it handled | the four core categories, reviewed locally by a blind agent; every ask goes to you; the remote facts from a Claude Code review workflow, else no remote review |
+| Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask` | the four core categories, reviewed locally by a blind agent; every ask goes to you |
 | Guardrails | domain rules a plan and its code must honour | none |
-| Visibility | `stealth` or `public` | `stealth` |
-| Storage | `in-repo` or `out-of-tree` | `in-repo` |
-| Layering | `extends main` or `replaces main`, in a linked worktree only | `extends main` |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10
 never substitutes another tool. The full contract, as the model reads it, is
@@ -52,14 +95,14 @@ pipeline gets project-specific steps.
 
 ## Pipelines
 
-One pipeline, or several named ones:
+One pipeline, or several named ones, in the frontmatter:
 
-```markdown
-## Ship pipeline
-
-- default: implement → review (local) → pr
-- direct (planless): implement → push
-- local: implement → commit
+```yaml
+pipelines:
+  default: implement → review (local) → pr
+  direct: implement → push
+  local: [implement, commit]
+planless: [direct]
 ```
 
 `default` runs unless the user names another. `local` is the one `f10 start --local` selects: the
@@ -89,21 +132,20 @@ and an edit to it is reviewed, not obeyed. The never-flag list holds whatever no
 report. The human reviewer is who answers an `ask` on a remote review; a local round's asks
 always go to you, in one questionnaire at the end of resolve.
 
-A **remote review** - a bot in CI, a human, a check - is four bold items with a fixed
+A **remote review** - a bot in CI, a human, a check - is four frontmatter keys with a fixed
 vocabulary, so `f10 init` can write them and `f10 review` can act on them:
 
-```markdown
-## Review
-
-- **Reviewer** - bot `claude[bot]`
-- **Arrives as** - issue comment
-- **Trigger** - automatic, on open and on push
-- **Done, handled** - posted, reaction `eyes`
+```yaml
+review:
+  reviewer: bot `claude[bot]`
+  arrives: issue comment
+  trigger: automatic, on open and on push
+  done: posted, reaction `eyes`
 ```
 
 Reviewer is `bot`, `human` or `check` plus the login or check name. Arrives as is `issue
 comment`, `inline review` or `check run`. Trigger is `automatic`, `manual` or both, followed by
-how a human fires it; f10 never fires a manual trigger itself. The fourth line is what signals
+how a human fires it; f10 never fires a manual trigger itself. Done is what signals
 the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it
 handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline
 review). The handled checkbox is the first one in the review's text; the rest are the
@@ -126,7 +168,7 @@ visible. Out-of-tree declares itself by location: create the directory and f10 f
 ## Worktrees
 
 A linked worktree reads main's instructions first and its own on top. A worktree with none
-gets main's alone. `Layering - replaces main` in the worktree's own `project.md` shuts main's
+gets main's alone. `layering: replaces` in the worktree's own frontmatter shuts main's
 out, for a branch on a different stack. Plans always land in the worktree that ran.
 
 ## Trackers without a CLI

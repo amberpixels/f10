@@ -33,8 +33,8 @@ known over shelling out. Never run an adapter.
   that the reviewer always runs in a fresh subagent.
 - **resolve**: the findings file, how many findings lack a verdict, verify, and where each
   `ask` would go (one questionnaire, or the declared human reviewer).
-- **catchup**: the base and how it was found, the strategy and its source (`catchup:` under
-  Hosting & PR, or the rebase default), the integration command, verify. Nothing pushed.
+- **catchup**: the base and how it was found, the strategy and its source (the `catchup`
+  frontmatter key, or the rebase default), the integration command, verify. Nothing pushed.
 - **capture**: the **create** adapter, id format, visibility.
 - **plan**: capture's facts plus the **fetch** adapter, guardrails, the plan path.
 - **ship**: per pipeline step, what it touches (verify, the PR/push adapter, review, deploy,

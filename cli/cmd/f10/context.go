@@ -41,8 +41,15 @@ func targetFor(ctx context.Context, cmd *cli.Command) (*target, error) {
 
 	lay := layout.Locate(ctx, dir)
 	pb := probe.Run(ctx, lay)
+	eff := facts.Build(lay, pb)
 
-	return &target{dir: dir, lay: lay, pb: pb, eff: facts.Build(lay, pb), scoped: scoped}, nil
+	// a fact declared wrong stops every command that acts on facts; config
+	// and init are how it is seen and fixed, so they run anyway
+	if errs := eff.Errors(); errs != "" && cmd.Name != "config" && cmd.Name != "init" {
+		return nil, errors.New("project.md: " + errs + "\n(f10 config shows every fact and where it came from)")
+	}
+
+	return &target{dir: dir, lay: lay, pb: pb, eff: eff, scoped: scoped}, nil
 }
 
 // rootDir turns -C into a directory. A path needs no lookup and always
@@ -120,17 +127,6 @@ func (t *target) sharedPlansDir() string {
 	}
 
 	return t.pb.PlansDir
-}
-
-// fact is the effective value of one project.md field, or "".
-func (t *target) fact(name string) string {
-	for _, f := range t.eff.Fields {
-		if f.Name == name {
-			return f.Value
-		}
-	}
-
-	return ""
 }
 
 // follow performs the side effect a url deserves, or prints it when the

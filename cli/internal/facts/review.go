@@ -262,8 +262,22 @@ func markedText(value string) string {
 // the vocabulary parseReview reads: the file init writes parses back to the
 // detection it replaced. "" when no review workflow was found.
 func reviewBody(pb *probe.Probes) string {
-	if pb == nil || pb.Review == nil {
+	d := detectedReview(pb)
+	if d == (ReviewDecl{}) {
 		return ""
+	}
+
+	return "- **Reviewer** - " + d.Reviewer + "\n" +
+		"- **Arrives as** - " + d.Arrives + "\n" +
+		"- **Trigger** - " + d.Trigger + "\n" +
+		"- **Done, handled** - " + d.Done
+}
+
+// detectedReview is the remote review a CI workflow implies, as the four
+// strings the frontmatter's review key takes.
+func detectedReview(pb *probe.Probes) ReviewDecl {
+	if pb == nil || pb.Review == nil {
+		return ReviewDecl{}
 	}
 
 	rv := pb.Review
@@ -284,8 +298,10 @@ func reviewBody(pb *probe.Probes) string {
 		trigger = "manual, comment `" + mention + "` on the PR"
 	}
 
-	return "- **Reviewer** - bot `" + rv.Reviewer + "`\n" +
-		"- **Arrives as** - issue comment\n" +
-		"- **Trigger** - " + trigger + "\n" +
-		"- **Done, handled** - posted, reaction `eyes`"
+	return ReviewDecl{
+		Reviewer: "bot `" + rv.Reviewer + "`",
+		Arrives:  "issue comment",
+		Trigger:  trigger,
+		Done:     "posted, reaction `eyes`",
+	}
 }

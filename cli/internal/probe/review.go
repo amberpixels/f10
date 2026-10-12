@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // A Review is the remote review a CI workflow declares: a workflow under

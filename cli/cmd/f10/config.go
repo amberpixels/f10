@@ -19,24 +19,31 @@ import (
 // A view is the one model both outputs render - the human table and --json
 // marshal the same struct, so they cannot disagree.
 type view struct {
-	CheckoutRoot    string        `json:"checkoutRoot"`
-	StorageRoot     string        `json:"storageRoot"`
-	Instructions    string        `json:"instructions"` // source description, bundle.sh wording
-	NestedIgnored   string        `json:"nestedIgnored,omitempty"`
-	Remote          string        `json:"remote,omitempty"`
-	PlansDir        string        `json:"plansDir"`
-	Plans           []string      `json:"plans,omitempty"`
-	Fields          []facts.Field `json:"fields"`
-	Unrecognized    []facts.Field `json:"unrecognized,omitempty"`
-	Layering        string        `json:"layering"`
-	Visibility      string        `json:"visibility"`
-	Storage         string        `json:"storage"`
-	TrackerKind     string        `json:"trackerKind,omitempty"`
-	IDPrefix        string        `json:"idPrefix,omitempty"`
-	IDPrefixOrigin  string        `json:"idPrefixOrigin,omitempty"`
-	IDPrefixDerived bool          `json:"idPrefixDerived,omitempty"`
-	Review          facts.Review  `json:"review,omitzero"` // the remote review's four facts, zero when none is declared
-	Roots           []string      `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
+	CheckoutRoot    string              `json:"checkoutRoot"`
+	StorageRoot     string              `json:"storageRoot"`
+	Instructions    string              `json:"instructions"` // source description, bundle.sh wording
+	NestedIgnored   string              `json:"nestedIgnored,omitempty"`
+	Remote          string              `json:"remote,omitempty"`
+	PlansDir        string              `json:"plansDir"`
+	Plans           []string            `json:"plans,omitempty"`
+	Fields          []facts.Field       `json:"fields"`
+	Unrecognized    []facts.Field       `json:"unrecognized,omitempty"`
+	Layering        string              `json:"layering"`
+	Visibility      string              `json:"visibility"`
+	Storage         string              `json:"storage"`
+	TrackerKind     string              `json:"trackerKind,omitempty"`
+	IDPrefix        string              `json:"idPrefix,omitempty"`
+	IDPrefixOrigin  string              `json:"idPrefixOrigin,omitempty"`
+	IDPrefixDerived bool                `json:"idPrefixDerived,omitempty"`
+	Review          facts.Review        `json:"review,omitzero"` // the remote review's four facts, zero when none is declared
+	MergeMethod     string              `json:"mergeMethod,omitempty"`
+	Catchup         string              `json:"catchup"`
+	Pipelines       map[string][]string `json:"pipelines"`
+	Planless        []string            `json:"planless,omitempty"`
+	DriveChain      []string            `json:"driveChain"`
+	Facts           []facts.Fact        `json:"facts"` // every typed value with its origin
+	Problems        []facts.Problem     `json:"problems,omitempty"`
+	Roots           []string            `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
 
 func configCommand() *cli.Command {
@@ -78,6 +85,13 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		IDPrefixOrigin:  eff.IDPrefixOrigin,
 		IDPrefixDerived: eff.IDPrefixDerived,
 		Review:          eff.Review,
+		MergeMethod:     eff.MergeMethod,
+		Catchup:         eff.Catchup,
+		Pipelines:       eff.Pipelines,
+		Planless:        eff.Planless,
+		DriveChain:      eff.DriveChain,
+		Facts:           eff.Facts,
+		Problems:        eff.Problems,
 		Roots:           projects.Roots(),
 	}
 
@@ -162,6 +176,11 @@ func renderHuman(w io.Writer, v *view) {
 	}
 
 	fmt.Fprintln(w)
+	banner(w, "facts the binary acts on", limit)
+	renderFields(w, factFields(v.Facts), limit)
+
+	fmt.Fprintln(w)
+	banner(w, "project.md sections", limit)
 	renderFields(w, v.Fields, limit)
 
 	if len(v.Unrecognized) > 0 {
@@ -175,6 +194,49 @@ func renderHuman(w io.Writer, v *view) {
 
 		fmt.Fprintln(w, faint.Render(banner))
 		renderFields(w, v.Unrecognized, limit)
+	}
+
+	renderProblems(w, v.Problems)
+}
+
+// banner prints a dimmed rule naming the block below it.
+func banner(w io.Writer, title string, limit int) {
+	if limit > 0 {
+		title = "── " + title + " " + rule(limit-len(title)-4)
+	}
+
+	fmt.Fprintln(w, lipgloss.NewStyle().Faint(true).Render(title))
+}
+
+// factFields shows the typed facts in the same table as the sections.
+func factFields(list []facts.Fact) []facts.Field {
+	fields := make([]facts.Field, 0, len(list))
+	for _, f := range list {
+		fields = append(fields, facts.Field{Name: f.Key, Value: f.Value, Origin: f.Origin})
+	}
+
+	return fields
+}
+
+// renderProblems lists what is wrong with the declaration, errors first:
+// an error stops every command but config and init.
+func renderProblems(w io.Writer, problems []facts.Problem) {
+	if len(problems) == 0 {
+		return
+	}
+
+	fmt.Fprintln(w)
+
+	for _, p := range problems {
+		if p.Error {
+			fmt.Fprintln(w, lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("error: "+p.Message))
+		}
+	}
+
+	for _, p := range problems {
+		if !p.Error {
+			fmt.Fprintln(w, lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("warning: "+p.Message))
+		}
 	}
 }
 
