@@ -27,8 +27,11 @@ Deploy has its own confirmation (the **deploy** step).
 - Extra text beside the subject is steering.
 
 **Run**
-1. Run `f10-load-project.sh --all` first, on every call of this skill: the pipeline is declared in what it prints.
-2. Follow the steps it prints, in the order the Arguments item and the pipeline give.
+1. Run `f10-load-project.sh` first, on every call of this skill, naming the steps the input needs: `capture fetch plan` for a description, `fetch plan` for a task id, none for a plan file.
+   The pipeline is declared in the `project.md` it prints.
+2. Follow those steps in the order the Arguments item gives.
+3. Load each pipeline step just before it runs, in one call with its badge: `f10-state.sh set ship running <step>; f10-load-project.sh <step>`, and follow the step from that load.
+   A `review` entry loads `review resolve`; with a recorded base (below), implement's load is `catchup implement`.
 
 **Pipelines** are the frontmatter's `pipelines:`, a name to its ordered steps, a list or one `a → b` string (`implement → review (local) → pr → review (CI) → deploy (staging)`); none declared is `default: implement → pr`.
 Each name is a generic step plus its overlay, or a project-defined one.
@@ -45,11 +48,11 @@ Run the **catchup** step's points 2 and 3, with three differences:
 - **A conflict fails the run**: abort so the tree is unchanged, keep any mark, and name `/f10:catchup` in the `next` row.
 - **`f10-landed`** is unset once the integration is clean; implement's verify covers it.
 
-Run the pipeline's steps **in the declared order**, from what `f10-load-project.sh` printed.
+Run the pipeline's steps **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
 A `judge` step routes the run by its verdict (the **judge** step).
 
-**Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected; `f10-state.sh set ship running <step>` before each step, named as the pipeline names it; `f10-state.sh set ship done` after the last.
+**Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected; `f10-state.sh set ship running <step>` before each step, named as the pipeline names it, in the call that loads it; `f10-state.sh set ship done` after the last.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 

@@ -14,23 +14,22 @@
 # third call.
 #
 # Usage:  f10-load-project.sh <step> [<step> ...]   the named generic steps + project.md + overlays
-#         f10-load-project.sh --all                 every generic step + project.md + every overlay
 #         f10-load-project.sh                       facts, layering, listing and probes, no steps
-#   e.g.  f10-load-project.sh capture  |  f10-load-project.sh fetch plan  |  f10-load-project.sh --all
+#   e.g.  f10-load-project.sh capture  |  f10-load-project.sh fetch plan
 #
-# --all exists for /f10:ship, whose steps are the pipeline declared in the project.md this script
-# prints, so ship cannot name them before the call. Do not replace it with a fixed step list.
+# /f10:ship loads each pipeline step just before it runs, so a long run that compacts still has
+# the full text. A flag is never a step name: one from a stale caller is noted and dropped.
 
 set -uo pipefail
 cwd="$(pwd)"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # A string, not an array: bash 3.2 trips over "${empty[*]}" under `set -u`.
-all=0
 steps=""
+ignored=""
 for a in "$@"; do
   case "$a" in
-    --all) all=1 ;;
+    -*) ignored="${ignored:+$ignored }$a" ;;
     *) steps="${steps:+$steps }$a" ;;
   esac
 done
@@ -165,7 +164,7 @@ list_md() {
   printf '%s\n' "${out:-none}"
 }
 
-# print one layer: its project.md, then its overlays (all under --all, else the requested ones)
+# print one layer: its project.md, then the requested steps' overlays
 print_layer() {
   echo "--- layer: $1 ($2) ---"
   if [ -f "$2/project.md" ]; then
@@ -176,25 +175,13 @@ print_layer() {
       echo "note: this project.md has no frontmatter; the binary reads its facts from prose for one release (\`f10 init --migrate\`)"
     fi
   fi
-  if [ "$all" = 1 ]; then
-    shopt -s nullglob
-    for f in "$2"/*.md; do
-      b="${f##*/}"
-      [ "$b" = "project.md" ] && continue # already printed above
-      echo "--- overlay: $b ---"
-      cat "$f"
+  for s in $steps; do
+    if [ -f "$2/$s.md" ]; then
+      echo "--- overlay: $s.md ---"
+      cat "$2/$s.md"
       echo
-    done
-    shopt -u nullglob
-  else
-    for s in $steps; do
-      if [ -f "$2/$s.md" ]; then
-        echo "--- overlay: $s.md ---"
-        cat "$2/$s.md"
-        echo
-      fi
-    done
-  fi
+    fi
+  done
 }
 
 supplied() { # supplied <file.md>
@@ -205,11 +192,8 @@ supplied() { # supplied <file.md>
 
 echo "=== f10 project @ $cwd ==="
 echo "checkout root: $here"
-if [ "$all" = 1 ]; then
-  echo "steps requested: --all (every overlay each layer holds)"
-else
-  echo "steps requested: ${steps:-none - facts only, no overlays}"
-fi
+echo "steps requested: ${steps:-none - facts only, no overlays}"
+[ -n "$ignored" ] && echo "note: ignoring unknown flag(s): $ignored - name the steps instead"
 echo "instructions source: $src"
 if [ -n "$l1_dir" ]; then
   files="$l1_label: $(list_md "$l1_dir")"
@@ -237,23 +221,12 @@ print_step() {
   fi
 }
 
-if [ "$all" = 1 ] || [ -n "$steps" ]; then
+if [ -n "$steps" ]; then
   echo "--- generic steps (plugin prose; the instructions below extend them, later wins) ---"
   echo
-  if [ "$all" = 1 ]; then
-    # all of them: ship's pipeline is declared in this output, and a free-text ship runs capture,
-    # fetch and plan before the pipeline names the rest
-    shopt -s nullglob
-    for f in "$root"/steps/*.md; do
-      b="${f##*/}"
-      print_step "${b%.md}"
-    done
-    shopt -u nullglob
-  else
-    for s in $steps; do
-      print_step "$s"
-    done
-  fi
+  for s in $steps; do
+    print_step "$s"
+  done
 fi
 
 # --- the instructions, in precedence order: later in this output wins ---

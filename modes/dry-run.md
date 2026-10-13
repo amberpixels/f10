@@ -1,6 +1,6 @@
 # Mode · dry-run - load and report, change nothing
 
-Load as normal (`--all` for ship), read the argument as the skill's Arguments items do, and report what the run would do.
+Load as normal, read the argument as the skill's Arguments items do, and report what the run would do.
 Execute nothing.
 
 **Reads stop at loading**: the instructions, `git worktree list`, and cheap checks (does `go.mod`, a `justfile`, a remote exist).
@@ -10,7 +10,7 @@ Every command a step would run is printed, quoted, not run.
 **Context** is `f10 config`, printed verbatim: where each fact came from, `declared` or `default`.
 Without the binary, `f10-load-project.sh`'s header lines and its inferred signals instead, each default marked `inferred`.
 
-**The path**, in the format below: how the argument was read, the steps in order, and per step its adapter, any overlay, and its exact output (the plan path, an archive move, the findings round).
+**The path**, in the format below: how the argument was read, the steps in order, and per step its adapter, any overlay (`instructions files:` lists them before the step loads), and its exact output (the plan path, an archive move, the findings round).
 Only facts a step on this path consumes; never invented content such as a task body or plan prose.
 
 ```
