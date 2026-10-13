@@ -16,7 +16,7 @@ Deploy has its own confirmation (the **deploy** step).
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`), or named in the user's own words: run that pipeline.
-  Otherwise `default` (declared in `project.md`; `implement → pr` per `conventions/context.md`).
+  Otherwise `default`; never self-select another, though for tiny work you may suggest one.
 - A **plan file** (`*.md` path): run the pipeline with it.
 - A **task id** (project id format / id / url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses).
@@ -29,6 +29,12 @@ Deploy has its own confirmation (the **deploy** step).
 **Run**
 1. Run `f10-load-project.sh --all` first, on every call of this skill: the pipeline is declared in what it prints.
 2. Follow the steps it prints, in the order the Arguments item and the pipeline give.
+
+**Pipelines** are the frontmatter's `pipelines:`, a name to its ordered steps, a list or one `a → b` string (`implement → review (local) → pr → review (CI) → deploy (staging)`); none declared is `default: implement → pr`.
+Each name is a generic step plus its overlay, or a project-defined one.
+`resolve` is never named: a `review` entry runs it.
+A pipeline listed in `planless:` skips capture, fetch and plan for free-text input: no task id, no plan file, a brief inline plan in chat.
+The last step is the **shipment**.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
 Run the **catchup** step's points 2 and 3, with three differences:

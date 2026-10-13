@@ -76,7 +76,7 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 
 	if missing := f.Missing(); len(missing) > 0 {
 		return nil, fmt.Errorf(
-			"the Review section's %s line(s) could not be read - see the vocabulary in conventions/context.md",
+			"the Review section's %s line(s) could not be read - see the vocabulary in docs/project-setup.md",
 			strings.Join(missing, ", "),
 		)
 	}

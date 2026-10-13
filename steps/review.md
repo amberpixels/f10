@@ -115,7 +115,17 @@ Both rounds' `ask` verdicts go to the user in resolve's one questionnaire before
 ## The remote review
 
 **`review (CI)` in a pipeline, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
-The four `review:` facts in the frontmatter (`conventions/context.md`) are the protocol, applied by `f10 review pick|wait|ack` over `gh` or `glab`.
+The four `review:` facts in the frontmatter are the protocol, applied by `f10 review pick|wait|ack` over `gh` or `glab`, each with a fixed vocabulary:
+
+- **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
+- **arrives** - where it lands: `issue comment`, `inline review` or `check run`.
+- **trigger** - what fires it: `automatic` (on open, on push), `manual` followed by how (`manual, comment \`@claude\` on the PR`), or both.
+- **done** - done, then handled.
+  Done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only).
+  A check run has no remote handled marker; a new push starts a new run.
+
+`f10 init` infers them from a `.github/workflows` workflow running the Claude Code action; the shell loader does not, so they arrive through `project.md`, or `f10 config` shows them as detected while undeclared.
+For a value outside the vocabulary `f10 review` refuses, naming the fact.
 Without them this half **fails**: there is nothing to wait for.
 
 1. **Pick.**

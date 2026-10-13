@@ -156,7 +156,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   A name with no generic step (e.g. `e2e`) is project-defined: `.f10/instructions/<name>.md` *is* the step.
   Of several **named pipelines**, only the user picks a non-default one.
   A *(planless)* one skips ticket and plan file.
-- **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, pipelines, stealth), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how it talks).
+- **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, the project.md core, stealth), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how it talks).
   A hook tells the model to load them when a skill starts and again after compaction; the project's instructions reload every run.
 - **Mode** - a run in `modes/` that changes execution: `help.md` (`--help`), `dry-run.md` (`--dry-run`), `driven.md` (`--driven`, a run prompted from another session) and `forward.md` (a task id another worktree holds).
 

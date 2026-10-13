@@ -69,8 +69,6 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 
 | heading | what it declares | default |
 |---|---|---|
-| heading | what it declares | default |
-|---|---|---|
 | Project | one line: what this is, and the stack | detected from build files |
 | Tracker | the fetch and create adapters | the host CLI's issue commands |
 | Hosting & PR | where code lives, how to open a PR or MR | from the git remote |
@@ -80,7 +78,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The full contract, as the model reads it, is `conventions/context.md`.
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`).
 
 ## Overlays
 
@@ -104,6 +102,14 @@ planless: [direct]
 `local` is the one `f10 start --local` selects: the run ends in commits and nothing leaves the machine.
 A planless pipeline skips capture and the plan file for free-text input.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
+
+## Drive chain
+
+`drive_chain` lists the skills `f10 drive` runs each task through: any subset of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, each at most once, `finish` last.
+Never `start`: every task gets its worktree first.
+In the default chain, review reads the remote review when one is declared, else runs the local reviewer, and resolve settles it before finish merges.
+A project whose ship pipeline already reviews drops `review` and `resolve` here.
+A chain typed after the tasks (`f10 drive GH-12 GH-15 judge ship`) replaces this one for that run.
 
 ## Review
 
@@ -138,7 +144,7 @@ review:
 Reviewer is `bot`, `human` or `check` plus the login or check name.
 Arrives as is `issue comment`, `inline review` or `check run`.
 Trigger is `automatic`, `manual` or both, followed by how a human fires it; f10 never fires a manual trigger itself.
-Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. `f10 init` writes these four from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger; a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails rather than waiting. The full vocabulary is in `conventions/context.md`.
+Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. `f10 init` writes these four from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger; a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
 
 ## Storage and visibility
 

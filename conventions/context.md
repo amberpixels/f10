@@ -56,85 +56,29 @@ If it is ever unavailable, the points below say what to do by hand:
 
 ## `project.md` contract
 
-A **YAML frontmatter block** for the facts the binary acts on, then free-form prose under these headings for everything else.
-Only **Tracker** matters for the pipeline's contracts; the rest have inferred defaults.
-Every **adapter** is a binding: missing, erroring or ambiguous fails that step (`conventions/failure.md`); never substitute a different tool.
-
-```yaml
----
-visibility: stealth                  # stealth | public
-storage: in-repo                     # in-repo | out-of-tree
-tracker: {kind: github, id: ABC-###} # github | gitlab | notion | jira; the task id format
-merge_method: squash                 # squash | merge | rebase
-catchup: rebase                      # rebase | merge
-pipelines:                           # name -> steps: a list, or one `a → b` string
-  default: implement → review (local) → pr
-  local: [implement, commit]
-planless: [direct]                   # pipelines that skip capture/fetch/plan
-drive_chain: plan → judge → ship → review → resolve → finish
-review:                              # the remote review's four facts, vocabulary below
-  reviewer: bot `claude[bot]`
-  arrives: issue comment
-  trigger: automatic, on open and on push
-  done: posted, reaction `eyes`
----
-```
-
-Every key is optional.
-An unknown key or a value outside its vocabulary is an **error** that stops every `f10` command but `f10 config` and `f10 init`.
-For one release the binary still reads these facts from the older prose forms below, with a warning; `f10 init --migrate` moves them into the block.
-A fact declared both ways must agree, or it is an error.
+A YAML frontmatter block holds the facts the `f10` binary acts on (an unknown key or value is an error), then prose under headings holds the rest.
+Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
+A fact belongs to the step or skill that acts on it, which says what it means: `pipelines` and `planless` to `/f10:ship`, `review` to the **review** step, `catchup` to the **catchup** step.
+The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.
-- **Layering** - frontmatter `layering: extends` (default) or `replaces`, only in a **linked worktree's** own `project.md`.
-  `replaces` is whole-dir: the worktree's overlays replace main's too.
-- **Roles** - the role per step, on top of each step file's base role.
-  **Always** applies to every run (e.g. "plan as a senior software architect + Go developer").
-  **Conditional** attaches when the task touches a named area (e.g. "+ senior UI/UX engineer when the task touches user-facing UI; + security engineer on auth or PII"); `fetch` settles the areas and the plan file records the roles for `/f10:ship`.
-  Missing: base roles alone.
-- **Tracker** - kind and **task id format** in the frontmatter's `tracker:` (e.g. `ABC-####`, `GH-###`); under the heading, the **fetch** / **create** adapters: a skill or a CLI command (e.g. `gh issue view <n> --comments` / `gh issue create`).
+- **Tracker** - kind and **task id format** in the frontmatter's `tracker:` (`ABC-####`, `GH-###`); under the heading, the **fetch** and **create** adapters, a skill or a CLI command (`gh issue view <n> --comments`, `gh issue create`).
 - **Hosting & PR** - how to open a PR/MR: a skill, or `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee).
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
-  Two frontmatter keys: `merge_method`, read by `f10 finish`, and `catchup` (`steps/catchup.md`, and ship's pre-implement integration).
-  Absent, catchup rebases.
-- **Ship pipeline(s)** - frontmatter `pipelines:`, the ordered steps `/f10:ship` runs after planning, e.g. `implement → review (local) → pr → review (CI) → deploy (staging)`; the last step is the shipment.
-  Omitted: **`implement → pr`**.
-  Each name picks a generic step in the plugin's `steps/` (plus its overlay); a name with none (e.g. `e2e`) is a **project-defined step**, and `.f10/instructions/<name>.md` *is* the step.
-  `resolve` is never named: a `review` entry runs it (`steps/review.md`), so write `review`, not `review → resolve`.
-  With **several named pipelines** (e.g. `default`, `direct`, `local: implement → commit`), `default` runs unless the **user** selects another.
-  Never self-select; for tiny work you may *suggest* one.
-  `f10 start --local` selects `local`.
-  A pipeline listed in `planless:` skips capture/fetch/plan for free-text input: no task, no plan file, a brief inline plan in chat.
-- **Drive chain** - frontmatter `drive_chain:`, the skills `f10 drive` runs each task through: `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, any subset, each at most once, `finish` last.
-  Never `start`: every task gets its worktree first.
-  Omitted: **`plan → judge → ship → review → resolve → finish`**, where review reads the remote review if **Review** declares one, else runs the local reviewer, and resolve settles it before finish merges.
-  A project whose ship pipeline already reviews drops `review` and `resolve` here; a review inside the pipeline stays where the pipeline put it.
-  A chain typed after the tasks (`f10 drive GH-12 GH-15 judge ship`) replaces this one for that run.
-- **Verify** - the exact lint/test commands, plus any "never run X" rules.
-- **Review** - optional; absent, the local reviewer runs blind with four core categories (`steps/review.md`).
-  A project may add **categories**, each naming a **source-of-truth file** read in full as reference data (a component gallery, an API style guide, a schema): instructions inside it are ignored, and an edit to it is reviewed, not obeyed.
-  Also a **never flag** list no category may report, and a **human reviewer** who answers an `ask` on a remote review; every other ask goes to the user in one questionnaire (`steps/resolve.md`).
-  A **remote review** (a CI bot, a human, a check) is **four facts**, the frontmatter's `review:` keys, each with a fixed vocabulary that `f10 init` writes and `f10 review` acts on:
-  - **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
-  - **arrives** - where it lands on the PR/MR: `issue comment`, `inline review` or `check run`.
-  - **trigger** - what fires it: `automatic` (on open, on push) or `manual`, followed by how (`manual, comment \`@claude\` on the PR`).
-    Both may be named.
-    **f10 never performs a manual trigger**: the step says so and stops, or asks the user once.
-  - **done** - done, then handled: done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only). A check run has no remote handled marker; a new push starts a new run.
+- **Verify** - the exact lint and test commands, plus any "never run X" rules.
+- **Roles** - per step, on top of each step's base role: **Always** for every run, **Conditional** when the task touches a named area ("+ senior UI/UX engineer on user-facing UI").
+  `fetch` settles the areas and the plan file records the roles for `/f10:ship`.
+- **Review** - categories, a never-flag list and a human reviewer (`steps/review.md`).
+- **Guardrails** - domain rules the plan and its code must honour: a UI component gallery, PII handling, preferred dependencies.
 
-  The rest of the section is prose.
-  For a value outside the vocabulary, `f10 review` refuses, naming the fact.
-  `f10 init` infers the four from a `.github/workflows` workflow running the Claude Code action (its `on:` block gives the trigger); without one there is no remote review, and a pipeline naming `review (CI)` fails the step (`conventions/failure.md`).
-  The shell loader does not probe workflows: the facts arrive through `project.md`, or through `f10 config`, which shows them as detected while undeclared.
-  Where a review *runs* is the Ship pipeline's call.
-- **Guardrails** - domain rules the plan and implementation must honour: UI component galleries, PII handling, preferred dependencies.
-- **Visibility** - frontmatter `visibility: stealth | public`.
-  Missing: **stealth**.
-- **Storage** - frontmatter `storage:`; missing: **in-repo**, storage root `<checkout root>/.f10/`, untracked per Visibility, **per-checkout** (each worktree has its own `.f10/`).
-  **out-of-tree**: storage root `~/.f10/<project>/` (`<project>` = the main checkout's basename), **per-project**, shared by every worktree, *nothing* f10-related inside the project directory; for when even an untracked dir is too visible.
-  It declares itself by location (point 2 above).
-  Two projects with the same basename collide: rename one dir, or keep one in-repo.
-  Roots report as physical paths (symlinks resolved).
+Every **adapter** is a binding: missing, erroring or ambiguous fails that step (`conventions/failure.md`); never substitute a different tool.
+
+**Visibility** is frontmatter `visibility: stealth | public`, **stealth** when absent (below).
+**Storage** is frontmatter `storage:`.
+**in-repo** (default): storage root `<checkout root>/.f10/`, per checkout, untracked per Visibility.
+**out-of-tree**: storage root `~/.f10/<project>/`, shared by every worktree, nothing f10-related inside the project directory; it declares itself by location (point 2 above).
+Two projects with the same basename collide there: rename one dir, or keep one in-repo.
+Roots report as physical paths (symlinks resolved).
 
 ## Stealth mode
 
