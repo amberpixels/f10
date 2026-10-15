@@ -15,6 +15,8 @@ argument-hint: "[--since <date> | --week] [--other]"
 - `--since <date>`: the period starts at that date (`YYYY-MM-DD`, local midnight) or RFC 3339 time.
 - `--week`: the period starts at last week's Monday, the summary for a Monday.
 - `--other`: also show the activity that carries no task id.
+- `<group>`: any other word is a group name from `~/.f10/standup.md`, which `f10 standup` cannot read yet.
+  Decline it in one line, naming the period flags as what works, and stop.
 - No argument: the period since the last standup you reported.
 
 **Run**

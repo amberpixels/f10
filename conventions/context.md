@@ -8,7 +8,7 @@ Every f10 run starts by loading it.
 
 - **skill** - an entry point the user invokes (`/f10:*`).
   `/f10:start`, `/f10:drive`, `/f10:finish` and `/f10:status` run the binary and no step.
-- **step** - a unit of work in `steps/*.md`: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `deploy`.
+- **step** - a unit of work in `steps/*.md`: `brainstorm`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `deploy`, `standup`.
   A skill runs one or more.
   A skill owns the invocation (argument, modes, authorization, where the session stops); a step owns the work.
   Where they disagree, the skill wins on the invocation and the step on the work.

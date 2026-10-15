@@ -11,11 +11,13 @@ Both are read as instructions; there is no template.
 Grouping, states, work against upkeep and the days all come from `f10 standup --json` (schema in `docs/cli.md` § Standup).
 Never re-read git or the host to second-guess them, and never fall back to doing so when the command fails: the same history always gives the same report.
 
-1. **Collect**, in one call: the read time, then the report.
+1. **Collect**, in one call: the read time, the person's settings, then the report.
 
    ```
-   date -u +%Y-%m-%dT%H:%M:%SZ; f10 standup --json [--since <date> | --week]
+   date -u +%Y-%m-%dT%H:%M:%SZ; cat ~/.f10/standup.md 2>/dev/null; f10 standup --json [--since <date> | --week]
    ```
+
+   No `~/.f10/standup.md` is normal: the overlay alone applies.
 
 2. **Resolve the tracker**, in one call: every task's url with `f10 task open --print <id>`, and for a task whose `title` is empty, its tracker title from the first line of `f10 task read <id>`.
    A task whose url does not resolve renders unlinked and is named once under the report; it does not fail the run.
@@ -24,9 +26,12 @@ Never re-read git or the host to second-guess them, and never fall back to doing
    - **A section per entry in `days`**, oldest first, headed by its weekday and date.
      In each, for the tasks whose `days` carry that date:
      - a task whose class that day is `work`: one line, its id linked to the tracker, its title, then its PRs linked in the JSON's order (chain order).
-       Its `state` goes on its last day's line only: it is where the task ended the period, not where it stood each day;
-     - every task whose class that day is `upkeep`: one line for all of them, such as `kept up to date: FT-12, FT-14`;
+       Its `state` goes on its last work day's line only: it is where the task ended the period, not where it stood each day;
+     - every task whose class that day is `upkeep`: one line for all of them, such as `kept up to date: FT-12, FT-14 (in review)`.
+       A task with no work day in the period carries its `state` in parentheses here, on its last day;
      - each reviewed PR whose `days` carry that date: one line, its number linked, its title and author.
+
+     Without `--other`, a date with no task and no reviewed PR on it (only `other` activity) gets no section.
    - **`other`** only when asked for: one section after the days, its PRs linked and its commits counted.
    - **An empty period** (no `days`): one line saying nothing was recorded since `since`.
 4. **Ask what is next**: one `AskUserQuestion`, `multiSelect`, offering
