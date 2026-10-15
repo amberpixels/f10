@@ -49,7 +49,12 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	in, err := collectStandup(ctx, t, since)
+	h, hostErr := t.host()
+
+	in, err := collectStandup(ctx, standupSource{
+		dir: t.lay.CheckoutRoot, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), prefix: t.eff.IDPrefix,
+		host: h, noHost: hostErr != nil,
+	}, since)
 	if err != nil {
 		return err
 	}
@@ -82,55 +87,96 @@ func parseSince(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("--since %q: want an RFC 3339 time or a YYYY-MM-DD date", s)
 }
 
+// standupSource is the checkout a standup reads, apart from the target so
+// a test can name each part.
+type standupSource struct {
+	dir, main, prefix string
+	host              host
+	noHost            bool // no host CLI for this checkout
+}
+
 // collectStandup reads git and, where the checkout has one, the host. A
 // checkout with no host CLI reports commits only; a host CLI that fails is
 // the command's error, never a quiet fall back to commits.
-func collectStandup(ctx context.Context, t *target, since time.Time) (standup.Input, error) {
-	dir := t.lay.CheckoutRoot
-
-	email := gitx.Out(ctx, dir, "config", "user.email")
+func collectStandup(ctx context.Context, src standupSource, since time.Time) (standup.Input, error) {
+	email := gitx.Out(ctx, src.dir, "config", "user.email")
 	if email == "" {
 		return standup.Input{}, errors.New("git has no user.email here, and standup matches your commits by it " +
 			"(git config user.email you@example.com)")
 	}
 
-	defRef := defaultBranch(ctx, dir)
-	remotes := strings.Fields(gitx.Out(ctx, dir, "remote"))
-	def := refBranch(defRef, remotes, "")
+	remotes := strings.Fields(gitx.Out(ctx, src.dir, "remote"))
 
-	commits, err := userCommits(ctx, dir, email, since, defRef, def, remotes)
+	defRef, def, err := standupDefault(ctx, src, remotes)
+	if err != nil {
+		return standup.Input{}, err
+	}
+
+	commits, err := userCommits(ctx, src.dir, email, since, defRef, def, remotes)
 	if err != nil {
 		return standup.Input{}, err
 	}
 
 	in := standup.Input{
-		Prefix:        t.eff.IDPrefix,
+		Prefix:        src.prefix,
 		Since:         since,
-		Checkout:      dir,
+		Checkout:      src.dir,
 		DefaultBranch: def,
 		User:          standup.User{Email: email},
 		Commits:       commits,
-		Bases:         recordedBases(ctx, cmp.Or(t.lay.MainRoot, dir)),
+		Bases:         recordedBases(ctx, src.main),
 	}
 
-	h, err := t.host()
-	if err != nil {
-		return in, nil //nolint:nilerr // no host CLI is a checkout that reports commits only
+	if src.noHost {
+		return in, nil
 	}
 
-	login, err := h.login(ctx)
-	if err != nil {
-		return standup.Input{}, err
-	}
-
-	prs, err := h.standupPulls(ctx, login, since)
+	login, err := src.host.login(ctx)
 	if err != nil {
 		return standup.Input{}, err
 	}
 
-	in.Host, in.User.Login, in.PRs = h.name, login, prs
+	prs, err := src.host.standupPulls(ctx, login, since)
+	if err != nil {
+		return standup.Input{}, err
+	}
+
+	in.Host, in.User.Login, in.PRs = src.host.name, login, prs
 
 	return in, nil
+}
+
+// standupDefault is the default branch as a ref to walk and as a branch
+// name: origin/HEAD, else the host's answer. Without either, commits that
+// landed would read as unfinished work, so it refuses; a checkout with no
+// remote at all has no default anyone else sees, and gets none.
+func standupDefault(ctx context.Context, src standupSource, remotes []string) (string, string, error) {
+	if r := defaultBranch(ctx, src.dir); r != "" {
+		return r, refBranch(r, remotes, ""), nil
+	}
+
+	if len(remotes) == 0 {
+		return "", "", nil
+	}
+
+	if src.noHost {
+		return "", "", errors.New(
+			"cannot tell the default branch: origin has no HEAD here (git remote set-head origin -a)",
+		)
+	}
+
+	name, err := src.host.defaultBranchName(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
+	for _, r := range []string{"refs/remotes/origin/" + name, "refs/heads/" + name} {
+		if gitx.Out(ctx, src.dir, "rev-parse", "--verify", "--quiet", r) != "" {
+			return r, name, nil
+		}
+	}
+
+	return "", name, nil
 }
 
 // logFormat is one commit per line, fields split by the unit separator,

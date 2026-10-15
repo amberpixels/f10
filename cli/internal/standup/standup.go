@@ -75,9 +75,17 @@ type HostPR struct {
 	CreatedAt time.Time
 	MergedAt  time.Time // zero unless merged
 	MergedBy  string
-	Commits   []string // shas the host lists for it; read for the user's own PRs only
-	MergeSHA  []string // the merge and squash commits it landed as
-	Reviews   []Review // read for other people's PRs only
+	Commits   []PRCommit // the commits the host lists for it; read for the user's own PRs only
+	MergeSHA  []string   // the merge and squash commits it landed as
+	Reviews   []Review   // read for other people's PRs only
+}
+
+// A PRCommit is one commit a PR lists. A rebase merge lands it on the
+// default branch under a new sha, keeping its author date and subject.
+type PRCommit struct {
+	SHA     string
+	Subject string
+	At      time.Time
 }
 
 // User is who the report is about: a git identity and a host login.
@@ -179,14 +187,27 @@ func Group(in Input) Report {
 	own, foreign := splitPRs(in.PRs, in.User.Login)
 	commits := periodCommits(in.Commits, since)
 
-	// a commit belongs to the PR whose commit list or merge commit names it,
-	// else to an open PR whose head is the branch it was reached from
+	// a commit belongs to the PR whose commit list or merge commit names it;
+	// a commit on the default branch to the merged PR listing its author date
+	// and subject, which is what a rebase merge keeps; else to an open PR
+	// whose head is the branch it was reached from
 	attached := make([][]Commit, len(own))
 	bySHA := map[string]int{}
+	rebased := map[string]int{}
 	openHead := map[string]int{}
 
 	for i, p := range own {
-		for _, sha := range slices.Concat(p.Commits, p.MergeSHA) {
+		shas := slices.Clone(p.MergeSHA)
+
+		for _, c := range p.Commits {
+			shas = append(shas, c.SHA)
+
+			if _, ok := rebased[landedKey(c.At, c.Subject)]; !ok && p.Status == HostMerged {
+				rebased[landedKey(c.At, c.Subject)] = i
+			}
+		}
+
+		for _, sha := range shas {
 			if _, ok := bySHA[sha]; !ok {
 				bySHA[sha] = i
 			}
@@ -201,6 +222,8 @@ func Group(in Input) Report {
 
 	for _, c := range commits {
 		if i, ok := bySHA[c.SHA]; ok {
+			attached[i] = append(attached[i], c)
+		} else if i, ok := rebased[landedKey(c.At, c.Subject)]; ok && c.Branch == in.DefaultBranch {
 			attached[i] = append(attached[i], c)
 		} else if i, ok := openHead[c.Branch]; ok && c.Branch != in.DefaultBranch {
 			attached[i] = append(attached[i], c)
@@ -295,6 +318,10 @@ func Group(in Input) Report {
 	rep.Reviewed = reviewed(foreign, in.User.Login, since)
 
 	return rep
+}
+
+func landedKey(at time.Time, subject string) string {
+	return at.UTC().Format(time.RFC3339) + "\x00" + subject
 }
 
 // splitPRs dedupes by number and splits the user's own PRs from others'.

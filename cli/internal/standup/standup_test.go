@@ -120,7 +120,7 @@ func TestGroupAttachesCommits(t *testing.T) {
 			commit("old", "FT-1/a", "rebased old work", -5), // authored before the period
 		},
 		[]HostPR{own(1, "FT-1/a", "main", HostOpen, func(p *HostPR) {
-			p.Commits = []string{"c1", "old"}
+			p.Commits = []PRCommit{{SHA: "c1"}, {SHA: "old"}}
 			p.MergeSHA = []string{"sq"}
 		})},
 	))
@@ -143,6 +143,35 @@ func TestGroupAttachesCommits(t *testing.T) {
 
 	if len(r.Other.Commits) != 1 || r.Other.Commits[0].SHA != "x1" {
 		t.Errorf("other commits = %+v, want x1", r.Other.Commits)
+	}
+}
+
+// A rebase merge lands the PR's commits on main under new shas; their author
+// date and subject still name the PR.
+func TestGroupFoldsRebaseMergedCommits(t *testing.T) {
+	r := Group(input(
+		[]Commit{
+			commit("r1", "main", "first", 2),
+			commit("r2", "main", "second", 3),
+			commit("r3", "FT-1/a", "first", 2),
+		},
+		[]HostPR{own(1, "FT-1/a", "main", HostMerged, func(p *HostPR) {
+			p.Commits = []PRCommit{{SHA: "o1", Subject: "first", At: at(2)}, {SHA: "o2", Subject: "second", At: at(3)}}
+			p.MergeSHA = []string{"r2"}
+		})},
+	))
+
+	if got := len(taskByID(t, r, "FT-1").PRs[0].Commits); got != 2 {
+		t.Errorf("PR commits = %d, want r1 and r2", got)
+	}
+
+	// only the default branch is a rebase merge's landing: r3 is elsewhere
+	if len(r.Other.Commits) != 0 || len(taskByID(t, r, "FT-1").Commits) != 1 {
+		t.Errorf(
+			"loose = other %+v, task %+v; want r3 alone, on the task",
+			r.Other.Commits,
+			taskByID(t, r, "FT-1").Commits,
+		)
 	}
 }
 
@@ -242,7 +271,7 @@ func TestGroupIsDeterministic(t *testing.T) {
 		commit("c4", "main", "chore", 1), commit("c5", "FT-1/a", "a2", 3),
 	}
 	prs := []HostPR{
-		own(1, "FT-1/a", "main", HostMerged, func(p *HostPR) { p.Commits = []string{"c1"} }),
+		own(1, "FT-1/a", "main", HostMerged, func(p *HostPR) { p.Commits = []PRCommit{{SHA: "c1"}} }),
 		own(2, "FT-2/b", "FT-1/a", HostOpen),
 		own(4, "FT-1/z", "FT-1/a", HostOpen),
 		{Number: 7, Author: "bob", Status: HostOpen, Reviews: []Review{{Author: "me", At: at(5)}}},

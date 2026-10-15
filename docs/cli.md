@@ -256,14 +256,18 @@ A host CLI that fails (not logged in, no network) fails the command; it never fa
 
 **Grouping.**
 
-- A commit belongs to the PR whose commit list or merge/squash commit names it, else to an open PR whose head is the branch it was reached from.
+- A commit belongs to the PR whose commit list or merge/squash commit names it.
+  A commit on the default branch belongs to the merged PR listing a commit with its author date and subject, which is what a rebase merge keeps.
+  Otherwise it belongs to an open PR whose head is the branch it was reached from.
 - A PR's task id comes from its head branch, then its title; a commit's from its branch, then its subject, read with the project's id format.
   No id puts the PR or commit in `other`.
 - A PR whose base is another of your PRs' head chains under it, listed root first.
   The base `f10 start --after` recorded wins over the host's, which the host retargets to the default branch once the base merges.
   A chain crossing tasks gives the dependent task `after`.
 - Your own PR is reported when you opened or merged it in the period, or it carries a commit of yours from it.
-- Other people's PRs go to `reviewed` when you reviewed them (a submitted review; on GitLab an approval or a comment) or merged them in the period.
+- Other people's PRs go to `reviewed` when you reviewed them or merged them in the period.
+  On GitHub a review is any review you submitted.
+  On GitLab it is an approval or a comment on an MR that lists you as a reviewer: an MR's notes are read only for those, since reading every MR updated in the period costs a call each.
 
 **States**, least advanced first: `started` (open, no changes yet), `in progress` (a draft), `in review` (open and ready), `shipped` (merged), plus `closed` for a PR closed unmerged.
 A task takes the least advanced state among its open PRs and its PR-less commits on a branch other than the default (`in progress`).
@@ -316,7 +320,7 @@ A breaking change bumps `schema`.
 | `prs[].merged_at` | absent unless merged |
 | `prs[].commits` | your commits on it in the period, by author date, then sha |
 | `commits[].at` | the author date |
-| `commits[].branch` | the branch it was reached from, remote prefix dropped; the default branch for anything it reaches |
+| `commits[].branch` | the branch it was reached from, remote prefix dropped; the default branch (origin/HEAD, else the host's) for anything it reaches |
 | `commits[].parents` | parent shas; two or more is a merge commit |
 | `reviewed` | by number; `actions` by time, then kind |
 

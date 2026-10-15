@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
@@ -137,7 +138,10 @@ func TestStandupPullsGitHub(t *testing.T) {
 	f.script(ghSearch("author:me updated:>="+ghStamp, ghOwnFields), `[
 	  {"number":5,"title":"FT-2: b","state":"OPEN","isDraft":true,"headRefName":"FT-2/b","baseRefName":"FT-1/a",
 	   "url":"u5","author":{"login":"me"},"createdAt":"2026-10-14T08:00:00Z","changedFiles":0,"mergeCommit":null}]`)
-	f.script("gh api --paginate repos/{owner}/{repo}/pulls/5/commits?per_page=100", `[{"sha":"a1"},{"sha":"a2"}]`)
+	f.script(
+		"gh api --paginate repos/{owner}/{repo}/pulls/5/commits?per_page=100",
+		`[{"sha":"a1","commit":{"message":"work on b\n\nbody","author":{"date":"2026-10-14T07:00:00Z"}}},{"sha":"a2"}]`,
+	)
 	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, ghForeignFields+",reviews"), `[
 	  {"number":9,"title":"theirs","state":"MERGED","url":"u9","author":{"login":"bob"},
 	   "reviews":[{"author":{"login":"me"},"submittedAt":"2026-10-14T09:00:00Z"}]},
@@ -158,7 +162,7 @@ func TestStandupPullsGitHub(t *testing.T) {
 	own, foreign := got[0], got[1]
 
 	if own.Number != 5 || own.Status != standup.HostOpen || !own.Draft || !own.Empty ||
-		own.Head != "FT-2/b" || own.Base != "FT-1/a" || !slices.Equal(own.Commits, []string{"a1", "a2"}) {
+		own.Head != "FT-2/b" || own.Base != "FT-1/a" || len(own.Commits) != 2 || own.Commits[0].Subject != "work on b" || own.Commits[1].SHA != "a2" {
 		t.Errorf("own = %+v", own)
 	}
 
@@ -182,7 +186,10 @@ func TestStandupPullsGitLab(t *testing.T) {
 	f.script(mrs+"per_page=100&reviewer_username=me"+q, `[{"iid":7,"title":"theirs","state":"opened",
 	  "author":{"username":"bob"},"web_url":"w7"}]`)
 	f.script(mrs+"per_page=100&state=merged&updated_after="+strings.ReplaceAll(ghStamp, ":", "%3A"), `[]`)
-	f.script("glab api --paginate projects/:fullpath/merge_requests/3/commits?per_page=100", `[{"id":"c1"}]`)
+	f.script(
+		"glab api --paginate projects/:fullpath/merge_requests/3/commits?per_page=100",
+		`[{"id":"c1","title":"b","authored_date":"2026-10-14T07:00:00Z"}]`,
+	)
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/notes?per_page=100", `[
 	  {"body":"approved this merge request","system":true,"created_at":"2026-10-14T09:00:00Z","author":{"username":"me"}},
 	  {"body":"requested review from @me","system":true,"created_at":"2026-10-14T08:00:00Z","author":{"username":"bob"}},
@@ -198,7 +205,7 @@ func TestStandupPullsGitLab(t *testing.T) {
 	}
 
 	if own := got[0]; own.Number != 3 || own.Empty || own.Head != "FT-2/b" ||
-		!slices.Equal(own.Commits, []string{"c1"}) {
+		len(own.Commits) != 1 || own.Commits[0].SHA != "c1" || own.Commits[0].Subject != "b" {
 		t.Errorf("own = %+v", own)
 	}
 
@@ -234,5 +241,84 @@ func TestRenderStandup(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("render missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// scriptStandupGit answers the git reads collectStandup makes, with one
+// commit of the user's on FT-2/b and origin/HEAD as given.
+func scriptStandupGit(f *fakes, email, originHead string) {
+	f.script("git config user.email", email)
+	f.script("git remote", "origin")
+	f.script(headRef, originHead)
+	f.script("git log --branches --remotes --source "+sinceArg+" "+logFormat,
+		strings.Join([]string{"a1", "me@x.io", "2026-10-14T10:00:00Z", "p1", "FT-2/b", "work"}, "\x1f"))
+	f.script("git log --format=%H "+sinceArg+" origin/main", "")
+	f.script(cfgDeps, "")
+}
+
+func TestCollectStandupWithoutHostReportsCommitsOnly(t *testing.T) {
+	f := newFakes(t)
+	scriptStandupGit(f, "me@x.io", "origin/main")
+
+	in, err := collectStandup(t.Context(), standupSource{dir: ".", main: ".", prefix: "FT", noHost: true}, standupSince)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if in.Host != "" || in.User.Login != "" || len(in.PRs) != 0 || len(in.Commits) != 1 || in.DefaultBranch != "main" {
+		t.Errorf("input = %+v, want one commit, no host, default main", in)
+	}
+}
+
+// A host CLI that fails is the command's error, never commits only.
+func TestCollectStandupFailsOnAFailingHost(t *testing.T) {
+	f := newFakes(t)
+	scriptStandupGit(f, "me@x.io", "origin/main")
+	f.answers["gh api user"] = []shell.Result{{Code: 1, Stderr: "not logged in"}}
+
+	_, err := collectStandup(
+		t.Context(),
+		standupSource{dir: ".", main: ".", host: host{name: "gh", dir: "."}},
+		standupSince,
+	)
+	if err == nil || !strings.Contains(err.Error(), "not logged in") {
+		t.Errorf("err = %v, want gh's own error", err)
+	}
+}
+
+func TestCollectStandupNeedsAGitEmail(t *testing.T) {
+	f := newFakes(t)
+	f.script("git config user.email", "")
+
+	_, err := collectStandup(t.Context(), standupSource{dir: ".", noHost: true}, standupSince)
+	if err == nil || !strings.Contains(err.Error(), "user.email") {
+		t.Errorf("err = %v, want the user.email hint", err)
+	}
+}
+
+// Without origin/HEAD the host names the default branch; without a host
+// either, standup refuses rather than read landed commits as unfinished.
+func TestStandupDefaultFallsBackToTheHost(t *testing.T) {
+	f := newFakes(t)
+	f.script(headRef, "")
+	f.script("gh repo view --json defaultBranchRef", `{"defaultBranchRef":{"name":"trunk"}}`)
+	f.script("git rev-parse --verify --quiet refs/remotes/origin/trunk", "abc")
+
+	ref, name, err := standupDefault(
+		t.Context(),
+		standupSource{dir: ".", host: host{name: "gh", dir: "."}},
+		[]string{"origin"},
+	)
+	if err != nil || ref != "refs/remotes/origin/trunk" || name != "trunk" {
+		t.Errorf("default = %q, %q, %v, want origin's trunk", ref, name, err)
+	}
+
+	if _, _, err := standupDefault(
+		t.Context(),
+		standupSource{dir: ".", noHost: true},
+		[]string{"origin"},
+	); err == nil ||
+		!strings.Contains(err.Error(), "set-head") {
+		t.Errorf("err = %v, want the set-head hint", err)
 	}
 }

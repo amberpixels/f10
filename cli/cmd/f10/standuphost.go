@@ -141,28 +141,67 @@ func (h host) standupPulls(ctx context.Context, login string, since time.Time) (
 	return append(out, foreignPulls(login, reviewed, merged)...), nil
 }
 
-// pullCommits is the shas a request lists, one call per request: asked for
-// inside the list query, gh's GraphQL refuses a node count past its limit.
-func (h host) pullCommits(ctx context.Context, number int) ([]string, error) {
+// defaultBranchName is the repo's default branch as the host has it.
+func (h host) defaultBranchName(ctx context.Context) (string, error) {
+	var repo struct {
+		DefaultBranchRef struct {
+			Name string `json:"name"`
+		} `json:"defaultBranchRef"`
+		DefaultBranch string `json:"default_branch"`
+	}
+
+	err := h.decode(ctx, &repo, h.pick(
+		[]string{"repo", "view", "--json", "defaultBranchRef"},
+		[]string{"repo", "view", "-F", "json"},
+	)...)
+	if err != nil {
+		return "", err
+	}
+
+	name := cmp.Or(repo.DefaultBranchRef.Name, repo.DefaultBranch)
+	if name == "" {
+		return "", fmt.Errorf("%s returned no default branch", h.name)
+	}
+
+	return name, nil
+}
+
+// pullCommits is the commits a request lists, one call per request: asked
+// for inside the list query, gh's GraphQL refuses a node count past its
+// limit.
+func (h host) pullCommits(ctx context.Context, number int) ([]standup.PRCommit, error) {
 	path := h.pick(
 		[]string{fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/commits?per_page=100", number)},
 		[]string{fmt.Sprintf("projects/:fullpath/merge_requests/%d/commits?per_page=100", number)},
 	)[0]
 
 	commits, err := decodePages[struct {
-		SHA string `json:"sha"`
-		ID  string `json:"id"`
+		SHA    string `json:"sha"`
+		Commit struct {
+			Message string `json:"message"`
+			Author  struct {
+				Date time.Time `json:"date"`
+			} `json:"author"`
+		} `json:"commit"`
+
+		ID           string    `json:"id"`
+		Title        string    `json:"title"`
+		AuthoredDate time.Time `json:"authored_date"`
 	}](ctx, h, path)
 	if err != nil {
 		return nil, err
 	}
 
-	shas := make([]string, 0, len(commits))
+	out := make([]standup.PRCommit, 0, len(commits))
+
 	for _, c := range commits {
-		shas = append(shas, cmp.Or(c.SHA, c.ID))
+		subject, _, _ := strings.Cut(cmp.Or(c.Commit.Message, c.Title), "\n")
+		out = append(out, standup.PRCommit{
+			SHA: cmp.Or(c.SHA, c.ID), Subject: subject, At: cmp.Or(c.Commit.Author.Date, c.AuthoredDate),
+		})
 	}
 
-	return shas, nil
+	return out, nil
 }
 
 func (h host) searchPRs(ctx context.Context, query, fields string) ([]standupPull, error) {
