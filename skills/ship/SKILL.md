@@ -7,7 +7,7 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply` and review's `f10 review ack`.
+Running this skill **is** the user's explicit authorization to push and open this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, and post review's `f10 review ack`.
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**

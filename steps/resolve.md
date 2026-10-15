@@ -2,7 +2,7 @@
 
 Role: a **senior engineer** triaging review findings.
 Input: the latest findings file under `<storage root>/reviews/<TASK-ID>/` with unsettled findings (shape in `steps/review.md`), plus the task text and the plan.
-Output: a verdict under every finding, the fixes in the working tree, verify green.
+Output: a verdict under every finding, verify green, and the fixes committed and pushed when the branch has an open PR or MR, else left in the working tree.
 No plan edit, no new file.
 Context: `project.md → Verify`; `project.md → Review` for who answers an `ask`.
 Badge: none; inside a ship pipeline the leaf stays `review`.
@@ -47,6 +47,11 @@ Settle every file the same way, whoever wrote it: what the block says is wrong, 
    A fix chosen here is verified, not re-reviewed.
 8. **Write the verdicts**: `verdict:` and any `reason:` under each block, one `verdict:` line per block.
    Never edit the reviewer's text.
-9. **Report** per `conventions/report.md`: a `findings` row, then the verdict counts, what the fixes changed, and which asks were answered.
+9. **Land the fixes on an open PR or MR.**
+   When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes as `steps/commit.md` point 2 says and push them to that branch, never forcing.
+   Outward-facing, under the run's authorization.
+   With no open PR or MR, the fixes stay in the working tree for the pipeline's next step (`pr`, `push`, `commit`) or the user.
+10. **Report** per `conventions/report.md`: a `findings` row, a `commit` row when point 9 committed, then the verdict counts, what the fixes changed, and which asks were answered.
 
 **On failure:** red verify after a fix, a findings file naming a task this checkout lacks, or a malformed file: report and stop, keeping the verdicts written so far.
+A rejected push stops with the commits local; never force-push to clear it (`conventions/failure.md`).

@@ -9,6 +9,7 @@ argument-hint: "<task-id | PR | this branch>"
 
 Producing the findings is `/f10:review`.
 This skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note`): ask once before the first post.
+Landing fixes on an open PR or MR (the step's point 9): a `--driven` run commits and pushes, since the user started its chain; otherwise ask once, inside the step's questionnaire, **commit and push**, **commit only**, or **leave uncommitted**.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -24,5 +25,5 @@ This skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note
 2. Follow the **resolve** step it prints.
 
 **Exit**
-- Stop once the verdicts are written and verify is green.
+- Stop once the verdicts are written, verify is green, and the fixes are landed or left as point 9 says.
 - Next: `/f10:review`, when nothing is left to settle.
