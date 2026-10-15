@@ -141,7 +141,7 @@ func (fx *driveFixture) mergeable(ids ...string) {
 
 	for _, id := range ids {
 		fx.f.script("git rev-parse -q --verify origin/"+id, "pushed-"+id)
-		fx.f.script("git merge-tree --write-tree --quiet origin/main pushed-"+id, "")
+		fx.f.script("git merge-tree --write-tree origin/main pushed-"+id, "")
 	}
 }
 
@@ -1058,7 +1058,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script(headRef, "origin/main")
 			fx.f.script("git fetch origin", "")
 			fx.f.script("git rev-parse -q --verify origin/GH-1", "old")
-			fx.f.fail("git merge-tree --write-tree --quiet origin/main old", shell.Result{Code: 1})
+			fx.f.fail("git merge-tree --write-tree origin/main old", shell.Result{Code: 1})
 			fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
 			// before the catchup, the switch that sends it, after it, before finish's push
 			fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main", "", "", "")

@@ -174,8 +174,9 @@ func IsAncestor(ctx context.Context, dir, commit, ref string) bool {
 // tried in memory the way a host tries a pull request: nothing is checked
 // out or written. git exits 1 for a conflict and higher for a bad ref, and
 // any failure reads as "no", so a caller checks that both refs exist first.
+// Not --quiet: git 2.56 exits 0 with it on a conflict.
 func MergesCleanly(ctx context.Context, dir, base, head string) bool {
-	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--quiet", base, head)
+	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", base, head)
 
 	return err == nil
 }

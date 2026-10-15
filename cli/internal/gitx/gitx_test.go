@@ -3,6 +3,8 @@ package gitx
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -158,7 +160,7 @@ func TestIsAncestorReadsTheExitCode(t *testing.T) {
 }
 
 func TestMergesCleanlyReadsTheExitCode(t *testing.T) {
-	script(t, map[string]string{"merge-tree --write-tree --quiet origin/main origin/GH-1": ""})
+	script(t, map[string]string{"merge-tree --write-tree origin/main origin/GH-1": ""})
 
 	if !MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-1") {
 		t.Error("a scripted clean merge read as a conflict")
@@ -166,6 +168,48 @@ func TestMergesCleanlyReadsTheExitCode(t *testing.T) {
 
 	if MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-2") {
 		t.Error("a failing merge-tree read as clean")
+	}
+}
+
+// MergesCleanly against a real git, since a conflict is read from the exit
+// code alone and git's flags have changed what it means before.
+func TestMergesCleanlyOnARealConflict(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+
+		if _, err := Exec(t.Context(), dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(body string) {
+		t.Helper()
+
+		if err := os.WriteFile(filepath.Join(dir, "f"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "t@t")
+	run("config", "user.name", "t")
+	write("base\n")
+	run("add", "f")
+	run("commit", "-qm", "base")
+	run("branch", "side")
+	run("branch", "other")
+	write("main\n")
+	run("commit", "-qam", "main")
+	run("checkout", "-q", "side")
+	write("side\n")
+	run("commit", "-qam", "side")
+
+	if MergesCleanly(t.Context(), dir, "main", "side") {
+		t.Error("a conflicting branch read as clean")
+	}
+
+	if !MergesCleanly(t.Context(), dir, "main", "other") {
+		t.Error("a branch behind main read as conflicting")
 	}
 }
 
