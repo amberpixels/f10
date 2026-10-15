@@ -579,3 +579,25 @@ func TestRenderStandupProjects(t *testing.T) {
 		}
 	}
 }
+
+// An arrow means a PR sits on the one before it: siblings on one root and
+// unrelated PRs in other are listed, not chained.
+func TestRenderStandupChainsOnlyStackedPRs(t *testing.T) {
+	r := standup.Standup{Since: standupSince, Projects: []standup.Project{{
+		Tasks: []standup.Task{{ID: "FT-1", State: standup.StateInReview, PRs: []standup.PR{
+			{Number: 1}, {Number: 2, BasePR: 1}, {Number: 3, BasePR: 1},
+		}}},
+		Other: standup.Other{PRs: []standup.PR{{Number: 5}, {Number: 9, BasePR: 3}}},
+	}}}
+
+	var out bytes.Buffer
+	if err := renderStandup(&out, r); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"#1 -> #2, #3", "other      #5, #9"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("render missing %q:\n%s", want, out.String())
+		}
+	}
+}

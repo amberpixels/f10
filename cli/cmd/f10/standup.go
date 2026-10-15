@@ -43,9 +43,9 @@ func standupCommand() *cli.Command {
 			&cli.BoolFlag{Name: "week", Usage: "start the period at last week's Monday"},
 			&cli.StringSliceFlag{
 				Name:  "group",
-				Usage: "also read the checkouts of `NAME`, a group in ~/.f10/standup.md; repeatable",
+				Usage: "read the checkouts of `NAME`, a group in ~/.f10/standup.md, instead of this one; repeatable",
 			},
-			&cli.BoolFlag{Name: "all", Usage: "also read every checkout under F10_ROOTS"},
+			&cli.BoolFlag{Name: "all", Usage: "read every checkout under F10_ROOTS instead of this one"},
 			&cli.BoolFlag{Name: "json", Usage: "emit the report as JSON (the schema is in docs/cli.md)"},
 		},
 		Action: runStandup,
@@ -745,15 +745,15 @@ func renderProject(b *strings.Builder, p standup.Project) {
 	}
 }
 
-// prList names the PRs. Within a repository a task's PRs are in chain
-// order, so a chain reads with " -> "; repositories are split by ", ".
+// prList names the PRs: " -> " where a PR sits on the one before it, ", "
+// between anything else (siblings, roots, other repositories).
 func prList(prs []standup.PR, label func(string, int) string) string {
 	var b strings.Builder
 
 	for i, p := range prs {
 		switch {
 		case i == 0:
-		case prs[i-1].Repo == p.Repo && p.BasePR != 0:
+		case prs[i-1].Repo == p.Repo && p.BasePR == prs[i-1].Number:
 			b.WriteString(" -> ")
 		default:
 			b.WriteString(", ")

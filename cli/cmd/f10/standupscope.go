@@ -102,11 +102,8 @@ func standupTargets(ctx context.Context, cmd *cli.Command) ([]*target, error) {
 func (t *target) standupTracker() (standup.Tracker, string) {
 	tr := standup.Tracker{Kind: t.eff.TrackerKind, Prefix: t.eff.IDPrefix}
 
-	kind := t.eff.TrackerKind
-	hostIssues := kind == "" || kind == "GitHub Issues" || kind == "GitLab work items" || !t.trackerDeclared()
-
-	if tr.Prefix != "" && (t.driver() != nil || !hostIssues) {
-		tr.Key = "tracker\x00" + kind + "\x00" + tr.Prefix
+	if tr.Prefix != "" && (t.driver() != nil || !t.hostIssues()) {
+		tr.Key = "tracker\x00" + tr.Kind + "\x00" + tr.Prefix
 
 		return tr, tr.Prefix
 	}

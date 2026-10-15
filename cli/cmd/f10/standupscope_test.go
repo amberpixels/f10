@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -165,5 +167,69 @@ func TestStandupAllNeedsRoots(t *testing.T) {
 
 	if got, want := repoList(s), "r1 r2"; got != want {
 		t.Errorf("repos = %q, want %q", got, want)
+	}
+}
+
+// declareTracker writes a project.md declaring kind and the ACME id format,
+// and commits work on task ACME-1.
+func declareTracker(t *testing.T, dir, kind string) {
+	t.Helper()
+
+	if kind != "" {
+		instructions := filepath.Join(dir, ".f10", "instructions")
+		if err := os.MkdirAll(instructions, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		body := "---\ntracker:\n  kind: " + kind + "\n  id: ACME-###\n---\n"
+		if err := os.WriteFile(filepath.Join(instructions, "project.md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	git(t, dir, "commit", "-q", "--allow-empty", "-m", "ACME-1 work")
+}
+
+// Checkouts merge a task only on a shared tracker: a declared Jira with one
+// prefix is one project; GitHub Issues, declared or not, stay per repository.
+func TestStandupMergesOnASharedTracker(t *testing.T) {
+	cases := []struct {
+		kind     string
+		projects []string
+	}{
+		{kind: "jira", projects: []string{"ACME"}},
+		{kind: "github", projects: []string{"svc-a", "svc-b"}},
+		{kind: "", projects: []string{"svc-a", "svc-b"}},
+	}
+
+	for _, c := range cases {
+		t.Run(cmp.Or(c.kind, "undeclared"), func(t *testing.T) {
+			isolateEnv(t)
+
+			root := canonical(t, t.TempDir())
+			a, b := scopeRepo(t, root, "svc-a"), scopeRepo(t, root, "svc-b")
+			declareTracker(t, a, c.kind)
+			declareTracker(t, b, c.kind)
+
+			s := standupJSON(t, "-C", a, "-C", b)
+
+			var names []string
+			for _, p := range s.Projects {
+				names = append(names, p.Name)
+			}
+
+			if !slices.Equal(names, c.projects) {
+				t.Fatalf("projects = %v, want %v", names, c.projects)
+			}
+
+			if c.kind != "jira" {
+				return
+			}
+
+			tasks := s.Projects[0].Tasks
+			if len(tasks) != 1 || tasks[0].ID != "ACME-1" || len(tasks[0].Commits) != 2 {
+				t.Errorf("tasks = %+v, want ACME-1 once with both repositories' commits", tasks)
+			}
+		})
 	}
 }

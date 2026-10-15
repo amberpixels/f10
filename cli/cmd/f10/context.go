@@ -190,14 +190,21 @@ func (t *target) driver() *driver.Driver {
 // A project declaring a tracker no host CLI reaches is refused rather than
 // read from host issues, where an unrelated issue or PR shares the number.
 func (t *target) issues() (host, error) {
-	if kind := t.eff.TrackerKind; kind != "" && kind != "GitHub Issues" && kind != "GitLab work items" &&
-		t.trackerDeclared() {
+	if !t.hostIssues() {
 		return host{}, fmt.Errorf("project.md declares a %s tracker, which f10 reads only through a driver, "+
 			"and none was found (looked for %s); see docs/driver-contract.md",
-			kind, strings.Join(t.driverPaths(), ", "))
+			t.eff.TrackerKind, strings.Join(t.driverPaths(), ", "))
 	}
 
 	return t.host()
+}
+
+// hostIssues reports whether the project's tracker is its host's issues:
+// nothing declared, or GitHub Issues or GitLab work items declared.
+func (t *target) hostIssues() bool {
+	kind := t.eff.TrackerKind
+
+	return kind == "" || kind == "GitHub Issues" || kind == "GitLab work items" || !t.trackerDeclared()
 }
 
 func (t *target) trackerDeclared() bool {
