@@ -65,6 +65,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and is now; a thing: what it is |
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
+| `/f10:standup [--since <date> \| --week] [--other]` | standup | a report of your work by day and task, printed; the next one starts where it ended |
 | `/f10:status [id]` | nothing: a hook answers it; with an id, `f10 status <id>` | the run's status in words; with an id, another worktree's run and its agent's question, relayed and answered |
 | `/f10:start <id> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent |
 | `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; agents' questions relayed |
@@ -196,8 +197,8 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain,catchup}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,commit,pr,push,review,resolve,demo,deploy}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain,catchup,standup}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,commit,pr,push,review,resolve,demo,deploy,standup}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/{help,dry-run,driven,forward}.md"]
     end

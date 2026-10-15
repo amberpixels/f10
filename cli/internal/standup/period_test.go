@@ -134,3 +134,83 @@ func TestActivityTimesAndDays(t *testing.T) {
 		t.Errorf("Days(nil) = %#v, want an empty list, which marshals as []", got)
 	}
 }
+
+func TestActivityTimesCountForcePushes(t *testing.T) {
+	since := time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)
+	pushed := time.Date(2026, 10, 12, 6, 0, 0, 0, time.UTC)
+
+	// a rebase keeps author dates, so the force-push is the PR's only time in the period
+	r := Report{Since: since, Tasks: []Task{{ID: "FT-1", PRs: []PR{{
+		CreatedAt:   since.AddDate(0, 0, -3),
+		ForcePushes: []ForcePush{{At: pushed, Class: ClassUpkeep, Upkeep: UpkeepRebase}},
+	}}}}}
+
+	if got, want := Days(ActivityTimes(r), kyiv), []string{"2026-10-12"}; !slices.Equal(got, want) {
+		t.Errorf("Days = %v, want %v: a force-push is activity", got, want)
+	}
+
+	if got := LastWorkingDay(local(10, 13, 9), DefaultWorkdays(), ActivityTimes(r)); !got.Equal(local(10, 12, 0)) {
+		t.Errorf("LastWorkingDay = %v, want the force-push's Monday", got)
+	}
+}
+
+func TestSetDays(t *testing.T) {
+	since := time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)
+	friday := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 10, 11, 22, 30, 0, 0, time.UTC) // Monday 01:30 in kyiv
+	monday := time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)
+	tuesday := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+
+	r := Report{
+		Since: since,
+		Tasks: []Task{
+			// worked on Friday, only merged main in on Monday
+			{ID: "FT-1", PRs: []PR{{
+				CreatedAt: since.AddDate(0, 0, -3),
+				Commits: []Commit{
+					{At: friday, Class: ClassWork},
+					{At: late, Class: ClassUpkeep, Upkeep: UpkeepBaseMerge},
+				},
+			}}},
+			// opened on Monday, merged on Tuesday: both are work
+			{ID: "FT-2", PRs: []PR{{CreatedAt: monday, MergedAt: &tuesday}}},
+			// a rebase on Tuesday and nothing else
+			{ID: "FT-3", PRs: []PR{{
+				CreatedAt:   since.AddDate(0, 0, -3),
+				ForcePushes: []ForcePush{{At: tuesday, Class: ClassUpkeep, Upkeep: UpkeepRebase}},
+			}}},
+		},
+		Reviewed: []ReviewedPR{{Actions: []Action{
+			{Kind: ActionReviewed, At: friday}, {Kind: ActionReviewed, At: since.Add(-time.Hour)},
+		}}},
+	}
+
+	SetDays(&r, kyiv)
+
+	want := map[string][]Day{
+		"FT-1": {{"2026-10-09", ClassWork}, {"2026-10-12", ClassUpkeep}},
+		"FT-2": {{"2026-10-12", ClassWork}, {"2026-10-13", ClassWork}},
+		"FT-3": {{"2026-10-13", ClassUpkeep}},
+	}
+
+	for _, task := range r.Tasks {
+		if !slices.Equal(task.Days, want[task.ID]) {
+			t.Errorf("%s days = %v, want %v", task.ID, task.Days, want[task.ID])
+		}
+	}
+
+	if want := []string{"2026-10-09"}; !slices.Equal(r.Reviewed[0].Days, want) {
+		t.Errorf("reviewed days = %v, want %v: the review before the period is not in it", r.Reviewed[0].Days, want)
+	}
+
+	if want := []string{"2026-10-09", "2026-10-12", "2026-10-13"}; !slices.Equal(r.Days, want) {
+		t.Errorf("report days = %v, want %v", r.Days, want)
+	}
+
+	empty := Report{Since: since, Tasks: []Task{{ID: "FT-9"}}}
+	SetDays(&empty, kyiv)
+
+	if empty.Tasks[0].Days == nil {
+		t.Error("a task with no activity has nil days, which marshals as null, want []")
+	}
+}

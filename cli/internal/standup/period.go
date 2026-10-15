@@ -93,51 +93,111 @@ func LastWorkingDay(now time.Time, w Workdays, activity []time.Time) time.Time {
 }
 
 // ActivityTimes is every time in a report the user did something within
-// its period: commits, PRs opened or merged, reviews and merges of others'.
+// its period: commits, PRs opened or merged, force-pushes, reviews and
+// merges of others'.
 func ActivityTimes(r Report) []time.Time {
 	var out []time.Time
 
-	add := func(t time.Time) {
-		if !t.IsZero() && !t.Before(r.Since) {
-			out = append(out, t)
-		}
-	}
-
-	prs := func(ps []PR) {
-		for _, p := range ps {
-			add(p.CreatedAt)
-
-			if p.MergedAt != nil {
-				add(*p.MergedAt)
-			}
-
-			for _, c := range p.Commits {
-				add(c.At)
-			}
-		}
-	}
-
 	for _, t := range r.Tasks {
-		prs(t.PRs)
+		out = append(out, taskTimes(t, r.Since)...)
+	}
 
-		for _, c := range t.Commits {
+	out = append(out, taskTimes(Task{PRs: r.Other.PRs, Commits: r.Other.Commits}, r.Since)...)
+
+	for _, p := range r.Reviewed {
+		out = append(out, actionTimes(p, r.Since)...)
+	}
+
+	return out
+}
+
+// A Day is a local date a task had activity on, and the class of that
+// day's activity alone: a task worked on Monday and only caught up with
+// its base on Tuesday is work on one and upkeep on the other.
+type Day struct {
+	Date  string `json:"date"`
+	Class string `json:"class"`
+}
+
+// SetDays fills in the local dates with activity: the report's, each
+// task's with that day's class, and each reviewed PR's. All three read the
+// same times, so a task's day is always one of the report's.
+func SetDays(r *Report, loc *time.Location) {
+	r.Days = Days(ActivityTimes(*r), loc)
+
+	for i := range r.Tasks {
+		t := &r.Tasks[i]
+		t.Days = []Day{}
+
+		for _, d := range Days(taskTimes(*t, r.Since), loc) {
+			from, err := time.ParseInLocation(time.DateOnly, d, loc)
+			if err != nil {
+				continue
+			}
+
+			to := from.AddDate(0, 0, 1)
+			if from.Before(r.Since) {
+				from = r.Since
+			}
+
+			t.Days = append(t.Days, Day{Date: d, Class: taskClass(*t, from, to)})
+		}
+	}
+
+	for i := range r.Reviewed {
+		r.Reviewed[i].Days = Days(actionTimes(r.Reviewed[i], r.Since), loc)
+	}
+}
+
+// taskTimes is the times a task's activity happened in the period.
+func taskTimes(t Task, since time.Time) []time.Time {
+	var out []time.Time
+
+	add := func(at time.Time) {
+		if inWindow(at, since, time.Time{}) {
+			out = append(out, at)
+		}
+	}
+
+	for _, p := range t.PRs {
+		add(p.CreatedAt)
+
+		if p.MergedAt != nil {
+			add(*p.MergedAt)
+		}
+
+		for _, c := range p.Commits {
 			add(c.At)
 		}
+
+		for _, fp := range p.ForcePushes {
+			add(fp.At)
+		}
 	}
 
-	prs(r.Other.PRs)
-
-	for _, c := range r.Other.Commits {
+	for _, c := range t.Commits {
 		add(c.At)
 	}
 
-	for _, p := range r.Reviewed {
-		for _, a := range p.Actions {
-			add(a.At)
+	return out
+}
+
+func actionTimes(p ReviewedPR, since time.Time) []time.Time {
+	var out []time.Time
+
+	for _, a := range p.Actions {
+		if inWindow(a.At, since, time.Time{}) {
+			out = append(out, a.At)
 		}
 	}
 
 	return out
+}
+
+// inWindow reports whether at is set and falls from from until to; a zero
+// to has no end.
+func inWindow(at, from, to time.Time) bool {
+	return !at.IsZero() && !at.Before(from) && (to.IsZero() || at.Before(to))
 }
 
 // Days is the dates, YYYY-MM-DD in loc, that the times fall on: ascending,

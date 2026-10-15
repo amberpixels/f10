@@ -120,7 +120,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 
 	rep := standup.Group(in)
 	rep.Period = period
-	rep.Days = standup.Days(standup.ActivityTimes(rep), time.Local)
+	standup.SetDays(&rep, time.Local)
 
 	if cmd.Bool("json") {
 		enc := json.NewEncoder(cmd.Writer)

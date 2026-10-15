@@ -141,6 +141,7 @@ type Task struct {
 	State   string   `json:"state"`
 	Class   string   `json:"class"`
 	After   string   `json:"after,omitempty"`
+	Days    []Day    `json:"days"` // the command sets it
 	PRs     []PR     `json:"prs"`
 	Commits []Commit `json:"commits"` // commits on no PR of the user's
 }
@@ -165,6 +166,7 @@ type ReviewedPR struct {
 	State   string   `json:"state"`
 	Author  string   `json:"author"`
 	Actions []Action `json:"actions"`
+	Days    []string `json:"days"` // local dates of the actions; the command sets it
 }
 
 // Report is the standup for one checkout.
@@ -320,7 +322,7 @@ func Group(in Input) Report {
 	for _, t := range tasks {
 		t.PRs = chainOrder(t.PRs)
 		t.State = taskState(*t, in.DefaultBranch)
-		t.Class = taskClass(*t, since)
+		t.Class = taskClass(*t, since, time.Time{})
 
 		if len(t.PRs) > 0 {
 			root := t.PRs[0]
