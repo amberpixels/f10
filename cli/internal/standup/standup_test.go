@@ -245,22 +245,31 @@ func TestGroupWithoutHost(t *testing.T) {
 	in := input([]Commit{commit("c1", "FT-1/a", "w", 1)}, nil)
 	in.Host, in.User.Login = "", ""
 
-	out, err := json.Marshal(Group(in))
+	out, err := json.Marshal(Merge(in.Since, "", []Report{Group(in)}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var back map[string]any
+	var back struct {
+		Projects []struct {
+			Repos    []map[string]any `json:"repos"`
+			Reviewed []any            `json:"reviewed"`
+		} `json:"projects"`
+	}
 	if err := json.Unmarshal(out, &back); err != nil {
 		t.Fatal(err)
 	}
 
-	if back["host"] != nil {
-		t.Errorf("host = %v, want null", back["host"])
+	if len(back.Projects) != 1 || len(back.Projects[0].Repos) != 1 {
+		t.Fatalf("projects = %s, want one with one repo", out)
 	}
 
-	if _, ok := back["reviewed"].([]any); !ok {
-		t.Errorf("reviewed = %v, want an empty array, not null", back["reviewed"])
+	if host, ok := back.Projects[0].Repos[0]["host"]; !ok || host != nil {
+		t.Errorf("host = %v, want null", host)
+	}
+
+	if back.Projects[0].Reviewed == nil {
+		t.Errorf("reviewed is null, want an empty array: %s", out)
 	}
 }
 
@@ -277,7 +286,7 @@ func TestGroupIsDeterministic(t *testing.T) {
 		{Number: 7, Author: "bob", Status: HostOpen, Reviews: []Review{{Author: "me", At: at(5)}}},
 	}
 
-	first, err := json.Marshal(Group(input(commits, prs)))
+	first, err := json.Marshal(Merge(since, "", []Report{Group(input(commits, prs))}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +298,7 @@ func TestGroupIsDeterministic(t *testing.T) {
 		rng.Shuffle(len(c), func(i, j int) { c[i], c[j] = c[j], c[i] })
 		rng.Shuffle(len(p), func(i, j int) { p[i], p[j] = p[j], p[i] })
 
-		got, err := json.Marshal(Group(input(c, p)))
+		got, err := json.Marshal(Merge(since, "", []Report{Group(input(c, p))}))
 		if err != nil {
 			t.Fatal(err)
 		}

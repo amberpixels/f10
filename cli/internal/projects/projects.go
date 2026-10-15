@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -87,7 +88,7 @@ func Find(name string) (string, error) {
 		}
 
 		for _, m := range matches {
-			if filepath.Base(m) == name && isCheckout(m) {
+			if filepath.Base(m) == name && IsCheckout(m) {
 				found = append(found, m)
 			}
 		}
@@ -104,9 +105,37 @@ func Find(name string) (string, error) {
 	}
 }
 
-// isCheckout reports whether dir is a git checkout. A linked worktree
+// All is every checkout under the configured roots, sorted, for a command
+// that reads every project, such as `f10 standup --all`.
+func All() ([]string, error) {
+	roots := Roots()
+	if len(roots) == 0 {
+		return nil, ErrDisabled
+	}
+
+	var found []string
+
+	for _, root := range roots {
+		matches, err := filepath.Glob(root)
+		if err != nil {
+			return nil, fmt.Errorf("bad glob %q in %s: %w", root, RootsEnv, err)
+		}
+
+		for _, m := range matches {
+			if IsCheckout(m) {
+				found = append(found, m)
+			}
+		}
+	}
+
+	slices.Sort(found)
+
+	return slices.Compact(found), nil
+}
+
+// IsCheckout reports whether dir is a git checkout. A linked worktree
 // carries .git as a file rather than a directory, so both count.
-func isCheckout(dir string) bool {
+func IsCheckout(dir string) bool {
 	fi, err := os.Stat(dir)
 	if err != nil || !fi.IsDir() {
 		return false

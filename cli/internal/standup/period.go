@@ -96,16 +96,20 @@ func LastWorkingDay(now time.Time, w Workdays, activity []time.Time) time.Time {
 // its period: commits, PRs opened or merged, force-pushes, reviews and
 // merges of others'.
 func ActivityTimes(r Report) []time.Time {
+	return activityTimes(r.Tasks, r.Other, r.Reviewed, r.Since)
+}
+
+func activityTimes(tasks []Task, other Other, reviewed []ReviewedPR, since time.Time) []time.Time {
 	var out []time.Time
 
-	for _, t := range r.Tasks {
-		out = append(out, taskTimes(t, r.Since)...)
+	for _, t := range tasks {
+		out = append(out, taskTimes(t, since)...)
 	}
 
-	out = append(out, taskTimes(Task{PRs: r.Other.PRs, Commits: r.Other.Commits}, r.Since)...)
+	out = append(out, taskTimes(Task{PRs: other.PRs, Commits: other.Commits}, since)...)
 
-	for _, p := range r.Reviewed {
-		out = append(out, actionTimes(p, r.Since)...)
+	for _, p := range reviewed {
+		out = append(out, actionTimes(p, since)...)
 	}
 
 	return out
@@ -119,33 +123,45 @@ type Day struct {
 	Class string `json:"class"`
 }
 
-// SetDays fills in the local dates with activity: the report's, each
-// task's with that day's class, and each reviewed PR's. All three read the
-// same times, so a task's day is always one of the report's.
-func SetDays(r *Report, loc *time.Location) {
-	r.Days = Days(ActivityTimes(*r), loc)
+// SetDays fills in the local dates with activity: the report's, across
+// every project, each task's with that day's class, and each reviewed
+// PR's. All three read the same times, so a task's day is always one of
+// the report's. It runs after Merge, so a task merged across repositories
+// gets the days of all of them.
+func SetDays(s *Standup, loc *time.Location) {
+	var all []time.Time
 
-	for i := range r.Tasks {
-		t := &r.Tasks[i]
-		t.Days = []Day{}
+	for i := range s.Projects {
+		p := &s.Projects[i]
+		all = append(all, activityTimes(p.Tasks, p.Other, p.Reviewed, s.Since)...)
 
-		for _, d := range Days(taskTimes(*t, r.Since), loc) {
-			from, err := time.ParseInLocation(time.DateOnly, d, loc)
-			if err != nil {
-				continue
-			}
+		for j := range p.Tasks {
+			setTaskDays(&p.Tasks[j], s.Since, loc)
+		}
 
-			to := from.AddDate(0, 0, 1)
-			if from.Before(r.Since) {
-				from = r.Since
-			}
-
-			t.Days = append(t.Days, Day{Date: d, Class: taskClass(*t, from, to)})
+		for j := range p.Reviewed {
+			p.Reviewed[j].Days = Days(actionTimes(p.Reviewed[j], s.Since), loc)
 		}
 	}
 
-	for i := range r.Reviewed {
-		r.Reviewed[i].Days = Days(actionTimes(r.Reviewed[i], r.Since), loc)
+	s.Days = Days(all, loc)
+}
+
+func setTaskDays(t *Task, since time.Time, loc *time.Location) {
+	t.Days = []Day{}
+
+	for _, d := range Days(taskTimes(*t, since), loc) {
+		from, err := time.ParseInLocation(time.DateOnly, d, loc)
+		if err != nil {
+			continue
+		}
+
+		to := from.AddDate(0, 0, 1)
+		if from.Before(since) {
+			from = since
+		}
+
+		t.Days = append(t.Days, Day{Date: d, Class: taskClass(*t, from, to)})
 	}
 }
 

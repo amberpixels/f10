@@ -161,8 +161,7 @@ func TestSetDays(t *testing.T) {
 	monday := time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)
 	tuesday := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
 
-	r := Report{
-		Since: since,
+	r := Standup{Since: since, Projects: []Project{{
 		Tasks: []Task{
 			// worked on Friday, only merged main in on Monday
 			{ID: "FT-1", PRs: []PR{{
@@ -183,7 +182,7 @@ func TestSetDays(t *testing.T) {
 		Reviewed: []ReviewedPR{{Actions: []Action{
 			{Kind: ActionReviewed, At: friday}, {Kind: ActionReviewed, At: since.Add(-time.Hour)},
 		}}},
-	}
+	}}}
 
 	SetDays(&r, kyiv)
 
@@ -193,24 +192,28 @@ func TestSetDays(t *testing.T) {
 		"FT-3": {{"2026-10-13", ClassUpkeep}},
 	}
 
-	for _, task := range r.Tasks {
+	for _, task := range r.Projects[0].Tasks {
 		if !slices.Equal(task.Days, want[task.ID]) {
 			t.Errorf("%s days = %v, want %v", task.ID, task.Days, want[task.ID])
 		}
 	}
 
-	if want := []string{"2026-10-09"}; !slices.Equal(r.Reviewed[0].Days, want) {
-		t.Errorf("reviewed days = %v, want %v: the review before the period is not in it", r.Reviewed[0].Days, want)
+	if want := []string{"2026-10-09"}; !slices.Equal(r.Projects[0].Reviewed[0].Days, want) {
+		t.Errorf(
+			"reviewed days = %v, want %v: the review before the period is not in it",
+			r.Projects[0].Reviewed[0].Days,
+			want,
+		)
 	}
 
 	if want := []string{"2026-10-09", "2026-10-12", "2026-10-13"}; !slices.Equal(r.Days, want) {
 		t.Errorf("report days = %v, want %v", r.Days, want)
 	}
 
-	empty := Report{Since: since, Tasks: []Task{{ID: "FT-9"}}}
+	empty := Standup{Since: since, Projects: []Project{{Tasks: []Task{{ID: "FT-9"}}}}}
 	SetDays(&empty, kyiv)
 
-	if empty.Tasks[0].Days == nil {
+	if empty.Projects[0].Tasks[0].Days == nil {
 		t.Error("a task with no activity has nil days, which marshals as null, want []")
 	}
 }

@@ -1,7 +1,7 @@
 # Step · standup - a status report from a person's activity
 
 Role: a colleague **writing a status report for a reader who was not there**.
-Input: a period (the default, `--since <date>` or `--week`) and whether to show `other`.
+Input: a period (the default, `--since <date>` or `--week`), the scope (this checkout, or `-C`, `--group`, `--all`) and whether to show `other`.
 Output: the report, printed raw, and the period marked as reported.
 Context: the project's `standup.md` overlay owns wording, sections and audience: a manager wants outcomes, a team wants PR links.
 The prose under `~/.f10/standup.md`'s frontmatter is the person's own and wins over the overlay where they disagree, since a standup belongs to the person.
@@ -14,16 +14,18 @@ Never re-read git or the host to second-guess them, and never fall back to doing
 1. **Collect**, in one call: the read time, the person's settings, then the report.
 
    ```
-   date -u +%Y-%m-%dT%H:%M:%SZ; cat ~/.f10/standup.md 2>/dev/null; f10 standup --json [--since <date> | --week]
+   date -u +%Y-%m-%dT%H:%M:%SZ; cat ~/.f10/standup.md 2>/dev/null; f10 [-C <checkout>]... standup --json [--since <date> | --week] [--group <name>]... [--all]
    ```
 
    No `~/.f10/standup.md` is normal: the overlay alone applies.
+   The activity is under `projects`, one per tracker; a project's `repos` are the repositories it was read from.
 
-2. **Resolve the tracker**, in one call: every task's url with `f10 task open --print <id>`, and for a task whose `title` is empty, its tracker title from the first line of `f10 task read <id>`.
+2. **Resolve the tracker**, in one call: every task's url with `f10 -C <its project's first repos[].checkout> task open --print <id>`, and for a task whose `title` is empty, its tracker title from the first line of `f10 -C <that checkout> task read <id>`.
    A task whose url does not resolve renders unlinked and is named once under the report; it does not fail the run.
    PR urls are the JSON's `url`, never rebuilt.
 3. **Render**, under a header naming the period from `since` and `period`:
    - **A section per entry in `days`**, oldest first, headed by its weekday and date.
+     With more than one project, the section's lines go under each project's `name`, in the JSON's order; a project with several `repos` names each PR's `repo` beside its number.
      In each, for the tasks whose `days` carry that date:
      - a task whose class that day is `work`: one line, its id linked to the tracker, its title, then its PRs linked in the JSON's order (chain order).
        Its `state` goes on its last work day's line only: it is where the task ended the period, not where it stood each day;

@@ -32,7 +32,7 @@ f10 review pick [n] [--json]                          # the latest unhandled rem
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
-f10 standup [--since <time> | --week] [--json]   # your commits and PRs in this checkout since your last standup, grouped by task
+f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 
 f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
@@ -249,9 +249,23 @@ Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's n
 
 ## Standup
 
-`f10 standup` reads what you did in this checkout over a period: your commits from git, your PRs or MRs, and other people's you reviewed or merged.
-It groups them by task and gives each task where it ended the period.
+`f10 standup` reads what you did over a period: your commits from git, your PRs or MRs, and other people's you reviewed or merged.
+It groups them by project, then task, and gives each task where it ended the period.
 It changes nothing and does not fetch: local and remote-tracking branches are read as they are, while PR states come fresh from the host.
+
+**The scope** is this checkout, or the union of:
+
+- `-C <path | name>`, repeatable; a path always works, a name once `F10_ROOTS` is set.
+- `--group <name>`, repeatable: a group from `~/.f10/standup.md`.
+- `--all`: every checkout under `F10_ROOTS`; with it unset, an error.
+
+Each checkout is read with its own `project.md`: tracker, id format, host.
+Checkouts of one repository (a main checkout and its worktrees) share their history, so the repository is read once, from the first of them given.
+A checkout that fails (a broken `project.md`, a host CLI that errors) fails the run, named.
+
+**Projects.** A host's issues (GitHub Issues, GitLab work items) belong to their repository, so each such repository is its own project, named after it: `GH-12` in two repositories is two issues.
+Any other tracker (a driver, or a declared kind other than the host's issues) is shared: repositories with the same tracker kind and id prefix form one project, named by the prefix, and the same task id in several of them is one task (`ACME-1: svc-a#12, svc-b#40`).
+Projects are listed in the order their first repository was given.
 
 **The period** runs since the last standup you reported, in any checkout, so two scopes run the same morning agree.
 The report lists the days that had activity (`days`), so Friday to Monday, a working Saturday or a holiday Monday need no calendar.
@@ -273,7 +287,19 @@ Until something marks a standup, every run starts at the last working day.
 
 - `standup.md`: your settings, YAML frontmatter then free prose.
   `workdays` lists the working weekdays as `mon` to `sun`, default `[mon, tue, wed, thu, fri]`; only a run with no standup stored reads it.
+  `groups` maps a name to the checkouts `--group <name>` reads: absolute paths or globs, `~/` expanded.
+  A glob keeps the checkouts it matches and skips anything else; a path that is not a checkout is an error.
+  Only a run with `--group` reads `groups`.
   An unknown key is an error.
+
+  ```yaml
+  ---
+  workdays: [mon, tue, wed, thu, fri]
+  groups:
+    work: [~/code/acme/*]
+    oss: [~/code/github.com/amberpixels/r3, ~/code/github.com/amberpixels/k1]
+  ---
+  ```
 - `standup.json`: the last reported standup, `{"at", "since"}`, written by `mark`.
   It is f10's state, not for editing; delete it to start over from the last working day.
 
@@ -301,6 +327,7 @@ A host CLI that fails (not logged in, no network) fails the command; it never fa
 **States**, least advanced first: `started` (open, no changes yet), `in progress` (a draft), `in review` (open and ready), `shipped` (merged), plus `closed` for a PR closed unmerged.
 A task takes the least advanced state among its open PRs and its PR-less commits on a branch other than the default (`in progress`).
 With nothing open it is `shipped` when a PR merged or a commit landed on the default branch, else `closed`.
+A task merged across repositories combines their states by the same rule, each repository read against its own default branch.
 
 **Work and upkeep.**
 Every commit and force-push in the period is `work` or `upkeep`, decided from git and the host, never from a commit message.
@@ -320,19 +347,24 @@ A task is `upkeep` when its period holds at least one upkeep item and no work it
 The text report folds upkeep tasks into one `kept up to date` line.
 Your own PR is also reported when its only activity in the period is a force-push of yours: a rebase keeps author dates, so it leaves no commit in the period.
 
-**JSON**, schema 1.
+**JSON**, schema 2.
 The same history gives the same bytes in the same zone: no run timestamp, every time in UTC (`days` are local dates), every list in a fixed order.
 A breaking change bumps `schema`.
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "since": "2026-10-14T00:00:00Z",
   "period": "last_standup",
   "days": ["2026-10-14", "2026-10-15"],
-  "checkout": "/path/to/checkout",
-  "host": "gh",
-  "user": {"email": "you@example.com", "login": "you"},
+  "projects": [
+  {
+  "name": "svc-a",
+  "tracker": {"kind": "GitHub Issues", "prefix": "GH"},
+  "repos": [
+    {"name": "svc-a", "checkout": "/path/to/checkout", "host": "gh",
+     "user": {"email": "you@example.com", "login": "you"}}
+  ],
   "tasks": [
     {
       "id": "GH-12",
@@ -343,11 +375,11 @@ A breaking change bumps `schema`.
       "days": [{"date": "2026-10-14", "class": "work"}, {"date": "2026-10-15", "class": "upkeep"}],
       "prs": [
         {
-          "number": 40, "title": "...", "url": "...", "state": "in review", "draft": false,
+          "repo": "svc-a", "number": 40, "title": "...", "url": "...", "state": "in review", "draft": false,
           "head": "GH-12/x", "base": "GH-11/y", "base_pr": 38,
           "created_at": "...", "merged_at": "...",
           "commits": [{"sha": "...", "subject": "...", "at": "...", "branch": "GH-12/x", "parents": ["..."],
-                       "class": "upkeep", "upkeep": "base-merge"}],
+                       "class": "upkeep", "upkeep": "base-merge", "repo": "svc-a"}],
           "force_pushes": [{"at": "...", "before": "...", "after": "...", "class": "upkeep", "upkeep": "rebase"}]
         }
       ],
@@ -356,9 +388,11 @@ A breaking change bumps `schema`.
   ],
   "other": {"prs": [], "commits": []},
   "reviewed": [
-    {"number": 41, "title": "...", "url": "...", "state": "shipped", "author": "them",
+    {"repo": "svc-a", "number": 41, "title": "...", "url": "...", "state": "shipped", "author": "them",
      "actions": [{"kind": "reviewed", "at": "..."}, {"kind": "merged", "at": "..."}],
      "days": ["2026-10-15"]}
+  ]
+  }
   ]
 }
 ```
@@ -366,14 +400,22 @@ A breaking change bumps `schema`.
 | field | meaning |
 |---|---|
 | `period` | how `since` was chosen: `last_standup`, `last_working_day`, `since` (the flag) or `week` |
-| `days` | the local dates (`YYYY-MM-DD`) with any of your activity in the period, ascending |
-| `host` | `gh`, `glab`, or `null` with no host CLI (then `user.login` is absent and `reviewed` is empty) |
-| `tasks` | by id prefix, then number |
+| `days` | the local dates (`YYYY-MM-DD`) with any of your activity in the period, across every repository, ascending |
+| `projects` | one per tracker, in the order their first repository was given |
+| `projects[].name` | the repository's name, or a shared tracker's id prefix |
+| `projects[].tracker` | its `kind` and id `prefix` as `project.md` gives them |
+| `repos` | the repositories read for the project, in the order given |
+| `repos[].host` | `gh`, `glab`, or `null` with no host CLI (then `user.login` is absent and that repository adds nothing to `reviewed`) |
+| `repos[].user` | your git email and host login there; either can differ per repository |
+| `repo` | on a PR, a commit or a reviewed PR: the repository it is in; a PR number names a PR only within it |
+| `tasks` | by id prefix, then number; a task id seen in several repositories of a project is one task |
+| `tasks[].state` | combined across repositories, each read against its own default branch |
 | `tasks[].after` | the task its root PR is stacked on; absent when none |
-| `tasks[].days` | the local dates with the task's activity, ascending, each with the class of that day's activity alone: a task worked on one day and only caught up with its base the next is `work`, then `upkeep` |
+| `tasks[].days` | the local dates with the task's activity, ascending, each with the class of that day's activity alone: a task worked on one day and only caught up with its base the next is `work`, then `upkeep`; a task merged across repositories has the days of all of them |
 | `reviewed[].days` | the local dates of your actions on that PR in the period, ascending |
-| `tasks[].prs` | chain order: a root, then the PRs on it; roots and siblings by number |
+| `tasks[].prs` | per repository, in the order given; within one, chain order: a root, then the PRs on it; roots and siblings by number |
 | `tasks[].commits`, `other.commits` | commits on no PR of yours, by author date, then sha |
+| `other.prs`, `reviewed` | per repository, in the order given; within one, by number |
 | `prs[].base_pr` | the PR whose head this one's base is; absent at a chain root |
 | `prs[].merged_at` | absent unless merged |
 | `prs[].commits` | your commits on it in the period, by author date, then sha |
@@ -383,7 +425,7 @@ A breaking change bumps `schema`.
 | `class` | on a task, a commit or a force-push: `work` or `upkeep` |
 | `upkeep` | on an upkeep commit or force-push: `base-merge`, `rebase`, `files` or `ci-fix`; absent on work |
 | `prs[].force_pushes` | your force-pushes to it in the period, by time, then after-sha |
-| `reviewed` | by number; `actions` by time, then kind |
+| `reviewed[].actions` | by time, then kind |
 
 ## References
 
@@ -392,6 +434,7 @@ With no id, a reference is looked up in one cascade: the id you passed, else the
 The branch lookup needs the project's task id format, declared in `project.md` or derived from the project's name.
 
 `-C` answers for another checkout.
+It names one checkout; only `f10 standup` takes it more than once.
 A path always works.
 A bare name works once `F10_ROOTS` says where to look:
 
