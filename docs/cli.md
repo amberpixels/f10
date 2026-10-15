@@ -32,6 +32,7 @@ f10 review pick [n] [--json]                          # the latest unhandled rem
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
+f10 standup --since <time> [--json]   # your commits and PRs in this checkout since a time, grouped by task
 
 f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -239,6 +240,89 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
   A reaction counts as handled only when it is newer than the review's last edit, so a sticky comment re-edited by a re-review reads as unhandled again.
 
 Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's notes, discussions and pipeline jobs.
+
+## Standup
+
+`f10 standup --since <time>` reads what you did in this checkout since `<time>`: your commits from git, your PRs or MRs, and other people's you reviewed or merged.
+It groups them by task and gives each task where it ended the period.
+`--since` takes an RFC 3339 time or a `YYYY-MM-DD` date (local midnight).
+It changes nothing and does not fetch: local and remote-tracking branches are read as they are, while PR states come fresh from the host.
+
+**You** are your git `user.email` and your host login (`gh api user` / `glab api user`), never a name.
+A commit is yours when its mailmapped author email equals yours, in any case.
+It is in the period when its author date is: a rebase or a `git merge main` replay moves the committer date, not the author date.
+A checkout with no host CLI reports commits only.
+A host CLI that fails (not logged in, no network) fails the command; it never falls back to commits only.
+
+**Grouping.**
+
+- A commit belongs to the PR whose commit list or merge/squash commit names it.
+  A commit on the default branch belongs to the merged PR listing a commit with its author date and subject, which is what a rebase merge keeps.
+  Otherwise it belongs to an open PR whose head is the branch it was reached from.
+- A PR's task id comes from its head branch, then its title; a commit's from its branch, then its subject, read with the project's id format.
+  No id puts the PR or commit in `other`.
+- A PR whose base is another of your PRs' head chains under it, listed root first.
+  The base `f10 start --after` recorded wins over the host's, which the host retargets to the default branch once the base merges.
+  A chain crossing tasks gives the dependent task `after`.
+- Your own PR is reported when you opened or merged it in the period, or it carries a commit of yours from it.
+- Other people's PRs go to `reviewed` when you reviewed them or merged them in the period.
+  On GitHub a review is any review you submitted.
+  On GitLab it is an approval or a comment on an MR that lists you as a reviewer: an MR's notes are read only for those, since reading every MR updated in the period costs a call each.
+
+**States**, least advanced first: `started` (open, no changes yet), `in progress` (a draft), `in review` (open and ready), `shipped` (merged), plus `closed` for a PR closed unmerged.
+A task takes the least advanced state among its open PRs and its PR-less commits on a branch other than the default (`in progress`).
+With nothing open it is `shipped` when a PR merged or a commit landed on the default branch, else `closed`.
+
+**JSON**, schema 1.
+The same history gives the same bytes: no run timestamp, every time in UTC, every list in a fixed order.
+A breaking change bumps `schema`.
+
+```json
+{
+  "schema": 1,
+  "since": "2026-10-14T00:00:00Z",
+  "checkout": "/path/to/checkout",
+  "host": "gh",
+  "user": {"email": "you@example.com", "login": "you"},
+  "tasks": [
+    {
+      "id": "GH-12",
+      "title": "the root PR's title, empty with no PR",
+      "state": "in review",
+      "after": "GH-11",
+      "prs": [
+        {
+          "number": 40, "title": "...", "url": "...", "state": "in review", "draft": false,
+          "head": "GH-12/x", "base": "GH-11/y", "base_pr": 38,
+          "created_at": "...", "merged_at": "...",
+          "commits": [{"sha": "...", "subject": "...", "at": "...", "branch": "GH-12/x", "parents": ["..."]}]
+        }
+      ],
+      "commits": []
+    }
+  ],
+  "other": {"prs": [], "commits": []},
+  "reviewed": [
+    {"number": 41, "title": "...", "url": "...", "state": "shipped", "author": "them",
+     "actions": [{"kind": "reviewed", "at": "..."}, {"kind": "merged", "at": "..."}]}
+  ]
+}
+```
+
+| field | meaning |
+|---|---|
+| `host` | `gh`, `glab`, or `null` with no host CLI (then `user.login` is absent and `reviewed` is empty) |
+| `tasks` | by id prefix, then number |
+| `tasks[].after` | the task its root PR is stacked on; absent when none |
+| `tasks[].prs` | chain order: a root, then the PRs on it; roots and siblings by number |
+| `tasks[].commits`, `other.commits` | commits on no PR of yours, by author date, then sha |
+| `prs[].base_pr` | the PR whose head this one's base is; absent at a chain root |
+| `prs[].merged_at` | absent unless merged |
+| `prs[].commits` | your commits on it in the period, by author date, then sha |
+| `commits[].at` | the author date |
+| `commits[].branch` | the branch it was reached from, remote prefix dropped; the default branch (origin/HEAD, else the host's) for anything it reaches |
+| `commits[].parents` | parent shas; two or more is a merge commit |
+| `reviewed` | by number; `actions` by time, then kind |
 
 ## References
 

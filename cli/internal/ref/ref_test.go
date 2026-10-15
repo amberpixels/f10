@@ -128,12 +128,15 @@ func TestMatchBranch(t *testing.T) {
 		{name: "prefix inside a word does not count", prefix: "ABC", branch: "newsABC-12", want: ""},
 		{name: "no id in the branch", prefix: "GH", branch: "main", want: ""},
 		{name: "no prefix, no match", branch: "ABC-2049/x", want: ""},
+		{name: "pr title", prefix: "FT", branch: "FT-49: add standup", want: "FT-49"},
+		{name: "bracketed title", prefix: "FT", branch: "[ft-49] add standup", want: "FT-49"},
+		{name: "longer number is not a shorter id", prefix: "FT", branch: "Fix FT-490", want: "FT-490"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := matchBranch(c.prefix, c.branch); got != c.want {
-				t.Errorf("matchBranch(%q, %q) = %q, want %q", c.prefix, c.branch, got, c.want)
+			if got := Match(c.prefix, c.branch); got != c.want {
+				t.Errorf("Match(%q, %q) = %q, want %q", c.prefix, c.branch, got, c.want)
 			}
 		})
 	}

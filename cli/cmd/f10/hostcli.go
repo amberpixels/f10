@@ -69,6 +69,25 @@ func (h host) decode(ctx context.Context, v any, args ...string) error {
 	return nil
 }
 
+// login is who the CLI is signed in as: gh names it login, glab username.
+func (h host) login(ctx context.Context) (string, error) {
+	var user struct {
+		Login    string `json:"login"`
+		Username string `json:"username"`
+	}
+
+	if err := h.decode(ctx, &user, "api", "user"); err != nil {
+		return "", err
+	}
+
+	login := cmp.Or(user.Login, user.Username)
+	if login == "" {
+		return "", fmt.Errorf("%s returned no login for the signed-in user", h.name)
+	}
+
+	return login, nil
+}
+
 // decodePages runs a `api --paginate` call and reads every page into one
 // list. gh merges the pages of an array into one array; glab may print one
 // document per page, so every document in the output is read in turn.

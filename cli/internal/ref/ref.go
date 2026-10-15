@@ -169,19 +169,20 @@ func (r Lookup) fromBranch(ctx context.Context) string {
 		return ""
 	}
 
-	return matchBranch(r.Prefix, gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	return Match(r.Prefix, gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
 }
 
-// matchBranch is fromBranch minus git, which is what makes it testable
-// without standing up a checkout per case.
-func matchBranch(prefix, branch string) string {
-	if prefix == "" || branch == "" {
+// Match is the task id in text: a branch name, a PR title, a commit
+// subject. It is fromBranch minus git, so standup reads titles and subjects
+// by the same rule and a test needs no checkout.
+func Match(prefix, text string) string {
+	if prefix == "" || text == "" {
 		return ""
 	}
 
 	re := regexp.MustCompile(`(?i)(?:^|[^a-z0-9])` + regexp.QuoteMeta(prefix) + `-?([0-9]+)`)
 
-	if m := re.FindStringSubmatch(branch); m != nil {
+	if m := re.FindStringSubmatch(text); m != nil {
 		return prefix + "-" + m[1]
 	}
 

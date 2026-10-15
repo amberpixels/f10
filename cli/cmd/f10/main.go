@@ -1,7 +1,8 @@
 // Command f10 is the lookaround binary and the one that starts a task. It
 // prints the effective configuration of the repo it runs in with a
 // provenance per value, reads the tasks, plans, demo reports and pull
-// requests that configuration points at, and says where a run is right now.
+// requests that configuration points at, says where a run is right now, and
+// reports what one person did in a checkout since a time.
 //
 // The lookaround verbs change nothing - no file they did not read, no
 // tracker item, no cache - and act on the reader's behalf only by handing a
@@ -44,7 +45,7 @@ func main() {
 func newApp() *cli.Command {
 	return &cli.Command{
 		Name:    "f10",
-		Usage:   "look around a project's f10 configuration, tasks and plans, start a task, reach its agent, drive a list and finish it",
+		Usage:   "look around a project's f10 configuration, tasks, plans and your activity, start a task, reach its agent, drive a list and finish it",
 		Version: version(debug.ReadBuildInfo()),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -62,6 +63,7 @@ func newApp() *cli.Command {
 			prCommand(),
 			reviewCommand(),
 			statusCommand(),
+			standupCommand(),
 			startCommand(),
 			forwardCommand(),
 			driveCommand(),
