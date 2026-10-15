@@ -21,7 +21,7 @@ No conflict, or nothing to bring in, is a **correct run**.
    git config --get branch."$(git branch --show-current)".f10-after-branch
    ```
 
-   - `f10-landed` (set by `f10 finish` when the base task merged): the base is the default branch.
+   - `f10-landed` (set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch): `git fetch origin`; the base is `origin/<default>`, the default branch found as under **Nothing** below.
      `git config --unset` it only after verify is green (point 5).
    - `f10-after-branch`: `git fetch origin`, then `refs/heads/<branch>`, else `origin/<branch>`.
      If it exists nowhere, the base task was finished: `git config --unset` both `f10-after` and `f10-after-branch` and use the default branch.
@@ -56,7 +56,7 @@ No conflict, or nothing to bring in, is a **correct run**.
    Then: commits brought in, each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
    If the strategy was the default, name the `catchup: merge | rebase` frontmatter key as the way to declare it.
 
-**Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished): on entry, note the ship status (`f10-state.sh show`).
+**Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished, or when the branch's pull request conflicts at finish): on entry, note the ship status (`f10-state.sh show`).
 The ambiguity question is the run's one ask: `f10-state.sh ask "<the questions>"; f10-state.sh set ship blocked catchup`.
 A failure: `f10-state.sh set ship failed catchup` with a `note`.
 A clean end after either restores the noted status; a clean end that never stopped writes nothing.

@@ -192,9 +192,13 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    The chain runs from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, and review gets `ci` where `project.md` declares a remote review.
-5. **Catchup after finish.**
+5. **Catchup after finish, and before it.**
    `finish` marks each branch that depended on the finished task `f10-landed`.
    Before a marked task's next skill, the driver sends it `/f10:catchup --driven`.
+   Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will.
+   A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
+   Once it ends clean, the driver pushes the caught-up branch (`--force-with-lease` against the sha it read, when the catchup rebased) and then merges.
+   A branch that still conflicts after one catchup halts the task.
    The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A conflict the catchup cannot settle is an ask; anything else halts the task.
 6. **Waiting.**

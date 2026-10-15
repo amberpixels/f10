@@ -157,6 +157,31 @@ func TestIsAncestorReadsTheExitCode(t *testing.T) {
 	}
 }
 
+func TestMergesCleanlyReadsTheExitCode(t *testing.T) {
+	script(t, map[string]string{"merge-tree --write-tree --quiet origin/main origin/GH-1": ""})
+
+	if !MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-1") {
+		t.Error("a scripted clean merge read as a conflict")
+	}
+
+	if MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-2") {
+		t.Error("a failing merge-tree read as clean")
+	}
+}
+
+func TestPushForcesOnlyWithALease(t *testing.T) {
+	calls := script(t, map[string]string{
+		"push origin HEAD:refs/heads/GH-1":                                        "",
+		"push --force-with-lease=refs/heads/GH-1:abc origin HEAD:refs/heads/GH-1": "",
+	})
+
+	for _, lease := range []string{"", "abc"} {
+		if err := Push(t.Context(), ".", "GH-1", lease); err != nil {
+			t.Fatalf("lease %q: %v (calls %q)", lease, err, *calls)
+		}
+	}
+}
+
 func TestRemoteBranchExists(t *testing.T) {
 	script(
 		t,

@@ -384,6 +384,9 @@ type driveRun struct {
 	// freshAt is when this drive started the task's agent: run state last
 	// updated before it was written by an agent that is gone, and is not read
 	freshAt time.Time
+	// mergeCatchup is set once this drive sent a catchup because the pull
+	// request conflicted at finish: a second conflict halts rather than loops
+	mergeCatchup bool
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -912,9 +915,11 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 	return pos, nil
 }
 
-// next sends the task its next element: none left ends it, finish runs in
-// this process, and a branch its finished base marked landed is caught up
-// with the default branch before any skill runs on it.
+// next sends the task its next element: none left ends it, and a branch
+// marked landed is caught up with the default branch before any skill,
+// finish included, runs on it. finish runs in this process once the pull
+// request merges cleanly; one that conflicts is marked landed and caught up
+// first.
 func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
 	if r.pos >= len(in.chain) {
 		in.end(w, r, driveResult{row: "done: " + strings.Join(in.chain, " ")})
@@ -924,16 +929,88 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	skill := in.chain[r.pos]
 
+	if skill == "finish" && !in.landed(ctx, r) {
+		if res := in.readyToMerge(ctx, w, r); res != nil {
+			in.end(w, r, *res)
+
+			return nil
+		}
+	}
+
 	switch {
+	case in.landed(ctx, r):
+		skill = "catchup"
 	case skill == "finish":
 		in.end(w, r, in.runFinish(ctx, w, r.task))
 
 		return nil
-	case in.landed(ctx, r):
-		skill = "catchup"
 	}
 
 	return in.send(ctx, w, r, skill)
+}
+
+// readyToMerge brings the pushed branch to where the host can merge it, or
+// says why it cannot. The host merges origin's copy of the branch, so that
+// is what is tried against origin's default branch: clean is ready; a local
+// branch already caught up is pushed; anything else is marked landed, which
+// sends it a catchup, once per drive. A branch origin does not have is left
+// to finish, whose refusal names it.
+func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
+	id, branch := r.task.ref.ID, r.o.branch
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		res := halted(id, "finish", err.Error())
+
+		return &res
+	}
+
+	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+		res := halted(id, "finish", err.Error())
+
+		return &res
+	}
+
+	base, pushed := "origin/"+def, gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "origin/"+branch)
+	if pushed == "" || gitx.MergesCleanly(ctx, r.o.path, base, pushed) {
+		return nil
+	}
+
+	if gitx.IsAncestor(ctx, r.o.path, base, "HEAD") {
+		lease, how := "", "pushed"
+		if !gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD") {
+			lease, how = pushed, "pushed with --force-with-lease (the catchup rewrote it)"
+		}
+
+		if err := gitx.Push(ctx, r.o.path, branch, lease); err != nil {
+			res := halted(id, "finish", fmt.Sprintf("pushing %s, caught up with %s: %v", branch, base, err))
+
+			return &res
+		}
+
+		fmt.Fprintf(w, "%s finish: %s caught up with %s, %s\n", id, branch, base, how)
+
+		return nil
+	}
+
+	if r.mergeCatchup {
+		res := halted(id, "finish", fmt.Sprintf("%s still conflicts with %s after a catchup: %s moved again, "+
+			"rerun the drive to catch up once more", branch, base, def))
+
+		return &res
+	}
+
+	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+cfgLanded, def); err != nil {
+		res := halted(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
+
+		return &res
+	}
+
+	r.mergeCatchup = true
+
+	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
+
+	return nil
 }
 
 // runFinish runs finish in this process. Its refusals halt the task with

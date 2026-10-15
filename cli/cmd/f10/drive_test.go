@@ -133,6 +133,18 @@ func (fx *driveFixture) expects(id, skill string) {
 	fx.f.script("git config branch."+id+"."+cfgDrive+" "+skill, "")
 }
 
+// mergeable scripts the check before each task's finish: origin's copy of
+// its branch merges cleanly into origin/main.
+func (fx *driveFixture) mergeable(ids ...string) {
+	fx.f.script(headRef, "origin/main")
+	fx.f.script("git fetch origin", "")
+
+	for _, id := range ids {
+		fx.f.script("git rev-parse -q --verify origin/"+id, "pushed-"+id)
+		fx.f.script("git merge-tree --write-tree --quiet origin/main pushed-"+id, "")
+	}
+}
+
 // writeRun records a run against GH-1's worktree, updated now.
 func (fx *driveFixture) writeRun(t *testing.T, ship, leaf, note, ask string) {
 	t.Helper()
@@ -448,6 +460,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	fx.f.script("herdr agent get pane:2", agentFound)
 	fx.expects("GH-2", "ship")
 	fx.f.script(wsList, unopened, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
+	fx.mergeable("GH-2")
 
 	var finished []string
 
@@ -861,6 +874,7 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	}
 
 	fx.f.script(worktrees, porcelain(pairs...))
+	fx.mergeable("GH-11", "GH-12", "GH-13", "GH-14", "GH-15")
 
 	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref) error {
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
@@ -966,6 +980,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
+			fx.mergeable("GH-1", "GH-2")
 
 			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref) error {
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
@@ -1023,6 +1038,83 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 
 			if fx.f.called("git config branch.GH-2." + cfgDrive + " catchup") {
 				t.Error("the catchup was recorded as a chain position")
+			}
+		})
+	}
+}
+
+// A pull request that conflicts with the default branch at finish, as a
+// sibling that merged first leaves it, is caught up before the merge: the
+// branch is marked landed, the agent gets /f10:catchup, and the caught-up
+// branch is pushed (with a lease, since the catchup rebased it) before
+// finish merges it. A branch still conflicting after that catchup halts.
+func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
+	for _, settled := range []bool{true, false} {
+		t.Run(fmt.Sprintf("settled=%v", settled), func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "finish")
+			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
+			fx.opens("GH-1", "ws:GH-1", "pane:1")
+			fx.f.script(headRef, "origin/main")
+			fx.f.script("git fetch origin", "")
+			fx.f.script("git rev-parse -q --verify origin/GH-1", "old")
+			fx.f.fail("git merge-tree --write-tree --quiet origin/main old", shell.Result{Code: 1})
+			fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
+			// before the catchup, the switch that sends it, after it, before finish's push
+			fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main", "", "", "")
+			fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
+			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
+			fx.f.script("git status --porcelain", "")
+			fx.f.fail("git merge-base --is-ancestor old HEAD", shell.Result{Code: 1})
+			fx.f.script("git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1", "")
+
+			after := shell.Result{}
+			if !settled {
+				after = shell.Result{Code: 1}
+			}
+
+			fx.f.answers["git merge-base --is-ancestor origin/main HEAD"] = []shell.Result{{Code: 1}, after}
+
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref) error {
+				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
+
+				return nil
+			}
+
+			fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if !settled {
+				if exitCode(err) != exitHalted ||
+					!strings.Contains(out, "still conflicts with origin/main after a catchup") {
+					t.Fatalf("err = %v\n%s", err, out)
+				}
+
+				if fx.f.called("finish GH-1") || fx.f.called("git push") {
+					t.Errorf("a branch still conflicting was pushed or merged: %q", fx.f.calls)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			fx.assertOrder(t, []string{
+				"git config branch.GH-1." + cfgLanded + " main",
+				"herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven",
+				"git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1",
+				"finish GH-1",
+			}, "git config branch.GH-1."+cfgLanded+" ", "herdr agent prompt", "git push", "finish")
+
+			for _, want := range []string{"conflicts with origin/main, catching up first", "--force-with-lease", "GH-1:    finished"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("output lacks %q:\n%s", want, out)
+				}
 			}
 		})
 	}

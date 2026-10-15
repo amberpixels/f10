@@ -4,7 +4,8 @@
 // writes are `f10 start`'s - a branch, a worktree, and the config entries
 // that record what a branch depends on - and `f10 finish`'s, which undoes
 // them once the branch has merged: the pull, the worktree removal, the
-// branch deletion.
+// branch deletion. `f10 drive` adds one: the push of a branch it caught up
+// before merging.
 //
 // Everything goes through Exec, a variable so a test can answer git
 // without a checkout. No go-git.
@@ -167,6 +168,36 @@ func IsAncestor(ctx context.Context, dir, commit, ref string) bool {
 	_, err := Exec(ctx, dir, "merge-base", "--is-ancestor", commit, ref)
 
 	return err == nil
+}
+
+// MergesCleanly reports whether head merges into base without a conflict,
+// tried in memory the way a host tries a pull request: nothing is checked
+// out or written. git exits 1 for a conflict and higher for a bad ref, and
+// any failure reads as "no", so a caller checks that both refs exist first.
+func MergesCleanly(ctx context.Context, dir, base, head string) bool {
+	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--quiet", base, head)
+
+	return err == nil
+}
+
+// Push sends HEAD to origin's branch. A lease (the sha origin's branch had
+// when the caller read it) forces the push only while origin still has that
+// sha, which a rebased branch needs; "" pushes a fast-forward and nothing
+// else.
+func Push(ctx context.Context, dir, branch, lease string) error {
+	args := []string{"push", "origin", "HEAD:refs/heads/" + branch}
+	if lease != "" {
+		args = []string{
+			"push",
+			"--force-with-lease=refs/heads/" + branch + ":" + lease,
+			"origin",
+			"HEAD:refs/heads/" + branch,
+		}
+	}
+
+	_, err := Exec(ctx, dir, args...)
+
+	return err
 }
 
 // PullFF fast-forwards the checked-out branch from its upstream, and fails
