@@ -49,6 +49,10 @@ func standupCommand() *cli.Command {
 						Usage:    "the `TIME` the reported standup started at, as its report gave it",
 						Required: true,
 					},
+					&cli.StringFlag{
+						Name:  "at",
+						Usage: "the `TIME` the reported standup was read at, where the next one starts (default: now)",
+					},
 				},
 				Action: runStandupMark,
 			},
@@ -71,11 +75,6 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	last, err := readLastStandup()
-	if err != nil {
-		return err
-	}
-
-	workdays, err := readWorkdays()
 	if err != nil {
 		return err
 	}
@@ -105,7 +104,14 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	// only the fallback reads the working days, so a broken standup.md
+	// fails no run that would not use it
 	if period == standup.PeriodLastWorkingDay {
+		workdays, err := readWorkdays()
+		if err != nil {
+			return err
+		}
+
 		in.Since = standup.LastWorkingDay(now, workdays, standup.ActivityTimes(standup.Group(in)))
 	}
 
@@ -125,7 +131,8 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 
 // runStandupMark records a reported standup. It takes the start the report
 // showed rather than working it out again, so the record and the report
-// agree across midnight and across scopes.
+// agree across midnight and across scopes. --at is when the report was
+// read: work done between reading and marking then falls in the next one.
 func runStandupMark(_ context.Context, cmd *cli.Command) error {
 	since, err := parseSince(cmd.String("since"))
 	if err != nil {
@@ -133,11 +140,26 @@ func runStandupMark(_ context.Context, cmd *cli.Command) error {
 	}
 
 	now := time.Now()
-	if since.After(now) {
-		return fmt.Errorf("--since %s is in the future", since.Format(time.RFC3339))
+	at := now
+
+	if cmd.IsSet("at") {
+		if at, err = parseSince(cmd.String("at")); err != nil {
+			return fmt.Errorf("--at: %w", err)
+		}
 	}
 
-	return writeLastStandup(standup.Last{At: now.UTC(), Since: since.UTC()})
+	switch {
+	case at.After(now):
+		return fmt.Errorf("--at %s is in the future", at.Format(time.RFC3339))
+	case since.After(at):
+		return fmt.Errorf(
+			"--since %s is after the standup was read (%s)",
+			since.Format(time.RFC3339),
+			at.Format(time.RFC3339),
+		)
+	}
+
+	return writeLastStandup(standup.Last{At: at.UTC(), Since: since.UTC()})
 }
 
 // parseSince reads --since. The period's other forms (since the last

@@ -141,6 +141,48 @@ func TestStandupMark(t *testing.T) {
 	if _, err := runStandupApp(t, "standup", "mark", "--since", future); err == nil {
 		t.Error("mark took a start in the future")
 	}
+
+	// the next standup starts when this one was read, not when it was marked
+	if _, err := runStandupApp(
+		t, "standup", "mark", "--since", "2026-10-09T07:00:00Z", "--at", "2026-10-12T06:30:00Z",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if last, err := readLastStandup(); err != nil || !last.At.Equal(time.Date(2026, 10, 12, 6, 30, 0, 0, time.UTC)) {
+		t.Errorf("stored %+v, %v, want at = --at", last, err)
+	}
+
+	if _, err := runStandupApp(
+		t, "standup", "mark", "--since", "2026-10-12T07:00:00Z", "--at", "2026-10-12T06:30:00Z",
+	); err == nil {
+		t.Error("mark took a start after the read")
+	}
+}
+
+// Only the fallback reads standup.md: a broken one fails no other run.
+func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
+	home := isolateEnv(t)
+	writeUserFile(t, home, standupConfigFile, "---\nworkdays: [monday]\n---\n")
+
+	dir := canonical(t, t.TempDir())
+	git(t, dir, "init", "-q")
+	git(t, dir, "config", "user.email", "me@x.io")
+
+	if _, err := runStandupApp(t, "-C", dir, "standup", "--json", "--week"); err != nil {
+		t.Errorf("--week: %v, want standup.md unread", err)
+	}
+
+	if _, err := runStandupApp(
+		t,
+		"-C",
+		dir,
+		"standup",
+		"--json",
+	); err == nil ||
+		!strings.Contains(err.Error(), "monday") {
+		t.Errorf("fallback: err = %v, want the bad day named", err)
+	}
 }
 
 func TestStandupSinceAndWeekConflict(t *testing.T) {

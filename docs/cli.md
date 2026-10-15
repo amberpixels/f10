@@ -33,7 +33,7 @@ f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a
 f10 review ack [n]                                    # leave the declared handled marker on it
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [--json]   # your commits and PRs in this checkout since your last standup, grouped by task
-f10 standup mark --since <time>                    # record a standup as reported: the next one starts where it ended
+f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 
 f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -257,8 +257,11 @@ The report lists the days that had activity (`days`), so Friday to Monday, a wor
 - `--since` takes an RFC 3339 time or a `YYYY-MM-DD` date (local midnight) instead.
 - `--week` starts at local midnight of last week's Monday and runs to now: the last-week summary for a Monday.
 
-Only `f10 standup mark --since <time>` moves the stored standup, with `<time>` the `since` the reported standup showed.
-The `/f10:standup` skill calls it once it has reported; `f10 standup`, with or without `--json`, never does, so a script reading the data does not shift the next report's period.
+Only `f10 standup mark --since <time> [--at <time>]` moves the stored standup.
+`--since` is the `since` the reported standup showed; `--at` is when it was read (default now), and the next standup starts there, so work done between reading the report and marking it is not lost.
+Run it once you have reported; the `/f10:standup` skill, when it ships, calls it for you.
+Until something marks a standup, every run starts at the last working day.
+`f10 standup`, with or without `--json`, never marks, so a script reading the data does not shift the next report's period.
 
 **Your files**, in `~/.f10/`, per person rather than per repo:
 
