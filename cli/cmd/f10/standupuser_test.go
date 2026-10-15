@@ -223,7 +223,7 @@ func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var rep standup.Report
+	var rep standup.Standup
 	if err := json.Unmarshal([]byte(out), &rep); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}

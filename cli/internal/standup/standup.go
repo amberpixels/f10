@@ -1,11 +1,13 @@
 // Package standup groups one person's activity in a checkout by task: the
 // commits they authored and the PRs or MRs they opened, reviewed or merged,
-// collected by `f10 standup` from git and the host CLI. Group is a pure
-// function, so the same history gives the same report byte for byte, and
-// reports from several checkouts can later be merged by task id.
+// collected by `f10 standup` from git and the host CLI. Group and Merge are
+// pure functions, so the same history gives the same report byte for byte:
+// Group reads one repository, Merge joins repositories on one tracker by
+// task id.
 //
-// The JSON shape is a contract for the /f10:standup skill and outside
-// consumers, documented in docs/cli.md. A breaking change bumps Schema.
+// The JSON shape (Standup) is a contract for the /f10:standup skill and
+// outside consumers, documented in docs/cli.md. A breaking change bumps
+// Schema.
 package standup
 
 import (
@@ -19,7 +21,7 @@ import (
 )
 
 // Schema is the version of the report's JSON shape.
-const Schema = 1
+const Schema = 2
 
 // Where a PR or a task ended the period, least advanced first. Closed is a
 // PR closed unmerged; it never decides a task's state while anything else
@@ -54,6 +56,7 @@ type Commit struct {
 	Parents []string  `json:"parents"`
 	Class   string    `json:"class"`
 	Upkeep  string    `json:"upkeep,omitempty"`
+	Repo    string    `json:"repo"`
 
 	// What upkeep.go decides the class from, collected beside the commit.
 	Files     []File `json:"-"`
@@ -107,6 +110,9 @@ type User struct {
 type Input struct {
 	Prefix        string // task id prefix; empty matches no id
 	Since         time.Time
+	Repo          string  // the repository's name, stamped on every PR and commit
+	Project       string  // the project Merge lists it under: the repo, or a shared tracker's prefix
+	Tracker       Tracker // the tracker its task ids belong to
 	Checkout      string
 	Host          string // "gh", "glab", or "" with no host
 	DefaultBranch string // local name, "main"
@@ -119,6 +125,7 @@ type Input struct {
 
 // PR is one of the user's PRs in the report.
 type PR struct {
+	Repo      string     `json:"repo"`
 	Number    int        `json:"number"`
 	Title     string     `json:"title"`
 	URL       string     `json:"url"`
@@ -160,6 +167,7 @@ type Action struct {
 
 // ReviewedPR is someone else's PR the user reviewed or merged.
 type ReviewedPR struct {
+	Repo    string   `json:"repo"`
 	Number  int      `json:"number"`
 	Title   string   `json:"title"`
 	URL     string   `json:"url"`
@@ -169,18 +177,19 @@ type ReviewedPR struct {
 	Days    []string `json:"days"` // local dates of the actions; the command sets it
 }
 
-// Report is the standup for one checkout.
+// Report is the activity in one repository, before Merge joins it to the
+// others on its tracker.
 type Report struct {
-	Schema   int          `json:"schema"`
-	Since    time.Time    `json:"since"`
-	Period   string       `json:"period,omitempty"` // how since was chosen; the command sets it
-	Days     []string     `json:"days"`             // local dates with activity; the command sets it
-	Checkout string       `json:"checkout"`
-	Host     *string      `json:"host"`
-	User     User         `json:"user"`
-	Tasks    []Task       `json:"tasks"`
-	Other    Other        `json:"other"`
-	Reviewed []ReviewedPR `json:"reviewed"`
+	Since    time.Time
+	Repo     string
+	Project  string
+	Tracker  Tracker
+	Checkout string
+	Host     *string
+	User     User
+	Tasks    []Task
+	Other    Other
+	Reviewed []ReviewedPR
 }
 
 // Group sorts the collected activity into tasks.
@@ -188,9 +197,10 @@ func Group(in Input) Report {
 	since := in.Since.UTC()
 
 	rep := Report{
-		Schema:   Schema,
 		Since:    since,
-		Days:     []string{},
+		Repo:     in.Repo,
+		Project:  in.Project,
+		Tracker:  in.Tracker,
 		Checkout: in.Checkout,
 		User:     in.User,
 		Tasks:    []Task{},
@@ -207,6 +217,7 @@ func Group(in Input) Report {
 
 	for i := range commits {
 		commits[i].Class, commits[i].Upkeep = classifyCommit(commits[i], in.UpkeepPaths)
+		commits[i].Repo = in.Repo
 	}
 
 	// a commit belongs to the PR whose commit list or merge commit names it;
@@ -276,7 +287,7 @@ func Group(in Input) Report {
 		}
 
 		out := PR{
-			Number: p.Number, Title: p.Title, URL: p.URL, State: prState(p), Draft: p.Draft,
+			Repo: in.Repo, Number: p.Number, Title: p.Title, URL: p.URL, State: prState(p), Draft: p.Draft,
 			Head: p.Head, Base: p.Base, BasePR: basePR[p.Number], CreatedAt: p.CreatedAt.UTC(),
 			Commits: nonNil(attached[i]), ForcePushes: pushes,
 		}
@@ -340,6 +351,9 @@ func Group(in Input) Report {
 	slices.SortFunc(rep.Other.PRs, func(a, b PR) int { return a.Number - b.Number })
 
 	rep.Reviewed = reviewed(foreign, in.User.Login, since)
+	for i := range rep.Reviewed {
+		rep.Reviewed[i].Repo = in.Repo
+	}
 
 	return rep
 }

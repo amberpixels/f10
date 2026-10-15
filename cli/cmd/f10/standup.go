@@ -19,9 +19,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// The standup noun reads what one person did in this checkout over a
-// period: their commits from git, the PRs or MRs they authored, reviewed or
-// merged from the host, grouped by task id. It changes nothing, so it does
+// The standup noun reads what one person did over a period, in this
+// checkout or a set of them: their commits from git, the PRs or MRs they
+// authored, reviewed or merged from the host, grouped by project and task
+// id. It changes nothing, so it does
 // not fetch: remote-tracking refs are read as they are, and the host's PR
 // states are fresh regardless. The user is their git email and their host
 // login, never a name, which two people can share.
@@ -31,14 +32,20 @@ import (
 // does not move the next report's start.
 func standupCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "standup",
-		Usage: "what you did in this checkout since your last standup: commits and PRs, grouped by task",
+		Name: "standup",
+		Usage: "what you did since your last standup: commits and PRs, grouped by project and task " +
+			"(this checkout, or several with -C, --group, --all)",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "since",
 				Usage: "start the period here instead: an RFC 3339 time, or a `DATE` (YYYY-MM-DD, local midnight)",
 			},
 			&cli.BoolFlag{Name: "week", Usage: "start the period at last week's Monday"},
+			&cli.StringSliceFlag{
+				Name:  "group",
+				Usage: "read the checkouts of `NAME`, a group in ~/.f10/standup.md, instead of this one; repeatable",
+			},
+			&cli.BoolFlag{Name: "all", Usage: "read every checkout under F10_ROOTS instead of this one"},
 			&cli.BoolFlag{Name: "json", Usage: "emit the report as JSON (the schema is in docs/cli.md)"},
 		},
 		Action: runStandup,
@@ -92,34 +99,42 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		from = standup.FallbackFrom(now)
 	}
 
-	t, err := targetFor(ctx, cmd)
+	targets, err := standupTargets(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	h, hostErr := t.host()
-
-	in, err := collectStandup(ctx, standupSource{
-		dir: t.lay.CheckoutRoot, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), prefix: t.eff.IDPrefix,
-		upkeep: t.eff.UpkeepPaths, host: h, noHost: hostErr != nil,
-	}, from)
+	ins, err := collectAll(ctx, targets, from)
 	if err != nil {
 		return err
 	}
 
 	// only the fallback reads the working days, so a broken standup.md
-	// fails no run that would not use it
+	// fails no run that would not use it; the day is the person's, so it is
+	// found over every repository at once
 	if period == standup.PeriodLastWorkingDay {
 		workdays, err := readWorkdays()
 		if err != nil {
 			return err
 		}
 
-		in.Since = standup.LastWorkingDay(now, workdays, standup.ActivityTimes(standup.Group(in)))
+		var activity []time.Time
+		for _, in := range ins {
+			activity = append(activity, standup.ActivityTimes(standup.Group(in))...)
+		}
+
+		start = standup.LastWorkingDay(now, workdays, activity)
+		for i := range ins {
+			ins[i].Since = start
+		}
 	}
 
-	rep := standup.Group(in)
-	rep.Period = period
+	reports := make([]standup.Report, len(ins))
+	for i, in := range ins {
+		reports[i] = standup.Group(in)
+	}
+
+	rep := standup.Merge(start, period, reports)
 	standup.SetDays(&rep, time.Local)
 
 	if cmd.Bool("json") {
@@ -621,64 +636,43 @@ func recordedBases(ctx context.Context, main string) map[string]string {
 	return out
 }
 
-// renderStandup is the report for a terminal: one line per task, the
-// upkeep-only tasks on one line, then the activity with no task and the
-// reviews. --json is the contract; this is a glance at it.
-func renderStandup(w io.Writer, r standup.Report) error {
+// renderStandup is the report for a terminal: per project, one line per
+// task, the upkeep-only tasks on one line, then the activity with no task
+// and the reviews. One project prints with no heading. --json is the
+// contract; this is a glance at it.
+func renderStandup(w io.Writer, s standup.Standup) error {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "since %s", r.Since.Local().Format("2006-01-02 15:04"))
+	fmt.Fprintf(&b, "since %s", s.Since.Local().Format("2006-01-02 15:04"))
 
-	if r.Period != "" {
-		fmt.Fprintf(&b, " (%s)", strings.ReplaceAll(r.Period, "_", " "))
+	if s.Period != "" {
+		fmt.Fprintf(&b, " (%s)", strings.ReplaceAll(s.Period, "_", " "))
 	}
 
 	b.WriteString("\n")
 
-	if len(r.Days) > 0 {
-		fmt.Fprintf(&b, "days  %s\n", dayList(r.Days))
+	if len(s.Days) > 0 {
+		fmt.Fprintf(&b, "days  %s\n", dayList(s.Days))
 	}
 
-	if len(r.Tasks)+len(r.Other.PRs)+len(r.Other.Commits)+len(r.Reviewed) == 0 {
-		b.WriteString("\nnothing\n")
-	}
+	empty := true
 
-	if len(r.Tasks) > 0 {
-		b.WriteString("\n")
-	}
-
-	var upkeep []string
-
-	for _, t := range r.Tasks {
-		if t.Class == standup.ClassUpkeep {
-			upkeep = append(upkeep, t.ID)
-
+	for _, p := range s.Projects {
+		if len(p.Tasks)+len(p.Other.PRs)+len(p.Other.Commits)+len(p.Reviewed) == 0 {
 			continue
 		}
 
-		fmt.Fprintf(&b, "%-10s %-12s %s%s\n", t.ID, t.State, prList(t.PRs, " -> "), commitCount(t.PRs, t.Commits))
-	}
+		empty = false
 
-	// tasks that only caught up with their base, rebased or regenerated
-	if len(upkeep) > 0 {
-		fmt.Fprintf(&b, "kept up to date  %s\n", strings.Join(upkeep, ", "))
-	}
-
-	if n := len(r.Other.PRs) + len(r.Other.Commits); n > 0 {
-		fmt.Fprintf(&b, "\nother      %s%s\n", prList(r.Other.PRs, ", "), commitCount(r.Other.PRs, r.Other.Commits))
-	}
-
-	if len(r.Reviewed) > 0 {
-		b.WriteString("\nreviewed\n")
-
-		for _, p := range r.Reviewed {
-			var kinds []string
-			for _, a := range p.Actions {
-				kinds = append(kinds, a.Kind)
-			}
-
-			fmt.Fprintf(&b, "  #%d %s (%s): %s\n", p.Number, p.Title, p.Author, strings.Join(dedupe(kinds), ", "))
+		if len(s.Projects) > 1 {
+			fmt.Fprintf(&b, "\n== %s%s\n", p.Name, repoNames(p))
 		}
+
+		renderProject(&b, p)
+	}
+
+	if empty {
+		b.WriteString("\nnothing\n")
 	}
 
 	_, err := io.WriteString(w, b.String())
@@ -686,14 +680,89 @@ func renderStandup(w io.Writer, r standup.Report) error {
 	return err
 }
 
-// prList names the PRs; a task's are in chain order, so " -> " reads true.
-func prList(prs []standup.PR, sep string) string {
-	parts := make([]string, 0, len(prs))
-	for _, p := range prs {
-		parts = append(parts, fmt.Sprintf("#%d", p.Number))
+// repoNames is a project's repositories, for its heading, when they are
+// not just the one the project is named after.
+func repoNames(p standup.Project) string {
+	if len(p.Repos) == 1 && p.Repos[0].Name == p.Name {
+		return ""
 	}
 
-	return strings.Join(parts, sep)
+	names := make([]string, 0, len(p.Repos))
+	for _, r := range p.Repos {
+		names = append(names, r.Name)
+	}
+
+	return " (" + strings.Join(names, ", ") + ")"
+}
+
+func renderProject(b *strings.Builder, p standup.Project) {
+	// a number names a PR only within its repository
+	label := func(repo string, n int) string {
+		if len(p.Repos) > 1 {
+			return fmt.Sprintf("%s#%d", repo, n)
+		}
+
+		return fmt.Sprintf("#%d", n)
+	}
+
+	if len(p.Tasks) > 0 {
+		b.WriteString("\n")
+	}
+
+	var upkeep []string
+
+	for _, t := range p.Tasks {
+		if t.Class == standup.ClassUpkeep {
+			upkeep = append(upkeep, t.ID)
+
+			continue
+		}
+
+		fmt.Fprintf(b, "%-10s %-12s %s%s\n", t.ID, t.State, prList(t.PRs, label), commitCount(t.PRs, t.Commits))
+	}
+
+	// tasks that only caught up with their base, rebased or regenerated
+	if len(upkeep) > 0 {
+		fmt.Fprintf(b, "kept up to date  %s\n", strings.Join(upkeep, ", "))
+	}
+
+	if n := len(p.Other.PRs) + len(p.Other.Commits); n > 0 {
+		fmt.Fprintf(b, "\nother      %s%s\n", prList(p.Other.PRs, label), commitCount(p.Other.PRs, p.Other.Commits))
+	}
+
+	if len(p.Reviewed) > 0 {
+		b.WriteString("\nreviewed\n")
+
+		for _, r := range p.Reviewed {
+			var kinds []string
+			for _, a := range r.Actions {
+				kinds = append(kinds, a.Kind)
+			}
+
+			fmt.Fprintf(b, "  %s %s (%s): %s\n",
+				label(r.Repo, r.Number), r.Title, r.Author, strings.Join(dedupe(kinds), ", "))
+		}
+	}
+}
+
+// prList names the PRs: " -> " where a PR sits on the one before it, ", "
+// between anything else (siblings, roots, other repositories).
+func prList(prs []standup.PR, label func(string, int) string) string {
+	var b strings.Builder
+
+	for i, p := range prs {
+		switch {
+		case i == 0:
+		case prs[i-1].Repo == p.Repo && p.BasePR == prs[i-1].Number:
+			b.WriteString(" -> ")
+		default:
+			b.WriteString(", ")
+		}
+
+		b.WriteString(label(p.Repo, p.Number))
+	}
+
+	return b.String()
 }
 
 func commitCount(prs []standup.PR, loose []standup.Commit) string {

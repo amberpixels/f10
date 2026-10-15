@@ -48,11 +48,14 @@ func newApp() *cli.Command {
 		Name:    "f10",
 		Usage:   "look around a project's f10 configuration, tasks, plans and your activity, start a task, reach its agent, drive a list and finish it",
 		Version: version(debug.ReadBuildInfo()),
+		// -C takes a path whole, commas included
+		DisableSliceFlagSeparator: true,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
+			&cli.StringSliceFlag{
 				Name:    "C",
 				Aliases: []string{"project"},
-				Usage:   "answer for another checkout: a `PATH` always, or a project name once F10_ROOTS is set",
+				Usage: "answer for another checkout: a `PATH` always, or a project name once F10_ROOTS is set; " +
+					"standup takes it more than once",
 			},
 		},
 		Commands: []*cli.Command{

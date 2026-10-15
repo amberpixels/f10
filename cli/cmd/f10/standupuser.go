@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
+	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
@@ -106,33 +109,33 @@ func writeLastStandup(last standup.Last) error {
 // standupConfig is the frontmatter of ~/.f10/standup.md. Unknown keys are
 // refused, as project.md's are; the prose below the block is the skill's.
 type standupConfig struct {
-	Workdays []string `yaml:"workdays"`
+	Workdays []string            `yaml:"workdays"`
+	Groups   map[string][]string `yaml:"groups"` // a name to the paths and globs of its checkouts
 }
 
-var weekdays = map[string]int{"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
-
-// readWorkdays is the working weekdays ~/.f10/standup.md declares, Monday
-// to Friday when it is missing or does not say.
-func readWorkdays() (standup.Workdays, error) {
+// readStandupConfig is ~/.f10/standup.md's frontmatter and the file's path,
+// empty when the file or its frontmatter is missing. Each caller reads only
+// the key it needs, so a broken standup.md fails only a run that uses it.
+func readStandupConfig() (standupConfig, string, error) {
 	dir, err := userF10Dir()
 	if err != nil {
-		return standup.Workdays{}, err
+		return standupConfig{}, "", err
 	}
 
 	path := filepath.Join(dir, standupConfigFile)
 
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return standup.DefaultWorkdays(), nil
+		return standupConfig{}, path, nil
 	}
 
 	if err != nil {
-		return standup.Workdays{}, err
+		return standupConfig{}, path, err
 	}
 
 	block, _, ok := frontmatter.Split(data)
 	if !ok {
-		return standup.DefaultWorkdays(), nil
+		return standupConfig{}, path, nil
 	}
 
 	var cfg standupConfig
@@ -141,7 +144,20 @@ func readWorkdays() (standup.Workdays, error) {
 	dec.KnownFields(true)
 
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return standup.Workdays{}, fmt.Errorf("%s: %w", path, err)
+		return standupConfig{}, path, fmt.Errorf("%s: %w", path, err)
+	}
+
+	return cfg, path, nil
+}
+
+var weekdays = map[string]int{"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
+
+// readWorkdays is the working weekdays ~/.f10/standup.md declares, Monday
+// to Friday when it is missing or does not say.
+func readWorkdays() (standup.Workdays, error) {
+	cfg, path, err := readStandupConfig()
+	if err != nil {
+		return standup.Workdays{}, err
 	}
 
 	if cfg.Workdays == nil {
@@ -168,4 +184,76 @@ func readWorkdays() (standup.Workdays, error) {
 	}
 
 	return w, nil
+}
+
+// readGroups is the checkouts the named groups in ~/.f10/standup.md list,
+// in the order given. A glob keeps the checkouts it matches and skips
+// anything else; a plain path that is not a checkout is an error, since the
+// user named it. The user declared each entry, so expanding a group is not
+// the filesystem walk F10_ROOTS fences.
+func readGroups(names []string) ([]string, error) {
+	cfg, path, err := readStandupConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	var dirs []string
+
+	for _, name := range names {
+		entries, ok := cfg.Groups[name]
+		if !ok {
+			declared := slices.Sorted(maps.Keys(cfg.Groups))
+			if len(declared) == 0 {
+				return nil, fmt.Errorf("no group %q: %s declares no groups (see docs/cli.md)", name, path)
+			}
+
+			return nil, fmt.Errorf("no group %q in %s (declared: %s)", name, path, strings.Join(declared, ", "))
+		}
+
+		for _, entry := range entries {
+			found, err := groupEntry(entry)
+			if err != nil {
+				return nil, fmt.Errorf("%s: group %s: %w", path, name, err)
+			}
+
+			dirs = append(dirs, found...)
+		}
+	}
+
+	return dirs, nil
+}
+
+// groupEntry is the checkouts one group entry names.
+func groupEntry(entry string) ([]string, error) {
+	p, err := expandHome(strings.TrimSpace(entry))
+	if err != nil {
+		return nil, err
+	}
+
+	if !filepath.IsAbs(p) {
+		return nil, fmt.Errorf("%q is not an absolute path (start it with / or ~/)", entry)
+	}
+
+	if !strings.ContainsAny(p, "*?[") {
+		if !projects.IsCheckout(p) {
+			return nil, fmt.Errorf("%s is not a git checkout", p)
+		}
+
+		return []string{p}, nil
+	}
+
+	matches, err := filepath.Glob(p)
+	if err != nil {
+		return nil, fmt.Errorf("bad glob %q: %w", entry, err)
+	}
+
+	var out []string
+
+	for _, m := range matches {
+		if projects.IsCheckout(m) {
+			out = append(out, m)
+		}
+	}
+
+	return out, nil
 }

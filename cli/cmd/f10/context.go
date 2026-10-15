@@ -41,58 +41,97 @@ func targetFor(ctx context.Context, cmd *cli.Command) (*target, error) {
 		return nil, err
 	}
 
+	return targetAt(ctx, dir, scoped, cmd.Name)
+}
+
+// targetAt is the target for one directory, for a command that answers for
+// several.
+func targetAt(ctx context.Context, dir string, scoped bool, cmdName string) (*target, error) {
 	lay := layout.Locate(ctx, dir)
 	pb := probe.Run(ctx, lay)
 	eff := facts.Build(lay, pb)
 
 	// a fact declared wrong stops every command that acts on facts; config
 	// and init are how it is seen and fixed, so they run anyway
-	if errs := eff.Errors(); errs != "" && cmd.Name != "config" && cmd.Name != "init" {
+	if errs := eff.Errors(); errs != "" && cmdName != "config" && cmdName != "init" {
 		return nil, errors.New("project.md: " + errs + "\n(f10 config shows every fact and where it came from)")
 	}
 
 	return &target{dir: dir, lay: lay, pb: pb, eff: eff, scoped: scoped}, nil
 }
 
-// rootDir turns -C into a directory. A path needs no lookup and always
-// works; a bare name goes to projects, which is off until the user turns it
-// on.
+// checkoutFlags is every -C given, trimmed, empty ones dropped.
+func checkoutFlags(cmd *cli.Command) []string {
+	var out []string
+
+	for _, v := range cmd.Root().StringSlice("C") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+
+	return out
+}
+
+// rootDir turns -C into a directory, the current one without it.
 func rootDir(cmd *cli.Command) (string, bool, error) {
-	sel := strings.TrimSpace(cmd.Root().String("C"))
-	if sel == "" {
+	sels := checkoutFlags(cmd)
+
+	switch len(sels) {
+	case 0:
 		cwd, err := os.Getwd()
 		if err != nil {
 			return "", false, fmt.Errorf("getwd: %w", err)
 		}
 
 		return cwd, false, nil
-	}
-
-	if projects.IsName(sel) {
-		dir, err := projects.Find(sel)
+	case 1:
+		dir, err := checkoutDir(sels[0])
 
 		return dir, true, err
+	default:
+		return "", false, fmt.Errorf("-C names one checkout (got %d); only standup takes several", len(sels))
+	}
+}
+
+// checkoutDir turns one -C value into a directory. A path needs no lookup
+// and always works; a bare name goes to projects, which is off until the
+// user turns it on.
+func checkoutDir(sel string) (string, error) {
+	if projects.IsName(sel) {
+		return projects.Find(sel)
 	}
 
-	if rest, ok := strings.CutPrefix(sel, "~/"); ok {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", false, fmt.Errorf("expanding ~ in %q: %w", sel, err)
-		}
-
-		sel = filepath.Join(home, rest)
+	sel, err := expandHome(sel)
+	if err != nil {
+		return "", err
 	}
 
 	dir, err := filepath.Abs(sel)
 	if err != nil {
-		return "", false, fmt.Errorf("finding %q: %w", sel, err)
+		return "", fmt.Errorf("finding %q: %w", sel, err)
 	}
 
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		return "", false, fmt.Errorf("no such directory: %s", dir)
+		return "", fmt.Errorf("no such directory: %s", dir)
 	}
 
-	return dir, true, nil
+	return dir, nil
+}
+
+// expandHome expands a leading ~/ to the home directory.
+func expandHome(path string) (string, error) {
+	rest, ok := strings.CutPrefix(path, "~/")
+	if !ok {
+		return path, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("expanding ~ in %q: %w", path, err)
+	}
+
+	return filepath.Join(home, rest), nil
 }
 
 // reference looks up a task reference for this target. Under -C the cascade
@@ -151,14 +190,21 @@ func (t *target) driver() *driver.Driver {
 // A project declaring a tracker no host CLI reaches is refused rather than
 // read from host issues, where an unrelated issue or PR shares the number.
 func (t *target) issues() (host, error) {
-	if kind := t.eff.TrackerKind; kind != "" && kind != "GitHub Issues" && kind != "GitLab work items" &&
-		t.trackerDeclared() {
+	if !t.hostIssues() {
 		return host{}, fmt.Errorf("project.md declares a %s tracker, which f10 reads only through a driver, "+
 			"and none was found (looked for %s); see docs/driver-contract.md",
-			kind, strings.Join(t.driverPaths(), ", "))
+			t.eff.TrackerKind, strings.Join(t.driverPaths(), ", "))
 	}
 
 	return t.host()
+}
+
+// hostIssues reports whether the project's tracker is its host's issues:
+// nothing declared, or GitHub Issues or GitLab work items declared.
+func (t *target) hostIssues() bool {
+	kind := t.eff.TrackerKind
+
+	return kind == "" || kind == "GitHub Issues" || kind == "GitLab work items" || !t.trackerDeclared()
 }
 
 func (t *target) trackerDeclared() bool {
