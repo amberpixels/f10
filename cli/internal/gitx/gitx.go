@@ -235,6 +235,15 @@ func DeleteBranch(ctx context.Context, dir, branch string) error {
 	return err
 }
 
+// DeleteRemoteRef drops the local copy of origin's branch, which a branch
+// deleted through the host's API leaves behind until a pruning fetch. git
+// deletes a ref that is not there without complaint.
+func DeleteRemoteRef(ctx context.Context, dir, branch string) error {
+	_, err := Exec(ctx, dir, "update-ref", "-d", "refs/remotes/origin/"+branch)
+
+	return err
+}
+
 // RemoteBranchExists asks origin whether it still has branch, which is the
 // one git read here that reaches the network.
 func RemoteBranchExists(ctx context.Context, dir, branch string) (bool, error) {

@@ -182,6 +182,14 @@ func TestPushForcesOnlyWithALease(t *testing.T) {
 	}
 }
 
+func TestDeleteRemoteRefDropsOriginsCopy(t *testing.T) {
+	calls := script(t, map[string]string{"update-ref -d refs/remotes/origin/GH-1": ""})
+
+	if err := DeleteRemoteRef(t.Context(), ".", "GH-1"); err != nil || len(*calls) != 1 {
+		t.Fatalf("err = %v, calls %q", err, *calls)
+	}
+}
+
 func TestRemoteBranchExists(t *testing.T) {
 	script(
 		t,

@@ -29,8 +29,10 @@ const (
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
 	cfgDeps = `git config --get-regexp ^branch\..*\.f10-after-branch$`
 	lsRem   = "git ls-remote --heads origin GH-1"
-	curBr   = "git branch --show-current"
-	wsList  = "herdr workspace list"
+	// finish drops the local copy of origin's branch along with the branch
+	dropRemoteRef = "git update-ref -d refs/remotes/origin/GH-1"
+	curBr         = "git branch --show-current"
+	wsList        = "herdr workspace list"
 
 	prOpen   = `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","mergeCommit":null}`
 	prMerged = `{"state":"MERGED","url":"https://gh/pr/9","number":9,"baseRefName":"main","mergeCommit":{"oid":"m3rge"}}`
@@ -63,6 +65,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 	f.script(cfgDeps, "")
 	f.script(lsRem, "abc\trefs/heads/GH-1")
 	f.script(ghDel, "")
+	f.script(dropRemoteRef, "")
 	f.script("herdr workspace close ws:9", "{}")
 	f.script("git worktree remove "+fx.wt, "")
 	f.script("git branch -D GH-1", "")
@@ -151,6 +154,7 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 		ghView,
 		lsRem,
 		ghDel,
+		dropRemoteRef,
 		curBr,
 		"git pull --ff-only",
 		"git merge-base --is-ancestor m3rge main",

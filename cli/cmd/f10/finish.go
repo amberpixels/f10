@@ -337,7 +337,7 @@ func resolved(p string) string {
 // landPull makes sure the branch's request is merged: merges it when open,
 // confirms it when already merged, refuses otherwise. It then deletes the
 // remote branch when the host still has it, which is what retargets a PR
-// stacked on this branch. The notes say when the merge was not this run's
+// stacked on this branch, and the local copy of it. The notes say when the merge was not this run's
 // and when the merge method was a default rather than a declaration.
 func landPull(ctx context.Context, in finishInput, name, def string) (pull, []string, error) {
 	p, err := in.host.pull(ctx, name)
@@ -391,6 +391,12 @@ func landPull(ctx context.Context, in finishInput, name, def string) (pull, []st
 		if err := in.host.deleteRemoteBranch(ctx, name); err != nil {
 			return pull{}, nil, fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.url(), err)
 		}
+	}
+
+	// the local copy of origin's branch outlives the API's delete, and a
+	// task with any branch left reads as not finished to drive and start
+	if err := gitx.DeleteRemoteRef(ctx, in.main, name); err != nil {
+		notes = append(notes, fmt.Sprintf("origin/%s is gone but its local copy is not: %v", name, err))
 	}
 
 	return p, notes, nil
