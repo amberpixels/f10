@@ -16,32 +16,78 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// The standup noun reads what one person did in this checkout since a
-// time: their commits from git, the PRs or MRs they authored, reviewed or
+// The standup noun reads what one person did in this checkout over a
+// period: their commits from git, the PRs or MRs they authored, reviewed or
 // merged from the host, grouped by task id. It changes nothing, so it does
 // not fetch: remote-tracking refs are read as they are, and the host's PR
 // states are fresh regardless. The user is their git email and their host
 // login, never a name, which two people can share.
+//
+// The period runs since the last standup reported, which `mark` records
+// once a report went out. Reading never records: a script calling --json
+// does not move the next report's start.
 func standupCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "standup",
-		Usage: "what you did in this checkout since a time: commits and PRs, grouped by task",
+		Usage: "what you did in this checkout since your last standup: commits and PRs, grouped by task",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:     "since",
-				Usage:    "the start of the period: an RFC 3339 time, or a `DATE` (YYYY-MM-DD, local midnight)",
-				Required: true,
+				Name:  "since",
+				Usage: "start the period here instead: an RFC 3339 time, or a `DATE` (YYYY-MM-DD, local midnight)",
 			},
+			&cli.BoolFlag{Name: "week", Usage: "start the period at last week's Monday"},
 			&cli.BoolFlag{Name: "json", Usage: "emit the report as JSON (the schema is in docs/cli.md)"},
 		},
 		Action: runStandup,
+		Commands: []*cli.Command{
+			{
+				Name:  "mark",
+				Usage: "record a standup as reported: the next period starts when this one ended",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "since",
+						Usage:    "the `TIME` the reported standup started at, as its report gave it",
+						Required: true,
+					},
+				},
+				Action: runStandupMark,
+			},
+		},
 	}
 }
 
 func runStandup(ctx context.Context, cmd *cli.Command) error {
-	since, err := parseSince(cmd.String("since"))
+	if cmd.IsSet("since") && cmd.Bool("week") {
+		return errors.New("--since and --week each set the start: pass one")
+	}
+
+	var since time.Time
+
+	if cmd.IsSet("since") {
+		var err error
+		if since, err = parseSince(cmd.String("since")); err != nil {
+			return err
+		}
+	}
+
+	last, err := readLastStandup()
 	if err != nil {
 		return err
+	}
+
+	workdays, err := readWorkdays()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	start, period := standup.Resolve(now, since, cmd.Bool("week"), last)
+
+	// with no standup stored, one wider collection finds the last working
+	// day with activity, and the same input is grouped again from it
+	from := start
+	if period == standup.PeriodLastWorkingDay {
+		from = standup.FallbackFrom(now)
 	}
 
 	t, err := targetFor(ctx, cmd)
@@ -54,12 +100,18 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	in, err := collectStandup(ctx, standupSource{
 		dir: t.lay.CheckoutRoot, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), prefix: t.eff.IDPrefix,
 		host: h, noHost: hostErr != nil,
-	}, since)
+	}, from)
 	if err != nil {
 		return err
 	}
 
+	if period == standup.PeriodLastWorkingDay {
+		in.Since = standup.LastWorkingDay(now, workdays, standup.ActivityTimes(standup.Group(in)))
+	}
+
 	rep := standup.Group(in)
+	rep.Period = period
+	rep.Days = standup.Days(standup.ActivityTimes(rep), time.Local)
 
 	if cmd.Bool("json") {
 		enc := json.NewEncoder(cmd.Writer)
@@ -71,8 +123,25 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	return renderStandup(cmd.Writer, rep)
 }
 
+// runStandupMark records a reported standup. It takes the start the report
+// showed rather than working it out again, so the record and the report
+// agree across midnight and across scopes.
+func runStandupMark(_ context.Context, cmd *cli.Command) error {
+	since, err := parseSince(cmd.String("since"))
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if since.After(now) {
+		return fmt.Errorf("--since %s is in the future", since.Format(time.RFC3339))
+	}
+
+	return writeLastStandup(standup.Last{At: now.UTC(), Since: since.UTC()})
+}
+
 // parseSince reads --since. The period's other forms (since the last
-// standup, a week) are the period's own flags, not spellings of this one.
+// standup, a week) are not spellings of this one.
 func parseSince(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)
 
@@ -278,7 +347,17 @@ func recordedBases(ctx context.Context, main string) map[string]string {
 func renderStandup(w io.Writer, r standup.Report) error {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "since %s\n", r.Since.Local().Format("2006-01-02 15:04"))
+	fmt.Fprintf(&b, "since %s", r.Since.Local().Format("2006-01-02 15:04"))
+
+	if r.Period != "" {
+		fmt.Fprintf(&b, " (%s)", strings.ReplaceAll(r.Period, "_", " "))
+	}
+
+	b.WriteString("\n")
+
+	if len(r.Days) > 0 {
+		fmt.Fprintf(&b, "days  %s\n", dayList(r.Days))
+	}
 
 	if len(r.Tasks)+len(r.Other.PRs)+len(r.Other.Commits)+len(r.Reviewed) == 0 {
 		b.WriteString("\nnothing\n")
@@ -350,4 +429,20 @@ func dedupe(s []string) []string {
 	}
 
 	return out
+}
+
+// dayList names the active days with their weekday, "Fri 10-09, Mon 10-12",
+// which is what tells a long weekend from a missed day.
+func dayList(days []string) string {
+	parts := make([]string, 0, len(days))
+
+	for _, d := range days {
+		if t, err := time.Parse(time.DateOnly, d); err == nil {
+			d = t.Format("Mon 01-02")
+		}
+
+		parts = append(parts, d)
+	}
+
+	return strings.Join(parts, ", ")
 }

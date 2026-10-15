@@ -6,15 +6,16 @@
 //
 // The lookaround verbs change nothing - no file they did not read, no
 // tracker item, no cache - and act on the reader's behalf only by handing a
-// url to a browser or a file to an editor. Five verbs act: `init` creates
+// url to a browser or a file to an editor. Six verbs act: `init` creates
 // the two files that register a project and never overwrites either,
 // `start` creates a branch and a worktree, opens them in Herdr and prompts
 // an agent there, `forward` hands a command to the agent a task already has,
-// `drive` runs a list of tasks through a chain of skills that way, and
-// `finish` undoes start once the work merged: the PR merged on the host,
-// the plan archived, the workspace closed, the worktree and branch removed,
-// main pulled. bin/f10-load-project.sh stays the agent-facing surface for a pipeline
-// run; this is the surface for a person, and for the commands an agent runs
+// `drive` runs a list of tasks through a chain of skills that way,
+// `standup mark` records a standup as reported so the next one starts where
+// it ended, and `finish` undoes start once the work merged: the PR merged on
+// the host, the plan archived, the workspace closed, the worktree and branch
+// removed, main pulled. bin/f10-load-project.sh stays the agent-facing
+// surface for a pipeline run; this is the surface for a person, and for the commands an agent runs
 // to read a task, start the next one, reach another or finish this one.
 //
 // A verb means one thing under every noun: `read` writes content, `open`

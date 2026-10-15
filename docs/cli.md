@@ -32,7 +32,8 @@ f10 review pick [n] [--json]                          # the latest unhandled rem
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
-f10 standup --since <time> [--json]   # your commits and PRs in this checkout since a time, grouped by task
+f10 standup [--since <time> | --week] [--json]   # your commits and PRs in this checkout since your last standup, grouped by task
+f10 standup mark --since <time>                    # record a standup as reported: the next one starts where it ended
 
 f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -243,10 +244,29 @@ Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's n
 
 ## Standup
 
-`f10 standup --since <time>` reads what you did in this checkout since `<time>`: your commits from git, your PRs or MRs, and other people's you reviewed or merged.
+`f10 standup` reads what you did in this checkout over a period: your commits from git, your PRs or MRs, and other people's you reviewed or merged.
 It groups them by task and gives each task where it ended the period.
-`--since` takes an RFC 3339 time or a `YYYY-MM-DD` date (local midnight).
 It changes nothing and does not fetch: local and remote-tracking branches are read as they are, while PR states come fresh from the host.
+
+**The period** runs since the last standup you reported, in any checkout, so two scopes run the same morning agree.
+The report lists the days that had activity (`days`), so Friday to Monday, a working Saturday or a holiday Monday need no calendar.
+
+- A standup reported earlier today gives its own start again: a second report the same day covers the same span, not an empty one.
+- With no standup stored, the period starts at local midnight of the last working day before today with activity, looked for over the last 14 days.
+  With none there, it starts at the previous working day.
+- `--since` takes an RFC 3339 time or a `YYYY-MM-DD` date (local midnight) instead.
+- `--week` starts at local midnight of last week's Monday and runs to now: the last-week summary for a Monday.
+
+Only `f10 standup mark --since <time>` moves the stored standup, with `<time>` the `since` the reported standup showed.
+The `/f10:standup` skill calls it once it has reported; `f10 standup`, with or without `--json`, never does, so a script reading the data does not shift the next report's period.
+
+**Your files**, in `~/.f10/`, per person rather than per repo:
+
+- `standup.md`: your settings, YAML frontmatter then free prose.
+  `workdays` lists the working weekdays as `mon` to `sun`, default `[mon, tue, wed, thu, fri]`; only a run with no standup stored reads it.
+  An unknown key is an error.
+- `standup.json`: the last reported standup, `{"at", "since"}`, written by `mark`.
+  It is f10's state, not for editing; delete it to start over from the last working day.
 
 **You** are your git `user.email` and your host login (`gh api user` / `glab api user`), never a name.
 A commit is yours when its mailmapped author email equals yours, in any case.
@@ -274,13 +294,15 @@ A task takes the least advanced state among its open PRs and its PR-less commits
 With nothing open it is `shipped` when a PR merged or a commit landed on the default branch, else `closed`.
 
 **JSON**, schema 1.
-The same history gives the same bytes: no run timestamp, every time in UTC, every list in a fixed order.
+The same history gives the same bytes in the same zone: no run timestamp, every time in UTC (`days` are local dates), every list in a fixed order.
 A breaking change bumps `schema`.
 
 ```json
 {
   "schema": 1,
   "since": "2026-10-14T00:00:00Z",
+  "period": "last_standup",
+  "days": ["2026-10-14", "2026-10-15"],
   "checkout": "/path/to/checkout",
   "host": "gh",
   "user": {"email": "you@example.com", "login": "you"},
@@ -311,6 +333,8 @@ A breaking change bumps `schema`.
 
 | field | meaning |
 |---|---|
+| `period` | how `since` was chosen: `last_standup`, `last_working_day`, `since` (the flag) or `week` |
+| `days` | the local dates (`YYYY-MM-DD`) with any of your activity in the period, ascending |
 | `host` | `gh`, `glab`, or `null` with no host CLI (then `user.login` is absent and `reviewed` is empty) |
 | `tasks` | by id prefix, then number |
 | `tasks[].after` | the task its root PR is stacked on; absent when none |

@@ -217,7 +217,9 @@ func TestStandupPullsGitLab(t *testing.T) {
 func TestRenderStandup(t *testing.T) {
 	merged := standupSince.Add(5 * time.Hour)
 	r := standup.Report{
-		Since: standupSince,
+		Since:  standupSince,
+		Period: standup.PeriodLastStandup,
+		Days:   []string{"2026-10-09", "2026-10-12"},
 		Tasks: []standup.Task{{ID: "FT-1", State: standup.StateInReview, PRs: []standup.PR{
 			{Number: 1, MergedAt: &merged, Commits: []standup.Commit{{SHA: "a"}}}, {Number: 2, BasePR: 1},
 		}}},
@@ -237,7 +239,7 @@ func TestRenderStandup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"FT-1", "in review", "#1 -> #2", "1 commit(s)", "#9 theirs (bob): reviewed, merged"} {
+	for _, want := range []string{"(last standup)", "Fri 10-09, Mon 10-12", "FT-1", "in review", "#1 -> #2", "1 commit(s)", "#9 theirs (bob): reviewed, merged"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("render missing %q:\n%s", want, out.String())
 		}
