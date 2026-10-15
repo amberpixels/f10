@@ -11,6 +11,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
 // The typed half of project.md: the facts the binary acts on, declared in a
@@ -30,6 +31,7 @@ type Declared struct {
 	Planless    []string         `yaml:"planless,omitempty"`
 	DriveChain  Steps            `yaml:"drive_chain,omitempty"`
 	Review      ReviewDecl       `yaml:"review,omitempty"`
+	Standup     StandupDecl      `yaml:"standup,omitempty"`
 }
 
 // TrackerDecl is the tracker's kind and its task id format (`FT-###`).
@@ -45,6 +47,13 @@ type ReviewDecl struct {
 	Arrives  string `yaml:"arrives,omitempty"`
 	Trigger  string `yaml:"trigger,omitempty"`
 	Done     string `yaml:"done,omitempty"`
+}
+
+// StandupDecl is what `f10 standup` reads: the paths that, alone in a
+// commit, make it upkeep, on top of the lockfiles, generated files and
+// snapshots it knows (schema dumps, a project's own codegen output).
+type StandupDecl struct {
+	Upkeep []string `yaml:"upkeep,omitempty"`
 }
 
 // Steps is an ordered list of names, written as a YAML list or as one
@@ -145,6 +154,12 @@ func (d Declared) check() []string {
 		bad = append(bad, fmt.Sprintf("tracker.id: %q has no id format like `ABC-###`", d.Tracker.ID))
 	}
 
+	for _, glob := range d.Standup.Upkeep {
+		if err := standup.CheckGlob(glob); err != nil {
+			bad = append(bad, fmt.Sprintf("standup.upkeep: %q: %v", glob, err))
+		}
+	}
+
 	for _, name := range d.Planless {
 		if _, ok := d.Pipelines[name]; !ok {
 			bad = append(bad, fmt.Sprintf("planless: %q names no pipeline", name))
@@ -188,4 +203,5 @@ func (l *layered) merge(d Declared, label string) {
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
+	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
 }

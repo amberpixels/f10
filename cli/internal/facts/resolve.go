@@ -171,6 +171,15 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 		e.DriveChain = splitSteps(DefaultDriveChain)
 	}
 
+	// frontmatter only: no prose ever declared it
+	if e.UpkeepPaths = fm.Standup.Upkeep; e.UpkeepPaths != nil {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "standup.upkeep",
+			Value:  strings.Join(e.UpkeepPaths, ", "),
+			Origin: "declared (" + fm.origin["standup"] + ", frontmatter)",
+		})
+	}
+
 	_, reviewDeclared := declared["Review"]
 	e.resolveReview(fm, fmSource, proseSource, body, reviewDeclared, pb)
 

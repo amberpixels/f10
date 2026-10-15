@@ -69,6 +69,7 @@ type Effective struct {
 	Pipelines   map[string][]string `json:"pipelines"`
 	Planless    []string            `json:"planless,omitempty"`
 	DriveChain  []string            `json:"driveChain"`
+	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.

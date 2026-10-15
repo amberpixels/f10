@@ -64,6 +64,7 @@ Go service for invoices.
 | `planless` | the pipelines that skip capture and the plan file | none |
 | `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done` | from a Claude Code review workflow, else none |
+| `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
 
 An unknown key or a value outside its vocabulary stops every `f10` command except `f10 config`, which shows each fact with where it came from, and `f10 init`.
 

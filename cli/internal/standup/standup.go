@@ -52,6 +52,13 @@ type Commit struct {
 	At      time.Time `json:"at"`     // author date
 	Branch  string    `json:"branch"` // the branch it was reached from, remote prefix dropped
 	Parents []string  `json:"parents"`
+	Class   string    `json:"class"`
+	Upkeep  string    `json:"upkeep,omitempty"`
+
+	// What upkeep.go decides the class from, collected beside the commit.
+	Files     []File `json:"-"`
+	BaseMerge bool   `json:"-"` // a merge whose second parent is on the base's first-parent line
+	ParentCI  *CI    `json:"-"` // nil unless asked and the host had checks
 }
 
 // A Review is one review event on a PR: a submitted review, an approval or
@@ -78,6 +85,8 @@ type HostPR struct {
 	Commits   []PRCommit // the commits the host lists for it; read for the user's own PRs only
 	MergeSHA  []string   // the merge and squash commits it landed as
 	Reviews   []Review   // read for other people's PRs only
+
+	ForcePushes []ForcePush // the user's own, on their own PRs
 }
 
 // A PRCommit is one commit a PR lists. A rebase merge lands it on the
@@ -105,6 +114,7 @@ type Input struct {
 	Commits       []Commit          // the user's, from git
 	PRs           []HostPR          // the user's own and the ones they reviewed or merged
 	Bases         map[string]string // head branch to the base branch `f10 start --after` recorded
+	UpkeepPaths   []string          // the project's globs, on top of the default upkeep paths
 }
 
 // PR is one of the user's PRs in the report.
@@ -120,6 +130,8 @@ type PR struct {
 	CreatedAt time.Time  `json:"created_at"`
 	MergedAt  *time.Time `json:"merged_at,omitempty"`
 	Commits   []Commit   `json:"commits"`
+
+	ForcePushes []ForcePush `json:"force_pushes"`
 }
 
 // Task is the activity carrying one task id.
@@ -127,6 +139,7 @@ type Task struct {
 	ID      string   `json:"id"`
 	Title   string   `json:"title"`
 	State   string   `json:"state"`
+	Class   string   `json:"class"`
 	After   string   `json:"after,omitempty"`
 	PRs     []PR     `json:"prs"`
 	Commits []Commit `json:"commits"` // commits on no PR of the user's
@@ -190,6 +203,10 @@ func Group(in Input) Report {
 	own, foreign := splitPRs(in.PRs, in.User.Login)
 	commits := periodCommits(in.Commits, since)
 
+	for i := range commits {
+		commits[i].Class, commits[i].Upkeep = classifyCommit(commits[i], in.UpkeepPaths)
+	}
+
 	// a commit belongs to the PR whose commit list or merge commit names it;
 	// a commit on the default branch to the merged PR listing its author date
 	// and subject, which is what a rebase merge keeps; else to an open PR
@@ -251,14 +268,15 @@ func Group(in Input) Report {
 	}
 
 	for i, p := range own {
-		if !inPeriod(p, since, len(attached[i]) > 0) {
+		pushes := periodPushes(p.ForcePushes, since)
+		if !inPeriod(p, since, len(attached[i])+len(pushes) > 0) {
 			continue
 		}
 
 		out := PR{
 			Number: p.Number, Title: p.Title, URL: p.URL, State: prState(p), Draft: p.Draft,
 			Head: p.Head, Base: p.Base, BasePR: basePR[p.Number], CreatedAt: p.CreatedAt.UTC(),
-			Commits: nonNil(attached[i]),
+			Commits: nonNil(attached[i]), ForcePushes: pushes,
 		}
 
 		if !p.MergedAt.IsZero() {
@@ -302,6 +320,7 @@ func Group(in Input) Report {
 	for _, t := range tasks {
 		t.PRs = chainOrder(t.PRs)
 		t.State = taskState(*t, in.DefaultBranch)
+		t.Class = taskClass(*t, since)
 
 		if len(t.PRs) > 0 {
 			root := t.PRs[0]
@@ -369,10 +388,34 @@ func periodCommits(commits []Commit, since time.Time) []Commit {
 	return out
 }
 
+// periodPushes keeps the force-pushes made in the period, classified and
+// sorted.
+func periodPushes(pushes []ForcePush, since time.Time) []ForcePush {
+	out := []ForcePush{}
+
+	for _, p := range pushes {
+		if p.At.Before(since) {
+			continue
+		}
+
+		p.At = p.At.UTC()
+		p.Class, p.Upkeep = classifyPush(p)
+		out = append(out, p)
+	}
+
+	slices.SortFunc(out, func(a, b ForcePush) int {
+		return cmp.Or(a.At.Compare(b.At), strings.Compare(a.After, b.After))
+	})
+
+	return out
+}
+
 // inPeriod is an own PR the user did something with: opened or merged in
-// the period, or carrying a commit of theirs from it.
-func inPeriod(p HostPR, since time.Time, hasCommits bool) bool {
-	return hasCommits || !p.CreatedAt.Before(since) || (!p.MergedAt.IsZero() && !p.MergedAt.Before(since))
+// the period, or carrying a commit or a force-push of theirs from it. A
+// rebase keeps author dates, so a rebase-only day shows as a force-push
+// alone.
+func inPeriod(p HostPR, since time.Time, active bool) bool {
+	return active || !p.CreatedAt.Before(since) || (!p.MergedAt.IsZero() && !p.MergedAt.Before(since))
 }
 
 // chainBases maps each PR to the PR whose head is its base. The base f10

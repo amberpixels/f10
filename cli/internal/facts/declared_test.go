@@ -193,3 +193,32 @@ func TestMigrate(t *testing.T) {
 		t.Errorf("a second migration = %v", err)
 	}
 }
+
+// standup.upkeep extends the default upkeep paths; a glob standup cannot
+// read stops the commands like any value outside its vocabulary.
+func TestStandupUpkeep(t *testing.T) {
+	eff := buildWith(t, "---\nstandup:\n  upkeep: [db/schema.rb, \"api/**/*.gen.ts\"]\n---\n# demo\n", "")
+
+	if len(eff.Problems) > 0 {
+		t.Fatalf("problems: %+v", eff.Problems)
+	}
+
+	if got := strings.Join(eff.UpkeepPaths, "|"); got != "db/schema.rb|api/**/*.gen.ts" {
+		t.Errorf("upkeep paths = %q", got)
+	}
+
+	if !slices.ContainsFunc(eff.Facts, func(f Fact) bool {
+		return f.Key == "standup.upkeep" && f.Origin == "declared (main, frontmatter)"
+	}) {
+		t.Errorf("no attributed standup.upkeep fact in %+v", eff.Facts)
+	}
+
+	bad := buildWith(t, "---\nstandup:\n  upkeep: [/abs/path, \"x/[y\"]\n---\n# demo\n", "")
+	if n := len(bad.Problems); n != 2 {
+		t.Errorf("problems = %+v, want one per bad glob", bad.Problems)
+	}
+
+	if _, err := decodeDeclared([]byte("standup:\n  upkep: [x]\n")); err == nil {
+		t.Error("an unknown standup key decoded")
+	}
+}

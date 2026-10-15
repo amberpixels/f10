@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,7 +101,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 
 	in, err := collectStandup(ctx, standupSource{
 		dir: t.lay.CheckoutRoot, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), prefix: t.eff.IDPrefix,
-		host: h, noHost: hostErr != nil,
+		upkeep: t.eff.UpkeepPaths, host: h, noHost: hostErr != nil,
 	}, from)
 	if err != nil {
 		return err
@@ -182,6 +185,7 @@ func parseSince(s string) (time.Time, error) {
 // a test can name each part.
 type standupSource struct {
 	dir, main, prefix string
+	upkeep            []string // project.md's standup.upkeep globs
 	host              host
 	noHost            bool // no host CLI for this checkout
 }
@@ -208,6 +212,9 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 		return standup.Input{}, err
 	}
 
+	bases := recordedBases(ctx, src.main)
+	commitFacts(ctx, src.dir, since, commits, defRef, bases)
+
 	in := standup.Input{
 		Prefix:        src.prefix,
 		Since:         since,
@@ -215,7 +222,8 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 		DefaultBranch: def,
 		User:          standup.User{Email: email},
 		Commits:       commits,
-		Bases:         recordedBases(ctx, src.main),
+		Bases:         bases,
+		UpkeepPaths:   src.upkeep,
 	}
 
 	if src.noHost {
@@ -230,6 +238,33 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 	prs, err := src.host.standupPulls(ctx, login, since)
 	if err != nil {
 		return standup.Input{}, err
+	}
+
+	// a force-push's commits are taken against the PR's base: the base f10
+	// recorded, else the host's
+	for i, p := range prs {
+		if len(p.ForcePushes) == 0 {
+			continue
+		}
+
+		base := baseRefs(ctx, src.dir, cmp.Or(bases[p.Head], p.Base), defRef, def)
+		if len(base) == 0 {
+			continue
+		}
+
+		for j, fp := range p.ForcePushes {
+			prs[i].ForcePushes[j].SamePatches = samePatches(ctx, src.dir, base[0], fp.Before, fp.After)
+		}
+	}
+
+	for i, c := range commits {
+		if !standup.NeedsCI(c, src.upkeep) {
+			continue
+		}
+
+		if commits[i].ParentCI, err = src.host.commitCI(ctx, c.Parents[0]); err != nil {
+			return standup.Input{}, err
+		}
 	}
 
 	in.Host, in.User.Login, in.PRs = src.host.name, login, prs
@@ -324,6 +359,214 @@ func userCommits(
 	return commits, nil
 }
 
+// numstatFormat opens each commit's numstat block with its sha.
+const numstatFormat = "--format=%x1e%H"
+
+// generatedHeader is Go's marker for a generated file (go help generate).
+const generatedHeader = `^// Code generated .* DO NOT EDIT\.$`
+
+// commitFacts fills in what the upkeep rules read from git: each commit's
+// changed files, which of them are generated, and whether a merge brought
+// in its base. Each fact is one walk or one call for all commits, and a
+// git read that fails leaves the fact unset, which classifies as work.
+func commitFacts(
+	ctx context.Context,
+	dir string,
+	since time.Time,
+	commits []standup.Commit,
+	defRef string,
+	bases map[string]string,
+) {
+	files := changedFiles(ctx, dir, since)
+
+	var paths, goPaths, shas []string
+
+	for i := range commits {
+		c := &commits[i]
+		c.Files = files[c.SHA]
+
+		for _, f := range c.Files {
+			paths = append(paths, f.Path)
+
+			if strings.HasSuffix(f.Path, ".go") {
+				goPaths = append(goPaths, f.Path)
+			}
+		}
+
+		if len(c.Files) > 0 {
+			shas = append(shas, c.SHA)
+		}
+	}
+
+	generated := generatedPaths(ctx, dir, paths, shas, goPaths)
+
+	for i := range commits {
+		c := &commits[i]
+		for j, f := range c.Files {
+			c.Files[j].Generated = generated[f.Path] || generated[c.SHA+":"+f.Path]
+		}
+
+		if len(c.Parents) < 2 {
+			continue
+		}
+
+		for _, base := range baseRefs(ctx, dir, bases[c.Branch], defRef, "") {
+			if onFirstParentLine(ctx, dir, base, c.Parents[1]) {
+				c.BaseMerge = true
+
+				break
+			}
+		}
+	}
+}
+
+// changedFiles is every non-merge commit's numstat in the period, by sha.
+// --no-renames lists a rename as a delete and an add, so both paths count.
+func changedFiles(ctx context.Context, dir string, since time.Time) map[string][]standup.File {
+	out := gitx.Out(ctx, dir, "log", "--branches", "--remotes", "--no-merges", "--no-renames", "--numstat",
+		"--since="+since.Format(time.RFC3339), numstatFormat)
+
+	files := map[string][]standup.File{}
+
+	for block := range strings.SplitSeq(out, "\x1e") {
+		sha, rest, _ := strings.Cut(strings.TrimSpace(block), "\n")
+		if sha == "" {
+			continue
+		}
+
+		for line := range strings.SplitSeq(rest, "\n") {
+			f := strings.SplitN(line, "\t", 3)
+			if len(f) < 3 {
+				continue
+			}
+
+			added, errA := strconv.Atoi(f[0])
+			deleted, errD := strconv.Atoi(f[1])
+			files[sha] = append(files[sha], standup.File{
+				Path: f[2], Added: added, Deleted: deleted, Binary: errA != nil || errD != nil,
+			})
+		}
+	}
+
+	return files
+}
+
+// generatedPaths is the paths marked linguist-generated in the working
+// tree's attributes, keyed by path, and the Go files carrying the
+// generated header at a commit, keyed by sha:path.
+func generatedPaths(ctx context.Context, dir string, paths, shas, goPaths []string) map[string]bool {
+	out := map[string]bool{}
+
+	if paths = sortedUnique(paths); len(paths) > 0 {
+		attrs := gitx.Out(ctx, dir, append([]string{"check-attr", "linguist-generated", "--"}, paths...)...)
+
+		for line := range strings.SplitSeq(attrs, "\n") {
+			p, value, ok := strings.Cut(line, ": linguist-generated: ")
+			if ok && (value == "set" || value == "true") {
+				out[p] = true
+			}
+		}
+	}
+
+	if goPaths = sortedUnique(goPaths); len(goPaths) > 0 {
+		args := append([]string{"grep", "-l", "-E", generatedHeader}, shas...)
+		args = append(append(args, "--"), goPaths...)
+
+		for line := range strings.SplitSeq(gitx.Out(ctx, dir, args...), "\n") {
+			if line != "" {
+				out[line] = true
+			}
+		}
+	}
+
+	return out
+}
+
+// baseRefs is the refs a branch's base can be read from: the recorded
+// base, remote-tracking first, then the default branch's ref.
+func baseRefs(ctx context.Context, dir, base, defRef, def string) []string {
+	var refs []string
+
+	if base != "" && base != def {
+		for _, r := range []string{"refs/remotes/origin/" + base, "refs/heads/" + base} {
+			if gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", r) != "" {
+				refs = append(refs, r)
+
+				break
+			}
+		}
+	}
+
+	if defRef != "" {
+		refs = append(refs, defRef)
+	}
+
+	return refs
+}
+
+// onFirstParentLine reports whether commit is on base's first-parent line:
+// the walk from base that stops at commit's ancestors ends on a commit
+// whose first parent is commit, or base is commit. Plain ancestry would
+// also count a feature branch that has since landed.
+func onFirstParentLine(ctx context.Context, dir, base, commit string) bool {
+	out, err := gitx.Exec(ctx, dir, "rev-list", "--first-parent", "--parents", base, "--not", commit)
+	if err != nil {
+		return false
+	}
+
+	if out == "" {
+		return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", base+"^{commit}") == commit
+	}
+
+	lines := strings.Split(out, "\n")
+	f := strings.Fields(lines[len(lines)-1])
+
+	return len(f) > 1 && f[1] == commit
+}
+
+// rangeDiffPair is one line of range-diff's pairing: the old and new
+// commit and how they compare (= same patch, ! changed, < dropped, > added).
+var rangeDiffPair = regexp.MustCompile(`^\s*(?:\d+|-):\s+\S+\s+([=!<>])\s+(?:\d+|-):`)
+
+// samePatches compares the commits a force-push replaced with the ones it
+// pushed, each taken against base: true when every commit kept its patch.
+// nil when git cannot tell, typically because the old commits were never
+// fetched here.
+func samePatches(ctx context.Context, dir, base, before, after string) *bool {
+	if before == "" || after == "" {
+		return nil
+	}
+
+	out, err := gitx.Exec(ctx, dir, "range-diff", "--no-color", base, before, after)
+	if err != nil {
+		return nil
+	}
+
+	pairs, same := 0, true
+
+	for line := range strings.SplitSeq(out, "\n") {
+		m := rangeDiffPair.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+
+		pairs++
+		same = same && m[1] == "="
+	}
+
+	if pairs == 0 {
+		return nil
+	}
+
+	return &same
+}
+
+func sortedUnique(s []string) []string {
+	slices.Sort(s)
+
+	return slices.Compact(s)
+}
+
 // refBranch is a ref as the branch it stands for: refs/ and a remote's
 // prefix dropped, so origin/x and x are one branch, and a remote's HEAD is
 // the default branch.
@@ -363,9 +606,9 @@ func recordedBases(ctx context.Context, main string) map[string]string {
 	return out
 }
 
-// renderStandup is the report for a terminal: one line per task, then the
-// activity with no task and the reviews. --json is the contract; this is a
-// glance at it.
+// renderStandup is the report for a terminal: one line per task, the
+// upkeep-only tasks on one line, then the activity with no task and the
+// reviews. --json is the contract; this is a glance at it.
 func renderStandup(w io.Writer, r standup.Report) error {
 	var b strings.Builder
 
@@ -389,8 +632,21 @@ func renderStandup(w io.Writer, r standup.Report) error {
 		b.WriteString("\n")
 	}
 
+	var upkeep []string
+
 	for _, t := range r.Tasks {
+		if t.Class == standup.ClassUpkeep {
+			upkeep = append(upkeep, t.ID)
+
+			continue
+		}
+
 		fmt.Fprintf(&b, "%-10s %-12s %s%s\n", t.ID, t.State, prList(t.PRs, " -> "), commitCount(t.PRs, t.Commits))
+	}
+
+	// tasks that only caught up with their base, rebased or regenerated
+	if len(upkeep) > 0 {
+		fmt.Fprintf(&b, "kept up to date  %s\n", strings.Join(upkeep, ", "))
 	}
 
 	if n := len(r.Other.PRs) + len(r.Other.Commits); n > 0 {

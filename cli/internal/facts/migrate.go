@@ -40,7 +40,7 @@ func renderDeclared(d Declared) (string, error) {
 func isEmpty(d Declared) bool {
 	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker == (TrackerDecl{}) &&
 		d.MergeMethod == "" && d.Catchup == "" && d.Pipelines == nil && d.Planless == nil &&
-		d.DriveChain == nil && d.Review == (ReviewDecl{})
+		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
 }
 
 // A Migration is what `f10 init --migrate` makes of one prose-only
