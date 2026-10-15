@@ -430,19 +430,12 @@ func (rv *reviewer) viewerLogin(ctx context.Context) (string, error) {
 		return rv.viewer, nil
 	}
 
-	var user struct {
-		Login    string `json:"login"`
-		Username string `json:"username"`
-	}
-
-	if err := rv.h.decode(ctx, &user, "api", "user"); err != nil {
+	login, err := rv.h.login(ctx)
+	if err != nil {
 		return "", err
 	}
 
-	rv.viewer = cmp.Or(user.Login, user.Username)
-	if rv.viewer == "" {
-		return "", fmt.Errorf("%s returned no login for the signed-in user", rv.h.name)
-	}
+	rv.viewer = login
 
 	return rv.viewer, nil
 }
