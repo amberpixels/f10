@@ -22,7 +22,7 @@ No conflict, or nothing to bring in, is a **correct run**.
    ```
 
    - `f10-landed` (set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch): `git fetch origin`; the base is `origin/<default>`, the default branch found as under **Nothing** below.
-     `git config --unset` it only after verify is green (point 5).
+     It stays set until point 5 clears it.
    - `f10-after-branch`: `git fetch origin`, then `refs/heads/<branch>`, else `origin/<branch>`.
      If it exists nowhere, the base task was finished: `git config --unset` both `f10-after` and `f10-after-branch` and use the default branch.
    - Nothing: the default branch, from `git symbolic-ref --quiet --short refs/remotes/origin/HEAD` without `origin/` (else `main`), as `origin/<default>` after the fetch, or the local branch without a remote.
@@ -31,7 +31,7 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 3. **Integrate.**
    Strategy: `catchup: merge` or `catchup: rebase` in the frontmatter (or, from an older file, under Hosting & PR); absent, **rebase**.
-   - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; report and stop;
+   - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; clear `f10-landed` as point 5 does, report and stop;
    - merge: `git merge --no-edit <base>`; rebase: `git rebase <base>`.
 
    Clean: point 5.
@@ -51,6 +51,8 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 5. **Verify** with `project.md → Verify` (none declared: detect as `steps/implement.md` does).
    Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge or folded into its commit under a rebase, and re-verify.
+   Green, with `f10-landed` found in point 2: `git config --unset branch."$(git branch --show-current)".f10-landed`, before the report.
+   `f10 drive` reads the mark still set as a catchup that did not finish, and halts the task.
 
 6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows.
    Then: commits brought in, each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
