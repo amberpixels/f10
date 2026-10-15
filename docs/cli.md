@@ -291,7 +291,9 @@ Until something marks a standup, every run starts at the last working day.
   A glob keeps the checkouts it matches and skips anything else; a path that is not a checkout is an error.
   Only a run with `--group` reads `groups`.
   An unknown key is an error.
-  The prose is for `/f10:standup`, and is where its Assigned and Deliver adapters are named.
+  The prose is for `/f10:standup`, and is where your wording and Deliver adapter are named.
+  A `## <name>` heading naming one of your `groups` starts that group's section: it applies on top of the prose above the first such heading when `--group <name>` is the only group the run names.
+  With several groups, or `--all`, only that person-wide prose applies.
 
   ```yaml
   ---
@@ -301,6 +303,19 @@ Until something marks a standup, every run starts at the last working day.
     oss: [~/code/github.com/amberpixels/r3, ~/code/github.com/amberpixels/k1]
   ---
   ```
+
+  The prose below that frontmatter, with a section for `work`:
+
+  ```markdown
+  Keep it short: one line per task, no commit counts.
+
+  ## work
+
+  Write for my lead, outcomes first.
+  Deliver: a Gmail draft to lead@acme.example.
+  ```
+
+  `--group work` drafts a mail in the lead's wording; `--group oss`, with no section, prints the report in the person-wide wording.
 - `standup.json`: the last reported standup, `{"at", "since"}`, written by `mark`.
   It is f10's state, not for editing; delete it to start over from the last working day.
 
