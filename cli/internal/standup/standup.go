@@ -158,6 +158,8 @@ type ReviewedPR struct {
 type Report struct {
 	Schema   int          `json:"schema"`
 	Since    time.Time    `json:"since"`
+	Period   string       `json:"period,omitempty"` // how since was chosen; the command sets it
+	Days     []string     `json:"days"`             // local dates with activity; the command sets it
 	Checkout string       `json:"checkout"`
 	Host     *string      `json:"host"`
 	User     User         `json:"user"`
@@ -173,6 +175,7 @@ func Group(in Input) Report {
 	rep := Report{
 		Schema:   Schema,
 		Since:    since,
+		Days:     []string{},
 		Checkout: in.Checkout,
 		User:     in.User,
 		Tasks:    []Task{},
