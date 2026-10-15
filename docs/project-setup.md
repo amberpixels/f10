@@ -88,7 +88,9 @@ A name with no generic step, `e2e` say, *is* the step: the overlay is its whole 
 That is how a pipeline gets project-specific steps.
 
 `standup.md` is the overlay `/f10:standup` reads: the report's wording, sections and audience, in prose, and optionally an **Assigned** adapter, the command listing your open tasks for the Next questionnaire where `f10 task search "is:open assignee:@me"` does not (GitLab, most drivers).
-The prose under `~/.f10/standup.md`'s frontmatter is yours and wins where the two disagree.
+It may also name a **Deliver** adapter, a skill, an MCP tool or a command that turns the report into a draft (a Gmail draft to your lead, say): f10 creates drafts and never sends, and an adapter that fails leaves the printed report to send by hand.
+The prose under `~/.f10/standup.md`'s frontmatter is yours and wins where the two disagree; a Deliver adapter, whose destination is yours, usually belongs there.
+Adapters are named in that prose, never as frontmatter keys, which `f10 standup` rejects.
 
 ## Pipelines
 
