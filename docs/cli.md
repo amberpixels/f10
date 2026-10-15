@@ -306,13 +306,13 @@ Every commit and force-push in the period is `work` or `upkeep`, decided from gi
 Upkeep is:
 
 - `base-merge`: a merge whose second parent is on the first-parent line of the default branch, or of the base `f10 start --after` recorded.
-  A merge into the default branch, or of any other branch, is work.
+  A merge made on the default branch, pushed or not, or of any other branch, is work.
 - `rebase`: a force-push to your PR whose old and new commits, each taken against the PR's base, pair up with the same patches (`git range-diff`, every pair `=`).
   Without the old commits in the local object store it is work: standup never fetches them.
 - `files`: a commit touching only lockfiles (`go.sum`, `package-lock.json`, `yarn.lock`, `Gemfile.lock`, `Cargo.lock` and the like), generated files (`*.pb.go`, `*_gen.go`, `*.gen.*`, `zz_generated*`, anything marked `linguist-generated`, Go files with the `Code generated ... DO NOT EDIT.` header) or snapshots (`__snapshots__/`, `*.snap`, `*.golden`), plus the project's `standup.upkeep` globs.
   A manifest such as `go.mod` or `package.json` is work.
 - `ci-fix`: a commit touching only test files, at most 30 lines added plus deleted, whose parent's CI was red and finished before the commit's author date.
-  It needs a host; with none it never applies.
+  It needs a host; with none, or with a parent the host never saw (an unpushed commit), it never applies.
 
 Anything else is work: hiding a real change costs more than listing a small one.
 A task is `upkeep` when its period holds at least one upkeep item and no work item; opening or merging a PR in the period is work.

@@ -4,15 +4,15 @@
   "host": "gh",
   "calls": {
     "gh api user": {
-      "stdout": "{\"login\":\"amberpixels\",\"id\":161472466,\"node_id\":\"U_kgDOCZ_f0g\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/161472466?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/amberpixels\",\"html_url\":\"https://github.com/amberpixels\",\"followers_url\":\"https://api.github.com/users/amberpixels/followers\",\"following_url\":\"https://api.github.com/users/amberpixels/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/amberpixels/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/amberpixels/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/amberpixels/subscriptions\",\"organizations_url\":\"https://api.github.com/users/amberpixels/orgs\",\"repos_url\":\"https://api.github.com/users/amberpixels/repos\",\"events_url\":\"https://api.github.com/users/amberpixels/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/amberpixels/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false,\"name\":\"Eugene\",\"company\":\"amberpixels.io\",\"blog\":\"eugene.md\",\"location\":\"Moldova, Chișinău\",\"email\":\"me@eugene.md\",\"hireable\":null,\"bio\":\"Building Things & Enjoying Building. \\r\\nGolang. Ruby. Typescript\",\"twitter_username\":null,\"notification_email\":\"me@eugene.md\",\"public_repos\":25,\"public_gists\":0,\"followers\":12,\"following\":31,\"created_at\":\"2024-02-27T13:13:05Z\",\"updated_at\":\"2026-09-24T14:42:17Z\"}"
+      "stdout": "{\"login\":\"amberpixels\",\"id\":161472466,\"node_id\":\"U_kgDOCZ_f0g\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/161472466?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/amberpixels\",\"html_url\":\"https://github.com/amberpixels\",\"followers_url\":\"https://api.github.com/users/amberpixels/followers\",\"following_url\":\"https://api.github.com/users/amberpixels/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/amberpixels/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/amberpixels/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/amberpixels/subscriptions\",\"organizations_url\":\"https://api.github.com/users/amberpixels/orgs\",\"repos_url\":\"https://api.github.com/users/amberpixels/repos\",\"events_url\":\"https://api.github.com/users/amberpixels/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/amberpixels/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false,\"name\":\"Eugene\",\"company\":\"amberpixels.io\",\"blog\":\"eugene.md\",\"location\":\"Moldova, Chișinău\",\"email\":\"me@eugene.md\",\"hireable\":null,\"bio\":\"Building Things \u0026 Enjoying Building. \\r\\nGolang. Ruby. Typescript\",\"twitter_username\":null,\"notification_email\":\"me@eugene.md\",\"public_repos\":25,\"public_gists\":0,\"followers\":12,\"following\":31,\"created_at\":\"2024-02-27T13:13:05Z\",\"updated_at\":\"2026-09-24T14:42:17Z\"}"
     },
-    "gh pr list --state all --search author:amberpixels updated:>=2026-10-09T21:00:00Z --json number,title,state,isDraft,headRefName,baseRefName,url,author,createdAt,mergedAt,changedFiles,mergeCommit --limit 1000": {
+    "gh pr list --state all --search author:amberpixels updated:\u003e=2026-10-09T21:00:00Z --json number,title,state,isDraft,headRefName,baseRefName,url,author,createdAt,mergedAt,changedFiles,mergeCommit --limit 1000": {
       "stdout": "[]"
     },
-    "gh pr list --state all --search is:merged merged:>=2026-10-09T21:00:00Z --json number,title,state,url,author,mergedAt,mergedBy --limit 1000": {
+    "gh pr list --state all --search is:merged merged:\u003e=2026-10-09T21:00:00Z --json number,title,state,url,author,mergedAt,mergedBy --limit 1000": {
       "stdout": "[]"
     },
-    "gh pr list --state all --search reviewed-by:amberpixels updated:>=2026-10-09T21:00:00Z --json number,title,state,url,author,mergedAt,mergedBy,reviews --limit 1000": {
+    "gh pr list --state all --search reviewed-by:amberpixels updated:\u003e=2026-10-09T21:00:00Z --json number,title,state,url,author,mergedAt,mergedBy,reviews --limit 1000": {
       "stdout": "[]"
     },
     "git check-attr linguist-generated -- README.md go.mod go.sum merge.go merge_test.go presets.go standardgo.go": {
@@ -31,9 +31,6 @@
       "stderr": "git grep: exit status 1",
       "code": 1
     },
-    "git log --branches --remotes --no-merges --no-renames --numstat --since=2026-10-10T00:00:00+03:00 --format=%x1e%H": {
-      "stdout": "\u001ebe489df9184c63206108829895d5da36a948bcdf\n\n59\t64\tREADME.md\n\u001ee175336c69851662c91edfce379d4e1e286478c6\n\n16\t26\tmerge.go\n10\t17\tmerge_test.go\n4\t6\tpresets.go\n8\t15\tstandardgo.go\n\u001e3d97412568f595d3bc9a0b4de3073914a56e7141\n\n30\t30\tgo.mod\n70\t73\tgo.sum"
-    },
     "git log --branches --remotes --source --since=2026-10-10T00:00:00+03:00 --format=%H%x1f%aE%x1f%aI%x1f%P%x1f%S%x1f%s": {
       "stdout": "be489df9184c63206108829895d5da36a948bcdf\u001feugene@amberpixels.io\u001f2026-10-12T13:48:26+03:00\u001fe175336c69851662c91edfce379d4e1e286478c6\u001fmain\u001fTighten README prose\ne175336c69851662c91edfce379d4e1e286478c6\u001feugene@amberpixels.io\u001f2026-10-12T13:48:26+03:00\u001f3d97412568f595d3bc9a0b4de3073914a56e7141\u001fmain\u001fTighten code comments to the why\n3d97412568f595d3bc9a0b4de3073914a56e7141\u001feugene@amberpixels.io\u001f2026-10-10T23:43:29+03:00\u001f99467056ba6499633c4499d973d7a736617e8e70\u001fmain\u001fgo mod up"
     },
@@ -42,6 +39,9 @@
     },
     "git remote": {
       "stdout": "origin"
+    },
+    "git show --no-renames --numstat --format=%x1e%H be489df9184c63206108829895d5da36a948bcdf e175336c69851662c91edfce379d4e1e286478c6 3d97412568f595d3bc9a0b4de3073914a56e7141": {
+      "stdout": "\u001ebe489df9184c63206108829895d5da36a948bcdf\n\n59\t64\tREADME.md\n\u001ee175336c69851662c91edfce379d4e1e286478c6\n\n16\t26\tmerge.go\n10\t17\tmerge_test.go\n4\t6\tpresets.go\n8\t15\tstandardgo.go\n\u001e3d97412568f595d3bc9a0b4de3073914a56e7141\n\n30\t30\tgo.mod\n70\t73\tgo.sum"
     },
     "git symbolic-ref --short refs/remotes/origin/HEAD": {
       "stdout": "origin/main"

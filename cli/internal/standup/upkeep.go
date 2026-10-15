@@ -90,7 +90,7 @@ func classifyCommit(c Commit, extra []string) (string, string) {
 	switch {
 	case upkeepFiles(c.Files, extra):
 		return ClassUpkeep, UpkeepFiles
-	case ciFixShape(c, extra) && c.ParentCI != nil && c.ParentCI.Red && !c.ParentCI.At.After(c.At):
+	case ciFixShape(c) && c.ParentCI != nil && c.ParentCI.Red && !c.ParentCI.At.After(c.At):
 		return ClassUpkeep, UpkeepCIFix
 	default:
 		return ClassWork, ""
@@ -108,7 +108,7 @@ func classifyPush(p ForcePush) (string, string) {
 // NeedsCI reports whether c is a CI fix if its parent's CI was red: the
 // collector asks the host only for these.
 func NeedsCI(c Commit, extra []string) bool {
-	return len(c.Parents) == 1 && !upkeepFiles(c.Files, extra) && ciFixShape(c, extra)
+	return len(c.Parents) == 1 && !upkeepFiles(c.Files, extra) && ciFixShape(c)
 }
 
 func upkeepFiles(files []File, extra []string) bool {
@@ -126,7 +126,7 @@ func upkeepFiles(files []File, extra []string) bool {
 }
 
 // ciFixShape is a small change to test files only.
-func ciFixShape(c Commit, extra []string) bool {
+func ciFixShape(c Commit) bool {
 	if len(c.Files) == 0 {
 		return false
 	}
@@ -134,7 +134,7 @@ func ciFixShape(c Commit, extra []string) bool {
 	lines := 0
 
 	for _, f := range c.Files {
-		if f.Binary || !matchAny(testGlobs, f.Path) && !matchAny(extra, f.Path) {
+		if f.Binary || !matchAny(testGlobs, f.Path) {
 			return false
 		}
 

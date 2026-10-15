@@ -58,6 +58,7 @@ func TestClassifyCommit(t *testing.T) {
 		{"test fix before red finished", withFiles(smallTest, red(3)), nil, ""},
 		{"test and code after red", withFiles(append(files("a.go"), smallTest...), red(1)), nil, ""},
 		{"spec dir after red", withFiles(files("spec/models/user_spec.rb", "spec/support/x.rb"), red(1)), nil, UpkeepCIFix},
+		{"project glob beside a test after red", withFiles(append(files("db/schema.rb"), smallTest...), red(1)), []string{"db/schema.rb"}, ""},
 		{"binary test file after red", withFiles([]File{{Path: "testdata/x.png", Binary: true}}, red(1)), nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

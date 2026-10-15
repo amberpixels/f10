@@ -126,7 +126,7 @@ func TestRecordedBases(t *testing.T) {
 	}
 }
 
-const numstatLog = "git log --branches --remotes --no-merges --no-renames --numstat " + sinceArg + " " + numstatFormat
+const numstatShow = "git show --no-renames --numstat " + numstatFormat
 
 func ghForcePushes(number int) string {
 	return "gh api graphql -f query=" + forcePushesQuery + " -F owner={owner} -F name={repo} -F number=" + strconv.Itoa(
@@ -283,7 +283,7 @@ func scriptStandupGit(f *fakes, email, originHead string) {
 	f.script("git log --branches --remotes --source "+sinceArg+" "+logFormat,
 		strings.Join([]string{"a1", "me@x.io", "2026-10-14T10:00:00Z", "p1", "FT-2/b", "work"}, "\x1f"))
 	f.script("git log --format=%H "+sinceArg+" origin/main", "")
-	f.script(numstatLog, "")
+	f.script(numstatShow+" a1", "")
 	f.script(cfgDeps, "")
 }
 
@@ -379,7 +379,10 @@ func TestRenderStandupFoldsUpkeep(t *testing.T) {
 func TestCommitFacts(t *testing.T) {
 	f := newFakes(t)
 
-	f.script(numstatLog, "\x1ec1\n\n3\t1\tgo.sum\n10\t2\tapi/client.go\n-\t-\tlogo.png\n\x1ec2\n\n1\t1\tz_gen.go")
+	f.script(
+		numstatShow+" c1 c2",
+		"\x1ec1\n\n3\t1\tgo.sum\n10\t2\tapi/client.go\n-\t-\tlogo.png\n\x1ec2\n\n1\t1\tz_gen.go",
+	)
 	f.script("git check-attr linguist-generated -- api/client.go go.sum logo.png z_gen.go",
 		"api/client.go: linguist-generated: unspecified\ngo.sum: linguist-generated: unspecified\n"+
 			"logo.png: linguist-generated: set\nz_gen.go: linguist-generated: unspecified")
@@ -395,7 +398,7 @@ func TestCommitFacts(t *testing.T) {
 		{SHA: "m1", Parents: []string{"c2", "mainTip"}, Branch: "FT-1/a"},
 		{SHA: "m2", Parents: []string{"c2", "feat"}, Branch: "FT-1/a"},
 	}
-	commitFacts(t.Context(), ".", standupSince, commits, "origin/main", nil)
+	commitFacts(t.Context(), ".", commits, "origin/main", "main", nil)
 
 	c1 := commits[0].Files
 	if len(c1) != 3 || c1[0].Path != "go.sum" || c1[0].Added != 3 || c1[1].Generated != true ||
@@ -411,12 +414,11 @@ func TestCommitFacts(t *testing.T) {
 // A merge on a stacked branch checks the recorded base before main.
 func TestOnFirstParentLineOfARecordedBase(t *testing.T) {
 	f := newFakes(t)
-	f.script(numstatLog, "")
 	f.script("git rev-parse --verify --quiet refs/remotes/origin/FT-1/a", "baseTip")
 	f.script("git rev-list --first-parent --parents refs/remotes/origin/FT-1/a --not b2", "baseTip b2")
 
 	commits := []standup.Commit{{SHA: "m", Parents: []string{"x", "b2"}, Branch: "FT-2/b"}}
-	commitFacts(t.Context(), ".", standupSince, commits, "origin/main", map[string]string{"FT-2/b": "FT-1/a"})
+	commitFacts(t.Context(), ".", commits, "origin/main", "main", map[string]string{"FT-2/b": "FT-1/a"})
 
 	if !commits[0].BaseMerge {
 		t.Error("a merge of the recorded base is a base merge")
@@ -479,5 +481,65 @@ func TestCommitCI(t *testing.T) {
 
 	if ci, err := (host{name: "glab", dir: "."}).commitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
 		t.Errorf("p3 = %+v, %v; want a red pipeline", ci, err)
+	}
+}
+
+// A merge made on the default branch merges into it: unpushed, its second
+// parent is origin's tip, and it must still not read as a base merge.
+func TestCommitFactsMergeOnTheDefaultBranch(t *testing.T) {
+	f := newFakes(t)
+	f.fail("git merge-base --is-ancestor local origin/main", shell.Result{Code: 1})
+	f.script("git merge-base --is-ancestor pushed origin/main", "")
+	f.script("git rev-list --first-parent --parents origin/main --not remoteTip", "pushed mine remoteTip\nmine m0")
+
+	commits := []standup.Commit{
+		{SHA: "local", Parents: []string{"mine", "remoteTip"}, Branch: "main"},
+		{SHA: "pushed", Parents: []string{"mine", "remoteTip"}, Branch: "main"},
+	}
+	commitFacts(t.Context(), ".", commits, "origin/main", "main", nil)
+
+	if commits[0].BaseMerge || commits[1].BaseMerge {
+		t.Errorf("base merge: unpushed %v, pushed %v; want neither", commits[0].BaseMerge, commits[1].BaseMerge)
+	}
+}
+
+// A CI read that fails, as for a parent the host never saw, leaves the
+// commit's CI unknown instead of failing the report; commits from before
+// the period are never asked about.
+func TestCollectStandupToleratesAnUnknownParent(t *testing.T) {
+	f := newFakes(t)
+	f.script("git config user.email", "me@x.io")
+	f.script("git remote", "origin")
+	f.script(headRef, "origin/main")
+	f.script("git log --branches --remotes --source "+sinceArg+" "+logFormat,
+		"t1\x1fme@x.io\x1f2026-10-14T10:00:00Z\x1fp1\x1fFT-2/b\x1ftest tweak\n"+
+			"t0\x1fme@x.io\x1f2026-10-13T10:00:00Z\x1fp0\x1fFT-2/b\x1fold test tweak")
+	f.script("git log --format=%H "+sinceArg+" origin/main", "")
+	f.script(numstatShow+" t1 t0", "\x1et1\n\n1\t1\ta_test.go\n\x1et0\n\n1\t1\ta_test.go")
+	f.script(cfgDeps, "")
+	f.script("git check-attr linguist-generated -- a_test.go", "a_test.go: linguist-generated: unspecified")
+	f.script("git grep -l -E "+generatedHeader+" t1 t0 -- a_test.go", "")
+	f.script("gh api user", `{"login":"me"}`)
+	f.script(ghSearch("author:me updated:>="+ghStamp, ghOwnFields), `[]`)
+	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, ghForeignFields+",reviews"), `[]`)
+	f.script(ghSearch("is:merged merged:>="+ghStamp, ghForeignFields), `[]`)
+	f.fail("gh api repos/{owner}/{repo}/commits/p1/check-runs?per_page=100",
+		shell.Result{Code: 1, Stderr: "No commit found for SHA: p1 (HTTP 422)"})
+
+	in, err := collectStandup(
+		t.Context(),
+		standupSource{dir: ".", main: ".", prefix: "FT", host: host{name: "gh", dir: "."}},
+		standupSince,
+	)
+	if err != nil {
+		t.Fatalf("a parent the host never saw failed the report: %v", err)
+	}
+
+	if in.Commits[0].ParentCI != nil {
+		t.Errorf("CI = %+v, want unknown", in.Commits[0].ParentCI)
+	}
+
+	if f.called("gh api repos/{owner}/{repo}/commits/p0/") {
+		t.Error("asked CI for a commit from before the period")
 	}
 }

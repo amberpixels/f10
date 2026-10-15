@@ -213,7 +213,7 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 	}
 
 	bases := recordedBases(ctx, src.main)
-	commitFacts(ctx, src.dir, since, commits, defRef, bases)
+	commitFacts(ctx, src.dir, commits, defRef, def, bases)
 
 	in := standup.Input{
 		Prefix:        src.prefix,
@@ -257,13 +257,15 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 		}
 	}
 
+	// a parent the host never saw (an unpushed commit) has no CI: unknown,
+	// which classifies as work rather than failing the report
 	for i, c := range commits {
-		if !standup.NeedsCI(c, src.upkeep) {
+		if c.At.Before(since) || !standup.NeedsCI(c, src.upkeep) {
 			continue
 		}
 
-		if commits[i].ParentCI, err = src.host.commitCI(ctx, c.Parents[0]); err != nil {
-			return standup.Input{}, err
+		if ci, err := src.host.commitCI(ctx, c.Parents[0]); err == nil {
+			commits[i].ParentCI = ci
 		}
 	}
 
@@ -372,12 +374,19 @@ const generatedHeader = `^// Code generated .* DO NOT EDIT\.$`
 func commitFacts(
 	ctx context.Context,
 	dir string,
-	since time.Time,
 	commits []standup.Commit,
-	defRef string,
+	defRef, def string,
 	bases map[string]string,
 ) {
-	files := changedFiles(ctx, dir, since)
+	var single []string
+
+	for _, c := range commits {
+		if len(c.Parents) == 1 {
+			single = append(single, c.SHA)
+		}
+	}
+
+	files := changedFiles(ctx, dir, single)
 
 	var paths, goPaths, shas []string
 
@@ -406,7 +415,9 @@ func commitFacts(
 			c.Files[j].Generated = generated[f.Path] || generated[c.SHA+":"+f.Path]
 		}
 
-		if len(c.Parents) < 2 {
+		// a merge made on the default branch merges into it; one not yet
+		// pushed would otherwise read as merging origin's tip in
+		if len(c.Parents) < 2 || c.Branch == def && (defRef == "" || !gitx.IsAncestor(ctx, dir, c.SHA, defRef)) {
 			continue
 		}
 
@@ -420,11 +431,15 @@ func commitFacts(
 	}
 }
 
-// changedFiles is every non-merge commit's numstat in the period, by sha.
+// changedFiles is the numstat of the given non-merge commits, by sha: the
+// user's own only, so the cost follows their activity, not the team's.
 // --no-renames lists a rename as a delete and an add, so both paths count.
-func changedFiles(ctx context.Context, dir string, since time.Time) map[string][]standup.File {
-	out := gitx.Out(ctx, dir, "log", "--branches", "--remotes", "--no-merges", "--no-renames", "--numstat",
-		"--since="+since.Format(time.RFC3339), numstatFormat)
+func changedFiles(ctx context.Context, dir string, shas []string) map[string][]standup.File {
+	if len(shas) == 0 {
+		return nil
+	}
+
+	out := gitx.Out(ctx, dir, append([]string{"show", "--no-renames", "--numstat", numstatFormat}, shas...)...)
 
 	files := map[string][]standup.File{}
 
