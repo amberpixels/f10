@@ -17,6 +17,7 @@ The segment brings its own leading space and is empty when no run is live, so it
 Set `"refreshInterval": 2` on `statusLine` in `~/.claude/settings.json` as well: without it the line re-renders only when an assistant message arrives, and a long implement step sits on a stale glyph for minutes.
 
 ```bash
+f10 doctor            # is the statusLine wired and the symlink in place, beside the rest of the install
 f10-state.sh doctor   # where state lives, whether the symlink is in place, what renders now
 ```
 

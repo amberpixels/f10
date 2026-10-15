@@ -292,7 +292,7 @@ printf '%s@%s%s %s' "$user" "$host" "$f10" "$dir"                        # ← d
 The segment brings its own leading space and is empty when no run is live, so it fits anywhere, even between `user@host` and the directory.
 
 Set `"refreshInterval": 2` on `statusLine` too; otherwise it refreshes only on assistant messages, and a long implement step shows a stale glyph.
-`f10-state.sh doctor` reports where state lives, whether the symlink is in place, and what the badge renders now.
+`f10 doctor` says whether the status line is wired; `f10-state.sh doctor` reports where state lives, whether the symlink is in place, and what the badge renders now.
 
 State is one small file per session in `~/.claude/f10/state/`, outside every repo (stealth wants nothing f10-shaped in a project).
 `/clear` starts a new session and retires the badge; a file older than the TTL stops rendering.
@@ -334,7 +334,10 @@ Full reference: [docs/cli.md](docs/cli.md).
 just install   # go install ./cli/cmd/f10
 f10 --version  # the release number from `go install ...@vX.Y.Z`, the commit from a checkout build
 f10 config
+f10 doctor     # is the plugin, the binary and the environment wired up? changes nothing
 ```
+
+`f10 doctor` checks both halves of the install and what they need: the plugin and binary versions agree, the plugin's scripts are on PATH, its hooks are registered (or wait on a restart), the status line is wired, Herdr, the host CLI's login and `project.md`'s frontmatter, each with a remedy line when it is not.
 
 `f10 init` writes `.f10/instructions/project.md` from what the probes found (stack, tracker and id format, host and PR CLI, verify commands, storage, visibility) and adds the stealth `.f10/` line to `.git/info/exclude`.
 Undetected sections are left out, not stubbed, and the `Project` one-liner is yours to write.
