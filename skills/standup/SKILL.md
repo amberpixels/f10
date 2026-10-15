@@ -1,11 +1,12 @@
 ---
 name: standup
-description: "f10 standup skill - a status report of what you did since your last standup, built from your commits and PRs grouped by task: a section per day, upkeep folded into one line, reviews of others' work, and a Next section from one questionnaire. Use when the user says \"/f10:standup\", asks for a standup, a status report or a daily update, or what they did yesterday or last week."
-allowed-tools: Bash, Read, AskUserQuestion
+description: "f10 standup skill - a status report of what you did since your last standup, built from your commits and PRs grouped by task: a section per day, upkeep folded into one line, reviews of others' work, and a Next section from one questionnaire, drafted through the adapter your overlay names. Use when the user says \"/f10:standup\", asks for a standup, a status report or a daily update, or what they did yesterday or last week."
 argument-hint: "[--since <date> | --week] [-C <checkout>]... [--group <name>]... [--all] [--other]"
 ---
 
 # f10 · standup
+
+No `allowed-tools` on purpose: the Deliver adapter is whatever the `standup` overlay binds (an MCP tool, a skill, a command), and a fixed list would disable it.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -25,4 +26,4 @@ argument-hint: "[--since <date> | --week] [-C <checkout>]... [--group <name>]...
 2. Follow the **standup** step it prints.
 
 **Exit**
-- Stop at the printed report and the marked period.
+- Stop at the printed report, its draft where an overlay names a Deliver adapter, and the marked period.
