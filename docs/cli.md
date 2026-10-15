@@ -255,6 +255,7 @@ It changes nothing and does not fetch: local and remote-tracking branches are re
 
 **The period** runs since the last standup you reported, in any checkout, so two scopes run the same morning agree.
 The report lists the days that had activity (`days`), so Friday to Monday, a working Saturday or a holiday Monday need no calendar.
+Activity is a commit by its author date, a PR of yours opened or merged, a force-push of yours, and a review or merge of someone else's PR.
 
 - A standup reported earlier today gives its own start again: a second report the same day covers the same span, not an empty one.
 - With no standup stored, the period starts at local midnight of the last working day before today with activity, looked for over the last 14 days.
@@ -264,7 +265,7 @@ The report lists the days that had activity (`days`), so Friday to Monday, a wor
 
 Only `f10 standup mark --since <time> [--at <time>]` moves the stored standup.
 `--since` is the `since` the reported standup showed; `--at` is when it was read (default now), and the next standup starts there, so work done between reading the report and marking it is not lost.
-Run it once you have reported; the `/f10:standup` skill, when it ships, calls it for you.
+The `/f10:standup` skill calls it once it has printed a report over the default period; run it by hand when you report some other way.
 Until something marks a standup, every run starts at the last working day.
 `f10 standup`, with or without `--json`, never marks, so a script reading the data does not shift the next report's period.
 
@@ -339,6 +340,7 @@ A breaking change bumps `schema`.
       "state": "in review",
       "class": "work",
       "after": "GH-11",
+      "days": [{"date": "2026-10-14", "class": "work"}, {"date": "2026-10-15", "class": "upkeep"}],
       "prs": [
         {
           "number": 40, "title": "...", "url": "...", "state": "in review", "draft": false,
@@ -355,7 +357,8 @@ A breaking change bumps `schema`.
   "other": {"prs": [], "commits": []},
   "reviewed": [
     {"number": 41, "title": "...", "url": "...", "state": "shipped", "author": "them",
-     "actions": [{"kind": "reviewed", "at": "..."}, {"kind": "merged", "at": "..."}]}
+     "actions": [{"kind": "reviewed", "at": "..."}, {"kind": "merged", "at": "..."}],
+     "days": ["2026-10-15"]}
   ]
 }
 ```
@@ -367,6 +370,8 @@ A breaking change bumps `schema`.
 | `host` | `gh`, `glab`, or `null` with no host CLI (then `user.login` is absent and `reviewed` is empty) |
 | `tasks` | by id prefix, then number |
 | `tasks[].after` | the task its root PR is stacked on; absent when none |
+| `tasks[].days` | the local dates with the task's activity, ascending, each with the class of that day's activity alone: a task worked on one day and only caught up with its base the next is `work`, then `upkeep` |
+| `reviewed[].days` | the local dates of your actions on that PR in the period, ascending |
 | `tasks[].prs` | chain order: a root, then the PRs on it; roots and siblings by number |
 | `tasks[].commits`, `other.commits` | commits on no PR of yours, by author date, then sha |
 | `prs[].base_pr` | the PR whose head this one's base is; absent at a chain root |

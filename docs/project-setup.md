@@ -87,6 +87,9 @@ A file `.f10/instructions/<step>.md` extends the generic step of that name.
 A name with no generic step, `e2e` say, *is* the step: the overlay is its whole definition.
 That is how a pipeline gets project-specific steps.
 
+`standup.md` is the overlay `/f10:standup` reads: the report's wording, sections and audience, in prose, and optionally an **Assigned** adapter, the command listing your open tasks for the Next questionnaire where `f10 task search "is:open assignee:@me"` does not (GitLab, most drivers).
+The prose under `~/.f10/standup.md`'s frontmatter is yours and wins where the two disagree.
+
 ## Pipelines
 
 One pipeline, or several named ones, in the frontmatter:

@@ -144,13 +144,19 @@ func ciFixShape(c Commit) bool {
 	return lines <= ciFixLines
 }
 
-// taskClass is upkeep when the task's activity in the period holds an
-// upkeep item and no work item. Opening or merging a PR is work.
-func taskClass(t Task, since time.Time) string {
+// taskClass is upkeep when the task's activity from from until to (zero:
+// no end) holds an upkeep item and no work item. Opening or merging a PR is
+// work.
+func taskClass(t Task, from, to time.Time) string {
 	upkeep := false
+	in := func(at time.Time) bool { return inWindow(at, from, to) }
 
 	commits := func(cs []Commit) bool {
 		for _, c := range cs {
+			if !in(c.At) {
+				continue
+			}
+
 			if c.Class != ClassUpkeep {
 				return false
 			}
@@ -162,7 +168,7 @@ func taskClass(t Task, since time.Time) string {
 	}
 
 	for _, p := range t.PRs {
-		if !p.CreatedAt.Before(since) || (p.MergedAt != nil && !p.MergedAt.Before(since)) {
+		if in(p.CreatedAt) || (p.MergedAt != nil && in(*p.MergedAt)) {
 			return ClassWork
 		}
 
@@ -171,6 +177,10 @@ func taskClass(t Task, since time.Time) string {
 		}
 
 		for _, fp := range p.ForcePushes {
+			if !in(fp.At) {
+				continue
+			}
+
 			if fp.Class != ClassUpkeep {
 				return ClassWork
 			}
