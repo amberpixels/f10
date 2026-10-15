@@ -291,6 +291,7 @@ Until something marks a standup, every run starts at the last working day.
   A glob keeps the checkouts it matches and skips anything else; a path that is not a checkout is an error.
   Only a run with `--group` reads `groups`.
   An unknown key is an error.
+  The prose is for `/f10:standup`, and is where its Assigned and Deliver adapters are named.
 
   ```yaml
   ---

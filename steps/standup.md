@@ -72,7 +72,8 @@ Never re-read git or the host to second-guess them, and never fall back to doing
 **Driven** (`modes/driven.md`): no questionnaire.
 The Next section lists the carry-over tasks and says assigned tasks were not offered; nothing becomes an ask.
 A driven run never marks: nobody read the report, so moving the period would hide that work from the next one.
-It still delivers: a draft is not a send, and a draft is where a report nobody watched gets read.
+Nor does it deliver: the adapter is a tool the session may not have approved, and its permission dialog would stall a pane nobody watches; without a mark, each driven run would also draft the same period again.
+One line under the report names the adapter that was not called.
 
 **On failure:** `f10` is not on `PATH`, or `f10 standup` fails (no git `user.email`, a host CLI not logged in, an unreadable `~/.f10/standup.json`).
 Report its stderr verbatim per `conventions/failure.md` and do not mark.
