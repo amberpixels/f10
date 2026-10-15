@@ -301,6 +301,24 @@ A host CLI that fails (not logged in, no network) fails the command; it never fa
 A task takes the least advanced state among its open PRs and its PR-less commits on a branch other than the default (`in progress`).
 With nothing open it is `shipped` when a PR merged or a commit landed on the default branch, else `closed`.
 
+**Work and upkeep.**
+Every commit and force-push in the period is `work` or `upkeep`, decided from git and the host, never from a commit message.
+Upkeep is:
+
+- `base-merge`: a merge whose second parent is on the first-parent line of the default branch, or of the base `f10 start --after` recorded.
+  A merge made on the default branch, pushed or not, or of any other branch, is work.
+- `rebase`: a force-push to your PR whose old and new commits, each taken against the PR's base, pair up with the same patches (`git range-diff`, every pair `=`).
+  Without the old commits in the local object store it is work: standup never fetches them.
+- `files`: a commit touching only lockfiles (`go.sum`, `package-lock.json`, `yarn.lock`, `Gemfile.lock`, `Cargo.lock` and the like), generated files (`*.pb.go`, `*_gen.go`, `*.gen.*`, `zz_generated*`, anything marked `linguist-generated`, Go files with the `Code generated ... DO NOT EDIT.` header) or snapshots (`__snapshots__/`, `*.snap`, `*.golden`), plus the project's `standup.upkeep` globs.
+  A manifest such as `go.mod` or `package.json` is work.
+- `ci-fix`: a commit touching only test files, at most 30 lines added plus deleted, whose parent's CI was red and finished before the commit's author date.
+  It needs a host; with none, or with a parent the host never saw (an unpushed commit), it never applies.
+
+Anything else is work: hiding a real change costs more than listing a small one.
+A task is `upkeep` when its period holds at least one upkeep item and no work item; opening or merging a PR in the period is work.
+The text report folds upkeep tasks into one `kept up to date` line.
+Your own PR is also reported when its only activity in the period is a force-push of yours: a rebase keeps author dates, so it leaves no commit in the period.
+
 **JSON**, schema 1.
 The same history gives the same bytes in the same zone: no run timestamp, every time in UTC (`days` are local dates), every list in a fixed order.
 A breaking change bumps `schema`.
@@ -319,13 +337,16 @@ A breaking change bumps `schema`.
       "id": "GH-12",
       "title": "the root PR's title, empty with no PR",
       "state": "in review",
+      "class": "work",
       "after": "GH-11",
       "prs": [
         {
           "number": 40, "title": "...", "url": "...", "state": "in review", "draft": false,
           "head": "GH-12/x", "base": "GH-11/y", "base_pr": 38,
           "created_at": "...", "merged_at": "...",
-          "commits": [{"sha": "...", "subject": "...", "at": "...", "branch": "GH-12/x", "parents": ["..."]}]
+          "commits": [{"sha": "...", "subject": "...", "at": "...", "branch": "GH-12/x", "parents": ["..."],
+                       "class": "upkeep", "upkeep": "base-merge"}],
+          "force_pushes": [{"at": "...", "before": "...", "after": "...", "class": "upkeep", "upkeep": "rebase"}]
         }
       ],
       "commits": []
@@ -354,6 +375,9 @@ A breaking change bumps `schema`.
 | `commits[].at` | the author date |
 | `commits[].branch` | the branch it was reached from, remote prefix dropped; the default branch (origin/HEAD, else the host's) for anything it reaches |
 | `commits[].parents` | parent shas; two or more is a merge commit |
+| `class` | on a task, a commit or a force-push: `work` or `upkeep` |
+| `upkeep` | on an upkeep commit or force-push: `base-merge`, `rebase`, `files` or `ci-fix`; absent on work |
+| `prs[].force_pushes` | your force-pushes to it in the period, by time, then after-sha |
 | `reviewed` | by number; `actions` by time, then kind |
 
 ## References

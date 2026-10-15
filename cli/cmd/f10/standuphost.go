@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
@@ -132,6 +133,10 @@ func (h host) standupPulls(ctx context.Context, login string, since time.Time) (
 		hp := p.hostPR()
 
 		if hp.Commits, err = h.pullCommits(ctx, hp.Number); err != nil {
+			return nil, err
+		}
+
+		if hp.ForcePushes, err = h.prForcePushes(ctx, hp.Number, login); err != nil {
 			return nil, err
 		}
 
@@ -286,6 +291,11 @@ func (h host) standupMRs(ctx context.Context, login string, since time.Time) ([]
 		}
 
 		hp.Empty = len(hp.Commits) == 0
+
+		if hp.ForcePushes, err = h.mrForcePushes(ctx, hp.Number, since); err != nil {
+			return nil, err
+		}
+
 		out = append(out, hp)
 	}
 
@@ -333,4 +343,157 @@ func (h host) mrReviews(ctx context.Context, iid int) ([]standup.Review, error) 
 	}
 
 	return out, nil
+}
+
+const forcePushesQuery = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
+	"{ pullRequest(number: $number) { timelineItems(last: 100, itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT]) " +
+	"{ nodes { ... on HeadRefForcePushedEvent { createdAt actor { login } beforeCommit { oid } afterCommit { oid } } } } } } }"
+
+// prForcePushes is the force-pushes the user made to a PR, the last 100:
+// GitHub records each with the head before and after.
+func (h host) prForcePushes(ctx context.Context, number int, login string) ([]standup.ForcePush, error) {
+	var payload struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					TimelineItems struct {
+						Nodes []struct {
+							CreatedAt    time.Time   `json:"createdAt"`
+							Actor        standupUser `json:"actor"`
+							BeforeCommit struct {
+								OID string `json:"oid"`
+							} `json:"beforeCommit"`
+							AfterCommit struct {
+								OID string `json:"oid"`
+							} `json:"afterCommit"`
+						} `json:"nodes"`
+					} `json:"timelineItems"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+
+	err := h.decode(ctx, &payload, "api", "graphql", "-f", "query="+forcePushesQuery,
+		"-F", "owner={owner}", "-F", "name={repo}", "-F", "number="+strconv.Itoa(number))
+	if err != nil {
+		return nil, err
+	}
+
+	var out []standup.ForcePush
+
+	for _, n := range payload.Data.Repository.PullRequest.TimelineItems.Nodes {
+		if !sameLogin(login, n.Actor.name()) {
+			continue
+		}
+
+		out = append(out, standup.ForcePush{At: n.CreatedAt, Before: n.BeforeCommit.OID, After: n.AfterCommit.OID})
+	}
+
+	return out, nil
+}
+
+// mrForcePushes reads GitLab's MR versions, one per push, since the time:
+// a version whose previous head is not its ancestor replaced commits. GitLab
+// records no pusher, so on the user's own MR each counts as theirs.
+func (h host) mrForcePushes(ctx context.Context, iid int, since time.Time) ([]standup.ForcePush, error) {
+	type version struct {
+		Head      string    `json:"head_commit_sha"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	versions, err := decodePages[version](
+		ctx,
+		h,
+		fmt.Sprintf("projects/:fullpath/merge_requests/%d/versions?per_page=100", iid),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	slices.SortStableFunc(versions, func(a, b version) int { return a.CreatedAt.Compare(b.CreatedAt) })
+
+	var out []standup.ForcePush
+
+	for i := 1; i < len(versions); i++ {
+		prev, cur := versions[i-1], versions[i]
+		if cur.CreatedAt.Before(since) || gitx.IsAncestor(ctx, h.dir, prev.Head, cur.Head) {
+			continue
+		}
+
+		out = append(out, standup.ForcePush{At: cur.CreatedAt, Before: prev.Head, After: cur.Head})
+	}
+
+	return out, nil
+}
+
+// commitCI is how the checks on a commit ended, nil when it has none. On
+// GitHub that is its check runs and its commit statuses; on GitLab its
+// last pipeline.
+func (h host) commitCI(ctx context.Context, sha string) (*standup.CI, error) {
+	if h.glab() {
+		var commit struct {
+			LastPipeline *struct {
+				Status    string    `json:"status"`
+				UpdatedAt time.Time `json:"updated_at"`
+			} `json:"last_pipeline"`
+		}
+
+		if err := h.decode(ctx, &commit, "api", "projects/:fullpath/repository/commits/"+sha); err != nil {
+			return nil, err
+		}
+
+		if p := commit.LastPipeline; p != nil {
+			return &standup.CI{Red: p.Status == "failed", At: p.UpdatedAt}, nil
+		}
+
+		return nil, nil
+	}
+
+	var runs struct {
+		CheckRuns []struct {
+			Conclusion  string    `json:"conclusion"`
+			CompletedAt time.Time `json:"completed_at"`
+		} `json:"check_runs"`
+	}
+
+	if err := h.decode(ctx, &runs, "api", "repos/{owner}/{repo}/commits/"+sha+"/check-runs?per_page=100"); err != nil {
+		return nil, err
+	}
+
+	var status struct {
+		Statuses []struct {
+			State     string    `json:"state"`
+			UpdatedAt time.Time `json:"updated_at"`
+		} `json:"statuses"`
+	}
+
+	if err := h.decode(ctx, &status, "api", "repos/{owner}/{repo}/commits/"+sha+"/status"); err != nil {
+		return nil, err
+	}
+
+	var ci *standup.CI
+
+	seen := func(red bool, at time.Time) {
+		if ci == nil {
+			ci = &standup.CI{}
+		}
+
+		if red && !ci.At.After(at) {
+			ci.Red, ci.At = true, at
+		}
+	}
+
+	for _, r := range runs.CheckRuns {
+		if !r.CompletedAt.IsZero() {
+			seen(r.Conclusion == "failure" || r.Conclusion == "timed_out", r.CompletedAt)
+		}
+	}
+
+	for _, s := range status.Statuses {
+		if s.State != "pending" {
+			seen(s.State == "failure" || s.State == "error", s.UpdatedAt)
+		}
+	}
+
+	return ci, nil
 }
