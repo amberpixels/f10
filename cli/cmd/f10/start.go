@@ -122,14 +122,15 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in := startInput{
-		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		driver:   t.driver(),
-		task:     r,
-		suffix:   suffix,
-		mode:     mode,
-		base:     base,
-		plansDir: t.sharedPlansDir(),
-		title:    titleLookup(t, r.Number),
+		main:      cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		driver:    t.driver(),
+		task:      r,
+		suffix:    suffix,
+		mode:      mode,
+		base:      base,
+		plansDir:  t.sharedPlansDir(),
+		adoptPlan: true,
+		title:     titleLookup(t, r.Number),
 	}
 
 	switch {
@@ -206,18 +207,19 @@ func afterFromBody(ctx context.Context, tr tracker, main string, task ref.Ref) (
 // startInput is everything start needs once the target is settled, so
 // the flow can be tested without a checkout.
 type startInput struct {
-	main     string         // the main checkout: worktrees are its siblings
-	driver   *driver.Driver // nil without one
-	task     ref.Ref
-	suffix   string
-	mode     string
-	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
-	base     string                                // branch whose ref is the base, or ""
-	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
-	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
-	notes    []string                              // notes settled before the flow, printed beneath the report
-	model    string                                // the agent's --model, resolved, or "" for claude's default
-	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
+	main      string         // the main checkout: worktrees are its siblings
+	driver    *driver.Driver // nil without one
+	task      ref.Ref
+	suffix    string
+	mode      string
+	after     string                                // task id whose branch is the base and whose plan is the contract, or ""
+	base      string                                // branch whose ref is the base, or ""
+	plansDir  string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	adoptPlan bool                                  // move a plan main saved for the task into the worktree, and ship it
+	title     func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
+	notes     []string                              // notes settled before the flow, printed beneath the report
+	model     string                                // the agent's --model, resolved, or "" for claude's default
+	progress  io.Writer                             // where a wait in progress is reported, or nil for nowhere
 }
 
 // titleLookup asks the host for the task's title. A checkout with no host
@@ -266,7 +268,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 			ctx,
 			o.path,
 			agentName(in.task.ID, in.suffix, o.path),
-			prompt(in.mode, in.task.ID, o.dep),
+			prompt(in.mode, in.task.ID, o.dep, o.plan),
 		); err != nil {
 			return err
 		}
@@ -277,6 +279,10 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		rows = append(rows, fact{label: "after", value: o.dep.task})
 	}
 
+	if o.plan != "" {
+		rows = append(rows, fact{label: "plan", value: o.plan})
+	}
+
 	return writeReport(
 		w,
 		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
@@ -285,13 +291,15 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 }
 
 // An openedTask is what openTask leaves behind: the branch, its worktree,
-// the workspace showing it, the dependency recorded, and whether the agent
-// in it was started by this call and so waits for its first prompt.
+// the workspace showing it, the dependency recorded, the plan the worktree
+// holds, and whether the agent in it was started by this call and so waits
+// for its first prompt.
 type openedTask struct {
 	branch string
 	path   string
 	ws     herdr.Workspace
 	dep    *dependency
+	plan   string // the task's plan the worktree reads, or "" when none was saved or adoption is off
 	fresh  bool
 	notes  []string
 }
@@ -372,6 +380,19 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		}
 	}
 
+	// before the agent starts: a move that fails must not leave an agent
+	// waiting for a prompt that would re-plan from scratch
+	var plan string
+
+	if in.adoptPlan {
+		var planNotes []string
+		if plan, planNotes, err = adoptPlan(in.main, path, in.plansDir, in.task.ID); err != nil {
+			return openedTask{}, err
+		}
+
+		notes = append(notes, planNotes...)
+	}
+
 	ws, wsNotes, err := openWorkspace(ctx, in.main, path, name)
 	if err != nil {
 		return openedTask{}, err
@@ -379,7 +400,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	notes = append(notes, wsNotes...)
 
-	o := openedTask{branch: name, path: path, ws: ws, dep: dep}
+	o := openedTask{branch: name, path: path, ws: ws, dep: dep, plan: plan}
 
 	agent := agentName(in.task.ID, in.suffix, path)
 
@@ -603,6 +624,51 @@ func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string 
 	return nil
 }
 
+// adoptPlan settles which plan of the task the worktree reads, moving the
+// one main saved into the worktree: moved, not copied, so a later ship in
+// main finds none. Out-of-tree storage shares one dir, so nothing moves.
+// A worktree that holds its own plan keeps it, and main's stays in place.
+func adoptPlan(main, worktree, plansDir, id string) (string, []string, error) {
+	if plansDir != "" {
+		return fileAt(filepath.Join(plansDir, id+".md")), nil, nil
+	}
+
+	src := filepath.Join(main, ".f10", "plans", id+".md")
+	dst := filepath.Join(worktree, ".f10", "plans", id+".md")
+
+	switch {
+	case src == dst:
+		return fileAt(dst), nil, nil
+	case fileAt(dst) != "":
+		if fileAt(src) == "" {
+			return dst, nil, nil
+		}
+
+		return dst, []string{fmt.Sprintf("kept the worktree's plan at %s; main's %s was left in place", dst, src)}, nil
+	case fileAt(src) == "":
+		return "", nil, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+		return "", nil, fmt.Errorf("moving the plan %s to %s: %w", src, dst, err)
+	}
+
+	if err := os.Rename(src, dst); err != nil {
+		return "", nil, fmt.Errorf("moving the plan %s to %s: %w", src, dst, err)
+	}
+
+	return dst, []string{"moved the plan from " + src}, nil
+}
+
+// fileAt is path when a file is there, else "".
+func fileAt(path string) string {
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+
+	return path
+}
+
 // recordDependency writes the dependency under the branch's section of the
 // local git config: per-branch, shared by every worktree, never pushed.
 func recordDependency(ctx context.Context, dir, branch string, dep *dependency) error {
@@ -654,21 +720,26 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 }
 
 // prompt is what the agent is told: the skills, the dependency where the
-// task has one, and the driven marker. Driven mode takes every gap on its
-// default and the fetch step carries the dependency's contract, so the
-// prompt states neither.
-func prompt(mode, id string, dep *dependency) string {
+// task has one, and the driven marker. A saved plan turns plan-then-ship
+// into ship alone; --plan still plans, and the plan step archives the saved
+// one. Driven mode takes every gap on its default and the fetch step carries
+// the dependency's contract, so the prompt states neither.
+func prompt(mode, id string, dep *dependency, plan string) string {
 	if mode == modeDiscuss {
-		return discussPrompt(id, dep)
+		return discussPrompt(id, dep, plan)
 	}
 
 	var p string
 
-	switch mode {
-	case modePlan:
+	switch {
+	case mode == modePlan:
 		p = "/f10:plan " + id
-	case modeLocal:
+	case mode == modeLocal && plan != "":
+		p = "/f10:ship local: " + id
+	case mode == modeLocal:
 		p = fmt.Sprintf("/f10:plan %s && /f10:ship local: %s", id, id)
+	case plan != "":
+		p = "/f10:ship " + id
 	default:
 		p = fmt.Sprintf("/f10:plan %s && /f10:ship %s", id, id)
 	}
@@ -686,9 +757,13 @@ func prompt(mode, id string, dep *dependency) string {
 // marker: the user talks to this agent in its own pane, and its questions
 // belong there. Comments come with `f10 task read`'s output and the
 // fetch-adapter fallback with its error, so the prompt names neither.
-func discussPrompt(id string, dep *dependency) string {
+func discussPrompt(id string, dep *dependency, plan string) string {
 	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines, "+
 		"opening any image it links.", id)
+
+	if plan != "" {
+		p += " A plan for it is saved at " + plan + "; read it too."
+	}
 
 	if dep != nil {
 		p += " For context: " + dependencyClause(id, dep) + "."
