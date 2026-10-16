@@ -215,7 +215,8 @@ func existingBranch(ctx context.Context, dir, want, id, suffix string) (string, 
 // taskCheckout is where a task is being worked on: its branch, found the way
 // start would find it, and the checkout that has the branch checked out.
 // Both are "" when the task has no branch; the path alone is "" when the
-// branch is checked out nowhere. No title lookup: the branch exists or it
+// branch is checked out nowhere. The checkout can be the main one, for a
+// task shipped from main without a worktree. No title lookup: the branch exists or it
 // does not, and a slug would cost a host call for nothing.
 func taskCheckout(
 	ctx context.Context,

@@ -732,3 +732,155 @@ func TestInside(t *testing.T) {
 		}
 	}
 }
+
+// onMain turns the fixture into a task shipped from the main checkout: the
+// branch is checked out in main, and the plan sits in main's .f10/plans.
+func (fx *finishFixture) onMain(t *testing.T, plan string) string {
+	t.Helper()
+
+	fx.f.script(worktrees, porcelain("GH-1", fx.main))
+	fx.f.script("git switch main", "")
+
+	p := filepath.Join(fx.main, ".f10", "plans", "GH-1.md")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(p, []byte(plan), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	return p
+}
+
+// A branch checked out in main: no self-close refusal from main's cwd, the
+// merge, then main switched to the default branch and pulled, the plan
+// archived within main, the local branch deleted, and no worktree removal
+// or workspace close, with worktrunk installed too.
+func TestFinishFromTheMainCheckout(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.has["wt"] = true
+	fx.openPR()
+	plan := fx.onMain(t, "# plan")
+	fx.in.workspace = "ws:1"
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	order := []string{
+		ghView,
+		ghMerge,
+		ghView,
+		lsRem,
+		ghDel,
+		dropRemoteRef,
+		"git switch main",
+		curBr,
+		"git pull --ff-only",
+		"git merge-base --is-ancestor m3rge main",
+		"git branch -D GH-1",
+	}
+
+	last := -1
+
+	for _, step := range order {
+		idx := indexAfter(fx.f.calls, step, last)
+		if idx < 0 {
+			t.Fatalf("%q did not run after step %d:\n%s", step, last, strings.Join(fx.f.calls, "\n"))
+		}
+
+		last = idx
+	}
+
+	for _, ran := range []string{"git worktree remove", "wt remove", "herdr workspace close", "herdr workspace focus"} {
+		if fx.f.called(ran) {
+			t.Errorf("%q ran for a branch checked out in main", ran)
+		}
+	}
+
+	if _, err := os.Stat(plan); !errors.Is(err, os.ErrNotExist) {
+		t.Error("the plan was left in main's plans")
+	}
+
+	archived := filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.md")
+	if body, err := os.ReadFile(archived); err != nil || string(body) != "# plan" {
+		t.Errorf("archived plan = %q, %v", body, err)
+	}
+
+	if !strings.Contains(out, "GH-1 was checked out in the main checkout at "+fx.main+": switched it to main") ||
+		strings.Contains(out, "workspace:") || strings.Contains(out, "nothing to close") {
+		t.Errorf("report:\n%s", out)
+	}
+}
+
+// Main's own archive stays as it is: the current plan takes the next number.
+func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.onMain(t, "current")
+
+	archive := filepath.Join(fx.main, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archive, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older"} {
+		if err := os.WriteFile(filepath.Join(archive, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older", "GH-1.2.md": "current"} {
+		got, err := os.ReadFile(filepath.Join(archive, name))
+		if err != nil || string(got) != body {
+			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
+		}
+	}
+}
+
+// A switch git refuses after the merge names both, and nothing else local
+// moves.
+func TestFinishFromTheMainCheckoutSwitchFails(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	plan := fx.onMain(t, "# plan")
+	fx.f.fail("git switch main", shell.Result{Code: 1, Stderr: "error: cannot switch"})
+
+	_, err := fx.run(t)
+	want := "https://gh/pr/9 merged, but switching the main checkout to main failed"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v", err)
+	}
+
+	for _, ran := range []string{"git pull", "git branch -D", "herdr workspace close"} {
+		if fx.f.called(ran) {
+			t.Errorf("%q ran after the switch failed", ran)
+		}
+	}
+
+	if _, err := os.Stat(plan); err != nil {
+		t.Error("the plan was moved although the switch failed")
+	}
+}
+
+// A dirty main checkout is refused before the host is reached.
+func TestFinishFromTheMainCheckoutRefusesDirty(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.onMain(t, "# plan")
+	fx.f.script("git status --porcelain", " M finish.go")
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Fatalf("err = %v", err)
+	}
+
+	if fx.f.called("gh ") || fx.f.called("git switch") {
+		t.Errorf("the host or a switch was reached before the dirty check: %v", fx.f.calls)
+	}
+}

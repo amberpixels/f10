@@ -125,11 +125,14 @@ Outside one it stops before touching anything and points at https://herdr.dev.
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
-It finds the task's branch the way start does (the exact name, else the one `<id>` / `<id>-*` branch) and the worktree that has it checked out; without either it stops, since finish removes only what start could have created.
+It finds the task's branch the way start does (the exact name, else the one `<id>` / `<id>-*` branch) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
+That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
+There finish merges as usual, switches main to the default branch and pulls it, deletes the local branch, and leaves main's workspace open; the report says the checkout was main's and was switched, not removed.
 
 1. **Refusals, before anything changes.**
    A dirty worktree, named file by file, with no `--force`: commit or discard first.
    A cwd inside the worktree being removed, or a `HERDR_WORKSPACE_ID` naming its workspace, unless `--yes` was passed: the message says the command would close its own workspace.
+   With the branch checked out in main, nothing closes, so this refusal does not apply.
    Outside Herdr, as start does.
 2. **The merge.**
    `gh pr view <branch>` / `glab mr view <branch>` by the branch.
@@ -144,6 +147,7 @@ It finds the task's branch the way start does (the exact name, else the one `<id
    On GitHub, deleting the branch is what retargets a PR stacked on it to main.
    GitLab retargets when the base's MR is merged, so the same stacked flow works there by a different trigger; deleting the branch alone would not.
 5. **Main is pulled** with `--ff-only` when the main checkout is on the default branch, else the default branch is fetched into without touching the checkout, and a note says so.
+   A main checkout on the task's branch is first switched to the default branch (`git switch`), then pulled.
    Either way the merge commit must be in the local default branch, or the run stops here with nothing removed.
 6. **Dependents are released.**
    A branch another task started with `--after` on this one has `branch.<name>.f10-after` and `.f10-after-branch` in local config.
@@ -152,10 +156,12 @@ It finds the task's branch the way start does (the exact name, else the one `<id
    Its next ship, or `/f10:catchup`, brings the default branch in before anything else runs and clears the mark.
    A note names each dependent.
 7. **The plan is archived**: with in-repo storage `<worktree>/.f10/plans/<ID>.md` moves to main's `.f10/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken, older archived versions first); with out-of-tree storage it moves within the shared root.
+   With the branch checked out in main, the plan moves within main's `.f10/plans/`, after main's existing archive.
    No plan is a note.
    A plan that cannot be moved is an error and nothing is removed, since with in-repo storage the worktree holds the only copy.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
+   With the branch checked out in main, only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
 
 Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already archived, there is no workspace to close, and only what is left is removed.
 
