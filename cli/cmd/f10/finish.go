@@ -26,7 +26,9 @@ import (
 // Everything after the merge is gated on the merge having landed: the
 // merge commit must be in the local default branch before anything local
 // is touched. Every refusal comes before the first change, and the plan
-// is out of the worktree before the worktree goes.
+// is out of the worktree before the worktree goes. A task shipped from the
+// main checkout has no worktree: main is switched to the default branch
+// and only the local branch goes.
 func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "finish",
@@ -109,9 +111,10 @@ type finishInput struct {
 // pull, the dependents, the plan, the report, the removal, the workspace.
 // The report is printed before anything local goes, and the workspace
 // closes last: on the self-close path the close ends this process, so
-// everything that must happen has happened by then.
+// everything that must happen has happened by then. With the branch checked
+// out in main, main's workspace is neither closed nor focused.
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
-	name, path, err := finishTarget(ctx, in)
+	name, path, onMain, err := finishTarget(ctx, in)
 	if err != nil {
 		return err
 	}
@@ -125,9 +128,15 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	ws, mainWS := workspaceAt(wss, path), workspaceAt(wss, in.main)
+	var ws, mainWS *herdr.Listed
 
-	self := inside(in.cwd, path) || (ws != nil && in.workspace != "" && in.workspace == ws.ID)
+	var self bool
+
+	if !onMain {
+		ws, mainWS = workspaceAt(wss, path), workspaceAt(wss, in.main)
+		self = inside(in.cwd, path) || (ws != nil && in.workspace != "" && in.workspace == ws.ID)
+	}
+
 	if self && !in.yes {
 		return fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
 			"run it from the main checkout, or pass --yes to close this workspace after the report",
@@ -144,12 +153,17 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
+	// on main, the default branch is checked out nowhere, so pullMain fetches
+	// into it and main stays on the task's branch until the end: a failure
+	// before then leaves a rerun the same shape to find
 	note, err := pullMain(ctx, in.main, def, p.sha())
 	if err != nil {
 		return err
 	}
 
-	notes = appendNote(notes, note)
+	if !onMain {
+		notes = appendNote(notes, note)
+	}
 
 	released, err := releaseDependents(ctx, in.main, name, def)
 	if err != nil {
@@ -175,9 +189,14 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
-	if ws != nil {
+	switch {
+	case onMain:
+		notes = append(notes, fmt.Sprintf("%s is checked out in the main checkout at %s: after this report "+
+			"main switches to %s and the branch is deleted; no worktree removed, no workspace closed",
+			name, in.main, def))
+	case ws != nil:
 		rows = append(rows, fact{label: "workspace", value: ws.ID})
-	} else {
+	default:
 		notes = append(notes, "no Herdr workspace shows the worktree, so nothing to close")
 	}
 
@@ -189,6 +208,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	if err := writeReport(w, rows, notes); err != nil {
 		return err
+	}
+
+	if onMain {
+		return switchMain(ctx, in.main, def, name, p.url())
 	}
 
 	if err := removeCheckout(ctx, in.main, path, name); err != nil {
@@ -208,6 +231,22 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	return nil
 }
 
+// switchMain ends a finish run on the main checkout: main onto the default
+// branch, then the task's branch deleted. Each error names the merge that
+// already landed and what is left to do by hand.
+func switchMain(ctx context.Context, main, def, branch, url string) error {
+	if err := gitx.Switch(ctx, main, def); err != nil {
+		return fmt.Errorf("%s merged, but switching the main checkout to %s failed: %w", url, def, err)
+	}
+
+	if err := gitx.DeleteBranch(ctx, main, branch); err != nil {
+		return fmt.Errorf("%s merged and main is on %s, but deleting %s failed (git branch -D %s): %w",
+			url, def, branch, branch, err)
+	}
+
+	return nil
+}
+
 // appendNote adds note to notes unless it is empty.
 func appendNote(notes []string, note string) []string {
 	if note == "" {
@@ -217,21 +256,23 @@ func appendNote(notes []string, note string) []string {
 	return append(notes, note)
 }
 
-// finishTarget is the task's branch and the worktree that has it checked
-// out. Both must exist: finish removes only what start could have created.
-func finishTarget(ctx context.Context, in finishInput) (string, string, error) {
+// finishTarget is the task's branch, the checkout that has it checked out,
+// and whether that checkout is main's: a worktree start created, or main
+// itself for a task shipped from there. A branch checked out nowhere is a
+// refusal, since finish cleans up only those two shapes.
+func finishTarget(ctx context.Context, in finishInput) (string, string, bool, error) {
 	name, path, err := taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
 
 	switch {
 	case err != nil:
-		return "", "", err
+		return "", "", false, err
 	case name == "":
-		return "", "", fmt.Errorf("%s has no branch here: nothing to finish", in.task.ID)
+		return "", "", false, fmt.Errorf("%s has no branch here: nothing to finish", in.task.ID)
 	case path == "":
-		return "", "", fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name)
+		return "", "", false, fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name)
 	}
 
-	return name, path, nil
+	return name, path, samePath(path, in.main), nil
 }
 
 // refuseDirty stops on anything git would list in the worktree, named file
@@ -488,8 +529,9 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	}
 
 	// in-repo: older versions the worktree archived go first, so the
-	// current plan ends up with the highest number
-	if plansDir == "" {
+	// current plan ends up with the highest number; main's own archive is
+	// already in place
+	if plansDir == "" && !samePath(worktree, main) {
 		older, _ := filepath.Glob(filepath.Join(src, "archive", id+".*.md"))
 		for _, o := range older {
 			if err := os.Rename(o, freeArchiveName(dst, id)); err != nil {

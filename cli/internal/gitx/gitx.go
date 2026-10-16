@@ -218,6 +218,14 @@ func FetchInto(ctx context.Context, dir, branch string) error {
 	return err
 }
 
+// Switch checks out branch in dir. A dirty tree can make git refuse, which
+// callers rule out first.
+func Switch(ctx context.Context, dir, branch string) error {
+	_, err := Exec(ctx, dir, "switch", branch)
+
+	return err
+}
+
 // RemoveWorktree removes the checkout at path. A dirty tree makes git
 // refuse, which callers rule out first.
 func RemoveWorktree(ctx context.Context, dir, path string) error {
