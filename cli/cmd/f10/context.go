@@ -51,9 +51,9 @@ func targetAt(ctx context.Context, dir string, scoped bool, cmdName string) (*ta
 	pb := probe.Run(ctx, lay)
 	eff := facts.Build(lay, pb)
 
-	// a fact declared wrong stops every command that acts on facts; config
-	// and init are how it is seen and fixed, so they run anyway
-	if errs := eff.Errors(); errs != "" && cmdName != "config" && cmdName != "init" {
+	// a fact declared wrong stops every command that acts on facts; config,
+	// init and doctor are how it is seen and fixed, so they run anyway
+	if errs := eff.Errors(); errs != "" && cmdName != "config" && cmdName != "init" && cmdName != "doctor" {
 		return nil, errors.New("project.md: " + errs + "\n(f10 config shows every fact and where it came from)")
 	}
 
