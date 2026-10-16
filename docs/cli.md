@@ -85,6 +85,14 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 
 - the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--local` ships through the project's `local` pipeline, so nothing is pushed; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
   The three are exclusive
+- a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) is moved, not copied, into the new worktree's `.f10/plans/`, so one plan exists and a later `/f10:ship <id>` in main finds none.
+  The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship local: <id>` with `--local`; `--plan` still plans, and the plan step archives the moved one; `--discuss` names the plan's path.
+  The report gains a `plan` row and a note beneath saying it was moved from main.
+  A worktree that already holds its own plan (start rerun on an existing worktree) keeps it and ships it, and main's is left in place with a note.
+  Out-of-tree storage shares one plans dir, so nothing moves and only the prompt changes.
+  The plan moves only when start starts the agent: a workspace whose agent is already running gets no prompt, so main's plan stays in place with a note.
+  A move that fails stops start before the agent is started, and an agent that fails to start after the move names where the plan went.
+  `f10 drive` leaves main's plan where it is
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
   With in-repo storage that path lies in the base task's worktree, and a note beneath the report says when no checkout reaches it or the plan is not written yet.
