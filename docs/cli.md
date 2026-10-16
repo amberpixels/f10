@@ -90,7 +90,8 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   The report gains a `plan` row and a note beneath saying it was moved from main.
   A worktree that already holds its own plan (start rerun on an existing worktree) keeps it and ships it, and main's is left in place with a note.
   Out-of-tree storage shares one plans dir, so nothing moves and only the prompt changes.
-  A move that fails stops start before the agent is started.
+  The plan moves only when start starts the agent: a workspace whose agent is already running gets no prompt, so main's plan stays in place with a note.
+  A move that fails stops start before the agent is started, and an agent that fails to start after the move names where the plan went.
   `f10 drive` leaves main's plan where it is
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.

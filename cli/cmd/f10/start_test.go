@@ -645,18 +645,17 @@ func TestAdoptPlan(t *testing.T) {
 				writePlan(t, planIn(wt))
 			}
 
-			plan, notes, err := adoptPlan(main, wt, "", "GH-1")
+			a, err := adoptPlan(main, wt, "", "GH-1")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if want := map[bool]string{true: planIn(wt)}[c.wantPlan]; plan != want {
-				t.Errorf("plan = %q, want %q", plan, want)
+			if want := map[bool]string{true: planIn(wt)}[c.wantPlan]; a.plan != want {
+				t.Errorf("plan = %q, want %q", a.plan, want)
 			}
 
-			got := strings.Join(notes, "\n")
-			if (c.wantNote == "") != (got == "") || !strings.Contains(got, c.wantNote) {
-				t.Errorf("notes = %q, want one containing %q", got, c.wantNote)
+			if (c.wantNote == "") != (a.note == "") || !strings.Contains(a.note, c.wantNote) {
+				t.Errorf("note = %q, want one containing %q", a.note, c.wantNote)
 			}
 
 			if _, err := os.Stat(planIn(main)); (err == nil) != c.mainKept {
@@ -675,9 +674,9 @@ func TestAdoptPlan(t *testing.T) {
 		dir := t.TempDir()
 		writePlan(t, planIn(dir))
 
-		plan, notes, err := adoptPlan(dir, dir, "", "GH-1")
-		if err != nil || plan != planIn(dir) || len(notes) != 0 {
-			t.Errorf("adoptPlan = %q, %v, %v; want the plan in place and no note", plan, notes, err)
+		a, err := adoptPlan(dir, dir, "", "GH-1")
+		if err != nil || a != (adoption{plan: planIn(dir)}) {
+			t.Errorf("adoptPlan = %+v, %v; want the plan in place and no note", a, err)
 		}
 	})
 
@@ -685,15 +684,15 @@ func TestAdoptPlan(t *testing.T) {
 		main, wt, plans := t.TempDir(), t.TempDir(), t.TempDir()
 		writePlan(t, planIn(main))
 
-		if plan, _, err := adoptPlan(main, wt, plans, "GH-1"); err != nil || plan != "" {
-			t.Errorf("adoptPlan with no shared plan = %q, %v; want none", plan, err)
+		if a, err := adoptPlan(main, wt, plans, "GH-1"); err != nil || a != (adoption{}) {
+			t.Errorf("adoptPlan with no shared plan = %+v, %v; want none", a, err)
 		}
 
 		writePlan(t, filepath.Join(plans, "GH-1.md"))
 
-		plan, notes, err := adoptPlan(main, wt, plans, "GH-1")
-		if err != nil || plan != filepath.Join(plans, "GH-1.md") || len(notes) != 0 {
-			t.Errorf("adoptPlan = %q, %v, %v; want the shared plan and no note", plan, notes, err)
+		a, err := adoptPlan(main, wt, plans, "GH-1")
+		if err != nil || a != (adoption{plan: filepath.Join(plans, "GH-1.md")}) {
+			t.Errorf("adoptPlan = %+v, %v; want the shared plan and no note", a, err)
 		}
 
 		if _, err := os.Stat(planIn(main)); err != nil {
@@ -710,7 +709,7 @@ func TestAdoptPlan(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, err := adoptPlan(main, wt, "", "GH-1")
+		_, err := adoptPlan(main, wt, "", "GH-1")
 		if err == nil || !strings.Contains(err.Error(), "moving the plan") {
 			t.Errorf("adoptPlan error = %v, want the move named", err)
 		}
@@ -1443,6 +1442,67 @@ func TestStartAdoptsMainsPlan(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// A workspace whose agent is already running gets no prompt, so main's plan
+// stays where it is and the report names no plan.
+func TestStartLeavesMainsPlanForARunningAgent(t *testing.T) {
+	main, wt := t.TempDir(), t.TempDir()
+	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
+	writePlan(t, src)
+
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, heads("GH-1"))
+	f.script(worktrees, porcelain("GH-1", wt))
+	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", reopened)
+	f.script("herdr agent get pane:7", agentFound)
+
+	var out bytes.Buffer
+
+	if err := start(t.Context(), &out, startInput{main: main, task: gh1, adoptPlan: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.called("herdr agent prompt") {
+		t.Error("an agent already running was prompted")
+	}
+
+	if _, err := os.Stat(src); err != nil {
+		t.Errorf("main's plan moved although no agent was prompted: %v", err)
+	}
+
+	if strings.Contains(out.String(), "plan:") {
+		t.Errorf("the report names a plan no agent was told about:\n%s", out.String())
+	}
+
+	if want := "main's plan " + src + " left in place"; !strings.Contains(out.String(), want) {
+		t.Errorf("report missing %q:\n%s", want, out.String())
+	}
+}
+
+// An agent that fails to start after the move names where the plan went,
+// since main no longer holds it.
+func TestStartNamesTheMovedPlanWhenTheAgentFails(t *testing.T) {
+	main, wt := t.TempDir(), t.TempDir()
+	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
+	writePlan(t, src)
+
+	agent := agentName("GH-1", "", wt)
+
+	f := newFakes(t)
+	f.has["wt"] = true
+	f.script(refsLocal, heads("GH-1"))
+	f.script(worktrees, porcelain("GH-1", wt))
+	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
+	f.fail("herdr agent start "+agent+" --kind claude --pane pane:7", shell.Result{Code: 1, Stderr: "no pane"})
+
+	err := start(t.Context(), &bytes.Buffer{}, startInput{main: main, task: gh1, adoptPlan: true})
+
+	dst := filepath.Join(wt, ".f10", "plans", "GH-1.md")
+	if err == nil || !strings.Contains(err.Error(), "the plan was moved from "+src+" to "+dst) {
+		t.Errorf("start error = %v, want the moved plan named", err)
 	}
 }
 

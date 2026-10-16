@@ -379,7 +379,7 @@ Notion, Jira or any tracker without a CLI goes through an executable at `.f10/dr
 `f10 start` replaces three hand-offs (a worktree recipe, a Herdr tab, claude launched with a hand-typed prompt), each a place to lose the branch suffix, the base or "keep it local":
 
 ```bash
-f10 start 1042                # branch, worktree, Herdr workspace, claude prompted with plan + ship
+f10 start 1042                # branch, worktree, Herdr workspace, claude prompted with plan + ship (ship alone when main saved a plan)
 f10 start 1042 --plan         # prompt the plan only
 f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
 f10 start 1042 --discuss      # fetch the task and wait: talk it through in the new pane before any plan
