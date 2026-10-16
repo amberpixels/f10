@@ -62,7 +62,7 @@ A fact belongs to the step or skill that acts on it, which says what it means: `
 The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.
-- **Tracker** - kind and **task id format** in the frontmatter's `tracker:` (`ABC-####`, `GH-###`); under the heading, the **fetch** and **create** adapters, a skill or a CLI command (`gh issue view <n> --comments`, `gh issue create`).
+- **Tracker** - kind and **task id format** in the frontmatter's `tracker:` (`ABC-####`, `GH-###`); under the heading, the **fetch** and **create** adapters, a skill or a CLI command (`gh issue view <n> --comments`, `gh issue create`), and an optional **parent** adapter that links a subtask to its parent (`steps/capture.md`).
 - **Hosting & PR** - how to open a PR/MR: a skill, or `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee).
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.

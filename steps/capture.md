@@ -6,7 +6,9 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
 
 1. **Scope check.**
    Ask the user only if the description is too thin to scope; otherwise infer the scope yourself.
-2. **Draft the task.**
+   A description whose pieces each ship on their own becomes a **parent** and one **subtask** per piece; a user who asks for one task gets one.
+2. **Draft the task**, or each task of a split.
+   A parent holds the problem, the settled shape and what is out of scope; a subtask holds its own scope, sized by the rules below.
    - **Title:** concise, imperative, at every size.
    - **Body: size it by what a reader needs to act**, not by how big the change is.
      A heading appears only over something the reader cannot infer from the sentences above, never over a restatement or an "n/a"; a task whose prose makes the scope obvious has none.
@@ -24,6 +26,7 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
    - **A dependency is a fixed last line.**
      When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; `f10 start` and `f10 drive` read it, so the word and the shape are fixed.
      No known order, no line.
+     Tasks meant to run in sequence are created in that order, so each `After:` names an id that already exists.
    - **Markup follows the tracker's renderer; markdown is not a safe default.**
      The create adapter says which renderer this is:
      - **GitHub / GitLab** - GFM, but **one line per paragraph, never hard-wrapped**: a single newline renders as `<br>`.
@@ -32,8 +35,10 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
      - **Unknown** - plain paragraphs, and no markup that reads as noise unrendered.
 3. **Create it** via the project's create adapter: a skill to invoke, or a CLI command such as `gh issue create` / `glab issue create`.
    Apply the project's declared default status/labels.
-4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format) and a `url` row, for the fetch step.
-   Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`.
+   A split creates the parent first, then links each subtask to it with the tracker's native parent link: the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
+   A tracker with no parent link gets a checklist of the subtask ids in the parent's body, edited in once they exist.
+4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format) and a `url` row, for the fetch step; several tasks report as the convention's tree.
+   Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, the parent's id for a split.
 
 Keep PII out of anything logged: ids, not names or emails.
 

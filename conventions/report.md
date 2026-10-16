@@ -30,6 +30,17 @@ plan:    .f10/plans/GH-2.md
 5. **The marker means "an openable url"**, never a path, a sha or a branch.
    It is `↗` (U+2197), not `🔗`, which is double-width.
 
+**Several tasks** from one run drop the `task` and `url` rows for one row per task: the id as the label, its url as the value.
+A subtask hangs under its parent on box-drawing lines (`├─`, `└─`, a level deeper `│  ├─`), padded with the labels so the marker column stays aligned.
+Rows run in `After:` order, a task outside the chain last; unrelated tasks get the same rows with no tree lines.
+Titles go in the prose beneath; no emoji, which are double-width.
+
+```yaml
+FT-71:     ↗ https://github.com/amberpixels/f10/issues/71
+├─ FT-72:  ↗ https://github.com/amberpixels/f10/issues/72
+└─ FT-73:  ↗ https://github.com/amberpixels/f10/issues/73
+```
+
 A step that produces nothing addressable (`implement`) reports in prose.
 Skills report the whole run the same way.
 `conventions/failure.md` and `modes/dry-run.md` use the same label column and bare urls, but **plain-fenced and colonless**, with no marker cell: their values are prose.
