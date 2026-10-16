@@ -549,11 +549,21 @@ link_statusline() {
   return 0
 }
 
+# `<session>.started` is when this session loaded the plugin; `f10 doctor` compares it with the
+# install's update time to tell a session that needs a restart. Compact and clear keep the process
+# and its loaded plugin, so only startup and resume mark it.
+mark_started() {
+  case "$(json_get source)" in startup | resume) ;; *) return 0 ;; esac
+  find_sid "$1" || return 0
+  mkdir -p "$state_dir" 2>/dev/null && : >"$state_dir/$sid.started" 2>/dev/null
+  return 0
+}
+
 # Sessions end without notice, so every state file outlives its run. A week is far past the TTL,
 # so this only reclaims files that already render nothing.
 cmd_prune() {
   [ -d "$state_dir" ] || exit 0
-  find "$state_dir" -type f \( -name '*.state' -o -name '*.conventions' \) -mtime +7 -delete 2>/dev/null
+  find "$state_dir" -type f \( -name '*.state' -o -name '*.conventions' -o -name '*.started' \) -mtime +7 -delete 2>/dev/null
   exit 0
 }
 
@@ -687,6 +697,7 @@ cmd_hook() {
       ;;
     SessionStart)
       link_statusline
+      mark_started "$hook_sid"
       cmd_prune
       ;;
   esac

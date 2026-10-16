@@ -178,8 +178,32 @@ func TestChecks(t *testing.T) {
 
 		{CheckHooks, "registered", nil, StatusOK, ""},
 		{CheckHooks, "not enabled", func(f *fixture) {
+			delete(f.env, "CLAUDECODE")
 			f.settings["enabledPlugins"] = map[string]bool{"f10@amberpixels": false}
 		}, StatusProblem, "claude plugin enable"},
+		{CheckHooks, "loaded from the session's PATH, install record disabled", func(f *fixture) {
+			f.settings["enabledPlugins"] = map[string]bool{"f10@amberpixels": false}
+		}, StatusOK, ""},
+		{CheckHooks, "no session started yet", func(f *fixture) {
+			must(f.t, os.Remove(filepath.Join(f.home, ".claude", "f10", "statusline")))
+		}, StatusProblem, "restart Claude Code"},
+		{CheckHooks, "hooks.json missing", func(f *fixture) {
+			must(f.t, os.Remove(filepath.Join(f.root, "hooks", "hooks.json")))
+		}, StatusProblem, "claude plugin update"},
+		{CheckHooks, "this session started before the update", func(f *fixture) {
+			// another session started since (the link is new), this one did not
+			f.env["CLAUDE_CODE_SESSION_ID"] = "s1"
+			marker := filepath.Join(f.home, ".claude", "f10", "state", "s1.started")
+			f.write(marker, "")
+			old := time.Now().Add(-2 * time.Hour)
+			must(f.t, os.Chtimes(marker, old, old))
+			f.install["lastUpdated"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+		}, StatusProblem, "restart Claude Code"},
+		{CheckHooks, "this session started after the update", func(f *fixture) {
+			f.env["CLAUDE_CODE_SESSION_ID"] = "s1"
+			f.write(filepath.Join(f.home, ".claude", "f10", "state", "s1.started"), "")
+			f.install["lastUpdated"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+		}, StatusOK, ""},
 		{CheckHooks, "updated after the last session start", func(f *fixture) {
 			f.install["lastUpdated"] = time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 		}, StatusProblem, "restart Claude Code"},
@@ -249,6 +273,46 @@ func TestHerdrMissingIsScopedAndDoesNotFail(t *testing.T) {
 
 	if Failed([]Result{r}) {
 		t.Error("a scoped problem failed the run")
+	}
+}
+
+func TestStatuslineMissingIsScopedAndDoesNotFail(t *testing.T) {
+	f := newFixture(t)
+	f.settings["statusLine"] = map[string]any{"command": "echo hi"}
+
+	r := f.run(CheckStatusline)
+	if r.Status != StatusProblem || len(r.Scope) == 0 {
+		t.Fatalf("status %q, scope %v: want a scoped problem", r.Status, r.Scope)
+	}
+
+	if Failed([]Result{r}) {
+		t.Error("a missing badge failed the run")
+	}
+}
+
+// A project-scope install is matched to the checkout through symlinks, the
+// way macOS reaches /tmp through /private/tmp, and beats the user-scope one.
+func TestProjectScopeInstallThroughASymlink(t *testing.T) {
+	f := newFixture(t)
+	delete(f.env, "CLAUDECODE")
+
+	alias := filepath.Join(t.TempDir(), "alias")
+	must(t, os.Symlink(f.e.Layout.MainRoot, alias))
+
+	other := t.TempDir()
+	f.write(filepath.Join(other, ".claude-plugin", "plugin.json"), `{"name":"f10","version":"0.30.0"}`)
+
+	f.writeJSON(filepath.Join(f.claude, "plugins", "installed_plugins.json"), map[string]any{"plugins": map[string]any{
+		"f10@amberpixels": []any{
+			f.install,
+			map[string]any{"scope": "project", "projectPath": alias, "installPath": other, "version": "0.30.0"},
+		},
+	}})
+	f.install = nil
+
+	r := f.run(CheckVersion)
+	if r.Status != StatusProblem || !strings.Contains(r.Detail, "plugin 0.30.0") {
+		t.Errorf("version check judged %q, want the project-scope 0.30.0 install", r.Detail)
 	}
 }
 

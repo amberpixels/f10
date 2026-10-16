@@ -56,8 +56,8 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 |---|---|---|
 | `version` | the plugin's `plugin.json` version against `f10 --version`; a dev build is not compared | `go install .../cli/cmd/f10@v<plugin version>`, or `claude plugin update f10@<marketplace>` when the plugin is the one behind |
 | `scripts` | every file in the plugin's `bin/`: executable, and inside a Claude Code session resolved from that `bin/` on PATH | `claude plugin update`, or restart the session |
-| `hooks` | the plugin enabled in `settings.json` and its `hooks/hooks.json`; "registered but needs a restart" when the install changed after the last session start (the time the SessionStart hook relinked `~/.claude/f10/statusline`) | `claude plugin enable`, or restart Claude Code |
-| `statusline` | `statusLine` in `settings.json` runs `~/.claude/f10/statusline`, and the link resolves | add the segment from [the status line](statusline.md), or start a session to relink it |
+| `hooks` | the plugin enabled in `settings.json` (a plugin loaded on the session's PATH counts as enabled) and its `hooks/hooks.json`; "registered but needs a restart" when the install changed after this session started (the `<session>.started` marker the SessionStart hook writes), or, outside a session, after the last session start anywhere | `claude plugin enable`, or restart Claude Code |
+| `statusline` | `statusLine` in `settings.json` runs `~/.claude/f10/statusline`, and the link resolves; scoped to the status-line badge | add the segment from [the status line](statusline.md), or start a session to relink it |
 | `herdr` | `herdr` on PATH; scoped to `start`, `forward`, `drive` and `finish` | install Herdr |
 | `host` | the `gh` or `glab` the remote routes to, installed and `auth status` green for the host; `not needed here` without a remote | `<cli> auth login --hostname <host>` |
 | `project` | `project.md` frontmatter: no unknown keys or values; `not needed here` outside a project | edit the named `project.md`; `f10 config` shows every fact |
@@ -65,7 +65,7 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 Inside a session the plugin judged is the one on the session's PATH (a directory marketplace or `--plugin-dir` included); outside one, the install `installed_plugins.json` records.
 
 It exits 1 when any check that every command needs has a problem.
-A scoped problem (`herdr`) is printed but affects only the commands it names, and `not needed here` never fails.
+A scoped problem (`herdr`, `statusline`) is printed but affects only what it names, and `not needed here` never fails.
 
 `--json` emits an array, one object per check:
 
@@ -73,7 +73,7 @@ A scoped problem (`herdr`) is printed but affects only the commands it names, an
 |---|---|
 | `name` | the check, as in the table |
 | `status` | `ok`, `problem` or `not_needed` |
-| `scope` | the commands a problem affects; `[]` means every command |
+| `scope` | what a problem affects, commands or the status-line badge; `[]` means every command |
 | `detail` | the evidence, one line |
 | `remedy` | the command or file edit; empty unless `status` is `problem` |
 

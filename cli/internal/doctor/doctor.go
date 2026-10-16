@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
@@ -29,7 +30,7 @@ const (
 type Result struct {
 	Name   string   `json:"name"`
 	Status string   `json:"status"`
-	Scope  []string `json:"scope"`  // the commands a problem affects; empty means every command
+	Scope  []string `json:"scope"`  // what a problem affects (commands, or the badge); empty means every command
 	Detail string   `json:"detail"` // the evidence, one line
 	Remedy string   `json:"remedy"` // empty unless the status is problem
 }
@@ -133,7 +134,9 @@ func readInstall(env *Env) (*install, string) {
 
 	var found *install
 
-	for key, entries := range file.Plugins {
+	// sorted, so two marketplaces carrying f10 always resolve the same way
+	for _, key := range slices.Sorted(maps.Keys(file.Plugins)) {
+		entries := file.Plugins[key]
 		if name, _, _ := strings.Cut(key, "@"); name != pluginName {
 			continue
 		}
@@ -171,11 +174,19 @@ type settings struct {
 func readSettings(env *Env) settings {
 	set := settings{Enabled: map[string]bool{}, User: filepath.Join(env.ClaudeDir, "settings.json")}
 
+	// the main checkout's project settings, then a linked worktree's on top:
+	// settings.local.json is untracked, so a worktree usually has none
 	files := []string{set.User}
-	if env.Layout != nil && env.Layout.CheckoutRoot != "" {
-		files = append(files,
-			filepath.Join(env.Layout.CheckoutRoot, ".claude", "settings.json"),
-			filepath.Join(env.Layout.CheckoutRoot, ".claude", "settings.local.json"))
+	if env.Layout != nil {
+		for _, root := range []string{env.Layout.MainRoot, env.Layout.CheckoutRoot} {
+			if root == "" || (root == env.Layout.CheckoutRoot && samePath(root, env.Layout.MainRoot)) {
+				continue
+			}
+
+			files = append(files,
+				filepath.Join(root, ".claude", "settings.json"),
+				filepath.Join(root, ".claude", "settings.local.json"))
+		}
 	}
 
 	for _, path := range files {

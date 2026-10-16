@@ -30,6 +30,12 @@ var herdrScope = []string{"start", "forward", "drive", "finish"}
 // stateScript is the plugin script every hook and the status line run.
 const stateScript = "f10-state.sh"
 
+// originSession marks a plugin found on the session's PATH: loaded, so enabled.
+const originSession = "this session's PATH"
+
+// statuslineScope is what a statusline problem affects: the badge, nothing a run reads.
+var statuslineScope = []string{"status-line badge"}
+
 // A plugin is the install the checks judge: inside a Claude Code session
 // the one its PATH reaches, which may be a directory marketplace or a
 // --plugin-dir rather than the versioned install, else the recorded install.
@@ -49,7 +55,7 @@ func resolvePlugin(env *Env, in *install) plugin {
 		if path, err := env.LookPath(stateScript); err == nil {
 			root := filepath.Dir(realDir(filepath.Dir(path)))
 			if name, version := readManifest(root); name == pluginName {
-				p.Root, p.Version, p.Origin = root, version, "this session's PATH"
+				p.Root, p.Version, p.Origin = root, version, originSession
 
 				return p
 			}
@@ -224,9 +230,10 @@ func checkScripts(env *Env, p plugin, reason string) Result {
 	return r
 }
 
-// checkHooks tells "not registered" from "registered, but no session has
-// started since the plugin changed": the SessionStart hook re-points the
-// statusline symlink, so its mtime is the last session start.
+// checkHooks tells "not registered" from "registered, but needs a restart".
+// Inside a session the start is this session's own marker, written by the
+// SessionStart hook; elsewhere, or from an older plugin that writes none, it
+// is the statusline symlink every session start re-points.
 func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Result {
 	if p.Root == "" {
 		return notInstalled(CheckHooks, reason, p)
@@ -240,9 +247,9 @@ func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Re
 	}
 
 	switch data, err := os.ReadFile(hooksFile); {
-	case in != nil && !set.Enabled[in.Key]:
+	case in != nil && p.Origin != originSession && !set.Enabled[in.Key]:
 		r.Status = StatusProblem
-		r.Detail = in.Key + " is installed but not enabled in " + set.User
+		r.Detail = in.Key + " is installed but not enabled in any settings file"
 		r.Remedy = "claude plugin enable " + in.Key
 
 		return r
@@ -258,20 +265,18 @@ func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Re
 
 	restart := "restart Claude Code: hooks load when a session starts"
 
-	link := statuslineLink(env)
-
-	fi, err := os.Lstat(link)
-	if err != nil {
+	started, which, ok := lastStart(env)
+	if !ok {
 		r.Status, r.Detail, r.Remedy = StatusProblem, "registered, but no session has run the SessionStart hook yet", restart
 
 		return r
 	}
 
 	if in != nil {
-		if updated, err := time.Parse(time.RFC3339, in.LastUpdated); err == nil && updated.After(fi.ModTime()) {
+		if updated, err := time.Parse(time.RFC3339, in.LastUpdated); err == nil && updated.After(started) {
 			r.Status = StatusProblem
 			r.Detail = "registered, but the plugin changed at " + updated.Local().Format(time.DateTime) +
-				", after the last session start at " + fi.ModTime().Format(time.DateTime)
+				", after " + which + " at " + started.Format(time.DateTime)
 			r.Remedy = restart
 
 			return r
@@ -284,6 +289,47 @@ func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Re
 	return r
 }
 
+// lastStart is when the session doctor runs in started, else when any
+// session last started, and which of the two it is.
+func lastStart(env *Env) (time.Time, string, bool) {
+	if sid := sessionID(env); sid != "" {
+		if fi, err := os.Stat(filepath.Join(stateDir(env), sid+".started")); err == nil {
+			return fi.ModTime(), "this session started", true
+		}
+	}
+
+	if fi, err := os.Lstat(statuslineLink(env)); err == nil {
+		return fi.ModTime(), "the last session start", true
+	}
+
+	return time.Time{}, "", false
+}
+
+// sessionID and stateDir mirror f10-state.sh's find_sid and state_dir.
+func sessionID(env *Env) string {
+	sid := env.Getenv("F10_SESSION_ID")
+	if sid == "" {
+		sid = env.Getenv("CLAUDE_CODE_SESSION_ID")
+	}
+
+	return strings.Map(func(r rune) rune {
+		if r == '.' || r == '_' || r == '-' || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') ||
+			('0' <= r && r <= '9') {
+			return r
+		}
+
+		return '_'
+	}, sid)
+}
+
+func stateDir(env *Env) string {
+	if d := env.Getenv("F10_STATE_DIR"); d != "" {
+		return d
+	}
+
+	return filepath.Join(env.Home, ".claude", "f10", "state")
+}
+
 func statuslineLink(env *Env) string {
 	return filepath.Join(env.Home, ".claude", "f10", "statusline")
 }
@@ -291,7 +337,7 @@ func statuslineLink(env *Env) string {
 // checkStatusline checks the user's statusLine runs the f10 segment and
 // the symlink it runs resolves.
 func checkStatusline(env *Env, set settings) Result {
-	r := Result{Name: CheckStatusline}
+	r := Result{Name: CheckStatusline, Scope: statuslineScope}
 	link := statuslineLink(env)
 
 	if !strings.Contains(set.StatusLine, "f10/statusline") && !strings.Contains(set.StatusLine, stateScript) {
@@ -311,6 +357,7 @@ func checkStatusline(env *Env, set settings) Result {
 	}
 
 	r.Status = StatusOK
+	r.Scope = nil
 
 	r.Detail = "statusLine in " + set.From + " runs " + link
 	if !set.Refresh {
