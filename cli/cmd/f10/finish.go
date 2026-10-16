@@ -153,18 +153,17 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	if onMain {
-		if err := gitx.Switch(ctx, in.main, def); err != nil {
-			return fmt.Errorf("%s merged, but switching the main checkout to %s failed: %w", p.url(), def, err)
-		}
-	}
-
+	// on main, the default branch is checked out nowhere, so pullMain fetches
+	// into it and main stays on the task's branch until the end: a failure
+	// before then leaves a rerun the same shape to find
 	note, err := pullMain(ctx, in.main, def, p.sha())
 	if err != nil {
 		return err
 	}
 
-	notes = appendNote(notes, note)
+	if !onMain {
+		notes = appendNote(notes, note)
+	}
 
 	released, err := releaseDependents(ctx, in.main, name, def)
 	if err != nil {
@@ -192,8 +191,9 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	switch {
 	case onMain:
-		notes = append(notes, fmt.Sprintf("%s was checked out in the main checkout at %s: switched it to %s "+
-			"and deleted the branch; no worktree removed, no workspace closed", name, in.main, def))
+		notes = append(notes, fmt.Sprintf("%s is checked out in the main checkout at %s: after this report "+
+			"main switches to %s and the branch is deleted; no worktree removed, no workspace closed",
+			name, in.main, def))
 	case ws != nil:
 		rows = append(rows, fact{label: "workspace", value: ws.ID})
 	default:
@@ -211,7 +211,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if onMain {
-		return gitx.DeleteBranch(ctx, in.main, name)
+		return switchMain(ctx, in.main, def, name, p.url())
 	}
 
 	if err := removeCheckout(ctx, in.main, path, name); err != nil {
@@ -226,6 +226,22 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	if ws != nil {
 		return herdr.CloseWorkspace(ctx, in.main, ws.ID)
+	}
+
+	return nil
+}
+
+// switchMain ends a finish run on the main checkout: main onto the default
+// branch, then the task's branch deleted. Each error names the merge that
+// already landed and what is left to do by hand.
+func switchMain(ctx context.Context, main, def, branch, url string) error {
+	if err := gitx.Switch(ctx, main, def); err != nil {
+		return fmt.Errorf("%s merged, but switching the main checkout to %s failed: %w", url, def, err)
+	}
+
+	if err := gitx.DeleteBranch(ctx, main, branch); err != nil {
+		return fmt.Errorf("%s merged and main is on %s, but deleting %s failed (git branch -D %s): %w",
+			url, def, branch, branch, err)
 	}
 
 	return nil

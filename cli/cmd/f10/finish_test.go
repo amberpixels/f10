@@ -739,6 +739,8 @@ func (fx *finishFixture) onMain(t *testing.T, plan string) string {
 	t.Helper()
 
 	fx.f.script(worktrees, porcelain("GH-1", fx.main))
+	fx.f.script(curBr, "GH-1")
+	fx.f.script("git fetch origin main:main", "")
 	fx.f.script("git switch main", "")
 
 	p := filepath.Join(fx.main, ".f10", "plans", "GH-1.md")
@@ -754,9 +756,10 @@ func (fx *finishFixture) onMain(t *testing.T, plan string) string {
 }
 
 // A branch checked out in main: no self-close refusal from main's cwd, the
-// merge, then main switched to the default branch and pulled, the plan
-// archived within main, the local branch deleted, and no worktree removal
-// or workspace close, with worktrunk installed too.
+// merge, the default branch fetched into while main stays on the task's
+// branch, the plan archived within main, the report, then main switched
+// and the local branch deleted, with no worktree removal or workspace
+// close, worktrunk installed too.
 func TestFinishFromTheMainCheckout(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.has["wt"] = true
@@ -764,10 +767,13 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 	plan := fx.onMain(t, "# plan")
 	fx.in.workspace = "ws:1"
 
-	out, err := fx.run(t)
-	if err != nil {
+	rec := &recorder{f: fx.f}
+
+	if err := finish(t.Context(), rec, fx.in); err != nil {
 		t.Fatal(err)
 	}
+
+	out := rec.buf.String()
 
 	order := []string{
 		ghView,
@@ -776,10 +782,10 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 		lsRem,
 		ghDel,
 		dropRemoteRef,
-		"git switch main",
 		curBr,
-		"git pull --ff-only",
+		"git fetch origin main:main",
 		"git merge-base --is-ancestor m3rge main",
+		"git switch main",
 		"git branch -D GH-1",
 	}
 
@@ -794,7 +800,9 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 		last = idx
 	}
 
-	for _, ran := range []string{"git worktree remove", "wt remove", "herdr workspace close", "herdr workspace focus"} {
+	for _, ran := range []string{
+		"git pull", "git worktree remove", "wt remove", "herdr workspace close", "herdr workspace focus",
+	} {
 		if fx.f.called(ran) {
 			t.Errorf("%q ran for a branch checked out in main", ran)
 		}
@@ -809,8 +817,10 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 		t.Errorf("archived plan = %q, %v", body, err)
 	}
 
-	if !strings.Contains(out, "GH-1 was checked out in the main checkout at "+fx.main+": switched it to main") ||
-		strings.Contains(out, "workspace:") || strings.Contains(out, "nothing to close") {
+	if !strings.Contains(out, "GH-1 is checked out in the main checkout at "+fx.main+
+		": after this report main switches to main") ||
+		strings.Contains(out, "workspace:") || strings.Contains(out, "nothing to close") ||
+		strings.Contains(out, "updated by fetch") {
 		t.Errorf("report:\n%s", out)
 	}
 }
@@ -844,28 +854,77 @@ func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	}
 }
 
-// A switch git refuses after the merge names both, and nothing else local
-// moves.
-func TestFinishFromTheMainCheckoutSwitchFails(t *testing.T) {
+// A failure after the merge and before the report leaves main on the task's
+// branch, so a rerun finds the same checkout, reads the PR as merged and
+// completes.
+func TestFinishFromTheMainCheckoutRerunsAfterAFailure(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	plan := fx.onMain(t, "# plan")
-	fx.f.fail("git switch main", shell.Result{Code: 1, Stderr: "error: cannot switch"})
+	fx.f.fail("git fetch origin main:main", shell.Result{Code: 1, Stderr: "fatal: refusing to fetch"})
 
-	_, err := fx.run(t)
-	want := "https://gh/pr/9 merged, but switching the main checkout to main failed"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("err = %v", err)
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "refusing to fetch") {
+		t.Fatalf("err = %v, want the fetch failure", err)
 	}
 
-	for _, ran := range []string{"git pull", "git branch -D", "herdr workspace close"} {
+	for _, ran := range []string{"git switch", "git branch -D"} {
 		if fx.f.called(ran) {
-			t.Errorf("%q ran after the switch failed", ran)
+			t.Errorf("%q ran although the fetch failed", ran)
 		}
 	}
 
 	if _, err := os.Stat(plan); err != nil {
-		t.Error("the plan was moved although the switch failed")
+		t.Error("the plan was moved although the fetch failed")
+	}
+
+	fx.f.calls = nil
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+	fx.f.script("git fetch origin main:main", "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fx.f.called("gh pr merge") || !fx.f.called("git switch main") || !fx.f.called("git branch -D GH-1") {
+		t.Errorf("rerun calls: %v", fx.f.calls)
+	}
+
+	if !strings.Contains(out, "was already merged") {
+		t.Errorf("rerun report:\n%s", out)
+	}
+
+	if _, err := os.Stat(filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.md")); err != nil {
+		t.Errorf("the rerun did not archive the plan: %v", err)
+	}
+}
+
+// A switch or a delete git refuses at the end names the merge that landed
+// and what is left.
+func TestFinishFromTheMainCheckoutTailFails(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.onMain(t, "# plan")
+	fx.f.fail("git switch main", shell.Result{Code: 1, Stderr: "error: cannot switch"})
+
+	want := "https://gh/pr/9 merged, but switching the main checkout to main failed"
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v", err)
+	}
+
+	if fx.f.called("git branch -D") {
+		t.Error("the branch was deleted although the switch failed")
+	}
+
+	fx = newFinishFixture(t)
+	fx.openPR()
+	fx.onMain(t, "# plan")
+	fx.f.fail("git branch -D GH-1", shell.Result{Code: 1, Stderr: "error: ref locked"})
+
+	want = "https://gh/pr/9 merged and main is on main, but deleting GH-1 failed (git branch -D GH-1)"
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v", err)
 	}
 }
 
