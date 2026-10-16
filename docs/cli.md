@@ -291,9 +291,9 @@ Until something marks a standup, every run starts at the last working day.
   A glob keeps the checkouts it matches and skips anything else; a path that is not a checkout is an error.
   Only a run with `--group` reads `groups`.
   An unknown key is an error.
-  The prose is for `/f10:standup`, and is where your wording and Deliver adapter are named.
-  A `## <name>` heading naming one of your `groups` starts that group's section: it applies on top of the prose above the first such heading when `--group <name>` is the only group the run names.
-  With several groups, or `--all`, only that person-wide prose applies.
+  The prose is for `/f10:standup`, and is where your wording and Deliver adapter are named, and an Assigned adapter where yours should win over a project's.
+  A `## <name>` heading naming one of your `groups` starts that group's section, which runs to the next group heading or the end of the file; keep person-wide prose above the first one.
+  A section applies on top of the person-wide prose when that group alone is the scope: no other `--group`, no `-C`, no `--all`.
 
   ```yaml
   ---

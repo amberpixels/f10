@@ -10,11 +10,12 @@ All of it is read as instructions; there is no template.
 
 - **Wording, sections, audience and the Deliver adapter** belong to the person, since a standup does: a manager wants outcomes, a team wants PR links.
   Later wins: the overlay of the one project the report covers (only when it covers exactly one), then `~/.f10/standup.md`'s person-wide prose, then its section for the group the run names.
-- **A group section** is a `## <name>` heading in that prose whose name is a key of the frontmatter's `groups:`; the prose before the first such heading is person-wide.
-  It applies only to a run naming exactly that one `--group`.
-  With several groups, or `--all`, only the person-wide prose applies, and one line under the report names the group sections left out.
-  A heading that matches no declared group is ordinary person-wide prose.
+- **A group section** is a `## <name>` heading in that prose whose name is a key of the frontmatter's `groups:`.
+  It runs to the next such heading or the end of the file, and any other heading inside it belongs to it, so the person-wide prose is everything above the first group heading.
+  A section applies only when the scope is that one group alone: no other `--group`, no `-C`, no `--all`.
+  Otherwise only the person-wide prose applies, and one line under the report names the group sections left out and why (several groups, extra checkouts).
 - **The Assigned adapter** belongs to a tracker, so it is per project: each project's own overlay names how to list its open tasks, in any run.
+  The person's prose may also name one for a project by its `name` in the JSON (or for every project, unnamed), and it wins over that project's overlay.
 - **A Deliver adapter** is a skill, an MCP tool or a CLI command that creates a draft of the report (a Gmail draft to a given address, say).
   None picked: the report is printed and nothing else.
 
@@ -31,7 +32,7 @@ Never re-read git or the host to second-guess them, and never fall back to doing
    No `~/.f10/standup.md` is normal: a project overlay alone applies, where the rule above allows one.
    The activity is under `projects`, one per tracker; a project's `repos` are the repositories it was read from.
 
-2. **Load the overlays**, in one call: for each entry in `projects`, `(cd <its first repos[].checkout> && f10-load-project.sh standup)`, reading only the layer blocks for `standup.md`.
+2. **Load the overlays**, in one call: for each entry in `projects`, `(cd <its first repos[].checkout> && f10-load-project.sh --overlays standup)`, which prints that checkout's `standup.md` overlays, layered, and nothing else.
    A project whose checkout is this session's reuses the load the skill already ran.
    When no project in the report is this session's checkout, the overlay that load printed is ignored.
    A project with no overlay is normal.
@@ -55,7 +56,7 @@ Never re-read git or the host to second-guess them, and never fall back to doing
    - **An empty period** (no `days`): one line saying nothing was recorded since `since`.
 5. **Ask what is next**: one `AskUserQuestion`, `multiSelect`, offering
    - carry-over: the tasks whose `state` is not `shipped` or `closed`;
-   - the open tasks assigned to the user, per project: through that project's **Assigned** adapter when its overlay names one, else `f10 -C <its first checkout> task search "is:open assignee:@me"` on a GitHub tracker, minus the carry-over;
+   - the open tasks assigned to the user, per project: through the **Assigned** adapter the rule above picks for it (the person's, else its overlay's), else `f10 -C <its first checkout> task search "is:open assignee:@me"` on a GitHub tracker, minus the carry-over;
      a project with neither (GitLab's search is text only, a driver may ignore the query) is named in one line saying only its carry-over is offered and why;
    - free text through Other.
 

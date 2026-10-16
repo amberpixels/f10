@@ -15,6 +15,8 @@
 #
 # Usage:  f10-load-project.sh <step> [<step> ...]   the named generic steps + project.md + overlays
 #         f10-load-project.sh                       facts, layering, listing and probes, no steps
+#         f10-load-project.sh --overlays <step>...  only each layer's overlays for the steps, for a
+#                                                   step reading another checkout's (standup, per project)
 #   e.g.  f10-load-project.sh capture  |  f10-load-project.sh fetch plan
 #
 # /f10:ship loads each pipeline step just before it runs, so a long run that compacts still has
@@ -27,8 +29,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # A string, not an array: bash 3.2 trips over "${empty[*]}" under `set -u`.
 steps=""
 ignored=""
+overlays_only=""
 for a in "$@"; do
   case "$a" in
+    --overlays) overlays_only=1 ;;
     -*) ignored="${ignored:+$ignored }$a" ;;
     *) steps="${steps:+$steps }$a" ;;
   esac
@@ -189,6 +193,30 @@ supplied() { # supplied <file.md>
   { [ -n "$l2_dir" ] && [ -f "$l2_dir/$1" ]; } && return 0
   return 1
 }
+
+# --overlays: the overlays alone, layered as below, with no step, project.md or probe
+if [ -n "$overlays_only" ]; then
+  echo "=== f10 overlays @ $here ($src) ==="
+  print_overlays() { # print_overlays <layer dir>
+    [ -n "$1" ] || return 0
+    for s in $steps; do
+      if [ -f "$1/$s.md" ]; then
+        echo "--- overlay: $s.md ($1) ---"
+        cat "$1/$s.md"
+        echo
+      fi
+    done
+  }
+  print_overlays "$l1_dir"
+  print_overlays "$l2_dir"
+  absent=""
+  for s in $steps; do
+    supplied "$s.md" || absent="${absent:+$absent, }$s.md"
+  done
+  echo "absent: ${absent:-none}"
+  echo "=== end f10 overlays ==="
+  exit 0
+fi
 
 echo "=== f10 project @ $cwd ==="
 echo "checkout root: $here"

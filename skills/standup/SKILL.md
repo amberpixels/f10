@@ -16,7 +16,7 @@ No `allowed-tools` on purpose: the Deliver adapter is whatever `~/.f10/standup.m
 - `--since <date>`: the period starts at that date (`YYYY-MM-DD`, local midnight) or RFC 3339 time.
 - `--week`: the period starts at last week's Monday, the summary for a Monday.
 - `--other`: also show the activity that carries no task id.
-- `-C <checkout>`, `--group <name>`, `--all`: the scope, passed to `f10 standup` as given: checkouts by path or name, a group from `~/.f10/standup.md` (whose own section there applies when it is the only group named), or every checkout under `F10_ROOTS`.
+- `-C <checkout>`, `--group <name>`, `--all`: the scope, passed to `f10 standup` as given: checkouts by path or name, a group from `~/.f10/standup.md` (whose own section there applies when that group alone is the scope), or every checkout under `F10_ROOTS`.
   Without them, this checkout.
 - `<group>`: any other bare word is a group name, read as `--group <word>`.
 - No argument: the period since the last standup you reported.
