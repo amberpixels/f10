@@ -25,6 +25,7 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 f10 task read [id]       # the task as markdown
 f10 task open [id]       # in the browser (--print writes the url instead)
 f10 task search <query>  # rows, not a picker
+f10 task children [id] [--json]   # the task's open subtasks, in After: order
 f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor
 f10 demo open [id]       # the demo report, in the browser
@@ -222,6 +223,7 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    Every task is looked up on the tracker.
    In a range, a pull request (GitHub numbers both alike) or an unknown number is skipped with a note; listed by hand, either is an error.
    A task with no branch whose issue is closed, or whose plan sits in main's `plans/archive/`, is finished and skipped.
+   A listed task with no branch that has unfinished subtasks (`f10 task children`) is refused: the subtasks are what runs, and `/f10:drive <parent>` is where they are chosen.
 3. **The graph.**
    Each task has at most one base: the `branch.<name>.f10-after` its branch recorded once started, else the `After:` line in its body.
    Where the two disagree, the branch wins, with a note.
@@ -513,6 +515,27 @@ f10 -C r3 task read 12
 `read` picks its presentation from where it writes: a pager when `$PAGER` is set and stdout is a terminal, raw markdown into any pipe.
 `f10 task read | glow` works because a pipe is not a terminal.
 `search` prints a table to a terminal and JSON to a pipe.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`.
+
+## Children
+
+`f10 task children 71` lists a parent's open subtasks, the links capture makes: GitHub sub-issues through `gh`, GitLab work-item children through `glab api graphql`, or a driver's `children` verb.
+Closed subtasks are dropped.
+Rows come in tree order: a subtask whose `After:` base is a sibling follows it one level deeper, and siblings at one level go by number.
+A base outside the siblings, or a cycle among them, puts the subtask at the top level.
+A subtask that is itself a parent is listed, not expanded.
+
+| field | meaning |
+|---|---|
+| `id` | the subtask, in the project's id format |
+| `title`, `url`, `state` | as the tracker holds them |
+| `labels` | label names; `[]` for none |
+| `after` | the id its body's `After:` line names, absent when none |
+| `finished` | no branch, and its plan archived, as drive decides it |
+| `depth` | 0 directly under the parent, one more per `After:` step |
+
+A task with no subtasks prints `[]`.
+Exit 3 means the tracker has no parent link: a driver that declines the verb on a tracker no host reaches, or a host without sub-issues or work items.
 
 ## Trackers
 

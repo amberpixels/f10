@@ -41,6 +41,13 @@ func taskCommand() *cli.Command {
 				ArgsUsage: "<query>",
 				Action:    runTaskSearch,
 			},
+			{
+				Name:      "children",
+				Usage:     "list the task's open subtasks in After: order (exit 3: the tracker has no parent link)",
+				ArgsUsage: "[task-id]",
+				Flags:     []cli.Flag{&cli.BoolFlag{Name: "json", Usage: "emit the rows as JSON"}},
+				Action:    runTaskChildren,
+			},
 		},
 	}
 }

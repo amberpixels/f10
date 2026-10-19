@@ -686,6 +686,90 @@ func TestDriveGraph(t *testing.T) {
 	})
 }
 
+// A listed parent with unfinished subtasks is refused before anything is
+// created; a task with none, a started one and a range member pass.
+func TestDriveRefusesAParent(t *testing.T) {
+	withChildren := func(fx *driveFixture, kids map[string][]childRow) {
+		fx.in.tracker.children = func(_ context.Context, r ref.Ref) ([]childRow, error) {
+			k, ok := kids[r.ID]
+			if !ok {
+				return nil, errNoParentLink
+			}
+
+			return k, nil
+		}
+	}
+
+	t.Run("a parent with open subtasks", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1")
+		fx.task("GH-1", taskInfo{body: "the parent"}, "")
+		withChildren(fx, map[string][]childRow{"GH-1": {{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}})
+
+		err := fx.drive(t)
+		if err == nil || !strings.Contains(err.Error(), "GH-1 is a parent of GH-2, GH-4") {
+			t.Fatalf("err = %v", err)
+		}
+
+		if fx.f.called("wt") || fx.f.called("herdr") {
+			t.Error("something was created before the refusal")
+		}
+	})
+
+	for name, kids := range map[string][]childRow{
+		"every subtask finished": {{ID: "GH-2", Finished: true}},
+		"no subtasks":            {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1")
+			fx.task("GH-1", taskInfo{body: "free"}, "")
+			withChildren(fx, map[string][]childRow{"GH-1": kids})
+
+			if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
+				t.Errorf("refused: %v", err)
+			}
+		})
+	}
+
+	t.Run("no parent link", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1")
+		fx.task("GH-1", taskInfo{body: "free"}, "")
+		withChildren(fx, nil)
+
+		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
+			t.Errorf("refused: %v", err)
+		}
+	})
+
+	t.Run("a started task is not asked", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1")
+		fx.task("GH-1", taskInfo{body: "free"}, "refs/heads/GH-1/work")
+		fx.in.tracker.children = func(context.Context, ref.Ref) ([]childRow, error) {
+			t.Error("children asked for a started task")
+
+			return nil, nil
+		}
+
+		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
+			t.Errorf("refused: %v", err)
+		}
+	})
+
+	t.Run("a range member is not asked", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1", "--", "GH-2")
+		fx.task("GH-1", taskInfo{body: "free"}, "")
+		fx.task("GH-2", taskInfo{body: "free"}, "")
+		fx.in.tracker.children = func(context.Context, ref.Ref) ([]childRow, error) {
+			t.Error("children asked for a range member")
+
+			return nil, nil
+		}
+
+		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
+			t.Errorf("refused: %v", err)
+		}
+	})
+}
+
 func TestParseDriveArgs(t *testing.T) {
 	cases := []struct {
 		args    []string

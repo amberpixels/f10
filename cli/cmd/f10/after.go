@@ -54,7 +54,10 @@ type taskInfo struct {
 type tracker struct {
 	resolve func(ctx context.Context, token string) (ref.Ref, error)
 	info    func(ctx context.Context, task ref.Ref) (taskInfo, error)
-	archive []string // the dirs finish moves a finished task's plan into
+	// children is the task's open subtasks; nil, like errNoParentLink, is a
+	// tracker with no parent link
+	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
+	archive  []string // the dirs finish moves a finished task's plan into
 }
 
 // tracker binds the lookups to this target: the driver's `read` for the
@@ -70,7 +73,7 @@ func (t *target) tracker() tracker {
 		archive = filepath.Join(dir, "archive")
 	}
 
-	return tracker{
+	tr := tracker{
 		resolve: t.reference,
 		info: func(ctx context.Context, task ref.Ref) (taskInfo, error) {
 			if d := t.driver(); d != nil {
@@ -102,6 +105,17 @@ func (t *target) tracker() tracker {
 		},
 		archive: []string{archive},
 	}
+
+	tr.children = func(ctx context.Context, task ref.Ref) ([]childRow, error) {
+		raw, err := t.rawChildren(ctx, task)
+		if err != nil {
+			return nil, err
+		}
+
+		return shapeChildren(ctx, tr, main, raw)
+	}
+
+	return tr
 }
 
 // finishedTask reports whether a task is done with: no branch here, and the

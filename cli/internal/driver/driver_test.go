@@ -83,9 +83,11 @@ func TestRunBranch(t *testing.T) {
 func TestRunUnsupportedVerb(t *testing.T) {
 	root := storageWith(t, "ok-driver")
 
-	_, err := Find(root, root).Run(t.Context(), VerbSearch, "anything")
-	if !errors.Is(err, ErrUnsupported) {
-		t.Fatalf("Run(search) = %v, want ErrUnsupported", err)
+	for _, verb := range []string{VerbSearch, VerbChildren} {
+		_, err := Find(root, root).Run(t.Context(), verb, "anything")
+		if !errors.Is(err, ErrUnsupported) {
+			t.Fatalf("Run(%s) = %v, want ErrUnsupported", verb, err)
+		}
 	}
 }
 
