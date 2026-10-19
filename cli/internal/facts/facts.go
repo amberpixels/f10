@@ -66,7 +66,7 @@ type Effective struct {
 	// declared: finish asks the repo.
 	MergeMethod  string              `json:"mergeMethod,omitempty"`
 	Catchup      string              `json:"catchup"`
-	ReviewTraces bool                `json:"reviewTraces"` // review_traces: on; a review after the PR leaves a status, a comment, a named fix commit
+	ReviewTraces bool                `json:"reviewTraces"` // review_traces: on; a review or judge after the PR leaves a status, a comment, a named commit
 	Pipelines    map[string][]string `json:"pipelines"`
 	Planless     []string            `json:"planless,omitempty"`
 	DriveChain   []string            `json:"driveChain"`
