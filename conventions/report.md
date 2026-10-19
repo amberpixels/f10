@@ -10,6 +10,7 @@ Every success report opens with one aligned block, fenced and tagged `yaml` for 
 
 ```yaml
 task:    GH-2
+title:   Add rate limiting to the public API
 url:   ↗ https://github.com/amberpixels/f10/issues/2
 plan:    .f10/plans/GH-2.md
 ```
@@ -23,10 +24,11 @@ plan:    .f10/plans/GH-2.md
    Never `[text](url)`, `<url>`, backticks, or a trailing comma or period.
 2. **Facts in the block, prose beneath it.**
    Rows carry addressable values only: task id, url, plan path, branch, commit sha, environment.
+   The one exception is a `title` row right under `task`, the task's title as the tracker holds it, so the id is recognisable without opening it.
    What changed, how far the pipeline got and what the user does next are sentences under the block.
 3. **Only rows the run produced.**
    No placeholders, no `n/a`, no empty values.
-4. **Most-identifying first**: the task, its url, then this step's artifacts.
+4. **Most-identifying first**: the task, its title, its url, then this step's artifacts.
 5. **The marker means "an openable url"**, never a path, a sha or a branch.
    It is `↗` (U+2197), not `🔗`, which is double-width.
 

@@ -38,7 +38,7 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
    Apply the project's declared default status/labels.
    A split creates the parent first, then links each subtask to it with the tracker's native parent link: the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
-4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format) and a `url` row, for the fetch step; several tasks report as the convention's tree.
+4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; several tasks report as the convention's tree.
    Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, the parent's id for a split.
 
 Keep PII out of anything logged: ids, not names or emails.
