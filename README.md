@@ -175,6 +175,8 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
 - **Findings file** - `<storage root>/reviews/<TASK-ID>/<round>.md`, from review to resolve: the reviewed sha, then one block per finding (title, summary, file and line, category, a concrete fix).
   Resolve appends verdicts and never edits the reviewer's text.
   Two rounds at most; they stay in the checkout's `.f10/`, since `f10 finish` archives only the plan.
+- **Verdict file** - `<storage root>/verdicts/<TASK-ID or slug>/<n>.md`, one per judge run: a header with the subject, the verdict, its reason and, in a ship run, what the run decided, then the argument.
+  An idea with no task files under a slug of the idea.
 - **Gap** - a decision only the user can make, recorded with a default so the plan is always shippable.
   Filling gaps is one optional questionnaire.
 - **Shipment** - what a ship run leaves, named by the pipeline's last step: verified code (`implement`), local commits (`commit`), pushed commits (`push`), an open PR/MR (`pr`), a running environment (`deploy`).
@@ -209,11 +211,13 @@ flowchart TB
         over["instructions/&lt;step&gt;.md - overlays"]
         plans2["plans/&lt;TASK-ID&gt;.md - output"]
         reviews2["reviews/&lt;TASK-ID&gt;/&lt;round&gt;.md - output"]
+        verdicts2["verdicts/&lt;TASK-ID&gt;/&lt;n&gt;.md - output"]
     end
     gsteps -- "1· load facts" --> proj
     gsteps -- "2· apply overlay (later wins)" --> over
     gsteps -- "3· write" --> plans2
     gsteps -- "3· write" --> reviews2
+    gsteps -- "3· write" --> verdicts2
 ```
 
 Precedence (full contract in `conventions/context.md`), later winning: the generic step, `main/project.md`, `main/<step>.md`, `worktree/project.md`, `worktree/<step>.md`, then inferred defaults.
@@ -324,7 +328,7 @@ Overriding `F10_STATE_GLYPHS` takes all eight positions; the last two hold the r
 Steps report precisely, hooks reliably: `Stop` closes a run whose last badge line the agent dropped.
 A phase left `pending` means "nobody said".
 
-Both writers also append to a local ledger, `~/.f10/f10.db` (SQLite, outside every repo): what the hooks observed, what artifacts (plans, findings) hold, and every badge call as the model claimed it, each row tagged with that source.
+Both writers also append to a local ledger, `~/.f10/f10.db` (SQLite, outside every repo): what the hooks observed, what artifacts (plans, findings, verdicts) hold, and every badge call as the model claimed it, each row tagged with that source.
 A write that fails goes to `~/.f10/ledger.spool`, replayed by the next one; `f10 ledger dump` prints the rows.
 
 </details>

@@ -113,6 +113,16 @@ type FindingsWritten struct {
 	Round string `json:"round"`
 }
 
+// VerdictWritten is a judge's verdict file saved under the storage root's
+// verdicts/<key>/, key the task id or, for an idea, a slug.
+type VerdictWritten struct {
+	Meta
+
+	Path string `json:"path"`
+	Key  string `json:"key"`
+	N    string `json:"n"`
+}
+
 func (*IssueCreated) Kind() string    { return "issue_created" }
 func (*PRCreated) Kind() string       { return "pr_created" }
 func (*Committed) Kind() string       { return "committed" }
@@ -121,6 +131,7 @@ func (*StepStarted) Kind() string     { return "step_started" }
 func (*Finished) Kind() string        { return "finished" }
 func (*PlanWritten) Kind() string     { return "plan_written" }
 func (*FindingsWritten) Kind() string { return "findings_written" }
+func (*VerdictWritten) Kind() string  { return "verdict_written" }
 
 // SkillStarted is an f10 skill starting: typed, which Claude Code expands,
 // or called by the model through the Skill tool.

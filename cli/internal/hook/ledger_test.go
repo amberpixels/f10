@@ -335,3 +335,85 @@ func str(v any) string {
 
 	return s
 }
+
+// A verdict file is one row; a rewrite with the same verdict and decision is
+// none, a decision filled in after a driven ask is one more. An idea's row
+// carries no task, though the session has one.
+func TestVerdictFileRows(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "f10.db")
+	t.Setenv(ledger.PathEnv, db)
+
+	env := testEnv(t)
+	work := t.TempDir()
+	verdicts := filepath.Join(work, ".f10", "verdicts")
+
+	for _, d := range []string{filepath.Join(verdicts, "FT-12"), filepath.Join(verdicts, "rate-limit")} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state := "v 1\ntask FT-12\nroot /work/acme\nskill ship\nship running\nleaf judge\nupdated 1\n"
+	if err := os.WriteFile(filepath.Join(env.StateDir, "s1.state"), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	write := func(path, content string) {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		dispatchRecorded(
+			t,
+			env,
+			toolPayload(t, "s1", work, "Write", map[string]any{"file_path": path}, map[string]any{}),
+		)
+	}
+
+	asked := `task: FT-12
+subject: plan FT-12
+verdict: rethink
+reason: the cache belongs in the client
+run: ship before pr
+decision: asked
+
+## Argument
+
+The server should not cache.
+`
+	answered := strings.Replace(asked, "decision: asked", "decision: block", 1)
+	taskFile := filepath.Join(verdicts, "FT-12", "1.md")
+
+	write(taskFile, asked)
+	write(taskFile, asked) // nothing changed: no new row
+	write(taskFile, answered)
+	write(filepath.Join(verdicts, "rate-limit", "1.md"),
+		"task:\nsubject: idea rate limit the public API\nverdict: stop\nreason: the gateway does it\nrun: standalone\n")
+	write(filepath.Join(verdicts, "FT-12", "2.md"), "task: FT-12\nverdict: green\n")
+
+	var got []string
+
+	for _, e := range recorded(t, db, ledger.Filter{Kind: ledger.JudgeVerdict}) {
+		p := e.Payload.Val
+		got = append(got, strings.Join([]string{e.Task, str(p["key"]), str(p["verdict"]), str(p["decision"])}, " "))
+
+		if e.Source != ledger.Artifact {
+			t.Errorf("source %q", e.Source)
+		}
+	}
+
+	want := []string{
+		"FT-12 FT-12 rethink asked",
+		"FT-12 FT-12 rethink block",
+		" rate-limit stop ",
+		"FT-12 FT-12  ",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("verdict rows\n got %q\nwant %q", got, want)
+	}
+
+	rows := recorded(t, db, ledger.Filter{Kind: ledger.JudgeVerdict, Task: "FT-12"})
+	if last := rows[len(rows)-1].Payload.Val; last["parse_error"] == nil {
+		t.Errorf("an unknown verdict recorded no parse error: %+v", last)
+	}
+}

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
 // Kinds, by source.
@@ -26,6 +28,7 @@ const (
 	PlanSuperseded    = "plan_superseded"
 	ReviewRoundOpened = "review_round_opened"
 	FindingVerdict    = "finding_verdict"
+	JudgeVerdict      = "judge_verdict"
 
 	StateSet   = "state_set"
 	StateTask  = "state_task"
@@ -88,7 +91,7 @@ func (ob *Observer) Observe(ctx context.Context, o observe.Observation) error {
 		e.At, e.Session = m.At, m.Session
 		e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, place.Branch
 
-		if e.Task == "" {
+		if e.Task == "" && !taskless(e) {
 			e.Task = task
 		}
 	}
@@ -192,6 +195,8 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 		return one(PlanSuperseded, Artifact, o.Task)
 	case *observe.FindingsWritten:
 		return ob.findings(ctx, o)
+	case *observe.VerdictWritten:
+		return ob.verdict(ctx, o, m)
 	}
 
 	return nil
@@ -316,6 +321,68 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	}
 
 	return events
+}
+
+// verdict records a judge's verdict file once per verdict and decision:
+// a rewrite that changes neither adds nothing, a decision filled in after a
+// driven ask adds a row.
+func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m observe.Meta) []Event {
+	raw, err := os.ReadFile(o.Path)
+	if err != nil {
+		return nil
+	}
+
+	p := Payload{"path": o.Path, "key": o.Key, "n": o.N}
+
+	f, err := verdict.Parse(string(raw))
+	if err != nil {
+		p["parse_error"] = err.Error()
+
+		task := ""
+		if f != nil {
+			task = f.Task
+		}
+
+		return []Event{{Kind: JudgeVerdict, Source: Artifact, Task: task, Payload: col(p)}}
+	}
+
+	// the database holds every project's rows: scope the lookup to this one
+	if ob.l != nil {
+		prior, _ := ob.l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict})
+		for _, e := range slices.Backward(prior) {
+			if v := e.Payload.Val; v["path"] == o.Path {
+				if v["verdict"] == f.Verdict && v["decision"] == nonEmpty(f.Decision) {
+					return nil
+				}
+
+				break
+			}
+		}
+	}
+
+	for key, v := range map[string]string{
+		"subject": f.Subject, "verdict": f.Verdict, "reason": f.Reason, "run": f.Run, "decision": f.Decision,
+	} {
+		if v != "" {
+			p[key] = v
+		}
+	}
+
+	if f.Blind {
+		p["blind"] = true
+	}
+
+	if f.Idea() {
+		p["idea"] = true
+	}
+
+	return []Event{{Kind: JudgeVerdict, Source: Artifact, Task: f.Task, Payload: col(p)}}
+}
+
+// taskless reports a row that belongs to no task even in a session that has
+// one: a verdict on an idea judged mid-task is not that task's verdict.
+func taskless(e *Event) bool {
+	return e.Kind == JudgeVerdict && e.Payload.Val["idea"] == true
 }
 
 // payloadOf is an observation's own fields, Meta left out: the row's

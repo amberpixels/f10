@@ -55,4 +55,4 @@ A step never names the skill that runs it, except where its behavior differs by 
 Ask: if a second skill ran this step, would the line still hold?
 Yes: the step.
 No: the skill. brainstorm's `Next: /f10:capture, once a shape is settled` fails that test (a skill that runs brainstorm, then capture, would drop it), so it goes in the skill.
-"It writes nothing" holds for any caller, so it goes in the step.
+"It writes only its verdict file" holds for any caller, so it goes in the step.
