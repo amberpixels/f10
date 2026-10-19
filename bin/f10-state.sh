@@ -710,15 +710,12 @@ cmd_hook() {
 }
 
 # The answer to a bare `/f10:status`, as a blocking verdict on stdout: exit 2 is the error path,
-# which wraps stderr in the hook command and echoes the prompt. The binary answers when on PATH;
-# print_run is the fallback.
+# which wraps stderr in the hook command and echoes the prompt. The plugin's own shim answers, by
+# path, so a stale f10 earlier on PATH cannot. Cached only: a download or build would outlast the
+# hook's timeout, so with no binary yet the shim's one line is the answer.
 answer_status() {
-  local text=""
-  if command -v f10 >/dev/null 2>&1; then
-    text="$(F10_SESSION_ID="$1" f10 status 2>&1)"
-  elif find_sid "$1" && load; then
-    text="$(print_run)"
-  fi
+  local text
+  text="$(F10_SESSION_ID="$1" F10_SHIM_CACHED_ONLY=1 "$(dirname "${BASH_SOURCE[0]}")/f10" status 2>&1)"
   [ -n "$text" ] || text="no f10 run in this session"
 
   printf '{"decision":"block","reason":"%s","hookSpecificOutput":{"hookEventName":"UserPromptExpansion","suppressOriginalPrompt":true}}\n' \

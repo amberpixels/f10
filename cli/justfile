@@ -47,6 +47,6 @@ build:
 ci: lint test
 # <<< justx:ci
 
-# install the f10 binary into GOBIN
+# build this checkout's binary into the cache slot the plugin's bin/f10 shim runs
 install:
-    go install ./cmd/f10
+    ../bin/f10 --shim-rebuild

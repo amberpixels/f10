@@ -35,7 +35,7 @@ test: cli::test
 # build the f10 binary
 build: cli::build
 
-# install the f10 binary into GOBIN
+# build this checkout's f10 binary into the shim's cache
 install: cli::install
 
 # run all checks - read-only, safe for CI

@@ -263,7 +263,6 @@ updated   4m ago
 
 From a terminal, `f10 status` lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
 Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
-Without the binary, `f10-state.sh show` prints the same for the current session.
 
 `f10 status 1042` reads another run: the one in the worktree that has the task's branch.
 An agent there runs **driven** ([modes/driven.md](modes/driven.md)): instead of asking in a pane nobody watches, it writes its questions to run state as one `ask` row and stops blocked.
@@ -328,13 +327,16 @@ Unrelated to f10 but pairs with it: Claude Code's [`footerLinksRegexes`](https:/
 
 ## The binary
 
+The plugin requires the `f10` binary and fetches it itself: its `bin/f10` shim runs the build matching the plugin's version, downloaded from this repo's release with `gh` (logged in), or built from the plugin's `cli/` when Go is installed.
+Resolution order, cache and release details: [docs/cli.md](docs/cli.md).
+
 `f10 config` prints a repo's effective configuration with each value's provenance (`detected`, `declared (main)`, `declared (worktree)`, `default`, `absent`), like `git config --show-origin`.
 `--json` for scripts.
 Full reference: [docs/cli.md](docs/cli.md).
 
 ```bash
-just install   # go install ./cli/cmd/f10
-f10 --version  # the release number from `go install ...@vX.Y.Z`, the commit from a checkout build
+just install   # dev: rebuild this checkout's cli/ into the shim's cache
+f10 --version  # the plugin's version, through the shim
 f10 config
 f10 doctor     # is the plugin, the binary and the environment wired up? changes nothing
 ```

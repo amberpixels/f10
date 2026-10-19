@@ -4,15 +4,30 @@ A lookaround, and the commands that start, reach, drive and finish a task.
 The lookaround verbs explain the loaded configuration and read the things it points at, changing nothing.
 Five verbs act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already has, `drive` runs a list of tasks through a chain of skills that way, and `finish` merges the task's PR and removes what start created.
 
+The plugin requires the binary and ships it as `bin/f10`, a shim that runs the build matching `plugin.json`'s version.
+The skills and the binary are one contract: the skill text describes the flags the binary takes.
+The shim resolves the binary in this order, caching under `~/.claude/f10/bin/`:
+
+1. **Cache:** this checkout's own build (`f10-<version>-<checkout key>`), else the release binary (`f10-<version>`).
+2. **Download:** `gh release download cli/v<version>` from this repo, the asset for this OS and CPU (darwin or linux, amd64 or arm64), checked against the release's `checksums.txt`. `gh` handles auth for the private repo. A checksum mismatch fails; it never falls through to a build.
+3. **Build:** the download failed and Go is installed, so `go build` of the plugin's `cli/` with the version stamped in.
+4. **Neither:** one line on stderr saying what is missing and how to fix it (`gh auth login`, or install Go), exit 1.
+
+A SessionStart hook runs the resolution in the background, so the first real call rarely waits, and shows the same line when neither `gh` nor Go is there.
+It also puts the plugin's `bin/` first on the session's PATH (through `CLAUDE_ENV_FILE`), so an older `f10` in `~/go/bin` cannot shadow the shim.
+Builds are keyed by the checkout they came from, so a worktree's build never replaces the one another checkout of the same version runs.
+The hook rebuilds a checkout's build once its `cli/` holds newer sources.
+A checkout running the release binary has no build of its own: after editing `cli/` there, run `just install` once, and the hook keeps that build current from then on.
+
 ```bash
-go install github.com/amberpixels/f10/cli/cmd/f10@latest
-f10 --version
+f10 --version   # always the plugin's version through the shim
+just install    # dev: rebuild this checkout's cli/ into the cache slot (bin/f10 --shim-rebuild)
 ```
 
-The binary carries the plugin's version, read from the build: each release tags the commit `f10--vX.Y.Z` for the plugin and `cli/vX.Y.Z` for the Go module under `cli/`, so `@latest` resolves to the release and `--version` prints its number.
-A build from the checkout (`just install`) prints the commit and its date instead, tagged or not, since Go stamps a version from tags only for a module at the repository root; a dev binary never claims to be a release.
-The skills and the binary are one contract - the skill text describes the flags the binary takes
-- and a `flag provided but not defined` from `f10` means the binary is behind the plugin: reinstall it.
+`--version` prints the version stamped at build time (`-X main.stampedVersion`), as the shim and the release workflow build it.
+An unstamped build prints the module version for `go install ...@vX.Y.Z`, or the commit and its date for a plain checkout build.
+Pushing a `cli/vX.Y.Z` tag runs `.github/workflows/release.yml`, which attaches the four binaries and `checksums.txt` to a GitHub Release; the release convention pushes that tag beside `f10--vX.Y.Z`.
+A `flag provided but not defined` from `f10` means some other `f10` ran in place of the shim: `f10 doctor` names it.
 
 ## Commands
 
@@ -55,8 +70,8 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 
 | check | what it reads | a problem's remedy |
 |---|---|---|
-| `version` | the plugin's `plugin.json` version against `f10 --version`; a dev build is not compared | `go install .../cli/cmd/f10@v<plugin version>`, or `claude plugin update f10@<marketplace>` when the plugin is the one behind |
-| `scripts` | every file in the plugin's `bin/`: executable, and inside a Claude Code session resolved from that `bin/` on PATH | `claude plugin update`, or restart the session |
+| `version` | the plugin's `plugin.json` version against `f10 --version`; an unstamped dev build is not compared | run the plugin's `bin/f10` in place of the `f10` earlier on PATH, or `claude plugin update f10@<marketplace>` when the plugin is the one behind |
+| `scripts` | every file in the plugin's `bin/`, the `f10` shim included: executable, and inside a Claude Code session resolved from that `bin/` on PATH | `claude plugin update`, or restart the session; for a shadowed `f10`, remove the copy PATH reaches first |
 | `hooks` | the plugin enabled in `settings.json` (a plugin loaded on the session's PATH counts as enabled) and its `hooks/hooks.json`; "registered but needs a restart" when the install changed after this session started (the `<session>.started` marker the SessionStart hook writes), or, outside a session, after the last session start anywhere | `claude plugin enable`, or restart Claude Code |
 | `statusline` | `statusLine` in `settings.json` runs `~/.claude/f10/statusline`, and the link resolves; scoped to the status-line badge | add the segment from [the status line](statusline.md), or start a session to relink it |
 | `herdr` | `herdr` on PATH; scoped to `start`, `forward`, `drive` and `finish` | install Herdr |

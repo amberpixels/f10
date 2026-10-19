@@ -17,7 +17,3 @@ f10 forward <task-id> "/f10:<skill> <the argument verbatim>"
   Continue with the skill.
 - anything else is a failure per `conventions/failure.md` (outside Herdr, no workspace shows the worktree, the agent is idle and not reporting).
   Report it and stop.
-
-Without the `f10` binary on `PATH`, read `git worktree list --porcelain` once.
-A worktree other than this checkout whose branch is `<id>`, `<id>/...` or `<id>-...` holds the task out of reach: fail, pointing at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
-Otherwise continue with the skill.

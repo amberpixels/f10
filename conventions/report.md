@@ -73,7 +73,7 @@ Inside a pipeline, `/f10:ship` passes the current step as `<leaf>` and declares 
 - `partial` - stopped after producing something durable (commits, an open PR, a deploy); see `conventions/failure.md` rule 7.
 - `blocked` - ended by a decision, not breakage: a judge verdict (`steps/judge.md`) or a driven ask (`modes/driven.md`).
 
-A stop state keeps its leaf; `note` records why and what unblocks it, one line each, for `f10 status` (`/f10:status` in a session, `f10-state.sh show` without the binary).
+A stop state keeps its leaf; `note` records why and what unblocks it, one line each, for `f10 status` (`/f10:status` in a session).
 
 **Cosmetic and best-effort.**
 Nothing reads this state back.

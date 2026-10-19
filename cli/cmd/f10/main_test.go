@@ -14,21 +14,32 @@ func TestVersion(t *testing.T) {
 	}
 
 	cases := []struct {
-		name string
-		bi   *debug.BuildInfo
-		ok   bool
-		want string
+		name  string
+		stamp string
+		bi    *debug.BuildInfo
+		ok    bool
+		want  string
 	}{
-		{"no build info", nil, false, "unknown"},
-		{"release install", stamped("v0.25.0"), true, "0.25.0"},
+		{"no build info", "", nil, false, "unknown"},
+		{"release install", "", stamped("v0.25.0"), true, "0.25.0"},
+		{"stamp over a release install", "0.35.0", stamped("v0.25.0"), true, "0.35.0"},
+		{
+			"stamp over a devel build",
+			"0.35.0",
+			stamped("(devel)", debug.BuildSetting{Key: "vcs.revision", Value: "0123456789abcdef"}),
+			true,
+			"0.35.0",
+		},
 		{
 			"pseudo-version past the tag",
+			"",
 			stamped("v0.25.1-0.20261005190000-0123456789ab"),
 			true,
 			"0.25.1-0.20261005190000-0123456789ab",
 		},
 		{
 			"devel with vcs",
+			"",
 			stamped("(devel)",
 				debug.BuildSetting{Key: "vcs.revision", Value: "0123456789abcdef0123456789abcdef01234567"},
 				debug.BuildSetting{Key: "vcs.time", Value: "2026-10-05T19:00:00Z"},
@@ -37,12 +48,12 @@ func TestVersion(t *testing.T) {
 			true,
 			"devel 0123456789ab 2026-10-05T19:00:00Z dirty",
 		},
-		{"devel without vcs", stamped("(devel)"), true, "devel"},
+		{"devel without vcs", "", stamped("(devel)"), true, "devel"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := version(c.bi, c.ok); got != c.want {
+			if got := versionOf(c.stamp, c.bi, c.ok); got != c.want {
 				t.Errorf("version = %q, want %q", got, c.want)
 			}
 		})
