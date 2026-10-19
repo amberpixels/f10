@@ -9,11 +9,11 @@ The skills and the binary are one contract: the skill text describes the flags t
 The shim resolves the binary in this order, caching under `~/.claude/f10/bin/`:
 
 1. **Cache:** this checkout's own build (`f10-<version>-<checkout key>`), else the release binary (`f10-<version>`).
-2. **Download:** `gh release download cli/v<version>` from this repo, the asset for this OS and CPU (darwin or linux, amd64 or arm64), checked against the release's `checksums.txt`. `gh` handles auth for the private repo. A checksum mismatch fails; it never falls through to a build.
+2. **Download:** the `cli/v<version>` release asset for this OS and CPU (darwin or linux, amd64 or arm64), fetched with `curl` from this repo's public release with no auth, checked against the release's `checksums.txt`. A checksum mismatch fails; it never falls through to a build.
 3. **Build:** the download failed and Go is installed, so `go build` of the plugin's `cli/` with the version stamped in.
-4. **Neither:** one line on stderr saying what is missing and how to fix it (`gh auth login`, or install Go), exit 1.
+4. **Neither:** one line on stderr saying what is missing and how to fix it (install `curl` or check the network, or install Go), exit 1.
 
-A SessionStart hook runs the resolution in the background, so the first real call rarely waits, and shows the same line when neither `gh` nor Go is there.
+A SessionStart hook runs the resolution in the background, so the first real call rarely waits, and shows the same line when neither `curl` nor Go is there.
 It also puts the plugin's `bin/` first on the session's PATH (through `CLAUDE_ENV_FILE`), so an older `f10` in `~/go/bin` cannot shadow the shim.
 Builds are keyed by the checkout they came from, so a worktree's build never replaces the one another checkout of the same version runs.
 The hook rebuilds a checkout's build once its `cli/` holds newer sources.

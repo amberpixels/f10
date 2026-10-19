@@ -14,7 +14,7 @@ import (
 )
 
 // shimFixture is a plugin root holding a copy of bin/f10, a cache dir, and
-// a stub dir standing in for gh and go on a PATH the test controls.
+// a stub dir standing in for curl and go on a PATH the test controls.
 type shimFixture struct {
 	t     *testing.T
 	root  string
@@ -26,8 +26,8 @@ type shimFixture struct {
 const shimVersion = "9.8.7"
 
 // shimTools are the commands the shim and the stubs run. The fixture's PATH
-// reaches them through symlinks and nothing else, so a real gh or go on the
-// machine (a CI runner has gh in /usr/bin) never takes part.
+// reaches them through symlinks and nothing else, so a real curl or go on the
+// machine never takes part.
 var shimTools = []string{
 	"awk", "bash", "cat", "chmod", "cksum", "dirname", "find", "grep", "head", "mkdir",
 	"mktemp", "mv", "nohup", "perl", "rm", "sed", "sh", "sha256sum", "shasum", "touch", "tr", "uname",
@@ -99,41 +99,63 @@ func (f *shimFixture) asset() string {
 	return "f10_" + shimVersion + "_" + runtime.GOOS + "_" + runtime.GOARCH
 }
 
-// stubGH answers `gh auth status` and `gh release download`, the latter by
-// writing the asset and a checksums file whose sum is sum, or the asset's
-// real one when sum is "".
-func (f *shimFixture) stubGH(sum string) {
+// stubCurl answers `curl -o <file> -w ... <url>` like a public release: the
+// asset, or a checksums file whose sum is sum (the asset's real one when sum
+// is ""), and HTTP 200. Each url it was asked for goes to the urls file.
+func (f *shimFixture) stubCurl(sum string) { f.stubCurlChecksums(sum, "200") }
+
+// stubCurlChecksums is stubCurl with checksums.txt answering HTTP status.
+func (f *shimFixture) stubCurlChecksums(sum, status string) {
 	body := fakeBinary("release")
 	if sum == "" {
 		h := sha256.Sum256([]byte(body))
 		sum = hex.EncodeToString(h[:])
 	}
 
-	f.write(filepath.Join(f.stubs, "gh"), `#!/bin/sh
-[ "$1" = auth ] && exit 0
+	f.write(filepath.Join(f.stubs, "curl"), `#!/bin/sh
 while [ $# -gt 0 ]; do
-  case "$1" in -D) dir="$2"; shift ;; esac
+  case "$1" in
+  -o) out="$2"; shift ;;
+  -w | --connect-timeout | --speed-limit | --speed-time) shift ;;
+  -*) ;;
+  *) url="$1" ;;
+  esac
   shift
 done
-cat >"$dir/`+f.asset()+`" <<'EOF'
+echo "$url" >>"`+f.urls()+`"
+case "$url" in
+*/checksums.txt)
+  printf '%s  %s\n' "`+sum+`" "`+f.asset()+`" >"$out"
+  printf `+status+`
+  ;;
+*)
+  cat >"$out" <<'EOF'
 `+body+`EOF
-printf '%s  %s\n' "`+sum+`" "`+f.asset()+`" >"$dir/checksums.txt"
+  printf 200
+  ;;
+esac
 `, 0o755)
 }
 
-// stubGHLoggedOut fails every call the way a gh without a login does.
-func (f *shimFixture) stubGHLoggedOut() {
-	f.write(filepath.Join(f.stubs, "gh"),
-		"#!/bin/sh\necho 'To get started with GitHub CLI, please run:  gh auth login' >&2\nexit 4\n", 0o755)
+// stubCurlNotFound answers every url the way GitHub answers a missing asset.
+func (f *shimFixture) stubCurlNotFound() {
+	f.write(filepath.Join(f.stubs, "curl"), `#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift ;; esac
+  shift
+done
+echo 'Not Found' >"$out"
+printf 404
+`, 0o755)
 }
 
-func (f *shimFixture) stubGHNoRelease() {
-	f.write(
-		filepath.Join(f.stubs, "gh"),
-		"#!/bin/sh\n[ \"$1\" = auth ] && exit 0\necho 'release not found' >&2\nexit 1\n",
-		0o755,
-	)
+// stubCurlOffline fails the way curl does when DNS cannot resolve github.com.
+func (f *shimFixture) stubCurlOffline() {
+	f.write(filepath.Join(f.stubs, "curl"),
+		"#!/bin/sh\necho 'curl: (6) Could not resolve host: github.com' >&2\nprintf 000\nexit 6\n", 0o755)
 }
+
+func (f *shimFixture) urls() string { return filepath.Join(f.stubs, "urls") }
 
 // stubGo answers `go build ... -o <file>` with a fake binary, and records
 // the ldflags it was given.
@@ -209,7 +231,7 @@ func TestShim(t *testing.T) {
 
 	t.Run("download fills the cache and runs it", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.stubGH("")
+		f.stubCurl("")
 
 		out, code := f.run("--version")
 		if code != 0 || out != "release --version\n" {
@@ -219,11 +241,19 @@ func TestShim(t *testing.T) {
 		if _, err := os.Stat(f.release()); err != nil {
 			t.Fatalf("not cached: %v", err)
 		}
+
+		urls, err := os.ReadFile(f.urls())
+		must(t, err)
+
+		base := "https://github.com/amberpixels/f10/releases/download/cli/v" + shimVersion + "/"
+		if want := base + f.asset() + "\n" + base + "checksums.txt\n"; string(urls) != want {
+			t.Errorf("fetched %q, want %q", urls, want)
+		}
 	})
 
 	t.Run("a checksum mismatch fails without building", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.stubGH(strings.Repeat("0", 64))
+		f.stubCurl(strings.Repeat("0", 64))
 		f.stubGo()
 
 		out, code := f.run("--version")
@@ -238,7 +268,7 @@ func TestShim(t *testing.T) {
 
 	t.Run("no release asset builds from cli/ with the version stamped", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.stubGHNoRelease()
+		f.stubCurlNotFound()
 		f.stubGo()
 
 		out, code := f.run("--version")
@@ -276,22 +306,59 @@ func TestShim(t *testing.T) {
 		}
 	})
 
-	t.Run("neither gh nor go prints the one line", func(t *testing.T) {
+	t.Run("neither curl nor go prints the one line", func(t *testing.T) {
 		f := newShimFixture(t)
 
 		out, code := f.run("status")
 		if code != 1 || strings.Count(out, "\n") != 1 ||
-			!strings.Contains(out, "no binary for "+shimVersion) || !strings.Contains(out, "gh auth login") {
+			!strings.Contains(out, "no binary for "+shimVersion) || !strings.Contains(out, "curl is not installed") ||
+			!strings.Contains(out, "install Go") {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
 	})
 
-	t.Run("a logged-out gh is named as such", func(t *testing.T) {
+	t.Run("a missing release is named by its asset", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.stubGHLoggedOut()
+		f.stubCurlNotFound()
 
 		out, code := f.run("status")
-		if code != 1 || !strings.Contains(out, "gh is not logged in") {
+		if code != 1 || !strings.Contains(out, "no public release asset "+f.asset()+" for cli/v"+shimVersion) {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
+	t.Run("a release missing checksums.txt names it and still builds", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubCurlChecksums("", "404")
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "no public release asset checksums.txt for cli/v"+shimVersion) {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+
+		f.stubGo()
+
+		if out, code := f.run("--version"); code != 0 || out != "build --version\n" {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
+	t.Run("an HTTP error names its status", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubCurlChecksums("", "503")
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "checksums.txt answered HTTP 503") {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
+	t.Run("an unreachable network is named as such", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubCurlOffline()
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "cannot reach github.com, and go is not installed") {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
 	})
@@ -308,7 +375,7 @@ func TestShim(t *testing.T) {
 
 	t.Run("cached only fails fast on an empty cache", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.stubGH("")
+		f.stubCurl("")
 		f.env = append(f.env, "F10_SHIM_CACHED_ONLY=1")
 
 		out, code := f.run("status")
@@ -354,21 +421,12 @@ func TestShim(t *testing.T) {
 		}
 	})
 
-	t.Run("the hook says what is missing when neither gh nor go is there", func(t *testing.T) {
+	t.Run("the hook says what is missing when neither curl nor go is there", func(t *testing.T) {
 		f := newShimFixture(t)
 
 		out, code := f.run("--shim-hook")
-		if code != 0 || !strings.HasPrefix(out, `{"systemMessage":"f10: no binary for `+shimVersion) {
-			t.Fatalf("got %q (exit %d)", out, code)
-		}
-	})
-
-	t.Run("the hook says so when gh is logged out and go is missing", func(t *testing.T) {
-		f := newShimFixture(t)
-		f.stubGHLoggedOut()
-
-		out, code := f.run("--shim-hook")
-		if code != 0 || !strings.Contains(out, "gh is not logged in, and go is not installed") {
+		if code != 0 || !strings.HasPrefix(out, `{"systemMessage":"f10: no binary for `+shimVersion) ||
+			!strings.Contains(out, "curl is not installed, and go is not installed") {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
 	})

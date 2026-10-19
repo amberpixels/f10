@@ -327,7 +327,7 @@ Unrelated to f10 but pairs with it: Claude Code's [`footerLinksRegexes`](https:/
 
 ## The binary
 
-The plugin requires the `f10` binary and fetches it itself: its `bin/f10` shim runs the build matching the plugin's version, downloaded from this repo's release with `gh` (logged in), or built from the plugin's `cli/` when Go is installed.
+The plugin requires the `f10` binary and fetches it itself: its `bin/f10` shim runs the build matching the plugin's version, downloaded from this repo's public release with `curl`, or built from the plugin's `cli/` when Go is installed.
 Resolution order, cache and release details: [docs/cli.md](docs/cli.md).
 
 `f10 config` prints a repo's effective configuration with each value's provenance (`detected`, `declared (main)`, `declared (worktree)`, `default`, `absent`), like `git config --show-origin`.
