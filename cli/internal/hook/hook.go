@@ -90,6 +90,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		}
 
 		seed(env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd)
+		notify(ctx, env, sid, p.Cwd, skillStarted(p.CommandName, p.CommandArgs)...)
 	case "PreToolUse":
 		// the model calling the skill itself, which the expansion never sees
 		if p.ToolName != "Skill" {
@@ -103,6 +104,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 
 		_ = json.Unmarshal(p.ToolInput, &in)
 		seed(env, sid, skillOf(in.Skill), in.Args, p.Cwd)
+		notify(ctx, env, sid, p.Cwd, skillStarted(in.Skill, in.Args)...)
 	case "PostToolUse":
 		obs := observed(ctx, env, p)
 		b := badge{env: env, session: sid, cwd: p.Cwd}
@@ -110,20 +112,24 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		for _, o := range obs {
 			observe.Stamp(o, sid, p.Cwd, env.now())
 			_ = b.Observe(ctx, o)
-
-			for _, ob := range env.Observers {
-				_ = ob.Observe(ctx, o)
-			}
 		}
+
+		notify(ctx, env, sid, p.Cwd, obs...)
 	case "Stop":
 		if sid == "" {
 			return nil
 		}
 
 		r, err := state.Load(state.Path(env.StateDir, sid))
-		if err == nil && r.Backstop() {
+		if err != nil {
+			return nil
+		}
+
+		if r.Backstop() {
 			_ = r.Save(env.StateDir, env.now())
 		}
+
+		notify(ctx, env, sid, p.Cwd, stopped(r)...)
 	case "SessionStart":
 		linkStatusline(env)
 
@@ -154,6 +160,50 @@ func skillOf(name string) string {
 	return ""
 }
 
+// notify stamps observations and hands them to every observer, in order.
+func notify(ctx context.Context, env *Env, sid, cwd string, obs ...observe.Observation) {
+	for _, o := range obs {
+		if observe.MetaOf(o).Session == "" {
+			observe.Stamp(o, sid, cwd, env.now())
+		}
+
+		for _, ob := range env.Observers {
+			_ = ob.Observe(ctx, o)
+		}
+	}
+}
+
+// skillStarted is an f10 skill starting, any of them, not only the badge's
+// phases. A bare `/f10:status` is answered without a run and is none.
+func skillStarted(name, args string) []observe.Observation {
+	skill, ok := strings.CutPrefix(name, "f10:")
+	if !ok && skillOf(name) == "" || skill == "" || skill == "status" && args == "" {
+		return nil
+	}
+
+	return []observe.Observation{&observe.SkillStarted{Skill: skill, Args: args}}
+}
+
+// stopped is where a run stands as a turn ends: the latest phase the run
+// reached, its status and leaf.
+func stopped(r *state.Run) []observe.Observation {
+	phase := ""
+
+	for _, ph := range state.Phases {
+		if r.Status(ph) != "pending" {
+			phase = ph
+		}
+	}
+
+	if phase == "" {
+		return nil
+	}
+
+	return []observe.Observation{
+		&observe.SessionStopped{Task: r.Task, Phase: phase, Status: r.Status(phase), Leaf: r.Leaf},
+	}
+}
+
 func seed(env *Env, sid, skill, args, cwd string) {
 	if skill == "" || sid == "" {
 		return
@@ -181,7 +231,20 @@ func observed(ctx context.Context, env *Env, p Payload) []observe.Observation {
 		_ = json.Unmarshal(p.ToolInput, &in)
 		_ = json.Unmarshal(p.ToolResponse, &out)
 
-		return observe.FromBash(in.Command, out.Stdout, out.Stderr)
+		obs := observe.FromBash(in.Command, out.Stdout, out.Stderr)
+
+		// a plan archived is a move under plans/; spare the storage-root
+		// lookup for every other command
+		if strings.Contains(in.Command, "mv") && strings.Contains(in.Command, "plans") {
+			root := ""
+			if env.StorageRoot != nil && p.Cwd != "" {
+				root = env.StorageRoot(ctx, p.Cwd)
+			}
+
+			obs = append(obs, observe.FromMoves(in.Command, p.Cwd, root)...)
+		}
+
+		return obs
 	case "Write", "Edit":
 		var in struct {
 			Path string `json:"file_path"`

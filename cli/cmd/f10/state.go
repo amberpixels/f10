@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -18,14 +20,16 @@ import (
 // over a typo.
 func stateCommand() *cli.Command {
 	verb := func(name, args, usage string, apply func(r *state.Run, a cli.Args) error) *cli.Command {
+		kind := "state_" + name
+
 		return &cli.Command{
 			Name:      name,
 			ArgsUsage: args,
 			Usage:     usage,
 			// notes and asks are free prose: a leading dash is text, not a flag
 			SkipFlagParsing: true,
-			Action: func(_ context.Context, cmd *cli.Command) error {
-				return writeState(cmd, apply)
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				return writeState(ctx, cmd, kind, apply)
 			},
 		}
 	}
@@ -92,7 +96,7 @@ func stateCommand() *cli.Command {
 	}
 }
 
-func writeState(cmd *cli.Command, apply func(r *state.Run, a cli.Args) error) error {
+func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r *state.Run, a cli.Args) error) error {
 	// a typo fails even without a session, or step prose would hide it
 	// until the first real run
 	r, _ := state.LoadOrFresh(state.Dir(), state.Session())
@@ -109,7 +113,43 @@ func writeState(cmd *cli.Command, apply func(r *state.Run, a cli.Args) error) er
 		return nil
 	}
 
-	_ = r.Save(state.Dir(), time.Now())
+	now := time.Now()
+	_ = r.Save(state.Dir(), now)
+
+	recordClaim(ctx, r, kind, cmd.Args().Slice(), now)
 
 	return nil
+}
+
+// recordClaim puts the call in the ledger as the model made it, beside the
+// state it left. Its outcome never reaches the exit code.
+func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, now time.Time) {
+	payload := ledger.Payload{
+		"args":    args,
+		"capture": r.Capture,
+		"plan":    r.Plan,
+		"ship":    r.Ship,
+	}
+
+	for key, v := range map[string]string{"leaf": r.Leaf, "final": r.Final, "note": r.Note, "next": r.Next, "ask": r.Ask} {
+		if v != "" {
+			payload[key] = v
+		}
+	}
+
+	cwd, _ := os.Getwd()
+	place := ledger.Where(ctx, cwd)
+
+	ledger.Record(ctx, ledger.BusyAsync, ledger.Event{
+		At:           now,
+		Project:      place.Project,
+		ProjectLocal: place.ProjectLocal,
+		Checkout:     place.Checkout,
+		Branch:       place.Branch,
+		Session:      r.Session,
+		Task:         r.Task,
+		Kind:         kind,
+		Source:       ledger.Claimed,
+		Payload:      ledger.NewPayload(payload),
+	})
 }

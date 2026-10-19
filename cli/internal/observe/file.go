@@ -15,16 +15,7 @@ const inRepoStorage = "/.f10/"
 // to the `.f10/` the path itself holds. Plan archives are moves, not new
 // plans, and are not matched. Meta is left for the caller to Stamp.
 func FromWrite(path, storageRoot string) Observation {
-	roots := []string{}
-	if storageRoot != "" {
-		roots = append(roots, filepath.Clean(storageRoot))
-	}
-
-	if i := strings.LastIndex(path, inRepoStorage); i >= 0 {
-		roots = append(roots, path[:i+len(inRepoStorage)-1])
-	}
-
-	for _, root := range roots {
+	for _, root := range storageRoots(path, storageRoot) {
 		rel, ok := strings.CutPrefix(filepath.Clean(path), root+string(filepath.Separator))
 		if !ok || !strings.HasSuffix(rel, ".md") {
 			continue

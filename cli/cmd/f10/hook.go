@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/hook"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -38,6 +41,22 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 
 	home, _ := os.UserHomeDir()
 
+	// a synchronous event holds the prompt while it runs: a busy ledger
+	// spools quickly instead
+	var event struct {
+		Name string `json:"hook_event_name"`
+	}
+
+	_ = json.Unmarshal(raw, &event)
+
+	busy := ledger.BusyAsync
+	if event.Name == "UserPromptExpansion" || event.Name == "PreToolUse" {
+		busy = ledger.BusySync
+	}
+
+	recorder := &ledger.Observer{StateDir: state.Dir(), Busy: busy, TaskID: hookTaskID}
+	defer recorder.Close()
+
 	env := &hook.Env{
 		StateDir: state.Dir(),
 		Home:     home,
@@ -47,6 +66,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot },
 		TaskID:      hookTaskID,
 		StatusText:  hookStatusText,
+		Observers:   []observe.Observer{recorder},
 	}
 
 	_, err = cmd.Writer.Write(hook.Dispatch(ctx, raw, env))

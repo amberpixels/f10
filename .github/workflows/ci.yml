@@ -29,5 +29,8 @@ jobs:
 
       # The same recipe developers run locally, so `just ci` and CI cannot
       # drift apart. ci is lint + test - it verifies, never rewrites.
+      # cgo off, as the release builds: proves no dependency needs a C toolchain
       - name: Lint and test
         run: just ci
+        env:
+          CGO_ENABLED: '0'
