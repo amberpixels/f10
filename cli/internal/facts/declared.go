@@ -21,17 +21,18 @@ import (
 
 // Declared is one layer's frontmatter.
 type Declared struct {
-	Visibility  string           `yaml:"visibility,omitempty"`
-	Storage     string           `yaml:"storage,omitempty"`
-	Layering    string           `yaml:"layering,omitempty"`
-	Tracker     TrackerDecl      `yaml:"tracker,omitempty"`
-	MergeMethod string           `yaml:"merge_method,omitempty"`
-	Catchup     string           `yaml:"catchup,omitempty"`
-	Pipelines   map[string]Steps `yaml:"pipelines,omitempty"`
-	Planless    []string         `yaml:"planless,omitempty"`
-	DriveChain  Steps            `yaml:"drive_chain,omitempty"`
-	Review      ReviewDecl       `yaml:"review,omitempty"`
-	Standup     StandupDecl      `yaml:"standup,omitempty"`
+	Visibility   string           `yaml:"visibility,omitempty"`
+	Storage      string           `yaml:"storage,omitempty"`
+	Layering     string           `yaml:"layering,omitempty"`
+	Tracker      TrackerDecl      `yaml:"tracker,omitempty"`
+	MergeMethod  string           `yaml:"merge_method,omitempty"`
+	Catchup      string           `yaml:"catchup,omitempty"`
+	ReviewTraces string           `yaml:"review_traces,omitempty"`
+	Pipelines    map[string]Steps `yaml:"pipelines,omitempty"`
+	Planless     []string         `yaml:"planless,omitempty"`
+	DriveChain   Steps            `yaml:"drive_chain,omitempty"`
+	Review       ReviewDecl       `yaml:"review,omitempty"`
+	Standup      StandupDecl      `yaml:"standup,omitempty"`
 }
 
 // TrackerDecl is the tracker's kind and its task id format (`FT-###`).
@@ -116,12 +117,13 @@ func decodeDeclared(block []byte) (Declared, error) {
 
 // The vocabularies the scalar keys accept.
 var vocab = map[string][]string{
-	"visibility":   {"stealth", "public"},
-	"storage":      {"in-repo", "out-of-tree"},
-	"layering":     {layout.LayeringExtends, layout.LayeringReplaces},
-	"tracker.kind": {"github", "gitlab", "notion", "jira"},
-	"merge_method": {"squash", "merge", "rebase"},
-	"catchup":      {"rebase", "merge"},
+	"visibility":    {"stealth", "public"},
+	"storage":       {"in-repo", "out-of-tree"},
+	"layering":      {layout.LayeringExtends, layout.LayeringReplaces},
+	"tracker.kind":  {"github", "gitlab", "notion", "jira"},
+	"merge_method":  {"squash", "merge", "rebase"},
+	"catchup":       {"rebase", "merge"},
+	"review_traces": {"on", "off"},
 }
 
 // trackerKinds maps the declared kind to the name the rest of f10 shows.
@@ -138,12 +140,13 @@ func (d Declared) check() []string {
 	var bad []string
 
 	for key, value := range map[string]string{
-		"visibility":   d.Visibility,
-		"storage":      d.Storage,
-		"layering":     d.Layering,
-		"tracker.kind": d.Tracker.Kind,
-		"merge_method": d.MergeMethod,
-		"catchup":      d.Catchup,
+		"visibility":    d.Visibility,
+		"storage":       d.Storage,
+		"layering":      d.Layering,
+		"tracker.kind":  d.Tracker.Kind,
+		"merge_method":  d.MergeMethod,
+		"catchup":       d.Catchup,
+		"review_traces": d.ReviewTraces,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
 			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
@@ -199,6 +202,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("tracker", d.Tracker != TrackerDecl{}, func() { l.Tracker = d.Tracker })
 	set("merge_method", d.MergeMethod != "", func() { l.MergeMethod = d.MergeMethod })
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
+	set("review_traces", d.ReviewTraces != "", func() { l.ReviewTraces = d.ReviewTraces })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })

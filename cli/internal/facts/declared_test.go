@@ -222,3 +222,38 @@ func TestStandupUpkeep(t *testing.T) {
 		t.Error("an unknown standup key decoded")
 	}
 }
+
+// review_traces is off unless declared, takes only on or off, and a later
+// layer's value wins with its origin.
+func TestReviewTraces(t *testing.T) {
+	traces := func(eff *Effective) Fact {
+		t.Helper()
+
+		i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "review_traces" })
+		if i < 0 {
+			t.Fatalf("no review_traces fact in %+v", eff.Facts)
+		}
+
+		return eff.Facts[i]
+	}
+
+	none := buildWith(t, "# demo\n", "")
+	if f := traces(none); none.ReviewTraces || f.Value != "off" || f.Origin != OriginDefault {
+		t.Errorf("undeclared = %v, %+v", none.ReviewTraces, f)
+	}
+
+	on := buildWith(t, "---\nreview_traces: on\n---\n# demo\n", "")
+	if f := traces(on); !on.ReviewTraces || f.Value != "on" || f.Origin != "declared (main, frontmatter)" {
+		t.Errorf("declared on = %v, %+v", on.ReviewTraces, f)
+	}
+
+	layered := buildWith(t, "---\nreview_traces: on\n---\n", "---\nreview_traces: off\n---\n")
+	if f := traces(layered); layered.ReviewTraces || f.Origin != "declared (worktree, frontmatter)" {
+		t.Errorf("worktree off = %v, %+v", layered.ReviewTraces, f)
+	}
+
+	bad := buildWith(t, "---\nreview_traces: yes\n---\n", "")
+	if !strings.Contains(bad.Errors(), "review_traces") {
+		t.Errorf("errors = %q", bad.Errors())
+	}
+}

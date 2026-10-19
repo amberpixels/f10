@@ -60,6 +60,7 @@ Go service for invoices.
 | `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`) and `id`, the task id format | host issues via `gh` or `glab`; ids prefixed from the project's name |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
 | `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
+| `review_traces` | `on` or `off`: a local review run after the PR leaves a commit status, a PR comment and a fix commit naming its findings | `off` |
 | `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
 | `planless` | the pipelines that skip capture and the plan file | none |
 | `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
@@ -79,7 +80,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`).
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`, the resolve step for `review_traces`).
 
 ## Overlays
 
@@ -161,6 +162,14 @@ Reviewer is `bot`, `human` or `check` plus the login or check name.
 Arrives as is `issue comment`, `inline review` or `check run`.
 Trigger is `automatic`, `manual` or both, followed by how a human fires it; f10 never fires a manual trigger itself.
 Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. `f10 init` writes these four from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger; a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
+
+`review_traces: on` makes a local review of a branch with an open PR or MR visible on it.
+The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped".
+A round that found anything also gets a PR comment listing the findings by title, each with its verdict and each skip's reason.
+The fix commit's message names what it fixed and what it skipped.
+The status is tied to a commit, so a later push shows the new head as unreviewed.
+It is off by default because on a shared repo every comment reaches your teammates.
+In stealth mode every trace reads as your own.
 
 ## Storage and visibility
 

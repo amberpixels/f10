@@ -111,6 +111,7 @@ Never delete or rewrite a round.
 **Inside a ship pipeline** a `review` entry runs this step, then `steps/resolve.md`.
 If that resolve recorded a `fix` of its own (before any questionnaire), round two runs both again; a round that was clean or settled by skips ends the entry, and a fix chosen in the final questionnaire opens no round.
 Both rounds' `ask` verdicts go to the user in resolve's one questionnaire before the next pipeline step.
+The entry's trace on the PR (`review_traces: on`) is made the same way, by its last resolve, a clean entry's included.
 
 ## The remote review
 

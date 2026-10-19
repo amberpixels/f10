@@ -278,6 +278,11 @@ func (e *Effective) resolveHosting(
 	default:
 		e.Catchup = "rebase"
 	}
+
+	// frontmatter only: no prose ever declared it
+	e.settle("review_traces", fmSource("review_traces", fm.ReviewTraces), source{},
+		Fact{Key: "review_traces", Value: "off", Origin: OriginDefault})
+	e.ReviewTraces = fm.ReviewTraces == "on"
 }
 
 func (e *Effective) resolvePipelines(

@@ -64,12 +64,13 @@ type Effective struct {
 
 	// The rest of the typed facts (resolve.go). MergeMethod "" means none
 	// declared: finish asks the repo.
-	MergeMethod string              `json:"mergeMethod,omitempty"`
-	Catchup     string              `json:"catchup"`
-	Pipelines   map[string][]string `json:"pipelines"`
-	Planless    []string            `json:"planless,omitempty"`
-	DriveChain  []string            `json:"driveChain"`
-	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	MergeMethod  string              `json:"mergeMethod,omitempty"`
+	Catchup      string              `json:"catchup"`
+	ReviewTraces bool                `json:"reviewTraces"` // review_traces: on; a review after the PR leaves a status, a comment, a named fix commit
+	Pipelines    map[string][]string `json:"pipelines"`
+	Planless     []string            `json:"planless,omitempty"`
+	DriveChain   []string            `json:"driveChain"`
+	UpkeepPaths  []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
