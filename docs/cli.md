@@ -6,16 +6,18 @@ Five verbs act: `init` registers a checkout and never overwrites, `start` create
 
 The plugin requires the binary and ships it as `bin/f10`, a shim that runs the build matching `plugin.json`'s version.
 The skills and the binary are one contract: the skill text describes the flags the binary takes.
-The shim resolves the binary in this order, and caches it as `~/.claude/f10/bin/f10-<version>`:
+The shim resolves the binary in this order, caching under `~/.claude/f10/bin/`:
 
-1. **Cache:** that file exists, so it runs.
+1. **Cache:** this checkout's own build (`f10-<version>-<checkout key>`), else the release binary (`f10-<version>`).
 2. **Download:** `gh release download cli/v<version>` from this repo, the asset for this OS and CPU (darwin or linux, amd64 or arm64), checked against the release's `checksums.txt`. `gh` handles auth for the private repo. A checksum mismatch fails; it never falls through to a build.
 3. **Build:** the download failed and Go is installed, so `go build` of the plugin's `cli/` with the version stamped in.
 4. **Neither:** one line on stderr saying what is missing and how to fix it (`gh auth login`, or install Go), exit 1.
 
 A SessionStart hook runs the resolution in the background, so the first real call rarely waits, and shows the same line when neither `gh` nor Go is there.
 It also puts the plugin's `bin/` first on the session's PATH (through `CLAUDE_ENV_FILE`), so an older `f10` in `~/go/bin` cannot shadow the shim.
-A checkout build is marked in the cache, and the hook rebuilds it once `cli/` holds newer sources.
+Builds are keyed by the checkout they came from, so a worktree's build never replaces the one another checkout of the same version runs.
+The hook rebuilds a checkout's build once its `cli/` holds newer sources.
+A checkout running the release binary has no build of its own: after editing `cli/` there, run `just install` once, and the hook keeps that build current from then on.
 
 ```bash
 f10 --version   # always the plugin's version through the shim

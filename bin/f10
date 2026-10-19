@@ -3,18 +3,25 @@
 #
 # The skills describe the binary's flags, so the plugin and the binary must be one release. This
 # shim reads the version from plugin.json and resolves, in order:
-#   1. the cache, ~/.claude/f10/bin/f10-<version>
+#   1. the cache: this checkout's own build, f10-<version>-<root key>, else the release binary,
+#      f10-<version>, both under ~/.claude/f10/bin
 #   2. the cli/v<version> release asset for this OS and CPU, via gh (which handles auth for a
 #      private repo), checked against the release's checksums.txt
 #   3. `go build` of this plugin's cli/ with the version stamped in, also the dev path
 # and execs it. Neither download nor build works: one line on stderr naming what is missing and the
 # fix, exit 1. A checksum mismatch fails outright, never falling through to a build.
 #
+# Builds are keyed by the checkout they came from, so a worktree's `just install` never replaces
+# the binary another checkout of the same version runs.
+#
 # Usage:
 #   f10 <args>            resolve, then exec the binary with <args>
 #   f10 --shim-resolve    resolve only; exit 1 with the one line when it cannot
-#   f10 --shim-rebuild    build this checkout's cli/ into the cache, replacing it (`just install`)
+#   f10 --shim-rebuild    build this checkout's cli/ into its cache slot (`just install`)
 #   f10 --shim-hook       the SessionStart hook, from hooks/hooks.json only
+#
+# F10_SHIM_CACHED_ONLY=1 fails fast instead of downloading or building, for hooks with a short
+# timeout.
 #
 # Hooks call it by path. Skills type a bare `f10`, which reaches it through the PATH the
 # SessionStart hook puts first.
@@ -32,8 +39,10 @@ if [ -z "$version" ]; then
   exit 1
 fi
 
-bin="$cache/f10-$version"
-built="$bin.built" # marks a cached binary as a checkout build, so the hook can tell it went stale
+release="$cache/f10-$version"
+build="$cache/f10-$version-$(printf '%s' "$root" | cksum | awk '{ print $1 }')"
+built="$build.built" # when the build was made, so the hook can tell it went stale
+bin=""
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$(uname -m)" in
@@ -51,16 +60,29 @@ cannot() {
     "$version" "$why_dl" "$why_go"
 }
 
+have() { command -v "$1" >/dev/null 2>&1; }
+
 sha256() {
-  if command -v sha256sum >/dev/null 2>&1; then
+  if have sha256sum; then
     sha256sum "$1" | awk '{ print $1 }'
   else
     shasum -a 256 "$1" | awk '{ print $1 }'
   fi
 }
 
+# Sets bin to the cached binary, this checkout's build first.
+cached() {
+  if [ -x "$build" ]; then
+    bin="$build"
+  elif [ -x "$release" ]; then
+    bin="$release"
+  else
+    return 1
+  fi
+}
+
 download() {
-  if ! command -v gh >/dev/null 2>&1; then
+  if ! have gh; then
     why_dl="gh is not installed"
     return 1
   fi
@@ -72,7 +94,11 @@ download() {
   fi
   if ! out="$(gh release download "cli/v$version" -R "$repo" -p "$asset" -p checksums.txt -D "$tmp" 2>&1)"; then
     rm -rf "$tmp"
-    why_dl="release cli/v$version has no $asset ($(printf '%s' "$out" | head -n 1))"
+    case "$out" in
+      *"auth login"* | *"authentication"* | *"401"*) why_dl="gh is not logged in" ;;
+      *"not found"* | *"404"* | *"no assets"*) why_dl="release cli/v$version has no $asset" ;;
+      *) why_dl="gh release download failed ($(printf '%s' "$out" | head -n 1))" ;;
+    esac
     return 1
   fi
 
@@ -85,13 +111,13 @@ download() {
   fi
 
   chmod +x "$tmp/$asset"
-  mv -f "$tmp/$asset" "$bin"
+  mv -f "$tmp/$asset" "$release"
   rm -rf "$tmp"
-  rm -f "$built"
+  bin="$release"
 }
 
-build() {
-  if ! command -v go >/dev/null 2>&1; then
+compile() {
+  if ! have go; then
     why_go="go is not installed"
     return 1
   fi
@@ -112,31 +138,40 @@ build() {
   fi
 
   # temp file plus mv, so a call racing the hook's resolve never execs a half-written file
-  mv -f "$tmp" "$bin"
+  mv -f "$tmp" "$build"
   : >"$built"
+  bin="$build"
 }
 
 resolve() {
-  [ -x "$bin" ] && return 0
+  cached && return 0
+  if [ "${F10_SHIM_CACHED_ONLY:-}" = 1 ]; then
+    if have gh || have go; then
+      printf 'f10: no binary for %s yet; the session start is fetching it, try again in a moment\n' "$version" >&2
+    else
+      why_dl="gh is not installed"
+      why_go="go is not installed"
+      printf '%s\n' "$(cannot)" >&2
+    fi
+    exit 1
+  fi
   mkdir -p "$cache" 2>/dev/null
   download && return 0
-  build && return 0
+  compile && return 0
   printf '%s\n' "$(cannot)" >&2
   exit 1
 }
 
-# A checkout build older than the cli/ sources it came from.
+# This checkout's build, older than the cli/ sources it came from.
 stale_build() {
   [ -f "$built" ] && [ -n "$(find "$root/cli" -newer "$built" \( -name '*.go' -o -name go.mod -o -name go.sum \) -print 2>/dev/null | head -n 1)" ]
 }
 
-say() { # a SessionStart verdict the user sees; the text holds no newline
-  printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
-}
-
 # Runs synchronously but never waits on a download or a build: those go to the background, and a
-# background failure surfaces on the first real call with the same line.
+# background failure surfaces on the first real call with the same line. What the user should see
+# goes out as one systemMessage.
 hook() {
+  local said=""
   # Claude Code applies CLAUDE_ENV_FILE to every later Bash command. The plugin's bin/ would
   # otherwise come after ~/go/bin, where a stale `go install` copy shadows this shim.
   if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -146,31 +181,33 @@ hook() {
     local found
     found="$(command -v f10 2>/dev/null || true)"
     if [ -n "$found" ] && [ "$found" != "$root/bin/f10" ]; then
-      say "f10: $found comes before the plugin's $root/bin/f10 on PATH and may not be $version; remove it"
+      said="f10: $found comes before the plugin's $root/bin/f10 on PATH and may not be $version; remove it"
     fi
   fi
 
   mkdir -p "$cache"
-  if [ -x "$bin" ]; then
-    stale_build || return 0
-    nohup "$root/bin/f10" --shim-rebuild </dev/null >"$cache/resolve.log" 2>&1 &
-    return 0
+  if cached; then
+    if stale_build; then
+      nohup "$root/bin/f10" --shim-rebuild </dev/null >"$cache/resolve.log" 2>&1 &
+    fi
+  elif ! have go && { ! have gh || ! gh auth status >/dev/null 2>&1; }; then
+    # without Go only a download can work, and that needs a logged-in gh
+    why_go="go is not installed"
+    why_dl="gh is not logged in"
+    have gh || why_dl="gh is not installed"
+    said="${said:+$said. }$(cannot)"
+  else
+    nohup "$root/bin/f10" --shim-resolve </dev/null >"$cache/resolve.log" 2>&1 &
   fi
 
-  if ! command -v gh >/dev/null 2>&1 && ! command -v go >/dev/null 2>&1; then
-    why_dl="gh is not installed"
-    why_go="go is not installed"
-    say "$(cannot)"
-    return 0
-  fi
-  nohup "$root/bin/f10" --shim-resolve </dev/null >"$cache/resolve.log" 2>&1 &
+  [ -z "$said" ] || printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$said" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
 }
 
 case "${1:-}" in
   --shim-resolve) resolve ;;
   --shim-rebuild)
     mkdir -p "$cache"
-    build || {
+    compile || {
       printf 'f10: %s\n' "$why_go" >&2
       exit 1
     }

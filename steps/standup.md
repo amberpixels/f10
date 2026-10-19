@@ -91,7 +91,7 @@ A driven run never marks: nobody read the report, so moving the period would hid
 Nor does it deliver: the adapter is a tool the session may not have approved, and its permission dialog would stall a pane nobody watches; without a mark, each driven run would also draft the same period again.
 One line under the report names the adapter that was not called.
 
-**On failure:** `f10` is not on `PATH`, or `f10 standup` fails (no git `user.email`, a host CLI not logged in, an unreadable `~/.f10/standup.json`).
+**On failure:** `f10 standup` fails (the plugin's `f10` has no binary and says so in one line, no git `user.email`, a host CLI not logged in, an unreadable `~/.f10/standup.json`).
 Report its stderr verbatim per `conventions/failure.md` and do not mark.
 A Deliver adapter that fails is point 7's fallback, not a run failure.
 A `mark` that fails after printing leaves the report valid: say so, with its stderr, and that the next standup starts where this one did.

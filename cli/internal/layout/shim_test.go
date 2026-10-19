@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // shimFixture is a plugin root holding a copy of bin/f10, a cache dir, and
@@ -23,6 +24,14 @@ type shimFixture struct {
 }
 
 const shimVersion = "9.8.7"
+
+// shimTools are the commands the shim and the stubs run. The fixture's PATH
+// reaches them through symlinks and nothing else, so a real gh or go on the
+// machine (a CI runner has gh in /usr/bin) never takes part.
+var shimTools = []string{
+	"awk", "bash", "cat", "chmod", "cksum", "dirname", "find", "grep", "head", "mkdir",
+	"mktemp", "mv", "nohup", "perl", "rm", "sed", "sh", "sha256sum", "shasum", "touch", "tr", "uname",
+}
 
 func newShimFixture(t *testing.T) *shimFixture {
 	t.Helper()
@@ -49,10 +58,19 @@ func newShimFixture(t *testing.T) *shimFixture {
 	f.write(filepath.Join(f.root, "cli", "go.mod"), "module example\n", 0o644)
 	must(t, os.MkdirAll(f.stubs, 0o755))
 
+	tools := filepath.Join(dir, "tools")
+	must(t, os.MkdirAll(tools, 0o755))
+
+	for _, name := range shimTools {
+		if path, err := exec.LookPath(name); err == nil {
+			must(t, os.Symlink(path, filepath.Join(tools, name)))
+		}
+	}
+
 	f.env = []string{
 		"HOME=" + dir,
 		"F10_BIN_DIR=" + f.cache,
-		"PATH=" + f.stubs + ":/usr/bin:/bin",
+		"PATH=" + f.stubs + ":" + tools,
 	}
 
 	return f
@@ -78,12 +96,12 @@ func fakeBinary(origin string) string {
 }
 
 func (f *shimFixture) asset() string {
-	arch := runtime.GOARCH
-	return "f10_" + shimVersion + "_" + runtime.GOOS + "_" + arch
+	return "f10_" + shimVersion + "_" + runtime.GOOS + "_" + runtime.GOARCH
 }
 
-// stubGH answers `gh release download` by writing the asset and a
-// checksums file whose sum is sum, or the asset's real one when sum is "".
+// stubGH answers `gh auth status` and `gh release download`, the latter by
+// writing the asset and a checksums file whose sum is sum, or the asset's
+// real one when sum is "".
 func (f *shimFixture) stubGH(sum string) {
 	body := fakeBinary("release")
 	if sum == "" {
@@ -92,6 +110,7 @@ func (f *shimFixture) stubGH(sum string) {
 	}
 
 	f.write(filepath.Join(f.stubs, "gh"), `#!/bin/sh
+[ "$1" = auth ] && exit 0
 while [ $# -gt 0 ]; do
   case "$1" in -D) dir="$2"; shift ;; esac
   shift
@@ -102,8 +121,18 @@ printf '%s  %s\n' "`+sum+`" "`+f.asset()+`" >"$dir/checksums.txt"
 `, 0o755)
 }
 
-func (f *shimFixture) stubGHFailing() {
-	f.write(filepath.Join(f.stubs, "gh"), "#!/bin/sh\necho 'release not found' >&2\nexit 1\n", 0o755)
+// stubGHLoggedOut fails every call the way a gh without a login does.
+func (f *shimFixture) stubGHLoggedOut() {
+	f.write(filepath.Join(f.stubs, "gh"),
+		"#!/bin/sh\necho 'To get started with GitHub CLI, please run:  gh auth login' >&2\nexit 4\n", 0o755)
+}
+
+func (f *shimFixture) stubGHNoRelease() {
+	f.write(
+		filepath.Join(f.stubs, "gh"),
+		"#!/bin/sh\n[ \"$1\" = auth ] && exit 0\necho 'release not found' >&2\nexit 1\n",
+		0o755,
+	)
 }
 
 // stubGo answers `go build ... -o <file>` with a fake binary, and records
@@ -136,12 +165,41 @@ func (f *shimFixture) run(args ...string) (string, int) {
 	return string(out), 0
 }
 
-func (f *shimFixture) cached() string { return filepath.Join(f.cache, "f10-"+shimVersion) }
+func (f *shimFixture) release() string { return filepath.Join(f.cache, "f10-"+shimVersion) }
+
+// build is this checkout's build slot, f10-<version>-<root key>, or "".
+func (f *shimFixture) build() string {
+	f.t.Helper()
+
+	matches, err := filepath.Glob(filepath.Join(f.cache, "f10-"+shimVersion+"-*"))
+	must(f.t, err)
+
+	for _, m := range matches {
+		if !strings.HasSuffix(m, ".built") {
+			return m
+		}
+	}
+
+	return ""
+}
+
+// eventually polls cond for a background job the hook started.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if cond() {
+			return
+		}
+	}
+
+	t.Fatalf("timed out waiting for %s", what)
+}
 
 func TestShim(t *testing.T) {
 	t.Run("cache hit runs the cached binary", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.write(f.cached(), fakeBinary("cache"), 0o755)
+		f.write(f.release(), fakeBinary("cache"), 0o755)
 
 		out, code := f.run("status", "--json")
 		if code != 0 || out != "cache status --json\n" {
@@ -158,7 +216,7 @@ func TestShim(t *testing.T) {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
 
-		if _, err := os.Stat(f.cached()); err != nil {
+		if _, err := os.Stat(f.release()); err != nil {
 			t.Fatalf("not cached: %v", err)
 		}
 	})
@@ -173,14 +231,14 @@ func TestShim(t *testing.T) {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
 
-		if _, err := os.Stat(f.cached()); err == nil {
+		if _, err := os.Stat(f.release()); err == nil {
 			t.Fatal("cached a binary that failed its checksum")
 		}
 	})
 
 	t.Run("no release asset builds from cli/ with the version stamped", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.stubGHFailing()
+		f.stubGHNoRelease()
 		f.stubGo()
 
 		out, code := f.run("--version")
@@ -195,16 +253,31 @@ func TestShim(t *testing.T) {
 			t.Errorf("ldflags = %q, want %q", ldflags, want)
 		}
 
-		if _, err := os.Stat(f.cached() + ".built"); err != nil {
+		if f.build() == "" {
+			t.Fatal("the build is not in this checkout's slot")
+		}
+
+		if _, err := os.Stat(f.build() + ".built"); err != nil {
 			t.Errorf("a checkout build left no marker: %v", err)
+		}
+	})
+
+	t.Run("this checkout's build wins over the release binary", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.write(f.release(), fakeBinary("release"), 0o755)
+		f.stubGo()
+
+		if out, code := f.run("--shim-rebuild"); code != 0 {
+			t.Fatalf("--shim-rebuild: %q (exit %d)", out, code)
+		}
+
+		if out, _ := f.run("x"); out != "build x\n" {
+			t.Fatalf("got %q", out)
 		}
 	})
 
 	t.Run("neither gh nor go prints the one line", func(t *testing.T) {
 		f := newShimFixture(t)
-		if _, err := exec.LookPath("/usr/bin/gh"); err == nil {
-			t.Skip("gh is installed in /usr/bin")
-		}
 
 		out, code := f.run("status")
 		if code != 1 || strings.Count(out, "\n") != 1 ||
@@ -213,9 +286,19 @@ func TestShim(t *testing.T) {
 		}
 	})
 
+	t.Run("a logged-out gh is named as such", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubGHLoggedOut()
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "gh is not logged in") {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
 	t.Run("resolve only does not run the binary", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.write(f.cached(), fakeBinary("cache"), 0o755)
+		f.write(f.release(), fakeBinary("cache"), 0o755)
 
 		out, code := f.run("--shim-resolve")
 		if code != 0 || out != "" {
@@ -223,9 +306,24 @@ func TestShim(t *testing.T) {
 		}
 	})
 
+	t.Run("cached only fails fast on an empty cache", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubGH("")
+		f.env = append(f.env, "F10_SHIM_CACHED_ONLY=1")
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "try again in a moment") {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+
+		if _, err := os.Stat(f.release()); err == nil {
+			t.Fatal("downloaded in cached-only mode")
+		}
+	})
+
 	t.Run("the hook puts the plugin's bin/ first, once", func(t *testing.T) {
 		f := newShimFixture(t)
-		f.write(f.cached(), fakeBinary("cache"), 0o755)
+		f.write(f.release(), fakeBinary("cache"), 0o755)
 
 		envFile := filepath.Join(t.TempDir(), "env")
 		f.env = append(f.env, "CLAUDE_ENV_FILE="+envFile)
@@ -245,16 +343,59 @@ func TestShim(t *testing.T) {
 		}
 	})
 
+	t.Run("without CLAUDE_ENV_FILE the hook names a shadowing f10", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.write(f.release(), fakeBinary("cache"), 0o755)
+		f.write(filepath.Join(f.stubs, "f10"), fakeBinary("stale"), 0o755)
+
+		out, code := f.run("--shim-hook")
+		if code != 0 || !strings.Contains(out, `"systemMessage":"f10: `+filepath.Join(f.stubs, "f10")+" comes before") {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
 	t.Run("the hook says what is missing when neither gh nor go is there", func(t *testing.T) {
 		f := newShimFixture(t)
-		if _, err := exec.LookPath("/usr/bin/go"); err == nil {
-			t.Skip("go is installed in /usr/bin")
-		}
 
 		out, code := f.run("--shim-hook")
 		if code != 0 || !strings.HasPrefix(out, `{"systemMessage":"f10: no binary for `+shimVersion) {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
+	})
+
+	t.Run("the hook says so when gh is logged out and go is missing", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubGHLoggedOut()
+
+		out, code := f.run("--shim-hook")
+		if code != 0 || !strings.Contains(out, "gh is not logged in, and go is not installed") {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
+	t.Run("the hook rebuilds a checkout build older than cli/", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubGo()
+
+		if out, code := f.run("--shim-rebuild"); code != 0 {
+			t.Fatalf("--shim-rebuild: %q (exit %d)", out, code)
+		}
+
+		old := time.Now().Add(-time.Hour)
+		must(t, os.Chtimes(f.build()+".built", old, old))
+		f.write(filepath.Join(f.root, "cli", "main.go"), "package main\n", 0o644)
+
+		record := filepath.Join(f.stubs, "ldflags")
+		must(t, os.Remove(record))
+
+		if out, code := f.run("--shim-hook"); code != 0 || out != "" {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+
+		eventually(t, "the background rebuild", func() bool {
+			_, err := os.Stat(record)
+			return err == nil
+		})
 	})
 }
 
