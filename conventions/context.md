@@ -63,7 +63,7 @@ The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.
 - **Tracker** - kind and **task id format** in the frontmatter's `tracker:` (`ABC-####`, `GH-###`); under the heading, the **fetch** and **create** adapters, a skill or a CLI command (`gh issue view <n> --comments`, `gh issue create`), and an optional **parent** adapter that links a subtask to its parent (`steps/capture.md`).
-- **Hosting & PR** - how to open a PR/MR: a skill, or `gh pr create` / `glab mr create` mechanics (branch naming, labels, assignee).
+- **Hosting & PR** - how to open or refresh a PR/MR: a skill, or `gh pr create` / `glab mr create` and `gh pr edit` / `glab mr update` mechanics (branch naming, labels, assignee).
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.
 - **Roles** - per step, on top of each step's base role: **Always** for every run, **Conditional** when the task touches a named area ("+ senior UI/UX engineer on user-facing UI").
