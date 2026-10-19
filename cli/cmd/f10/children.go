@@ -27,8 +27,40 @@ import (
 // a normal answer the drive skill reads as "drive the id as given".
 const exitNoParentLink = 3
 
+// exitParent is start's exit for a parent with unfinished subtasks: the
+// start skill turns it into "drive them, or start one".
+const exitParent = 6
+
 // errNoParentLink is a tracker that cannot link a subtask to its parent.
 var errNoParentLink = errors.New("the tracker has no parent link")
+
+// openSubtasks is the ids of a task's unfinished subtasks, in tree order:
+// the check start and drive make before a task runs as one of its own. A
+// tracker with no parent link has none.
+func openSubtasks(ctx context.Context, tr tracker, r ref.Ref) ([]string, error) {
+	if tr.children == nil {
+		return nil, nil
+	}
+
+	kids, err := tr.children(ctx, r)
+	if errors.Is(err, errNoParentLink) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("%s: reading its subtasks: %w", r.ID, err)
+	}
+
+	var open []string
+
+	for _, k := range kids {
+		if !k.Finished {
+			open = append(open, k.ID)
+		}
+	}
+
+	return open, nil
+}
 
 // A childRow is one open subtask. Rows come in tree order: a child whose
 // After: base is a sibling follows that sibling one level deeper.

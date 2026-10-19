@@ -782,29 +782,9 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 // drive skill is where they are chosen. A started task is never a parent
 // here, so a resumed drive asks nothing more of the tracker.
 func (in *driveInput) refuseParent(ctx context.Context, r ref.Ref) error {
-	if in.tracker.children == nil {
-		return nil
-	}
-
-	kids, err := in.tracker.children(ctx, r)
-	if errors.Is(err, errNoParentLink) {
-		return nil
-	}
-
-	if err != nil {
-		return fmt.Errorf("%s: reading its subtasks: %w", r.ID, err)
-	}
-
-	var open []string
-
-	for _, k := range kids {
-		if !k.Finished {
-			open = append(open, k.ID)
-		}
-	}
-
-	if len(open) == 0 {
-		return nil
+	open, err := openSubtasks(ctx, in.tracker, r)
+	if err != nil || len(open) == 0 {
+		return err
 	}
 
 	return fmt.Errorf("%s is a parent of %s: list the subtasks to drive (f10 task children %s), "+

@@ -167,6 +167,15 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		pick:     pick,
 	}
 
+	if checksParent(mode, pick) {
+		in.children = t.tracker().children
+	}
+
+	// before the body's After: line, whose own refusal would hide this one
+	if err := refuseStartParent(ctx, in); err != nil {
+		return err
+	}
+
 	switch {
 	case pick != nil:
 		// the branch and its base are the PR's
@@ -327,6 +336,9 @@ type startInput struct {
 	model    string                                // the agent's --model, resolved, or "" for claude's default
 	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
 	pick     *pickup                               // the PR picked up, or nil for a task started by its id
+	// children is the task's subtasks, read to refuse a parent; nil skips the
+	// check (see checksParent)
+	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
 }
 
 // titleLookup asks the host for the task's title. A checkout with no host
@@ -400,6 +412,36 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
 		o.notes,
 	)
+}
+
+// checksParent reports whether start refuses a parent: a PR pickup is
+// someone else's branch, and talking an umbrella task through before
+// splitting it is what --discuss is for.
+func checksParent(mode string, pick *pickup) bool {
+	return pick == nil && mode != modeDiscuss
+}
+
+// refuseStartParent stops a parent with unfinished subtasks before anything
+// is created, since its agent would ship the whole umbrella on one branch.
+// A task with a branch was started already and reopens as before, as drive
+// never treats a started task as a parent.
+func refuseStartParent(ctx context.Context, in startInput) error {
+	if in.children == nil {
+		return nil
+	}
+
+	branched, err := hasTaskBranch(ctx, in.main, in.task.ID)
+	if err != nil || branched {
+		return err
+	}
+
+	open, err := openSubtasks(ctx, tracker{children: in.children}, in.task)
+	if err != nil || len(open) == 0 {
+		return err
+	}
+
+	return cli.Exit(fmt.Sprintf("f10: %s is a parent of %s: run /f10:drive %s to drive them, "+
+		"or start one subtask (f10 start %s)", in.task.ID, strings.Join(open, ", "), in.task.ID, open[0]), exitParent)
 }
 
 // An openedTask is what openTask leaves behind: the branch, its worktree,

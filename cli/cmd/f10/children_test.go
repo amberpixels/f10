@@ -194,3 +194,40 @@ func TestChildrenDriverDeclines(t *testing.T) {
 		t.Errorf("err = %v, want errNoParentLink", err)
 	}
 }
+
+func TestOpenSubtasks(t *testing.T) {
+	r := ref.Ref{ID: "FT-1", Number: "1"}
+	failed := errors.New("boom")
+
+	for name, tc := range map[string]struct {
+		children func(context.Context, ref.Ref) ([]childRow, error)
+		want     []string
+		err      string
+	}{
+		"no lookup":      {},
+		"no parent link": {children: func(context.Context, ref.Ref) ([]childRow, error) { return nil, errNoParentLink }},
+		"a read error": {
+			children: func(context.Context, ref.Ref) ([]childRow, error) { return nil, failed },
+			err:      "FT-1: reading its subtasks: boom",
+		},
+		"unfinished rows in order": {
+			children: func(context.Context, ref.Ref) ([]childRow, error) {
+				return []childRow{{ID: "FT-3"}, {ID: "FT-2", Finished: true}, {ID: "FT-4"}}, nil
+			},
+			want: []string{"FT-3", "FT-4"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := openSubtasks(t.Context(), tracker{children: tc.children}, r)
+
+			switch {
+			case tc.err != "" && (err == nil || err.Error() != tc.err):
+				t.Errorf("err = %v, want %q", err, tc.err)
+			case tc.err == "" && err != nil:
+				t.Errorf("err = %v", err)
+			case strings.Join(got, ",") != strings.Join(tc.want, ","):
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
