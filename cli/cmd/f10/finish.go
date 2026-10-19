@@ -29,6 +29,9 @@ import (
 // is out of the worktree before the worktree goes. A task shipped from the
 // main checkout has no worktree: main is switched to the default branch
 // and only the local branch goes.
+//
+// A PR someone else opened is not merged unasked: --merge merges it, and
+// --local cleans up here and leaves it open, for a review handed back.
 func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "finish",
@@ -39,12 +42,25 @@ func finishCommand() *cli.Command {
 				Name:  "yes",
 				Usage: "when run from inside the task's own workspace, close it after the report instead of refusing",
 			},
+			&cli.BoolFlag{Name: "merge", Usage: "merge the PR even when someone else opened it"},
+			&cli.BoolFlag{
+				Name:  "local",
+				Usage: "clean up the worktree, branch and workspace and leave the PR open: a review handed back",
+			},
 		},
 		Action: runFinish,
 	}
 }
 
+// exitForeign is finish's exit when the PR is someone else's and no flag
+// says what to do with it: the finish skill asks, and reruns with one.
+const exitForeign = 3
+
 func runFinish(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Bool("merge") && cmd.Bool("local") {
+		return errors.New("--merge and --local are exclusive: one merges the PR, the other leaves it open")
+	}
+
 	if err := herdr.Available(); err != nil {
 		return err
 	}
@@ -78,7 +94,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 
-	return finish(ctx, cmd.Writer, finishInput{
+	err = finish(ctx, cmd.Writer, finishInput{
 		main:      main,
 		driver:    t.driver(),
 		task:      r,
@@ -88,8 +104,28 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		cwd:       cwd,
 		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 		yes:       cmd.Bool("yes"),
+		merge:     cmd.Bool("merge"),
+		local:     cmd.Bool("local"),
 		plansDir:  t.sharedPlansDir(),
 	})
+
+	if fp := (foreignPullError{}); errors.As(err, &fp) {
+		return cli.Exit("f10: "+fp.Error(), exitForeign)
+	}
+
+	return err
+}
+
+// A foreignPullError is an open PR someone else opened, met with neither
+// --merge nor --local: finish changed nothing and the choice is the user's.
+type foreignPullError struct {
+	url    string
+	author string
+}
+
+func (e foreignPullError) Error() string {
+	return fmt.Sprintf("%s was opened by %s: pass --merge to merge it, "+
+		"or --local to clean up here and leave it open", e.url, e.author)
 }
 
 // finishInput is everything finish needs once the target is settled, so
@@ -104,6 +140,8 @@ type finishInput struct {
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
 	yes       bool
+	merge     bool   // merge the PR even when someone else opened it
+	local     bool   // leave the PR open and clean up only what is here
 	plansDir  string // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
 }
 
@@ -148,29 +186,61 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	p, notes, err := landPull(ctx, in, name, def)
+	p, err := in.host.pull(ctx, name)
 	if err != nil {
 		return err
 	}
 
-	// on main, the default branch is checked out nowhere, so pullMain fetches
-	// into it and main stays on the task's branch until the end: a failure
-	// before then leaves a rerun the same shape to find
-	note, err := pullMain(ctx, in.main, def, p.sha())
+	leave, err := in.leaveOpen(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	if !onMain {
-		notes = appendNote(notes, note)
-	}
+	var (
+		rows  []fact
+		notes []string
+		ended = p.url() + " merged"
+	)
 
-	released, err := releaseDependents(ctx, in.main, name, def)
-	if err != nil {
-		return err
-	}
+	if leave {
+		if err := refuseUnpushed(ctx, in.main, name); err != nil {
+			return err
+		}
 
-	notes = append(notes, released...)
+		ended = p.url() + " left open"
+		rows = []fact{{label: "task", value: in.task.ID}, {label: "pr", value: p.url(), url: true}}
+		notes = append(notes, fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
+			p.url(), p.status()))
+	} else {
+		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
+			return err
+		}
+
+		// on main, the default branch is checked out nowhere, so pullMain fetches
+		// into it and main stays on the task's branch until the end: a failure
+		// before then leaves a rerun the same shape to find
+		note, err := pullMain(ctx, in.main, def, p.sha())
+		if err != nil {
+			return err
+		}
+
+		if !onMain {
+			notes = appendNote(notes, note)
+		}
+
+		released, err := releaseDependents(ctx, in.main, name, def)
+		if err != nil {
+			return err
+		}
+
+		notes = append(notes, released...)
+
+		rows = []fact{
+			{label: "task", value: in.task.ID},
+			{label: "pr", value: p.url(), url: true},
+			{label: "merge", value: p.sha()},
+		}
+	}
 
 	archived, note, err := archivePlan(path, in.main, in.plansDir, in.task.ID)
 	if err != nil {
@@ -178,12 +248,6 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	notes = appendNote(notes, note)
-
-	rows := []fact{
-		{label: "task", value: in.task.ID},
-		{label: "pr", value: p.url(), url: true},
-		{label: "merge", value: p.sha()},
-	}
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived})
@@ -211,7 +275,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if onMain {
-		return switchMain(ctx, in.main, def, name, p.url())
+		return switchMain(ctx, in.main, def, name, ended)
 	}
 
 	if err := removeCheckout(ctx, in.main, path, name); err != nil {
@@ -232,19 +296,61 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 }
 
 // switchMain ends a finish run on the main checkout: main onto the default
-// branch, then the task's branch deleted. Each error names the merge that
-// already landed and what is left to do by hand.
-func switchMain(ctx context.Context, main, def, branch, url string) error {
+// branch, then the task's branch deleted. Each error names what already
+// happened to the PR (ended: "<url> merged") and what is left to do by hand.
+func switchMain(ctx context.Context, main, def, branch, ended string) error {
 	if err := gitx.Switch(ctx, main, def); err != nil {
-		return fmt.Errorf("%s merged, but switching the main checkout to %s failed: %w", url, def, err)
+		return fmt.Errorf("%s, but switching the main checkout to %s failed: %w", ended, def, err)
 	}
 
 	if err := gitx.DeleteBranch(ctx, main, branch); err != nil {
-		return fmt.Errorf("%s merged and main is on %s, but deleting %s failed (git branch -D %s): %w",
-			url, def, branch, branch, err)
+		return fmt.Errorf("%s and main is on %s, but deleting %s failed (git branch -D %s): %w",
+			ended, def, branch, branch, err)
 	}
 
 	return nil
+}
+
+// leaveOpen reports whether finish cleans up locally and leaves the PR as
+// it is. A merged PR always takes the full path, which only confirms it.
+// An open PR someone else opened, with neither flag, is a refusal that
+// changes nothing; a closed one is left only with --local.
+func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
+	switch {
+	case p.status() == pullMerged:
+		return false, nil
+	case in.local:
+		return true, nil
+	case in.merge || p.status() != pullOpen:
+		return false, nil
+	}
+
+	author := p.author()
+	if author == "" {
+		return false, nil
+	}
+
+	me, err := in.host.login(ctx)
+	if err != nil {
+		return false, fmt.Errorf("telling whose PR %s is: %w", p.url(), err)
+	}
+
+	if !strings.EqualFold(author, me) {
+		return false, foreignPullError{url: p.url(), author: author}
+	}
+
+	return false, nil
+}
+
+// refuseUnpushed stops a cleanup that leaves the PR open while the branch
+// has commits origin's copy lacks: deleting the branch would lose them.
+func refuseUnpushed(ctx context.Context, main, branch string) error {
+	if gitx.IsAncestor(ctx, main, "refs/heads/"+branch, "refs/remotes/origin/"+branch) {
+		return nil
+	}
+
+	return fmt.Errorf("%s has commits origin/%s does not: push or drop them first, "+
+		"since leaving the PR open deletes the local branch", branch, branch)
 }
 
 // appendNote adds note to notes unless it is empty.
@@ -380,12 +486,7 @@ func resolved(p string) string {
 // remote branch when the host still has it, which is what retargets a PR
 // stacked on this branch, and the local copy of it. The notes say when the merge was not this run's
 // and when the merge method was a default rather than a declaration.
-func landPull(ctx context.Context, in finishInput, name, def string) (pull, []string, error) {
-	p, err := in.host.pull(ctx, name)
-	if err != nil {
-		return pull{}, nil, err
-	}
-
+func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pull, []string, error) {
 	var notes []string
 
 	switch p.status() {
@@ -414,8 +515,8 @@ func landPull(ctx context.Context, in finishInput, name, def string) (pull, []st
 	case pullMerged:
 		notes = append(notes, p.url()+" was already merged")
 	default:
-		return pull{}, nil, fmt.Errorf("%s is %s without a merge: finish only finishes merged or mergeable work",
-			p.url(), p.status())
+		return pull{}, nil, fmt.Errorf("%s is %s without a merge: finish only finishes merged or mergeable work; "+
+			"--local cleans up here and leaves it %s", p.url(), p.status(), p.status())
 	}
 
 	if p.status() != pullMerged || p.sha() == "" {

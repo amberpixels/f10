@@ -130,7 +130,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		plansDir: t.sharedPlansDir(),
 		settings: claudeSettingsPath(),
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
-		finish: func(ctx context.Context, w io.Writer, task ref.Ref) error {
+		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("getwd: %w", err)
@@ -144,6 +144,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				method:    t.eff.MergeMethod,
 				cwd:       cwd,
 				workspace: os.Getenv("HERDR_WORKSPACE_ID"),
+				merge:     pr == finishMerge,
+				local:     pr == finishLocal,
 				plansDir:  t.sharedPlansDir(),
 			})
 		},
@@ -337,7 +339,7 @@ type driveInput struct {
 	plansDir string // the shared plans dir, or "" for in-repo storage
 	settings string // claude's settings file, which names the model a bad --model falls back to
 	title    func(ref.Ref) func(context.Context) (string, error)
-	finish   func(ctx context.Context, w io.Writer, task ref.Ref) error
+	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error // pr: "", or the answer merge or local
 	stateDir string
 	ttl      time.Duration
 	now      func() time.Time
@@ -715,9 +717,15 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		}
 
 		if branched {
-			local, err := branchesFor(ctx, in.main, "refs/heads/", r.ID, suffix)
-			if err != nil {
-				return err
+			var local []string
+			if suffix == "" {
+				local = linkedBranches(ctx, in.main, r.ID)
+			}
+
+			if len(local) == 0 {
+				if local, err = branchesFor(ctx, in.main, "refs/heads/", r.ID, suffix); err != nil {
+					return err
+				}
 			}
 
 			if len(local) == 1 {
@@ -1059,25 +1067,84 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	return nil
 }
 
+// The answers drive's own finish question takes, for a PR someone else
+// opened: merge it, or clean up locally and leave it open.
+const (
+	finishMerge = "merge"
+	finishLocal = "local"
+)
+
 // runFinish runs finish in this process. Its refusals halt the task with
-// the reason; its report is indented under the progress lines.
+// the reason, except a PR someone else opened, which asks; its report is
+// indented under the progress lines.
 func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask) driveResult {
-	fmt.Fprintf(w, "%s finish: running\n", task.ref.ID)
+	id := task.ref.ID
+
+	pr, err := in.finishAnswer(id)
+	if err != nil {
+		return halted(id, "finish", err.Error())
+	}
+
+	fmt.Fprintf(w, "%s finish: running\n", id)
 
 	var buf bytes.Buffer
 
-	err := in.finish(ctx, &buf, task.ref)
+	err = in.finish(ctx, &buf, task.ref, pr)
 
 	sc := bufio.NewScanner(&buf)
 	for sc.Scan() {
 		fmt.Fprintf(w, "  %s\n", sc.Text())
 	}
 
+	if fp := (foreignPullError{}); errors.As(err, &fp) {
+		return driveResult{
+			row:  "asked at finish",
+			code: exitAsk,
+			lines: []string{fmt.Sprintf("%s asks at finish: 1. %s was opened by %s: [%s | %s]",
+				id, fp.url, fp.author, finishLocal, finishMerge)},
+		}
+	}
+
 	if err != nil {
-		return halted(task.ref.ID, "finish", err.Error())
+		return halted(id, "finish", err.Error())
 	}
 
 	return driveResult{row: "finished"}
+}
+
+// finishAnswer is the answer to finish's question this drive was resumed
+// with: one keyed to the task, which must be merge or local, else a bare
+// one that is, so a bare answer meant for an agent's question stays there.
+func (in *driveInput) finishAnswer(id string) (string, error) {
+	if a, ok := in.answers[id]; ok {
+		delete(in.answers, id)
+
+		if c := finishChoice(a); c != "" {
+			return c, nil
+		}
+
+		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLocal, finishMerge)
+	}
+
+	if c := finishChoice(in.answer); c != "" {
+		in.answer = ""
+
+		return c, nil
+	}
+
+	return "", nil
+}
+
+// finishChoice reads `local`, `merge` or `1. local` as finish's answer, or "".
+func finishChoice(answer string) string {
+	a := strings.ToLower(strings.TrimSpace(answer))
+	a = strings.TrimSpace(strings.TrimPrefix(a, "1."))
+
+	if a == finishMerge || a == finishLocal {
+		return a
+	}
+
+	return ""
 }
 
 // send runs one element in the task's agent: attach to a turn already

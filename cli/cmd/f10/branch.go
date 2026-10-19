@@ -144,11 +144,20 @@ func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, e
 	return slices.DeleteFunc(refs, func(r string) bool { return !strings.HasSuffix(r, "-"+suffix) }), nil
 }
 
-// taskBranch is the branch --after names: the task's local branch, else its
-// branch on origin. Nothing matching is a failure before anything is
-// created; several matching is one too, since guessing would base the work
-// on the wrong attempt.
+// taskBranch is the branch --after names: the branch linked to the task,
+// else its local branch, else its branch on origin. Nothing matching is a
+// failure before anything is created; several matching is one too, since
+// guessing would base the work on the wrong attempt.
 func taskBranch(ctx context.Context, dir, id string) (string, error) {
+	switch linked := linkedBranches(ctx, dir, id); len(linked) {
+	case 0:
+	case 1:
+		return linked[0], nil
+	default:
+		return "", fmt.Errorf("--after %s: several branches are linked to it, name one: %s",
+			id, strings.Join(linked, ", "))
+	}
+
 	for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
 		refs, err := branchesFor(ctx, dir, root, id, "")
 		if err != nil {
@@ -166,6 +175,23 @@ func taskBranch(ctx context.Context, dir, id string) (string, error) {
 	}
 
 	return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
+}
+
+// cfgTaskKeys matches every branch's f10-task entry in the local config.
+const cfgTaskKeys = `^branch\..*\.` + cfgTaskID + `$`
+
+// linkedBranches are the local branches whose f10-task names id: a branch
+// picked up from a PR, whose name need not carry the id at all.
+func linkedBranches(ctx context.Context, dir, id string) []string {
+	var names []string
+
+	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
+		if strings.EqualFold(e.Value, id) {
+			names = append(names, strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgTaskID))
+		}
+	}
+
+	return names
 }
 
 // namedRef is the ref --base names, with the commit it points at: the local
@@ -189,32 +215,68 @@ func refSHA(ctx context.Context, dir, r string) string {
 	return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", r)
 }
 
+// A foundBranch is the branch existingBranch settled on, and whether only
+// origin has it, in which case start creates the local branch tracking it.
+type foundBranch struct {
+	name   string
+	remote bool
+}
+
 // existingBranch is the branch to reuse, or "" when the task has none yet.
-// The name start would create wins outright; otherwise one task branch is
-// reused, and several is an error, since a suffix exists to say which.
-func existingBranch(ctx context.Context, dir, want, id, suffix string) (string, error) {
-	refs, err := branchesFor(ctx, dir, "refs/heads/", id, suffix)
-	if err != nil {
-		return "", err
+// A branch linked to the task wins, then the name start would create, then
+// the one task branch, locally and then on origin. Several is an error,
+// since a suffix exists to say which. A suffix skips the link: it names an
+// attempt by its branch name.
+func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBranch, error) {
+	if suffix == "" {
+		switch linked := linkedBranches(ctx, dir, id); len(linked) {
+		case 0:
+		case 1:
+			return foundBranch{name: linked[0]}, nil
+		default:
+			return foundBranch{}, fmt.Errorf("several branches are linked to %s (git config branch.<name>.%s): %s",
+				id, cfgTaskID, strings.Join(linked, ", "))
+		}
 	}
 
-	if slices.Contains(refs, want) {
-		return want, nil
+	for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
+		refs, err := branchesFor(ctx, dir, root, id, suffix)
+		if err != nil {
+			return foundBranch{}, err
+		}
+
+		for i, r := range refs {
+			refs[i] = strings.TrimPrefix(r, "origin/")
+		}
+
+		remote := root != "refs/heads/"
+
+		if slices.Contains(refs, want) {
+			return foundBranch{name: want, remote: remote}, nil
+		}
+
+		switch len(refs) {
+		case 0:
+			continue
+		case 1:
+			return foundBranch{name: refs[0], remote: remote}, nil
+		default:
+			where := ""
+			if remote {
+				where = " on origin"
+			}
+
+			return foundBranch{}, fmt.Errorf("several branches for %s%s, add a suffix to pick one: %s",
+				id, where, strings.Join(refs, ", "))
+		}
 	}
 
-	switch len(refs) {
-	case 0:
-		return "", nil
-	case 1:
-		return refs[0], nil
-	default:
-		return "", fmt.Errorf("several branches for %s, add a suffix to pick one: %s", id, strings.Join(refs, ", "))
-	}
+	return foundBranch{}, nil
 }
 
 // taskCheckout is where a task is being worked on: its branch, found the way
 // start would find it, and the checkout that has the branch checked out.
-// Both are "" when the task has no branch; the path alone is "" when the
+// Both are "" when the task has no local branch; the path alone is "" when the
 // branch is checked out nowhere. The checkout can be the main one, for a
 // task shipped from main without a worktree. No title lookup: the branch exists or it
 // does not, and a slug would cost a host call for nothing.
@@ -230,10 +292,12 @@ func taskCheckout(
 		return "", "", err
 	}
 
-	name, err := existingBranch(ctx, main, want, task.ID, suffix)
-	if err != nil || name == "" {
+	found, err := existingBranch(ctx, main, want, task.ID, suffix)
+	if err != nil || found.name == "" || found.remote {
 		return "", "", err
 	}
+
+	name := found.name
 
 	wts, err := gitx.Worktrees(ctx, main)
 	if err != nil {

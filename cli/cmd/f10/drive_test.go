@@ -78,7 +78,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 			return nil
 		},
-		finish: func(context.Context, io.Writer, ref.Ref) error {
+		finish: func(context.Context, io.Writer, ref.Ref, string) error {
 			t.Fatal("finish ran although the chain has none")
 
 			return nil
@@ -464,7 +464,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 
 	var finished []string
 
-	fx.in.finish = func(_ context.Context, w io.Writer, task ref.Ref) error {
+	fx.in.finish = func(_ context.Context, w io.Writer, task ref.Ref, _ string) error {
 		finished = append(finished, task.ID)
 		fmt.Fprintln(w, "task:  "+task.ID)
 
@@ -1014,7 +1014,7 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	fx.f.script(worktrees, porcelain(pairs...))
 	fx.mergeable("GH-11", "GH-12", "GH-13", "GH-14", "GH-15")
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 		fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -1120,7 +1120,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fx.mergeable("GH-1", "GH-2")
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 				fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -1214,7 +1214,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 
 			fx.f.answers["git merge-base --is-ancestor origin/main HEAD"] = []shell.Result{{Code: 1}, after}
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 				return nil
@@ -1522,5 +1522,53 @@ func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 
 	if limit := int(startWindow/defaultEvery) + 2; fx.sleeps > limit {
 		t.Errorf("polled %d times, past the start window's %d", fx.sleeps, limit)
+	}
+}
+
+// Someone else's PR at finish is drive's own question: the task stops
+// asking, and the resumed drive passes the answer to finish.
+func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
+	var got []string
+
+	in := &driveInput{
+		answers: map[string]string{},
+		finish: func(_ context.Context, _ io.Writer, _ ref.Ref, pr string) error {
+			got = append(got, pr)
+			if pr == "" {
+				return foreignPullError{url: "https://gh/pr/9", author: "alice"}
+			}
+
+			return nil
+		},
+	}
+
+	task := driveTask{ref: gh1}
+
+	res := in.runFinish(t.Context(), io.Discard, task)
+	if res.code != exitAsk || len(res.lines) != 1 || !strings.Contains(res.lines[0], "[local | merge]") {
+		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
+	}
+
+	in.answers["GH-1"] = "1. local"
+
+	if res = in.runFinish(t.Context(), io.Discard, task); res.code != 0 {
+		t.Fatalf("runFinish answered local = %+v, want finished", res)
+	}
+
+	// a bare answer that is no finish choice belongs to some agent's question
+	in.answer = "1. yes"
+
+	if res = in.runFinish(t.Context(), io.Discard, task); res.code != exitAsk || in.answer != "1. yes" {
+		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.answer)
+	}
+
+	in.answers["GH-1"] = "maybe"
+
+	if res = in.runFinish(t.Context(), io.Discard, task); res.code != exitHalted {
+		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
+	}
+
+	if want := []string{"", finishLocal, ""}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("finish was passed %q, want %q", got, want)
 	}
 }

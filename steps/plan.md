@@ -30,7 +30,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    - **Plan / read-only mode:** never stop silently.
      Call `ExitPlanMode` to present the plan and get the go-ahead (or ask the user to exit plan mode with shift+tab), then write the file.
 4. **Hand off.**
-   Confirm the file exists, present the plan, and report per `conventions/report.md`: `task`, `url` if the tracker gave one, `plan`.
+   Confirm the file exists, present the plan, and report per `conventions/report.md`: `task`, `title`, `url` if the tracker gave one, `plan`.
    Offer to fill open gaps (`conventions/gaps.md`).
 
 **On failure:** the file cannot be written (other than read-only mode): put the full plan in the message with the path it was meant for.

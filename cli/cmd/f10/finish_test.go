@@ -23,7 +23,7 @@ type finishFixture struct {
 }
 
 const (
-	ghView  = "gh pr view GH-1 --json state,url,number,baseRefName,mergeStateStatus,mergeCommit"
+	ghView  = "gh pr view GH-1 --json state,url,number,baseRefName,mergeStateStatus,mergeCommit,author"
 	ghRepo  = "gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
@@ -941,5 +941,131 @@ func TestFinishFromTheMainCheckoutRefusesDirty(t *testing.T) {
 
 	if fx.f.called("gh ") || fx.f.called("git switch") {
 		t.Errorf("the host or a switch was reached before the dirty check: %v", fx.f.calls)
+	}
+}
+
+// prOpenBy is an open, mergeable PR that login opened.
+func prOpenBy(login string) string {
+	return `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","mergeCommit":null,` +
+		`"author":{"login":"` + login + `"}}`
+}
+
+const (
+	ghUser   = "gh api user"
+	unpushed = "git merge-base --is-ancestor refs/heads/GH-1 refs/remotes/origin/GH-1"
+)
+
+// Someone else's open PR, with neither flag, changes nothing and says which
+// flag does what.
+func TestFinishRefusesSomeoneElsesPR(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, prOpenBy("alice"))
+	fx.f.script(ghUser, `{"login":"me"}`)
+
+	_, err := fx.run(t)
+
+	fp := foreignPullError{}
+	if !errors.As(err, &fp) || fp.author != "alice" || !strings.Contains(err.Error(), "--merge") ||
+		!strings.Contains(err.Error(), "--local") {
+		t.Fatalf("err = %v, want the foreign PR refusal naming both flags", err)
+	}
+
+	if fx.f.called("gh pr merge") || fx.f.called("git worktree remove") || fx.f.called("herdr workspace close") {
+		t.Errorf("finish changed something on a refusal: %v", fx.f.calls)
+	}
+}
+
+// One's own PR merges as before, whatever case the host spells the login in.
+func TestFinishMergesOwnPR(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script(ghView, prOpenBy("Me"), prMerged)
+	fx.f.script(ghUser, `{"login":"me"}`)
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called(ghMerge) {
+		t.Error("the user's own PR was not merged")
+	}
+}
+
+// --merge merges someone else's PR without asking who the user is.
+func TestFinishMergeFlagMergesSomeoneElsesPR(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script(ghView, prOpenBy("alice"), prMerged)
+	fx.in.merge = true
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called(ghMerge) || fx.f.called(ghUser) {
+		t.Errorf("--merge = %v, want a merge and no login read", fx.f.calls)
+	}
+}
+
+// --local leaves the PR open: no merge, no remote delete, no pull, no
+// dependents released, and the plan, worktree, branch and workspace go.
+func TestFinishLocalLeavesThePROpen(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, prOpenBy("alice"))
+	fx.f.script(unpushed, "")
+	fx.plan(t, "GH-1.md", "# plan")
+	fx.in.local = true
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, banned := range []string{"gh pr merge", ghDel, lsRem, "git pull", cfgDeps, ghUser} {
+		if fx.f.called(banned) {
+			t.Errorf("--local ran %q: %v", banned, fx.f.calls)
+		}
+	}
+
+	for _, want := range []string{"git worktree remove " + fx.wt, "git branch -D GH-1", "herdr workspace close ws:9"} {
+		if !fx.f.called(want) {
+			t.Errorf("--local did not run %q", want)
+		}
+	}
+
+	for _, want := range []string{"pr:", "https://gh/pr/9", "is left open", "plan:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report missing %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Contains(out, "merge:") {
+		t.Errorf("--local reported a merge:\n%s", out)
+	}
+}
+
+// --local deletes the local branch, so commits origin lacks stop it first.
+func TestFinishLocalRefusesUnpushedCommits(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, prOpenBy("alice"))
+	fx.f.fail(unpushed, missing)
+	fx.in.local = true
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "push or drop them") {
+		t.Fatalf("err = %v, want the unpushed commits refused", err)
+	}
+
+	if fx.f.called("git worktree remove") || fx.f.called("git branch -D") {
+		t.Errorf("the branch went although it had unpushed commits: %v", fx.f.calls)
+	}
+}
+
+// A closed PR is refused without --local, and the refusal names it.
+func TestFinishClosedPRNamesLocal(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, `{"state":"CLOSED","url":"https://gh/pr/9","number":9,"baseRefName":"main"}`)
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "--local") {
+		t.Fatalf("err = %v, want the closed PR refused, naming --local", err)
 	}
 }

@@ -24,6 +24,19 @@ type pull struct {
 	DetailedMergeStatus string `json:"detailed_merge_status"`
 	MergeCommitSHA      string `json:"merge_commit_sha"`
 	SquashCommitSHA     string `json:"squash_commit_sha"`
+	HeadRefName         string `json:"headRefName"`
+	SourceBranch        string `json:"source_branch"`
+	Title               string `json:"title"`
+	Body                string `json:"body"`
+	Description         string `json:"description"`
+	IsCrossRepository   bool   `json:"isCrossRepository"`
+	SourceProjectID     int    `json:"source_project_id"`
+	TargetProjectID     int    `json:"target_project_id"`
+
+	Author struct {
+		Login    string `json:"login"`
+		Username string `json:"username"`
+	} `json:"author"`
 
 	MergeCommit struct {
 		OID string `json:"oid"`
@@ -41,6 +54,17 @@ const (
 func (p pull) url() string  { return cmp.Or(p.URL, p.WebURL) }
 func (p pull) base() string { return cmp.Or(p.BaseRefName, p.TargetBranch) }
 func (p pull) sha() string  { return cmp.Or(p.MergeCommit.OID, p.SquashCommitSHA, p.MergeCommitSHA) }
+func (p pull) head() string { return cmp.Or(p.HeadRefName, p.SourceBranch) }
+func (p pull) body() string { return cmp.Or(p.Body, p.Description) }
+
+// author is who opened the request: gh names it login, glab username.
+func (p pull) author() string { return cmp.Or(p.Author.Login, p.Author.Username) }
+
+// fork reports whether the request's branch lives in another repository,
+// which origin does not have.
+func (p pull) fork() bool {
+	return p.IsCrossRepository || p.SourceProjectID != p.TargetProjectID
+}
 
 func (p pull) status() string {
 	switch s := strings.ToLower(p.State); s {
@@ -58,8 +82,22 @@ func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	var p pull
 
 	err := h.decode(ctx, &p, h.pick(
-		[]string{"pr", "view", branch, "--json", "state,url,number,baseRefName,mergeStateStatus,mergeCommit"},
+		[]string{"pr", "view", branch, "--json", "state,url,number,baseRefName,mergeStateStatus,mergeCommit,author"},
 		[]string{"mr", "view", branch, "-F", "json"},
+	)...)
+
+	return p, err
+}
+
+// pullNumber reads the request numbered number, with what start needs to
+// pick it up: its head branch, where that lives, and the text a task id
+// is read from.
+func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
+	var p pull
+
+	err := h.decode(ctx, &p, h.pick(
+		[]string{"pr", "view", number, "--json", "state,url,number,title,body,author,headRefName,isCrossRepository"},
+		[]string{"mr", "view", number, "-F", "json"},
 	)...)
 
 	return p, err

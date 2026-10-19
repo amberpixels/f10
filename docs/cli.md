@@ -116,6 +116,21 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   A project with its own shape encodes it in the driver's `branch` verb; no title, or a title with no ASCII letters in it, leaves the bare id and says so beneath the report
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a second worktree for one task can live beside the first
 - the agent is named `<id>` lowercased, with the suffix, then six hex characters hashed from the worktree path (`gh-12-3e78d4`): Herdr's agent names are one namespace across every project, so the same id in two repositories never collides
+- `f10 start <PR url | #n>` picks up a PR someone else opened: the task is in the tracker, the branch and the PR are on the remote, and nothing is local.
+  A url with `/pull/<n>` or `/merge_requests/<n>`, or GitLab's `!<n>`, names a PR; on GitHub, whose issues and PRs share one counter, a bare `#<n>` is asked of the host as a PR first, and one the host knows as no PR is read as a task id, as before; on GitLab `#<n>` stays a task id.
+  Any other host error on that lookup is the error.
+  Start reads the PR through `gh` or `glab`, runs `git fetch origin`, creates the local branch tracking origin's (`git branch --track`), and puts the worktree on it.
+  A local branch already there is fast-forwarded to origin's when it is behind and checked out nowhere; behind in a worktree, or diverged, is a note.
+  The task id comes from `--task <id>`, else a closing keyword in the PR body (`Closes #12`, or an issue url of this repo) where the tracker is the host's issues, else an id in the project's format in the body, the title or the branch name.
+  None found: start exits **3** having changed nothing, and `/f10:start` asks for the id and reruns with `--task`.
+  The branch is linked to its task in local config, `branch.<name>.f10-task=<id>`, beside `f10-after`.
+  The agent is prompted plain text, with no `--driven` marker: it reads the task, `gh pr view <n> --comments` and `gh pr diff <n>`, summarises the task, the PR's state and its diff, and waits.
+  `--plan` prompts the plan instead, with the PR's diff as the starting point; nothing ships a picked-up PR unread.
+  The report gains a `pr` row.
+  A PR from a fork, a PR no longer open, `--local`, `--after` and `--base` are refused before anything is created
+- every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`); a task read with no id in a picked-up worktree finds its task through the same link.
+  With no local branch, start also finds the one task branch on origin (`refs/remotes/origin/`) and creates the local branch tracking it rather than a second branch from main.
+  It reads what the last fetch saw; for a branch pushed since, run `git fetch` or pass the PR link
 - a task that already has a branch gets its worktree reused, or created when the branch has none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise for the base, while its dependency is recorded all the same; a workspace Herdr already shows is adopted rather than opened again, keeps its agent, and nothing is prompted twice.
   Where several workspaces show the checkout, the one with an agent is adopted, else the first, and each other one is named in a note with the command that closes it; none is closed.
   One with no agent in its root pane (a start that failed earlier) gets one started and prompted when that pane is an idle shell; a pane running anything else is left alone
@@ -134,7 +149,7 @@ Outside one it stops before touching anything and points at https://herdr.dev.
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
-It finds the task's branch the way start does (the exact name, else the one `<id>` / `<id>-*` branch) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
+It finds the task's branch the way start does (the branch linked by `f10-task`, else the exact name, else the one `<id>` / `<id>-*` branch) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
 There finish merges as usual, brings the default branch up to the merge, switches main to it, deletes the local branch, and leaves main's workspace open; the report says the checkout was main's and was switched, not removed.
 
@@ -149,6 +164,12 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Already merged: confirmed.
    Closed without a merge: a refusal.
    A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and the host retargets this PR.
+   **Someone else's PR.**
+   An open PR whose author is not the signed-in host user (`gh api user`) is not merged unasked: with neither flag finish exits **3** having changed nothing, and `/f10:finish` asks whether to merge it or clean up locally.
+   `--merge` merges it as above.
+   `--local` cleans up here and leaves the PR open, for a review handed back: no merge, no remote branch deleted, no pull, no dependents released; the plan is archived and the worktree, local branch and workspace go as in step 8.
+   It refuses first when the local branch has commits `origin/<branch>` lacks, since deleting the branch would lose them.
+   A closed PR is cleaned up only with `--local`.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).
    Absent, the repo's settings decide: on GitHub the one method allowed, else squash with a note beneath the report saying the default was taken and how to declare one; on GitLab the project's squash option, since GitLab fixes the strategy per project.
 4. **The remote branch is deleted** when origin still has it, through the host's API (glab's `--remove-source-branch` usually did it already).
@@ -242,6 +263,7 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    The chain runs from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
    A plan the worktree reads when the driver starts its agent counts as plan done, so the default chain resumes at `judge` rather than planning again.
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
+   A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, and review gets `ci` where `project.md` declares a remote review.
 5. **Catchup after finish, and before it.**
    `finish` marks each branch that depended on the finished task `f10-landed`.
