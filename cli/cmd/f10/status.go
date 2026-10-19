@@ -74,7 +74,13 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		runs, others = taskRuns(inRoot(live, in.root), in.id)
 
 		if len(runs) == 0 {
-			statusFallback(ctx, cmd.Writer, in, others, termWidth(cmd.Writer))
+			fb := taskFallback(ctx, in, others)
+
+			if cmd.Bool("json") {
+				return encodeJSON(cmd.Writer, fb)
+			}
+
+			fb.render(cmd.Writer, termWidth(cmd.Writer))
 
 			return nil
 		}
@@ -123,14 +129,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(runs); err != nil {
-			return fmt.Errorf("encoding runs: %w", err)
-		}
-
-		return nil
+		return encodeJSON(cmd.Writer, runs)
 	}
 
 	limit := termWidth(cmd.Writer)
@@ -203,13 +202,16 @@ func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskSta
 // taskRuns splits runs from the task's checkout into the task's own and
 // the rest. Every skill call reseeds its session's run, so the agent in a
 // task's worktree may be on another task by now. An empty task counts as
-// the task's only before capture: a fresh `ship <id>` before fetch names it.
+// the task's only when the run was seeded from a reference, before fetch
+// names it: capture `pending`, or `skipped` once fetch opens the plan phase.
 // Capturing, or planning from a description, is about some other task.
 func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	var own, others []*state.Run
 
 	for _, r := range runs {
-		if strings.EqualFold(r.Task, id) || (r.Task == "" && r.Capture == "pending") {
+		fresh := r.Task == "" && (r.Capture == "pending" || r.Capture == "skipped")
+
+		if strings.EqualFold(r.Task, id) || fresh {
 			own = append(own, r)
 		} else {
 			others = append(others, r)
@@ -219,32 +221,68 @@ func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	return own, others
 }
 
-// statusFallback reports a task no live run is about: what each agent in
-// its checkout is on instead, then the plan file and the PR, each only
-// where it exists. Status only reads, so a host that cannot answer drops
-// the PR row rather than failing what was already printed.
-func statusFallback(ctx context.Context, w io.Writer, in taskStatusInput, others []*state.Run, limit int) {
-	plain := lipgloss.NewStyle()
-	faint := lipgloss.NewStyle().Faint(true)
+// fallback is what `status <id>` reports for a task no live run is about:
+// the runs in its checkout, which are on something else, then its plan file
+// and its PR, each only where it exists.
+type fallback struct {
+	Task    string       `json:"task"`
+	Root    string       `json:"root"`
+	Others  []*state.Run `json:"others"`
+	Plan    string       `json:"plan,omitempty"`
+	PR      string       `json:"pr,omitempty"`
+	PRState string       `json:"pr_state,omitempty"`
+}
 
-	headerRow(w, "task", in.id, limit, plain)
-	headerRow(w, "run", "none for "+in.id+" in "+in.root, limit, faint)
-
-	for _, r := range others {
-		headerRow(w, "agent", valueOr(r.Task)+" · "+currentPhase(r), limit, plain)
+// taskFallback gathers the fallback. Status only reads, so a host that
+// cannot answer drops the PR rather than failing the report.
+func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run) fallback {
+	fb := fallback{Task: in.id, Root: in.root, Others: others}
+	if fb.Others == nil {
+		fb.Others = []*state.Run{} // an empty list, not null, for a JSON reader
 	}
 
 	if exists(in.plan) {
-		headerRow(w, "plan", in.plan, limit, plain)
+		fb.Plan = in.plan
 	}
 
-	if in.host == nil {
-		return
+	if in.host != nil {
+		if p, err := in.host.pull(ctx, in.branch); err == nil && p.url() != "" {
+			fb.PR, fb.PRState = p.url(), p.status()
+		}
 	}
 
-	if p, err := in.host.pull(ctx, in.branch); err == nil && p.url() != "" {
-		headerRow(w, "pr", p.url()+" ("+p.status()+")", limit, plain)
+	return fb
+}
+
+func (fb fallback) render(w io.Writer, limit int) {
+	plain := lipgloss.NewStyle()
+	faint := lipgloss.NewStyle().Faint(true)
+
+	headerRow(w, "task", fb.Task, limit, plain)
+	headerRow(w, "run", "none for "+fb.Task+" in "+fb.Root, limit, faint)
+
+	for _, r := range fb.Others {
+		headerRow(w, "agent", valueOr(r.Task)+" · "+currentPhase(r), limit, plain)
 	}
+
+	if fb.Plan != "" {
+		headerRow(w, "plan", fb.Plan, limit, plain)
+	}
+
+	if fb.PR != "" {
+		headerRow(w, "pr", fb.PR+" ("+fb.PRState+")", limit, plain)
+	}
+}
+
+func encodeJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("encoding status: %w", err)
+	}
+
+	return nil
 }
 
 // currentPhase is the furthest phase a run has reached, with its status:
