@@ -102,7 +102,10 @@ func (f *shimFixture) asset() string {
 // stubCurl answers `curl -o <file> -w ... <url>` like a public release: the
 // asset, or a checksums file whose sum is sum (the asset's real one when sum
 // is ""), and HTTP 200. Each url it was asked for goes to the urls file.
-func (f *shimFixture) stubCurl(sum string) {
+func (f *shimFixture) stubCurl(sum string) { f.stubCurlChecksums(sum, "200") }
+
+// stubCurlChecksums is stubCurl with checksums.txt answering HTTP status.
+func (f *shimFixture) stubCurlChecksums(sum, status string) {
 	body := fakeBinary("release")
 	if sum == "" {
 		h := sha256.Sum256([]byte(body))
@@ -111,17 +114,26 @@ func (f *shimFixture) stubCurl(sum string) {
 
 	f.write(filepath.Join(f.stubs, "curl"), `#!/bin/sh
 while [ $# -gt 0 ]; do
-  case "$1" in -o) out="$2"; shift ;; -w | --connect-timeout) shift ;; -*) ;; *) url="$1" ;; esac
+  case "$1" in
+  -o) out="$2"; shift ;;
+  -w | --connect-timeout | --speed-limit | --speed-time) shift ;;
+  -*) ;;
+  *) url="$1" ;;
+  esac
   shift
 done
 echo "$url" >>"`+f.urls()+`"
 case "$url" in
-*/checksums.txt) printf '%s  %s\n' "`+sum+`" "`+f.asset()+`" >"$out" ;;
-*) cat >"$out" <<'EOF'
+*/checksums.txt)
+  printf '%s  %s\n' "`+sum+`" "`+f.asset()+`" >"$out"
+  printf `+status+`
+  ;;
+*)
+  cat >"$out" <<'EOF'
 `+body+`EOF
-;;
+  printf 200
+  ;;
 esac
-printf 200
 `, 0o755)
 }
 
@@ -311,6 +323,32 @@ func TestShim(t *testing.T) {
 
 		out, code := f.run("status")
 		if code != 1 || !strings.Contains(out, "no public release asset "+f.asset()+" for cli/v"+shimVersion) {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
+	t.Run("a release missing checksums.txt names it and still builds", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubCurlChecksums("", "404")
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "no public release asset checksums.txt for cli/v"+shimVersion) {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+
+		f.stubGo()
+
+		if out, code := f.run("--version"); code != 0 || out != "build --version\n" {
+			t.Fatalf("got %q (exit %d)", out, code)
+		}
+	})
+
+	t.Run("an HTTP error names its status", func(t *testing.T) {
+		f := newShimFixture(t)
+		f.stubCurlChecksums("", "503")
+
+		out, code := f.run("status")
+		if code != 1 || !strings.Contains(out, "checksums.txt answered HTTP 503") {
 			t.Fatalf("got %q (exit %d)", out, code)
 		}
 	})

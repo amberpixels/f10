@@ -95,14 +95,18 @@ download() {
   fi
   # the asset first, so a release that does not exist is reported by the asset's name
   for file in "$asset" checksums.txt; do
-    code="$(curl -sSL --connect-timeout 10 -o "$tmp/$file" -w '%{http_code}' "$url/$file" 2>"$tmp/.err")"
+    # a transfer slower than 1 KB/s for 30s is a stall, so a foreground call never hangs
+    code="$(curl -sSL --connect-timeout 10 --speed-limit 1024 --speed-time 30 \
+      -o "$tmp/$file" -w '%{http_code}' "$url/$file" 2>"$tmp/.err")"
     rc=$?
     [ "$rc" = 0 ] && [ "$code" = 200 ] && continue
 
     # a tag pushed before the release workflow ran and a repo no longer public both 404
     case "$rc:$code" in
       *:404) why_dl="no public release asset $file for cli/v$version" ;;
-      6:* | 7:* | 28:*) why_dl="cannot reach github.com" ;;
+      0:*) why_dl="$url/$file answered HTTP $code" ;;
+      6:* | 7:* | 28:000) why_dl="cannot reach github.com" ;;
+      28:*) why_dl="the download of $file from github.com stalled" ;;
       *) why_dl="curl $url/$file failed ($(head -n 1 "$tmp/.err"), HTTP $code)" ;;
     esac
     rm -rf "$tmp"
