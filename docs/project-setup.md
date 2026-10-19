@@ -96,6 +96,9 @@ Adapters are named in that prose, never as frontmatter keys, which `f10 standup`
 `cleanup.md` adds a project's rules to the cleanup step: its comment conventions, code or comments never to remove, more development-artifact patterns, typography.
 Cleanup replaces em and en dashes by default; a project that keeps them says so here.
 
+`pr.md` sets the PR's title shape, body shape and labels.
+It may name **owned sections**, headings whose content something else maintains (a screenshots section a script regenerates): a `pr` entry that refreshes an open PR rewrites the rest of the description from the full diff and copies those sections verbatim.
+
 ## Pipelines
 
 One pipeline, or several named ones, in the frontmatter:
@@ -105,6 +108,7 @@ pipelines:
   default: implement → cleanup → review (local) → pr
   direct: implement → push
   local: [implement, commit]
+  judged: implement → pr → review (local) → judge → pr
 planless: [direct]
 ```
 
@@ -112,6 +116,7 @@ planless: [direct]
 `local` is the one `f10 start --local` selects: the run ends in commits and nothing leaves the machine.
 A planless pipeline skips capture and the plan file for free-text input.
 A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
+A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
 
 ## Drive chain
