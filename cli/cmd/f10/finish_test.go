@@ -555,8 +555,16 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 
-	shared := t.TempDir()
+	root := t.TempDir()
+	shared := filepath.Join(root, "plans")
 	fx.in.plansDir = shared
+
+	images := filepath.Join(root, "images", "GH-1")
+	for _, d := range []string{shared, images} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	if err := os.WriteFile(filepath.Join(shared, "GH-1.md"), []byte("plan"), 0o644); err != nil {
 		t.Fatal(err)
@@ -570,8 +578,30 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 		t.Errorf("plan not archived in the shared root: %v", err)
 	}
 
+	if _, err := os.Stat(images); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the task's images survived in the shared root: %v", err)
+	}
+
 	if _, err := os.Stat(filepath.Join(fx.main, ".f10")); !errors.Is(err, os.ErrNotExist) {
 		t.Error("an in-repo .f10/ was created under out-of-tree storage")
+	}
+}
+
+// With in-repo storage, images a read from main left in main's .f10/ go too.
+func TestRemoveImagesInRepo(t *testing.T) {
+	main := t.TempDir()
+
+	dir := filepath.Join(main, ".f10", "images", "GH-1")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if note := removeImages(main, "", "GH-1"); note != "" {
+		t.Errorf("removeImages = %q, want no note", note)
+	}
+
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("main's images survived: %v", err)
 	}
 }
 

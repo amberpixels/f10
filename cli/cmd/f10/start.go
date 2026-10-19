@@ -1001,11 +1001,10 @@ func prompt(mode, id string, dep *dependency, plan string, pick *pickup) string 
 
 // discussPrompt fetches the task and stops. It is plain text with no driven
 // marker: the user talks to this agent in its own pane, and its questions
-// belong there. Comments come with `f10 task read`'s output and the
+// belong there. Comments and images come with `f10 task read`'s output and the
 // fetch-adapter fallback with its error, so the prompt names neither.
 func discussPrompt(id string, dep *dependency, plan string) string {
-	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines, "+
-		"opening any image it links.", id)
+	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines.", id)
 
 	if plan != "" {
 		p += " A plan for it is saved at " + plan + "; read it too."
@@ -1022,7 +1021,7 @@ func discussPrompt(id string, dep *dependency, plan string) string {
 // state and its diff summarised, then the agent waits in its own pane.
 func pickupPrompt(id, plan string, pick *pickup) string {
 	p := fmt.Sprintf("Run `f10 task read %s`, `%s` and `%s`, and summarise in a few lines what the task asks, "+
-		"the PR's state (reviews, checks, open threads) and what its diff does, opening any image they link.",
+		"the PR's state (reviews, checks, open threads) and what its diff does, opening any image the PR links.",
 		id, pick.view, pick.diff)
 
 	if plan != "" {

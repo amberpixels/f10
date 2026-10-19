@@ -77,6 +77,10 @@ That separation is what lets `open` mean the same thing for a task as it does fo
 `read` writes plain markdown and stops. f10 decides presentation from whether it is writing to a terminal, so the same command serves a person at a prompt and an agent capturing stdout.
 A driver that pipes through `glow` or a pager itself breaks both.
 
+**Link images, never inline them.**
+Print each image as a link (markdown image syntax, an HTML `<img>`, or the bare url), signed urls included.
+f10 downloads every linked image itself and names the local paths after the document, so a driver that downloads or inlines image data duplicates that work and hides the images from it.
+
 ## A driver in full
 
 ```sh
