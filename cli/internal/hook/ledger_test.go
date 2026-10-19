@@ -358,7 +358,7 @@ func TestVerdictFileRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	write := func(path, content string) {
+	writeAs := func(session, path, content string) {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -366,9 +366,10 @@ func TestVerdictFileRows(t *testing.T) {
 		dispatchRecorded(
 			t,
 			env,
-			toolPayload(t, "s1", work, "Write", map[string]any{"file_path": path}, map[string]any{}),
+			toolPayload(t, session, work, "Write", map[string]any{"file_path": path}, map[string]any{}),
 		)
 	}
+	write := func(path, content string) { writeAs("s1", path, content) }
 
 	asked := `task: FT-12
 subject: plan FT-12
@@ -390,6 +391,10 @@ The server should not cache.
 	write(filepath.Join(verdicts, "rate-limit", "1.md"),
 		"task:\nsubject: idea rate limit the public API\nverdict: stop\nreason: the gateway does it\nrun: standalone\n")
 	write(filepath.Join(verdicts, "FT-12", "2.md"), "task: FT-12\nverdict: green\n")
+	// a malformed idea stays taskless too
+	write(filepath.Join(verdicts, "rate-limit", "2.md"), "task:\nsubject: idea rate limit\nverdict: PROCEED\n")
+	// a recreated checkout restarts numbering: same path, same content, new run
+	writeAs("s2", taskFile, answered)
 
 	var got []string
 
@@ -407,13 +412,17 @@ The server should not cache.
 		"FT-12 FT-12 rethink block",
 		" rate-limit stop ",
 		"FT-12 FT-12  ",
+		" rate-limit  ",
+		"FT-12 FT-12 rethink block",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("verdict rows\n got %q\nwant %q", got, want)
 	}
 
-	rows := recorded(t, db, ledger.Filter{Kind: ledger.JudgeVerdict, Task: "FT-12"})
-	if last := rows[len(rows)-1].Payload.Val; last["parse_error"] == nil {
-		t.Errorf("an unknown verdict recorded no parse error: %+v", last)
+	rows := recorded(t, db, ledger.Filter{Kind: ledger.JudgeVerdict})
+	for _, i := range []int{3, 4} {
+		if rows[i].Payload.Val["parse_error"] == nil {
+			t.Errorf("an unknown verdict recorded no parse error: %+v", rows[i].Payload.Val)
+		}
 	}
 }

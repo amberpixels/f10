@@ -21,6 +21,7 @@ Every f10 run starts by loading it.
   Bare `plan` is ambiguous: write `/f10:plan` for the skill, the **plan** step for the step.
   "Run the **plan** step" means execute its instructions, never re-invoke the skill.
 - **findings** - `<storage root>/reviews/<TASK-ID>/<round>.md` (`steps/review.md`).
+- **verdict file** - `<storage root>/verdicts/<key>/<n>.md`, one per judge run, `<key>` the task id or, for an idea, a kebab slug of it (`steps/judge.md` point 8).
 - **shipment** - what the ship pipeline leaves, named by its **last step**: verified code (`implement`), local commits (`commit`), pushed commits (`push`), an open PR/MR (`pr`), a running environment (`deploy`), or a project-defined step's output.
 
 **Step headers.**

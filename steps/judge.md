@@ -60,7 +60,7 @@ Name a bug only where it changes the verdict.
    In later replies, the banner returns only when the verdict changes.
 8. **Write the verdict file**, every run, whatever the verdict: `<storage root>/verdicts/<key>/<n>.md`, root verbatim from `storage root:`.
    `<key>` is the task id when the subject resolves to one (point 1), else a short kebab slug of the subject; `<n>` is the next integer in that directory.
-   The main agent writes it, `--blind` included.
+   The main agent writes it, `--blind` included; a spawned blind judge skips this point.
    The header, one `key: value` per line, in this order; the hook parses it:
 
    ```
@@ -86,7 +86,7 @@ Name a bug only where it changes the verdict.
    The file stays under the storage root: never name it or its path in a commit, PR comment, status or tracker text.
 
 **Blind** (`--blind`): for work this session produced.
-Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`) and follow this step.
+Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`), follow this step except point 8, write no file, and return the verdict and its argument.
 Relay its verdict unchanged; you may dispute it in one line.
 The agent writes nothing: you write the verdict file with `blind: yes`, your dispute, if any, under `## Argument`.
 

@@ -324,8 +324,9 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 }
 
 // verdict records a judge's verdict file once per verdict and decision:
-// a rewrite that changes neither adds nothing, a decision filled in after a
-// driven ask adds a row.
+// a rewrite in the same session that changes neither adds nothing, a
+// decision filled in after a driven ask adds a row. Another session at the
+// same path is a new run: numbering restarts in a recreated checkout.
 func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m observe.Meta) []Event {
 	raw, err := os.ReadFile(o.Path)
 	if err != nil {
@@ -341,6 +342,10 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 		task := ""
 		if f != nil {
 			task = f.Task
+
+			if f.Idea() {
+				p["idea"] = true
+			}
 		}
 
 		return []Event{{Kind: JudgeVerdict, Source: Artifact, Task: task, Payload: col(p)}}
@@ -351,7 +356,7 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 		prior, _ := ob.l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict})
 		for _, e := range slices.Backward(prior) {
 			if v := e.Payload.Val; v["path"] == o.Path {
-				if v["verdict"] == f.Verdict && v["decision"] == nonEmpty(f.Decision) {
+				if e.Session == m.Session && v["verdict"] == f.Verdict && v["decision"] == nonEmpty(f.Decision) {
 					return nil
 				}
 
