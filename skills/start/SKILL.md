@@ -27,5 +27,10 @@ A line starting `!!!` goes first, verbatim, above the block.
 **Exit 3 is a question**: a PR whose body, title and branch name no task.
 Ask the user for the task id once with `AskUserQuestion` (the PR's url in the question; the id comes through Other), rerun the same command with `--task <id>` appended, and relay its report.
 
+**Exit 6 is a question**: a parent task with unfinished subtasks, named in the message.
+Read them with `f10 task children <id> --json` (unfinished rows only), then ask once with `AskUserQuestion`, header the parent id: **Drive the subtasks** first, then up to three subtasks as `Start <id>` with the title as description, depth 0 first; another subtask comes through Other.
+Drive invokes the `/f10:drive <id>` skill, carrying `--model` and dropping start's other flags with one line saying so.
+A subtask reruns `f10 start <subtask>` with the original flags; relay its report under these same rules.
+
 If the command fails otherwise, print its message verbatim and stop; it names the cause and what to do.
 If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.

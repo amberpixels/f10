@@ -102,6 +102,9 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its line, the last of the body by convention) is read as `--after <id>` when that task has a branch, and noted beneath the report.
   When the base has no branch and is finished (its issue closed, or its plan in main's `plans/archive/`), the branch is based on the default branch with a note; when it is not finished, start refuses before creating anything.
   A body that cannot be read is a note, never a refusal
+- a parent task with unfinished subtasks (`f10 task children`) is refused before anything is created, since its agent would ship the whole umbrella on one branch: start exits **6** naming the open subtasks, and `/f10:start` asks whether to drive them (`/f10:drive <parent>`) or start one of them.
+  The check is the one drive makes.
+  It is skipped for `--discuss`, which talks an umbrella task through, for a PR pickup, and for a task that already has a branch (start rerun on it); a parent whose subtasks are all finished, and a tracker with no parent link, start as before
 - `--base <branch>` bases the branch on a git ref instead: the local branch, else the one on origin (`origin/main` typed as such is also accepted).
   It fails before creating anything when neither exists, and notes beneath the report when the base sits at the default branch's commit, since a base that changes nothing is otherwise invisible.
   Exclusive with `--after`
@@ -245,6 +248,7 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    In a range, a pull request (GitHub numbers both alike) or an unknown number is skipped with a note; listed by hand, either is an error.
    A task with no branch whose issue is closed, or whose plan sits in main's `plans/archive/`, is finished and skipped.
    A listed task with no branch that has unfinished subtasks (`f10 task children`) is refused: the subtasks are what runs, and `/f10:drive <parent>` is where they are chosen.
+   It is the same check `f10 start` makes.
 3. **The graph.**
    Each task has at most one base: the `branch.<name>.f10-after` its branch recorded once started, else the `After:` line in its body.
    Where the two disagree, the branch wins, with a note.

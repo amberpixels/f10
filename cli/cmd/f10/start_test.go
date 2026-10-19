@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfave/cli/v3"
+
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -1592,4 +1594,84 @@ func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 	if len(f.calls) != 0 {
 		t.Errorf("commands ran before the refusal: %v", f.calls)
 	}
+}
+
+// A parent with unfinished subtasks is refused with exitParent before any
+// branch, worktree or workspace exists; a started task, one whose subtasks
+// are all finished and one with none start as before.
+func TestStartRefusesAParent(t *testing.T) {
+	kidsOf := func(rows []childRow, err error, asked *bool) func(context.Context, ref.Ref) ([]childRow, error) {
+		return func(context.Context, ref.Ref) ([]childRow, error) {
+			*asked = true
+
+			return rows, err
+		}
+	}
+
+	t.Run("open subtasks", func(t *testing.T) {
+		f := newFakes(t)
+		f.script(refsLocal, "")
+
+		var asked bool
+
+		rows := []childRow{{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}
+		in := startInput{main: "/code/repo", task: gh1, children: kidsOf(rows, nil, &asked)}
+		err := start(t.Context(), io.Discard, in)
+
+		var coder cli.ExitCoder
+		if !errors.As(err, &coder) || coder.ExitCode() != exitParent {
+			t.Fatalf("err = %v, want exit %d", err, exitParent)
+		}
+
+		for _, want := range []string{"GH-1 is a parent of GH-2, GH-4", "/f10:drive GH-1", "f10 start GH-2"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("message missing %q: %v", want, err)
+			}
+		}
+
+		if f.called("wt ") || f.called("git worktree add") || f.called("herdr worktree") || f.called("herdr agent") {
+			t.Errorf("something was created before the refusal: %v", f.calls)
+		}
+	})
+
+	for name, tc := range map[string]struct {
+		rows []childRow
+		err  error
+	}{
+		"every subtask finished": {rows: []childRow{{ID: "GH-2", Finished: true}}},
+		"no subtasks":            {rows: []childRow{}},
+		"no parent link":         {err: errNoParentLink},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFakes(t)
+			f.script(refsLocal, "")
+
+			var asked bool
+
+			in := startInput{main: "/code/repo", task: gh1, children: kidsOf(tc.rows, tc.err, &asked)}
+			if err := refuseStartParent(t.Context(), in); err != nil || !asked {
+				t.Errorf("err = %v, asked = %v; want a pass after asking", err, asked)
+			}
+		})
+	}
+
+	t.Run("a started task", func(t *testing.T) {
+		f := newFakes(t)
+		f.script(refsLocal, heads("GH-1"))
+
+		var asked bool
+
+		in := startInput{main: "/code/repo", task: gh1, children: kidsOf([]childRow{{ID: "GH-2"}}, nil, &asked)}
+		if err := refuseStartParent(t.Context(), in); err != nil || asked {
+			t.Errorf("err = %v, asked = %v; a started task is never a parent", err, asked)
+		}
+	})
+
+	t.Run("no check", func(t *testing.T) {
+		newFakes(t)
+
+		if err := refuseStartParent(t.Context(), startInput{main: "/code/repo", task: gh1}); err != nil {
+			t.Errorf("err = %v with no children lookup", err)
+		}
+	})
 }
