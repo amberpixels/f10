@@ -17,6 +17,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    One exception: a base that exists neither locally nor on origin was finished and deleted, so its code is in the default branch: `git config --unset` both keys and open against the default branch.
 4. **Open it** via the project's PR adapter: a skill, or plain `gh pr create` / `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
    In stealth mode, no f10 traces in the branch name, commits, or PR text (`conventions/context.md`).
+   Another task named in the PR text is a link with its title (`conventions/context.md` → Task references).
 5. **Never merge** unless project.md explicitly says otherwise; merging is a human's action.
 6. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab) carrying the url.
 

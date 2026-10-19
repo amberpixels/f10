@@ -24,9 +24,10 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
      - **Repro detail stops at what reproduces it**, not the session that found it.
      - **No effort estimates.**
    - **A dependency is a fixed last line.**
-     When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; `f10 start` and `f10 drive` read it, so the word and the shape are fixed.
+     When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything after the id, so the word and the shape are fixed.
      No known order, no line.
      Tasks meant to run in sequence are created in that order, so each `After:` names an id that already exists.
+   - **Other tasks named in the body** (a base task in prose, a parent, a subtask) carry their title, in the renderer's form (`conventions/context.md` → Task references); the `After:` line stays bare.
    - **Markup follows the tracker's renderer; markdown is not a safe default.**
      The create adapter says which renderer this is:
      - **GitHub / GitLab** - GFM, but **one line per paragraph, never hard-wrapped**: a single newline renders as `<br>`.
@@ -36,7 +37,7 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
 3. **Create it** via the project's create adapter: a skill to invoke, or a CLI command such as `gh issue create` / `glab issue create`.
    Apply the project's declared default status/labels.
    A split creates the parent first, then links each subtask to it with the tracker's native parent link: the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
-   A tracker with no parent link gets a checklist of the subtask ids in the parent's body, edited in once they exist.
+   A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
 4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; several tasks report as the convention's tree.
    Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, the parent's id for a split.
 
