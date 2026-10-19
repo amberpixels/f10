@@ -7,7 +7,7 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, and post review's `f10 review ack`.
+Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, and post review's `f10 review ack`.
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -36,6 +36,7 @@ Deploy has its own confirmation (the **deploy** step).
 **Pipelines** are the frontmatter's `pipelines:`, a name to its ordered steps, a list or one `a → b` string (`implement → review (local) → pr → review (CI) → deploy (staging)`); none declared is `default: implement → pr`.
 Each name is a generic step plus its overlay, or a project-defined one.
 `resolve` is never named: a `review` entry runs it.
+A `pr` entry opens the branch's PR, or refreshes it when one is open, so a pipeline may name `pr` again after review or judge to bring the description up to date.
 A pipeline listed in `planless:` skips capture, fetch and plan for free-text input: no task id, no plan file, a brief inline plan in chat.
 The last step is the **shipment**.
 

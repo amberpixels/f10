@@ -72,7 +72,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 |---|---|---|
 | Project | one line: what this is, and the stack | detected from build files |
 | Tracker | the fetch and create adapters, and a parent adapter linking a subtask to its parent | the host CLI's issue commands; GitHub sub-issues or GitLab child links for the parent |
-| Hosting & PR | where code lives, how to open a PR or MR | from the git remote |
+| Hosting & PR | where code lives, how to open or refresh a PR or MR | from the git remote |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
 | Roles | the role per step, always or by area | each step's base role |
 | Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask` | the four core categories, reviewed locally by a blind agent; every ask goes to you |
@@ -96,6 +96,9 @@ Adapters are named in that prose, never as frontmatter keys, which `f10 standup`
 `cleanup.md` adds a project's rules to the cleanup step: its comment conventions, code or comments never to remove, more development-artifact patterns, typography.
 Cleanup replaces em and en dashes by default; a project that keeps them says so here.
 
+`pr.md` sets the PR's title shape, body shape and labels.
+It may name **owned sections**, headings whose content something else maintains (a screenshots section a script regenerates): a `pr` entry that refreshes an open PR rewrites the rest of the description from the full diff and copies those sections verbatim.
+
 ## Pipelines
 
 One pipeline, or several named ones, in the frontmatter:
@@ -105,6 +108,7 @@ pipelines:
   default: implement → cleanup → review (local) → pr
   direct: implement → push
   local: [implement, commit]
+  judged: implement → pr → review (local) → judge → pr
 planless: [direct]
 ```
 
@@ -112,6 +116,7 @@ planless: [direct]
 `local` is the one `f10 start --local` selects: the run ends in commits and nothing leaves the machine.
 A planless pipeline skips capture and the plan file for free-text input.
 A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
+A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
 
 ## Drive chain
