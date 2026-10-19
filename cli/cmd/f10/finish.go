@@ -248,7 +248,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	notes = appendNote(notes, note)
-	notes = appendNote(notes, removeImages(in.plansDir, in.task.ID))
+	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived})
@@ -650,16 +650,16 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	return target, "", nil
 }
 
-// removeImages drops the images `task read` downloaded for the task. With
-// in-repo storage they sit in the worktree's .f10/ and go with it; the
-// shared root keeps them, so they go here. A failure is a note: the task is
+// removeImages drops the images `task read` downloaded for the task into
+// the shared root, or into main's .f10/ for a read made from main; a
+// worktree's own go with the worktree. A failure is a note: the task is
 // finished either way.
-func removeImages(plansDir, id string) string {
-	if plansDir == "" {
-		return ""
+func removeImages(main, plansDir, id string) string {
+	dir := filepath.Join(main, ".f10", "images", id)
+	if plansDir != "" {
+		dir = filepath.Join(filepath.Dir(plansDir), "images", id)
 	}
 
-	dir := filepath.Join(filepath.Dir(plansDir), "images", id)
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Sprintf("the task's images at %s stay: %v", dir, err)
 	}

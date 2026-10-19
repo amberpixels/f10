@@ -587,6 +587,24 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 	}
 }
 
+// With in-repo storage, images a read from main left in main's .f10/ go too.
+func TestRemoveImagesInRepo(t *testing.T) {
+	main := t.TempDir()
+
+	dir := filepath.Join(main, ".f10", "images", "GH-1")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if note := removeImages(main, "", "GH-1"); note != "" {
+		t.Errorf("removeImages = %q, want no note", note)
+	}
+
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("main's images survived: %v", err)
+	}
+}
+
 // With worktrunk on PATH the removal goes through wt and deletes the branch.
 func TestFinishRemovesThroughWorktrunk(t *testing.T) {
 	fx := newFinishFixture(t)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -131,6 +132,45 @@ func TestDownloadRefusesAnOversizedBody(t *testing.T) {
 
 	if errText(got[0].Err) != "over 20 MB" {
 		t.Errorf("result = %+v, want the size refusal", got[0])
+	}
+}
+
+func TestDownloadCapsTheCount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(png)
+	}))
+	defer srv.Close()
+
+	urls := make([]string, maxImages+1)
+	for i := range urls {
+		urls[i] = srv.URL + "/" + strconv.Itoa(i)
+	}
+
+	got, err := Downloader{Client: srv.Client()}.Download(context.Background(), t.TempDir(), urls)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got[maxImages-1].Err != nil || errText(got[maxImages].Err) != "over the 20-image limit" {
+		t.Errorf("last two results = %+v, %+v; want the 20th kept and the 21st over the limit",
+			got[maxImages-1], got[maxImages])
+	}
+}
+
+// The default client never dials a local address, whatever the url says.
+func TestDownloadRefusesLocalAddresses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(png)
+	}))
+	defer srv.Close()
+
+	got, err := Downloader{}.Download(context.Background(), t.TempDir(), []string{srv.URL + "/a.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(errText(got[0].Err), "refusing a local address") {
+		t.Errorf("result = %+v, want the local address refused", got[0])
 	}
 }
 

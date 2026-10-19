@@ -32,22 +32,33 @@ func TestWithImages(t *testing.T) {
 	d := images.Downloader{Client: srv.Client()}
 
 	plain := "# GH-1: no images\n\nbody\n"
-	if got, err := withImages(context.Background(), plain, dir, d); err != nil || got != plain {
-		t.Errorf("withImages(plain) = %q, %v; want it unchanged", got, err)
+	if got := withImages(context.Background(), plain, dir, d); got != plain {
+		t.Errorf("withImages(plain) = %q, want it unchanged", got)
 	}
 
 	doc := "# GH-1: shots\n\n![a](" + srv.URL + "/shot.png)\n\n---\n\n**bob**\n\n" + srv.URL + "/gone.png\n"
 
-	got, err := withImages(context.Background(), doc, dir, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	got := withImages(context.Background(), doc, dir, d)
 	want := strings.TrimRight(doc, "\n") + "\n\n" +
 		"Images: " + filepath.Join(dir, "1.png") + " - read each before summarising\n" +
 		"Images not downloaded: " + srv.URL + "/gone.png (HTTP 404)\n"
 	if got != want {
 		t.Errorf("withImages = %q, want %q", got, want)
+	}
+}
+
+// A dir that cannot be written fails every image and still prints the task.
+func TestWithImagesUnwritableDir(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "images")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := "# GH-1\n\n![a](https://x.io/a.png)\n"
+
+	got := withImages(context.Background(), doc, filepath.Join(blocker, "GH-1"), images.Downloader{})
+	if !strings.HasPrefix(got, doc) || !strings.Contains(got, "Images not downloaded: https://x.io/a.png (") {
+		t.Errorf("withImages = %q, want the doc and the image named as failed", got)
 	}
 }
 

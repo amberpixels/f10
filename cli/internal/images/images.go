@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -20,10 +22,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
 const (
+	maxImages   = 20
 	maxBytes    = 20 << 20
 	timeout     = 30 * time.Second
 	parallelism = 4
@@ -37,6 +41,29 @@ var (
 	// a bare url, an image only when its path ends in an image extension
 	bareURL = regexp.MustCompile(`https?://[^\s<>()"'\[\]]+`)
 )
+
+// publicClient dials only public addresses, checked on the resolved ip so a
+// name pointing at a local service is refused too.
+var publicClient = &http.Client{Transport: &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{Timeout: timeout, Control: func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+
+		ip, err := netip.ParseAddr(host)
+		if err != nil {
+			return err
+		}
+
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			return fmt.Errorf("refusing a local address: %s", ip)
+		}
+
+		return nil
+	}}).DialContext,
+}}
 
 // byType names a file by its content type; a type missing here falls back
 // to the url's own extension.
@@ -114,22 +141,28 @@ type Result struct {
 }
 
 // A Downloader fetches images. Authorize, when set, may add credentials to
-// each first request; the client decides what survives a redirect.
+// each first request; the client decides what survives a redirect. A nil
+// Client is one that refuses local and private addresses, since the urls
+// come from task text anyone may have written.
 type Downloader struct {
 	Client    *http.Client
 	Authorize func(*http.Request)
 }
 
-// Download fetches every url into dir, named 1.<ext>, 2.<ext>, ... in link
-// order. dir is emptied first, so it holds only this set.
+// Download fetches up to maxImages urls into dir, named 1.<ext>, 2.<ext>,
+// ... in link order; the rest fail as over the limit. The set lands in a
+// sibling first and replaces dir whole, so a concurrent read of the same
+// task never sees a half-written or emptied dir.
 func (d Downloader) Download(ctx context.Context, dir string, urls []string) ([]Result, error) {
-	if err := os.RemoveAll(dir); err != nil {
-		return nil, fmt.Errorf("clearing %s: %w", dir, err)
+	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
+		return nil, fmt.Errorf("creating %s: %w", filepath.Dir(dir), err)
 	}
 
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return nil, fmt.Errorf("creating %s: %w", dir, err)
+	tmp, err := os.MkdirTemp(filepath.Dir(dir), filepath.Base(dir)+".tmp-")
+	if err != nil {
+		return nil, fmt.Errorf("creating a download dir beside %s: %w", dir, err)
 	}
+	defer os.RemoveAll(tmp)
 
 	results := make([]Result, len(urls))
 	sem := make(chan struct{}, parallelism)
@@ -137,16 +170,34 @@ func (d Downloader) Download(ctx context.Context, dir string, urls []string) ([]
 	var wg sync.WaitGroup
 
 	for i, u := range urls {
+		if i >= maxImages {
+			results[i] = Result{URL: u, Err: fmt.Errorf("over the %d-image limit", maxImages)}
+
+			continue
+		}
+
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			p, err := d.fetch(ctx, u, filepath.Join(dir, strconv.Itoa(i+1)))
-			results[i] = Result{URL: u, Path: p, Err: err}
+			name, err := d.fetch(ctx, u, filepath.Join(tmp, strconv.Itoa(i+1)))
+			if err == nil {
+				name = filepath.Join(dir, filepath.Base(name))
+			}
+
+			results[i] = Result{URL: u, Path: name, Err: err}
 		})
 	}
 
 	wg.Wait()
+
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, fmt.Errorf("clearing %s: %w", dir, err)
+	}
+
+	if err := os.Rename(tmp, dir); err != nil {
+		return nil, fmt.Errorf("moving the images into %s: %w", dir, err)
+	}
 
 	return results, nil
 }
@@ -165,7 +216,7 @@ func (d Downloader) fetch(ctx context.Context, raw, base string) (string, error)
 		d.Authorize(req)
 	}
 
-	resp, err := cmp.Or(d.Client, http.DefaultClient).Do(req)
+	resp, err := cmp.Or(d.Client, publicClient).Do(req)
 	if err != nil {
 		if ue, ok := errors.AsType[*url.Error](err); ok {
 			return "", ue.Err

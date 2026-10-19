@@ -31,7 +31,11 @@ func taskCommand() *cli.Command {
 				Name:      "read",
 				Usage:     "write the task to stdout as markdown",
 				ArgsUsage: "[task-id]",
-				Action:    runTaskRead,
+				Flags: []cli.Flag{&cli.BoolFlag{
+					Name:  "no-images",
+					Usage: "into a pipe too, leave the task's images as links (a title lookup)",
+				}},
+				Action: runTaskRead,
 			},
 			{
 				Name:      "open",
@@ -73,13 +77,8 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 
 	// a person at a terminal opens the links themselves and would wait on
 	// the downloads; an agent gets local files in place of urls that expire
-	if !isTerminal(cmd.Writer) {
-		dir := filepath.Join(t.lay.StorageRoot, "images", strings.ToUpper(r.ID))
-
-		doc, err = withImages(ctx, doc, dir, images.Downloader{Authorize: githubAuth(ctx, t)})
-		if err != nil {
-			return err
-		}
+	if !isTerminal(cmd.Writer) && !cmd.Bool("no-images") {
+		doc = withImages(ctx, doc, t.imagesDir(ctx, r.ID), images.Downloader{Authorize: githubAuth(ctx, t)})
 	}
 
 	return writeDoc(ctx, cmd.Writer, t.dir, doc)
@@ -115,19 +114,34 @@ func readTask(ctx context.Context, t *target, token string) (ref.Ref, string, er
 }
 
 // withImages downloads every image doc links into dir and ends doc with
-// the footer naming them; a doc with no images comes back as it was.
-func withImages(ctx context.Context, doc, dir string, d images.Downloader) (string, error) {
+// the footer naming them; a doc with no images comes back as it was. A dir
+// that cannot be written fails every image, never the read.
+func withImages(ctx context.Context, doc, dir string, d images.Downloader) string {
 	links := images.Links(doc)
 	if len(links) == 0 {
-		return doc, nil
+		return doc
 	}
 
 	results, err := d.Download(ctx, dir, links)
 	if err != nil {
-		return "", err
+		results = make([]images.Result, len(links))
+		for i, u := range links {
+			results[i] = images.Result{URL: u, Err: err}
+		}
 	}
 
-	return strings.TrimRight(doc, "\n") + "\n\n" + images.Footer(results), nil
+	return strings.TrimRight(doc, "\n") + "\n\n" + images.Footer(results)
+}
+
+// imagesDir is where a task's images land: <storage root>/images/<ID>.
+// In-repo storage under stealth keeps .f10/ in info/exclude first, since
+// a read may be the first thing to create it.
+func (t *target) imagesDir(ctx context.Context, id string) string {
+	if t.sharedPlansDir() == "" && t.eff.Visibility == "stealth" {
+		_, _ = excludeF10(ctx, t.lay.CheckoutRoot)
+	}
+
+	return filepath.Join(t.lay.StorageRoot, "images", strings.ToUpper(id))
 }
 
 // githubAuth adds the gh token to image requests for GitHub's own hosts,
