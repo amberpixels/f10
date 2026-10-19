@@ -836,8 +836,8 @@ func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error)
 	return finishedTask(info, in.tracker.archive, base.ID, false), nil
 }
 
-// open opens the task's checkout and agent, and reads where in the chain it
-// stands.
+// open opens the task's checkout and agent, adopting a plan main saved for
+// it as start does, and reads where in the chain it stands.
 func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error {
 	task := r.task
 
@@ -887,7 +887,8 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 
 // position is how many chain skills the task is past: the last one drive
 // recorded on the branch, else what its run state proves - plan and ship
-// are the phases the badge tracks.
+// are the phases the badge tracks - and a plan the worktree reads counts as
+// plan done, so driven ship takes it rather than planning again.
 func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 	if last := gitx.Out(ctx, in.main, "config", "--get", "branch."+o.branch+"."+cfgDrive); last != "" {
 		if i := slices.Index(in.chain, last); i >= 0 {
@@ -895,12 +896,16 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 		}
 	}
 
-	run, err := in.run(o.path)
-	if err != nil || run == nil {
-		return 0, err
+	pos := 0
+
+	if i := slices.Index(in.chain, "plan"); i >= 0 && o.plan != "" {
+		pos = i + 1
 	}
 
-	pos := 0
+	run, err := in.run(o.path)
+	if err != nil || run == nil {
+		return pos, err
+	}
 
 	for _, phase := range []string{"plan", "ship"} {
 		if s := run.Status(phase); s != "done" && s != "prior" {

@@ -492,6 +492,60 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	}
 }
 
+// A plan saved for the task before drive opened it counts as plan done: the
+// chain resumes at judge, and no plan prompt is sent. Out-of-tree storage
+// keeps it in place; start's tests cover the move from main.
+func TestDriveTakesASavedPlanAsPlanned(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "plan", "judge")
+	fx.in.plansDir = t.TempDir()
+	writePlan(t, filepath.Join(fx.in.plansDir, "GH-1.md"))
+	fx.task("GH-1", taskInfo{body: "first"}, "")
+	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if fx.f.called("herdr agent prompt " + agentOf("GH-1") + " /f10:plan") {
+		t.Errorf("the saved plan was planned again: %q", fx.f.calls)
+	}
+
+	if want := "GH-1:    done: plan judge"; !strings.Contains(fx.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
+	}
+}
+
+// position counts a plan the worktree reads only where the chain has plan,
+// and a skill drive recorded on the branch still wins.
+func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		chain    []string
+		plan     string
+		recorded string
+		want     int
+	}{
+		{name: "plan in the chain", chain: []string{"plan", "judge", "ship"}, plan: "/p/GH-1.md", want: 1},
+		{name: "no plan saved", chain: []string{"plan", "judge", "ship"}, want: 0},
+		{name: "no plan in the chain", chain: []string{"judge", "ship"}, plan: "/p/GH-1.md", want: 0},
+		{name: "recorded skill wins", chain: []string{"plan", "judge", "ship"}, plan: "/p/GH-1.md", recorded: "judge", want: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1")
+			fx.in.chain = tc.chain
+			fx.f.script("git config --get branch.GH-1."+cfgDrive, tc.recorded)
+
+			pos, err := fx.in.position(t.Context(), openedTask{branch: "GH-1", path: "/code/repo.GH-1", plan: tc.plan})
+			if err != nil || pos != tc.want {
+				t.Errorf("position = %d, %v; want %d", pos, err, tc.want)
+			}
+		})
+	}
+}
+
 // A range takes every id between its ends; a pull request in it, or a
 // number the tracker does not know, is skipped with a note.
 func TestDriveRangeSkipsWhatIsNotATask(t *testing.T) {

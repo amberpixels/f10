@@ -1426,7 +1426,7 @@ func TestStartAdoptsMainsPlan(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: main, task: gh1, adoptPlan: true}); err != nil {
+	if err := start(t.Context(), &out, startInput{main: main, task: gh1}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1461,7 +1461,7 @@ func TestStartLeavesMainsPlanForARunningAgent(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: main, task: gh1, adoptPlan: true}); err != nil {
+	if err := start(t.Context(), &out, startInput{main: main, task: gh1}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1498,37 +1498,11 @@ func TestStartNamesTheMovedPlanWhenTheAgentFails(t *testing.T) {
 	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
 	f.fail("herdr agent start "+agent+" --kind claude --pane pane:7", shell.Result{Code: 1, Stderr: "no pane"})
 
-	err := start(t.Context(), &bytes.Buffer{}, startInput{main: main, task: gh1, adoptPlan: true})
+	err := start(t.Context(), &bytes.Buffer{}, startInput{main: main, task: gh1})
 
 	dst := filepath.Join(wt, ".f10", "plans", "GH-1.md")
 	if err == nil || !strings.Contains(err.Error(), "the plan was moved from "+src+" to "+dst) {
 		t.Errorf("start error = %v, want the moved plan named", err)
-	}
-}
-
-// drive opens tasks with adoption off: main's plan stays and the prompt
-// still plans.
-func TestStartLeavesMainsPlanWithoutAdoption(t *testing.T) {
-	main, wt := t.TempDir(), t.TempDir()
-	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
-	writePlan(t, src)
-
-	agent := agentName("GH-1", "", wt)
-
-	f := newFakes(t)
-	f.has["wt"] = true
-	f.script(refsLocal, heads("GH-1"))
-	f.script(worktrees, porcelain("GH-1", wt))
-	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
-	f.script("herdr agent start "+agent+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, "GH-1", nil, ""), "{}")
-
-	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: main, task: gh1}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := os.Stat(src); err != nil {
-		t.Errorf("main's plan moved with adoption off: %v", err)
 	}
 }
 

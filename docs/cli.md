@@ -92,7 +92,7 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   Out-of-tree storage shares one plans dir, so nothing moves and only the prompt changes.
   The plan moves only when start starts the agent: a workspace whose agent is already running gets no prompt, so main's plan stays in place with a note.
   A move that fails stops start before the agent is started, and an agent that fails to start after the move names where the plan went.
-  `f10 drive` leaves main's plan where it is
+  `f10 drive` adopts main's plan the same way, when it starts the task's agent.
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
   With in-repo storage that path lies in the base task's worktree, and a note beneath the report says when no checkout reaches it or the plan is not written yet.
@@ -232,11 +232,13 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    A task starts once its base is through: finished, or its whole chain run, where the chain has no `finish`.
    Every task that is ready starts in the same pass, since each agent is its own session.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
+   A plan the main checkout saved for the task moves into the worktree under start's rules (a worktree's own plan wins, out-of-tree storage moves nothing, a failed move stops before the agent starts).
    A checkout Herdr already shows, as an earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle shell.
    Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
    Nothing is prompted at open.
    The chain runs from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
+   A plan the worktree reads when the driver starts its agent counts as plan done, so the default chain resumes at `judge` rather than planning again.
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, and review gets `ci` where `project.md` declares a remote review.
 5. **Catchup after finish, and before it.**
