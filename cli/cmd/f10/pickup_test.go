@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/urfave/cli/v3"
 )
 
 func TestPullToken(t *testing.T) {
@@ -292,5 +295,98 @@ func TestLinkedBranchCountsForAfter(t *testing.T) {
 
 	if ok, err := hasTaskBranch(t.Context(), "/code/repo", "GH-7"); !ok || err != nil {
 		t.Errorf("hasTaskBranch on a linked branch = %v, %v", ok, err)
+	}
+}
+
+// A PR naming no task exits 3, which the start skill turns into a question;
+// --task wins over what the PR names; --task with no PR is refused.
+func TestPickedTask(t *testing.T) {
+	none := pull{URL: pickGH.url, Title: "fix login", HeadRefName: pickGH.branch}
+
+	_, err := pickedTask("GH", true, pickGH, none, "")
+
+	var coder cli.ExitCoder
+	if !errors.As(err, &coder) || coder.ExitCode() != exitNoTask || !strings.Contains(err.Error(), "--task") {
+		t.Errorf("a PR naming no task = %v, want exit %d naming --task", err, exitNoTask)
+	}
+
+	if got, err := pickedTask("GH", true, pickGH, pull{Body: "Closes #4"}, "GH-9"); got != "GH-9" || err != nil {
+		t.Errorf("--task with a PR = %q, %v; want GH-9", got, err)
+	}
+
+	if got, err := pickedTask("GH", true, pickGH, pull{Body: "Closes #4"}, ""); got != "GH-4" || err != nil {
+		t.Errorf("a PR naming its task = %q, %v; want GH-4", got, err)
+	}
+
+	if _, err := pickedTask("GH", true, nil, pull{}, "GH-9"); err == nil {
+		t.Error("--task with no PR was not refused")
+	}
+
+	if got, err := pickedTask("GH", true, nil, pull{}, ""); got != "" || err != nil {
+		t.Errorf("no PR and no --task = %q, %v", got, err)
+	}
+}
+
+// Only the host's "no such PR" turns a #n back into a task id; a login or
+// network failure is the error.
+func TestNoSuchPull(t *testing.T) {
+	no := errors.New("gh: GraphQL: Could not resolve to a PullRequest with the number of 85. (repository.pullRequest)")
+	if !noSuchPull(no) {
+		t.Error("gh's no-such-PR answer was not recognised")
+	}
+
+	if noSuchPull(errors.New("gh: To get started with GitHub CLI, please run:  gh auth login")) {
+		t.Error("a logged-out gh was read as no PR")
+	}
+}
+
+// A picked-up PR's branch already here is brought to origin's head when it
+// is behind and checked out nowhere, else noted.
+func TestSyncPickup(t *testing.T) {
+	const (
+		ahead  = "git merge-base --is-ancestor refs/remotes/origin/b refs/heads/b"
+		behind = "git merge-base --is-ancestor refs/heads/b refs/remotes/origin/b"
+		force  = "git branch --force --track b origin/b"
+	)
+
+	cases := []struct {
+		name             string
+		upToDate, behind bool
+		checkedOut       bool
+		note             string
+		forced           bool
+	}{
+		{name: "up to date", upToDate: true, behind: true},
+		{name: "behind, checked out nowhere", behind: true, note: "fast-forwarded b", forced: true},
+		{name: "behind, checked out", behind: true, checkedOut: true, note: "pull in its worktree"},
+		{name: "diverged", note: "has diverged"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFakes(t)
+			f.script(force, "")
+
+			for key, ok := range map[string]bool{ahead: c.upToDate, behind: c.behind} {
+				if ok {
+					f.script(key, "")
+				} else {
+					f.fail(key, missing)
+				}
+			}
+
+			note, err := syncPickup(t.Context(), "/code/repo", "b", c.checkedOut)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if (c.note == "") != (note == "") || !strings.Contains(note, c.note) {
+				t.Errorf("note = %q, want %q", note, c.note)
+			}
+
+			if f.called(force) != c.forced {
+				t.Errorf("forced = %v, want %v", f.called(force), c.forced)
+			}
+		})
 	}
 }

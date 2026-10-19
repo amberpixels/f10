@@ -117,8 +117,10 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a second worktree for one task can live beside the first
 - the agent is named `<id>` lowercased, with the suffix, then six hex characters hashed from the worktree path (`gh-12-3e78d4`): Herdr's agent names are one namespace across every project, so the same id in two repositories never collides
 - `f10 start <PR url | #n>` picks up a PR someone else opened: the task is in the tracker, the branch and the PR are on the remote, and nothing is local.
-  A url with `/pull/<n>` or `/merge_requests/<n>`, or GitLab's `!<n>`, names a PR; a bare `#<n>` is asked of the host as a PR first, and one the host knows as no PR is read as a task id, as before.
-  Start reads the PR through `gh` or `glab`, runs `git fetch origin`, creates the local branch tracking origin's (`git branch --track`) unless it exists, and puts the worktree on it.
+  A url with `/pull/<n>` or `/merge_requests/<n>`, or GitLab's `!<n>`, names a PR; on GitHub, whose issues and PRs share one counter, a bare `#<n>` is asked of the host as a PR first, and one the host knows as no PR is read as a task id, as before; on GitLab `#<n>` stays a task id.
+  Any other host error on that lookup is the error.
+  Start reads the PR through `gh` or `glab`, runs `git fetch origin`, creates the local branch tracking origin's (`git branch --track`), and puts the worktree on it.
+  A local branch already there is fast-forwarded to origin's when it is behind and checked out nowhere; behind in a worktree, or diverged, is a note.
   The task id comes from `--task <id>`, else a closing keyword in the PR body (`Closes #12`, or an issue url of this repo) where the tracker is the host's issues, else an id in the project's format in the body, the title or the branch name.
   None found: start exits **3** having changed nothing, and `/f10:start` asks for the id and reruns with `--task`.
   The branch is linked to its task in local config, `branch.<name>.f10-task=<id>`, beside `f10-after`.

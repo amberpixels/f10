@@ -717,9 +717,15 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		}
 
 		if branched {
-			local, err := branchesFor(ctx, in.main, "refs/heads/", r.ID, suffix)
-			if err != nil {
-				return err
+			var local []string
+			if suffix == "" {
+				local = linkedBranches(ctx, in.main, r.ID)
+			}
+
+			if len(local) == 0 {
+				if local, err = branchesFor(ctx, in.main, "refs/heads/", r.ID, suffix); err != nil {
+					return err
+				}
 			}
 
 			if len(local) == 1 {

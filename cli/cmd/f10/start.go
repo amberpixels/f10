@@ -52,7 +52,7 @@ func startCommand() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "task",
-				Usage: "with a PR, the `TASK-ID` it belongs to, for a PR whose body, title and branch name none",
+				Usage: "with a PR, the `TASK-ID` it belongs to, when its body, title and branch name none",
 			},
 			&cli.StringFlag{
 				Name: "model",
@@ -86,9 +86,8 @@ const (
 	cfgAfter       = "f10-after"
 	cfgAfterBranch = "f10-after-branch"
 	cfgLanded      = "f10-landed"
-	// cfgTaskID links a branch whose name need not carry the id to its task:
-	// start writes it on a branch picked up from a PR.
-	cfgTaskID = "f10-task"
+	// cfgTaskID links a branch whose name need not carry the id to its task
+	cfgTaskID = ref.TaskKey
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
@@ -133,26 +132,19 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		suffix string
 	)
 
+	if task, err = pickedTask(t.eff.IDPrefix, t.hostIssues(), pick, pr, task); err != nil {
+		return err
+	}
+
 	switch {
 	case pick != nil:
 		if err := refusePickupFlags(mode, after, base); err != nil {
 			return err
 		}
 
-		if task == "" {
-			task = pickupTask(t.eff.IDPrefix, t.hostIssues(), pr)
-		}
-
-		if task == "" {
-			return cli.Exit(fmt.Sprintf("f10: %s names no task in its body, title or branch %s: "+
-				"rerun with --task <ID>", pick.url, pick.branch), exitNoTask)
-		}
-
 		if r, err = t.reference(ctx, task); err != nil {
 			return fmt.Errorf("%s: %w", pick.url, err)
 		}
-	case task != "":
-		return errors.New("--task names the task of a PR: pass the PR's link or #n")
 	default:
 		var id string
 
@@ -214,18 +206,21 @@ func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, err
 	}
 
 	h, err := t.host()
-	if err != nil {
-		if probe {
-			return nil, pull{}, nil
-		}
 
+	switch {
+	case err != nil && probe:
+		return nil, pull{}, nil
+	case err != nil:
 		return nil, pull{}, err
+	case probe && h.glab():
+		// GitLab numbers issues and MRs apart: #n is an issue there, !n an MR
+		return nil, pull{}, nil
 	}
 
 	p, err := h.pullNumber(ctx, number)
 
 	switch {
-	case err != nil && probe:
+	case err != nil && probe && noSuchPull(err):
 		return nil, pull{}, nil
 	case err != nil:
 		return nil, pull{}, err
@@ -236,6 +231,25 @@ func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, err
 	}
 
 	return h.pickupOf(number, p), p, nil
+}
+
+// pickedTask is the task id for a picked-up PR: --task, else the one the
+// PR names. A PR naming none exits with exitNoTask, which the start skill
+// turns into a question; --task with no PR is a refusal.
+func pickedTask(prefix string, hostIssues bool, pick *pickup, pr pull, task string) (string, error) {
+	switch {
+	case pick == nil && task != "":
+		return "", errors.New("--task names the task of a PR: pass the PR's link or #n")
+	case pick == nil || task != "":
+		return task, nil
+	}
+
+	if task = pickupTask(prefix, hostIssues, pr); task == "" {
+		return "", cli.Exit(fmt.Sprintf("f10: %s names no task in its body, title or branch %s: "+
+			"rerun with --task <ID>", pick.url, pick.branch), exitNoTask)
+	}
+
+	return task, nil
 }
 
 // refusePickupFlags stops the flags a picked-up PR has no use for: its
@@ -442,12 +456,21 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	path := worktreeOf(wts, name)
 
+	if in.pick != nil && !existing.remote {
+		note, err := syncPickup(ctx, in.main, name, path != "")
+		if err != nil {
+			return openedTask{}, err
+		}
+
+		notes = appendNote(notes, note)
+	}
+
 	switch {
 	case path != "":
 		notes = append(notes, "reused the existing worktree")
 	case existing.name != "":
 		if existing.remote {
-			if err := gitx.TrackBranch(ctx, in.main, name); err != nil {
+			if err := gitx.TrackBranch(ctx, in.main, name, false); err != nil {
 				return openedTask{}, err
 			}
 

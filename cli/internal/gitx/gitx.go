@@ -141,8 +141,15 @@ func Fetch(ctx context.Context, dir string) error {
 
 // TrackBranch creates local branch from origin's branch of the same name,
 // tracking it, so a pull or push in its worktree needs no upstream set.
-func TrackBranch(ctx context.Context, dir, branch string) error {
-	_, err := Exec(ctx, dir, "branch", "--track", branch, "origin/"+branch)
+// With force an existing branch is moved there, which git refuses while a
+// worktree has it checked out.
+func TrackBranch(ctx context.Context, dir, branch string, force bool) error {
+	args := []string{"branch", "--track", branch, "origin/" + branch}
+	if force {
+		args = []string{"branch", "--force", "--track", branch, "origin/" + branch}
+	}
+
+	_, err := Exec(ctx, dir, args...)
 
 	return err
 }

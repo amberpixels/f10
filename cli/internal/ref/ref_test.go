@@ -196,8 +196,8 @@ func TestLookupExhausted(t *testing.T) {
 // config holds names the task, ahead of the branch name.
 func TestFromBranchReadsTheLink(t *testing.T) {
 	answers := map[string]string{
-		"rev-parse --abbrev-ref HEAD":                  "alice/fix-login",
-		"config --get branch.alice/fix-login.f10-task": "GH-9",
+		"rev-parse --abbrev-ref HEAD":                    "alice/fix-login",
+		"config --get branch.alice/fix-login." + TaskKey: "GH-9",
 	}
 
 	prev := gitx.Exec
@@ -216,7 +216,7 @@ func TestFromBranchReadsTheLink(t *testing.T) {
 		t.Errorf("fromBranch with a link = %q, want GH-9", got)
 	}
 
-	delete(answers, "config --get branch.alice/fix-login.f10-task")
+	delete(answers, "config --get branch.alice/fix-login."+TaskKey)
 	answers["rev-parse --abbrev-ref HEAD"] = "GH-3/slug"
 
 	if got := r.fromBranch(t.Context()); got != "GH-3" {

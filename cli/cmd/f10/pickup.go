@@ -36,7 +36,8 @@ var pullPathRE = regexp.MustCompile(`/(?:pull|merge_requests)/(\d+)(?:[/?#]|$)`)
 
 // pullToken is the request number a start argument names, if any: a
 // request url or GitLab's `!12` name one for sure; a bare `#12` may name a
-// request or a task, so probe says to ask the host before taking it.
+// request or a task, so probe says to ask the host before taking it (only
+// GitHub, whose issues and PRs share one counter, can answer).
 func pullToken(token string) (string, bool) {
 	switch {
 	case strings.Contains(token, "://"):
@@ -48,6 +49,15 @@ func pullToken(token string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// noSuchPull reports whether the host answered that the number is no PR,
+// as opposed to failing to answer at all.
+func noSuchPull(err error) bool {
+	msg := err.Error()
+
+	return strings.Contains(msg, "Could not resolve to a PullRequest") ||
+		strings.Contains(msg, "no pull requests found")
 }
 
 func digits(s string) bool {
@@ -126,6 +136,28 @@ func (h host) pickupOf(number string, p pull) *pickup {
 		view:   cmd("view", "--comments"),
 		diff:   cmd("diff"),
 	}
+}
+
+// syncPickup brings a picked-up PR's local branch, which start found
+// already there, to the PR's head on origin: moved when it is behind and
+// checked out nowhere, else a note saying how it differs.
+func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
+	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
+
+	switch {
+	case gitx.IsAncestor(ctx, main, remote, local):
+		return "", nil
+	case !gitx.IsAncestor(ctx, main, local, remote):
+		return fmt.Sprintf("%s has diverged from origin/%s: the worktree holds the local commits", branch, branch), nil
+	case checkedOut:
+		return fmt.Sprintf("%s is behind origin/%s: pull in its worktree", branch, branch), nil
+	}
+
+	if err := gitx.TrackBranch(ctx, main, branch, true); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("fast-forwarded %s to origin/%s", branch, branch), nil
 }
 
 // fetchPickup brings the request's branch into origin's refs, which a
