@@ -12,7 +12,6 @@ import (
 	"mime"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -22,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -42,28 +40,35 @@ var (
 	bareURL = regexp.MustCompile(`https?://[^\s<>()"'\[\]]+`)
 )
 
-// publicClient dials only public addresses, checked on the resolved ip so a
-// name pointing at a local service is refused too.
-var publicClient = &http.Client{Transport: &http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{Timeout: timeout, Control: func(_, address string, _ syscall.RawConn) error {
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return err
+// publicClient refuses urls whose host resolves to a loopback, link-local
+// or unspecified address: local services and cloud metadata. The check is
+// on the url's host, never the dialed address, which is the proxy when one
+// is set; private ranges stay allowed for self-hosted trackers.
+var publicClient = &http.Client{
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
 		}
 
-		ip, err := netip.ParseAddr(host)
-		if err != nil {
-			return err
-		}
+		return refuseLocal(req.Context(), req.URL)
+	},
+}
 
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+func refuseLocal(ctx context.Context, u *url.URL) error {
+	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", u.Hostname())
+	if err != nil {
+		return err
+	}
+
+	for _, ip := range addrs {
+		ip = ip.Unmap()
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
 			return fmt.Errorf("refusing a local address: %s", ip)
 		}
+	}
 
-		return nil
-	}}).DialContext,
-}}
+	return nil
+}
 
 // byType names a file by its content type; a type missing here falls back
 // to the url's own extension.
@@ -142,8 +147,8 @@ type Result struct {
 
 // A Downloader fetches images. Authorize, when set, may add credentials to
 // each first request; the client decides what survives a redirect. A nil
-// Client is one that refuses local and private addresses, since the urls
-// come from task text anyone may have written.
+// Client refuses local addresses, since the urls come from task text
+// anyone may have written.
 type Downloader struct {
 	Client    *http.Client
 	Authorize func(*http.Request)
@@ -214,6 +219,12 @@ func (d Downloader) fetch(ctx context.Context, raw, base string) (string, error)
 
 	if d.Authorize != nil {
 		d.Authorize(req)
+	}
+
+	if d.Client == nil {
+		if err := refuseLocal(ctx, req.URL); err != nil {
+			return "", err
+		}
 	}
 
 	resp, err := cmp.Or(d.Client, publicClient).Do(req)
