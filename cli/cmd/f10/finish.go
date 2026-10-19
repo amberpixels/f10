@@ -613,11 +613,11 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 // still needs cleaning up; a plan that cannot be moved is an error, since
 // removing the worktree would delete it.
 func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
-	src := filepath.Join(worktree, ".f10", "plans")
+	src := taskPlansDir(worktree, plansDir)
 	dst := filepath.Join(main, ".f10", "plans", "archive")
 
 	if plansDir != "" {
-		src, dst = plansDir, filepath.Join(plansDir, "archive")
+		dst = filepath.Join(plansDir, "archive")
 	}
 
 	plan := filepath.Join(src, id+".md")
@@ -647,6 +647,12 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	}
 
 	return target, "", nil
+}
+
+// taskPlansDir is where a task's plan sits: the shared plans dir with
+// out-of-tree storage, else the .f10/plans of the checkout working on it.
+func taskPlansDir(checkout, plansDir string) string {
+	return cmp.Or(plansDir, filepath.Join(checkout, ".f10", "plans"))
 }
 
 // freeArchiveName is `<id>.md` under dir when free, else `<id>.<N>.md` with

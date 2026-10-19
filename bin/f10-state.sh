@@ -415,6 +415,11 @@ cmd_seed() {
   find_sid "${2:-}" || exit 0
   # --help prints the skill's arguments and runs nothing, so the badge keeps the last real run.
   case " $args " in *" --help "*) exit 0 ;; esac
+  # A leading pipeline name (`ship local: ABC-1042`, as f10 start --local sends) picks the
+  # pipeline, not the task: the reference or description is what follows it.
+  if [[ "$args" =~ ^[[:space:]]*[A-Za-z][A-Za-z0-9_-]*:[[:space:]]+(.*)$ ]]; then
+    args="${BASH_REMATCH[1]}"
+  fi
 
   # Not for capture, which always mints a new task. `ship 1042` continues ABC-1042.
   local ref up_ref up_task chain=0

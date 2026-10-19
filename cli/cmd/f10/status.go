@@ -25,8 +25,9 @@ import (
 // session id is in the environment and the answer is that one run; from a
 // plain terminal there is none, so it lists this repo's live runs, and
 // --all every live run on the machine. A task id names another run: the
-// one reported from the checkout that has the task's branch, which is how
-// a session reads the question a driven agent stopped on.
+// task's own, reported from the checkout that has the task's branch, which
+// is how a session reads the question a driven agent stopped on. With no
+// run of its own, the task gets what is durable: its plan file and its PR.
 func statusCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
@@ -57,7 +58,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
 		}
 
-		id, root, err := taskRoot(ctx, cmd, token)
+		in, err := taskStatusFor(ctx, cmd, token)
 		if err != nil {
 			return err
 		}
@@ -67,13 +68,21 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
+		var others []*state.Run
+
 		showRoot = true
-		runs = inRoot(live, root)
+		runs, others = taskRuns(inRoot(live, in.root), in.id)
 
 		if len(runs) == 0 {
-			_, err = fmt.Fprintf(cmd.Writer, "no live f10 run in %s, where %s is checked out\n", root, id)
+			fb := taskFallback(ctx, in, others)
 
-			return err
+			if cmd.Bool("json") {
+				return encodeJSON(cmd.Writer, fb)
+			}
+
+			fb.render(cmd.Writer, termWidth(cmd.Writer))
+
+			return nil
 		}
 	case sid != "" && !all:
 		r, err := state.Load(state.Path(dir, sid))
@@ -120,14 +129,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(runs); err != nil {
-			return fmt.Errorf("encoding runs: %w", err)
-		}
-
-		return nil
+		return encodeJSON(cmd.Writer, runs)
 	}
 
 	limit := termWidth(cmd.Writer)
@@ -143,20 +145,30 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// taskRoot is the task's id and the checkout holding its branch: where the
-// agent working on it reports its run, whichever session that is. A task
-// with no branch, or a branch checked out nowhere, has no run to read.
-func taskRoot(ctx context.Context, cmd *cli.Command, token string) (string, string, error) {
+// taskStatusInput is what `status <id>` knows about a task before reading
+// any run: the checkout holding its branch, where the agent working on it
+// reports, and where its durable facts are looked up when no run is its own.
+type taskStatusInput struct {
+	id     string
+	branch string
+	root   string // the checkout holding branch
+	plan   string // where the task's plan would be
+	host   *host  // nil without a host CLI: no PR row
+}
+
+// taskStatusFor resolves the task to its checkout. A task with no branch,
+// or a branch checked out nowhere, has no run to read.
+func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskStatusInput, error) {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
-		return "", "", err
+		return taskStatusInput{}, err
 	}
 
 	id, suffix := ref.SplitSuffix(token)
 
 	r, err := t.reference(ctx, id)
 	if err != nil {
-		return "", "", err
+		return taskStatusInput{}, err
 	}
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
@@ -165,14 +177,126 @@ func taskRoot(ctx context.Context, cmd *cli.Command, token string) (string, stri
 
 	switch {
 	case err != nil:
-		return "", "", err
+		return taskStatusInput{}, err
 	case name == "":
-		return "", "", fmt.Errorf("%s has no branch here: no run to read", r.ID)
+		return taskStatusInput{}, fmt.Errorf("%s has no branch here: no run to read", r.ID)
 	case path == "":
-		return "", "", fmt.Errorf("branch %s is checked out nowhere: no run to read", name)
+		return taskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: no run to read", name)
 	}
 
-	return r.ID, path, nil
+	in := taskStatusInput{
+		id:     r.ID,
+		branch: name,
+		root:   path,
+		plan:   filepath.Join(taskPlansDir(path, t.sharedPlansDir()), r.ID+".md"),
+	}
+
+	if h, err := t.host(); err == nil {
+		h = h.at(path)
+		in.host = &h
+	}
+
+	return in, nil
+}
+
+// taskRuns splits runs from the task's checkout into the task's own and
+// the rest. Every skill call reseeds its session's run, so the agent in a
+// task's worktree may be on another task by now. An empty task counts as
+// the task's only when the run was seeded from a reference, before fetch
+// names it: capture `pending`, or `skipped` once fetch opens the plan phase.
+// Capturing, or planning from a description, is about some other task.
+func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
+	var own, others []*state.Run
+
+	for _, r := range runs {
+		fresh := r.Task == "" && (r.Capture == "pending" || r.Capture == "skipped")
+
+		if strings.EqualFold(r.Task, id) || fresh {
+			own = append(own, r)
+		} else {
+			others = append(others, r)
+		}
+	}
+
+	return own, others
+}
+
+// fallback is what `status <id>` reports for a task no live run is about:
+// the runs in its checkout, which are on something else, then its plan file
+// and its PR, each only where it exists.
+type fallback struct {
+	Task    string       `json:"task"`
+	Root    string       `json:"root"`
+	Others  []*state.Run `json:"others"`
+	Plan    string       `json:"plan,omitempty"`
+	PR      string       `json:"pr,omitempty"`
+	PRState string       `json:"pr_state,omitempty"`
+}
+
+// taskFallback gathers the fallback. Status only reads, so a host that
+// cannot answer drops the PR rather than failing the report.
+func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run) fallback {
+	fb := fallback{Task: in.id, Root: in.root, Others: others}
+	if fb.Others == nil {
+		fb.Others = []*state.Run{} // an empty list, not null, for a JSON reader
+	}
+
+	if exists(in.plan) {
+		fb.Plan = in.plan
+	}
+
+	if in.host != nil {
+		if p, err := in.host.pull(ctx, in.branch); err == nil && p.url() != "" {
+			fb.PR, fb.PRState = p.url(), p.status()
+		}
+	}
+
+	return fb
+}
+
+func (fb fallback) render(w io.Writer, limit int) {
+	plain := lipgloss.NewStyle()
+	faint := lipgloss.NewStyle().Faint(true)
+
+	headerRow(w, "task", fb.Task, limit, plain)
+	headerRow(w, "run", "none for "+fb.Task+" in "+fb.Root, limit, faint)
+
+	for _, r := range fb.Others {
+		headerRow(w, "agent", valueOr(r.Task)+" · "+currentPhase(r), limit, plain)
+	}
+
+	if fb.Plan != "" {
+		headerRow(w, "plan", fb.Plan, limit, plain)
+	}
+
+	if fb.PR != "" {
+		headerRow(w, "pr", fb.PR+" ("+fb.PRState+")", limit, plain)
+	}
+}
+
+func encodeJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("encoding status: %w", err)
+	}
+
+	return nil
+}
+
+// currentPhase is the furthest phase a run has reached, with its status:
+// `capture running`, `ship blocked at judge`.
+func currentPhase(r *state.Run) string {
+	phase := state.Phases[0]
+
+	for _, p := range state.Phases {
+		if r.Status(p) != "pending" {
+			phase = p
+		}
+	}
+
+	return phase + " " + r.PhaseText(phase)
 }
 
 // checkoutRoot is the repo a plain terminal asks about: -C's target or the
