@@ -27,6 +27,6 @@ No real forks: `## Gaps - none`.
 Offer it, declinable, after `/f10:plan` saves the file (list open gaps by title), before `/f10:ship` implements (*fill now, or proceed on the defaults?*, naming the defaults), and whenever the user asks.
 **Driven** runs never offer it: each gap stays on its default, listed in the report (`modes/driven.md`).
 
-On answers: mark each **Resolved**, fold it into the stages and Consequences, and re-save the plan file.
+On answers: mark each **Resolved**, fold it into the stages (and Consequences where it changes a cost), and re-save the plan file.
 If an answer differs from a default the code already built on, say so: that is a redesign pass, not a silent edit.
 Keep resolved gaps in the file.
