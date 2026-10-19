@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -114,65 +112,41 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	}
 }
 
-// The runs the state script leaves at each point a task's own agent can be
+// The runs the state writer leaves at each point a task's own agent can be
 // read from, classified against the task: a ship seeded from a reference,
 // the same once fetch opens the plan phase, the --local pipeline word
 // before the id, and a capture, which is about another task.
-func TestTaskRunsFromTheScript(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("bash script")
+func TestTaskRunsFromTheWriter(t *testing.T) {
+	seed := func(skill, args string) func(r *state.Run) {
+		return func(r *state.Run) { r.Seed(skill, args, "/work/acme") }
 	}
-
-	_, file, _, _ := runtime.Caller(0)
-	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
-	dir := t.TempDir()
-
-	run := func(session string, args ...string) {
-		t.Helper()
-
-		cmd := exec.Command(script, args...)
-		cmd.Env = append(os.Environ(), "F10_STATE_DIR="+dir, "F10_SESSION_ID="+session)
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("%v: %v\n%s", args, err, out)
-		}
-	}
-
-	load := func(session string) *state.Run {
-		t.Helper()
-
-		r, err := state.Load(state.Path(dir, session))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return r
+	set := func(phase, status string) func(r *state.Run) {
+		return func(r *state.Run) { _ = r.Set(phase, status, "") }
 	}
 
 	for _, tc := range []struct {
 		name  string
-		steps [][]string
+		steps []func(r *state.Run)
 		own   bool
 	}{
-		{"ship seeded", [][]string{{"seed", "ship", "", "GH-1", dir}}, true},
-		{"ship in fetch", [][]string{{"seed", "ship", "", "GH-1", dir}, {"set", "plan", "running"}}, true},
-		{"ship local", [][]string{{"seed", "ship", "", "local: GH-1", dir}}, true},
-		{"plan then ship local", [][]string{
-			{"seed", "plan", "", "GH-1", dir},
-			{"task", "GH-1"},
-			{"set", "plan", "done"},
-			{"seed", "ship", "", "local: GH-1", dir},
+		{"ship seeded", []func(*state.Run){seed("ship", "GH-1")}, true},
+		{"ship in fetch", []func(*state.Run){seed("ship", "GH-1"), set("plan", "running")}, true},
+		{"ship local", []func(*state.Run){seed("ship", "local: GH-1")}, true},
+		{"plan then ship local", []func(*state.Run){
+			seed("plan", "GH-1"),
+			func(r *state.Run) { _ = r.SetTask("GH-1", "") },
+			set("plan", "done"),
+			seed("ship", "local: GH-1"),
 		}, true},
-		{"capture", [][]string{{"seed", "capture", "", "add a retry to the client", dir}}, false},
-		{"ship a description", [][]string{{"seed", "ship", "", "add a retry to the client", dir}}, false},
+		{"capture", []func(*state.Run){seed("capture", "add a retry to the client")}, false},
+		{"ship a description", []func(*state.Run){seed("ship", "add a retry to the client")}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			session := strings.ReplaceAll(tc.name, " ", "-")
-			for _, args := range tc.steps {
-				run(session, args...)
+			r := state.Fresh("s")
+			for _, step := range tc.steps {
+				step(r)
 			}
 
-			r := load(session)
 			own, _ := taskRuns([]*state.Run{r}, "GH-1")
 
 			if got := len(own) == 1; got != tc.own {

@@ -27,7 +27,7 @@ const (
 // herdrScope is every command that runs inside a Herdr session.
 var herdrScope = []string{"start", "forward", "drive", "finish"}
 
-// stateScript is the plugin script every hook and the status line run.
+// stateScript is the plugin script the status line runs and steps call; finding it on PATH finds the plugin.
 const stateScript = "f10-state.sh"
 
 // shimName is the plugin's bin/f10, which resolves and runs the binary.
@@ -314,7 +314,7 @@ func lastStart(env *Env) (time.Time, string, bool) {
 	return time.Time{}, "", false
 }
 
-// sessionID and stateDir mirror f10-state.sh's find_sid and state_dir.
+// sessionID and stateDir mirror internal/state's Session and Dir over env, so a test can fake them.
 func sessionID(env *Env) string {
 	sid := env.Getenv("F10_SESSION_ID")
 	if sid == "" {

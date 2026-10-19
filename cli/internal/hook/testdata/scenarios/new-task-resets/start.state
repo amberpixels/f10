@@ -1,0 +1,13 @@
+v 1
+task FT-9
+url https://github.com/acme/app/issues/12
+root /work/acme
+capture prior
+plan done
+ship blocked
+leaf judge
+final pr
+note stop: no
+next do the thing
+ask 1. keep? [no | yes]
+updated 1

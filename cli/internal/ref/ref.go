@@ -1,7 +1,7 @@
 // Package ref looks up which task a lookaround command is about. Every noun
 // takes the same optional reference and falls back the same way, so the
 // cascade lives here once: an explicit id, then the id in the current branch
-// name, then the task this session's f10-state file records.
+// name, then the task this session's run state records.
 //
 // The prefix that makes a branch searchable comes from facts - the task id
 // format a project declares, or the one its name derives. Without a prefix
@@ -14,14 +14,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // Where a looked-up reference came from. Reported so an error, or a caller
@@ -205,55 +204,17 @@ func Match(prefix, text string) string {
 	return ""
 }
 
-// sessionTask reads the task id f10-state.sh recorded for this session.
-// The state file is flat `key value` lines by design - it is read on every
-// status-line tick - so it is parsed here rather than shelled out to.
+// sessionTask reads the task id the run state records for this session.
 func sessionTask() string {
-	sid := cmp.Or(os.Getenv("F10_SESSION_ID"), os.Getenv("CLAUDE_CODE_SESSION_ID"))
+	sid := state.Session()
 	if sid == "" {
 		return ""
 	}
 
-	// the same sanitising the script does: the id names a file
-	sid = regexp.MustCompile(`[^A-Za-z0-9._-]`).ReplaceAllString(sid, "_")
-
-	dir := os.Getenv("F10_STATE_DIR")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-
-		dir = filepath.Join(home, ".claude", "f10", "state")
-	}
-
-	// through a root rather than a joined path: the session id arrives from
-	// the environment, and Root.Open refuses to leave the state directory
-	// however it was spelled
-	root, err := os.OpenRoot(dir)
+	r, err := state.Load(state.Path(state.Dir(), sid))
 	if err != nil {
 		return ""
 	}
 
-	defer root.Close()
-
-	f, err := root.Open(sid + ".state")
-	if err != nil {
-		return ""
-	}
-
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return ""
-	}
-
-	for line := range strings.SplitSeq(string(data), "\n") {
-		if v, ok := strings.CutPrefix(line, "task "); ok {
-			return strings.TrimSpace(v)
-		}
-	}
-
-	return ""
+	return r.Task
 }

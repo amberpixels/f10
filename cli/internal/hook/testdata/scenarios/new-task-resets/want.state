@@ -1,0 +1,13 @@
+v 1
+task 
+url 
+root /work/acme
+capture pending
+plan pending
+ship pending
+leaf 
+final 
+note 
+next 
+ask 
+updated *
