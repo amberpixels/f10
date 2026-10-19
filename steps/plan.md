@@ -10,6 +10,9 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    First line: **Roles**, the roles it was written under, for `/f10:ship` to inherit.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
    Then ordered **stages**, the critical files each touches, data/migration work, tests to add or adjust, key tradeoffs and alternatives.
+   Then a **`## Consequences` section**, a few lines of prose, in the ADR sense: what the chosen design makes easier, what it makes harder, the constraint it now depends on, and what to revisit under which condition.
+   No trade-off worth naming: `## Consequences - none`.
+   Stage tradeoffs weigh the alternatives; Consequences records what the chosen one costs, Gaps what is still undecided, and rollout or monitoring stays out (below).
    Last, a **`## Gaps` section** (`conventions/gaps.md`), or `## Gaps - none`.
 
    **Altitude: a senior engineer who knows this codebase, not a code generator.**

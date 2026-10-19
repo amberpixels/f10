@@ -16,6 +16,8 @@ Name a bug only where it changes the verdict.
    A PR number, url, or the current branch: diff and description via the host CLI (`gh pr diff` / `gh pr view --comments`, `glab mr diff` / `glab mr view`), or `git diff <base>...HEAD` without a PR, plus the task and plan the branch name points to.
    A sha, a range, or "last N commits": `git show <sha>` / `git diff <range>`, plus the task and plan the messages or branch point to; count commits with `git log --oneline` (`HEAD~N` skips merged branches).
    No argument: what this conversation is about; say in one line which subject you took before judging it.
+   Whatever the subject, a plan's `## Consequences` are costs it already accepts: weigh them in point 5; a cost it leaves out, or `- none` on a design with an evident one, is a defect where it changes the verdict.
+   A plan saved before the section existed has none: read its costs from the stages, never count the absence against it.
 2. **Restate the problem, then find it in the code** with a few targeted `Read`/`Grep` calls in one message.
    Where the stated problem and the real one differ, build the judgment on that.
 3. **Symptom or cause.**
@@ -99,7 +101,7 @@ The route depends on whether a `pr` entry ran earlier in the same pipeline run, 
 - **stop** - end **blocked** (`decision: block`): `f10-state.sh set ship blocked judge` and, in the same call, `f10-state.sh note "stop: <the reason, one line>" "<the smallest thing that would change the verdict>"`; then the verdict as the report, naming any durable work (commits, an open PR).
 - **rethink** / **proceed with changes** - discuss as brainstorm does (`steps/brainstorm.md` points 3 to 6).
   Each change or objection becomes a gap in one `AskUserQuestion` (`conventions/gaps.md`), the judge's answer first, **block the run** a real option.
-  On **continue**, the ship skill folds the answers into the plan file (stages and Gaps) and runs the next step; on **block**, end as stop, with this verdict in the note.
+  On **continue**, the ship skill folds the answers into the plan file (stages, Consequences and Gaps) and runs the next step; on **block**, end as stop, with this verdict in the note.
   `decision:` records the answer, `continue` or `block`.
 
 **Driven** (`modes/driven.md`): proceed and proceed with changes continue, the ship skill folding the changes in without asking; the verdict and the changes are one line each in the report.
