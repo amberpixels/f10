@@ -32,26 +32,31 @@ Name a bug only where it changes the verdict.
    - **stop** (red) - do not build it: not real, already solved, or not worth the cost.
 
    Open the reply with its **banner**, a `diff`-tagged block; line two is the reason, under 80 characters.
-   The circle names the verdict; the terminal colors `+` green and `-` red, which shows only go or no-go, so a terminal without highlighting still shows all four:
+   No emoji: the bar from line two opens line one too, and the word names the verdict; the terminal colors `+` green and `-` red, which shows only go or no-go, so `(!)` marks yellow and `(?)` marks orange:
 
    ```diff
-   + 🟢 PROCEED
+   + ▌ PROCEED
    + ▌ <the reason, one line>
    ```
    ```diff
-   + 🟡 PROCEED WITH CHANGES
+   + ▌ PROCEED WITH CHANGES (!)
    + ▌ <the reason, one line - what folds in>
    ```
    ```diff
-   - 🟠 RETHINK
+   - ▌ RETHINK (?)
    - ▌ <the reason, one line - where the real problem lives>
    ```
    ```diff
-   - 🔴 STOP
+   - ▌ STOP
    - ▌ <the reason, one line - what already solves it, or what it costs>
    ```
 
-   Under it, points 2 to 6 in a few short paragraphs grounded in what you read, then the smallest thing that would change the verdict.
+   Under it, only what is wrong.
+   Points 2 to 6 are the investigation, not the reply: what holds gets one sentence at most, never a recap of the problem, a list of what to keep, or the evidence that it checks out.
+   - **Green**: one or two sentences on why it holds.
+   - **Yellow**: one sentence on what holds, then a numbered list, one item per change: the defect in bold (what is wrong and where, `file:line` when there is one), then the fix in one or two lines.   - **Orange** and **red**: what is wrong with the shape, or why not to build it, in a short paragraph or two, and where the real problem lives.
+
+   Close with the smallest thing that would change the verdict, in one line.
    In later replies, the banner returns only when the verdict changes.
 
 **Blind** (`--blind`): for work this session produced.
