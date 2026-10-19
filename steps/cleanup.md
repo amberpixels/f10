@@ -76,8 +76,10 @@ If the repo has an earlier comment cleanup (`git log -i --grep=comment`), read o
 - A trailing comment may be reworded; the code before it stays byte-identical.
 
 **Check:** `f10-cleanup-check.sh comments "$SNAP" <changed files>`.
-It prints `CODE CHANGED: <file>` where a non-comment line differs after stripping trailing comments and mapping dashes to a hyphen, and `UNCHECKED: <file>` for a syntax it does not know.
-Read a flagged or unchecked file's diff by eye: a dash swap in a string is allowed when no test matches the text; anything else is reverted.
+It lexes strings and block comments, so a marker inside a string stays code.
+It prints `CODE CHANGED: <file>` where code differs (a dash and a hyphen count as equal), `DASH IN CODE: <file>:<line>` for each dash swapped outside a comment, and `UNCHECKED: <file>` for a syntax it does not know.
+Read a flagged or unchecked file's diff by eye and revert the change.
+Keep a `DASH IN CODE` line only where nothing matches the old text (a test, a parser, a separator) and name it in the report; otherwise revert it.
 
 ## prose
 

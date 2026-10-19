@@ -5,9 +5,10 @@
 # ship pipeline the tree already holds implement's uncommitted work. Paths are looked up as
 # <snapshot-dir>/<file>, so run from the directory the snapshot was taken in, with the same spelling.
 #
-# comments  Every non-comment line is unchanged, after dropping full-line comments and blank lines,
-#           stripping trailing comments, and mapping em and en dashes to a hyphen. Prints
-#           `CODE CHANGED: <file>`, or `UNCHECKED: <file>` for a comment syntax it does not know.
+# comments  Every line's code is unchanged once comments and blank lines go, em and en dashes
+#           counting as a hyphen. Prints `CODE CHANGED: <file>`, `DASH IN CODE: <file>:<line>` for
+#           each dash swapped outside a comment (allowed, but reported), or `UNCHECKED: <file>` for
+#           a comment syntax it does not know.
 # literals  Every literal in the snapshot (backtick span, fenced code line, path, --flag, number)
 #           appears somewhere in the current files. The union is searched, not the matching file,
 #           since a rule may have moved to its canonical home. Tokens listed in
@@ -38,19 +39,46 @@ style_of() { # the comment syntax of a file, by name
   esac
 }
 
-code_lines() { # code_lines <style> <file>: the lines a comment-only pass must leave alone
-  local full trail em=$'\xe2\x80\x94' en=$'\xe2\x80\x93'
+code_lines() { # code_lines <style> <file>: `<line>\t<code>` for every line with code left once comments go
+  local lc="" bopen="" bclose="" quotes=""
   case "$1" in
-    hash) full='^[[:space:]]*#' trail='[[:space:]]+#.*$' ;;
-    slash) full='^[[:space:]]*(//|/\*|\*)' trail='[[:space:]]+(//|/\*).*$' ;;
-    erb) full='^[[:space:]]*<%#' trail='[[:space:]]+#.*$' ;;
-    dash) full='^[[:space:]]*--' trail='[[:space:]]+--.*$' ;;
+    hash) lc='#' quotes="\"'\`" ;;
+    slash) lc='//' bopen='/*' bclose='*/' quotes="\"'\`" ;;
+    dash) lc='--' bopen='/*' bclose='*/' quotes="\"'" ;;
+    erb) bopen='<%#' bclose='%>' ;;
   esac
-  grep -vE "$full" "$2" | sed -E "s@$trail@@; s/$em/-/g; s/$en/-/g; s/[[:space:]]+$//" | grep -v '^$'
+  # A lexer, not a regex: a comment marker inside a string is code, and a block comment's state
+  # carries across lines. An unclosed quote keeps the rest as code, so a mis-lex flags, never hides.
+  awk -v lc="$lc" -v bopen="$bopen" -v bclose="$bclose" -v quotes="$quotes" -v hash="$([ "$1" = hash ] && echo 1)" '
+    {
+      line = $0; n = length(line); out = ""; i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (state == "block") {
+          if (substr(line, i, length(bclose)) == bclose) { state = ""; i += length(bclose) } else i++
+          continue
+        }
+        if (state == "str") {
+          out = out c
+          if (c == "\\" && q != "`" && i < n) { out = out substr(line, i + 1, 1); i += 2; continue }
+          if (c == q) state = ""
+          i++
+          continue
+        }
+        # A shell # opens a comment only at the start of a word ($#, ${#a} are code).
+        if (lc != "" && substr(line, i, length(lc)) == lc && (!hash || i == 1 || substr(line, i - 1, 1) ~ /[ \t]/)) break
+        if (bopen != "" && substr(line, i, length(bopen)) == bopen) { state = "block"; i += length(bopen); continue }
+        if (quotes != "" && index(quotes, c)) { state = "str"; q = c }
+        out = out c
+        i++
+      }
+      sub(/[ \t]+$/, "", out)
+      if (out != "") print NR "\t" out
+    }' "$2"
 }
 
 check_comments() {
-  local flagged=0 f style
+  local flagged=0 f style before after em=$'\xe2\x80\x94' en=$'\xe2\x80\x93'
   for f in "$@"; do
     [ -f "$snap/$f" ] || continue
     style=$(style_of "$f")
@@ -59,9 +87,20 @@ check_comments() {
       flagged=1
       continue
     fi
-    if [ ! -f "$f" ] || ! diff <(code_lines "$style" "$snap/$f") <(code_lines "$style" "$f") >/dev/null; then
+    if [ ! -f "$f" ]; then
       echo "CODE CHANGED: $f"
       flagged=1
+      continue
+    fi
+    before=$(code_lines "$style" "$snap/$f")
+    after=$(code_lines "$style" "$f")
+    if [ "$(cut -f2- <<<"$before" | sed "s/$em/-/g; s/$en/-/g")" != "$(cut -f2- <<<"$after" | sed "s/$em/-/g; s/$en/-/g")" ]; then
+      echo "CODE CHANGED: $f"
+      flagged=1
+    elif [ "$(cut -f2- <<<"$before")" != "$(cut -f2- <<<"$after")" ]; then
+      # Only dashes differ, so the code lines pair up one to one: name each, the agent checks it.
+      awk -F'\t' -v f="$f" 'NR == FNR { old[FNR] = $0; next } { line = $1; sub(/^[0-9]+\t/, ""); o = old[FNR]; sub(/^[0-9]+\t/, "", o); if ($0 != o) print "DASH IN CODE: " f ":" line }' \
+        <(printf '%s\n' "$before") <(printf '%s\n' "$after")
     fi
   done
   [ "$flagged" -eq 0 ] && echo "comments: code unchanged"

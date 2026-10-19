@@ -73,6 +73,30 @@ func TestCleanupCheckComments(t *testing.T) {
 		{
 			"dash swap in a string", "a.go", goBefore,
 			"package x\n\nfunc Foo() int { return 1 }\n\nvar s = \"a - b\"\n",
+			"DASH IN CODE: a.go:5\ncomments: code unchanged", 0,
+		},
+		{
+			"pointer line edit", "a.go", "package x\n\nfunc f(p *int) {\n\t*p = 1\n}\n",
+			"package x\n\nfunc f(p *int) {\n\t*p = 2\n}\n",
+			"CODE CHANGED: a.go", 1,
+		},
+		{
+			"block comment rewrite", "a.go",
+			"package x\n\n/*\n * Long story,\n * previously two.\n */\nvar n = 1 /* one */ + 1\n",
+			"package x\n\n/*\n * Why: one.\n */\nvar n = 1 /* a one */ + 1\n",
+			"code unchanged", 0,
+		},
+		{
+			"comment marker in a string", "a.go", "package x\n\nvar u = \"http://a\" // site\n",
+			"package x\n\nvar u = \"http://b\" // site\n",
+			"CODE CHANGED: a.go", 1,
+		},
+		{
+			"hash in a shell string", "b.sh", "echo \"a #b\" # note\n", "echo \"a #c\" # note\n",
+			"CODE CHANGED: b.sh", 1,
+		},
+		{
+			"shell parameter hash", "b.sh", "n=${#a} # count\n", "n=${#a} # length\n",
 			"code unchanged", 0,
 		},
 		{
