@@ -1596,8 +1596,8 @@ func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 	}
 }
 
-// A parent with unfinished subtasks is refused with exitParent before any
-// branch, worktree or workspace exists; a started task, one whose subtasks
+// A parent with unfinished subtasks is refused with exitParent, reading no
+// more than whether the task has a branch; a started task, one whose subtasks
 // are all finished and one with none start as before.
 func TestStartRefusesAParent(t *testing.T) {
 	kidsOf := func(rows []childRow, err error, asked *bool) func(context.Context, ref.Ref) ([]childRow, error) {
@@ -1616,7 +1616,7 @@ func TestStartRefusesAParent(t *testing.T) {
 
 		rows := []childRow{{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}
 		in := startInput{main: "/code/repo", task: gh1, children: kidsOf(rows, nil, &asked)}
-		err := start(t.Context(), io.Discard, in)
+		err := refuseStartParent(t.Context(), in)
 
 		var coder cli.ExitCoder
 		if !errors.As(err, &coder) || coder.ExitCode() != exitParent {
@@ -1629,8 +1629,14 @@ func TestStartRefusesAParent(t *testing.T) {
 			}
 		}
 
-		if f.called("wt ") || f.called("git worktree add") || f.called("herdr worktree") || f.called("herdr agent") {
-			t.Errorf("something was created before the refusal: %v", f.calls)
+		if !asked {
+			t.Error("the refusal did not come from the subtask lookup")
+		}
+
+		for _, c := range f.calls {
+			if !strings.HasPrefix(c, "git for-each-ref") && !strings.HasPrefix(c, linkedKeys) {
+				t.Errorf("%q ran for the check, which only looks for the task's branch", c)
+			}
 		}
 	})
 
@@ -1674,4 +1680,21 @@ func TestStartRefusesAParent(t *testing.T) {
 			t.Errorf("err = %v with no children lookup", err)
 		}
 	})
+}
+
+// Every mode but --discuss refuses a parent; a PR pickup never does.
+func TestChecksParent(t *testing.T) {
+	for _, mode := range []string{modeDefault, modePlan, modeLocal} {
+		if !checksParent(mode, nil) {
+			t.Errorf("mode %q skips the parent check", mode)
+		}
+	}
+
+	if checksParent(modeDiscuss, nil) {
+		t.Error("--discuss refuses a parent")
+	}
+
+	if checksParent(modeDefault, pickGH) || checksParent(modePlan, pickGH) {
+		t.Error("a PR pickup refuses a parent")
+	}
 }

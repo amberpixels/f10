@@ -167,6 +167,15 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		pick:     pick,
 	}
 
+	if checksParent(mode, pick) {
+		in.children = t.tracker().children
+	}
+
+	// before the body's After: line, whose own refusal would hide this one
+	if err := refuseStartParent(ctx, in); err != nil {
+		return err
+	}
+
 	switch {
 	case pick != nil:
 		// the branch and its base are the PR's
@@ -193,11 +202,6 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in.progress = cmd.ErrWriter
-
-	// talking an umbrella task through before splitting it is fine
-	if pick == nil && mode != modeDiscuss {
-		in.children = t.tracker().children
-	}
 
 	return start(ctx, cmd.Writer, in)
 }
@@ -333,7 +337,7 @@ type startInput struct {
 	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
 	pick     *pickup                               // the PR picked up, or nil for a task started by its id
 	// children is the task's subtasks, read to refuse a parent; nil skips the
-	// check (a PR pickup, --discuss)
+	// check (see checksParent)
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
 }
 
@@ -373,10 +377,6 @@ type dependency struct {
 // A workspace Herdr already showed keeps its agent, and nothing is
 // prompted twice; one left with no agent gets its agent and its prompt.
 func start(ctx context.Context, w io.Writer, in startInput) error {
-	if err := refuseStartParent(ctx, in); err != nil {
-		return err
-	}
-
 	o, err := openTask(ctx, in)
 	if err != nil {
 		return err
@@ -412,6 +412,13 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
 		o.notes,
 	)
+}
+
+// checksParent reports whether start refuses a parent: a PR pickup is
+// someone else's branch, and talking an umbrella task through before
+// splitting it is what --discuss is for.
+func checksParent(mode string, pick *pickup) bool {
+	return pick == nil && mode != modeDiscuss
 }
 
 // refuseStartParent stops a parent with unfinished subtasks before anything
