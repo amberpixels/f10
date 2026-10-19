@@ -67,9 +67,9 @@ Each skill is an **entry point** into the chain:
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task, printed, and drafted where your settings or the project's overlay name a delivery adapter; the next one starts where it ended |
 | `/f10:status [id]` | nothing: a hook answers it; with an id, `f10 status <id>` | the run's status in words; with an id, another worktree's run and its agent's question, relayed and answered |
-| `/f10:start <id> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent |
+| `/f10:start <id \| PR url \| #n> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--task <id>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent; a PR's branch picked up |
 | `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; a parent id expands into the subtasks you pick; agents' questions relayed |
-| `/f10:finish <id> [--yes]` | nothing: it runs `f10 finish` | PR merged, plan archived, workspace closed, worktree and branch gone, main pulled |
+| `/f10:finish <id> [--yes] [--merge \| --local]` | nothing: it runs `f10 finish` | PR merged (someone else's only when you say so), plan archived, workspace closed, worktree and branch gone, main pulled |
 
 ## Install
 
@@ -387,6 +387,7 @@ f10 start 1042 --after 1040   # base the branch on that task's branch, record th
                               # (no flag: the task body's `After:` line, when it has one)
 f10 start 1042 --base rel/2   # base the branch on a git ref: the local branch, else origin's
 f10 start 1042-attempt2       # a second worktree for the same task, beside the first
+f10 start https://github.com/o/r/pull/77   # pick up someone's PR: its branch, linked to its task; summarise and wait
 ```
 
 The branch is the driver's `branch` verb, else `<ID>/<slug>` from the task's title.

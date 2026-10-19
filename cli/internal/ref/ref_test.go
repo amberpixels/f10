@@ -5,7 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 func TestParse(t *testing.T) {
@@ -186,5 +189,37 @@ func TestLookupExhausted(t *testing.T) {
 	_, err := Lookup{Prefix: "GH", Dir: t.TempDir()}.Find(context.Background(), "")
 	if !errors.Is(err, ErrNoReference) {
 		t.Fatalf("Find with every tier empty = %v, want ErrNoReference", err)
+	}
+}
+
+// A branch picked up from a PR carries no id: the f10-task link its local
+// config holds names the task, ahead of the branch name.
+func TestFromBranchReadsTheLink(t *testing.T) {
+	answers := map[string]string{
+		"rev-parse --abbrev-ref HEAD":                    "alice/fix-login",
+		"config --get branch.alice/fix-login." + TaskKey: "GH-9",
+	}
+
+	prev := gitx.Exec
+	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+		if out, ok := answers[strings.Join(args, " ")]; ok {
+			return out, nil
+		}
+
+		return "", errors.New("exit 1")
+	}
+
+	t.Cleanup(func() { gitx.Exec = prev })
+
+	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
+	if got := r.fromBranch(t.Context()); got != "GH-9" {
+		t.Errorf("fromBranch with a link = %q, want GH-9", got)
+	}
+
+	delete(answers, "config --get branch.alice/fix-login."+TaskKey)
+	answers["rev-parse --abbrev-ref HEAD"] = "GH-3/slug"
+
+	if got := r.fromBranch(t.Context()); got != "GH-3" {
+		t.Errorf("fromBranch without a link = %q, want GH-3", got)
 	}
 }

@@ -32,6 +32,11 @@ const (
 	OriginSession  = "session"
 )
 
+// TaskKey is the local config key, under `branch.<name>.`, that links a
+// branch to its task: start writes it on a branch picked up from a PR,
+// whose name need not carry the id.
+const TaskKey = "f10-task"
+
 // ErrNoReference means the cascade ran out. It is wrapped with what each
 // tier actually had to offer, because "none found" alone sends a reader
 // looking in the wrong place - most often at a session tier that was never
@@ -164,12 +169,23 @@ func (r Lookup) parse(token, origin string) (Ref, error) {
 // names carry it in any position and any case - `ABC-2049/dark-mode`,
 // `feature/abc-123-fix-bug` - so the prefix is anchored on a non-word
 // boundary rather than on the start of the string.
+// A branch picked up from a PR may carry no id at all, so the task its
+// local config links it to (`branch.<name>.f10-task`) is read first.
 func (r Lookup) fromBranch(ctx context.Context) string {
+	branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch == "" {
+		return ""
+	}
+
+	if id := gitx.Out(ctx, r.Dir, "config", "--get", "branch."+branch+"."+TaskKey); id != "" {
+		return id
+	}
+
 	if r.Prefix == "" {
 		return ""
 	}
 
-	return Match(r.Prefix, gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	return Match(r.Prefix, branch)
 }
 
 // Match is the task id in text: a branch name, a PR title, a commit

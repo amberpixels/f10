@@ -34,7 +34,7 @@ func startCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "start",
 		Usage:     "start a task: a worktree, a Herdr workspace and a prompted agent",
-		ArgsUsage: "<task-id>[-suffix]",
+		ArgsUsage: "<task-id>[-suffix] | <PR url | #n>",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "plan", Usage: "prompt only the plan"},
 			&cli.BoolFlag{
@@ -49,6 +49,10 @@ func startCommand() *cli.Command {
 			&cli.StringFlag{
 				Name:  "base",
 				Usage: "base the branch on `BRANCH`, local or on origin, instead of the default branch",
+			},
+			&cli.StringFlag{
+				Name:  "task",
+				Usage: "with a PR, the `TASK-ID` it belongs to, when its body, title and branch name none",
 			},
 			&cli.StringFlag{
 				Name: "model",
@@ -82,6 +86,8 @@ const (
 	cfgAfter       = "f10-after"
 	cfgAfterBranch = "f10-after-branch"
 	cfgLanded      = "f10-landed"
+	// cfgTaskID links a branch whose name need not carry the id to its task
+	cfgTaskID = ref.TaskKey
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
@@ -114,11 +120,39 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 			"add `local: implement -> commit` under Ship pipeline(s), since ship never picks one unasked")
 	}
 
-	id, suffix := ref.SplitSuffix(token)
-
-	r, err := t.reference(ctx, id)
+	pick, pr, err := pickupFor(ctx, t, token)
 	if err != nil {
 		return err
+	}
+
+	task := strings.TrimSpace(cmd.String("task"))
+
+	var (
+		r      ref.Ref
+		suffix string
+	)
+
+	if task, err = pickedTask(t.eff.IDPrefix, t.hostIssues(), pick, pr, task); err != nil {
+		return err
+	}
+
+	switch {
+	case pick != nil:
+		if err := refusePickupFlags(mode, after, base); err != nil {
+			return err
+		}
+
+		if r, err = t.reference(ctx, task); err != nil {
+			return fmt.Errorf("%s: %w", pick.url, err)
+		}
+	default:
+		var id string
+
+		id, suffix = ref.SplitSuffix(token)
+
+		if r, err = t.reference(ctx, id); err != nil {
+			return err
+		}
 	}
 
 	in := startInput{
@@ -130,9 +164,15 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		base:     base,
 		plansDir: t.sharedPlansDir(),
 		title:    titleLookup(t, r.Number),
+		pick:     pick,
 	}
 
 	switch {
+	case pick != nil:
+		// the branch and its base are the PR's
+		if err := fetchPickup(ctx, in.main, pick); err != nil {
+			return err
+		}
 	case after != "":
 		afterRef, err := t.reference(ctx, after)
 		if err != nil {
@@ -155,6 +195,74 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	in.progress = cmd.ErrWriter
 
 	return start(ctx, cmd.Writer, in)
+}
+
+// pickupFor is the PR the start argument names, or nil when it names a
+// task. A bare #n that the host knows as no PR is a task id, as before.
+func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, error) {
+	number, probe := pullToken(token)
+	if number == "" {
+		return nil, pull{}, nil
+	}
+
+	h, err := t.host()
+
+	switch {
+	case err != nil && probe:
+		return nil, pull{}, nil
+	case err != nil:
+		return nil, pull{}, err
+	case probe && h.glab():
+		// GitLab numbers issues and MRs apart: #n is an issue there, !n an MR
+		return nil, pull{}, nil
+	}
+
+	p, err := h.pullNumber(ctx, number)
+
+	switch {
+	case err != nil && probe && noSuchPull(err):
+		return nil, pull{}, nil
+	case err != nil:
+		return nil, pull{}, err
+	}
+
+	if err := refusePull(p); err != nil {
+		return nil, pull{}, err
+	}
+
+	return h.pickupOf(number, p), p, nil
+}
+
+// pickedTask is the task id for a picked-up PR: --task, else the one the
+// PR names. A PR naming none exits with exitNoTask, which the start skill
+// turns into a question; --task with no PR is a refusal.
+func pickedTask(prefix string, hostIssues bool, pick *pickup, pr pull, task string) (string, error) {
+	switch {
+	case pick == nil && task != "":
+		return "", errors.New("--task names the task of a PR: pass the PR's link or #n")
+	case pick == nil || task != "":
+		return task, nil
+	}
+
+	if task = pickupTask(prefix, hostIssues, pr); task == "" {
+		return "", cli.Exit(fmt.Sprintf("f10: %s names no task in its body, title or branch %s: "+
+			"rerun with --task <ID>", pick.url, pick.branch), exitNoTask)
+	}
+
+	return task, nil
+}
+
+// refusePickupFlags stops the flags a picked-up PR has no use for: its
+// branch and base are the PR's, and nobody ships someone else's PR unread.
+func refusePickupFlags(mode, after, base string) error {
+	switch {
+	case after != "" || base != "":
+		return errors.New("--after and --base do not apply to a PR: its branch and its base are the PR's")
+	case mode == modeLocal:
+		return errors.New("--local does not apply to a PR: the agent summarises it and waits, or plans with --plan")
+	}
+
+	return nil
 }
 
 func startMode(cmd *cli.Command) (string, error) {
@@ -218,6 +326,7 @@ type startInput struct {
 	notes    []string                              // notes settled before the flow, printed beneath the report
 	model    string                                // the agent's --model, resolved, or "" for claude's default
 	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
+	pick     *pickup                               // the PR picked up, or nil for a task started by its id
 }
 
 // titleLookup asks the host for the task's title. A checkout with no host
@@ -266,13 +375,18 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 			ctx,
 			o.path,
 			agentName(in.task.ID, in.suffix, o.path),
-			prompt(in.mode, in.task.ID, o.dep, o.plan),
+			prompt(in.mode, in.task.ID, o.dep, o.plan, in.pick),
 		); err != nil {
 			return err
 		}
 	}
 
-	rows := []fact{{label: "task", value: in.task.ID}, {label: "branch", value: o.branch}}
+	rows := []fact{{label: "task", value: in.task.ID}}
+	if in.pick != nil {
+		rows = append(rows, fact{label: "pr", value: in.pick.url, url: true})
+	}
+
+	rows = append(rows, fact{label: "branch", value: o.branch})
 	if o.dep != nil {
 		rows = append(rows, fact{label: "after", value: o.dep.task})
 	}
@@ -308,35 +422,27 @@ type openedTask struct {
 // first thing created is the worktree. Both start and drive adopt main's
 // plan; drive prompts the agent itself, one skill at a time.
 func openTask(ctx context.Context, in startInput) (openedTask, error) {
-	name, slugNote, err := branchName(ctx, in.driver, in.task, in.suffix, in.title)
+	settled, err := branchFor(ctx, in)
 	if err != nil {
 		return openedTask{}, err
 	}
 
-	base, dep, err := baseFor(ctx, in)
-	if err != nil {
-		return openedTask{}, err
-	}
-
-	existing, err := existingBranch(ctx, in.main, name, in.task.ID, in.suffix)
-	if err != nil {
-		return openedTask{}, err
-	}
+	name, base, dep, existing := settled.name, settled.base, settled.dep, settled.existing
 
 	notes := slices.Clone(in.notes)
 
 	// the bare-id note explains a name this run gives; a branch that exists
 	// keeps the name it has, whatever the title would have said
 	switch {
-	case existing != "":
-		name = existing
+	case existing.name != "":
+		name = existing.name
 
 		if base.ref != "" {
 			notes = append(notes, ignoredBaseNote(base, dep, name))
 			base = baseRef{}
 		}
-	case slugNote != "":
-		notes = append(notes, slugNote)
+	case settled.slugNote != "":
+		notes = append(notes, settled.slugNote)
 	}
 
 	wts, err := gitx.Worktrees(ctx, in.main)
@@ -350,10 +456,27 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	path := worktreeOf(wts, name)
 
+	if in.pick != nil && !existing.remote {
+		note, err := syncPickup(ctx, in.main, name, path != "")
+		if err != nil {
+			return openedTask{}, err
+		}
+
+		notes = appendNote(notes, note)
+	}
+
 	switch {
 	case path != "":
 		notes = append(notes, "reused the existing worktree")
-	case existing != "":
+	case existing.name != "":
+		if existing.remote {
+			if err := gitx.TrackBranch(ctx, in.main, name, false); err != nil {
+				return openedTask{}, err
+			}
+
+			notes = append(notes, "created "+name+" tracking origin/"+name)
+		}
+
 		if path, err = checkout(ctx, in.main, name, "", false); err != nil {
 			return openedTask{}, err
 		}
@@ -375,6 +498,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	if dep != nil {
 		if err := recordDependency(ctx, in.main, name, dep); err != nil {
 			return openedTask{}, err
+		}
+	}
+
+	if in.pick != nil {
+		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgTaskID, in.task.ID); err != nil {
+			return openedTask{}, fmt.Errorf("linking %s to %s: %w", name, in.task.ID, err)
 		}
 	}
 
@@ -448,6 +577,45 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	o.notes = notes
 
 	return o, nil
+}
+
+// A settledBranch is what start knows before creating anything: the name
+// it would give, why that name is the bare id, the base, the dependency,
+// and the branch the task already has.
+type settledBranch struct {
+	name     string
+	slugNote string
+	base     baseRef
+	dep      *dependency
+	existing foundBranch
+}
+
+// branchFor settles the branch before anything is created. A picked-up
+// PR's branch and base are the PR's, so only whether it is local yet is open.
+func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
+	if in.pick != nil {
+		name := in.pick.branch
+		local := refSHA(ctx, in.main, "refs/heads/"+name) != ""
+
+		return settledBranch{name: name, existing: foundBranch{name: name, remote: !local}}, nil
+	}
+
+	name, slugNote, err := branchName(ctx, in.driver, in.task, in.suffix, in.title)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	base, dep, err := baseFor(ctx, in)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	existing, err := existingBranch(ctx, in.main, name, in.task.ID, in.suffix)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	return settledBranch{name: name, slugNote: slugNote, base: base, dep: dep, existing: existing}, nil
 }
 
 // openWorkspace is the workspace showing the checkout at path. One Herdr
@@ -752,9 +920,16 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 // task has one, and the driven marker. A saved plan turns plan-then-ship
 // into ship alone; --plan still plans, and the plan step archives the saved
 // one. Driven mode takes every gap on its default and the fetch step carries
-// the dependency's contract, so the prompt states neither.
-func prompt(mode, id string, dep *dependency, plan string) string {
-	if mode == modeDiscuss {
+// the dependency's contract, so the prompt states neither. A picked-up PR is
+// summarised and discussed, or planned from its diff with --plan: never
+// shipped unread.
+func prompt(mode, id string, dep *dependency, plan string, pick *pickup) string {
+	switch {
+	case pick != nil && mode == modePlan:
+		return driven(fmt.Sprintf("/f10:plan %s continue PR %s: its diff is the starting point", id, pick.url))
+	case pick != nil:
+		return pickupPrompt(id, plan, pick)
+	case mode == modeDiscuss:
 		return discussPrompt(id, dep, plan)
 	}
 
@@ -796,6 +971,20 @@ func discussPrompt(id string, dep *dependency, plan string) string {
 
 	if dep != nil {
 		p += " For context: " + dependencyClause(id, dep) + "."
+	}
+
+	return p + " Then stop and wait."
+}
+
+// pickupPrompt is discussPrompt for a picked-up PR: the task, the PR's
+// state and its diff summarised, then the agent waits in its own pane.
+func pickupPrompt(id, plan string, pick *pickup) string {
+	p := fmt.Sprintf("Run `f10 task read %s`, `%s` and `%s`, and summarise in a few lines what the task asks, "+
+		"the PR's state (reviews, checks, open threads) and what its diff does, opening any image they link.",
+		id, pick.view, pick.diff)
+
+	if plan != "" {
+		p += " A plan for it is saved at " + plan + "; read it too."
 	}
 
 	return p + " Then stop and wait."

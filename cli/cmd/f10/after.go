@@ -143,8 +143,13 @@ func finishedTask(info taskInfo, archive []string, id string, hasBranch bool) bo
 	return false
 }
 
-// hasTaskBranch reports whether the task has a branch, local or on origin.
+// hasTaskBranch reports whether the task has a branch: linked to it, or
+// named for it locally or on origin.
 func hasTaskBranch(ctx context.Context, dir, id string) (bool, error) {
+	if len(linkedBranches(ctx, dir, id)) > 0 {
+		return true, nil
+	}
+
 	for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
 		refs, err := branchesFor(ctx, dir, root, id, "")
 		if err != nil {
