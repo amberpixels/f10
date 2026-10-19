@@ -81,6 +81,10 @@ func TestFromWrite(t *testing.T) {
 	}{
 		{"in-repo plan", "/w/.f10/plans/FT-1.md", "", &PlanWritten{Path: "/w/.f10/plans/FT-1.md", Task: "FT-1"}},
 		{"in-repo findings", "/w/.f10/reviews/FT-1/2.md", "/w/.f10", &FindingsWritten{Path: "/w/.f10/reviews/FT-1/2.md", Task: "FT-1", Round: "2"}},
+		{"in-repo verdict", "/w/.f10/verdicts/FT-1/1.md", "/w/.f10", &VerdictWritten{Path: "/w/.f10/verdicts/FT-1/1.md", Key: "FT-1", N: "1"}},
+		{"idea verdict, root from the path", "/w/.f10/verdicts/rate-limit/2.md", "", &VerdictWritten{Path: "/w/.f10/verdicts/rate-limit/2.md", Key: "rate-limit", N: "2"}},
+		{"out-of-tree verdict", "/h/.f10/w/verdicts/FT-1/1.md", "/h/.f10/w", &VerdictWritten{Path: "/h/.f10/w/verdicts/FT-1/1.md", Key: "FT-1", N: "1"}},
+		{"verdict too shallow", "/w/.f10/verdicts/FT-1.md", "/w/.f10", nil},
 		{"out-of-tree plan", "/h/.f10/w/plans/FT-1.md", "/h/.f10/w", &PlanWritten{Path: "/h/.f10/w/plans/FT-1.md", Task: "FT-1"}},
 		{"out-of-tree without its root", "/h/.f10/w/plans/FT-1.md", "", nil},
 		{"archive", "/w/.f10/plans/archive/FT-1.1.md", "/w/.f10", nil},
