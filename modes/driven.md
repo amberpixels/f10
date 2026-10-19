@@ -26,7 +26,7 @@ Two questions never become asks: a driven run takes every gap on its default, li
 ## The answer
 
 Answers arrive as your **next prompt**, plain text, numbered as the ask was (sent by `f10 forward <task-id> "<answers>"` or `f10 drive ... --answer`).
-Run `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the answers in as `conventions/gaps.md` does (gaps **Resolved** in the plan file, decisions into the stages); resume from the step that stopped.
+Run `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the answers in as `conventions/gaps.md` does (gaps **Resolved** in the plan file, decisions into the stages and Consequences); resume from the step that stopped.
 An answer with no ask recorded is steering.
 
 A **Claude Code permission dialog** cannot travel this way: the driving session sees an idle agent.
