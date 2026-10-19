@@ -1,0 +1,13 @@
+v 1
+task FT-12
+url https://github.com/acme/app/issues/12
+root /work/acme
+capture prior
+plan done
+ship failed
+leaf pr
+final pr
+note stop: red verify
+next do the thing
+ask 
+updated 1

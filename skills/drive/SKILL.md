@@ -63,4 +63,4 @@ On every exit, a line starting `!!!` goes first, verbatim, above everything else
 - **anything else** - the command refused; its message names the cause.
   Print it verbatim and stop.
 
-If `f10` is not on `PATH`, or `f10 drive` is an unknown command, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
+A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

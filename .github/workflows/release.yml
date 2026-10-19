@@ -1,0 +1,46 @@
+name: Release
+
+# The plugin's bin/f10 shim downloads the binary for its version from the
+# release this workflow makes for the cli/vX.Y.Z tag.
+on:
+  push:
+    tags: ['cli/v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      # Four static binaries cross-compile on one runner; asset names are the
+      # ones the shim asks for: f10_<version>_<os>_<arch>.
+      - name: Build
+        working-directory: cli
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          version="${GITHUB_REF_NAME#cli/v}"
+          mkdir -p ../dist
+          for os in darwin linux; do
+            for arch in amd64 arm64; do
+              GOOS="$os" GOARCH="$arch" go build -trimpath \
+                -ldflags "-s -w -X main.stampedVersion=$version" \
+                -o "../dist/f10_${version}_${os}_${arch}" ./cmd/f10
+            done
+          done
+          cd ../dist && sha256sum f10_* > checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag --title "f10 ${GITHUB_REF_NAME#cli/v}" --notes "f10 binaries for plugin ${GITHUB_REF_NAME#cli/v}"

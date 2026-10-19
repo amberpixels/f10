@@ -27,8 +27,11 @@ const (
 // herdrScope is every command that runs inside a Herdr session.
 var herdrScope = []string{"start", "forward", "drive", "finish"}
 
-// stateScript is the plugin script every hook and the status line run.
+// stateScript is the plugin script the status line runs and steps call; finding it on PATH finds the plugin.
 const stateScript = "f10-state.sh"
+
+// shimName is the plugin's bin/f10, which resolves and runs the binary.
+const shimName = "f10"
 
 // originSession marks a plugin found on the session's PATH: loaded, so enabled.
 const originSession = "this session's PATH"
@@ -108,7 +111,10 @@ func checkVersion(env *Env, p plugin, reason string) Result {
 		return notInstalled(CheckVersion, reason, p)
 	}
 
-	install := "go install github.com/amberpixels/f10/cli/cmd/f10@v" + p.Version
+	// the shim fetches or builds the binary for the plugin's version; a
+	// mismatch means some other f10 ran this
+	install := "run " + filepath.Join(p.Root, "bin", shimName) + ", which fetches or builds " + p.Version +
+		", in place of the f10 earlier on PATH"
 	r := Result{Name: CheckVersion}
 
 	switch {
@@ -219,6 +225,9 @@ func checkScripts(env *Env, p plugin, reason string) Result {
 
 		if r.Status == StatusProblem {
 			r.Remedy = "restart Claude Code: a session puts the plugin's bin/ on PATH when it starts"
+			if name == shimName && err == nil {
+				r.Remedy = "remove " + path + ", or restart Claude Code: the SessionStart hook puts the plugin's bin/ first"
+			}
 
 			return r
 		}
@@ -305,7 +314,7 @@ func lastStart(env *Env) (time.Time, string, bool) {
 	return time.Time{}, "", false
 }
 
-// sessionID and stateDir mirror f10-state.sh's find_sid and state_dir.
+// sessionID and stateDir mirror internal/state's Session and Dir over env, so a test can fake them.
 func sessionID(env *Env) string {
 	sid := env.Getenv("F10_SESSION_ID")
 	if sid == "" {

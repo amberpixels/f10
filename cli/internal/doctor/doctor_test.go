@@ -55,7 +55,7 @@ func newFixture(t *testing.T) *fixture {
 	f.write(filepath.Join(f.root, ".claude-plugin", "plugin.json"), `{"name":"f10","version":"0.34.0"}`)
 	f.write(filepath.Join(f.root, "hooks", "hooks.json"), `{"hooks":{"SessionStart":[]}}`)
 
-	for _, s := range []string{"f10-state.sh", "f10-load-project.sh"} {
+	for _, s := range []string{"f10", "f10-state.sh", "f10-load-project.sh"} {
 		path := filepath.Join(f.root, "bin", s)
 		f.write(path, "#!/bin/sh\n")
 		must(t, os.Chmod(path, 0o755))
@@ -150,7 +150,13 @@ func TestChecks(t *testing.T) {
 		remedy string // a substring of the remedy, for problems
 	}{
 		{CheckVersion, "same release", nil, StatusOK, ""},
-		{CheckVersion, "binary behind", func(f *fixture) { f.e.Version = "0.33.0" }, StatusProblem, "go install"},
+		{
+			CheckVersion,
+			"binary behind",
+			func(f *fixture) { f.e.Version = "0.33.0" },
+			StatusProblem,
+			"fetches or builds",
+		},
 		{
 			CheckVersion,
 			"plugin behind",
@@ -168,6 +174,9 @@ func TestChecks(t *testing.T) {
 		{CheckScripts, "in session, shadowed", func(f *fixture) {
 			f.path["f10-load-project.sh"] = "/elsewhere/f10-load-project.sh"
 		}, StatusProblem, "restart"},
+		{CheckScripts, "in session, the shim shadowed", func(f *fixture) {
+			f.path["f10"] = "/home/me/go/bin/f10"
+		}, StatusProblem, "remove /home/me/go/bin/f10"},
 		{CheckScripts, "outside a session", func(f *fixture) {
 			delete(f.env, "CLAUDECODE")
 			delete(f.path, "f10-load-project.sh")

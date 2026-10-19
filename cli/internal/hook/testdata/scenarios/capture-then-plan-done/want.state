@@ -1,0 +1,13 @@
+v 1
+task FT-12
+url 
+root /work/acme
+capture done
+plan done
+ship pending
+leaf 
+final 
+note 
+next 
+ask 
+updated *

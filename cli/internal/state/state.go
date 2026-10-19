@@ -1,12 +1,12 @@
-// Package state reads the run state bin/f10-state.sh writes: one small
-// `key value` file per session under ~/.claude/f10/state, keyed by session
-// rather than by repo because two sessions over one checkout are two runs.
+// Package state owns the run state: one small `key value` file per session
+// under ~/.claude/f10/state, keyed by session rather than by repo because two
+// sessions over one checkout are two runs.
 //
-// The script is the writer and the semantics oracle. This package only
-// reads, with the script's own tolerances - unknown keys ignored, a
-// non-numeric timestamp read as stale - so `f10 status` and
-// `f10-state.sh show` describe one run the same way. The parity test pins
-// that.
+// This package is the only writer (`f10 state`, `f10 hook`) and holds the
+// rules. The status line's renderer, `bin/f10-state.sh render`, is the other
+// reader: it runs on every refresh, so it stays bash and reads the same
+// format with the same tolerances - unknown keys ignored, a non-numeric
+// timestamp read as stale. The render parity test pins that.
 package state
 
 import (
@@ -24,7 +24,7 @@ import (
 )
 
 // DefaultTTL is how long a run counts as live with nothing reporting: the
-// script's default, and the point past which the badge stops rendering.
+// point past which the badge stops rendering.
 const DefaultTTL = 24 * time.Hour
 
 const (
@@ -39,13 +39,14 @@ const (
 var Phases = []string{"capture", "plan", "ship"}
 
 // A Run is one session's state file, read back. Every phase holds one of
-// the script's statuses: pending, running, done, failed, partial, skipped,
+// the Statuses: pending, running, done, failed, partial, skipped,
 // prior, blocked.
 type Run struct {
 	Session string    `json:"session"`
 	Task    string    `json:"task,omitempty"`
 	URL     string    `json:"url,omitempty"`
-	Root    string    `json:"root,omitempty"` // checkout root the run is about
+	Root    string    `json:"root,omitempty"`  // checkout root the run is about
+	Skill   string    `json:"skill,omitempty"` // the skill that began the run
 	Capture string    `json:"capture"`
 	Plan    string    `json:"plan"`
 	Ship    string    `json:"ship"`
@@ -57,7 +58,7 @@ type Run struct {
 	Updated time.Time `json:"updated"`
 }
 
-// Dir is where state files live: the script's variable, else its default.
+// Dir is where state files live: F10_STATE_DIR, else the default.
 func Dir() string {
 	if d := os.Getenv(dirEnv); d != "" {
 		return d
@@ -71,7 +72,7 @@ func Dir() string {
 	return filepath.Join(home, ".claude", "f10", "state")
 }
 
-// TTL is how long a run counts as live, from the script's variable.
+// TTL is how long a run counts as live, from F10_STATE_TTL.
 func TTL() time.Duration {
 	if s := os.Getenv(ttlEnv); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
@@ -82,19 +83,26 @@ func TTL() time.Duration {
 	return DefaultTTL
 }
 
-// Session is the session this process runs in, in the order the script
-// finds it: the explicit override, then the id Claude Code exports into
-// every Bash tool call. Empty from a plain terminal.
+// Session is the session this process runs in: the explicit override, then
+// the id Claude Code exports into every Bash tool call. Empty from a plain
+// terminal. A hook names its session in the payload instead.
 func Session() string {
 	return cmp.Or(os.Getenv(sessionEnv), os.Getenv(claudeSessionEnv))
 }
 
 var unsafe = regexp.MustCompile(`[^A-Za-z0-9._-]`)
 
-// Path is the state file for a session: the id sanitized the way the
-// script sanitizes it, since it names a file.
+// Path is the state file for a session: the id sanitized, since it names a
+// file, the way the renderer sanitizes it.
 func Path(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+fileExt)
+}
+
+// StartedPath is the mark a session's start leaves beside its state file:
+// when the session loaded the plugin, for doctor to compare with the
+// install's update time.
+func StartedPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".started")
 }
 
 // Load reads one state file. A missing file is os.ErrNotExist, unwrapped
@@ -124,6 +132,8 @@ func Load(path string) (*Run, error) {
 			r.URL = value
 		case "root":
 			r.Root = value
+		case "skill":
+			r.Skill = value
 		case "capture":
 			r.Capture = cmp.Or(value, "pending")
 		case "plan":
@@ -216,8 +226,7 @@ func Stopped(status string) bool {
 
 // PhaseText is the status with its step attached where one is known and
 // belongs to that status: `running: implement`, `blocked at judge`. The
-// leaf is a pipeline step, so only ship ever carries one. The script's
-// show prints the same words.
+// leaf is a pipeline step, so only ship ever carries one.
 func (r *Run) PhaseText(phase string) string {
 	status := r.Status(phase)
 

@@ -29,4 +29,4 @@ When the command exits 3 because someone else opened the PR (the message names t
 Rerun the same command with the chosen flag appended and relay its report.
 
 Every other refusal is final: print the message verbatim and stop; it names the cause and what to do.
-If `f10` is not on `PATH`, or fails with `flag provided but not defined`, the binary is missing or older than this plugin: say so, quote `f10 --version` where it ran, and point at `go install github.com/amberpixels/f10/cli/cmd/f10@latest`.
+A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

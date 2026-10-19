@@ -18,6 +18,8 @@
 // surface for a pipeline run; this is the surface for a person, and for the commands an agent runs
 // to read a task, start the next one, reach another or finish this one.
 //
+// `ledger dump` reads the local record hooks and badge calls append to.
+//
 // A verb means one thing under every noun: `read` writes content, `open`
 // follows an address, `search` finds by description. The matrix is sparse
 // where a verb has no meaning for a noun; it never redefines one to fill a
@@ -73,19 +75,35 @@ func newApp() *cli.Command {
 			forwardCommand(),
 			driveCommand(),
 			finishCommand(),
+			hookCommand(),
+			stateCommand(),
+			ledgerCommand(),
 		},
 	}
 }
 
+// stampedVersion is the plugin version a build was made for, set with
+// `-ldflags "-X main.stampedVersion=X.Y.Z"` by the plugin's bin/f10 shim and
+// the release workflow. Empty in any other build.
+var stampedVersion string
+
 // version is what `f10 --version` prints, read from the build rather than a
 // constant that drifts. The skills describe the binary's flags, so the binary
-// carries the plugin's version: the `cli/vX.Y.Z` tag each release puts beside
-// `f10--vX.Y.Z`, which Go reads for a module under cli/. A release install
-// (`go install ...@v0.25.0`) prints the bare number. A checkout build prints
-// the commit, its date and a dirty mark, even at the tag, since Go derives a
-// version from tags only for a module at the repository root; so a dev
-// binary never claims to be a release.
+// carries the plugin's version: the stamp when the shim or a release built
+// it. Without one, a `go install ...@v0.25.0` prints the bare number, read
+// from the `cli/vX.Y.Z` tag each release puts beside `f10--vX.Y.Z`, and a
+// checkout build prints the commit, its date and a dirty mark, even at the
+// tag, since Go derives a version from tags only for a module at the
+// repository root.
 func version(bi *debug.BuildInfo, ok bool) string {
+	return versionOf(stampedVersion, bi, ok)
+}
+
+func versionOf(stamp string, bi *debug.BuildInfo, ok bool) string {
+	if stamp != "" {
+		return stamp
+	}
+
 	if !ok || bi == nil {
 		return "unknown"
 	}

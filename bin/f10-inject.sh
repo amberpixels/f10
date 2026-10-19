@@ -10,8 +10,8 @@
 # the conventions are over twice that.
 #
 # Whether the session holds them is a marker beside the run state, `<session>.conventions`.
-# f10-state.sh's seed and clear never touch it (a new run is not a new context); its prune and
-# doctor read it. The session-id and JSON helpers mirror f10-state.sh's, which runs on every
+# The binary's seed and clear never touch it (a new run is not a new context); its prune and
+# f10-state.sh's doctor read it. The session-id helper mirrors f10-state.sh's, which runs on every
 # status-line tick and so sources nothing.
 #
 # Usage:  f10-inject.sh   (from hooks/hooks.json only)

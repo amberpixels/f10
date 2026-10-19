@@ -263,7 +263,6 @@ updated   4m ago
 
 From a terminal, `f10 status` lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
 Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
-Without the binary, `f10-state.sh show` prints the same for the current session.
 
 `f10 status 1042` reads another run: the one in the worktree that has the task's branch.
 An agent there runs **driven** ([modes/driven.md](modes/driven.md)): instead of asking in a pane nobody watches, it writes its questions to run state as one `ask` row and stops blocked.
@@ -312,15 +311,21 @@ Overriding `F10_STATE_GLYPHS` takes all eight positions; the last two hold the r
 <details>
 <summary>How the badge stays current: two writers</summary>
 
-- **Hooks** (`hooks/hooks.json`) - `UserPromptExpansion` and `PreToolUse` catch a skill starting, typed or model-invoked, and read the argument to tell a description (routed through capture) from a task id; the first also answers a bare `/f10:status` with a blocking verdict on stdout, ending the turn.
-  The same two events, and `SessionStart` after a compaction, inject the conventions, in chunks under Claude Code's per-hook cap, once per session and again when compaction dropped them; a per-session marker says whether the session holds them.
-  `PostToolUse` catches the plan file being written: "plan done", and the task id.
+- **Hooks** (`hooks/hooks.json`) - every state hook runs `f10 hook`, which reads the payload once.
+  `UserPromptExpansion` and `PreToolUse` catch a skill starting, typed or model-invoked, and read the argument to tell a description (routed through capture) from a task id; the first also answers a bare `/f10:status` with a blocking verdict on stdout, ending the turn.
+  The same two events, and `SessionStart` after a compaction, inject the conventions (`f10-inject.sh`), in chunks under Claude Code's per-hook cap, once per session and again when compaction dropped them; a per-session marker says whether the session holds them.
+  `PostToolUse` turns what a run produces into typed observations: an issue or PR created, a commit, a push, a step loaded, `f10 finish`, a plan or findings file written.
+  A few of them settle the badge: a plan file is "plan done" and the task id, a ship step loaded is that step running, and the issue capture creates names the task.
   `Stop` closes out whatever is still running.
   `SessionStart` prunes dead state and refreshes the symlink.
 - **Steps** - one `f10-state.sh set` call as each phase opens and closes, **cosmetic and best-effort** per `conventions/report.md`.
+  The script forwards it to `f10 state`; with no binary yet, the call is a no-op.
 
 Steps report precisely, hooks reliably: `Stop` closes a run whose last badge line the agent dropped.
 A phase left `pending` means "nobody said".
+
+Both writers also append to a local ledger, `~/.f10/f10.db` (SQLite, outside every repo): what the hooks observed, what artifacts (plans, findings) hold, and every badge call as the model claimed it, each row tagged with that source.
+A write that fails goes to `~/.f10/ledger.spool`, replayed by the next one; `f10 ledger dump` prints the rows.
 
 </details>
 
@@ -328,13 +333,16 @@ Unrelated to f10 but pairs with it: Claude Code's [`footerLinksRegexes`](https:/
 
 ## The binary
 
+The plugin requires the `f10` binary and fetches it itself: its `bin/f10` shim runs the build matching the plugin's version, downloaded from this repo's public release with `curl`, or built from the plugin's `cli/` when Go is installed.
+Resolution order, cache and release details: [docs/cli.md](docs/cli.md).
+
 `f10 config` prints a repo's effective configuration with each value's provenance (`detected`, `declared (main)`, `declared (worktree)`, `default`, `absent`), like `git config --show-origin`.
 `--json` for scripts.
 Full reference: [docs/cli.md](docs/cli.md).
 
 ```bash
-just install   # go install ./cli/cmd/f10
-f10 --version  # the release number from `go install ...@vX.Y.Z`, the commit from a checkout build
+just install   # dev: rebuild this checkout's cli/ into the shim's cache
+f10 --version  # the plugin's version, through the shim
 f10 config
 f10 doctor     # is the plugin, the binary and the environment wired up? changes nothing
 ```
@@ -359,6 +367,7 @@ f10 pr open              # this branch's PR or MR, gh or glab decided by the rem
 f10 review pick|wait|ack # the remote review on that PR: read it, await it, mark it handled
 f10 status               # where the run is: this session's, or this repo's live ones
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
+f10 ledger dump          # what runs recorded locally (--json, --project ., --task, --session)
 ```
 
 A reference is any id shape (`1042`, `#1042`, `ABC-1042`) or the task's url.
@@ -460,7 +469,7 @@ The parity suite in `cli/internal/layout` runs every fixture through both.
 ## Development
 
 The executable surface is `bin/` plus `cli/`.
-`bin/f10-load-conventions.sh` cats the six convention files (identical everywhere; run when `bin/f10-inject.sh`, a hook, says the context lacks them, and by subagents); `bin/f10-load-project.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` records run state for the status line.
+`bin/f10-load-conventions.sh` cats the six convention files (identical everywhere; run when `bin/f10-inject.sh`, a hook, says the context lacks them, and by subagents); `bin/f10-load-project.sh` loads one repo's instructions (varies by worktree, reruns every run); `bin/f10-state.sh` renders the status-line badge and forwards badge calls to the binary, which writes the run state.
 All four are on the Bash tool's `PATH`, so prose names them bare.
 `cli/` is the lookaround binary, its own Go module (`github.com/amberpixels/f10/cli`) with `cmd/f10` as its main, kept in this repo because its parity tests run the scripts in `bin/`.
 

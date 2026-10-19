@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# f10 · shim - run the f10 binary built for this plugin's version, fetching or building it first.
+#
+# The skills describe the binary's flags, so the plugin and the binary must be one release. This
+# shim reads the version from plugin.json and resolves, in order:
+#   1. the cache: this checkout's own build, f10-<version>-<root key>, else the release binary,
+#      f10-<version>, both under ~/.claude/f10/bin
+#   2. the cli/v<version> release asset for this OS and CPU, fetched with curl from the public
+#      release (no auth), checked against the release's checksums.txt
+#   3. `go build` of this plugin's cli/ with the version stamped in, also the dev path
+# and execs it. Neither download nor build works: one line on stderr naming what is missing and the
+# fix, exit 1. A checksum mismatch fails outright, never falling through to a build.
+#
+# Builds are keyed by the checkout they came from, so a worktree's `just install` never replaces
+# the binary another checkout of the same version runs.
+#
+# Usage:
+#   f10 <args>            resolve, then exec the binary with <args>
+#   f10 --shim-resolve    resolve only; exit 1 with the one line when it cannot
+#   f10 --shim-rebuild    build this checkout's cli/ into its cache slot (`just install`)
+#   f10 --shim-hook       the SessionStart hook, from hooks/hooks.json only
+#   f10 hook              every other hook: the cached binary only, nothing when there is none
+#
+# F10_SHIM_CACHED_ONLY=1 fails fast instead of downloading or building, for hooks with a short
+# timeout.
+#
+# Hooks call it by path. Skills type a bare `f10`, which reaches it through the PATH the
+# SessionStart hook puts first.
+
+set -uo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cache="${F10_BIN_DIR:-$HOME/.claude/f10/bin}"
+repo="${F10_RELEASE_REPO:-amberpixels/f10}"
+
+version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+  "$root/.claude-plugin/plugin.json" 2>/dev/null | head -n 1)"
+if [ -z "$version" ]; then
+  printf 'f10: no version in %s; reinstall the plugin\n' "$root/.claude-plugin/plugin.json" >&2
+  exit 1
+fi
+
+release="$cache/f10-$version"
+build="$cache/f10-$version-$(printf '%s' "$root" | cksum | awk '{ print $1 }')"
+built="$build.built" # when the build was made, so the hook can tell it went stale
+bin=""
+
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  arm64 | aarch64) arch=arm64 ;;
+  *) arch="$(uname -m)" ;;
+esac
+
+why_dl=""
+why_go=""
+
+# The one line every entry point prints when no binary can be had.
+cannot() {
+  printf 'f10: no binary for %s: %s, and %s; fix: install curl or check the network (release download), or install Go (build from source)' \
+    "$version" "$why_dl" "$why_go"
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+sha256() {
+  if have sha256sum; then
+    sha256sum "$1" | awk '{ print $1 }'
+  else
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  fi
+}
+
+# Sets bin to the cached binary, this checkout's build first.
+cached() {
+  if [ -x "$build" ]; then
+    bin="$build"
+  elif [ -x "$release" ]; then
+    bin="$release"
+  else
+    return 1
+  fi
+}
+
+download() {
+  if ! have curl; then
+    why_dl="curl is not installed"
+    return 1
+  fi
+
+  local asset="f10_${version}_${os}_${arch}" url="https://github.com/$repo/releases/download/cli/v$version"
+  local tmp file code rc want got
+  if ! tmp="$(mktemp -d "$cache/.download.XXXXXX")"; then
+    why_dl="cannot write to $cache"
+    return 1
+  fi
+  # the asset first, so a release that does not exist is reported by the asset's name
+  for file in "$asset" checksums.txt; do
+    # a transfer slower than 1 KB/s for 30s is a stall, so a foreground call never hangs
+    code="$(curl -sSL --connect-timeout 10 --speed-limit 1024 --speed-time 30 \
+      -o "$tmp/$file" -w '%{http_code}' "$url/$file" 2>"$tmp/.err")"
+    rc=$?
+    [ "$rc" = 0 ] && [ "$code" = 200 ] && continue
+
+    # a tag pushed before the release workflow ran and a repo no longer public both 404
+    case "$rc:$code" in
+      *:404) why_dl="no public release asset $file for cli/v$version" ;;
+      0:*) why_dl="$url/$file answered HTTP $code" ;;
+      6:* | 7:* | 28:000) why_dl="cannot reach github.com" ;;
+      28:*) why_dl="the download of $file from github.com stalled" ;;
+      *) why_dl="curl $url/$file failed ($(head -n 1 "$tmp/.err"), HTTP $code)" ;;
+    esac
+    rm -rf "$tmp"
+    return 1
+  done
+
+  want="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$tmp/checksums.txt")"
+  got="$(sha256 "$tmp/$asset")"
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then
+    rm -rf "$tmp"
+    printf 'f10: %s from release cli/v%s does not match checksums.txt; not running it\n' "$asset" "$version" >&2
+    exit 1
+  fi
+
+  chmod +x "$tmp/$asset"
+  mv -f "$tmp/$asset" "$release"
+  rm -rf "$tmp"
+  bin="$release"
+}
+
+compile() {
+  if ! have go; then
+    why_go="go is not installed"
+    return 1
+  fi
+  if [ ! -f "$root/cli/go.mod" ]; then
+    why_go="$root/cli is missing"
+    return 1
+  fi
+
+  local tmp out
+  if ! tmp="$(mktemp "$cache/.build.XXXXXX")"; then
+    why_go="cannot write to $cache"
+    return 1
+  fi
+  if ! out="$(cd "$root/cli" && go build -ldflags "-X main.stampedVersion=$version" -o "$tmp" ./cmd/f10 2>&1)"; then
+    rm -f "$tmp"
+    why_go="go build in $root/cli failed ($(printf '%s' "$out" | head -n 1))"
+    return 1
+  fi
+
+  # temp file plus mv, so a call racing the hook's resolve never execs a half-written file
+  mv -f "$tmp" "$build"
+  : >"$built"
+  bin="$build"
+}
+
+resolve() {
+  cached && return 0
+  if [ "${F10_SHIM_CACHED_ONLY:-}" = 1 ]; then
+    if have curl || have go; then
+      printf 'f10: no binary for %s yet; the session start is fetching it, try again in a moment\n' "$version" >&2
+    else
+      why_dl="curl is not installed"
+      why_go="go is not installed"
+      printf '%s\n' "$(cannot)" >&2
+    fi
+    exit 1
+  fi
+  mkdir -p "$cache" 2>/dev/null
+  download && return 0
+  compile && return 0
+  printf '%s\n' "$(cannot)" >&2
+  exit 1
+}
+
+# This checkout's build, older than the cli/ sources it came from.
+stale_build() {
+  [ -f "$built" ] && [ -n "$(find "$root/cli" -newer "$built" \( -name '*.go' -o -name go.mod -o -name go.sum \) -print 2>/dev/null | head -n 1)" ]
+}
+
+# Runs synchronously but never waits on a download or a build: those go to the background, and a
+# background failure surfaces on the first real call with the same line. What the user should see
+# goes out as one systemMessage.
+#
+# The session start's own `f10 hook` (statusline relink, start mark, prune) is a no-op while no
+# binary is cached, so a background resolve replays it with this payload once one lands: the first
+# session after an install or update otherwise keeps a statusline pointing at the old install.
+hook() {
+  local said="" payload=""
+  [ -t 0 ] || payload="$(cat)"
+  # Claude Code applies CLAUDE_ENV_FILE to every later Bash command. The plugin's bin/ would
+  # otherwise come after ~/go/bin, where a stale `go install` copy shadows this shim.
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    local line="export PATH=\"$root/bin:\$PATH\""
+    grep -qxF "$line" "$CLAUDE_ENV_FILE" 2>/dev/null || printf '%s\n' "$line" >>"$CLAUDE_ENV_FILE"
+  else
+    local found
+    found="$(command -v f10 2>/dev/null || true)"
+    if [ -n "$found" ] && [ "$found" != "$root/bin/f10" ]; then
+      said="f10: $found comes before the plugin's $root/bin/f10 on PATH and may not be $version; remove it"
+    fi
+  fi
+
+  mkdir -p "$cache"
+  if cached; then
+    if stale_build; then
+      nohup "$root/bin/f10" --shim-rebuild </dev/null >"$cache/resolve.log" 2>&1 &
+    fi
+  elif ! have go && ! have curl; then
+    why_go="go is not installed"
+    why_dl="curl is not installed"
+    said="${said:+$said. }$(cannot)"
+  else
+    # shellcheck disable=SC2016 # expanded by the inner sh, from its arguments
+    nohup sh -c '"$1" --shim-resolve && printf "%s" "$2" | "$1" hook' sh "$root/bin/f10" "$payload" \
+      </dev/null >"$cache/resolve.log" 2>&1 &
+  fi
+
+  [ -z "$said" ] || printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$said" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+}
+
+case "${1:-}" in
+  --shim-resolve) resolve ;;
+  --shim-rebuild)
+    mkdir -p "$cache"
+    compile || {
+      printf 'f10: %s\n' "$why_go" >&2
+      exit 1
+    }
+    ;;
+  --shim-hook) hook ;;
+  hook)
+    # Hooks have a short timeout and never fail a run: no download or build here. Until the
+    # session start's background resolve lands a binary, a hook is a silent no-op.
+    cached || exit 0
+    F10_PLUGIN_ROOT="$root" exec "$bin" "$@"
+    ;;
+  *)
+    resolve
+    exec "$bin" "$@"
+    ;;
+esac

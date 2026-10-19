@@ -334,7 +334,7 @@ func canonPath(p string) string {
 }
 
 // renderRun prints one run as the label/value block config uses, in the
-// order the script's show prints the same facts. The root row appears only
+// order `f10 state show` prints the same facts. The root row appears only
 // when listing: for one session it is the directory you are in.
 func renderRun(w io.Writer, r *state.Run, showRoot bool, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
