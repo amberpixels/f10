@@ -33,6 +33,7 @@ flowchart LR
     plan -->|".f10/plans/&lt;TASK-ID&gt;.md"| implement
     subgraph shippipe ["ship pipeline - declared per project (default: implement → pr)"]
         implement[implement] --> pr[pr]
+        implement -.-> clean["cleanup (comments · prose · code)"] -.-> revL
         implement -.-> revL["review (local, both halves)"] -.-> pr
         pr -.-> revC["review (CI / human)"] -.-> deploy["deploy / e2e / …"]
     end
@@ -60,6 +61,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
 | `/f10:ship <id \| plan.md \| desc>` | whatever's missing, then the ship pipeline | end of the declared pipeline (an open PR by default); or handed to the task's own agent |
+| `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose to plain rules, leftovers out of the code; each diff proven in scope, verify green, nothing committed |
 | `/f10:review <id \| PR \| this branch> [ci]` | review | a findings file from a reviewer that never saw your session, or read in from the CI review |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, fixes verified, asks in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk |
@@ -197,8 +199,8 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge,review,resolve,demo,explain,catchup,standup}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,commit,pr,push,review,resolve,demo,deploy,standup}.md"]
+        skills2["skills/{brainstorm,capture,plan,ship,judge,cleanup,review,resolve,demo,explain,catchup,standup}"]
+        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,deploy,standup}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/{help,dry-run,driven,forward}.md"]
     end

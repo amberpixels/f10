@@ -95,3 +95,76 @@ func TestInjectHooks(t *testing.T) {
 		}
 	}
 }
+
+// Every skill that runs a step reads the conventions, so it must be in both
+// f10-inject.sh's list and its UserPromptExpansion matcher. This pins the two
+// to skills/, so a skill added in one place only fails here.
+func TestInjectSkillsMatchDir(t *testing.T) {
+	bin := filepath.Dir(scriptPath(t))
+
+	script, err := os.ReadFile(filepath.Join(bin, "f10-inject.sh"))
+	if err != nil {
+		t.Fatalf("f10-inject.sh: %v", err)
+	}
+
+	var listed []string
+	for line := range strings.SplitSeq(string(script), "\n") {
+		if rest, ok := strings.CutPrefix(line, `skills="`); ok {
+			listed = strings.Fields(strings.TrimSuffix(rest, `"`))
+		}
+	}
+
+	raw, err := os.ReadFile(filepath.Join(bin, "..", "hooks", "hooks.json"))
+	if err != nil {
+		t.Fatalf("hooks.json: %v", err)
+	}
+
+	var cfg struct {
+		Hooks map[string][]struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("hooks.json: %v", err)
+	}
+
+	var matched []string
+	for _, group := range cfg.Hooks["UserPromptExpansion"] {
+		for _, h := range group.Hooks {
+			if strings.HasSuffix(h.Command, "/bin/f10-inject.sh") {
+				inner := strings.TrimSuffix(strings.TrimPrefix(group.Matcher, "f10:("), ")")
+				matched = strings.Split(inner, "|")
+			}
+		}
+	}
+
+	dirs, err := filepath.Glob(filepath.Join(bin, "..", "skills", "*", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+
+	// these run the f10 binary and no step
+	binaryOnly := []string{"drive", "finish", "start", "status"}
+
+	var onDisk []string
+	for _, d := range dirs {
+		if name := filepath.Base(filepath.Dir(d)); !slices.Contains(binaryOnly, name) {
+			onDisk = append(onDisk, name)
+		}
+	}
+
+	slices.Sort(listed)
+	slices.Sort(matched)
+	slices.Sort(onDisk)
+
+	if !slices.Equal(listed, onDisk) {
+		t.Errorf("f10-inject.sh lists %v, skills/ holds %v", listed, onDisk)
+	}
+
+	if !slices.Equal(matched, onDisk) {
+		t.Errorf("hooks.json matches %v, skills/ holds %v", matched, onDisk)
+	}
+}
