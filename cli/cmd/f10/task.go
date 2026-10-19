@@ -6,11 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/images"
+	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
 // The task noun goes through the project's driver when it has one, and
@@ -58,7 +63,7 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	doc, err := readTask(ctx, t, cmd.Args().First())
+	r, doc, err := readTask(ctx, t, cmd.Args().First())
 	if err != nil {
 		// an agent reading this has the project's fetch adapter as its
 		// fallback, and learns of it here, when it applies, not in every prompt
@@ -66,34 +71,97 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 			"(project.md, Tracker)", err)
 	}
 
+	// a person at a terminal opens the links themselves and would wait on
+	// the downloads; an agent gets local files in place of urls that expire
+	if !isTerminal(cmd.Writer) {
+		dir := filepath.Join(t.lay.StorageRoot, "images", strings.ToUpper(r.ID))
+
+		doc, err = withImages(ctx, doc, dir, images.Downloader{Authorize: githubAuth(ctx, t)})
+		if err != nil {
+			return err
+		}
+	}
+
 	return writeDoc(ctx, cmd.Writer, t.dir, doc)
 }
 
 // readTask is the task as markdown: the driver's `read`, else the host's
 // issue with its comments.
-func readTask(ctx context.Context, t *target, token string) (string, error) {
+func readTask(ctx context.Context, t *target, token string) (ref.Ref, string, error) {
 	r, err := t.reference(ctx, token)
 	if err != nil {
-		return "", err
+		return r, "", err
 	}
 
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
-			return doc, nil
+			return r, doc, nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
-			return "", err
+			return r, "", err
 		}
 	}
 
 	h, err := t.issues()
 	if err != nil {
+		return r, "", err
+	}
+
+	doc, err := h.issueDoc(ctx, r.ID, r.Number)
+
+	return r, doc, err
+}
+
+// withImages downloads every image doc links into dir and ends doc with
+// the footer naming them; a doc with no images comes back as it was.
+func withImages(ctx context.Context, doc, dir string, d images.Downloader) (string, error) {
+	links := images.Links(doc)
+	if len(links) == 0 {
+		return doc, nil
+	}
+
+	results, err := d.Download(ctx, dir, links)
+	if err != nil {
 		return "", err
 	}
 
-	return h.issueDoc(ctx, r.ID, r.Number)
+	return strings.TrimRight(doc, "\n") + "\n\n" + images.Footer(results), nil
+}
+
+// githubAuth adds the gh token to image requests for GitHub's own hosts,
+// where a private repo's attachments sit; nothing else ever sees it. The
+// token is read once, on the first such request, and a failed read leaves
+// the request bare, so its error names the image.
+func githubAuth(ctx context.Context, t *target) func(*http.Request) {
+	h, err := t.host()
+	if err != nil || h.glab() {
+		return nil
+	}
+
+	var (
+		once  sync.Once
+		token string
+	)
+
+	return func(r *http.Request) {
+		host := r.URL.Hostname()
+		if r.URL.Scheme != "https" || (host != "github.com" && !strings.HasSuffix(host, ".githubusercontent.com")) {
+			return
+		}
+
+		once.Do(func() {
+			out, err := h.run(ctx, "auth", "token")
+			if err == nil {
+				token = strings.TrimSpace(out)
+			}
+		})
+
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
 }
 
 func runTaskOpen(ctx context.Context, cmd *cli.Command) error {

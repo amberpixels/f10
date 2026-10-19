@@ -555,6 +555,8 @@ f10 -C r3 task read 12
 
 `read` picks its presentation from where it writes: a pager when `$PAGER` is set and stdout is a terminal, raw markdown into any pipe.
 `f10 task read | glow` works because a pipe is not a terminal.
+Into a pipe, `read` also downloads every image the task links (markdown and HTML image syntax, and bare image urls, in the body and the comments) into `<storage root>/images/<ID>/`, replaced on each read, and ends with a line naming each local path; an image that fails is named with its url and the reason.
+On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private repo's attachments download.
 `search` prints a table to a terminal and JSON to a pipe.
 `children` prints a tree to a terminal and JSON to a pipe or with `--json`.
 

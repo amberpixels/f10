@@ -589,8 +589,7 @@ func TestPrompt(t *testing.T) {
 // pane, so it never carries the driven marker.
 func TestDiscussPrompt(t *testing.T) {
 	got := prompt(modeDiscuss, "GH-1", nil, "", nil)
-	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines, " +
-		"opening any image it links. Then stop and wait."
+	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines. Then stop and wait."
 
 	if got != want {
 		t.Errorf("prompt(discuss) = %q, want %q", got, want)

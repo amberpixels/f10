@@ -555,8 +555,16 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 
-	shared := t.TempDir()
+	root := t.TempDir()
+	shared := filepath.Join(root, "plans")
 	fx.in.plansDir = shared
+
+	images := filepath.Join(root, "images", "GH-1")
+	for _, d := range []string{shared, images} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	if err := os.WriteFile(filepath.Join(shared, "GH-1.md"), []byte("plan"), 0o644); err != nil {
 		t.Fatal(err)
@@ -568,6 +576,10 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(shared, "archive", "GH-1.md")); err != nil {
 		t.Errorf("plan not archived in the shared root: %v", err)
+	}
+
+	if _, err := os.Stat(images); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the task's images survived in the shared root: %v", err)
 	}
 
 	if _, err := os.Stat(filepath.Join(fx.main, ".f10")); !errors.Is(err, os.ErrNotExist) {

@@ -385,7 +385,7 @@ export F10_ROOTS=~/code/github.com/*/*       # opt in, and names work too
 f10 -C r3 task read 12
 ```
 
-`read` pages through `$PAGER` on a terminal and writes raw markdown into a pipe, so `f10 task read | glow` works.
+`read` pages through `$PAGER` on a terminal and writes raw markdown into a pipe, so `f10 task read | glow` works. Into a pipe it also downloads the images the task links and names their local paths at the end, so an agent reads files rather than urls that expire.
 
 Notion, Jira or any tracker without a CLI goes through an executable at `.f10/driver` ([the driver contract](docs/driver-contract.md)); f10 specifies the contract, not the driver.
 
