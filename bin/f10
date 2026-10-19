@@ -5,8 +5,8 @@
 # shim reads the version from plugin.json and resolves, in order:
 #   1. the cache: this checkout's own build, f10-<version>-<root key>, else the release binary,
 #      f10-<version>, both under ~/.claude/f10/bin
-#   2. the cli/v<version> release asset for this OS and CPU, via gh (which handles auth for a
-#      private repo), checked against the release's checksums.txt
+#   2. the cli/v<version> release asset for this OS and CPU, fetched with curl from the public
+#      release (no auth), checked against the release's checksums.txt
 #   3. `go build` of this plugin's cli/ with the version stamped in, also the dev path
 # and execs it. Neither download nor build works: one line on stderr naming what is missing and the
 # fix, exit 1. A checksum mismatch fails outright, never falling through to a build.
@@ -56,7 +56,7 @@ why_go=""
 
 # The one line every entry point prints when no binary can be had.
 cannot() {
-  printf 'f10: no binary for %s: %s, and %s; fix: gh auth login (release download) or install Go (build from source)' \
+  printf 'f10: no binary for %s: %s, and %s; fix: install curl or check the network (release download), or install Go (build from source)' \
     "$version" "$why_dl" "$why_go"
 }
 
@@ -82,25 +82,32 @@ cached() {
 }
 
 download() {
-  if ! have gh; then
-    why_dl="gh is not installed"
+  if ! have curl; then
+    why_dl="curl is not installed"
     return 1
   fi
 
-  local asset="f10_${version}_${os}_${arch}" tmp out want got
+  local asset="f10_${version}_${os}_${arch}" url="https://github.com/$repo/releases/download/cli/v$version"
+  local tmp file code rc want got
   if ! tmp="$(mktemp -d "$cache/.download.XXXXXX")"; then
     why_dl="cannot write to $cache"
     return 1
   fi
-  if ! out="$(gh release download "cli/v$version" -R "$repo" -p "$asset" -p checksums.txt -D "$tmp" 2>&1)"; then
-    rm -rf "$tmp"
-    case "$out" in
-      *"auth login"* | *"authentication"* | *"401"*) why_dl="gh is not logged in" ;;
-      *"not found"* | *"404"* | *"no assets"*) why_dl="release cli/v$version has no $asset" ;;
-      *) why_dl="gh release download failed ($(printf '%s' "$out" | head -n 1))" ;;
+  # the asset first, so a release that does not exist is reported by the asset's name
+  for file in "$asset" checksums.txt; do
+    code="$(curl -sSL --connect-timeout 10 -o "$tmp/$file" -w '%{http_code}' "$url/$file" 2>"$tmp/.err")"
+    rc=$?
+    [ "$rc" = 0 ] && [ "$code" = 200 ] && continue
+
+    # a tag pushed before the release workflow ran and a repo no longer public both 404
+    case "$rc:$code" in
+      *:404) why_dl="no public release asset $file for cli/v$version" ;;
+      6:* | 7:* | 28:*) why_dl="cannot reach github.com" ;;
+      *) why_dl="curl $url/$file failed ($(head -n 1 "$tmp/.err"), HTTP $code)" ;;
     esac
+    rm -rf "$tmp"
     return 1
-  fi
+  done
 
   want="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$tmp/checksums.txt")"
   got="$(sha256 "$tmp/$asset")"
@@ -146,10 +153,10 @@ compile() {
 resolve() {
   cached && return 0
   if [ "${F10_SHIM_CACHED_ONLY:-}" = 1 ]; then
-    if have gh || have go; then
+    if have curl || have go; then
       printf 'f10: no binary for %s yet; the session start is fetching it, try again in a moment\n' "$version" >&2
     else
-      why_dl="gh is not installed"
+      why_dl="curl is not installed"
       why_go="go is not installed"
       printf '%s\n' "$(cannot)" >&2
     fi
@@ -190,11 +197,9 @@ hook() {
     if stale_build; then
       nohup "$root/bin/f10" --shim-rebuild </dev/null >"$cache/resolve.log" 2>&1 &
     fi
-  elif ! have go && { ! have gh || ! gh auth status >/dev/null 2>&1; }; then
-    # without Go only a download can work, and that needs a logged-in gh
+  elif ! have go && ! have curl; then
     why_go="go is not installed"
-    why_dl="gh is not logged in"
-    have gh || why_dl="gh is not installed"
+    why_dl="curl is not installed"
     said="${said:+$said. }$(cannot)"
   else
     nohup "$root/bin/f10" --shim-resolve </dev/null >"$cache/resolve.log" 2>&1 &
