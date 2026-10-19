@@ -132,14 +132,16 @@ type SkillStarted struct {
 }
 
 // SessionStopped is a turn ending with a run in the session, at the phase,
-// status and leaf its state holds after the Stop backstop ran.
+// status and leaf its state held before the Stop backstop ran. Backstop says
+// the backstop then promoted it to done.
 type SessionStopped struct {
 	Meta
 
-	Task   string `json:"task,omitempty"`
-	Phase  string `json:"phase"`
-	Status string `json:"status"`
-	Leaf   string `json:"leaf,omitempty"`
+	Task     string `json:"task,omitempty"`
+	Phase    string `json:"phase"`
+	Status   string `json:"status"`
+	Leaf     string `json:"leaf,omitempty"`
+	Backstop bool   `json:"backstop,omitempty"`
 }
 
 // PlanArchived is a plan moved into the storage root's plans/archive/, the

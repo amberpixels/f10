@@ -97,9 +97,10 @@ type Ledger struct {
 	path string
 }
 
-// Open opens the database at path for writing: it creates the file, runs the
-// migrations and replays the spool.
-func Open(ctx context.Context, path string, busy time.Duration) (*Ledger, error) {
+// Open opens the database at path for writing: it creates the file and runs
+// the migrations. With replay it also replays the spool, which a synchronous
+// hook leaves to the next async writer: a backlog has no bound.
+func Open(ctx context.Context, path string, busy time.Duration, replay bool) (*Ledger, error) {
 	if path == "" {
 		return nil, errors.New("ledger: no path")
 	}
@@ -119,7 +120,9 @@ func Open(ctx context.Context, path string, busy time.Duration) (*Ledger, error)
 		return nil, err
 	}
 
-	l.replay(ctx)
+	if replay {
+		l.replay(ctx)
+	}
 
 	return l, nil
 }
@@ -229,7 +232,7 @@ func Record(ctx context.Context, busy time.Duration, events ...Event) {
 		return
 	}
 
-	l, err := Open(ctx, path, busy)
+	l, err := Open(ctx, path, busy, true)
 	if err != nil {
 		fill(path, events)
 		spool(path, events)

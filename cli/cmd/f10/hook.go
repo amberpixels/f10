@@ -42,19 +42,17 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 	home, _ := os.UserHomeDir()
 
 	// a synchronous event holds the prompt while it runs: a busy ledger
-	// spools quickly instead
+	// spools quickly, and the spool's replay waits for an async writer
 	var event struct {
 		Name string `json:"hook_event_name"`
 	}
 
 	_ = json.Unmarshal(raw, &event)
 
-	busy := ledger.BusyAsync
+	recorder := &ledger.Observer{StateDir: state.Dir(), Busy: ledger.BusyAsync, TaskID: hookTaskID}
 	if event.Name == "UserPromptExpansion" || event.Name == "PreToolUse" {
-		busy = ledger.BusySync
+		recorder.Busy, recorder.NoReplay = ledger.BusySync, true
 	}
-
-	recorder := &ledger.Observer{StateDir: state.Dir(), Busy: busy, TaskID: hookTaskID}
 	defer recorder.Close()
 
 	env := &hook.Env{

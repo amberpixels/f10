@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func tempPath(t *testing.T) string {
 func openT(t *testing.T, path string) *Ledger {
 	t.Helper()
 
-	l, err := Open(context.Background(), path, BusyAsync)
+	l, err := Open(context.Background(), path, BusyAsync, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,5 +228,92 @@ func TestNormalizeRemote(t *testing.T) {
 		if got := NormalizeRemote(tc.in); got != tc.want {
 			t.Errorf("NormalizeRemote(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// A claim another opener holds is left alone while fresh, taken over once
+// stale; a claim stamps the time it was made, so a spool that sat for a
+// while is not stale the moment it is claimed.
+func TestReplayTakesOverOnlyStaleClaims(t *testing.T) {
+	path := tempPath(t)
+
+	line := func(id string) []byte {
+		events := []Event{{ID: id, Kind: RunStarted, Source: Observed}}
+		fill(path, events)
+
+		raw, err := json.Marshal(events[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return append(raw, '\n')
+	}
+
+	old := time.Now().Add(-time.Hour)
+	live, dead := spoolPath(path)+".111.0", spoolPath(path)+".222.0"
+
+	for name, id := range map[string]string{live: "01LIVE", dead: "01DEAD"} {
+		if err := os.WriteFile(name, line(id), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := os.Chtimes(dead, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	openT(t, path).Close()
+
+	got := list(t, path, Filter{})
+	if len(got) != 1 || got[0].ID != "01DEAD" {
+		t.Errorf("replayed %+v", got)
+	}
+
+	if _, err := os.Stat(live); err != nil {
+		t.Errorf("a live claim was taken: %v", err)
+	}
+
+	// the main spool, last appended an hour ago, claimed by this opener
+	if err := os.WriteFile(spoolPath(path), line("01MAIN"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chtimes(spoolPath(path), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	l := openT(t, path)
+	claims, _ := filepath.Glob(spoolPath(path) + ".*")
+
+	for _, c := range claims {
+		if fi, err := os.Stat(c); err == nil && c != live && time.Since(fi.ModTime()) > staleClaim {
+			t.Errorf("claim %s reads as stale", c)
+		}
+	}
+
+	_ = l.Close()
+}
+
+// A synchronous hook opens without replaying: the spool waits for the next
+// async writer.
+func TestOpenWithoutReplayLeavesTheSpool(t *testing.T) {
+	path := tempPath(t)
+	spool(path, []Event{{ID: "01SPOOL", Kind: RunStarted, Source: Observed}})
+
+	l, err := Open(context.Background(), path, BusySync, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = l.Close()
+
+	if _, err := os.Stat(spoolPath(path)); err != nil {
+		t.Errorf("spool gone: %v", err)
+	}
+
+	openT(t, path).Close()
+
+	if got := list(t, path, Filter{}); len(got) != 1 {
+		t.Errorf("replayed %d", len(got))
 	}
 }

@@ -158,8 +158,12 @@ func TestARunLeavesEveryKindInTheLedger(t *testing.T) {
 		t.Errorf("kinds\n got %v\nwant %v", got, want)
 	}
 
+	stops := []string{}
+
 	for _, e := range events {
 		switch e.Kind {
+		case ledger.SessionStopped:
+			stops = append(stops, str(e.Payload.Val["phase"])+" "+str(e.Payload.Val["status"]))
 		case ledger.TaskCaptured:
 			if e.Task != "FT-12" || e.Payload.Val["url"] != "https://github.com/acme/app/issues/12" {
 				t.Errorf("captured %+v", e)
@@ -184,4 +188,150 @@ func TestARunLeavesEveryKindInTheLedger(t *testing.T) {
 			t.Errorf("%s: project %q local=%v", e.Kind, e.Project, e.ProjectLocal)
 		}
 	}
+
+	// each stop as the run stood when the turn ended, before the backstop;
+	// the plan file written is plan done, observed rather than inferred
+	if want := []string{"capture running", "plan done", "ship running"}; !slices.Equal(stops, want) {
+		t.Errorf("stops %q, want %q", stops, want)
+	}
+}
+
+func recorded(t *testing.T, db string, f ledger.Filter) []ledger.Event {
+	t.Helper()
+
+	l, err := ledger.OpenRead(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+
+	events, err := l.List(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return events
+}
+
+// The row keeps where the run stopped; the backstop's done is a flag on it,
+// never its status.
+func TestSessionStoppedRecordsTheStateBeforeTheBackstop(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "f10.db")
+	t.Setenv(ledger.PathEnv, db)
+
+	env := testEnv(t)
+	start := "v 1\ntask FT-12\nroot /work/acme\nskill ship\ncapture prior\nplan prior\nship running\nleaf review\nfinal review\nupdated 1\n"
+
+	if err := os.WriteFile(filepath.Join(env.StateDir, "s1.state"), []byte(start), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dispatchRecorded(t, env, payload(t, "stop"))
+
+	got := recorded(t, db, ledger.Filter{Kind: ledger.SessionStopped})
+	if len(got) != 1 {
+		t.Fatalf("got %d rows", len(got))
+	}
+
+	p := got[0].Payload.Val
+	if p["phase"] != "ship" || p["status"] != "running" || p["leaf"] != "review" || p["backstop"] != true ||
+		got[0].Task != "FT-12" {
+		t.Errorf("stop row %+v", p)
+	}
+
+	// the backstop still promoted the badge
+	raw, err := os.ReadFile(filepath.Join(env.StateDir, "s1.state"))
+	if err != nil || !strings.Contains(string(raw), "ship done") {
+		t.Errorf("state after the backstop:\n%s", raw)
+	}
+}
+
+// A round-two file reuses round-one ids under its prior section: each status
+// is recorded against round two, a block with a status and no verdict too.
+func TestRoundTwoRecordsPriorStatuses(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "f10.db")
+	t.Setenv(ledger.PathEnv, db)
+
+	env := testEnv(t)
+	work := t.TempDir()
+	reviews := filepath.Join(work, ".f10", "reviews", "FT-12")
+
+	if err := os.MkdirAll(reviews, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	write := func(name, content string) {
+		path := filepath.Join(reviews, name)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		dispatchRecorded(
+			t,
+			env,
+			toolPayload(t, "s1", work, "Write", map[string]any{"file_path": path}, map[string]any{}),
+		)
+	}
+
+	write("1.md", `task: FT-12
+round: 1
+reviewed: aaaaaaa
+reviewer: local
+verdict: findings
+
+## Findings
+
+### 1.1 Retry loops forever
+where: client.go:10
+category: correctness and logic
+verdict: skip +reply
+reason: bounded by the caller
+
+### 1.2 No timeout
+where: client.go:20
+category: correctness and logic
+verdict: fix
+`)
+	write("2.md", `task: FT-12
+round: 2
+reviewed: bbbbbbb
+reviewer: local
+verdict: clean
+
+## Prior round
+
+### 1.1 Retry loops forever - explanation accepted
+The caller bounds it.
+where: client.go:10
+verdict: skip +reply
+reason: bounded by the caller
+
+### 1.2 No timeout - fixed
+where: client.go:20
+
+## Categories
+
+- correctness and logic: none found
+`)
+
+	var got []string
+
+	for _, e := range recorded(t, db, ledger.Filter{Kind: ledger.FindingVerdict}) {
+		p := e.Payload.Val
+		got = append(
+			got,
+			strings.Join([]string{str(p["round"]), str(p["finding"]), str(p["verdict"]), str(p["status"])}, " "),
+		)
+	}
+
+	want := []string{"1 1.1 skip +reply ", "1 1.2 fix ", "2 1.1 skip +reply explanation accepted", "2 1.2  fixed"}
+	if !slices.Equal(got, want) {
+		t.Errorf("verdict rows\n got %q\nwant %q", got, want)
+	}
+}
+
+func str(v any) string {
+	s, _ := v.(string)
+
+	return s
 }

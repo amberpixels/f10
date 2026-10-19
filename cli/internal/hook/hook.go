@@ -125,11 +125,21 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			return nil
 		}
 
+		// read before the backstop: the ledger keeps where the run stopped,
+		// never the done the backstop infers
+		stop := stopped(r)
+
 		if r.Backstop() {
 			_ = r.Save(env.StateDir, env.now())
+
+			if stop != nil {
+				stop.Backstop = true
+			}
 		}
 
-		notify(ctx, env, sid, p.Cwd, stopped(r)...)
+		if stop != nil {
+			notify(ctx, env, sid, p.Cwd, stop)
+		}
 	case "SessionStart":
 		linkStatusline(env)
 
@@ -185,8 +195,8 @@ func skillStarted(name, args string) []observe.Observation {
 }
 
 // stopped is where a run stands as a turn ends: the latest phase the run
-// reached, its status and leaf.
-func stopped(r *state.Run) []observe.Observation {
+// reached, its status and leaf; nil when no phase has started.
+func stopped(r *state.Run) *observe.SessionStopped {
 	phase := ""
 
 	for _, ph := range state.Phases {
@@ -199,9 +209,7 @@ func stopped(r *state.Run) []observe.Observation {
 		return nil
 	}
 
-	return []observe.Observation{
-		&observe.SessionStopped{Task: r.Task, Phase: phase, Status: r.Status(phase), Leaf: r.Leaf},
-	}
+	return &observe.SessionStopped{Task: r.Task, Phase: phase, Status: r.Status(phase), Leaf: r.Leaf}
 }
 
 func seed(env *Env, sid, skill, args, cwd string) {

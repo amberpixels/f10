@@ -109,11 +109,15 @@ func (l *Ledger) replay(ctx context.Context) {
 		}
 	}
 
-	for _, src := range claims {
-		claimed := fmt.Sprintf("%s.%d", main, os.Getpid())
-		if src == claimed {
-			continue
-		}
+	for i, src := range claims {
+		// one name per source, so a claim kept after a failed replay is never
+		// renamed over
+		claimed := fmt.Sprintf("%s.%d.%d", main, os.Getpid(), i)
+
+		// rename keeps the mtime, so stamp it first: on a claim it means
+		// claimed at, and a live claim never reads as stale
+		now := time.Now()
+		_ = os.Chtimes(src, now, now)
 
 		if err := os.Rename(src, claimed); err != nil {
 			continue // nothing there, or another opener took it

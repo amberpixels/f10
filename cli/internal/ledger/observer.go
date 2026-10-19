@@ -40,6 +40,9 @@ const (
 type Observer struct {
 	StateDir string
 	Busy     time.Duration
+	// NoReplay leaves the spool to a later writer: a synchronous hook holds
+	// the prompt while it runs.
+	NoReplay bool
 	// TaskID is the tracker task id a created issue's url names.
 	TaskID func(ctx context.Context, cwd, url string) string
 
@@ -114,7 +117,7 @@ func (ob *Observer) open(ctx context.Context) {
 		return
 	}
 
-	if l, err := Open(ctx, ob.path, ob.Busy); err == nil {
+	if l, err := Open(ctx, ob.path, ob.Busy, !ob.NoReplay); err == nil {
 		ob.l = l
 	}
 }
@@ -264,7 +267,7 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	var events []Event
 
 	opened := false
-	verdicts := map[string]string{}
+	last := map[string]string{} // round/finding -> verdict and status last recorded
 
 	for _, e := range prior {
 		switch e.Kind {
@@ -273,9 +276,11 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 				opened = true
 			}
 		case FindingVerdict:
+			round, _ := e.Payload.Val["round"].(string)
 			id, _ := e.Payload.Val["finding"].(string)
 			v, _ := e.Payload.Val["verdict"].(string)
-			verdicts[id] = v
+			st, _ := e.Payload.Val["status"].(string)
+			last[round+"/"+id] = v + "|" + st
 		}
 	}
 
@@ -291,22 +296,20 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 		})})
 	}
 
+	// keyed by round: a prior-round block reuses its round-one id, and its
+	// status is news even when its verdict is not
 	for _, fd := range f.Findings {
-		if fd.Verdict == "" || verdicts[fd.ID] == fd.Verdict {
+		if fd.Verdict == "" && fd.Status == "" || last[f.Round+"/"+fd.ID] == fd.Verdict+"|"+fd.Status {
 			continue
 		}
 
-		p := Payload{"round": f.Round, "finding": fd.ID, "title": fd.Title, "verdict": fd.Verdict}
-		if fd.Category != "" {
-			p["category"] = fd.Category
-		}
-
-		if fd.Reason != "" {
-			p["reason"] = fd.Reason
-		}
-
-		if fd.Status != "" {
-			p["status"] = fd.Status
+		p := Payload{"round": f.Round, "finding": fd.ID, "title": fd.Title}
+		for key, v := range map[string]string{
+			"verdict": fd.Verdict, "category": fd.Category, "reason": fd.Reason, "status": fd.Status,
+		} {
+			if v != "" {
+				p[key] = v
+			}
 		}
 
 		events = append(events, Event{Kind: FindingVerdict, Source: Artifact, Task: o.Task, Payload: col(p)})
