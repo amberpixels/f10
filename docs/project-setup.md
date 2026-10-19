@@ -93,7 +93,8 @@ The overlay's wording and Deliver adapter apply only to a report covering that p
 The prose under `~/.f10/standup.md`'s frontmatter is yours and wins where the two disagree, and a `## <group>` section in it can give one group its own wording and destination; a Deliver adapter, whose destination is yours, usually belongs there.
 Adapters are named in that prose, never as frontmatter keys, which `f10 standup` rejects.
 
-`cleanup.md` adds a project's rules to the cleanup step: its comment conventions, code or comments never to remove, more development-artifact patterns, typography rules such as a ban on long dashes.
+`cleanup.md` adds a project's rules to the cleanup step: its comment conventions, code or comments never to remove, more development-artifact patterns, typography.
+Cleanup replaces em and en dashes by default; a project that keeps them says so here.
 
 ## Pipelines
 

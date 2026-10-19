@@ -3,7 +3,7 @@
 Role: a **senior engineer** preparing a change for someone who reads it cold.
 Input: targets and a scope (below).
 Output: the cleaned files in the working tree, verify green, nothing committed; the pipeline's next step or the user decides where they go.
-Context: `project.md → Verify` and `→ Guardrails`; the `cleanup.md` overlay adds a project's rules (its comment conventions, what never to remove, more artifact patterns, typography).
+Context: `project.md → Verify` and `→ Guardrails`; the `cleanup.md` overlay adds a project's rules (its comment conventions, what never to remove, more artifact patterns, typography, or keeping long dashes).
 Badge: none; inside a ship pipeline the leaf is `cleanup`.
 
 **Targets.**
@@ -20,6 +20,11 @@ Bug hunting is not a target: it stays with review.
 
 Skip generated, vendored, fixture and lock files, changelogs and verbatim quotes.
 
+**Dashes**, every target, unless the project's guardrails or overlay say otherwise.
+No em or en dash on a line the pass rewrites, or anywhere in a file given by path: a plain hyphen, or the sentence restructured where a hyphen reads badly.
+Ranges become `1-10`; arrows in prose become words.
+Fenced code blocks and verbatim quotes keep theirs.
+
 ## Procedure
 
 1. **Snapshot first.**
@@ -31,12 +36,12 @@ Skip generated, vendored, fixture and lock files, changelogs and verbatim quotes
    ```
 
    Every proof below compares against this snapshot, never HEAD: in a pipeline the tree already holds implement's uncommitted work.
-   Take the baseline the target names, and grep for characters the house style forbids (CLAUDE.md, guardrails, the overlay; em and en dashes and prose arrows are the common case).
+   Take the baseline the target names, and grep for em and en dashes, prose arrows and any other character the house style forbids.
 2. **Read every file in full before the first edit.**
    A comment that looks redundant can be the only record of a trap; a rule that looks repeated can carry an exception.
 3. **Rewrite with the Edit tool**, one hunk at a time, by the target's rules below.
    Never sed, perl or python on source or prose.
-   A house-style typography rule applies to every changed line.
+   The dash rule and any house-style typography rule apply to every changed line.
 4. **Prove the scope** with the target's check below and report its output.
    A change the check flags is reverted, unless it is an allowed exception the target names.
 5. **Verify** per `project.md → Verify` (implement's skip for an unmoved tree holds).
@@ -72,7 +77,7 @@ If the repo has an earlier comment cleanup (`git log -i --grep=comment`), read o
 
 **Check:** `f10-cleanup-check.sh comments "$SNAP" <changed files>`.
 It prints `CODE CHANGED: <file>` where a non-comment line differs after stripping trailing comments and mapping dashes to a hyphen, and `UNCHECKED: <file>` for a syntax it does not know.
-Read a flagged or unchecked file's diff by eye: a house-style dash swap in a string is allowed when no test matches the text; anything else is reverted.
+Read a flagged or unchecked file's diff by eye: a dash swap in a string is allowed when no test matches the text; anything else is reverted.
 
 ## prose
 
