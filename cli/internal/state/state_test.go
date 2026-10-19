@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -153,52 +152,24 @@ func TestPhaseText(t *testing.T) {
 	}
 }
 
-// The script's show is the oracle for the words: every label it prints
-// must come back with the same value from this package, so a field added
-// on one side fails here until the other side carries it too.
+// Show and `f10 status` print the same facts: every label Show prints must
+// come back with the same value from the Run, so a field added to one fails
+// here until the other carries it too.
 func TestShowParity(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("bash script")
-	}
-
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate this source file")
-	}
-
-	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
-	if _, err := os.Stat(script); err != nil {
-		t.Fatalf("f10-state.sh not found: %v", err)
-	}
-
-	dir := t.TempDir()
-	env := append(os.Environ(), dirEnv+"="+dir, sessionEnv+"=parity", "NO_COLOR=1")
-
-	run := func(args ...string) string {
-		t.Helper()
-
-		cmd := exec.Command(script, args...)
-		cmd.Env = env
-
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("%v: %v\n%s", args, err, out)
-		}
-
-		return string(out)
-	}
+	r := Fresh("parity")
 
 	// the sequence a ship run stopped by a judge verdict makes
-	run("task", "GH-26", "https://github.com/amberpixels/f10/issues/26")
-	run("final", "pr")
-	run("set", "ship", "running", "judge")
-	run("set", "ship", "blocked", "judge")
-	run("note", "stop: the change patches the symptom", "move the retry into the client")
-	run("ask", "1. keep the retry? [no | yes]\n2. where? [client | server]")
-
-	r, err := Load(Path(dir, "parity"))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+	for _, err := range []error{
+		r.SetTask("GH-26", "https://github.com/amberpixels/f10/issues/26"),
+		r.SetFinal("pr"),
+		r.Set("ship", "running", "judge"),
+		r.Set("ship", "blocked", "judge"),
+		r.SetNote("stop: the change patches the symptom", "move the retry into the client"),
+		r.SetAsk("1. keep the retry? [no | yes]\n2. where? [client | server]"),
+	} {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	ours := map[string]string{
@@ -217,23 +188,30 @@ func TestShowParity(t *testing.T) {
 		t.Errorf("ask = %q, want the newline folded: %q", r.Ask, want)
 	}
 
+	if want := "blocked at judge"; ours["ship"] != want {
+		t.Errorf("ship = %q, want %q", ours["ship"], want)
+	}
+
+	var out strings.Builder
+	r.Show(&out, time.Now())
+
 	seen := 0
 
-	for line := range strings.SplitSeq(strings.TrimSpace(run("show")), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
 		label, rest, _ := strings.Cut(line, " ")
 		value := strings.TrimSpace(rest)
 
 		switch label {
 		case "capture", "plan", "ship":
-			// the script prefixes a glyph; the words after it are the value
+			// a glyph comes first; the words after it are the value
 			_, value, _ = strings.Cut(value, " ")
 		case "updated", "root":
-			continue // age is time-dependent; root is recorded only by the seed hook
+			continue
 		}
 
 		want, known := ours[label]
 		if !known {
-			t.Errorf("script prints %q, which this package does not carry", label)
+			t.Errorf("show prints %q, which the run does not carry", label)
 
 			continue
 		}
@@ -241,12 +219,107 @@ func TestShowParity(t *testing.T) {
 		seen++
 
 		if value != want {
-			t.Errorf("%s: script %q, package %q", label, value, want)
+			t.Errorf("%s: show %q, run %q", label, value, want)
 		}
 	}
 
 	if seen != len(ours) {
-		t.Errorf("script printed %d of the %d shared labels", seen, len(ours))
+		t.Errorf("show printed %d of the %d shared labels", seen, len(ours))
+	}
+}
+
+// The status line runs bin/f10-state.sh render, a bash reader of the file
+// this package writes. Each status must draw its own glyph, and a stopped
+// run its step, exactly as the bash writer's files drew them.
+func TestRenderParity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash script")
+	}
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate this source file")
+	}
+
+	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
+	dir := t.TempDir()
+
+	render := func(r *Run) string {
+		t.Helper()
+
+		if err := r.Save(dir, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := exec.Command(script, "render", r.Session)
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1")
+
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+
+		return string(out)
+	}
+
+	for _, tc := range []struct {
+		run  Run
+		want string
+	}{
+		{Run{Capture: "pending", Plan: "pending", Ship: "pending"}, " 󱊴 ○○○"},
+		{Run{Capture: "running", Plan: "pending", Ship: "pending"}, " 󱊴 ◎○○"},
+		{Run{Capture: "skipped", Plan: "done", Ship: "pending"}, " 󱊴 ◌●○"},
+		{Run{Capture: "prior", Plan: "prior", Ship: "running", Leaf: "implement"}, " 󱊴 ◉◉◎"},
+		{Run{Capture: "prior", Plan: "done", Ship: "failed", Leaf: "pr"}, " 󱊴 ◉●✗ pr"},
+		{Run{Capture: "prior", Plan: "done", Ship: "partial", Leaf: "pr"}, " 󱊴 ◉●󰅚 pr"},
+		{Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Skill: "ship", Ask: "1. go?"}, " 󱊴 ◉●󰜺 judge"},
+	} {
+		r := tc.run
+		r.Session, r.Root = "render", "/work/acme"
+
+		if got := render(&r); got != tc.want {
+			t.Errorf("%+v renders %q, want %q", tc.run, got, tc.want)
+		}
+	}
+}
+
+func TestSetRejectsTypos(t *testing.T) {
+	r := Fresh("s")
+
+	for _, err := range []error{
+		r.Set("shp", "running", ""),
+		r.Set("ship", "runing", ""),
+		r.SetTask("", ""),
+		r.SetNote("", "x"),
+		r.SetAsk(""),
+		r.SetFinal(""),
+	} {
+		if _, ok := errors.AsType[*UsageError](err); !ok {
+			t.Errorf("got %v, want a UsageError", err)
+		}
+	}
+}
+
+func TestSaveFlattensAndRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	r := Fresh("s")
+	r.Root, r.Skill, r.Note = "/work/acme", "ship", "two\nlines"
+
+	if err := r.Save(dir, time.Unix(1_800_000_000, 0)); err != nil {
+		t.Fatal(err)
+	}
+
+	back, err := Load(Path(dir, "s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if back.Note != "two lines" || back.Skill != "ship" || back.Updated.Unix() != 1_800_000_000 {
+		t.Errorf("read back %+v", back)
+	}
+
+	if matches, _ := filepath.Glob(filepath.Join(dir, "*.state.*")); len(matches) != 0 {
+		t.Errorf("temp files left: %v", matches)
 	}
 }
 
@@ -269,8 +342,6 @@ func TestInject(t *testing.T) {
 	if _, err := os.Stat(script); err != nil {
 		t.Fatalf("f10-inject.sh not found: %v", err)
 	}
-
-	stateScript := filepath.Join(bin, "f10-state.sh")
 
 	dir := t.TempDir()
 	env := append(os.Environ(), dirEnv+"="+dir)
@@ -364,13 +435,14 @@ func TestInject(t *testing.T) {
 	}
 
 	// a new run (seed) and a dropped badge (clear) are not a new context
-	for _, args := range [][]string{{"seed", "plan", "s3", "GH-2", dir}, {"clear"}} {
-		cmd := exec.Command(stateScript, args...)
-		cmd.Env = append(slices.Clone(env), sessionEnv+"=s3")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("%v: %v\n%s", args, err, out)
-		}
+	r := Fresh("s3")
+	r.Seed("plan", "GH-2", dir)
+
+	if err := r.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
 	}
+
+	Clear(dir, "s3")
 
 	if got := inject(typed("s3", "p2", "f10:plan", "GH-2")); got != "" {
 		t.Error("after seed and clear: injected again")

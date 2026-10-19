@@ -1,0 +1,1 @@
+{"session_id":"s1","transcript_path":"/home/dev/.claude/projects/-work-acme/s1.jsonl","cwd":"/work/acme","prompt_id":"p1","permission_mode":"auto","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"f10:ship","command_args":"--dry-run FT-12","command_source":"plugin","prompt":"/f10:ship --dry-run FT-12"}

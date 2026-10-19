@@ -19,6 +19,7 @@
 #   f10 --shim-resolve    resolve only; exit 1 with the one line when it cannot
 #   f10 --shim-rebuild    build this checkout's cli/ into its cache slot (`just install`)
 #   f10 --shim-hook       the SessionStart hook, from hooks/hooks.json only
+#   f10 hook              every other hook: the cached binary only, nothing when there is none
 #
 # F10_SHIM_CACHED_ONLY=1 fails fast instead of downloading or building, for hooks with a short
 # timeout.
@@ -181,8 +182,13 @@ stale_build() {
 # Runs synchronously but never waits on a download or a build: those go to the background, and a
 # background failure surfaces on the first real call with the same line. What the user should see
 # goes out as one systemMessage.
+#
+# The session start's own `f10 hook` (statusline relink, start mark, prune) is a no-op while no
+# binary is cached, so a background resolve replays it with this payload once one lands: the first
+# session after an install or update otherwise keeps a statusline pointing at the old install.
 hook() {
-  local said=""
+  local said="" payload=""
+  [ -t 0 ] || payload="$(cat)"
   # Claude Code applies CLAUDE_ENV_FILE to every later Bash command. The plugin's bin/ would
   # otherwise come after ~/go/bin, where a stale `go install` copy shadows this shim.
   if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -206,7 +212,9 @@ hook() {
     why_dl="curl is not installed"
     said="${said:+$said. }$(cannot)"
   else
-    nohup "$root/bin/f10" --shim-resolve </dev/null >"$cache/resolve.log" 2>&1 &
+    # shellcheck disable=SC2016 # expanded by the inner sh, from its arguments
+    nohup sh -c '"$1" --shim-resolve && printf "%s" "$2" | "$1" hook' sh "$root/bin/f10" "$payload" \
+      </dev/null >"$cache/resolve.log" 2>&1 &
   fi
 
   [ -z "$said" ] || printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$said" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
@@ -222,6 +230,12 @@ case "${1:-}" in
     }
     ;;
   --shim-hook) hook ;;
+  hook)
+    # Hooks have a short timeout and never fail a run: no download or build here. Until the
+    # session start's background resolve lands a binary, a hook is a silent no-op.
+    cached || exit 0
+    F10_PLUGIN_ROOT="$root" exec "$bin" "$@"
+    ;;
   *)
     resolve
     exec "$bin" "$@"

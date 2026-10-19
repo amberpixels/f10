@@ -73,6 +73,8 @@ func newApp() *cli.Command {
 			forwardCommand(),
 			driveCommand(),
 			finishCommand(),
+			hookCommand(),
+			stateCommand(),
 		},
 	}
 }

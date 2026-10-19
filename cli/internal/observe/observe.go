@@ -1,0 +1,123 @@
+// Package observe turns what a hook sees - a Bash command and its output, a
+// file written - into typed facts about a run: an issue or PR opened, a
+// commit, a push, a step loaded, a plan or findings file saved.
+//
+// It only recognises; it never acts. Observers do: the badge reads a few of
+// these to settle what the model would otherwise have to report, and the
+// ledger persists all of them.
+package observe
+
+import (
+	"context"
+	"time"
+)
+
+// Meta is what every observation carries: the session it happened in, the
+// directory it ran from, and when the hook saw it.
+type Meta struct {
+	Session string    `json:"session"`
+	Cwd     string    `json:"cwd,omitempty"`
+	At      time.Time `json:"at"`
+}
+
+func (m *Meta) meta() *Meta { return m }
+
+// An Observation is one fact. The set is closed: only this package's types
+// satisfy it, so an observer's type switch can be exhaustive.
+type Observation interface {
+	Kind() string
+	meta() *Meta
+}
+
+// Stamp fills an observation's Meta.
+func Stamp(o Observation, session, cwd string, at time.Time) {
+	m := o.meta()
+	m.Session, m.Cwd, m.At = session, cwd, at
+}
+
+// MetaOf reads an observation's Meta.
+func MetaOf(o Observation) Meta { return *o.meta() }
+
+// An Observer receives observations, one at a time, in the order a hook saw
+// them. An error is the observer's own; the hook carries on.
+type Observer interface {
+	Observe(ctx context.Context, o Observation) error
+}
+
+// IssueCreated is a tracker issue opened with `gh issue create` or
+// `glab issue create`, seen by the url it printed.
+type IssueCreated struct {
+	Meta
+
+	Host string `json:"host"` // gh or glab
+	URL  string `json:"url"`
+}
+
+// PRCreated is a PR or MR opened with `gh pr create` or `glab mr create`.
+type PRCreated struct {
+	Meta
+
+	Host string `json:"host"`
+	URL  string `json:"url"`
+}
+
+// Committed is a `git commit` that made a commit, seen by its
+// `[branch sha] subject` line.
+type Committed struct {
+	Meta
+
+	Branch  string `json:"branch"`
+	SHA     string `json:"sha"` // abbreviated, as git printed it
+	Subject string `json:"subject"`
+}
+
+// Pushed is a `git push` that moved at least one ref.
+type Pushed struct {
+	Meta
+
+	Remote string   `json:"remote,omitempty"` // the `To <remote>` line
+	Refs   []string `json:"refs"`             // each `src -> dst` as printed
+}
+
+// StepStarted is `f10-load-project.sh` loading steps: ship loads each
+// pipeline step right before it runs, so one step named is that step
+// starting. No steps is a load for a pipeline with no step to name.
+type StepStarted struct {
+	Meta
+
+	Steps []string `json:"steps"`
+}
+
+// Finished is an `f10 finish` call, with its arguments.
+type Finished struct {
+	Meta
+
+	Args []string `json:"args"`
+}
+
+// PlanWritten is a plan file saved under the storage root's plans/.
+type PlanWritten struct {
+	Meta
+
+	Path string `json:"path"`
+	Task string `json:"task"`
+}
+
+// FindingsWritten is a review's findings file saved under the storage root's
+// reviews/<task>/.
+type FindingsWritten struct {
+	Meta
+
+	Path  string `json:"path"`
+	Task  string `json:"task"`
+	Round string `json:"round"`
+}
+
+func (*IssueCreated) Kind() string    { return "issue_created" }
+func (*PRCreated) Kind() string       { return "pr_created" }
+func (*Committed) Kind() string       { return "committed" }
+func (*Pushed) Kind() string          { return "pushed" }
+func (*StepStarted) Kind() string     { return "step_started" }
+func (*Finished) Kind() string        { return "finished" }
+func (*PlanWritten) Kind() string     { return "plan_written" }
+func (*FindingsWritten) Kind() string { return "findings_written" }
