@@ -7,7 +7,7 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, and post review's `f10 review ack`.
+Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and, for a judge entry after `pr`, push its changes to that PR and post its status and comment.
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -51,7 +51,8 @@ Run the **catchup** step's points 2 and 3, with three differences:
 
 Run the pipeline's steps **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
-A `judge` step routes the run by its verdict (the **judge** step).
+A `judge` step routes the run by its verdict, differently before and after a `pr` entry (the **judge** step).
+After `pr`, the changes folded into the plan are built by the judge step's own route, not by a rerun of `implement`.
 
 **Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected; `f10-state.sh set ship running <step>` before each step, named as the pipeline names it, in the call that loads it; `f10-state.sh set ship done` after the last.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
