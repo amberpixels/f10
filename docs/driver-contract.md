@@ -18,7 +18,7 @@ A file that is missing, is a directory, or has no execute bit is simply "no driv
 <driver> <verb> [argument]
 ```
 
-Four verbs, each writing its answer to stdout:
+Five verbs, each writing its answer to stdout:
 
 | verb | argument | stdout |
 |---|---|---|
@@ -26,8 +26,9 @@ Four verbs, each writing its answer to stdout:
 | `url` | task number | one url, alone on a line |
 | `search` | a query string | a JSON array of task rows |
 | `branch` | task number | one branch name, alone on a line |
+| `children` | task number | a JSON array of the task's subtasks |
 
-The argument for `read`, `url` and `branch` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
+The argument for `read`, `url`, `branch` and `children` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 
 `branch` is where a project encodes its branch shape - `feat/1042-short-slug`, or whatever `project.md` declares under Hosting & PR.
 `f10 start` creates that branch; a driver without the verb gets the default, `<ID>/<slug>`, the slug cut from the title the host CLI returns.
@@ -38,6 +39,17 @@ Extra fields are allowed and ignored:
 ```json
 [{ "id": "ABC-1042", "title": "Fix order search timeout", "status": "In Progress", "url": "https://…" }]
 ```
+
+A `children` row is one subtask linked to the task as its parent.
+f10 drops rows whose `state` is `closed`, resolves `id` and `after` to the project's id format, and decides `finished` itself, so a driver returns every subtask it knows:
+
+```json
+[{ "id": "ABC-1043", "title": "Add the index", "url": "https://…", "state": "open", "labels": ["draft"], "after": "ABC-1042" }]
+```
+
+`after` is optional: a row with a `body` instead has its `After:` line read from it.
+`[]` means the task has no subtasks.
+Exit `3` declines the verb as for any other: f10 falls back to the host's issues, and where the tracker is not the host's, reads it as no parent link, so `/f10:drive` drives the id as given.
 
 ## Exit codes
 

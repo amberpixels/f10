@@ -24,10 +24,11 @@ import (
 
 // Verbs a driver may implement.
 const (
-	VerbRead   = "read"   // stdout: the task as markdown
-	VerbURL    = "url"    // stdout: one url
-	VerbSearch = "search" // stdout: JSON rows, one task each
-	VerbBranch = "branch" // stdout: one branch name, never created
+	VerbRead     = "read"     // stdout: the task as markdown
+	VerbURL      = "url"      // stdout: one url
+	VerbSearch   = "search"   // stdout: JSON rows, one task each
+	VerbBranch   = "branch"   // stdout: one branch name, never created
+	VerbChildren = "children" // stdout: JSON rows, one subtask each
 )
 
 // ExitUnsupported is the contract's reserved exit code: the driver ran and

@@ -68,7 +68,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task, printed, and drafted where your settings or the project's overlay name a delivery adapter; the next one starts where it ended |
 | `/f10:status [id]` | nothing: a hook answers it; with an id, `f10 status <id>` | the run's status in words; with an id, another worktree's run and its agent's question, relayed and answered |
 | `/f10:start <id> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent |
-| `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; agents' questions relayed |
+| `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; a parent id expands into the subtasks you pick; agents' questions relayed |
 | `/f10:finish <id> [--yes]` | nothing: it runs `f10 finish` | PR merged, plan archived, workspace closed, worktree and branch gone, main pulled |
 
 ## Install
