@@ -93,13 +93,16 @@ The overlay's wording and Deliver adapter apply only to a report covering that p
 The prose under `~/.f10/standup.md`'s frontmatter is yours and wins where the two disagree, and a `## <group>` section in it can give one group its own wording and destination; a Deliver adapter, whose destination is yours, usually belongs there.
 Adapters are named in that prose, never as frontmatter keys, which `f10 standup` rejects.
 
+`cleanup.md` adds a project's rules to the cleanup step: its comment conventions, code or comments never to remove, more development-artifact patterns, typography.
+Cleanup replaces em and en dashes by default; a project that keeps them says so here.
+
 ## Pipelines
 
 One pipeline, or several named ones, in the frontmatter:
 
 ```yaml
 pipelines:
-  default: implement → review (local) → pr
+  default: implement → cleanup → review (local) → pr
   direct: implement → push
   local: [implement, commit]
 planless: [direct]
@@ -108,6 +111,7 @@ planless: [direct]
 `default` runs unless the user names another.
 `local` is the one `f10 start --local` selects: the run ends in commits and nothing leaves the machine.
 A planless pipeline skips capture and the plan file for free-text input.
+A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
 
 ## Drive chain
