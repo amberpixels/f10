@@ -164,12 +164,23 @@ func (r Lookup) parse(token, origin string) (Ref, error) {
 // names carry it in any position and any case - `ABC-2049/dark-mode`,
 // `feature/abc-123-fix-bug` - so the prefix is anchored on a non-word
 // boundary rather than on the start of the string.
+// A branch picked up from a PR may carry no id at all, so the task its
+// local config links it to (`branch.<name>.f10-task`) is read first.
 func (r Lookup) fromBranch(ctx context.Context) string {
+	branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch == "" {
+		return ""
+	}
+
+	if id := gitx.Out(ctx, r.Dir, "config", "--get", "branch."+branch+".f10-task"); id != "" {
+		return id
+	}
+
 	if r.Prefix == "" {
 		return ""
 	}
 
-	return Match(r.Prefix, gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	return Match(r.Prefix, branch)
 }
 
 // Match is the task id in text: a branch name, a PR title, a commit

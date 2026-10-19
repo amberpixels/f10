@@ -1,8 +1,8 @@
 // Package gitx is the binary's one door to git. The reads mirror the
 // shell-outs bin/f10-load-project.sh makes - the bash script is the semantics
 // oracle, and shelling out identically keeps the two comparable. The
-// writes are `f10 start`'s - a branch, a worktree, and the config entries
-// that record what a branch depends on - and `f10 finish`'s, which undoes
+// writes are `f10 start`'s - a branch (new, or tracking origin's), a
+// worktree, and the config entries that record what a branch depends on - and `f10 finish`'s, which undoes
 // them once the branch has merged: the pull, the worktree removal, the
 // branch deletion. `f10 drive` adds one: the push of a branch it caught up
 // before merging.
@@ -128,6 +128,21 @@ func AddWorktree(ctx context.Context, dir, path, branch, base string, create boo
 	}
 
 	_, err := Exec(ctx, dir, args...)
+
+	return err
+}
+
+// Fetch updates every remote-tracking branch from origin.
+func Fetch(ctx context.Context, dir string) error {
+	_, err := Exec(ctx, dir, "fetch", "origin")
+
+	return err
+}
+
+// TrackBranch creates local branch from origin's branch of the same name,
+// tracking it, so a pull or push in its worktree needs no upstream set.
+func TrackBranch(ctx context.Context, dir, branch string) error {
+	_, err := Exec(ctx, dir, "branch", "--track", branch, "origin/"+branch)
 
 	return err
 }
