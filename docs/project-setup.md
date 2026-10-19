@@ -167,7 +167,7 @@ Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted
 The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped".
 A round that found anything also gets a PR comment listing the findings by title, each with its verdict and each skip's reason.
 The fix commit's message names what it fixed and what it skipped.
-A judge after the PR leaves a `judge` status and a one-line comment; a proceed with changes pushes its changes first, and a stop marks the PR "do not merge" with its reason, leaving it open.
+A judge after the PR leaves a `judge` status and a comment with its verdict; a proceed with changes pushes its changes first and lists them, and a stop marks the PR "do not merge" with its reason, leaving it open.
 The status is tied to a commit, so a later push shows the new head as unreviewed, a judge's own push included: judge plus green verify is not followed by a second review.
 It is off by default because on a shared repo every comment reaches your teammates.
 In stealth mode every trace reads as your own.

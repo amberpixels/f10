@@ -31,7 +31,7 @@ Deploy has its own confirmation (the **deploy** step).
    The pipeline is declared in the `project.md` it prints.
 2. Follow those steps in the order the Arguments item gives.
 3. Load each pipeline step just before it runs, in one call with its badge: `f10-state.sh set ship running <step>; f10-load-project.sh <step>`, and follow the step from that load.
-   A `review` entry loads `review resolve`; with a recorded base (below), implement's load is `catchup implement`.
+   A `review` entry loads `review resolve`; a `judge` entry after a `pr` entry loads `judge implement commit`, for the yellow route; with a recorded base (below), implement's load is `catchup implement`.
 
 **Pipelines** are the frontmatter's `pipelines:`, a name to its ordered steps, a list or one `a → b` string (`implement → review (local) → pr → review (CI) → deploy (staging)`); none declared is `default: implement → pr`.
 Each name is a generic step plus its overlay, or a project-defined one.

@@ -2,7 +2,8 @@
 
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
-Output: a verdict in chat, the argument under it.
+Output: a verdict in chat, the argument under it; after `pr` in a ship run, also a pushed commit (yellow) and a status and comment on the PR.
+Context: after `pr` only, `project.md → Verify` and `→ Hosting & PR`, and the frontmatter's `review_traces`.
 **It writes nothing** (folding a verdict into the plan is the ship skill's; the badge note lives outside every repo).
 The one exception is a judge entry after `pr` in a ship run: its route writes code, commits and PR traces under the ship skill's authorization.
 A standalone `/f10:judge` never does, on a PR included.
@@ -77,7 +78,7 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 
 - **Green, proceed** - leave the trace (below) and continue; the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.
-  The ship skill folds them into the plan file as before `pr`; then make them, run the project's Verify, commit as `steps/commit.md` point 2 says, and push to the PR's branch, never forcing.
+  The ship skill folds them into the plan file as before `pr`; then make and verify them as `steps/implement.md` points 1 and 2 say, commit as `steps/commit.md` point 2 says, and push to the PR's branch, never forcing.
   With `review_traces: on`, the commit body names each change in plain words for a reader of the PR.
   No second review round: a judge plus green verify is enough.
   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`), the changes left uncommitted and nothing posted.
@@ -96,10 +97,10 @@ The answer resumes at `judge`: refactor runs yellow, stop runs red.
 
 **The trace** after `pr`, when the frontmatter says `review_traces: on` and the branch has an open PR or MR; off, every route still runs and only the status and comment are skipped.
 
-- **Status** with context `judge` on the PR's head after this step's push (yellow: the pushed commit; green and red: `headRefOid`), via the calls `steps/resolve.md` point 10 uses with `context='judge'` (GitLab `name='judge'`), the description under 140 characters:
-  green `success` with the reason; yellow `success` with `proceed with changes: <n> changes`; red `failure` with `do not merge: <the reason>`, cut to fit.
-  A driven orange ask sets `failure` with `rethink: waiting on a decision` before the run ends blocked; its settled color sets the status again.
-  A sha already carrying a `judge` status is left alone.
+- **Status** with context `judge` on the PR's head after this step's push (yellow: the pushed commit; green and red: `headRefOid`), the description under 140 characters: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='judge' -f description='<text>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='judge' -f description='<text>'`.
+  The descriptions: green `success` with the reason; yellow `success` with `proceed with changes: <n> changes`; red `failure` with `do not merge: <the reason>`, cut to fit.
+  A driven orange ask sets `failure` with `rethink: waiting on a decision` before the run ends blocked; its settled color replaces that status.
+  Otherwise a sha already carrying a `judge` status with the same state and description is left alone, so a retry never posts twice.
 - **Comment** (`gh pr comment` / `glab mr note`), never while an orange ask waits.
   Green: one line, the verdict and its reason.
   Yellow: the verdict and its reason, a line per change, the commit's short sha.
@@ -109,4 +110,5 @@ The answer resumes at `judge`: refactor runs yellow, stop runs red.
 - The report adds a `commit` row when yellow pushed, a `status` row (the sha and its state) and a `comment` row (its url) when posted.
 
 **On failure:** an unknown task id or an unreadable PR (`conventions/failure.md`).
+After `pr`, also a PR closed or merged since `pr`, red verify and a failed post (above), and a rejected push: it stops with the commit local, badge `partial` on `judge`, nothing posted; never force-push to clear it.
 A **stop** verdict is success.
