@@ -24,7 +24,7 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
      - **Repro detail stops at what reproduces it**, not the session that found it.
      - **No effort estimates.**
    - **A dependency is a fixed last line.**
-     When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; `f10 start` and `f10 drive` read it, so the word and the shape are fixed.
+     When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything after the id, so the word and the shape are fixed.
      No known order, no line.
      Tasks meant to run in sequence are created in that order, so each `After:` names an id that already exists.
    - **Other tasks named in the body** (a base task in prose, a parent, a subtask) carry their title, in the renderer's form (`conventions/context.md` → Task references); the `After:` line stays bare.

@@ -13,6 +13,7 @@ For tiny, low-risk changes: chores, annotations, typos.
    The implement step's verify must have passed.
 3. **Commit clean.**
    Small, conventional commits in the repo's style; no AI attribution lines; in stealth mode, no f10 traces in messages (`conventions/context.md`).
+   Another task named in a message carries its title (`conventions/context.md` → Task references).
 4. **Push** to the branch the user intended (default branch unless they said otherwise), and **report** per `conventions/report.md`: a `branch` row and a `commit` row with the sha(s), then a one-line summary of what changed as prose.
 
 **On failure:** the push is rejected (protected branch, stale ref): stop and report, leaving the commits local.

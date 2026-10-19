@@ -91,13 +91,14 @@ Unless `project.md` says `public`:
 
 ## Task references
 
-Text that leaves the machine (PR/MR text and replies, commit messages, tracker task bodies) names a task other than its own by title and url, not a bare id: `FT-70` does not autolink on GitHub, and a Jira, Linear or Notion id means nothing to a reader.
+Text that leaves the machine (PR/MR text and replies, commit messages, tracker task bodies) names a task other than its own by its title, and a url where the text renders one, not a bare id: `FT-70` does not autolink on GitHub, and a Jira, Linear or Notion id means nothing to a reader.
 
-- **Rendered markdown** (PR/MR text, PR/MR replies, GitHub/GitLab task bodies): the first mention is `[<ID>: <title>](<url>)`; later mentions may use the bare id.
-- **Unrendered text** (commit messages, a tracker that does not render markdown, per `steps/capture.md`): `<ID> (<title>)`, no url.
+- **Text that renders links** (PR/MR bodies and replies, task bodies on a tracker whose renderer takes links): the first mention is a link titled `<ID>: <title>`, in the renderer's form (`[<ID>: <title>](<url>)` in markdown, a native link on Notion or Jira, per `steps/capture.md`).
+- **Text that renders nothing** (PR/MR and task titles, commit messages, an unknown renderer): `<ID> (<title>)`, no url.
+- **First mention in each text**: every body, reply, comment and commit message is read on its own, so each names the task in full once; later mentions in the same text may use the bare id.
 - **Title and url** come from `f10 task read <id>`, else the project's fetch adapter; a task this run already read is not read again.
 - **An id the tracker does not know**, or a read that fails, stays bare, with no invented title; it does not fail the step.
-- **Fixed-shape lines keep their shape**: `After: <id>` stays bare because `f10 start` and `f10 drive` parse it.
+- **Fixed-shape lines keep their shape**: `After: <id>` stays a bare id; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything after the id.
 - The task the work belongs to keeps the form its host needs (a closing keyword such as `Closes #83`).
 
 A tracker link is not an f10 trace: stealth mode allows it.
