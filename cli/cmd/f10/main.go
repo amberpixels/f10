@@ -18,6 +18,8 @@
 // surface for a pipeline run; this is the surface for a person, and for the commands an agent runs
 // to read a task, start the next one, reach another or finish this one.
 //
+// `ledger dump` reads the local record hooks and badge calls append to.
+//
 // A verb means one thing under every noun: `read` writes content, `open`
 // follows an address, `search` finds by description. The matrix is sparse
 // where a verb has no meaning for a noun; it never redefines one to fill a
@@ -75,6 +77,7 @@ func newApp() *cli.Command {
 			finishCommand(),
 			hookCommand(),
 			stateCommand(),
+			ledgerCommand(),
 		},
 	}
 }

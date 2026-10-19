@@ -121,3 +121,39 @@ func (*StepStarted) Kind() string     { return "step_started" }
 func (*Finished) Kind() string        { return "finished" }
 func (*PlanWritten) Kind() string     { return "plan_written" }
 func (*FindingsWritten) Kind() string { return "findings_written" }
+
+// SkillStarted is an f10 skill starting: typed, which Claude Code expands,
+// or called by the model through the Skill tool.
+type SkillStarted struct {
+	Meta
+
+	Skill string `json:"skill"`
+	Args  string `json:"args,omitempty"`
+}
+
+// SessionStopped is a turn ending with a run in the session, at the phase,
+// status and leaf its state held before the Stop backstop ran. Backstop says
+// the backstop then promoted it to done.
+type SessionStopped struct {
+	Meta
+
+	Task     string `json:"task,omitempty"`
+	Phase    string `json:"phase"`
+	Status   string `json:"status"`
+	Leaf     string `json:"leaf,omitempty"`
+	Backstop bool   `json:"backstop,omitempty"`
+}
+
+// PlanArchived is a plan moved into the storage root's plans/archive/, the
+// plan step's way of superseding it.
+type PlanArchived struct {
+	Meta
+
+	From string `json:"from"`
+	To   string `json:"to"`
+	Task string `json:"task"`
+}
+
+func (*SkillStarted) Kind() string   { return "skill_started" }
+func (*SessionStopped) Kind() string { return "session_stopped" }
+func (*PlanArchived) Kind() string   { return "plan_archived" }

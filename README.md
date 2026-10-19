@@ -324,6 +324,9 @@ Overriding `F10_STATE_GLYPHS` takes all eight positions; the last two hold the r
 Steps report precisely, hooks reliably: `Stop` closes a run whose last badge line the agent dropped.
 A phase left `pending` means "nobody said".
 
+Both writers also append to a local ledger, `~/.f10/f10.db` (SQLite, outside every repo): what the hooks observed, what artifacts (plans, findings) hold, and every badge call as the model claimed it, each row tagged with that source.
+A write that fails goes to `~/.f10/ledger.spool`, replayed by the next one; `f10 ledger dump` prints the rows.
+
 </details>
 
 Unrelated to f10 but pairs with it: Claude Code's [`footerLinksRegexes`](https://code.claude.com/docs/en/settings#footer-link-badges) turns a task id in a reply into a clickable footer badge, one regex per tracker, no script.
@@ -364,6 +367,7 @@ f10 pr open              # this branch's PR or MR, gh or glab decided by the rem
 f10 review pick|wait|ack # the remote review on that PR: read it, await it, mark it handled
 f10 status               # where the run is: this session's, or this repo's live ones
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
+f10 ledger dump          # what runs recorded locally (--json, --project ., --task, --session)
 ```
 
 A reference is any id shape (`1042`, `#1042`, `ABC-1042`) or the task's url.

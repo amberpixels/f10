@@ -1,6 +1,8 @@
 package observe
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -91,5 +93,63 @@ func TestFromWrite(t *testing.T) {
 				t.Errorf("FromWrite = %#v, want %#v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestFromMovesNeedsTheArchivedFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "proj", ".f10")
+	archive := filepath.Join(root, "plans", "archive")
+
+	if err := os.MkdirAll(archive, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := "mkdir -p " + archive + " && mv " + filepath.Join(
+		root,
+		"plans",
+		"FT-3.md",
+	) + " " + filepath.Join(
+		archive,
+		"FT-3.1.md",
+	)
+
+	if got := FromMoves(cmd, "", ""); len(got) != 0 {
+		t.Errorf("a move that left nothing counted: %+v", got)
+	}
+
+	if err := os.WriteFile(filepath.Join(archive, "FT-3.1.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := FromMoves(cmd, "", "")
+	want := []Observation{&PlanArchived{
+		From: filepath.Join(root, "plans", "FT-3.md"), To: filepath.Join(archive, "FT-3.1.md"), Task: "FT-3",
+	}}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+
+	// relative, into the directory, with an out-of-tree root
+	oot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(oot, "plans", "archive"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(oot, "plans", "archive", "FT-4.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := FromMoves(
+		"mv -f plans/FT-4.md plans/archive/",
+		oot,
+		oot,
+	); len(got) != 1 ||
+		got[0].(*PlanArchived).Task != "FT-4" {
+		t.Errorf("relative move: %+v", got)
+	}
+
+	if got := FromMoves("mv notes.md elsewhere/", oot, oot); len(got) != 0 {
+		t.Errorf("unrelated move: %+v", got)
 	}
 }
