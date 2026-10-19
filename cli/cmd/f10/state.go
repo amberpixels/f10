@@ -22,6 +22,8 @@ func stateCommand() *cli.Command {
 			Name:      name,
 			ArgsUsage: args,
 			Usage:     usage,
+			// notes and asks are free prose: a leading dash is text, not a flag
+			SkipFlagParsing: true,
 			Action: func(_ context.Context, cmd *cli.Command) error {
 				return writeState(cmd, apply)
 			},

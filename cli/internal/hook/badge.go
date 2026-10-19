@@ -26,6 +26,13 @@ func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 		return nil
 	}
 
+	// the id lookup runs git and reads the project, so it happens before the
+	// load: a writer call landing during it must not be saved over
+	issueID := ""
+	if o, ok := o.(*observe.IssueCreated); ok && b.env.TaskID != nil {
+		issueID = b.env.TaskID(ctx, b.cwd, o.URL)
+	}
+
 	r, loaded := state.LoadOrFresh(b.env.StateDir, b.session)
 
 	switch o := o.(type) {
@@ -46,16 +53,11 @@ func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 	case *observe.IssueCreated:
 		// capture creating the task; the first issue (a parent) wins over the
 		// subtasks created after it
-		if !loaded || r.Capture != "running" || r.Task != "" || b.env.TaskID == nil {
+		if !loaded || r.Capture != "running" || r.Task != "" || issueID == "" {
 			return nil
 		}
 
-		id := b.env.TaskID(ctx, b.cwd, o.URL)
-		if id == "" {
-			return nil
-		}
-
-		if err := r.SetTask(id, o.URL); err != nil {
+		if err := r.SetTask(issueID, o.URL); err != nil {
 			return err
 		}
 	default:

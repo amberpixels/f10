@@ -171,8 +171,13 @@ stale_build() {
 # Runs synchronously but never waits on a download or a build: those go to the background, and a
 # background failure surfaces on the first real call with the same line. What the user should see
 # goes out as one systemMessage.
+#
+# The session start's own `f10 hook` (statusline relink, start mark, prune) is a no-op while no
+# binary is cached, so a background resolve replays it with this payload once one lands: the first
+# session after an install or update otherwise keeps a statusline pointing at the old install.
 hook() {
-  local said=""
+  local said="" payload=""
+  [ -t 0 ] || payload="$(cat)"
   # Claude Code applies CLAUDE_ENV_FILE to every later Bash command. The plugin's bin/ would
   # otherwise come after ~/go/bin, where a stale `go install` copy shadows this shim.
   if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -198,7 +203,9 @@ hook() {
     have gh || why_dl="gh is not installed"
     said="${said:+$said. }$(cannot)"
   else
-    nohup "$root/bin/f10" --shim-resolve </dev/null >"$cache/resolve.log" 2>&1 &
+    # shellcheck disable=SC2016 # expanded by the inner sh, from its arguments
+    nohup sh -c '"$1" --shim-resolve && printf "%s" "$2" | "$1" hook' sh "$root/bin/f10" "$payload" \
+      </dev/null >"$cache/resolve.log" 2>&1 &
   fi
 
   [ -z "$said" ] || printf '{"systemMessage":"%s"}\n' "$(printf '%s' "$said" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
