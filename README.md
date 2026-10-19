@@ -172,6 +172,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
 - **Plan file** - `<storage root>/plans/<TASK-ID>.md`, the handoff from plan to ship.
   The storage root is anchored to the checkout root, whatever the launch directory.
   A plan only in chat is a failed run; superseded plans are archived, never edited.
+  It closes with **Consequences** (what the chosen design costs and when to revisit it), then **Gaps**.
 - **Findings file** - `<storage root>/reviews/<TASK-ID>/<round>.md`, from review to resolve: the reviewed sha, then one block per finding (title, summary, file and line, category, a concrete fix).
   Resolve appends verdicts and never edits the reviewer's text.
   Two rounds at most; they stay in the checkout's `.f10/`, since `f10 finish` archives only the plan.
