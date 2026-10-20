@@ -12,7 +12,7 @@ argument-hint: "<task-id | free-text description>"
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task, otherwise run the **fetch** and **plan** steps.
+- A **task id** (in the project's id format, e.g. `ABC-1234`, `#123`, or an id/url), or a **bundle** of them joined by `+` (`ABC-1+ABC-2`, one plan in the lead's file): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task, otherwise run the **fetch** and **plan** steps.
 - A **free-text description**: run the **capture** step (create the task), then **fetch** and **plan**.
 - **No argument** (an argument that names no task, like "let's plan something", counts as none):
   - **A task already in this conversation** (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.

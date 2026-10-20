@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
@@ -169,15 +170,18 @@ func hasTaskBranch(ctx context.Context, dir, id string) (bool, error) {
 // has its code in the default branch already; anything else would base the
 // work on code that does not exist, and is refused before anything is made.
 func bodyAfter(ctx context.Context, tr tracker, main string, task ref.Ref, body string) (string, string, error) {
-	line := afterIn(body)
-	if line == "" {
-		return "", "", nil
+	line, err := bundleAfter(ctx, tr, task, body)
+	if err != nil || line == "" {
+		return "", "", err
 	}
 
 	base, err := tr.resolve(ctx, line)
 	if err != nil {
 		return "", "", fmt.Errorf("%s's body says After: %s: %w", task.ID, line, err)
 	}
+
+	// a base that rides in a bundle is waited for as the bundle, by its lead
+	base = base.Head()
 
 	branched, err := hasTaskBranch(ctx, main, base.ID)
 	if err != nil {
@@ -199,4 +203,53 @@ func bodyAfter(ctx context.Context, tr tracker, main string, task ref.Ref, body 
 
 	return "", "", fmt.Errorf("%s's body says After: %s, which has no branch and is not finished: "+
 		"start %s first, or pass --base", task.ID, base.ID, base.ID)
+}
+
+// bundleAfter is the After: line a task answers to: its body's, or for a
+// bundle, the one base its members' bodies name outside the bundle. A line
+// naming another member orders work inside the one branch, so it is
+// dropped; two different bases cannot both be the branch's.
+func bundleAfter(ctx context.Context, tr tracker, task ref.Ref, body string) (string, error) {
+	if len(task.Riders()) == 0 {
+		return afterIn(body), nil
+	}
+
+	var line, base, from string
+
+	for i, m := range task.MemberRefs() {
+		text := body
+		if i > 0 {
+			info, err := tr.info(ctx, m)
+			if err != nil {
+				return "", fmt.Errorf("reading %s for its After: line: %w", m.ID, err)
+			}
+
+			text = info.body
+		}
+
+		l := afterIn(text)
+		if l == "" {
+			continue
+		}
+
+		r, err := tr.resolve(ctx, l)
+		if err != nil {
+			return "", fmt.Errorf("%s's body says After: %s: %w", m.ID, l, err)
+		}
+
+		id := r.Head().ID
+		if slices.Contains(task.Members(), r.ID) || slices.Contains(task.Members(), id) {
+			continue
+		}
+
+		switch {
+		case base == "":
+			line, base, from = l, id, m.ID
+		case base != id:
+			return "", fmt.Errorf("bundle %s has two bases: %s is After: %s and %s is After: %s; "+
+				"a branch has one", task.Label(), from, base, m.ID, id)
+		}
+	}
+
+	return line, nil
 }

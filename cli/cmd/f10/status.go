@@ -171,6 +171,9 @@ func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskSta
 		return taskStatusInput{}, err
 	}
 
+	// a bundle's run, plan and branch are its lead's
+	r = r.Head()
+
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 
 	name, path, err := taskCheckout(ctx, main, t.driver(), r, suffix)

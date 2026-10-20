@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -33,8 +34,16 @@ const (
 
 // TaskKey is the local config key, under `branch.<name>.`, that links a
 // branch to its task: start writes it on a branch picked up from a PR,
-// whose name need not carry the id.
+// whose name need not carry the id, and on a bundle's branch, for its lead.
 const TaskKey = "f10-task"
+
+// RidersKey is the key, beside TaskKey, that lists a bundle's riders,
+// space-separated: the tasks one branch ships beside its lead.
+const RidersKey = "f10-tasks"
+
+// Separator joins a bundle's ids where they are typed and in its branch
+// name: `ABC-1+ABC-2`, the lead first.
+const Separator = "+"
 
 // ErrNoReference means the cascade ran out. It is wrapped with what each
 // tier actually had to offer, because "none found" alone sends a reader
@@ -47,6 +56,61 @@ type Ref struct {
 	ID     string // "GH-22": the prefix and number in the project's format
 	Number string // "22": what a host CLI wants
 	Origin string
+	// Bundle is every id of the bundle the task belongs to, lead first, or
+	// nil for a task that ships alone
+	Bundle []string
+}
+
+// Head is the reference a branch is looked up by: the bundle's lead, or the
+// task itself. Plan, agent, run state and ledger all key on it.
+func (r Ref) Head() Ref {
+	if len(r.Bundle) == 0 || r.Bundle[0] == r.ID {
+		return r
+	}
+
+	return Ref{ID: r.Bundle[0], Number: numberOf(r.Bundle[0]), Origin: r.Origin, Bundle: r.Bundle}
+}
+
+// MemberRefs is every member as a reference of its own, the lead first.
+func (r Ref) MemberRefs() []Ref {
+	if len(r.Bundle) == 0 {
+		return []Ref{r}
+	}
+
+	refs := make([]Ref, 0, len(r.Bundle))
+	for _, id := range r.Bundle {
+		refs = append(refs, Ref{ID: id, Number: numberOf(id), Origin: r.Origin})
+	}
+
+	return refs
+}
+
+// numberOf is the number a parsed id ends in: "22" for GH-22 and for 22.
+func numberOf(id string) string {
+	return id[strings.LastIndexByte(id, '-')+1:]
+}
+
+// Members is every id the reference ships: the bundle, or the task alone.
+func (r Ref) Members() []string {
+	if len(r.Bundle) == 0 {
+		return []string{r.ID}
+	}
+
+	return r.Bundle
+}
+
+// Riders is the bundle's ids after its lead, or nil.
+func (r Ref) Riders() []string {
+	if len(r.Bundle) < 2 {
+		return nil
+	}
+
+	return r.Bundle[1:]
+}
+
+// Label is the reference as typed at an entry point: `ABC-1+ABC-2`, or the id.
+func (r Ref) Label() string {
+	return strings.Join(r.Members(), Separator)
 }
 
 // A Lookup answers references for one checkout.
@@ -59,20 +123,87 @@ type Lookup struct {
 // the branch and then to the session; a non-empty one that does not parse
 // is an error rather than a fallthrough, because a typo'd id should say so
 // instead of quietly opening whatever the branch happens to name.
+//
+// Any member of a bundle comes back with the whole bundle: a `+`-joined
+// token as the lead, a single id as itself, so reading a rider still reads
+// the rider and Head finds the branch.
 func (r Lookup) Find(ctx context.Context, explicit string) (Ref, error) {
 	if strings.TrimSpace(explicit) != "" {
-		return r.parse(explicit, OriginExplicit)
+		if !isURL(explicit) && strings.Contains(explicit, Separator) {
+			return r.parseBundle(explicit)
+		}
+
+		return r.bundled(ctx, explicit, OriginExplicit, nil)
 	}
 
-	if id := r.fromBranch(ctx); id != "" {
-		return r.parse(id, OriginBranch)
+	if id, members := r.fromBranch(ctx); id != "" {
+		return r.bundled(ctx, id, OriginBranch, members)
 	}
 
 	if id := sessionTask(); id != "" {
-		return r.parse(id, OriginSession)
+		return r.bundled(ctx, id, OriginSession, nil)
 	}
 
 	return Ref{}, r.exhausted(ctx)
+}
+
+// parseBundle reads `ABC-1+ABC-2` as a bundle: the lead's reference, with
+// every member parsed alike. A repeated member, or a single one, is a typo.
+func (r Lookup) parseBundle(token string) (Ref, error) {
+	parts := strings.Split(strings.TrimSpace(token), Separator)
+	if len(parts) < 2 {
+		return Ref{}, fmt.Errorf("a bundle is two or more ids joined by %s: %s", Separator, token)
+	}
+
+	var lead Ref
+
+	members := make([]string, 0, len(parts))
+
+	for i, part := range parts {
+		got, err := r.parse(part, OriginExplicit)
+		if err != nil {
+			return Ref{}, fmt.Errorf("in bundle %s: %w", token, err)
+		}
+
+		if slices.Contains(members, got.ID) {
+			return Ref{}, fmt.Errorf("bundle %s names %s twice", token, got.ID)
+		}
+
+		if i == 0 {
+			lead = got
+		}
+
+		members = append(members, got.ID)
+	}
+
+	lead.Bundle = members
+
+	return lead, nil
+}
+
+// bundleOf is the bundle local config records id in, lead first, or nil:
+// a branch whose riders list it, or whose linked lead it is.
+func (r Lookup) bundleOf(ctx context.Context, id string) []string {
+	for _, e := range gitx.ConfigEntries(ctx, r.Dir, `^branch\..*\.`+RidersKey+`$`) {
+		branch := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+RidersKey)
+		riders := strings.Fields(e.Value)
+
+		lead := gitx.Out(ctx, r.Dir, "config", "--get", "branch."+branch+"."+TaskKey)
+		if lead == "" {
+			lead = Match(r.Prefix, branch)
+		}
+
+		if lead == "" || len(riders) == 0 {
+			continue
+		}
+
+		same := func(s string) bool { return strings.EqualFold(s, id) }
+		if same(lead) || slices.ContainsFunc(riders, same) {
+			return append([]string{lead}, riders...)
+		}
+	}
+
+	return nil
 }
 
 // exhausted explains which tier came up empty and why. The session tier is
@@ -164,27 +295,87 @@ func (r Lookup) parse(token, origin string) (Ref, error) {
 	return Ref{ID: id, Number: m[2], Origin: origin}, nil
 }
 
-// fromBranch pulls the task id out of the current branch name. Real branch
-// names carry it in any position and any case - `ABC-2049/dark-mode`,
-// `feature/abc-123-fix-bug` - so the prefix is anchored on a non-word
-// boundary rather than on the start of the string.
-// A branch picked up from a PR may carry no id at all, so the task its
-// local config links it to (`branch.<name>.f10-task`) is read first.
-func (r Lookup) fromBranch(ctx context.Context) string {
-	branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD")
-	if branch == "" {
-		return ""
+// bundled parses token and attaches its bundle: members when the caller
+// already knows them, else the bundle local config records it in.
+func (r Lookup) bundled(ctx context.Context, token, origin string, members []string) (Ref, error) {
+	got, err := r.parse(token, origin)
+	if err != nil {
+		return got, err
 	}
 
-	if id := gitx.Out(ctx, r.Dir, "config", "--get", "branch."+branch+"."+TaskKey); id != "" {
-		return id
+	if members == nil {
+		members = r.bundleOf(ctx, got.ID)
+	}
+
+	got.Bundle = members
+
+	return got, nil
+}
+
+// fromBranch pulls the task id out of the current branch name, with its
+// bundle when the branch ships one. Real branch names carry the id in any
+// position and any case - `ABC-2049/dark-mode`, `feature/abc-123-fix-bug` -
+// so the prefix is anchored on a non-word boundary rather than on the start
+// of the string. A branch picked up from a PR may carry no id at all, so
+// the task its local config links it to (`branch.<name>.f10-task`) is read
+// first, and the riders recorded beside it.
+func (r Lookup) fromBranch(ctx context.Context) (string, []string) {
+	branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch == "" {
+		return "", nil
+	}
+
+	section := "branch." + branch + "."
+
+	if id := gitx.Out(ctx, r.Dir, "config", "--get", section+TaskKey); id != "" {
+		var members []string
+		if riders := strings.Fields(gitx.Out(ctx, r.Dir, "config", "--get", section+RidersKey)); len(riders) > 0 {
+			members = append([]string{id}, riders...)
+		}
+
+		return id, members
 	}
 
 	if r.Prefix == "" {
-		return ""
+		return "", nil
 	}
 
-	return Match(r.Prefix, branch)
+	members := Members(r.Prefix, branch)
+	if members == nil {
+		return Match(r.Prefix, branch), nil
+	}
+
+	return members[0], members
+}
+
+// Members is the bundle a branch name spells in its first segment,
+// `ABC-1+ABC-2/slug`, lead first, or nil for a name that spells none.
+func Members(prefix, branch string) []string {
+	if prefix == "" {
+		return nil
+	}
+
+	head, _, _ := strings.Cut(branch, "/")
+
+	parts := strings.Split(head, Separator)
+	if len(parts) < 2 {
+		return nil
+	}
+
+	re := regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(prefix) + `-([0-9]+)$`)
+
+	members := make([]string, 0, len(parts))
+
+	for _, p := range parts {
+		m := re.FindStringSubmatch(p)
+		if m == nil {
+			return nil
+		}
+
+		members = append(members, prefix+"-"+m[1])
+	}
+
+	return members
 }
 
 // Match is the task id in text: a branch name, a PR title, a commit

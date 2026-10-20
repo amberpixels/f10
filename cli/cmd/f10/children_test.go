@@ -87,8 +87,8 @@ func childTarget(t *testing.T, cli string) *target {
 
 func scriptNoBranch(f *fakes, ids ...string) {
 	for _, id := range ids {
-		f.script("git for-each-ref --format=%(refname) refs/heads/"+id+" refs/heads/"+id+"-*", "")
-		f.script("git for-each-ref --format=%(refname) refs/remotes/origin/"+id+" refs/remotes/origin/"+id+"-*", "")
+		f.script(refsKey("refs/heads/", id), "")
+		f.script(refsKey("refs/remotes/origin/", id), "")
 	}
 }
 

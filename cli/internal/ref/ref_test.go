@@ -212,14 +212,137 @@ func TestFromBranchReadsTheLink(t *testing.T) {
 	t.Cleanup(func() { gitx.Exec = prev })
 
 	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
-	if got := r.fromBranch(t.Context()); got != "GH-9" {
+	if got, _ := r.fromBranch(t.Context()); got != "GH-9" {
 		t.Errorf("fromBranch with a link = %q, want GH-9", got)
 	}
 
 	delete(answers, "config --get branch.alice/fix-login."+TaskKey)
 	answers["rev-parse --abbrev-ref HEAD"] = "GH-3/slug"
 
-	if got := r.fromBranch(t.Context()); got != "GH-3" {
-		t.Errorf("fromBranch without a link = %q, want GH-3", got)
+	if got, members := r.fromBranch(t.Context()); got != "GH-3" || members != nil {
+		t.Errorf("fromBranch without a link = %q %v, want GH-3 alone", got, members)
+	}
+}
+
+// fakeGit answers git calls from a table, and fails the rest.
+func fakeGit(t *testing.T, answers map[string]string) {
+	t.Helper()
+
+	prev := gitx.Exec
+	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+		if out, ok := answers[strings.Join(args, " ")]; ok {
+			return out, nil
+		}
+
+		return "", errors.New("exit 1")
+	}
+
+	t.Cleanup(func() { gitx.Exec = prev })
+}
+
+// A bundle's branch answers with every member: from its recorded link and
+// riders, else from the ids its name spells.
+func TestFromBranchReadsTheBundle(t *testing.T) {
+	answers := map[string]string{
+		"rev-parse --abbrev-ref HEAD":                     "GH-1+GH-2/slug",
+		"config --get branch.GH-1+GH-2/slug." + TaskKey:   "GH-1",
+		"config --get branch.GH-1+GH-2/slug." + RidersKey: "GH-2 GH-5",
+	}
+	fakeGit(t, answers)
+
+	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
+
+	got, err := r.Find(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.ID != "GH-1" || strings.Join(got.Bundle, " ") != "GH-1 GH-2 GH-5" {
+		t.Errorf("Find on a linked bundle = %s %v, want GH-1 [GH-1 GH-2 GH-5]", got.ID, got.Bundle)
+	}
+
+	delete(answers, "config --get branch.GH-1+GH-2/slug."+TaskKey)
+
+	got, err = r.Find(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.ID != "GH-1" || strings.Join(got.Bundle, " ") != "GH-1 GH-2" {
+		t.Errorf("Find on an unlinked bundle = %s %v, want GH-1 [GH-1 GH-2]", got.ID, got.Bundle)
+	}
+}
+
+// Any member typed alone comes back as itself, carrying the bundle local
+// config records it in; Head is the lead every branch lookup uses.
+func TestFindResolvesAMemberToItsBundle(t *testing.T) {
+	fakeGit(t, map[string]string{
+		`config --get-regexp ^branch\..*\.` + RidersKey + `$`: "branch.GH-1+GH-2/slug." + RidersKey + " GH-2",
+		"config --get branch.GH-1+GH-2/slug." + TaskKey:       "GH-1",
+	})
+
+	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
+
+	for _, token := range []string{"2", "GH-1"} {
+		got, err := r.Find(t.Context(), token)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if strings.Join(got.Bundle, "+") != "GH-1+GH-2" {
+			t.Errorf("Find(%q).Bundle = %v, want [GH-1 GH-2]", token, got.Bundle)
+		}
+
+		if head := got.Head(); head.ID != "GH-1" || head.Number != "1" {
+			t.Errorf("Find(%q).Head() = %s #%s, want GH-1 #1", token, head.ID, head.Number)
+		}
+	}
+
+	got, err := r.Find(t.Context(), "3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Bundle != nil || got.Head().ID != "GH-3" || got.Label() != "GH-3" {
+		t.Errorf("Find(3) = %+v, want GH-3 alone", got)
+	}
+}
+
+func TestParseBundle(t *testing.T) {
+	r := Lookup{Prefix: "GH"}
+
+	got, err := r.parseBundle("gh-1+#2+3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.ID != "GH-1" || got.Label() != "GH-1+GH-2+GH-3" || strings.Join(got.Riders(), " ") != "GH-2 GH-3" {
+		t.Errorf("parseBundle = %+v, want GH-1 leading GH-2 and GH-3", got)
+	}
+
+	for _, bad := range []string{"GH-1", "GH-1+GH-1", "GH-1+prose", "GH-1+"} {
+		if _, err := r.parseBundle(bad); err == nil {
+			t.Errorf("parseBundle(%q) took it, want an error", bad)
+		}
+	}
+}
+
+func TestMembers(t *testing.T) {
+	cases := map[string]string{
+		"ABC-1+ABC-2/slug":    "ABC-1 ABC-2",
+		"abc-1+abc-22":        "ABC-1 ABC-22",
+		"ABC-1/slug":          "",
+		"ABC-1+feature/x":     "",
+		"feature/ABC-1+ABC-2": "",
+	}
+
+	for branch, want := range cases {
+		if got := strings.Join(Members("ABC", branch), " "); got != want {
+			t.Errorf("Members(%q) = %q, want %q", branch, got, want)
+		}
+	}
+
+	if got := Match("ABC", "ABC-1+ABC-2/slug"); got != "ABC-1" {
+		t.Errorf("Match on a bundle branch = %q, want the lead ABC-1", got)
 	}
 }

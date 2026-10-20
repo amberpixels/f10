@@ -37,7 +37,7 @@ f10 init --migrate       # move the facts an older project.md declares in prose 
 f10 config [--json]      # the effective configuration, with the origin of every value
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
-f10 task read [id]       # the task as markdown
+f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task open [id]       # in the browser (--print writes the url instead)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json]   # the task's open subtasks, in After: order
@@ -52,10 +52,10 @@ f10 status [id] [--all] [--json]   # where the run is: this session's, a task's 
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 
-f10 start <id>[-suffix] [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
-f10 drive <id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
-f10 finish <id>[-suffix] [--yes]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
+f10 drive <id | id+id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
+f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
 ```
 
 A verb means one thing under every noun.
@@ -146,7 +146,7 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   `--plan` prompts the plan instead, with the PR's diff as the starting point; nothing ships a picked-up PR unread.
   The report gains a `pr` row.
   A PR from a fork, a PR no longer open, `--local`, `--after` and `--base` are refused before anything is created
-- every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`); a task read with no id in a picked-up worktree finds its task through the same link.
+- every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link and the `f10-tasks` riders first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`, `<id>+...`); a task read with no id in a picked-up worktree finds its task through the same link.
   With no local branch, start also finds the one task branch on origin (`refs/remotes/origin/`) and creates the local branch tracking it rather than a second branch from main.
   It reads what the last fetch saw; for a branch pushed since, run `git fetch` or pass the PR link
 - a task that already has a branch gets its worktree reused, or created when the branch has none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise for the base, while its dependency is recorded all the same; a workspace Herdr already shows is adopted rather than opened again, keeps its agent, and nothing is prompted twice.
@@ -154,6 +154,17 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   One with no agent in its root pane (a start that failed earlier) gets one started and prompted when that pane is an idle shell; a pane running anything else is left alone
 - a fresh pane whose shell is still running its rc files refuses the agent as busy; start retries every 200ms for up to 5s before failing with Herdr's error, and prints a line to stderr at least every second while it waits
 - `--local` refuses before creating anything when `project.md` declares no `local` pipeline, since ship never picks a pipeline unasked
+
+**Bundles.**
+`f10 start ABC-1+ABC-2` ships several tasks as one branch, one worktree, one agent and one PR.
+The first id is the **lead** and keeps everything keyed on a task (plan file, findings, verdicts, agent name, run state, ledger); the others are **riders**.
+The branch is `ABC-1+ABC-2/<slug>`, the slug from the lead's title, and start records `branch.<name>.f10-task` (the lead) and `branch.<name>.f10-tasks` (the riders, space-separated) once it exists.
+Every other command takes any member's id and acts on the bundle: `f10 finish ABC-2` finds the ABC-1 branch.
+A bundle branch fetched from origin has no local record; start reads its riders from the branch name and records them.
+Before anything is created, start refuses a parent among the members, a rider already on another branch (naming it), a branch that exists with other riders (riders are fixed at start) and a suffix.
+The bundle's base is the one `After:` its members name outside it; a line naming another member is dropped, and two different bases are refused.
+`f10 drive` takes a bundle as one entry; a task `After:` a rider waits for the whole bundle.
+Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
 Before the first pipeline step, ship brings the branch up to date with the base when it moved - a rebase, or a merge where `project.md` declares `catchup: merge` - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
@@ -167,7 +178,11 @@ Outside one it stops before touching anything and points at https://herdr.dev.
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
-It finds the task's branch the way start does (the branch linked by `f10-task`, else the exact name, else the one `<id>` / `<id>-*` branch) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
+It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
+For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
+Without it, finish exits **7** before changing anything, and the finish skill asks.
+Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`; after a merge that already happened, each is reopened instead.
+A tracker that is not the host closes nothing on merge, so the notes name the riders to close there.
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
 There finish merges as usual, brings the default branch up to the merge, switches main to it, deletes the local branch, and leaves main's workspace open; the report says the checkout was main's and was switched, not removed.
 

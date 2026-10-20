@@ -36,7 +36,7 @@ func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "finish",
 		Usage:     "finish a task: merge its PR, archive the plan, remove the worktree, close the workspace, pull main",
-		ArgsUsage: "<task-id>[-suffix]",
+		ArgsUsage: "<task-id>[-suffix] | <any id of a bundle>",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "yes",
@@ -46,6 +46,11 @@ func finishCommand() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "local",
 				Usage: "clean up the worktree, branch and workspace and leave the PR open: a review handed back",
+			},
+			&cli.StringFlag{
+				Name: "close",
+				Usage: "for a bundle, the riders the PR delivers, closed with the lead: `IDS` (comma-separated), " +
+					"all or none; the rest stay open",
 			},
 		},
 		Action: runFinish,
@@ -87,6 +92,26 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	if suffix != "" && r.Bundle != nil {
+		return fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
+	}
+
+	// any member finishes the whole bundle, found by its lead
+	r = r.Head()
+
+	var closing []string
+
+	if v := strings.TrimSpace(cmd.String("close")); v != "" {
+		if len(r.Riders()) == 0 {
+			return fmt.Errorf("--close names riders, and %s ships alone", r.ID)
+		}
+
+		resolve := func(tok string) (ref.Ref, error) { return t.reference(ctx, tok) }
+		if closing, err = closeChoice(r, v, resolve); err != nil {
+			return err
+		}
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
@@ -107,10 +132,15 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		merge:     cmd.Bool("merge"),
 		local:     cmd.Bool("local"),
 		plansDir:  t.sharedPlansDir(),
+		close:     closing,
 	})
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
 		return cli.Exit("f10: "+fp.Error(), exitForeign)
+	}
+
+	if re := (ridersError{}); errors.As(err, &re) {
+		return cli.Exit("f10: "+re.Error(), exitRiders)
 	}
 
 	return err
@@ -143,6 +173,9 @@ type finishInput struct {
 	merge     bool   // merge the PR even when someone else opened it
 	local     bool   // leave the PR open and clean up only what is here
 	plansDir  string // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	// close is a bundle's riders the PR delivers, closed with the lead; nil
+	// until --close answers, which a bundle's merge refuses to go without
+	close []string
 }
 
 // finish runs the flow: branch, worktree, the refusals, the merge, the
@@ -212,9 +245,23 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		notes = append(notes, fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
 			p.url(), p.status()))
 	} else {
+		var riderNotes []string
+
+		if len(in.task.Riders()) > 0 {
+			if in.close == nil {
+				return ridersError{task: in.task}
+			}
+
+			if riderNotes, err = settleRiders(ctx, in, name, p.status() == pullMerged); err != nil {
+				return err
+			}
+		}
+
 		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
 			return err
 		}
+
+		notes = append(notes, riderNotes...)
 
 		// on main, the default branch is checked out nowhere, so pullMain fetches
 		// into it and main stays on the task's branch until the end: a failure
@@ -236,9 +283,14 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		notes = append(notes, released...)
 
 		rows = []fact{
-			{label: "task", value: in.task.ID},
+			{label: "task", value: in.task.Label()},
 			{label: "pr", value: p.url(), url: true},
 			{label: "merge", value: p.sha()},
+		}
+
+		// a tracker that is not the host closes nothing on merge
+		if len(in.close) > 0 && in.driver == nil {
+			rows = append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
 		}
 	}
 

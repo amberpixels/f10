@@ -10,6 +10,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    First line: **Roles**, the roles it was written under, for `/f10:ship` to inherit.
    A **Kind** line follows for a `bug` or `refactor` (`Kind: bug`); a plan without one is a feature.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
+   A bundle adds a **Bundle** line (`Bundle: ABC-1+ABC-2`) and a `## Riders` section listing each rider's acceptance criteria under its id; the stages cover every member.
    The kind opens the plan, before the stages:
    - **bug** - a `## Reproduction` section: the steps or input, expected, actual, the root cause at `file:line`, and the test that will fail before the fix.
      The first stage writes that test.
@@ -34,7 +35,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    - **A handful of stages**; at eight, collapse.
      Real tradeoffs, not filler risk tables.
 3. **Save the plan: it is the deliverable.**
-   `Write` it to **`<storage root>/plans/<TASK-ID>.md`**, the root verbatim from `storage root:`, `<TASK-ID>` the exact tracker id, uppercased (e.g. `<storage root>/plans/ABC-2049.md`), or a short kebab slug without one.
+   `Write` it to **`<storage root>/plans/<TASK-ID>.md`**, the root verbatim from `storage root:`, `<TASK-ID>` the exact tracker id (a bundle's lead), uppercased (e.g. `<storage root>/plans/ABC-2049.md`), or a short kebab slug without one.
    `/f10:ship` reads this exact path.
    Create `plans/` if missing; in-repo under stealth, keep `.f10/` in the file `git rev-parse --git-path info/exclude` names.
    **Out-of-tree storage** (`~/.f10/<project>/`): write **nothing** inside the project directory.

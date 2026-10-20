@@ -82,13 +82,16 @@ func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []st
 	return order, notes, nil
 }
 
-// listIndex maps each listed id to its first position.
+// listIndex maps each listed id to its first position; every member of a
+// bundle maps to the bundle's, so a base that rides in it waits for it.
 func listIndex(tasks []driveTask) map[string]int {
 	index := make(map[string]int, len(tasks))
 
 	for i, t := range tasks {
-		if _, seen := index[t.ref.ID]; !seen {
-			index[t.ref.ID] = i
+		for _, id := range t.ref.Members() {
+			if _, seen := index[id]; !seen {
+				index[id] = i
+			}
 		}
 	}
 

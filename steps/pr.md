@@ -21,6 +21,8 @@ Context: `project.md → Hosting & PR` (the PR adapter).
 5. **Open it** via the project's PR adapter: a skill, or plain `gh pr create` / `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
    In stealth mode, no f10 traces in the branch name, commits, or PR text (`conventions/context.md`).
    Another task named in the PR text is a link with its title (`conventions/context.md` → Task references).
+   A **bundle** (riders in `git config --get branch."$(git branch --show-current)".f10-tasks`): the title is the lead's, and the body links every member with its title.
+   On a host that closes issues on merge it carries one closing keyword per member, each on a line of its own (`Closes #12`): `f10 finish` rewrites a rider's line to keep it open.
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
    - **Push first**: commit what the tree holds per the adapter, then push, never forcing, so the description never covers code the PR lacks.
    - **Someone else's PR** (`author.login` other than `gh api user --jq .login`, `author.username` other than `glab api user`'s `username`, compared case-insensitively): stop after the push and leave the title and body as they are.

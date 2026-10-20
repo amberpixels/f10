@@ -44,7 +44,7 @@ func newFakes(t *testing.T) *fakes {
 	// Herdr shows no workspace until a test says otherwise
 	f.script("herdr workspace list", `{"result":{"workspaces":[]}}`)
 	// no branch is linked to a task, and origin has no task branch, until a test says so
-	f.absent = []string{linkedKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/"}
+	f.absent = []string{linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/"}
 
 	prevExec, prevCapture, prevHas := gitx.Exec, shell.Capture, shell.Has
 
@@ -78,6 +78,11 @@ func (f *fakes) answer(key string) shell.Result {
 			if strings.HasPrefix(key, p) {
 				return shell.Result{}
 			}
+		}
+
+		// no branch records riders until a test says so
+		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgRiders) {
+			return shell.Result{}
 		}
 
 		f.t.Fatalf("unscripted call: %q\nscripted:\n  %s", key, strings.Join(f.keys(), "\n  "))
@@ -136,10 +141,11 @@ func fakeDriver(t *testing.T) *driver.Driver {
 
 const (
 	linkedKeys = "git config --get-regexp " + cfgTaskKeys
-	refsOrigin = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-1 refs/remotes/origin/GH-1-*"
-	refsLocal  = "git for-each-ref --format=%(refname) refs/heads/GH-1 refs/heads/GH-1-*"
-	refsAfter  = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-*"
-	refsAfterO = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-*"
+	riderKeys  = "git config --get-regexp ^branch\\..*\\." + cfgRiders + "$"
+	refsOrigin = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-1 refs/remotes/origin/GH-1-* refs/remotes/origin/GH-1+* refs/remotes/origin/GH-1+*/*"
+	refsLocal  = "git for-each-ref --format=%(refname) refs/heads/GH-1 refs/heads/GH-1-* refs/heads/GH-1+* refs/heads/GH-1+*/*"
+	refsAfter  = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-* refs/heads/GH-7+* refs/heads/GH-7+*/*"
+	refsAfterO = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-* refs/remotes/origin/GH-7+* refs/remotes/origin/GH-7+*/*"
 	shaAfter   = "git rev-parse --verify --quiet GH-7/base"
 	cfgTask    = "git config branch.GH-1.f10-after GH-7"
 	cfgBranch  = "git config branch.GH-1.f10-after-branch GH-7/base"
@@ -162,6 +168,11 @@ var gh1 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit}
 
 // missing is what rev-parse --verify --quiet answers for a ref that is not there.
 var missing = shell.Result{Code: 1}
+
+// refsKey is the for-each-ref call that looks for task id's branches under root.
+func refsKey(root, id string) string {
+	return "git for-each-ref --format=%(refname) " + strings.Join(taskRefs(root, id), " ")
+}
 
 // heads prefixes branch names the way for-each-ref prints them.
 func heads(names ...string) string {

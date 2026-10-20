@@ -88,6 +88,8 @@ const (
 	cfgLanded      = "f10-landed"
 	// cfgTaskID links a branch whose name need not carry the id to its task
 	cfgTaskID = ref.TaskKey
+	// cfgRiders lists a bundle's riders beside the lead cfgTaskID names
+	cfgRiders = ref.RidersKey
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
@@ -142,9 +144,15 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
+		if strings.Contains(task, ref.Separator) {
+			return fmt.Errorf("--task %s: a PR is picked up for one task, not a bundle", task)
+		}
+
 		if r, err = t.reference(ctx, task); err != nil {
 			return fmt.Errorf("%s: %w", pick.url, err)
 		}
+
+		r.Bundle = nil
 	default:
 		var id string
 
@@ -153,6 +161,13 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		if r, err = t.reference(ctx, id); err != nil {
 			return err
 		}
+
+		if suffix != "" && r.Bundle != nil {
+			return fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
+		}
+
+		// any member starts, or reopens, the whole bundle under its lead
+		r = r.Head()
 	}
 
 	in := startInput{
@@ -188,7 +203,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("--after: %w", err)
 		}
 
-		in.after = afterRef.ID
+		in.after = afterRef.Head().ID
 	case base == "":
 		// no flag names a base: the body's After: line may
 		if in.after, in.notes, err = afterFromBody(ctx, t.tracker(), in.main, r); err != nil {
@@ -387,13 +402,13 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 			ctx,
 			o.path,
 			agentName(in.task.ID, in.suffix, o.path),
-			prompt(in.mode, in.task.ID, o.dep, o.plan, in.pick),
+			prompt(in.mode, o.task.Label(), o.dep, o.plan, in.pick),
 		); err != nil {
 			return err
 		}
 	}
 
-	rows := []fact{{label: "task", value: in.task.ID}}
+	rows := []fact{{label: "task", value: o.task.Label()}}
 	if in.pick != nil {
 		rows = append(rows, fact{label: "pr", value: in.pick.url, url: true})
 	}
@@ -422,9 +437,10 @@ func checksParent(mode string, pick *pickup) bool {
 }
 
 // refuseStartParent stops a parent with unfinished subtasks before anything
-// is created, since its agent would ship the whole umbrella on one branch.
-// A task with a branch was started already and reopens as before, as drive
-// never treats a started task as a parent.
+// is created, since its agent would ship the whole umbrella on one branch;
+// in a bundle, every member is checked. A task with a branch was started
+// already and reopens as before, as drive never treats a started task as a
+// parent.
 func refuseStartParent(ctx context.Context, in startInput) error {
 	if in.children == nil {
 		return nil
@@ -435,13 +451,85 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 		return err
 	}
 
-	open, err := openSubtasks(ctx, tracker{children: in.children}, in.task)
-	if err != nil || len(open) == 0 {
-		return err
+	for _, m := range in.task.MemberRefs() {
+		open, err := openSubtasks(ctx, tracker{children: in.children}, m)
+		if err != nil {
+			return err
+		}
+
+		if len(open) > 0 {
+			return cli.Exit(fmt.Sprintf("f10: %s is a parent of %s: run /f10:drive %s to drive them, "+
+				"or start one subtask (f10 start %s)", m.ID, strings.Join(open, ", "), m.ID, open[0]), exitParent)
+		}
 	}
 
-	return cli.Exit(fmt.Sprintf("f10: %s is a parent of %s: run /f10:drive %s to drive them, "+
-		"or start one subtask (f10 start %s)", in.task.ID, strings.Join(open, ", "), in.task.ID, open[0]), exitParent)
+	return nil
+}
+
+// settleBundle checks the bundle against the branch start found, before
+// anything is created, and returns the task with the riders that branch
+// ships. A task alone takes the riders of the bundle branch it leads, which
+// a branch fetched from origin carries in its name only. It refuses what
+// would split a task across two branches: a rider another branch already
+// ships, or a branch that exists with other riders than the ones typed,
+// since riders are fixed at start.
+func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
+	if existing != "" {
+		lead, riders := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
+
+		switch {
+		case len(task.Riders()) == 0 && len(riders) > 0 && strings.EqualFold(lead, task.ID):
+			task.Bundle = append([]string{task.ID}, riders...)
+		case !strings.EqualFold(lead, task.ID) && lead != "":
+			return ref.Ref{}, fmt.Errorf("%s is already on branch %s, led by %s: finish it first, or start %s",
+				task.ID, existing, lead, lead)
+		case !slices.Equal(riders, task.Riders()):
+			return ref.Ref{}, fmt.Errorf("branch %s ships %s; riders are fixed at start, so %s cannot reopen it: "+
+				"finish it first, or start %s", existing,
+				ref.Ref{ID: task.ID, Bundle: append([]string{task.ID}, riders...)}.Label(),
+				task.Label(), task.ID)
+		}
+	}
+
+	for _, rider := range task.Riders() {
+		branches := linkedBranches(ctx, main, rider)
+
+		for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
+			refs, err := gitx.Refs(ctx, main, append(taskRefs(root, rider), riderRefs(root, rider)...)...)
+			if err != nil {
+				return ref.Ref{}, err
+			}
+
+			for _, r := range refs {
+				branches = append(branches, strings.TrimPrefix(r, "origin/"))
+			}
+		}
+
+		for _, b := range branches {
+			if b != existing {
+				return ref.Ref{}, fmt.Errorf("%s is already on branch %s: finish it first, or leave it out of %s",
+					rider, b, task.Label())
+			}
+		}
+	}
+
+	return task, nil
+}
+
+// recordBundle links the branch to its lead and lists its riders, under
+// the branch's section of the local git config, so any member finds it.
+func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
+	section := "branch." + branch + "."
+
+	if err := gitx.SetConfig(ctx, dir, section+cfgTaskID, task.ID); err != nil {
+		return fmt.Errorf("recording bundle %s: %w", task.Label(), err)
+	}
+
+	if err := gitx.SetConfig(ctx, dir, section+cfgRiders, strings.Join(task.Riders(), " ")); err != nil {
+		return fmt.Errorf("recording bundle %s: %w", task.Label(), err)
+	}
+
+	return nil
 }
 
 // An openedTask is what openTask leaves behind: the branch, its worktree,
@@ -449,6 +537,7 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 // holds, and whether the agent in it was started by this call and so waits
 // for its first prompt.
 type openedTask struct {
+	task   ref.Ref // the task, with the riders its branch ships
 	branch string
 	path   string
 	ws     herdr.Workspace
@@ -470,6 +559,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	}
 
 	name, base, dep, existing := settled.name, settled.base, settled.dep, settled.existing
+
+	if in.pick == nil {
+		if in.task, err = settleBundle(ctx, in.main, in.task, existing.name); err != nil {
+			return openedTask{}, err
+		}
+	}
 
 	notes := slices.Clone(in.notes)
 
@@ -549,6 +644,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		}
 	}
 
+	if len(in.task.Riders()) > 0 {
+		if err := recordBundle(ctx, in.main, name, in.task); err != nil {
+			return openedTask{}, err
+		}
+	}
+
 	ws, wsNotes, err := openWorkspace(ctx, in.main, path, name)
 	if err != nil {
 		return openedTask{}, err
@@ -556,7 +657,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	notes = append(notes, wsNotes...)
 
-	o := openedTask{branch: name, path: path, ws: ws, dep: dep}
+	o := openedTask{task: in.task, branch: name, path: path, ws: ws, dep: dep}
 
 	agent := agentName(in.task.ID, in.suffix, path)
 

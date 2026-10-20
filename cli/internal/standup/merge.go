@@ -111,6 +111,13 @@ func mergeTask(a, b Task, since time.Time) Task {
 	a.Title = cmp.Or(a.Title, b.Title)
 	a.After = cmp.Or(a.After, b.After)
 
+	a.Riders = slices.Clone(a.Riders)
+	for _, id := range b.Riders {
+		if !slices.Contains(a.Riders, id) {
+			a.Riders = append(a.Riders, id)
+		}
+	}
+
 	return a
 }
 
