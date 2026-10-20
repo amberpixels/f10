@@ -17,6 +17,8 @@ Every f10 run starts by loading it.
 - **task id** - the tracker id, in the project's format.
   It names the plan file, the branch and the report's rows.
   A planless pipeline has none, and no step may invent one.
+- **task kind** - `feature`, `bug` or `refactor`; fetch settles it and the plan records it as a `Kind:` line, absent meaning feature.
+  Not the frontmatter's `tracker.kind`.
 - **plan** - `<storage root>/plans/<TASK-ID>.md`.
   Bare `plan` is ambiguous: write `/f10:plan` for the skill, the **plan** step for the step.
   "Run the **plan** step" means execute its instructions, never re-invoke the skill.

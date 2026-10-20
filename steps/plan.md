@@ -8,9 +8,19 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
 1. **Design a conventional solution**: reuse existing abstractions, follow the project's CLAUDE.md and declared guardrails (e.g. a canonical UI component gallery means designing with its components, never a parallel one).
 2. **Write a staged plan.**
    First line: **Roles**, the roles it was written under, for `/f10:ship` to inherit.
+   A **Kind** line follows for a `bug` or `refactor` (`Kind: bug`); a plan without one is a feature.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
+   The kind opens the plan, before the stages:
+   - **bug** - a `## Reproduction` section: the steps or input, expected, actual, the root cause at `file:line`, and the test that will fail before the fix.
+     The first stage writes that test.
+     Where no automated test can reproduce it (a race, a third-party outage, UI timing), the section says so and names the manual check instead.
+   - **refactor** - a `## Invariant` section: the behavior that stays the same and the tests that prove it.
+     Missing coverage makes the first stage characterization tests that pass before any change.
+     An existing assertion that must change is a behavior change: name it and why, or the work is not a refactor.
+
    Then ordered **stages**, the critical files each touches, data/migration work, tests to add or adjust, key tradeoffs and alternatives.
    Then a **`## Consequences` section**, a few lines of prose, in the ADR sense: what the chosen design makes easier, what it makes harder, the constraint it now depends on, and what to revisit under which condition.
+   For a bug, that includes the related failures this fix leaves uncovered, when there are any.
    No trade-off worth naming: `## Consequences - none`.
    Stage tradeoffs weigh the alternatives; Consequences records what the chosen one costs, Gaps what is still undecided, and rollout or monitoring stays out (below).
    Last, a **`## Gaps` section** (`conventions/gaps.md`), or `## Gaps - none`.

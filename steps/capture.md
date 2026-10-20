@@ -36,6 +36,7 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
      - **Unknown** - plain paragraphs, and no markup that reads as noise unrendered.
 3. **Create it** via the project's create adapter: a skill to invoke, or a CLI command such as `gh issue create` / `glab issue create`.
    Apply the project's declared default status/labels.
+   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later.
    A split creates the parent first, then links each subtask to it with the tracker's native parent link: the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
 4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; several tasks report as the convention's tree.
