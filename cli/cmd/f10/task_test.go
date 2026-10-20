@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // A task's images come after it as local paths, a failed one by its url and
@@ -90,6 +92,95 @@ func TestGithubAuthScopesTheToken(t *testing.T) {
 
 		if got := r.Header.Get("Authorization"); got != want {
 			t.Errorf("%s: Authorization = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+// The list pages hang off the repo url each CLI reports, in its own spelling.
+func TestListURLs(t *testing.T) {
+	f := newFakes(t)
+
+	f.script("gh repo view --json url", `{"url":"https://github.com/o/r"}`)
+	f.script("glab repo view -F json", `{"web_url":"https://gitlab.example.com/g/r/"}`)
+
+	for _, tc := range []struct {
+		cli, issues, pulls string
+	}{
+		{"gh", "https://github.com/o/r/issues", "https://github.com/o/r/pulls"},
+		{"glab", "https://gitlab.example.com/g/r/-/issues", "https://gitlab.example.com/g/r/-/merge_requests"},
+	} {
+		h := host{name: tc.cli}
+
+		if got, err := h.issuesURL(t.Context()); err != nil || got != tc.issues {
+			t.Errorf("%s issues = %q, %v; want %q", tc.cli, got, err, tc.issues)
+		}
+
+		if got, err := h.pullsURL(t.Context()); err != nil || got != tc.pulls {
+			t.Errorf("%s pulls = %q, %v; want %q", tc.cli, got, err, tc.pulls)
+		}
+	}
+}
+
+// A driver's index wins; a driver declining it falls back to the host's issues.
+func TestTaskListURL(t *testing.T) {
+	f := newFakes(t)
+	tg := childTarget(t, "gh")
+	writeDriver(t, tg.lay.StorageRoot)
+
+	f.script("driver index", "https://tracker.example.com/board\n")
+
+	if got, err := taskListURL(t.Context(), tg); err != nil || got != "https://tracker.example.com/board" {
+		t.Errorf("driver index = %q, %v", got, err)
+	}
+
+	f.fail("driver index", shell.Result{Code: driver.ExitUnsupported})
+	f.script("gh repo view --json url", `{"url":"https://github.com/o/r"}`)
+
+	if got, err := taskListURL(t.Context(), tg); err != nil || got != "https://github.com/o/r/issues" {
+		t.Errorf("fallback = %q, %v", got, err)
+	}
+}
+
+// The open-task list: a driver's list wins, a driver declining it falls back
+// to the host's open issues, ids in the project's format.
+func TestTaskRows(t *testing.T) {
+	f := newFakes(t)
+	tg := childTarget(t, "gh")
+	writeDriver(t, tg.lay.StorageRoot)
+
+	f.script("driver list", `[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9"}]`)
+
+	rows, err := taskRows(t.Context(), tg)
+	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" {
+		t.Errorf("driver list = %+v, %v", rows, err)
+	}
+
+	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
+	f.script("gh issue list --json number,title,state,url --limit 30",
+		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7"}]`)
+
+	rows, err = taskRows(t.Context(), tg)
+	if err != nil || len(rows) != 1 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" {
+		t.Errorf("fallback = %+v, %v", rows, err)
+	}
+}
+
+// Open requests list as rows, numbered the way each host writes them.
+func TestPullRows(t *testing.T) {
+	f := newFakes(t)
+
+	f.script("gh pr list --json number,title,state,url --limit 30",
+		`[{"number":113,"title":"bundle","state":"OPEN","url":"https://github.com/o/r/pull/113"}]`)
+	f.script("glab mr list -F json --per-page 30",
+		`[{"iid":4,"title":"fix","state":"opened","web_url":"https://gitlab.example.com/g/r/-/merge_requests/4"}]`)
+
+	for _, tc := range []struct{ cli, id, url string }{
+		{"gh", "#113", "https://github.com/o/r/pull/113"},
+		{"glab", "!4", "https://gitlab.example.com/g/r/-/merge_requests/4"},
+	} {
+		rows, err := host{name: tc.cli}.pullRows(t.Context())
+		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != pullOpen || rows[0].URL != tc.url {
+			t.Errorf("%s rows = %+v, %v", tc.cli, rows, err)
 		}
 	}
 }

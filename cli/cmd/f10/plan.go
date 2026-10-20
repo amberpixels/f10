@@ -29,7 +29,7 @@ func planCommand() *cli.Command {
 				Name:      "open",
 				Usage:     "open the plan in your editor",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{printFlag()},
+				Flags:     []cli.Flag{linkFlag()},
 				Action:    runPlanOpen,
 			},
 		},
@@ -56,7 +56,7 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if cmd.Bool("print") {
+	if cmd.Bool("link") {
 		_, err := fmt.Fprintln(cmd.Writer, path)
 
 		return err
@@ -64,7 +64,7 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 
 	editor := shell.Editor()
 	if len(editor) == 0 {
-		return fmt.Errorf("no editor: set $EDITOR, or use --print to get the path (%s)", path)
+		return fmt.Errorf("no editor: set $EDITOR, or use --link to get the path (%s)", path)
 	}
 
 	return shell.Passthrough(ctx, t.dir, editor[0], append(editor[1:], path)...)

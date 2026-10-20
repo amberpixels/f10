@@ -18,7 +18,7 @@ A file that is missing, is a directory, or has no execute bit is simply "no driv
 <driver> <verb> [argument]
 ```
 
-Five verbs, each writing its answer to stdout:
+Seven verbs, each writing its answer to stdout:
 
 | verb | argument | stdout |
 |---|---|---|
@@ -27,8 +27,12 @@ Five verbs, each writing its answer to stdout:
 | `search` | a query string | a JSON array of task rows |
 | `branch` | task number | one branch name, alone on a line |
 | `children` | task number | a JSON array of the task's subtasks |
+| `index` | none | one url, the task list, alone on a line |
+| `list` | none | a JSON array of task rows, the first page of open tasks |
 
 The argument for `read`, `url`, `branch` and `children` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
+`index` and `list` take no argument: `index` is the page `f10 task open` with no id opens, `list` the rows `f10 task open --print` writes, in `search`'s row shape.
+A driver without them gets the host's open issues.
 
 `branch` is where a project encodes its branch shape - `feat/1042-short-slug`, or whatever `project.md` declares under Hosting & PR.
 `f10 start` creates that branch; a driver without the verb gets the default, `<ID>/<slug>`, the slug cut from the title the host CLI returns.
@@ -68,7 +72,7 @@ Every other non-zero exit is a real failure, and f10 surfaces your stderr rather
 **Return data, never act.**
 A driver prints a url; f10 opens it.
 A driver prints a branch name; f10 creates the branch.
-That separation is what lets `open` mean the same thing for a task as it does for a pull request, where no driver is involved at all - and it keeps `f10 task open --print` pipeable.
+That separation is what lets `open` mean the same thing for a task as it does for a pull request, where no driver is involved at all - and it keeps `f10 task open --link` pipeable.
 
 **Print the whole task.**
 `read` includes the task's comments after its body, as the host path does: an agent reads the task through this verb alone, and a decision made in a comment is part of what it asks.

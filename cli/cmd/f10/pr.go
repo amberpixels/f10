@@ -1,8 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/urfave/cli/v3"
 
@@ -16,13 +18,13 @@ import (
 func prCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "pr",
-		Usage: "open the pull or merge request for a branch",
+		Usage: "open a pull or merge request, or their list",
 		Commands: []*cli.Command{
 			{
 				Name:      "open",
-				Usage:     "open the PR/MR in the browser",
+				Usage:     "open the PR/MR in the browser; with no number, the PR/MR list",
 				ArgsUsage: "[number]",
-				Flags:     []cli.Flag{printFlag()},
+				Flags:     []cli.Flag{linkFlag(), printFlag()},
 				Action:    runPROpen,
 			},
 		},
@@ -40,11 +42,28 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// no number is a question about a branch, and the other checkout's
-	// branch is as real as this one's - so -C changes nothing here
 	number := cmd.Args().First()
 
-	if cmd.Bool("print") {
+	switch {
+	case number == "" && cmd.Bool("print"):
+		rows, err := h.pullRows(ctx)
+		if err != nil {
+			return err
+		}
+
+		return writeRows(cmd.Writer, rows, "no open requests")
+	case number == "":
+		url, err := h.pullsURL(ctx)
+		if err != nil {
+			return err
+		}
+
+		return follow(ctx, cmd.Writer, h.dir, url, cmd.Bool("link"))
+	case cmd.Bool("print"):
+		return shell.Passthrough(ctx, h.dir, h.name, h.prArgs(number)...)
+	}
+
+	if cmd.Bool("link") {
 		url, err := h.prURL(ctx, number)
 		if err != nil {
 			return err
@@ -70,8 +89,38 @@ func (h host) prArgs(number string, tail ...string) []string {
 	return append(args, tail...)
 }
 
-// prURL is the request's url: the one for number, or for the current
-// branch's request when number is "".
+// pullRows is the first page of open requests, newest first, as rows: gh
+// numbers them #n, glab !n.
+func (h host) pullRows(ctx context.Context) ([]row, error) {
+	var found []pull
+
+	err := h.decode(ctx, &found, h.pick(
+		[]string{"pr", "list", "--json", "number,title,state,url", "--limit", "30"},
+		[]string{"mr", "list", "-F", "json", "--per-page", "30"},
+	)...)
+	if err != nil {
+		return nil, err
+	}
+
+	sigil := "#"
+	if h.glab() {
+		sigil = "!"
+	}
+
+	rows := make([]row, 0, len(found))
+	for _, p := range found {
+		rows = append(rows, row{
+			ID:     sigil + strconv.Itoa(cmp.Or(p.Number, p.IID)),
+			Title:  p.Title,
+			Status: p.status(),
+			URL:    p.url(),
+		})
+	}
+
+	return rows, nil
+}
+
+// prURL is the url of the request number names.
 func (h host) prURL(ctx context.Context, number string) (string, error) {
 	var payload map[string]any
 

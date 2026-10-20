@@ -39,9 +39,9 @@ func taskCommand() *cli.Command {
 			},
 			{
 				Name:      "open",
-				Usage:     "open the task in the browser",
+				Usage:     "open the task in the browser; with no task id, the task list",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{printFlag()},
+				Flags:     []cli.Flag{linkFlag(), printFlag()},
 				Action:    runTaskOpen,
 			},
 			{
@@ -195,9 +195,33 @@ func githubAuth(ctx context.Context, t *target) func(*http.Request) {
 }
 
 func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
+	listing := !cmd.Args().Present()
+
+	if cmd.Bool("print") && !listing {
+		return runTaskRead(ctx, cmd)
+	}
+
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
+	}
+
+	// no task id is the list, never the branch's task: read is for that
+	switch {
+	case listing && cmd.Bool("print"):
+		rows, err := taskRows(ctx, t)
+		if err != nil {
+			return err
+		}
+
+		return writeRows(cmd.Writer, rows, "no open tasks")
+	case listing:
+		url, err := taskListURL(ctx, t)
+		if err != nil {
+			return err
+		}
+
+		return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("link"))
 	}
 
 	r, err := t.reference(ctx, cmd.Args().First())
@@ -208,7 +232,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 	if d := t.driver(); d != nil {
 		url, err := d.Run(ctx, driver.VerbURL, r.Number)
 		if err == nil {
-			return follow(ctx, cmd.Writer, t.dir, strings.TrimSpace(url), cmd.Bool("print"))
+			return follow(ctx, cmd.Writer, t.dir, strings.TrimSpace(url), cmd.Bool("link"))
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
@@ -228,7 +252,56 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("print"))
+	return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("link"))
+}
+
+// taskListURL is the tracker's task list: the driver's index when it has
+// one, else the host's issues page.
+func taskListURL(ctx context.Context, t *target) (string, error) {
+	if d := t.driver(); d != nil {
+		url, err := d.Run(ctx, driver.VerbIndex)
+		if err == nil {
+			return strings.TrimSpace(url), nil
+		}
+
+		if !errors.Is(err, driver.ErrUnsupported) {
+			return "", err
+		}
+	}
+
+	h, err := t.issues()
+	if err != nil {
+		return "", err
+	}
+
+	return h.issuesURL(ctx)
+}
+
+// taskRows is the first page of the tracker's open tasks: the driver's list
+// when it has one, else the host's open issues.
+func taskRows(ctx context.Context, t *target) ([]row, error) {
+	if d := t.driver(); d != nil {
+		out, err := d.Run(ctx, driver.VerbList)
+		if err == nil {
+			var rows []row
+			if err := json.Unmarshal([]byte(out), &rows); err != nil {
+				return nil, fmt.Errorf("parsing driver list rows: %w", err)
+			}
+
+			return rows, nil
+		}
+
+		if !errors.Is(err, driver.ErrUnsupported) {
+			return nil, err
+		}
+	}
+
+	h, err := t.issues()
+	if err != nil {
+		return nil, err
+	}
+
+	return h.listIssues(ctx, "", t.eff.IDPrefix)
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -247,7 +320,7 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return writeRows(cmd.Writer, rows)
+	return writeRows(cmd.Writer, rows, "no matches")
 }
 
 // A row is what a search returns: the four fields f10 relies on. A driver
@@ -281,14 +354,14 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		return nil, err
 	}
 
-	return h.searchIssues(ctx, query, t.eff.IDPrefix)
+	return h.listIssues(ctx, query, t.eff.IDPrefix)
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a
 // table, anything else gets the JSON. f10 prints rows and never picks a
 // winner among them - choosing is fzf's job in a shell and the agent's in a
 // turn, and a picker here would be wrong for one of the two.
-func writeRows(w io.Writer, rows []row) error {
+func writeRows(w io.Writer, rows []row, none string) error {
 	if !isTerminal(w) {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
@@ -301,7 +374,7 @@ func writeRows(w io.Writer, rows []row) error {
 	}
 
 	if len(rows) == 0 {
-		_, err := fmt.Fprintln(w, "no matches")
+		_, err := fmt.Fprintln(w, none)
 
 		return err
 	}
@@ -313,10 +386,29 @@ func writeRows(w io.Writer, rows []row) error {
 	}
 
 	for _, r := range rows {
-		if _, err := fmt.Fprintf(w, "%-*s  %-*s  %s\n", idW, r.ID, statusW, r.Status, r.Title); err != nil {
+		// ↗ marks a row that opens, as in the report blocks; it is one cell wide
+		marker := "  "
+		if r.URL != "" {
+			marker = hyperlink(r.URL, "↗") + " "
+		}
+
+		id := hyperlink(r.URL, r.ID) + strings.Repeat(" ", idW-len(r.ID))
+		title := hyperlink(r.URL, r.Title)
+
+		if _, err := fmt.Fprintf(w, "%s%s  %-*s  %s\n", marker, id, statusW, r.Status, title); err != nil {
 			return fmt.Errorf("writing rows: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// hyperlink wraps text in an OSC 8 link to url, which a terminal shows as
+// text alone and one without support ignores; no url leaves text plain.
+func hyperlink(url, text string) string {
+	if url == "" {
+		return text
+	}
+
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
 }

@@ -29,6 +29,8 @@ const (
 	VerbSearch   = "search"   // stdout: JSON rows, one task each
 	VerbBranch   = "branch"   // stdout: one branch name, never created
 	VerbChildren = "children" // stdout: JSON rows, one subtask each
+	VerbIndex    = "index"    // stdout: one url, the task list; no argument
+	VerbList     = "list"     // stdout: JSON rows, the first page of open tasks; no argument
 )
 
 // ExitUnsupported is the contract's reserved exit code: the driver ran and

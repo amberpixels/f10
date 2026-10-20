@@ -24,7 +24,7 @@ func demoCommand() *cli.Command {
 				Name:      "open",
 				Usage:     "open the demo report in the browser",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{printFlag()},
+				Flags:     []cli.Flag{linkFlag()},
 				Action:    runDemoOpen,
 			},
 		},
@@ -37,7 +37,7 @@ func runDemoOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if cmd.Bool("print") {
+	if cmd.Bool("link") {
 		_, err := fmt.Fprintln(cmd.Writer, path)
 
 		return err
@@ -45,7 +45,7 @@ func runDemoOpen(ctx context.Context, cmd *cli.Command) error {
 
 	opener := shell.Opener()
 	if opener == "" {
-		return fmt.Errorf("no opener on PATH: use --print to get the path (%s)", path)
+		return fmt.Errorf("no opener on PATH: use --link to get the path (%s)", path)
 	}
 
 	return shell.Passthrough(ctx, t.dir, opener, path)

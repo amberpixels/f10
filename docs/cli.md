@@ -38,13 +38,13 @@ f10 config [--json]      # the effective configuration, with the origin of every
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
-f10 task open [id]       # in the browser (--print writes the url instead)
+f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json]   # the task's open subtasks, in After: order
 f10 plan read [id]       # the plan saved for that task
-f10 plan open [id]       # in your editor
-f10 demo open [id]       # the demo report, in the browser
-f10 pr open              # this branch's PR or MR, gh or glab decided by the remote
+f10 plan open [id]       # in your editor (--link writes the path)
+f10 demo open [id]       # the demo report, in the browser (--link writes the path)
+f10 pr open [n]          # the PR or MR, no number their list; gh or glab decided by the remote (--link, --print as for task)
 f10 review pick [n] [--json]                          # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it

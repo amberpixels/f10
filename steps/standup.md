@@ -38,7 +38,7 @@ Never re-read git or the host to second-guess them, and never fall back to doing
    A project with no overlay is normal.
    One project in the report: its overlay feeds wording and Deliver as well as Assigned; several: Assigned only.
 
-3. **Resolve the tracker**, in one call: every task's url with `f10 -C <its project's first repos[].checkout> task open --print <id>`, and for a task whose `title` is empty, its tracker title from the first line of `f10 -C <that checkout> task read --no-images <id>`.
+3. **Resolve the tracker**, in one call: every task's url with `f10 -C <its project's first repos[].checkout> task open --link <id>`, and for a task whose `title` is empty, its tracker title from the first line of `f10 -C <that checkout> task read --no-images <id>`.
    A task whose url does not resolve renders unlinked and is named once under the report; it does not fail the run.
    PR urls are the JSON's `url`, never rebuilt.
 4. **Render**, under a header naming the period from `since` and `period`:

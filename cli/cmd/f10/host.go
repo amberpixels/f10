@@ -155,6 +155,52 @@ func (h host) issueURL(ctx context.Context, number string) (string, error) {
 	return "", fmt.Errorf("%s returned no url for issue %s", h.name, number)
 }
 
+// repoURL is the repository's web page, read from the host rather than the
+// remote, so a fork or a self-hosted GitLab gets its own.
+func (h host) repoURL(ctx context.Context) (string, error) {
+	var payload struct {
+		URL    string `json:"url"`
+		WebURL string `json:"web_url"`
+	}
+
+	if err := h.decode(ctx, &payload, h.pick(
+		[]string{"repo", "view", "--json", "url"},
+		[]string{"repo", "view", "-F", "json"},
+	)...); err != nil {
+		return "", err
+	}
+
+	url := cmp.Or(payload.URL, payload.WebURL)
+	if url == "" {
+		return "", fmt.Errorf("%s returned no repository url", h.name)
+	}
+
+	return strings.TrimSuffix(url, "/"), nil
+}
+
+// issuesURL is the repository's issue list.
+func (h host) issuesURL(ctx context.Context) (string, error) {
+	return h.repoPage(ctx, "/issues", "/-/issues")
+}
+
+// pullsURL is the repository's pull or merge request list.
+func (h host) pullsURL(ctx context.Context) (string, error) {
+	return h.repoPage(ctx, "/pulls", "/-/merge_requests")
+}
+
+func (h host) repoPage(ctx context.Context, gh, glab string) (string, error) {
+	url, err := h.repoURL(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if h.glab() {
+		return url + glab, nil
+	}
+
+	return url + gh, nil
+}
+
 // issueTitle is the one field the default branch name carries.
 func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 	iss, err := h.issue(ctx, number, "title")
@@ -173,14 +219,19 @@ func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 	return iss.Title, nil
 }
 
-// searchIssues lists the issues matching query as task rows, their ids
-// carrying prefix when the project has one.
-func (h host) searchIssues(ctx context.Context, query, prefix string) ([]row, error) {
+// listIssues lists the open issues matching query, or the first page of
+// them for "", as task rows, their ids carrying prefix when the project has one.
+func (h host) listIssues(ctx context.Context, query, prefix string) ([]row, error) {
+	var search []string
+	if query != "" {
+		search = []string{"--search", query}
+	}
+
 	var found []issue
 
 	err := h.decode(ctx, &found, h.pick(
-		[]string{"issue", "list", "--search", query, "--json", "number,title,state,url", "--limit", "30"},
-		[]string{"issue", "list", "--search", query, "-F", "json", "--per-page", "30"},
+		append([]string{"issue", "list"}, append(search, "--json", "number,title,state,url", "--limit", "30")...),
+		append([]string{"issue", "list"}, append(search, "-F", "json", "--per-page", "30")...),
 	)...)
 	if err != nil {
 		return nil, err

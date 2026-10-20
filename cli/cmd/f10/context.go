@@ -231,8 +231,8 @@ func (t *target) sharedPlansDir() string {
 // follow performs the side effect a url deserves, or prints it when the
 // caller asked for the address instead. Drivers return addresses; f10 is
 // what acts on them.
-func follow(ctx context.Context, w io.Writer, dir, url string, addressOnly bool) error {
-	if addressOnly {
+func follow(ctx context.Context, w io.Writer, dir, url string, linkOnly bool) error {
+	if linkOnly {
 		_, err := fmt.Fprintln(w, url)
 
 		return err
@@ -240,7 +240,7 @@ func follow(ctx context.Context, w io.Writer, dir, url string, addressOnly bool)
 
 	opener := shell.Opener()
 	if opener == "" {
-		return errors.New("no OS opener (open/xdg-open) on PATH - use --print and open it yourself")
+		return errors.New("no OS opener (open/xdg-open) on PATH - use --link and open it yourself")
 	}
 
 	return shell.Passthrough(ctx, dir, opener, url)
@@ -272,10 +272,16 @@ func writeDoc(ctx context.Context, w io.Writer, dir, doc string) error {
 	return shell.Pipe(ctx, dir, doc, pager[0], pager[1:]...)
 }
 
-// printFlag is the same flag on every verb that follows an address: print
-// it instead. It exists so `open` keeps one meaning across the nouns - a
-// plan's address is a path and a task's is a url, and no verb name covers
-// both honestly.
+// linkFlag is the same flag on every verb that follows an address: print
+// it instead, for a pipe. It exists so `open` keeps one meaning across the
+// nouns - a plan's address is a path and a task's is a url, and no verb name
+// covers both honestly.
+func linkFlag() cli.Flag {
+	return &cli.BoolFlag{Name: "link", Usage: "print the address instead of opening it"}
+}
+
+// printFlag is `open` writing what the address shows into the terminal: the
+// item, or the list's first page when no item is named.
 func printFlag() cli.Flag {
-	return &cli.BoolFlag{Name: "print", Usage: "print the address instead of opening it"}
+	return &cli.BoolFlag{Name: "print", Usage: "write the item, or with none the list's first page, to stdout"}
 }
