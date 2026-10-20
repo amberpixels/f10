@@ -8,7 +8,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
 1. **Design a conventional solution**: reuse existing abstractions, follow the project's CLAUDE.md and declared guardrails (e.g. a canonical UI component gallery means designing with its components, never a parallel one).
 2. **Write a staged plan.**
    First line: **Roles**, the roles it was written under, for `/f10:ship` to inherit.
-   A **Kind** line follows for a `bug` or `refactor` (`Kind: bug`); a plan without one is a feature.
+   A **Kind** line follows for a `bug`, `refactor` or `spike` (`Kind: bug`); a plan without one is a feature.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
    A bundle adds a **Bundle** line (`Bundle: ABC-1+ABC-2`) and a `## Riders` section listing each rider's acceptance criteria under its id; the stages cover every member.
    The kind opens the plan, before the stages:
@@ -18,6 +18,9 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    - **refactor** - a `## Invariant` section: the behavior that stays the same and the tests that prove it.
      Missing coverage makes the first stage characterization tests that pass before any change.
      An existing assertion that must change is a behavior change: name it and why, or the work is not a refactor.
+   - **spike** - a `## Question` section: the question, the decision it feeds, and the evidence that counts as an answer.
+     Stages are experiments, each naming the evidence it produces, not features to build.
+     Consequences states what the likely recommendation would commit the project to.
 
    Then ordered **stages**, the critical files each touches, data/migration work, tests to add or adjust, key tradeoffs and alternatives.
    Then a **`## Consequences` section**, a few lines of prose, in the ADR sense: what the chosen design makes easier, what it makes harder, the constraint it now depends on, and what to revisit under which condition.

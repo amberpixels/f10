@@ -40,6 +40,14 @@ A `pr` entry opens the branch's PR, or refreshes it when one is open, so a pipel
 A pipeline listed in `planless:` skips capture, fetch and plan for free-text input: no task id, no plan file, a brief inline plan in chat.
 The last step is the **shipment**.
 
+**A spike ends after implement**, whatever the pipeline: a `Kind: spike` plan answers a question, and its code never leaves the machine.
+No step after implement runs (no cleanup, commit, push, pr, review, judge or deploy); the shipment is the spike report.
+`f10 finish` cannot close it (it needs a PR and a clean worktree, and archives only the plan), so the final report ends with the manual close.
+In a linked worktree with in-repo storage: copy the spike report and the plan into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
+In the main checkout, or with out-of-tree storage, the report already outlives the code: discard the experiment code by the paths the report names.
+It also offers, in one line, to post the report's answer and recommendation as a comment on the task, outward-facing and free of f10 traces; a driven run lists the offer and posts nothing.
+The kind is known from the plan before the pipeline starts, so the badge declares `f10-state.sh final implement`, and a dry run prints the path cut at implement.
+
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
 Run the **catchup** step's points 2 and 3, with three differences:
 
@@ -59,4 +67,4 @@ A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan pri
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
 **Exit**
-- Stop after the pipeline's last step, with the final report: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, as produced), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof (implement's line), what changed, and a one-line reminder of gaps left on their defaults.
+- Stop after the pipeline's last step (a spike's: implement), with the final report: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, a spike report's path, as produced), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.
