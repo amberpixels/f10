@@ -19,13 +19,14 @@ Every question the steps call for (**wait or proceed** on a base with no code, a
 2. **Stop blocked, in the same call**: `; f10-state.sh set <phase> blocked [<leaf>]` (for ship, the pipeline step as leaf).
    The `Stop` hook leaves `blocked` alone.
 3. **End the turn**, printing the ask once under a facts block carrying the task.
-   `f10 status <task-id>` reads it from any session.
+   The print is for a person looking at this pane: end it with "Answer here", never a command for another session (`f10 forward`, `f10 status`, `f10 drive --answer`).
+   The driving session reads the ask through `f10 status <task-id>` and knows its own way back.
 
 Two questions never become asks: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`), and ships a saved plan as it stands rather than asking **reuse or re-plan**.
 
 ## The answer
 
-Answers arrive as your **next prompt**, plain text, numbered as the ask was (sent by `f10 forward <task-id> "<answers>"` or `f10 drive ... --answer`).
+Answers arrive as your **next prompt**, plain text, numbered as the ask was, typed in this pane or sent from the driving session.
 Run `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the answers in as `conventions/gaps.md` does (gaps **Resolved** in the plan file, decisions into the stages, and Consequences where they change a cost); resume from the step that stopped.
 An answer with no ask recorded is steering.
 
