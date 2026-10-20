@@ -170,7 +170,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   Its **kind** is `feature`, `bug`, `refactor` or `spike`, read from the steering, a label or the description (a spike only from the steering or a label); the plan records it.
   A bug is reproduced and its cause traced before it is planned, and its fix starts with a test that fails first.
   A refactor proves behavior unchanged with tests green before and after.
-  A spike answers a question: its run ends at a spike report, and its code is never committed.
+  A spike (a research task) answers a question: its run ends at a spike report, and its code is never committed.
 - **Stage** - one ordered unit inside a plan file.
   Not a step, not a skill.
 - **Plan file** - `<storage root>/plans/<TASK-ID>.md`, the handoff from plan to ship.

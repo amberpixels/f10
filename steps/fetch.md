@@ -10,7 +10,7 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
 2. **Settle the kind**: `feature`, `bug`, `refactor` or `spike`.
    The steering's word wins (`/f10:plan FT-12 as a bug`), then a tracker label or type that names one (`bug`, `defect`, `regression` are a bug; `refactor`, `tech-debt` a refactor; `spike`, `research`, `investigation` a spike; other labels, `question` among them, say nothing), then the description (an error, a stack trace, "used to work" read as a bug; "no behavior change", "restructure" as a refactor), else `feature`.
    A kind read from the description alone is named as such in the brief, so a reader can overrule it.
-   The description never settles a spike, which skips the PR: a task that only asks a question ("find out whether", "is it feasible") stays a feature, with a gap asking whether it is a spike.
+   The description never settles a spike, which skips the PR: a task that only asks a question ("find out whether", "is it feasible") stays a feature, and the brief says it reads like one, so the user can re-plan it `as a spike`.
 3. **Investigate only the real unknowns.**
    The task text and anything established in this conversation are **ground truth**: never re-verify a premise the task or the user gave you, except a bug's reported behavior, which is reproduced below.
    Investigate only what you need to design well: the exact code you'll mirror or touch, existing patterns to reuse, callers, downstream consumers behind a real decision, and tests, in a few targeted reads (`conventions/latency.md` rule 5).
