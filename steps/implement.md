@@ -3,6 +3,7 @@
 Role: a **senior engineer** in the project's stack, implementing an approved plan.
 Input: a plan: from the plan step just run, a saved `<storage root>/plans/<task>.md`, or a file the user passed.
 Output: verified code in the working tree; later pipeline steps (`pr`, `push`, `review`, `deploy`) decide where it goes.
+A spike's output is its spike report, its code left uncommitted, and no later step runs.
 Context: `project.md` guardrails and Verify.
 
 0. **Check the plan's gaps first**: open items are handled per `conventions/gaps.md` before any code.
@@ -24,7 +25,7 @@ Context: `project.md` guardrails and Verify.
    Run the project's verify commands from project.md, respecting its "never run X" rules.
    No Verify section: detect.
    `justfile` means `just lint` / `just test`; `Makefile`, its standard targets; else the stack's idiomatic verify commands (`go test ./...` + the linter the repo configures, etc.).
-   Fix what you broke.
+   Fix what you broke; a spike records red verify in its report instead (point 1).
    **The one skip: a tree that did not move.**
    If *this session* already ran these same commands green and nothing has touched the working tree since, say so and move on.
 3. **Hand off.**
@@ -32,4 +33,4 @@ Context: `project.md` guardrails and Verify.
    A bug or refactor names its proof in one line: the test, red before and green after, or the manual check and its result.
    A spike names its report's path and the answer in one line.
 
-**On failure:** verify stays red and you cannot fix it (`conventions/failure.md`).
+**On failure:** verify stays red and you cannot fix it (`conventions/failure.md`), except in a spike (point 1).
