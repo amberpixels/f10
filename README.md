@@ -167,9 +167,10 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
 
 - **Task** - the tracker item.
   Its **task id** names every artifact downstream.
-  Its **kind** is `feature`, `bug` or `refactor`, read from the steering, a label or the description; the plan records it.
+  Its **kind** is `feature`, `bug`, `refactor` or `spike`, read from the steering, a label or the description; the plan records it.
   A bug is reproduced and its cause traced before it is planned, and its fix starts with a test that fails first.
   A refactor proves behavior unchanged with tests green before and after.
+  A spike answers a question: its run ends at a spike report, and its code is never committed.
 - **Stage** - one ordered unit inside a plan file.
   Not a step, not a skill.
 - **Plan file** - `<storage root>/plans/<TASK-ID>.md`, the handoff from plan to ship.
@@ -181,9 +182,10 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   Two rounds at most; they stay in the checkout's `.f10/`, since `f10 finish` archives only the plan.
 - **Verdict file** - `<storage root>/verdicts/<TASK-ID or slug>/<n>.md`, one per judge run: a header with the subject, the verdict, its reason and, in a ship run, what the run decided, then the argument.
   An idea with no task files under a slug of the idea.
+- **Spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's shipment: the question, the answer, its evidence, the recommendation and follow-up tasks.
 - **Gap** - a decision only the user can make, recorded with a default so the plan is always shippable.
   Filling gaps is one optional questionnaire.
-- **Shipment** - what a ship run leaves, named by the pipeline's last step: verified code (`implement`), local commits (`commit`), pushed commits (`push`), an open PR/MR (`pr`), a running environment (`deploy`).
+- **Shipment** - what a ship run leaves, named by the pipeline's last step: verified code (`implement`), local commits (`commit`), pushed commits (`push`), an open PR/MR (`pr`), a running environment (`deploy`); for a spike, its spike report.
   A project with no git in its pipeline still ships.
 
 **Project binding**

@@ -16,6 +16,10 @@ Context: `project.md` guardrails and Verify.
      A plan naming a manual check instead: run it where the session can (the CLI, a script), else list it for the user.
    - **refactor** - run the Invariant's tests, and any characterization tests the plan adds, green before the first change and after the last.
      An existing assertion the plan did not name stays as it is.
+   - **spike** - run the experiments with the least code that produces their evidence: no polish, and tests only where an experiment needs one.
+     Write the **spike report** to `<storage root>/spikes/<TASK-ID>.md`: the question, the answer, the evidence (commands run, numbers, files by path), the recommendation, and follow-up tasks worth capturing, a title each.
+     The experiment code stays uncommitted in the worktree; the report names it by path.
+     Verify still runs, and its result goes in the report, but red verify on throwaway code does not fail the step.
 2. **Verify locally.**
    Run the project's verify commands from project.md, respecting its "never run X" rules.
    No Verify section: detect.
@@ -26,5 +30,6 @@ Context: `project.md` guardrails and Verify.
 3. **Hand off.**
    Briefly note what changed, then continue with the next ship-pipeline step.
    A bug or refactor names its proof in one line: the test, red before and green after, or the manual check and its result.
+   A spike names its report's path and the answer in one line.
 
 **On failure:** verify stays red and you cannot fix it (`conventions/failure.md`).

@@ -17,14 +17,16 @@ Every f10 run starts by loading it.
 - **task id** - the tracker id, in the project's format.
   It names the plan file, the branch and the report's rows.
   A planless pipeline has none, and no step may invent one.
-- **task kind** - `feature`, `bug` or `refactor`; fetch settles it and the plan records it as a `Kind:` line, absent meaning feature.
+- **task kind** - `feature`, `bug`, `refactor` or `spike`; fetch settles it and the plan records it as a `Kind:` line, absent meaning feature.
   Not the frontmatter's `tracker.kind`.
 - **plan** - `<storage root>/plans/<TASK-ID>.md`.
   Bare `plan` is ambiguous: write `/f10:plan` for the skill, the **plan** step for the step.
   "Run the **plan** step" means execute its instructions, never re-invoke the skill.
 - **findings** - `<storage root>/reviews/<TASK-ID>/<round>.md` (`steps/review.md`).
 - **verdict file** - `<storage root>/verdicts/<key>/<n>.md`, one per judge run, `<key>` the task id or, for an idea, a kebab slug of it (`steps/judge.md` point 8).
+- **spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's answer (`steps/implement.md`).
 - **shipment** - what the ship pipeline leaves, named by its **last step**: verified code (`implement`), local commits (`commit`), pushed commits (`push`), an open PR/MR (`pr`), a running environment (`deploy`), or a project-defined step's output.
+  A spike's is its spike report, whatever the pipeline.
 
 **Step headers.**
 A step's `Role:` is its base role; add the project's `project.md → Roles` on top, including conditional roles the plan recorded.
