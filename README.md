@@ -351,7 +351,7 @@ Resolution order, cache and release details: [docs/cli.md](docs/cli.md).
 Full reference: [docs/cli.md](docs/cli.md).
 
 ```bash
-just install   # dev: rebuild this checkout's cli/ into the shim's cache
+just install   # dev: rebuild this checkout's cli/ into the shim's cache and $GOBIN
 f10 --version  # the plugin's version, through the shim
 f10 config
 f10 doctor     # is the plugin, the binary and the environment wired up? changes nothing

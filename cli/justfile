@@ -47,6 +47,8 @@ build:
 ci: lint test
 # <<< justx:ci
 
-# build this checkout's binary into the cache slot the plugin's bin/f10 shim runs
+# build this checkout's binary into the cache slot the plugin's bin/f10 shim runs,
+# and into $GOBIN so a bare `f10` in a terminal runs the same build
 install:
     ../bin/f10 --shim-rebuild
+    go install -ldflags "-X main.stampedVersion=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' ../.claude-plugin/plugin.json)" ./cmd/f10

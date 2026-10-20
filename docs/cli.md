@@ -21,7 +21,7 @@ A checkout running the release binary has no build of its own: after editing `cl
 
 ```bash
 f10 --version   # always the plugin's version through the shim
-just install    # dev: rebuild this checkout's cli/ into the cache slot (bin/f10 --shim-rebuild)
+just install    # dev: rebuild this checkout's cli/ into the cache slot (bin/f10 --shim-rebuild) and $GOBIN (go install)
 ```
 
 `--version` prints the version stamped at build time (`-X main.stampedVersion`), as the shim and the release workflow build it.
