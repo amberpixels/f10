@@ -17,6 +17,7 @@ argument-hint: "<task-id | free-text description>"
 - **No argument** (an argument that names no task, like "let's plan something", counts as none):
   - **A task already in this conversation** (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.
     **Skip `capture` and the `fetch` investigation**; go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
+    Fetch's kind rules still run: settle the kind, and reproduce a bug or ask.
   - No task in the conversation: ask for one in one line and wait.
 - Extra text beside a task id is steering for the run.
 

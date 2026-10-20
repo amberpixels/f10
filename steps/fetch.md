@@ -11,12 +11,13 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
    The steering's word wins (`/f10:plan FT-12 as a bug`), then a tracker label or type that names one (`bug`, `defect`, `regression` are a bug; `refactor`, `tech-debt` a refactor; other labels say nothing), then the description (an error, a stack trace, "used to work" read as a bug; "no behavior change", "restructure" as a refactor), else `feature`.
    A kind read from the description alone is named as such in the brief, so a reader can overrule it.
 3. **Investigate only the real unknowns.**
-   The task text and anything established in this conversation are **ground truth**: never re-verify a premise the task or the user gave you.
+   The task text and anything established in this conversation are **ground truth**: never re-verify a premise the task or the user gave you, except a bug's reported behavior, which is reproduced below.
    Investigate only what you need to design well: the exact code you'll mirror or touch, existing patterns to reuse, callers, downstream consumers behind a real decision, and tests, in a few targeted reads (`conventions/latency.md` rule 5).
    The kind adds what it must prove:
    - **bug** - reproduce it where the project can run it (a test, the CLI, the verify commands): the steps or input, expected against actual.
      Then trace the root cause to a `file:line`.
-     A bug that does not reproduce, or a cause still a guess after a few reads, never becomes a plan: ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, `set plan blocked`, per `modes/driven.md`), and stop.
+     A bug that does not reproduce, or a cause still a guess after a few reads, never becomes a plan: ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, per `modes/driven.md`), and retry the reproduction once with the answer.
+     Still not reproduced: stop with `f10-state.sh set plan blocked` and a `note` naming what was tried and what to collect next.
    - **refactor** - the behavior that must not change, the tests that pin it, and where coverage is missing.
 4. **Surface obstacles explicitly**: the task out of date against the current code, internal conflicts, ambiguous or missing requirements, hidden coupling, data/migration concerns.
 5. **Decide like a senior engineer.**
@@ -25,4 +26,4 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
 6. **Output** a short investigation brief: the kind (with a bug's reproduction and root cause, or a refactor's invariant), what changes, where, the **areas** the task really touches (correct the task's _Areas_ note if investigation disagrees, or derive areas from the code when the task carries none; name the conditional roles in `project.md → Roles` they trigger), the obstacles found, the decisions you took, and the gaps with their defaults for the plan to record.
 
 **On failure:** the tracker does not know the id, or is unreachable (`conventions/failure.md`).
-A bug that does not reproduce is a declined outcome, not a failure.
+A bug fetch could not reproduce is a declined outcome, not a failure.

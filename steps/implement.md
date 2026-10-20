@@ -9,7 +9,7 @@ Context: `project.md` guardrails and Verify.
 1. **Implement the plan** in the project's house style: its CLAUDE.md rules and the guardrails in project.md / the implement overlay.
    Comments stay 1-2 lines.
    Keep PII out of logs.
-   The plan's **Kind** line sets what comes first:
+   The plan's **Kind** line sets what comes first, while none of the plan's code exists yet (a later change on the same branch, such as a judge's, skips it):
    - **bug** - write the Reproduction's test and run it on the unfixed tree: it must fail, for the reason the plan names.
      A test that passes there did not reproduce the bug: stop (`conventions/failure.md`), never fix against it.
      Then the fix, and the same test green.
