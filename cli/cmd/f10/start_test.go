@@ -356,7 +356,7 @@ func TestHostIssueTitle(t *testing.T) {
 func TestHostRefusesPullRequests(t *testing.T) {
 	f := newFakes(t)
 	pr := `{"number":35,"title":"Merged PR","url":"https://github.com/o/r/pull/35"}`
-	f.script("gh issue view 35 --json number,title,state,url,body,comments", pr)
+	f.script("gh issue view 35 --json number,title,state,labels,url,body,comments", pr)
 	f.script("gh issue view 35 --json url", pr)
 	f.script("glab issue view 7 -F json", `{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7"}`)
 
@@ -377,6 +377,36 @@ func TestHostRefusesPullRequests(t *testing.T) {
 
 	if _, err := (host{name: "glab", dir: "/code/repo"}).issueURL(t.Context(), "7"); err == nil {
 		t.Error("glab merge request taken for an issue")
+	}
+}
+
+// task read puts the labels between state and url, whichever shape the host
+// gives them in.
+func TestHostIssueDocLabels(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh issue view 12 --json number,title,state,labels,url,body,comments",
+		`{"number":12,"title":"Crash","state":"OPEN","labels":[{"name":"bug"},{"name":"draft"}],`+
+			`"url":"https://github.com/o/r/issues/12","body":"boom"}`)
+	f.script("gh issue view 13 --json number,title,state,labels,url,body,comments",
+		`{"number":13,"title":"Plain","state":"OPEN","labels":[],"url":"https://github.com/o/r/issues/13"}`)
+	f.script("glab issue view 7 -F json",
+		`{"iid":7,"title":"Crash","state":"opened","labels":["bug"],"web_url":"https://gitlab.com/g/p/-/issues/7"}`)
+
+	tests := []struct {
+		host   string
+		number string
+		want   string
+	}{
+		{"gh", "12", "OPEN · bug, draft · https://github.com/o/r/issues/12\n"},
+		{"gh", "13", "OPEN · https://github.com/o/r/issues/13\n"},
+		{"glab", "7", "opened · bug · https://gitlab.com/g/p/-/issues/7\n"},
+	}
+
+	for _, tt := range tests {
+		doc, err := host{name: tt.host, dir: "/code/repo"}.issueDoc(t.Context(), "FT-"+tt.number, tt.number)
+		if err != nil || !strings.Contains(doc, tt.want) {
+			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
+		}
 	}
 }
 

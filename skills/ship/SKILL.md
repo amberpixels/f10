@@ -59,4 +59,4 @@ A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan pri
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
 **Exit**
-- Stop after the pipeline's last step, with the final report: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, as produced), then review status ("stopped at PR" is a normal end), deploy status, what changed, and a one-line reminder of gaps left on their defaults.
+- Stop after the pipeline's last step, with the final report: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, as produced), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof (implement's line), what changed, and a one-line reminder of gaps left on their defaults.

@@ -36,4 +36,4 @@ next            <the smallest thing the user can do to unblock it>
 
 Then stop, without a question you could have answered yourself.
 
-**A step that correctly declines is a normal end**, reported as an outcome: ship stopping at an open PR because the pipeline declares no review, a gap left on its default, review findings you then fixed, a planless pipeline skipping the plan file, a judge verdict that ends a ship run (`steps/judge.md`; badge `blocked`, never `failed`).
+**A step that correctly declines is a normal end**, reported as an outcome: ship stopping at an open PR because the pipeline declares no review, a gap left on its default, a bug that does not reproduce, review findings you then fixed, a planless pipeline skipping the plan file, a judge verdict that ends a ship run (`steps/judge.md`; badge `blocked`, never `failed`).

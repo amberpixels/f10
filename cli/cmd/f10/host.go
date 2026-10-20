@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -27,6 +28,7 @@ type issue struct {
 	WebURL      string `json:"web_url"`
 	Body        string `json:"body"`
 	Description string `json:"description"`
+	Labels      labels `json:"labels"`
 
 	Comments []struct {
 		Body   string `json:"body"`
@@ -34,6 +36,32 @@ type issue struct {
 			Login string `json:"login"`
 		} `json:"author"`
 	} `json:"comments"`
+}
+
+// labels are the issue's label names: gh gives objects, glab plain strings.
+type labels []string
+
+func (l *labels) UnmarshalJSON(data []byte) error {
+	var names []string
+	if err := json.Unmarshal(data, &names); err == nil {
+		*l = names
+
+		return nil
+	}
+
+	var objs []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(data, &objs); err != nil {
+		return err
+	}
+
+	*l = make(labels, 0, len(objs))
+	for _, o := range objs {
+		*l = append(*l, o.Name)
+	}
+
+	return nil
 }
 
 func (i issue) url() string  { return cmp.Or(i.URL, i.WebURL) }
@@ -78,7 +106,7 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 
 // issueDoc is the issue as the markdown document `task read` prints.
 func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
-	iss, err := h.issue(ctx, number, "number,title,state,url,body,comments")
+	iss, err := h.issue(ctx, number, "number,title,state,labels,url,body,comments")
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +119,11 @@ func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
 
 	fmt.Fprintf(&b, "# %s: %s\n\n", id, iss.Title)
 
-	meta := slices.DeleteFunc([]string{iss.State, iss.url()}, func(s string) bool { return s == "" })
+	// labels sit up top: fetch reads a task's kind from them
+	meta := slices.DeleteFunc(
+		[]string{iss.State, strings.Join(iss.Labels, ", "), iss.url()},
+		func(s string) bool { return s == "" },
+	)
 	if len(meta) > 0 {
 		fmt.Fprintf(&b, "%s\n\n", strings.Join(meta, " · "))
 	}

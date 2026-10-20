@@ -22,6 +22,7 @@ Name a bug only where it changes the verdict.
    Where the stated problem and the real one differ, build the judgment on that.
 3. **Symptom or cause.**
    For a symptom, name where the cause lives and what fixing it takes.
+   A bug's plan names its root cause under Reproduction: a fix that lands away from that cause is the symptom case.
 4. **What already exists**: in the codebase, a dependency, or an open tracker task.
 5. **The longer-lived shape**: the one design you would build instead, if any, grounded in what you read, its cost now against reaching it later.
    A quick hack is a hack only if a better shape is reachable now.
