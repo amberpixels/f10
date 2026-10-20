@@ -147,6 +147,9 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				merge:     pr == finishMerge,
 				local:     pr == finishLocal,
 				plansDir:  t.sharedPlansDir(),
+				// a driven finish asks no second question: a bundle's merge
+				// closes every rider, which the report's closed row names
+				close: task.Riders(),
 			})
 		},
 		stateDir: state.Dir(),
@@ -441,8 +444,10 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 		runs = append(runs, r)
 
-		if _, seen := byID[r.task.ref.ID]; !seen {
-			byID[r.task.ref.ID] = r
+		for _, id := range r.task.ref.Members() {
+			if _, seen := byID[id]; !seen {
+				byID[id] = r
+			}
 		}
 	}
 
@@ -679,8 +684,12 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 	add := func(r ref.Ref, suffix string, listed int) error {
 		ranged := listed < 0
 
-		if slices.ContainsFunc(tasks, func(t driveTask) bool { return t.ref.ID == r.ID && t.suffix == suffix }) {
-			return fmt.Errorf("%s is listed twice", r.ID)
+		if i := slices.IndexFunc(tasks, func(t driveTask) bool {
+			return t.suffix == suffix && slices.ContainsFunc(r.Members(), func(id string) bool {
+				return slices.Contains(t.ref.Members(), id)
+			})
+		}); i >= 0 {
+			return fmt.Errorf("%s is listed twice", sharedMember(tasks[i].ref, r))
 		}
 
 		info, err := in.tracker.info(ctx, r)
@@ -702,13 +711,18 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 
 		task := driveTask{ref: r, suffix: suffix, info: info, model: in.modelFor(listed)}
 
-		if line := afterIn(info.body); line != "" {
+		line, err := bundleAfter(ctx, in.tracker, r, info.body)
+		if err != nil {
+			return err
+		}
+
+		if line != "" {
 			base, err := in.tracker.resolve(ctx, line)
 			if err != nil {
 				return fmt.Errorf("%s's body says After: %s: %w", r.ID, line, err)
 			}
 
-			task.after = base.ID
+			task.after = base.Head().ID
 		}
 
 		branched, err := hasTaskBranch(ctx, in.main, r.ID)
@@ -736,8 +750,10 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		task.finished = finishedTask(info, in.tracker.archive, r.ID, branched)
 
 		if !ranged && !task.finished && !branched {
-			if err := in.refuseParent(ctx, r); err != nil {
-				return err
+			for _, m := range r.MemberRefs() {
+				if err := in.refuseParent(ctx, m); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -769,7 +785,12 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return nil, nil, err
 		}
 
-		if err := add(r, suffix, i); err != nil {
+		if suffix != "" && r.Bundle != nil {
+			return nil, nil, fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
+		}
+
+		// any member drives the whole bundle, under its lead
+		if err := add(r.Head(), suffix, i); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -793,6 +814,9 @@ func (in *driveInput) refuseParent(ctx context.Context, r ref.Ref) error {
 
 // span resolves a range's two ends.
 func (in *driveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
+	if slices.ContainsFunc(in.args.tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
+		return ref.Ref{}, ref.Ref{}, errors.New("a range's ends are single ids: list a bundle on its own")
+	}
 	from, err := in.tracker.resolve(ctx, in.args.tasks[0])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
@@ -1172,7 +1196,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.o.path,
 			id,
 			r.task.suffix,
-			skillPrompt(skill, id, r.o.dep, in.remote),
+			skillPrompt(skill, r.task.ref.Label(), r.o.dep, in.remote),
 		); err != nil {
 			return err
 		}
@@ -1448,9 +1472,14 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 // mode takes every gap on its default and reuses a saved plan, so plan and
 // ship are the bare skill; both name the dependency when the task has a
 // base. catchup is not a chain skill: drive sends it to a branch its finished
-// base marked landed.
+// base marked landed. id is a bundle's label, `ABC-1+ABC-2`: plan and ship
+// take it whole, every other skill its lead, from which it finds the branch.
 func skillPrompt(skill, id string, dep *dependency, remote bool) string {
 	var p string
+
+	if skill != "plan" && skill != "ship" {
+		id, _, _ = strings.Cut(id, ref.Separator)
+	}
 
 	switch skill {
 	case "review":
@@ -1507,4 +1536,15 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	case <-t.C:
 		return nil
 	}
+}
+
+// sharedMember is the first id two listed entries both name.
+func sharedMember(a, b ref.Ref) string {
+	for _, id := range b.Members() {
+		if slices.Contains(a.Members(), id) {
+			return id
+		}
+	}
+
+	return b.ID
 }

@@ -67,50 +67,66 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, doc, err := readTask(ctx, t, cmd.Args().First())
-	if err != nil {
-		// an agent reading this has the project's fetch adapter as its
-		// fallback, and learns of it here, when it applies, not in every prompt
-		return fmt.Errorf("%w\nfetch the task through the project's fetch adapter instead "+
-			"(project.md, Tracker)", err)
-	}
+	token := cmd.Args().First()
 
-	// a person at a terminal opens the links themselves and would wait on
-	// the downloads; an agent gets local files in place of urls that expire
-	if !isTerminal(cmd.Writer) && !cmd.Bool("no-images") {
-		doc = withImages(ctx, doc, t.imagesDir(ctx, r.ID), images.Downloader{Authorize: githubAuth(ctx, t)})
-	}
-
-	return writeDoc(ctx, cmd.Writer, t.dir, doc)
-}
-
-// readTask is the task as markdown: the driver's `read`, else the host's
-// issue with its comments.
-func readTask(ctx context.Context, t *target, token string) (ref.Ref, string, error) {
 	r, err := t.reference(ctx, token)
 	if err != nil {
-		return r, "", err
+		return fetchFallback(err)
 	}
 
+	// a typed bundle reads every member, lead first; an id alone reads itself
+	members := []ref.Ref{r}
+	if strings.Contains(token, ref.Separator) {
+		members = r.MemberRefs()
+	}
+
+	docs := make([]string, 0, len(members))
+
+	for _, m := range members {
+		doc, err := readDoc(ctx, t, m)
+		if err != nil {
+			return fetchFallback(err)
+		}
+
+		// a person at a terminal opens the links themselves and would wait on
+		// the downloads; an agent gets local files in place of urls that expire
+		if !isTerminal(cmd.Writer) && !cmd.Bool("no-images") {
+			doc = withImages(ctx, doc, t.imagesDir(ctx, m.ID), images.Downloader{Authorize: githubAuth(ctx, t)})
+		}
+
+		docs = append(docs, strings.TrimRight(doc, "\n"))
+	}
+
+	return writeDoc(ctx, cmd.Writer, t.dir, strings.Join(docs, "\n\n---\n\n"))
+}
+
+// fetchFallback tells an agent reading a failed read that the project's
+// fetch adapter is its fallback: here, when it applies, not in every prompt.
+func fetchFallback(err error) error {
+	return fmt.Errorf("%w\nfetch the task through the project's fetch adapter instead "+
+		"(project.md, Tracker)", err)
+}
+
+// readDoc is the task as markdown: the driver's `read`, else the host's
+// issue with its comments.
+func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
-			return r, doc, nil
+			return doc, nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
-			return r, "", err
+			return "", err
 		}
 	}
 
 	h, err := t.issues()
 	if err != nil {
-		return r, "", err
+		return "", err
 	}
 
-	doc, err := h.issueDoc(ctx, r.ID, r.Number)
-
-	return r, doc, err
+	return h.issueDoc(ctx, r.ID, r.Number)
 }
 
 // withImages downloads every image doc links into dir and ends doc with

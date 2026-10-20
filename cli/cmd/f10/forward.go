@@ -75,6 +75,9 @@ func runForward(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	// a bundle's member goes to the bundle's agent, named for its lead
+	r = r.Head()
+
 	return forward(ctx, cmd.Writer, forwardInput{
 		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
 		here:     t.lay.CheckoutRoot,

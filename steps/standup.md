@@ -46,6 +46,7 @@ Never re-read git or the host to second-guess them, and never fall back to doing
      With more than one project, the section's lines go under each project's `name`, in the JSON's order; a project with several `repos` names each PR's `repo` beside its number.
      In each, for the tasks whose `days` carry that date:
      - a task whose class that day is `work`: one line, its id linked to the tracker, its title, then its PRs linked in the JSON's order (chain order).
+       A task with `riders` is a bundle: its riders follow the title as `with FT-12, FT-13`, each linked;
        Its `state` goes on its last work day's line only: it is where the task ended the period, not where it stood each day;
      - every task whose class that day is `upkeep`: one line for all of them, such as `kept up to date: FT-12, FT-14 (in review)`.
        A task with no work day in the period carries its `state` in parentheses here, on its last day;

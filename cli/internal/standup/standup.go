@@ -143,11 +143,13 @@ type PR struct {
 
 // Task is the activity carrying one task id.
 type Task struct {
-	ID      string   `json:"id"`
-	Title   string   `json:"title"`
-	State   string   `json:"state"`
-	Class   string   `json:"class"`
-	After   string   `json:"after,omitempty"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	State string `json:"state"`
+	Class string `json:"class"`
+	After string `json:"after,omitempty"`
+	// Riders are the tasks a bundle's branch ships beside this one, its lead
+	Riders  []string `json:"riders,omitempty"`
 	Days    []Day    `json:"days"` // the command sets it
 	PRs     []PR     `json:"prs"`
 	Commits []Commit `json:"commits"` // commits on no PR of the user's
@@ -307,6 +309,7 @@ func Group(in Input) Report {
 		taskOf[p.Number] = id
 		t := task(id)
 		t.PRs = append(t.PRs, out)
+		t.addRiders(in.Prefix, p.Head)
 	}
 
 	for _, c := range loose {
@@ -319,6 +322,7 @@ func Group(in Input) Report {
 
 		t := task(id)
 		t.Commits = append(t.Commits, c)
+		t.addRiders(in.Prefix, c.Branch)
 	}
 
 	// a base PR outside the period still names the task this one comes after
@@ -635,4 +639,19 @@ func nonNil[T any](s []T) []T {
 	}
 
 	return s
+}
+
+// addRiders records the riders a bundle's branch name spells beside its
+// lead, `ABC-1+ABC-2/slug`, once each.
+func (t *Task) addRiders(prefix, branch string) {
+	members := ref.Members(prefix, branch)
+	if len(members) < 2 || members[0] != t.ID {
+		return
+	}
+
+	for _, id := range members[1:] {
+		if !slices.Contains(t.Riders, id) {
+			t.Riders = append(t.Riders, id)
+		}
+	}
 }

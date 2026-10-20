@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -306,5 +307,23 @@ func TestGroupIsDeterministic(t *testing.T) {
 		if !bytes.Equal(got, first) {
 			t.Fatalf("shuffled input changed the output:\n%s\n%s", first, got)
 		}
+	}
+}
+
+// A bundle's PR groups under its lead, which lists the riders its branch
+// names; a rider gets no task of its own.
+func TestGroupListsABundlesRiders(t *testing.T) {
+	r := Group(input(
+		[]Commit{commit("a1", "FT-1+FT-2/slug", "work", 2)},
+		[]HostPR{own(9, "FT-1+FT-2/slug", "main", HostOpen)},
+	))
+
+	lead := taskByID(t, r, "FT-1")
+	if strings.Join(lead.Riders, " ") != "FT-2" || len(lead.PRs) != 1 {
+		t.Errorf("lead = %+v, want one PR and rider FT-2", lead)
+	}
+
+	if len(r.Tasks) != 1 {
+		t.Errorf("tasks = %+v, want the bundle as one", r.Tasks)
 	}
 }

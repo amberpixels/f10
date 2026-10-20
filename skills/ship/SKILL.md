@@ -18,8 +18,8 @@ Deploy has its own confirmation (the **deploy** step).
 - A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`), or named in the user's own words: run that pipeline.
   Otherwise `default`; never self-select another, though for tiny work you may suggest one.
 - A **plan file** (`*.md` path): run the pipeline with it.
-- A **task id** (project id format / id / url): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
-  Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (glob the plans dir if the exact name misses).
+- A **task id** (project id format / id / url), or a **bundle** joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
+  Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
   Found: ask **reuse this plan or re-plan?** (AskUserQuestion); re-plan runs the **plan** step.
   Missing: run the **plan** step.
   Then the pipeline.

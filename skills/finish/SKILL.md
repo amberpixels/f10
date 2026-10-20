@@ -28,5 +28,8 @@ On no, stop.
 When the command exits 3 because someone else opened the PR (the message names the author, `--merge` and `--local`), ask once with `AskUserQuestion`: clean up locally and leave the PR open (`--local`), or merge it (`--merge`), or stop.
 Rerun the same command with the chosen flag appended and relay its report.
 
+When the command exits 7 because the task ships in a bundle (the message names the riders and `--close`), ask once with one multi-select `AskUserQuestion`: which riders does the PR deliver, one option per rider, every one recommended.
+Rerun the same command with `--close <the chosen ids, comma-separated>`, or `--close none` when none is chosen, and relay its report: the lead and the chosen riders close on merge, the rest stay open.
+
 Every other refusal is final: print the message verbatim and stop; it names the cause and what to do.
 A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

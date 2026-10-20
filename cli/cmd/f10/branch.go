@@ -56,24 +56,28 @@ func branchName(
 
 // slugBranch is the default shape, `<ID>/<slug>`: the id in front keeps
 // the branch searchable by its task, the slug says what the task is where
-// only the branch name shows - a Herdr tab, a worktree listing. No title,
-// or one that slugs to nothing, leaves the bare id and says so.
+// only the branch name shows - a Herdr tab, a worktree listing. A bundle
+// puts every id in front, `ABC-1+ABC-2/<slug>`, the slug from the lead's
+// title, so trackers that link branches by issue key link every member. No
+// title, or one that slugs to nothing, leaves the bare ids and says so.
 func slugBranch(ctx context.Context, task ref.Ref, title func(context.Context) (string, error)) (string, string) {
+	ids := task.Label()
+
 	if title == nil {
-		return task.ID, fmt.Sprintf("no title source for %s, so the branch is the bare id", task.ID)
+		return ids, fmt.Sprintf("no title source for %s, so the branch is the bare id", task.ID)
 	}
 
 	text, err := title(ctx)
 	if err != nil {
-		return task.ID, fmt.Sprintf("no title for %s (%v), so the branch is the bare id", task.ID, err)
+		return ids, fmt.Sprintf("no title for %s (%v), so the branch is the bare id", task.ID, err)
 	}
 
 	slug := slugify(text)
 	if slug == "" {
-		return task.ID, fmt.Sprintf("the title of %s yields no slug, so the branch is the bare id", task.ID)
+		return ids, fmt.Sprintf("the title of %s yields no slug, so the branch is the bare id", task.ID)
 	}
 
-	return task.ID + "/" + slug, ""
+	return ids + "/" + slug, ""
 }
 
 // slugMax is where a slug is cut: long enough to carry a title's meaning,
@@ -124,9 +128,12 @@ func slugify(title string) string {
 
 // taskRefs are the patterns a task's branch can sit under a root: the id
 // itself (which for-each-ref extends to everything below it at a slash),
-// and the id with a dash suffix.
+// the id with a dash suffix, and a bundle the id leads, bare or slugged
+// (a for-each-ref `*` stops at a slash).
 func taskRefs(root, id string) []string {
-	return []string{root + id, root + id + "-*"}
+	bundle := root + id + ref.Separator + "*"
+
+	return []string{root + id, root + id + "-*", bundle, bundle + "/*"}
 }
 
 // branchesFor lists the branches under root that belong to task id,
@@ -177,17 +184,32 @@ func taskBranch(ctx context.Context, dir, id string) (string, error) {
 	return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
 }
 
-// cfgTaskKeys matches every branch's f10-task entry in the local config.
-const cfgTaskKeys = `^branch\..*\.` + cfgTaskID + `$`
+// cfgTaskKeys matches every branch's f10-task and f10-tasks entry in the
+// local config.
+const cfgTaskKeys = `^branch\..*\.(` + cfgTaskID + `|` + cfgRiders + `)$`
 
-// linkedBranches are the local branches whose f10-task names id: a branch
-// picked up from a PR, whose name need not carry the id at all.
+// linkedBranches are the local branches whose f10-task names id, or whose
+// f10-tasks lists it: a branch picked up from a PR, whose name need not
+// carry the id at all, and a bundle's branch, found by any member.
 func linkedBranches(ctx context.Context, dir, id string) []string {
 	var names []string
 
 	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
-		if strings.EqualFold(e.Value, id) {
-			names = append(names, strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgTaskID))
+		branch, key := e.Key, ""
+		for _, k := range []string{cfgTaskID, cfgRiders} {
+			if b, ok := strings.CutSuffix(e.Key, "."+k); ok {
+				branch, key = strings.TrimPrefix(b, "branch."), k
+			}
+		}
+
+		ids := []string{e.Value}
+		if key == cfgRiders {
+			ids = strings.Fields(e.Value)
+		}
+
+		if slices.ContainsFunc(ids, func(s string) bool { return strings.EqualFold(s, id) }) &&
+			!slices.Contains(names, branch) {
+			names = append(names, branch)
 		}
 	}
 
@@ -287,6 +309,8 @@ func taskCheckout(
 	task ref.Ref,
 	suffix string,
 ) (string, string, error) {
+	task = task.Head()
+
 	want, _, err := branchName(ctx, d, task, suffix, nil)
 	if err != nil {
 		return "", "", err

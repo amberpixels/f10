@@ -99,8 +99,8 @@ func (fx *driveFixture) drive(t *testing.T) error {
 // named after it.
 func (fx *driveFixture) task(id string, info taskInfo, branches string) {
 	fx.infos[id] = info
-	fx.f.script("git for-each-ref --format=%(refname) refs/heads/"+id+" refs/heads/"+id+"-*", branches)
-	fx.f.script("git for-each-ref --format=%(refname) refs/remotes/origin/"+id+" refs/remotes/origin/"+id+"-*", "")
+	fx.f.script(refsKey("refs/heads/", id), branches)
+	fx.f.script(refsKey("refs/remotes/origin/", id), "")
 
 	for _, key := range []string{cfgDrive, cfgAfter, cfgLanded} {
 		fx.f.script("git config --get branch."+id+"."+key, "")
