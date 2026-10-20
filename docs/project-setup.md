@@ -119,6 +119,7 @@ A planless pipeline skips capture and the plan file for free-text input.
 A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
+A spike is the exception: its run ends after implement, whatever the pipeline, with a spike report.
 
 ## Drive chain
 

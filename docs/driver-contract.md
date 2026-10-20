@@ -72,7 +72,7 @@ That separation is what lets `open` mean the same thing for a task as it does fo
 
 **Print the whole task.**
 `read` includes the task's comments after its body, as the host path does: an agent reads the task through this verb alone, and a decision made in a comment is part of what it asks.
-Put the task's labels or type (a Jira issue type, a Notion select) near the top, as the host path puts them beside the state: fetch reads a bug or a refactor from them.
+Put the task's labels or type (a Jira issue type, a Notion select) near the top, as the host path puts them beside the state: fetch reads a bug, a refactor or a spike from them.
 
 **Print markdown, not a rendering.**
 `read` writes plain markdown and stops. f10 decides presentation from whether it is writing to a terminal, so the same command serves a person at a prompt and an agent capturing stdout.
