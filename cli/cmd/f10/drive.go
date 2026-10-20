@@ -147,9 +147,10 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				merge:     pr == finishMerge,
 				local:     pr == finishLocal,
 				plansDir:  t.sharedPlansDir(),
-				// a driven finish asks no second question: a bundle's merge
-				// closes every rider, which the report's closed row names
-				close: task.Riders(),
+				// a driven finish asks no second question, since a resume
+				// carries only the latest answer: a bundle's riders stay
+				// open, the reversible choice, and the report names them
+				close: []string{},
 			})
 		},
 		stateDir: state.Dir(),

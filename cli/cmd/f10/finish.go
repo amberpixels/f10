@@ -288,7 +288,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			{label: "merge", value: p.sha()},
 		}
 
-		if len(in.close) > 0 {
+		// a tracker that is not the host closes nothing on merge
+		if len(in.close) > 0 && in.driver == nil {
 			rows = append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
 		}
 	}

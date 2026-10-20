@@ -160,9 +160,11 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 The first id is the **lead** and keeps everything keyed on a task (plan file, findings, verdicts, agent name, run state, ledger); the others are **riders**.
 The branch is `ABC-1+ABC-2/<slug>`, the slug from the lead's title, and start records `branch.<name>.f10-task` (the lead) and `branch.<name>.f10-tasks` (the riders, space-separated) once it exists.
 Every other command takes any member's id and acts on the bundle: `f10 finish ABC-2` finds the ABC-1 branch.
+A bundle branch fetched from origin has no local record; start reads its riders from the branch name and records them.
 Before anything is created, start refuses a parent among the members, a rider already on another branch (naming it), a branch that exists with other riders (riders are fixed at start) and a suffix.
 The bundle's base is the one `After:` its members name outside it; a line naming another member is dropped, and two different bases are refused.
-`f10 drive` takes a bundle as one entry; a task `After:` a rider waits for the whole bundle, and drive's finish closes every rider.
+`f10 drive` takes a bundle as one entry; a task `After:` a rider waits for the whole bundle.
+Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
 Before the first pipeline step, ship brings the branch up to date with the base when it moved - a rebase, or a merge where `project.md` declares `catchup: merge` - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.

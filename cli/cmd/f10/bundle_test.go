@@ -4,16 +4,25 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bundle: []string{"GH-1", "GH-2"}}
 
-const refsRider = "git for-each-ref --format=%(refname) refs/heads/GH-2 refs/heads/GH-2-* refs/heads/GH-2+* refs/heads/GH-2+*/*"
+var refsRider = riderKey("refs/heads/", "GH-2")
+
+// riderKey is the for-each-ref call that looks for every branch a rider is on.
+func riderKey(root, id string) string {
+	patterns := append(taskRefs(root, id), riderRefs(root, id)...)
+
+	return "git for-each-ref --format=%(refname) " + strings.Join(patterns, " ")
+}
 
 // A bundle starts as one branch named for every member, one worktree and
 // one agent named for the lead, with the riders recorded once the branch
@@ -57,12 +66,12 @@ func TestStartABundle(t *testing.T) {
 	}
 }
 
-func TestRefuseBundle(t *testing.T) {
+func TestSettleBundle(t *testing.T) {
 	t.Run("a rider on a branch of its own", func(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsRider, heads("GH-2/own"))
 
-		err := refuseBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-2/own") {
 			t.Errorf("err = %v, want the rider's branch named", err)
 		}
@@ -73,38 +82,72 @@ func TestRefuseBundle(t *testing.T) {
 		f.script(linkedKeys, "branch.GH-3+GH-2/x."+cfgRiders+" GH-2")
 		f.script(refsRider, "")
 
-		err := refuseBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-3+GH-2/x") {
 			t.Errorf("err = %v, want the other bundle's branch named", err)
+		}
+	})
+
+	t.Run("a rider past the lead of a bundle only origin has", func(t *testing.T) {
+		f := newFakes(t)
+		onOrigin := func(p string) bool { return strings.Contains(p, "refs/remotes/origin/") }
+		f.absent = slices.DeleteFunc(f.absent, onOrigin)
+		f.script(refsRider, "")
+		f.script(riderKey("refs/remotes/origin/", "GH-2"), "refs/remotes/origin/GH-5+GH-2/x\n")
+
+		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-5+GH-2/x") {
+			t.Errorf("err = %v, want the remote bundle named", err)
 		}
 	})
 
 	t.Run("riders changed since start", func(t *testing.T) {
 		f := newFakes(t)
 		f.script("git config --get branch.GH-1+GH-3/x."+cfgRiders, "GH-3")
+		f.script("git config --get branch.GH-1+GH-3/x."+cfgTaskID, "GH-1")
 
-		err := refuseBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
+		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
 		if err == nil || !strings.Contains(err.Error(), "ships GH-1+GH-3; riders are fixed at start") {
 			t.Errorf("err = %v, want the recorded bundle named", err)
+		}
+	})
+
+	t.Run("the task rides in another bundle", func(t *testing.T) {
+		newFakes(t)
+
+		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-5+GH-1/x")
+		if err == nil || !strings.Contains(err.Error(), "GH-1 is already on branch GH-5+GH-1/x, led by GH-5") {
+			t.Errorf("err = %v, want the branch's own lead named", err)
 		}
 	})
 
 	t.Run("the bundle's own branch reopens", func(t *testing.T) {
 		f := newFakes(t)
 		f.script("git config --get branch.GH-1+GH-2/x."+cfgRiders, "GH-2")
+		f.script("git config --get branch.GH-1+GH-2/x."+cfgTaskID, "GH-1")
 		f.script(linkedKeys, "branch.GH-1+GH-2/x."+cfgTaskID+" GH-1\nbranch.GH-1+GH-2/x."+cfgRiders+" GH-2")
 		f.script(refsRider, "")
 
-		if err := refuseBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
+		if _, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
 			t.Errorf("err = %v reopening the bundle's own branch", err)
+		}
+	})
+
+	t.Run("the lead alone takes the riders a fetched branch's name spells", func(t *testing.T) {
+		f := newFakes(t)
+		f.script(refsRider, "")
+
+		got, err := settleBundle(t.Context(), "/code/repo", gh1, "GH-1+GH-2/x")
+		if err != nil || got.Label() != "GH-1+GH-2" {
+			t.Errorf("settleBundle = %s, %v; want the bundle GH-1+GH-2", got.Label(), err)
 		}
 	})
 
 	t.Run("a task alone is never refused", func(t *testing.T) {
 		newFakes(t)
 
-		if err := refuseBundle(t.Context(), "/code/repo", gh1, ""); err != nil {
-			t.Errorf("err = %v for a single task", err)
+		if got, err := settleBundle(t.Context(), "/code/repo", gh1, ""); err != nil || got.Bundle != nil {
+			t.Errorf("settleBundle = %+v, %v for a single task", got, err)
 		}
 	})
 }
@@ -342,5 +385,39 @@ func TestLedgerMatchesABundleMember(t *testing.T) {
 
 	if got := eventTask(ledger.Event{Task: "GH-1", Branch: "GH-1/slug"}); got != "GH-1" {
 		t.Errorf("eventTask on a single branch = %q, want GH-1", got)
+	}
+}
+
+// A tracker that is not the host closes nothing on merge: no closed row, no
+// body edit, and the notes name what to close there.
+func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.task, fx.in.close, fx.in.driver = bundle12, []string{"GH-2"}, fakeDriver(t)
+	fx.f.fail("driver branch 1", shell.Result{Code: 3})
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(out, "closed:") || fx.f.called("gh pr view GH-1 --json body") {
+		t.Errorf("a driver tracker reported or edited a close:\n%s\n%v", out, fx.f.calls)
+	}
+
+	if !strings.Contains(out, "close GH-2 there") {
+		t.Errorf("report does not name the rider to close by hand:\n%s", out)
+	}
+}
+
+// A rerun after a failed merge closes a rider an earlier run kept open.
+func TestCloseAgain(t *testing.T) {
+	body := keepOpen("Closes #1\nCloses #2", "2")
+	if got := closeAgain(body, "2"); got != "Closes #1\nCloses #2" {
+		t.Errorf("closeAgain = %q, want the keyword back", got)
+	}
+
+	if got := closeAgain("Part of #22", "2"); got != "Part of #22" {
+		t.Errorf("closeAgain touched another issue: %q", got)
 	}
 }

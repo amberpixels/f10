@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -134,6 +135,31 @@ func taskRefs(root, id string) []string {
 	bundle := root + id + ref.Separator + "*"
 
 	return []string{root + id, root + id + "-*", bundle, bundle + "/*"}
+}
+
+// riderRefs are the patterns of a bundle branch the id rides in, past its
+// lead: `<lead>+<id>`, `<lead>+<id>+<more>`, each bare or slugged.
+func riderRefs(root, id string) []string {
+	mid := root + "*" + ref.Separator + id
+
+	return []string{mid, mid + "/*", mid + ref.Separator + "*", mid + ref.Separator + "*/*"}
+}
+
+// branchBundle is the lead and riders a branch ships: its recorded link,
+// else the ids its name spells, as a branch fetched from origin carries
+// them. A branch that ships no bundle has no riders.
+func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string) {
+	section := "branch." + branch + "."
+
+	if riders := strings.Fields(gitx.Out(ctx, dir, "config", "--get", section+cfgRiders)); len(riders) > 0 {
+		return cmp.Or(gitx.Out(ctx, dir, "config", "--get", section+cfgTaskID), ref.Match(prefix, branch)), riders
+	}
+
+	if members := ref.Members(prefix, branch); members != nil {
+		return members[0], members[1:]
+	}
+
+	return "", nil
 }
 
 // branchesFor lists the branches under root that belong to task id,

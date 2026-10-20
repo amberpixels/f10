@@ -9,7 +9,7 @@ argument-hint: "<id>... [plan|judge|ship|review|resolve|finish ...]"
 
 Run tasks through a chain from here: `f10 drive` opens each task as `f10 start` does, dependents after their base, and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
 `--model` picks every agent's model, `<id>:<model>` one task's, which wins.
-A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish closes every rider.
+A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
 This skill expands parents, runs the command, relays its questions and prints its report; it runs no step.
 
 **Arguments**

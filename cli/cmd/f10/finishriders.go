@@ -100,8 +100,7 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 	}
 
 	switch {
-	case len(kept) == 0:
-	case merged:
+	case merged && len(kept) > 0:
 		for _, m := range kept {
 			if err := in.host.reopenIssue(ctx, m.Number); err != nil {
 				return nil, fmt.Errorf("reopening %s, which the merge closed: %w", m.ID, err)
@@ -109,21 +108,25 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 		}
 
 		notes = append(notes, "reopened "+strings.Join(refIDs(kept), ", ")+", which the merge had closed")
-	default:
+	case !merged:
 		body, err := in.host.pullBody(ctx, branch)
 		if err != nil {
 			return nil, err
 		}
 
+		// a rerun after a failed merge may close a rider an earlier run kept
 		edited := body
 		for _, m := range kept {
 			edited = keepOpen(edited, m.Number)
 		}
 
+		for _, m := range closing {
+			edited = closeAgain(edited, m.Number)
+		}
+
 		if edited != body {
 			if err := in.host.editPullBody(ctx, branch, edited); err != nil {
-				return nil, fmt.Errorf("taking the closing keywords of %s out of the PR body: %w",
-					strings.Join(refIDs(kept), ", "), err)
+				return nil, fmt.Errorf("editing the closing keywords in the PR body: %w", err)
 			}
 		}
 	}
@@ -159,6 +162,15 @@ func keepOpen(body, number string) string {
 	re := regexp.MustCompile(fmt.Sprintf(closingKeyword, regexp.QuoteMeta(number)))
 
 	return re.ReplaceAllString(body, "Part of $1")
+}
+
+// closeAgain undoes keepOpen for issue number: `Part of #12` back into
+// `Closes #12`.
+func closeAgain(body, number string) string {
+	re := regexp.MustCompile(fmt.Sprintf(`\bPart of (#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`,
+		regexp.QuoteMeta(number)))
+
+	return re.ReplaceAllString(body, "Closes $1")
 }
 
 // pullBody reads the description of the request whose head is branch.
