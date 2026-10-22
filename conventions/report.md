@@ -51,6 +51,9 @@ Skills report the whole run the same way.
 
 A skill's **Exit** block may name a `Next:` skill.
 Offer it in one line under the report, with its condition where the item gives one, and leave the call to the user: never run it.
+**A chained skill is not offered, it runs**: when the argument goes on with `&& /f10:<skill> ...`, the user already made that call.
+Invoke it with the Skill tool right after this skill's report, its arguments verbatim (`--driven` kept), without ending the turn.
+A stop the steps call for (a `blocked` ask, a failure) still stops the chain.
 
 ## The status-line badge
 

@@ -19,12 +19,12 @@ argument-hint: "<task-id | free-text description>"
     **Skip `capture` and the `fetch` investigation**; go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
     Fetch's kind rules still run: settle the kind, and reproduce a bug or ask.
   - No task in the conversation: ask for one in one line and wait.
-- Extra text beside a task id is steering for the run.
+- Extra text beside a task id is steering for the run, except a `&& /f10:<skill> ...` tail: that is a chain, run once the plan is saved (`conventions/report.md`).
 
 **Run**
 1. Run `f10-load-project.sh fetch plan` first, on every call of this skill; with a free-text argument, `f10-load-project.sh capture fetch plan`.
 2. Follow each step it prints, in the order the Arguments item gives.
 
 **Exit**
-- Stop at the saved plan.
+- Stop at the saved plan, unless the argument chains a skill: then run it.
 - Next: `/f10:ship <id>`.
