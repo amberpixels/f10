@@ -12,11 +12,11 @@ This skill only runs the command and relays its output; it runs no step.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--all`, `--group <name>`: `f10 board` does not take them yet, one checkout per call; say so in one line and stop.
 - `--json`: print the Board JSON the command emits verbatim in a fenced block, offer nothing, and stop.
 - `--since <date>`: the window `done` rows cover, a `YYYY-MM-DD` date or RFC 3339 time; default seven days.
 - `--remote`: the host and the tracker only, what a viewer without the checkout sees.
 - `-C <checkout>`: another checkout, by path, or by name once `F10_ROOTS` is set.
-- `--all`, `--group <name>`: `f10 board` does not take them yet, one checkout per call; say so in one line and stop.
 - No argument: this checkout, the last seven days.
 
 Everything goes to `f10 board` verbatim:
