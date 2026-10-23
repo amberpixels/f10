@@ -568,10 +568,11 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 		// settleRiders may have just rewritten the description's closing
 		// keywords, and the body under the commit must be the host's current one
 		description := p.body()
-		if in.traces && len(in.task.Riders()) > 0 {
-			if description, err = in.host.pullBody(ctx, name); err != nil {
-				return pull{}, nil, err
-			}
+		if in.traces {
+			var note string
+
+			description, note = lastState(ctx, in, name, description)
+			notes = appendNote(notes, note)
 		}
 
 		if p, err = in.host.mergePull(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
@@ -609,10 +610,42 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 	return p, notes, nil
 }
 
+// lastState leaves the PR body's hidden state block saying finish, the
+// last state before the merge, and returns the body as the host now holds
+// it. A failed read or write is a note, never a failed finish: the merge is
+// the work, the block a trace of it.
+func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string) {
+	body, err := in.host.pullBody(ctx, branch)
+	if err != nil {
+		return fallback, "the PR body's state block was not rewritten: " + err.Error()
+	}
+
+	out, err := trace.Rewrite(body, trace.Update{
+		Step:   "finish",
+		Task:   in.task.ID,
+		Riders: in.task.Riders(),
+		After:  branchAfter(ctx, in.main, branch),
+	})
+	if err != nil {
+		return body, "the PR body's state block was not rewritten: " + err.Error()
+	}
+
+	if out == body {
+		return body, ""
+	}
+
+	if err := in.host.editPullBody(ctx, branch, out); err != nil {
+		return body, "the PR body's state block was not rewritten: " + err.Error()
+	}
+
+	return out, ""
+}
+
 // mergeBody is what the host's commit says under its subject: the request's
-// description, then one Task: line per member, so the commit that survives a
-// squash still names what it shipped. Only with traces on and for a squash or
-// a GitHub merge commit; a rebase, like glab's merge (""), lands the branch's own trailers.
+// description without its hidden state block, then one Task: line per
+// member, so the commit that survives a squash still names what it shipped.
+// Only with traces on and for a squash or a GitHub merge commit; a rebase,
+// like glab's merge (""), lands the branch's own trailers.
 func mergeBody(in finishInput, description, method string) string {
 	if !in.traces || (method != "--squash" && method != "--merge") {
 		return ""
@@ -623,7 +656,7 @@ func mergeBody(in finishInput, description, method string) string {
 		return ""
 	}
 
-	if body := strings.TrimSpace(description); body != "" {
+	if body := strings.TrimSpace(trace.StripState(description)); body != "" {
 		return body + "\n\n" + trailers
 	}
 

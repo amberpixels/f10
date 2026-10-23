@@ -24,6 +24,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    Another task named in the PR text is a link with its title (`conventions/context.md` → Task references).
    A **bundle** (riders in `git config --get branch."$(git branch --show-current)".f10-tasks`): the title is the lead's, and the body links every member with its title.
    On a host that closes issues on merge it carries one closing keyword per member, each on a line of its own (`Closes #12`): `f10 finish` rewrites a rider's line to keep it open.
+   Once it is open, `f10 trace state --step pr` writes the hidden state block into its body (`docs/traces.md`): nothing with `traces: off`, and a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
    - **Push first**: commit what the tree holds per the adapter (`steps/commit.md` point 2, `--step implement`), then push, never forcing, so the description never covers code the PR lacks.
    - **Someone else's PR** (`author.login` other than `gh api user --jq .login`, `author.username` other than `glab api user`'s `username`, compared case-insensitively): stop after the push and leave the title and body as they are.
@@ -31,6 +32,9 @@ Context: `project.md → Hosting & PR` (the PR adapter).
      The title keeps its task id.
    - **Owned sections**: a section the overlay names as maintained elsewhere (a screenshots section a script regenerates) is copied verbatim from the old body into its place in the new one; one the old body lacks stays out.
      The old body is read for these sections only.
+   - **The state block** (`docs/traces.md`): with plain mechanics, run `f10 trace state --step pr --body-file <file>` on the draft before writing it, and the block and its counts come over from the old body.
+     A skill adapter takes no draft: there the block is an owned section, copied verbatim whatever the switch, and `f10 trace state --step pr` runs after the skill's write.
+     Nothing with `traces: off`; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
    - **Write it** through the project's PR adapter: a skill adapter refreshes through that skill, and one with no way to refresh fails the step (`conventions/failure.md` rule 4).
      Plain mechanics: `gh pr edit <n> --title … --body-file <file>` / `glab mr update <n> --title … --description "$(cat <file>)"`, the draft in a temp file outside the repo.
      The base, labels and assignee stay as they are.
