@@ -38,7 +38,7 @@ f10 config [--json]      # the effective configuration, with the origin of every
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
-f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page)
+f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json]   # the task's open subtasks, in After: order
 f10 plan read [id]       # the plan saved for that task

@@ -370,7 +370,7 @@ The same binary reads what that configuration points at, with the repo's own too
 ```bash
 f10 task read            # the current task as markdown - from the branch, or this session
 f10 task open 1042       # in the browser
-f10 task open --print    # the open tasks, first page, as rows (no id: the list, in the browser)
+f10 task open --print    # the open tasks, first page, as rows ranked by priority (no id: the list, in the browser)
 f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
 f10 demo open            # the demo report for it, in the browser
@@ -383,7 +383,7 @@ f10 ledger dump          # what runs recorded locally (--json, --project ., --ta
 
 A reference is any id shape (`1042`, `#1042`, `ABC-1042`) or the task's url.
 `read` writes content, `open` follows an address (`--link` writes the address instead, for a pipe), `search` finds by description, the same under every noun.
-`task open` and `pr open` with no argument open the list; `--print` writes it to the terminal instead, the first page as rows, and with an id writes the item.
+`task open` and `pr open` with no argument open the list; `--print` writes it to the terminal instead, the first page as rows, tasks ranked by priority, and with an id writes the item.
 Every other verb with no argument takes the id in the branch name, else the task this session recorded.
 `-C` answers for another checkout, no `cd` needed:
 

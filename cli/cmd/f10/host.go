@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/driver"
 )
 
 // The host-issues fallback: what `task` does in a project with no driver,
@@ -220,19 +222,23 @@ func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 }
 
 // listIssues lists the open issues matching query, or the first page of
-// them for "", as task rows, their ids carrying prefix when the project has one.
-func (h host) listIssues(ctx context.Context, query, prefix string) ([]row, error) {
-	var search []string
+// them for "", as task rows: ids carry prefix when the project has one, and
+// priorities, the lower-cased label to level index, ranks them; nil ranks none.
+func (h host) listIssues(ctx context.Context, query, prefix string, priorities map[string]string) ([]row, error) {
+	ghArgs := []string{"issue", "list"}
+	glabArgs := []string{"issue", "list"}
+
 	if query != "" {
-		search = []string{"--search", query}
+		ghArgs = append(ghArgs, "--search", query)
+		glabArgs = append(glabArgs, "--search", query)
 	}
+
+	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels", "--limit", "30")
+	glabArgs = append(glabArgs, "-F", "json", "--per-page", "30")
 
 	var found []issue
 
-	err := h.decode(ctx, &found, h.pick(
-		append([]string{"issue", "list"}, append(search, "--json", "number,title,state,url", "--limit", "30")...),
-		append([]string{"issue", "list"}, append(search, "-F", "json", "--per-page", "30")...),
-	)...)
+	err := h.decode(ctx, &found, h.pick(ghArgs, glabArgs)...)
 	if err != nil {
 		return nil, err
 	}
@@ -244,8 +250,28 @@ func (h host) listIssues(ctx context.Context, query, prefix string) ([]row, erro
 			id = prefix + "-" + id
 		}
 
-		rows = append(rows, row{ID: id, Title: iss.Title, Status: iss.State, URL: iss.url()})
+		rows = append(rows, row{
+			ID:       id,
+			Title:    iss.Title,
+			Status:   iss.State,
+			URL:      iss.url(),
+			Priority: priorityOf(iss.Labels, priorities),
+		})
 	}
 
 	return rows, nil
+}
+
+// priorityOf is the most urgent level the issue's labels map to, or "" when
+// none does. Labels compare case-insensitively, as the hosts treat them.
+func priorityOf(names []string, priorities map[string]string) string {
+	best, level := len(driver.Priorities), ""
+
+	for _, name := range names {
+		if rank, ok := driver.PriorityRank(priorities[strings.ToLower(name)]); ok && rank < best {
+			best, level = rank, driver.Priorities[rank]
+		}
+	}
+
+	return level
 }

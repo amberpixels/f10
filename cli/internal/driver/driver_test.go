@@ -109,3 +109,19 @@ func TestRunFailureKeepsStderr(t *testing.T) {
 		t.Errorf("Run error = %q, want it to carry the driver's stderr", err)
 	}
 }
+
+// The vocabulary is ordered and case-insensitive; a word outside it has no
+// rank, so a caller can drop it with a warning rather than guess.
+func TestPriorityRank(t *testing.T) {
+	for value, want := range map[string]int{"urgent": 0, "High": 1, "medium": 2, "LOW": 3, "low\n": 3} {
+		if got, ok := PriorityRank(value); !ok || got != want {
+			t.Errorf("PriorityRank(%q) = %d, %v; want %d", value, got, ok, want)
+		}
+	}
+
+	for _, value := range []string{"", "p1", "highest"} {
+		if got, ok := PriorityRank(value); ok || got != -1 {
+			t.Errorf("PriorityRank(%q) = %d, %v; want -1, false", value, got, ok)
+		}
+	}
+}

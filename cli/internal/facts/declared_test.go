@@ -257,3 +257,61 @@ func TestReviewTraces(t *testing.T) {
 		t.Errorf("errors = %q", bad.Errors())
 	}
 }
+
+// tracker.priority maps host labels onto the contract's levels: a string or
+// a list per level, indexed case-insensitively, shown in vocabulary order
+// with its origin. A level outside the vocabulary or a label under two
+// levels is an error; an empty level is not.
+func TestTrackerPriority(t *testing.T) {
+	eff := buildWith(t, "---\ntracker:\n  kind: github\n  id: FT-###\n  priority:\n"+
+		"    low: P3\n    high: [P1, \"priority:high\"]\n    medium: []\n---\n# demo\n", "")
+
+	if len(eff.Problems) > 0 {
+		t.Fatalf("problems: %+v", eff.Problems)
+	}
+
+	if eff.IDPrefix != "FT" || eff.TrackerKind != "GitHub Issues" {
+		t.Errorf("tracker beside the map = %q, %q", eff.IDPrefix, eff.TrackerKind)
+	}
+
+	want := map[string]string{"p3": "low", "p1": "high", "priority:high": "high"}
+	if len(eff.PriorityLabels) != len(want) {
+		t.Errorf("index = %v, want %v", eff.PriorityLabels, want)
+	}
+
+	for label, level := range want {
+		if eff.PriorityLabels[label] != level {
+			t.Errorf("index[%q] = %q, want %q", label, eff.PriorityLabels[label], level)
+		}
+	}
+
+	i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "tracker.priority" })
+	if i < 0 || eff.Facts[i].Value != "high: P1, priority:high; low: P3" ||
+		eff.Facts[i].Origin != "declared (main, frontmatter)" {
+		t.Errorf("fact = %+v", eff.Facts)
+	}
+
+	none := buildWith(t, "---\ntracker: {kind: github, id: FT-###}\n---\n# demo\n", "")
+	if none.PriorityLabels != nil ||
+		slices.ContainsFunc(none.Facts, func(f Fact) bool { return f.Key == "tracker.priority" }) {
+		t.Errorf("undeclared map = %v, %+v", none.PriorityLabels, none.Facts)
+	}
+
+	// a worktree that declares tracker: replaces the whole block, map included
+	wt := buildWith(t, "---\ntracker:\n  id: FT-###\n  priority: {high: P1}\n---\n",
+		"---\ntracker: {id: FT-###}\n---\n")
+	if wt.PriorityLabels != nil {
+		t.Errorf("worktree tracker without a map kept main's: %v", wt.PriorityLabels)
+	}
+
+	bad := buildWith(t, "---\ntracker:\n  priority:\n    highest: P0\n    high: [P1, p2]\n    low: [P2]\n---\n", "")
+	for _, msg := range []string{`"highest" is not one of urgent, high, medium, low`, `label "P2" is listed under both high and low`} {
+		if !strings.Contains(bad.Errors(), msg) {
+			t.Errorf("errors = %q, want %q", bad.Errors(), msg)
+		}
+	}
+
+	if _, err := decodeDeclared([]byte("tracker:\n  priority:\n    high: {label: P1}\n")); err == nil {
+		t.Error("a mapping as a level's labels decoded")
+	}
+}

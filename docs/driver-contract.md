@@ -32,6 +32,7 @@ Seven verbs, each writing its answer to stdout:
 
 The argument for `read`, `url`, `branch` and `children` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 `index` and `list` take no argument: `index` is the page `f10 task open` with no id opens, `list` the rows `f10 task open --print` writes, in `search`'s row shape.
+f10 ranks them by `priority` itself, so a driver returns them in its own order.
 A driver without them gets the host's open issues.
 
 `branch` is where a project encodes its branch shape - `feat/1042-short-slug`, or whatever `project.md` declares under Hosting & PR.
@@ -43,6 +44,10 @@ Extra fields are allowed and ignored:
 ```json
 [{ "id": "ABC-1042", "title": "Fix order search timeout", "status": "In Progress", "url": "https://…" }]
 ```
+
+A fifth, `"priority": "high"`, is optional: one of `urgent`, `high`, `medium`, `low`, in that order.
+A driver maps its tracker's own values onto these (Jira's `Highest` becomes `urgent`); a row without the field has no priority and ranks after every row with one.
+A value outside the vocabulary is dropped with a warning on stderr, never an error, so a driver that gets one word wrong still lists its tasks.
 
 A `children` row is one subtask linked to the task as its parent.
 f10 drops rows whose `state` is `closed`, resolves `id` and `after` to the project's id format, and decides `finished` itself, so a driver returns every subtask it knows:

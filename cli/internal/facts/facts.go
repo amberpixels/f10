@@ -58,6 +58,10 @@ type Effective struct {
 	IDPrefixOrigin  string `json:"idPrefixOrigin,omitempty"`  // "declared (<layer>)" or "derived from project name <name>"
 	IDPrefixDerived bool   `json:"idPrefixDerived,omitempty"` // the prefix came from the project's name, not a declaration
 
+	// PriorityLabels is tracker.priority inverted: a lower-cased host label
+	// to the level it carries; nil when none is declared.
+	PriorityLabels map[string]string `json:"priorityLabels,omitempty"`
+
 	// The remote review's four facts (review.go); zero when Review declares
 	// no remote reviewer.
 	Review Review `json:"review"`
