@@ -54,7 +54,7 @@ f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [-
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
-f10 board [--since <time>] [--remote] [--json]   # where every task stands: done, in progress with its stage and next action, next
+f10 board [--since <time>] [--remote] [--json | --html] [--out <path>]   # where every task stands: done, in progress with its stage and next action, next
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -570,6 +570,9 @@ It writes nothing to the host.
   The host is asked once for the open requests and once for the merged ones, then once per merged request for its branch, once per open request for the declared remote reviewer's review, and once for the commits of a request nothing else names a task for; a long window on a busy repository costs that many calls.
 - `--remote` reads the host and the tracker only: what a viewer without the checkout sees.
 - `--json` prints the Board JSON, the contract every renderer reads; `docs/board.md` is its spec, the stages and their rules included, and `docs/board.schema.json` its schema.
+- `--html` prints one static page: the Board JSON embedded, drawn by a renderer inlined in the page, so it opens from disk with no server and no network and can be attached or hosted as is.
+  The page shows every row with its stage, `stage_from` and next action, and the failed sources; it draws the same rows from the same JSON as the terminal and decides no stage.
+- `--out <path>` writes `--json` or `--html` to a file instead of stdout.
 
 A row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished`, `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host (`docs/traces.md`), `guessed` for the host's own facts alone.
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
