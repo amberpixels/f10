@@ -25,8 +25,8 @@
     "git config --get-regexp ^branch\\..*\\.(f10-task|f10-tasks|f10-after|f10-model)$": {
       "stdout": "branch.FT-7/rate.f10-model opus"
     },
-    "git log --no-show-signature --format=%ae origin/main..FT-7/rate": {
-      "stdout": "ann@acme.example\nann@acme.example\nann@acme.example"
+    "git log --no-show-signature --format=%H %ae origin/main..FT-7/rate": {
+      "stdout": "00000000000000000000000000000000000000a1 ann@acme.example\n00000000000000000000000000000000000000a2 ann@acme.example\n00000000000000000000000000000000000000a3"
     }
   }
 }

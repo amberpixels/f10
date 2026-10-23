@@ -135,7 +135,7 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	f := newFakes(t)
 	f.absent = append(
 		f.absent,
-		"git log --no-show-signature --format=%ae",
+		"git log --no-show-signature --format=%H %ae",
 		"git config --get-regexp",
 		"git symbolic-ref",
 		"git for-each-ref",

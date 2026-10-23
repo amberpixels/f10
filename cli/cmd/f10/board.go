@@ -270,7 +270,7 @@ func collectBoards(
 
 			switch {
 			case e.err != nil:
-				p := lookaround.Project{Name: filepath.Base(e.dir), Checkout: e.dir}
+				p := lookaround.Project{ID: e.id, Name: filepath.Base(e.main), Checkout: e.main}
 				boards[i] = lookaround.Unreachable(p, e.err, now, since)
 
 				return

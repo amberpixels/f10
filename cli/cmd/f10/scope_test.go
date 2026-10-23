@@ -85,16 +85,21 @@ func TestStandupReadsEveryCheckoutOnce(t *testing.T) {
 	}
 }
 
-// Other commands answer for one checkout.
-func TestOnlyStandupTakesSeveralCheckouts(t *testing.T) {
+// Commands other than standup and board answer for one checkout; board
+// over several is TestBoardCheckoutsExpand.
+func TestOtherCommandsTakeOneCheckout(t *testing.T) {
 	isolateEnv(t)
 
 	root := canonical(t, t.TempDir())
 	a, b := scopeRepo(t, root, "a"), scopeRepo(t, root, "b")
 
 	if _, err := runStandupApp(t, "-C", a, "-C", b, "config"); err == nil ||
-		!strings.Contains(err.Error(), "only standup") {
-		t.Errorf("err = %v, want two -C refused outside standup", err)
+		!strings.Contains(err.Error(), "(got 2)") || !strings.Contains(err.Error(), "take several") {
+		t.Errorf("err = %v, want two -C refused with the count and who takes several", err)
+	}
+
+	if _, err := runStandupApp(t, "-C", a, "-C", b, "board", "--json"); err != nil {
+		t.Errorf("board with two -C: %v, want accepted", err)
 	}
 }
 

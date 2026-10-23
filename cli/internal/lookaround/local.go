@@ -57,18 +57,25 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 
 	// one log per worktree gives the count of commits past the base and
 	// who wrote them, for the same call rev-list --count would cost: a
-	// line per commit, signatures off so log.showSignature adds none
+	// line per commit, the sha first so a commit with no author email
+	// still counts once the output is trimmed, signatures off so
+	// log.showSignature adds none
 	for _, wt := range wts {
 		w := Worktree{Path: wt.Path, Branch: wt.Branch}
 		if wt.Branch != "" && def != "" && wt.Branch != strings.TrimPrefix(def, "origin/") {
-			log, err := gitx.Exec(ctx, in.Main, "log", "--no-show-signature", "--format=%ae", def+".."+wt.Branch)
+			log, err := gitx.Exec(ctx, in.Main, "log", "--no-show-signature", "--format=%H %ae", def+".."+wt.Branch)
 			if err == nil && log != "" {
 				for line := range strings.SplitSeq(log, "\n") {
 					w.Ahead++
 
-					email := strings.TrimSpace(line)
-					if email != "" &&
-						!slices.ContainsFunc(w.Emails, func(e string) bool { return strings.EqualFold(e, email) }) {
+					fields := strings.Fields(line)
+					if len(fields) < 2 {
+						continue
+					}
+
+					if email := fields[1]; !slices.ContainsFunc(w.Emails, func(e string) bool {
+						return strings.EqualFold(e, email)
+					}) {
 						w.Emails = append(w.Emails, email)
 					}
 				}

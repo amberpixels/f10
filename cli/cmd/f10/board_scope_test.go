@@ -39,6 +39,7 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 	root := canonical(t, t.TempDir())
 	good := scopeRepo(t, root, "good")
 	broken := scopeRepo(t, root, "broken")
+	git(t, broken, "remote", "add", "origin", "git@github.com:acme/broken.git")
 
 	instructions := filepath.Join(broken, ".f10", "instructions")
 	if err := os.MkdirAll(instructions, 0o755); err != nil {
@@ -73,6 +74,10 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 		if s.OK || !strings.Contains(s.Error, "bogus") {
 			t.Errorf("broken %s: %+v, want failed naming the key", s.Name, s)
 		}
+	}
+
+	if p := boards[0].Project; p.ID != "github.com/acme/broken" || p.Checkout != broken {
+		t.Errorf("broken project = %+v, want its id and main checkout", p)
 	}
 
 	if local := boards[1].Sources[2]; !local.OK || boards[1].Project.Checkout != good {

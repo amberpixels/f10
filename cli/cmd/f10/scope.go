@@ -173,6 +173,8 @@ func scoped(cmd *cli.Command) bool {
 // binding it, which the command decides what to do with.
 type scopeEntry struct {
 	dir    string
+	main   string // the main checkout, for a board of a checkout that would not bind
+	id     string // its project id, the normalised remote
 	target *target
 	repo   *repoRef
 	err    error
@@ -204,9 +206,10 @@ func bindScope(ctx context.Context, items []scopeItem, cmdName string) []scopeEn
 		}
 
 		roots[main] = true
-		ids[ledger.Where(ctx, main).Project] = true
 
-		e := scopeEntry{dir: it.dir}
+		e := scopeEntry{dir: it.dir, main: main, id: ledger.Where(ctx, main).Project}
+		ids[e.id] = true
+
 		if e.target, e.err = targetAt(ctx, it.dir, true, cmdName); e.err != nil {
 			e.err = fmt.Errorf("%s: %w", it.dir, e.err)
 		}

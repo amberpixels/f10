@@ -614,7 +614,7 @@ Each project is collected on its own, a few at a time: one that cannot be read (
 Checkouts of one repository are read once, from the first given; a repository named outright that a checkout already covers is dropped.
 
 - `--all` or `--group` prints one line per project: `<n> in flight` (rows neither `done` nor `next`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
-- `--detail`, or a scope built from `-C` alone, prints every project's rows under a heading with its name.
+- `--detail`, or a scope of more than one `-C` with no `--all` or `--group`, prints every project's rows under a heading with its name; one `-C` prints the board as this checkout's.
 - `--by person` prints rows grouped by `who.person` across projects, a heading per person, the unresolved last under `nobody`, each row naming its project.
 - `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 1 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
 
@@ -644,6 +644,7 @@ Checkouts of one repository are read once, from the first given; a repository na
 - `--remote` reads the host and the tracker only: what a viewer without the checkout sees.
 - `--json` prints the Board JSON, the contract every renderer reads; `docs/board.md` is its spec, the stages and their rules included, and `docs/board.schema.json` its schema.
 - `--html` prints one static page: the Board JSON embedded, drawn by a renderer inlined in the page, so it opens from disk with no server and no network and can be attached or hosted as is.
+  The page draws one project: over several (`--all`, `--group`, more than one `-C`) it is refused.
   The page shows every row with its stage, `stage_from` and next action, and the failed sources; it draws the same rows from the same JSON as the terminal and decides no stage.
 - `--out <path>` writes `--json` or `--html` to a file instead of stdout.
 
