@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "checkout": "/code/widgets",
+    "remote": false
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": false,
+      "error": "gh: not logged in",
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": false,
+      "error": "gh: not logged in",
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-2",
+      "stage": "implementing",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-2-bc3293",
+        "agent_status": "working",
+        "model": "opus"
+      },
+      "where": {
+        "branch": "FT-2/slug",
+        "worktree": "/code/widgets.FT-2-slug",
+        "workspace": "FT-2"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "text": "at cleanup"
+      }
+    }
+  ]
+}

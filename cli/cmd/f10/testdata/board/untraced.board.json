@@ -62,6 +62,35 @@
       }
     },
     {
+      "key": "FT-6",
+      "task": {
+        "id": "FT-6",
+        "title": "dark mode",
+        "url": "https://github.com/acme/widgets/issues/6",
+        "status": "OPEN"
+      },
+      "stage": "pr-open",
+      "stage_from": "guessed",
+      "who": {
+        "author": "bob"
+      },
+      "where": {
+        "pr": {
+          "number": 7,
+          "title": "Tidy the index",
+          "url": "https://github.com/acme/widgets/pull/7",
+          "state": "open",
+          "head": "tidy-index",
+          "base": "main"
+        },
+        "branch": "tidy-index"
+      },
+      "last_activity": "2026-10-21T10:00:00Z",
+      "next": {
+        "command": "/f10:review FT-6"
+      }
+    },
+    {
       "key": "FT-4",
       "stage": "merged-unfinished",
       "stage_from": "guessed",
@@ -82,22 +111,6 @@
       "last_activity": "2026-10-20T10:00:00Z",
       "next": {
         "command": "f10 finish FT-4"
-      }
-    },
-    {
-      "key": "FT-6",
-      "task": {
-        "id": "FT-6",
-        "title": "dark mode",
-        "url": "https://github.com/acme/widgets/issues/6",
-        "status": "OPEN"
-      },
-      "stage": "next",
-      "stage_from": "guessed",
-      "who": {},
-      "where": {},
-      "next": {
-        "command": "f10 start FT-6"
       }
     }
   ]

@@ -233,9 +233,10 @@ func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 			tail = append(tail, next)
 		}
 
+		// cut on runes: a byte offset would split a multibyte character
 		fixed := keyW + 2 + stageW + 2 + 7 + 2 + len(strings.Join(tail, "  ")) + 4
-		if limit > 0 && len(title) > limit-fixed && limit-fixed > 8 {
-			title = title[:limit-fixed-1] + "…"
+		if runes := []rune(title); limit > 0 && len(runes) > limit-fixed && limit-fixed > 8 {
+			title = string(runes[:limit-fixed-1]) + "…"
 		}
 
 		from := ""

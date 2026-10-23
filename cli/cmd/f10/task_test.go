@@ -153,12 +153,24 @@ func TestTaskRows(t *testing.T) {
 
 	f.script(
 		"driver list",
-		`[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9","priority":"high"}]`,
+		`[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9","priority":"high",`+
+			`"body":"Some text.\n\nAfter: 12\n"}]`,
 	)
 
 	rows, err := taskRows(t.Context(), tg, issuePage)
 	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" || rows[0].Priority != "high" {
 		t.Errorf("driver list = %+v, %v", rows, err)
+	}
+
+	// the body is read for its After: line, a bare number in the project's
+	// format, and never printed
+	if tasks := boardTasks(rows, "FT"); len(tasks) != 1 || tasks[0].After != "FT-12" {
+		t.Errorf("board tasks = %+v, want After FT-12", tasks)
+	}
+
+	var printed bytes.Buffer
+	if err := writeRows(&printed, rows, "none"); err != nil || strings.Contains(printed.String(), "body") {
+		t.Errorf("printed rows = %q, %v; want no body", printed.String(), err)
 	}
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})

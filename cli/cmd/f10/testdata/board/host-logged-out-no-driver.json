@@ -1,0 +1,35 @@
+{
+  "now": "2026-10-23T12:00:00Z",
+  "since": "2026-10-16T12:00:00Z",
+  "prefix": "FT",
+  "host": "gh",
+  "calls": {
+    "gh pr list --state all --search is:open --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000": {
+      "code": 1,
+      "stderr": "gh: To get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token."
+    },
+    "git worktree list --porcelain": {
+      "stdout": "worktree {root}\nHEAD aaaa\nbranch refs/heads/main\n\nworktree {root}.FT-2-widgets\nHEAD bbbb\nbranch refs/heads/FT-2/widgets\n"
+    },
+    "git for-each-ref --format=%(refname) refs/heads/": {
+      "stdout": "refs/heads/main\nrefs/heads/FT-2/widgets"
+    },
+    "git symbolic-ref --short refs/remotes/origin/HEAD": {
+      "stdout": "origin/main"
+    },
+    "git rev-list --count origin/main..FT-2/widgets": {
+      "stdout": "1"
+    },
+    "gh issue list --json number,title,state,url,labels,body --limit 100": {
+      "code": 1,
+      "stderr": "gh: To get started with GitHub CLI, please run:  gh auth login"
+    }
+  },
+  "runs": {
+    "s1": "task FT-2\nroot {root}.FT-2-widgets\ncapture skipped\nplan done\nship running\nleaf cleanup\nupdated {now}\n"
+  },
+  "files": {
+    "{root}/.f10/plans/FT-3.md": "Roles: x\n\n# FT-3\n",
+    "{root}.FT-2-widgets/.f10/plans/FT-2.md": "Roles: x\n\n# FT-2\n"
+  }
+}

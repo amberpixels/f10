@@ -77,7 +77,7 @@
       "stage": "in-review",
       "stage_from": "local",
       "who": {
-        "agent": "ft-2-4f178e",
+        "agent": "ft-1-4f178e",
         "model": "opus",
         "author": "ann"
       },

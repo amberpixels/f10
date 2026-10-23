@@ -150,7 +150,9 @@ func gather(f Facts, since time.Time) []*row {
 	}
 
 	if f.Local != nil {
-		local(f, rows, find)
+		// rows grows under local's own find calls, so it reads them through
+		// the closure, never a copy of the slice
+		local(f, find, func() []*row { return rows })
 	}
 
 	for _, r := range rows {
@@ -193,7 +195,7 @@ func membersOf(prefix string, p PR) []string {
 // by the tasks it is linked to or spells, a run by its task and the
 // riders sharing its branch, plans, findings, verdicts and the ledger by
 // id.
-func local(f Facts, rows []*row, find func(string) *row) {
+func local(f Facts, find func(string) *row, all func() []*row) {
 	l := f.Local
 
 	// one branch per task, chosen the same way every run: the one with a
@@ -256,7 +258,7 @@ func local(f Facts, rows []*row, find func(string) *row) {
 			continue
 		}
 
-		for _, r := range append([]*row{find(run.Task)}, ridersOf(rows, run.Task)...) {
+		for _, r := range append([]*row{find(run.Task)}, ridersOf(all(), run.Task)...) {
 			if r.run == nil || run.Updated.After(r.run.Updated) {
 				r.run = run
 			}
@@ -285,7 +287,7 @@ func local(f Facts, rows []*row, find func(string) *row) {
 		find(id).finished = true
 	}
 
-	for _, r := range rows {
+	for _, r := range all() {
 		if r.worktree != nil {
 			r.Where.Worktree = r.worktree.Path
 
@@ -294,8 +296,9 @@ func local(f Facts, rows []*row, find func(string) *row) {
 				r.Who.AgentStatus = ws.AgentStatus
 			}
 
+			// the one agent in a bundle's worktree is named after the lead
 			if !strings.HasPrefix(r.Key, "#") {
-				r.Who.Agent = AgentFor(r.Key, r.Where.Branch, r.worktree.Path)
+				r.Who.Agent = AgentFor(cmp.Or(r.lead, r.Key), r.Where.Branch, r.worktree.Path)
 			}
 		}
 
@@ -399,10 +402,12 @@ func ridersOf(rows []*row, lead string) []*row {
 	return out
 }
 
+// touch moves the row's last activity forward, in UTC, so a board reads
+// the same in every zone.
 func (r *row) touch(times ...time.Time) {
 	for _, t := range times {
 		if t.After(r.LastActivity) {
-			r.LastActivity = t
+			r.LastActivity = t.UTC()
 		}
 	}
 }

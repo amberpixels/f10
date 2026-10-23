@@ -5,7 +5,7 @@
   "host": "gh",
   "calls": {
     "gh pr list --state all --search is:open --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000": {
-      "stdout": "[{\"number\": 5, \"title\": \"FT-5: faster search\", \"state\": \"OPEN\", \"headRefName\": \"FT-5/search\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/5\", \"author\": {\"login\": \"ann\"}, \"updatedAt\": \"2026-10-20T10:00:00Z\", \"body\": \"\", \"reviewRequests\": [{\"login\": \"bob\"}]}]"
+      "stdout": "[{\"number\": 5, \"title\": \"FT-5: faster search\", \"state\": \"OPEN\", \"headRefName\": \"FT-5/search\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/5\", \"author\": {\"login\": \"ann\"}, \"updatedAt\": \"2026-10-20T10:00:00Z\", \"body\": \"\", \"reviewRequests\": [{\"login\": \"bob\"}]}, {\"number\": 7, \"title\": \"Tidy the index\", \"state\": \"OPEN\", \"headRefName\": \"tidy-index\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/7\", \"author\": {\"login\": \"bob\"}, \"updatedAt\": \"2026-10-21T10:00:00Z\", \"body\": \"\"}]"
     },
     "gh pr list --state all --search is:merged merged:>=2026-10-16T12:00:00Z --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000": {
       "stdout": "[{\"number\": 4, \"title\": \"FT-4: login page\", \"state\": \"MERGED\", \"headRefName\": \"FT-4/login\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/4\", \"author\": {\"login\": \"ann\"}, \"updatedAt\": \"2026-10-20T10:00:00Z\", \"body\": \"\", \"mergedAt\": \"2026-10-20T10:00:00Z\"}]"
@@ -16,12 +16,6 @@
     "gh api repos/{owner}/{repo}/branches/FT-4/login": {
       "stdout": "{\"name\":\"FT-4/login\"}"
     },
-    "gh api --paginate repos/{owner}/{repo}/pulls/5/commits?per_page=100": {
-      "stdout": "[{\"sha\": \"c50\", \"commit\": {\"message\": \"speed up the index\", \"author\": {\"date\": \"2026-10-20T09:00:00Z\"}}}]"
-    },
-    "gh api --paginate repos/{owner}/{repo}/pulls/4/commits?per_page=100": {
-      "stdout": "[{\"sha\": \"c40\", \"commit\": {\"message\": \"login page\", \"author\": {\"date\": \"2026-10-20T09:00:00Z\"}}}]"
-    },
     "git worktree list --porcelain": {
       "stdout": "worktree {root}\nHEAD aaaa\nbranch refs/heads/main\n"
     },
@@ -30,6 +24,9 @@
     },
     "git symbolic-ref --short refs/remotes/origin/HEAD": {
       "stdout": "origin/main"
+    },
+    "gh api --paginate repos/{owner}/{repo}/pulls/7/commits?per_page=100": {
+      "stdout": "[{\"sha\": \"c70\", \"commit\": {\"message\": \"Tidy the index\\n\\nTask: FT-6\\nStep: implement\\n\", \"author\": {\"date\": \"2026-10-21T09:00:00Z\"}}}]"
     }
   }
 }

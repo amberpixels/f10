@@ -123,7 +123,7 @@ A row with no task id gets a sentence where a command would need one.
 ## Sources
 
 Each collector fetches and interprets nothing, and fails on its own: a failed source carries its error and every other row still renders.
-The host collector reads every open request and every one merged since the window, each one's commits for trailers, each merged one's head branch, and the declared remote reviewer's unhandled review.
+The host collector reads every open request and every one merged since the window, the commits of a request nothing else names a task for (for the trailers' task), each merged one's head branch, and the declared remote reviewer's unhandled review.
 The tracker collector reads open tasks through the driver's `list`, else the host's issues.
 The local collector reads the worktrees and branches with what `f10 start` recorded on them, the live runs in them, plan, findings and verdict files under the storage root, what the ledger closed, and Herdr's workspaces.
 Nothing is ever written to the host.
