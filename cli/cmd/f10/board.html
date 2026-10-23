@@ -94,8 +94,8 @@
   .stage[data-stage="merged-unfinished"] { color: var(--cyan); }
   .stage[data-stage="next"] { color: var(--faint); font-weight: 400; }
   @media (max-width: 640px) {
-    .row { grid-template-columns: max-content max-content minmax(0, 1fr); }
-    .from { display: none; }
+    .row { grid-template-columns: max-content max-content max-content minmax(0, 1fr); }
+    .title { grid-column: 1 / -1; }
   }
 </style>
 </head>
@@ -157,7 +157,7 @@ function model(board) {
       url: (r.task && r.task.url) || (pr && pr.url) || "",
       stage: r.stage,
       stage_from: r.stage_from,
-      title: (r.task && r.task.title) || (pr && pr.title) || "",
+      title: r.task ? (r.task.title || "") : (pr && pr.title) || "",
       pr: pr ? pr.number : 0,
       pr_url: pr ? (pr.url || "") : "",
       who: who(r),
@@ -167,6 +167,11 @@ function model(board) {
     m.rows.push(line);
   });
   return m;
+}
+
+function heading(board) {
+  var name = board.project && board.project.name;
+  return name ? name + " board" : "board";
 }
 
 function link(url, text, cls) {
@@ -183,7 +188,7 @@ function render(board, m) {
     "done since " + localDate(board.window.since)].filter(Boolean);
   var okSources = (board.sources || []).filter(function (s) { return s.ok && !s.skipped; })
     .map(function (s) { return s.name + " " + s.took_ms + " ms"; });
-  var out = "<header><h1>" + esc(p.name || "board") + " board</h1>" +
+  var out = "<header><h1>" + esc(heading(board)) + "</h1>" +
     '<p class="meta">' + meta.map(esc).join(" · ") + "</p>" +
     (okSources.length ? '<p class="meta">sources: ' + esc(okSources.join(" · ")) + "</p>" : "") + "</header>";
 
@@ -224,7 +229,7 @@ function render(board, m) {
 
 if (typeof document !== "undefined") {
   var board = JSON.parse(document.getElementById("board").textContent);
-  document.title = ((board.project && board.project.name) || "") + " board";
+  document.title = heading(board);
   document.getElementById("app").innerHTML = render(board, model(board));
 }
 </script>

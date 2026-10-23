@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +25,8 @@ import (
 // the next closing script tag.
 const boardDataOpen = `<script type="application/json" id="board">`
 
-// htmlBoards is every recorded board, plus one with nothing to show.
+// htmlBoards is every recorded board, plus one with nothing to show and
+// one with the shapes the recorded ones lack.
 func htmlBoards(t *testing.T) map[string]lookaround.Board {
 	t.Helper()
 
@@ -48,7 +51,7 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 		boards[strings.TrimSuffix(filepath.Base(path), ".board.json")] = b
 	}
 
-	boards["empty"] = lookaround.Board{
+	empty := lookaround.Board{
 		Version:     lookaround.Version,
 		GeneratedAt: time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC),
 		Project:     lookaround.Project{ID: "github.com/acme/widgets", Name: "widgets", Host: "gh", Remote: true},
@@ -59,6 +62,47 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 			{Name: lookaround.SourceLocal, Skipped: true},
 		},
 	}
+	boards["empty"] = empty
+
+	// the shapes no recorded board holds: a task with no title beside a
+	// request, a request naming no task, an agent at work, an address that
+	// is not a web address, a title with a quote, a sentence for next
+	edges := empty
+	edges.Project.Name = ""
+	edges.Rows = []lookaround.Row{
+		{
+			Key:       "FT-1",
+			Task:      &lookaround.Task{ID: "FT-1"},
+			Stage:     lookaround.StagePROpen,
+			StageFrom: lookaround.FromGuessed,
+			Where: lookaround.Where{
+				PR: &lookaround.PRRef{
+					Number: 11,
+					Title:  "the request's title",
+					URL:    "https://x.io/pull/11",
+					State:  "open",
+				},
+			},
+			Next: lookaround.Next{Command: "/f10:review FT-1"},
+		},
+		{
+			Key:       "#12",
+			Stage:     lookaround.StageInReview,
+			StageFrom: lookaround.FromGuessed,
+			Who:       lookaround.Who{Author: "ann", Reviewers: []string{"bob"}},
+			Where: lookaround.Where{
+				PR: &lookaround.PRRef{Number: 12, Title: "no task here", URL: "https://x.io/pull/12", State: "open"},
+			},
+			Next: lookaround.Next{Text: "waiting on review"},
+		},
+		{
+			Key: "FT-3", Task: &lookaround.Task{ID: "FT-3", Title: `say "hi" <b>`, URL: "javascript:alert(1)"},
+			Stage: lookaround.StageImplementing, StageFrom: lookaround.FromLocal,
+			Who:  lookaround.Who{Agent: "ft-3-abc123", AgentStatus: "working", Assignees: []string{"ann"}},
+			Next: lookaround.Next{Text: "at implement"},
+		},
+	}
+	boards["edges"] = edges
 
 	return boards
 }
@@ -175,54 +219,145 @@ func scriptBody(t *testing.T) string {
 	return body
 }
 
-// The page's model() and the terminal's boardLines agree on every board:
-// same notes, same empty sentence, same lines in the same order.
-func TestBoardHTMLModelMatchesTerminal(t *testing.T) {
+// A rendered is one board through the page's script under node: its
+// model, and the markup render() made of it.
+type rendered struct {
+	Model boardModel `json:"model"`
+	HTML  string     `json:"html"`
+}
+
+// renderUnderNode runs the page's script on every board and returns what
+// it drew; it skips the test where node is absent.
+func renderUnderNode(t *testing.T) map[string]rendered {
+	t.Helper()
+
 	node, err := exec.LookPath("node")
 	if err != nil {
-		t.Skip("node is not on PATH: the page's model is checked only where it is")
+		t.Skip("node is not on PATH: the page's renderer is checked only where it is")
 	}
 
 	dir := t.TempDir()
-	harness := filepath.Join(dir, "model.js")
+	harness := filepath.Join(dir, "render.js")
 	script := "const fs = require('fs');\n" +
 		"const __board = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));\n" +
 		scriptBody(t) + "\n" +
-		"process.stdout.write(JSON.stringify(model(__board)));\n"
+		"const __model = model(__board);\n" +
+		"process.stdout.write(JSON.stringify({ model: __model, html: render(__board, __model) }));\n"
 
 	if err := os.WriteFile(harness, []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
+	out := map[string]rendered{}
+
+	for name, b := range htmlBoards(t) {
+		raw, err := json.Marshal(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		input := filepath.Join(dir, name+".json")
+		if err := os.WriteFile(input, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := exec.CommandContext(t.Context(), node, harness, input).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: node: %v\n%s", name, err, got)
+		}
+
+		var r rendered
+		if err := json.Unmarshal(got, &r); err != nil {
+			t.Fatalf("%s: the page's output does not parse: %v\n%s", name, err, got)
+		}
+
+		out[name] = r
+	}
+
+	return out
+}
+
+// The page's model() and the terminal's boardLines agree on every board:
+// same notes, same empty sentence, same lines in the same order.
+func TestBoardHTMLModelMatchesTerminal(t *testing.T) {
+	drawn := renderUnderNode(t)
+
 	for name, b := range htmlBoards(t) {
 		t.Run(name, func(t *testing.T) {
-			raw, err := json.Marshal(b)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			input := filepath.Join(dir, name+".json")
-			if err := os.WriteFile(input, raw, 0o600); err != nil {
-				t.Fatal(err)
-			}
-
-			out, err := exec.CommandContext(t.Context(), node, harness, input).CombinedOutput()
-			if err != nil {
-				t.Fatalf("node: %v\n%s", err, out)
-			}
-
-			var got boardModel
-			if err := json.Unmarshal(out, &got); err != nil {
-				t.Fatalf("the page's model does not parse: %v\n%s", err, out)
-			}
-
-			want := boardLines(b)
+			want, got := boardLines(b), drawn[name].Model
 			if !reflect.DeepEqual(want, got) {
 				wantJSON, _ := json.MarshalIndent(want, "", "  ")
 				gotJSON, _ := json.MarshalIndent(got, "", "  ")
 				t.Errorf("the page and the terminal disagree\nterminal:\n%s\npage:\n%s", wantJSON, gotJSON)
 			}
 		})
+	}
+}
+
+// render() draws every line of the model: each key, stage and origin, and
+// each note, appear in the markup.
+func TestBoardHTMLRenderDrawsEveryRow(t *testing.T) {
+	drawn := renderUnderNode(t)
+
+	for name, r := range drawn {
+		t.Run(name, func(t *testing.T) {
+			for _, n := range r.Model.Notes {
+				if !strings.Contains(r.HTML, `class="`+n.Status+`"`) || !strings.Contains(r.HTML, ">"+n.Name+"<") {
+					t.Errorf("source %s %s is not drawn", n.Name, n.Status)
+				}
+			}
+
+			if r.Model.Empty != "" && !strings.Contains(r.HTML, r.Model.Empty) {
+				t.Errorf("the empty sentence is not drawn")
+			}
+
+			for _, row := range r.Model.Rows {
+				for _, want := range []string{
+					">" + row.Key + "<",
+					`data-stage="` + row.Stage + `">` + row.Stage + "<",
+					`class="from">` + row.StageFrom + "<",
+				} {
+					if !strings.Contains(r.HTML, want) {
+						t.Errorf("%s: %q is not drawn", row.Key, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+// What render() escapes: an address that is not a web address draws no
+// link, a quote in a title arrives as an entity, and an empty project
+// name draws one plain heading.
+func TestBoardHTMLRenderEscapes(t *testing.T) {
+	html := renderUnderNode(t)["edges"].HTML
+
+	for _, want := range []string{
+		`<span class="key">FT-3</span>`,
+		`say &quot;hi&quot; &lt;b&gt;`,
+		`<a class="key" href="https://x.io/pull/12" rel="noopener">#12</a>`,
+		`<code>/f10:review FT-1</code>`,
+		"<h1>board</h1>",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("%q is not in the markup:\n%s", want, html)
+		}
+	}
+
+	if strings.Contains(html, "javascript:") {
+		t.Error("a javascript: address reached the markup")
+	}
+}
+
+// The version the page knows is the version the binary emits.
+func TestBoardHTMLKnowsThisVersion(t *testing.T) {
+	m := regexp.MustCompile(`var KNOWN_VERSION = (\d+);`).FindStringSubmatch(boardHTMLPage)
+	if m == nil {
+		t.Fatal("the page declares no KNOWN_VERSION")
+	}
+
+	if got, _ := strconv.Atoi(m[1]); got != lookaround.Version {
+		t.Errorf("the page knows version %d, the board is version %d", got, lookaround.Version)
 	}
 }
 
