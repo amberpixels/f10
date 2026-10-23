@@ -1,0 +1,68 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets"
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-3",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/3",
+      "status": "open",
+      "priority": "low"
+    },
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    },
+    {
+      "id": "FT-2",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/2",
+      "status": "open",
+      "priority": "urgent"
+    },
+    {
+      "id": "FT-4",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/4",
+      "status": "open",
+      "priority": "high"
+    }
+  ],
+  "PRs": [],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "Skipped": false,
+      "TookMS": 1
+    }
+  ],
+  "Local": {
+    "Runs": [],
+    "Worktrees": [],
+    "Branches": {},
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {}
+  }
+}

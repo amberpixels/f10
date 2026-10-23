@@ -41,6 +41,21 @@ const TaskKey = "f10-task"
 // space-separated: the tasks one branch ships beside its lead.
 const RidersKey = "f10-tasks"
 
+// The keys `f10 start --after` writes beside TaskKey: the base task's id
+// and its bare branch name. Once the base merges, finish clears both and
+// sets LandedKey to the base's id, so the next step brings the default
+// branch in first.
+const (
+	AfterKey       = "f10-after"
+	AfterBranchKey = "f10-after-branch"
+	LandedKey      = "f10-landed"
+)
+
+// ModelKey records the model `f10 start --model` gave the branch's agent,
+// for a reader of the branch; absent for claude's default and on branches
+// started before it was written.
+const ModelKey = "f10-model"
+
 // Separator joins a bundle's ids where they are typed and in its branch
 // name: `ABC-1+ABC-2`, the lead first.
 const Separator = "+"

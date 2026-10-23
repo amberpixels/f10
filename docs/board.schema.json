@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/amberpixels/f10/docs/board.schema.json",
+  "title": "Board",
+  "description": "Where every task of one project stands; docs/board.md is the spec.",
+  "$ref": "#/$defs/Board",
+  "$defs": {
+    "Board": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "project": {
+          "$ref": "#/$defs/Project"
+        },
+        "window": {
+          "$ref": "#/$defs/Window"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Row"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "generated_at",
+        "project",
+        "window",
+        "sources",
+        "rows"
+      ]
+    },
+    "Project": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string",
+          "enum": [
+            "gh",
+            "glab"
+          ]
+        },
+        "checkout": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "remote"
+      ]
+    },
+    "Window": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "since"
+      ]
+    },
+    "Source": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "host",
+            "tracker",
+            "local"
+          ]
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "skipped": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "took_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "ok",
+        "took_ms"
+      ]
+    },
+    "Row": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/Task"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "asks-waiting",
+            "blocked",
+            "ready",
+            "in-review",
+            "pr-open",
+            "implementing",
+            "planned",
+            "merged-unfinished",
+            "next",
+            "done"
+          ]
+        },
+        "stage_from": {
+          "type": "string",
+          "enum": [
+            "local",
+            "trace",
+            "guessed"
+          ]
+        },
+        "who": {
+          "$ref": "#/$defs/Who"
+        },
+        "where": {
+          "$ref": "#/$defs/Where"
+        },
+        "review": {
+          "$ref": "#/$defs/ReviewFacts"
+        },
+        "blocked_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "last_activity": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "next": {
+          "$ref": "#/$defs/Next"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "stage",
+        "stage_from",
+        "who",
+        "where",
+        "next"
+      ]
+    },
+    "Task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "urgent",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "assignee": {
+          "type": "string"
+        },
+        "after": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ]
+    },
+    "Who": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "agent_status": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "assignees": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reviewers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Where": {
+      "type": "object",
+      "properties": {
+        "pr": {
+          "$ref": "#/$defs/PRRef"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "worktree": {
+          "type": "string"
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PRRef": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "merged",
+            "closed"
+          ]
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "head": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "mergeable": {
+          "type": "string",
+          "enum": [
+            "clean",
+            "conflicts",
+            "blocked"
+          ]
+        },
+        "checks": {
+          "type": "string",
+          "enum": [
+            "green",
+            "red",
+            "pending"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "state"
+      ]
+    },
+    "ReviewFacts": {
+      "type": "object",
+      "properties": {
+        "step": {
+          "type": "string"
+        },
+        "round": {
+          "type": "integer"
+        },
+        "open": {
+          "type": "integer"
+        },
+        "asks": {
+          "type": "integer"
+        },
+        "approvals": {
+          "type": "integer"
+        },
+        "changes_requested": {
+          "type": "integer"
+        },
+        "remote_open": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Next": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

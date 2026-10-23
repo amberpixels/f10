@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "checkout": "/code/widgets",
+    "remote": false
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-7",
+      "task": {
+        "id": "FT-7",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/7",
+        "status": "open"
+      },
+      "stage": "implementing",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-7-v2-ecb0e1",
+        "model": "opus"
+      },
+      "where": {
+        "branch": "FT-7-v2/slug",
+        "worktree": "/code/widgets.FT-7-v2-slug"
+      },
+      "next": {
+        "command": "/f10:ship FT-7"
+      }
+    }
+  ]
+}
