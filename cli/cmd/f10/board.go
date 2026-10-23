@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +26,7 @@ import (
 // progress at which stage and who owes the next move, and what comes next.
 // It reads the host, the tracker and this machine, each a source that can
 // fail on its own, and derives nothing here: lookaround decides every
-// stage, and the terminal and --json draw the same rows.
+// stage, and the terminal, --json and --html draw the same rows.
 func boardCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "board",
@@ -39,6 +41,14 @@ func boardCommand() *cli.Command {
 				Usage: "read the host and the tracker only, as a viewer without the checkout would",
 			},
 			&cli.BoolFlag{Name: "json", Usage: "emit the Board JSON (the schema is docs/board.schema.json)"},
+			&cli.BoolFlag{
+				Name:  "html",
+				Usage: "emit one static HTML page: the Board JSON embedded, drawn by an inlined renderer; opens from disk",
+			},
+			&cli.StringFlag{
+				Name:  "out",
+				Usage: "write --json or --html to this `PATH` instead of stdout",
+			},
 		},
 		Action: runBoard,
 	}
@@ -50,7 +60,18 @@ const boardWindow = 7 * 24 * time.Hour
 // boardPage is how many open tasks the board asks the host for.
 const boardPage = 100
 
+// The board's output formats; the empty one is the terminal.
+const (
+	boardJSON = "json"
+	boardHTML = "html"
+)
+
 func runBoard(ctx context.Context, cmd *cli.Command) error {
+	format, err := boardFormat(cmd)
+	if err != nil {
+		return err
+	}
+
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
@@ -69,11 +90,69 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 
 	board := lookaround.Derive(lookaround.Collect(ctx, in), now, since)
 
-	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, board)
+	if format == "" {
+		renderBoard(cmd.Writer, board, termWidth(cmd.Writer))
+
+		return nil
 	}
 
-	renderBoard(cmd.Writer, board, termWidth(cmd.Writer))
+	data, err := boardBytes(board, format)
+	if err != nil {
+		return err
+	}
+
+	return emitBoard(cmd.Writer, cmd.String("out"), data)
+}
+
+// boardFormat settles the output format from the flags before anything is
+// collected: --json and --html are exclusive, and --out has no meaning for
+// the terminal, whose width is the terminal's.
+func boardFormat(cmd *cli.Command) (string, error) {
+	switch {
+	case cmd.Bool("json") && cmd.Bool("html"):
+		return "", errors.New("--json and --html are exclusive: pick one")
+	case cmd.Bool("json"):
+		return boardJSON, nil
+	case cmd.Bool("html"):
+		return boardHTML, nil
+	case cmd.String("out") != "":
+		return "", errors.New("--out writes --json or --html: add one")
+	default:
+		return "", nil
+	}
+}
+
+// boardBytes is the board in one of the file formats.
+func boardBytes(b lookaround.Board, format string) ([]byte, error) {
+	var buf bytes.Buffer
+
+	var err error
+	if format == boardHTML {
+		err = renderBoardHTML(&buf, b)
+	} else {
+		err = encodeJSON(&buf, b)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// emitBoard writes the rendered board to the path, else to the writer. The
+// file is world-readable on purpose: it is a report meant to be attached
+// or hosted as is.
+func emitBoard(w io.Writer, path string, data []byte) error {
+	if path == "" {
+		_, err := w.Write(data)
+
+		return err
+	}
+
+	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // a report meant to be attached or hosted
+		return fmt.Errorf("writing the board: %w", err)
+	}
 
 	return nil
 }
@@ -171,6 +250,92 @@ func boardTasks(rows []row, prefix string) []lookaround.Task {
 	return out
 }
 
+// A boardModel is what a renderer draws: the sources worth a line, the
+// sentence for an empty board, one line per row. board.html builds the
+// same model in JavaScript; the JSON tags are the parity test's contract.
+type boardModel struct {
+	Notes []boardNote `json:"notes"`
+	Empty string      `json:"empty,omitempty"`
+	Rows  []boardLine `json:"rows"`
+}
+
+// A boardNote is a source that did not deliver: failed, with its error,
+// or skipped on purpose.
+type boardNote struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+// A boardLine is one row, reduced to what a glance needs.
+type boardLine struct {
+	Group       string `json:"group"`
+	Key         string `json:"key"`
+	URL         string `json:"url,omitempty"`
+	Stage       string `json:"stage"`
+	StageFrom   string `json:"stage_from"`
+	Title       string `json:"title,omitempty"`
+	PR          int    `json:"pr,omitempty"`
+	PRURL       string `json:"pr_url,omitempty"`
+	Who         string `json:"who,omitempty"`
+	Next        string `json:"next,omitempty"`
+	NextCommand bool   `json:"next_command,omitempty"`
+}
+
+// boardLines reduces the board to its model: the rows and the sources,
+// never the header facts.
+//
+//nolint:lostfield // a reduction by design
+func boardLines(b lookaround.Board) boardModel {
+	m := boardModel{Notes: []boardNote{}, Rows: []boardLine{}}
+
+	for _, s := range b.Sources {
+		switch {
+		case s.Skipped:
+			m.Notes = append(m.Notes, boardNote{Name: s.Name, Status: "skipped"})
+		case !s.OK:
+			m.Notes = append(m.Notes, boardNote{Name: s.Name, Status: "failed", Error: s.Error})
+		}
+	}
+
+	if len(b.Rows) == 0 {
+		m.Empty = "nothing in flight, nothing next, nothing done since " + b.Window.Since.Local().Format("2006-01-02")
+
+		return m
+	}
+
+	for _, r := range b.Rows {
+		line := boardLine{
+			Group:     boardGroup(r.Stage),
+			Key:       r.Key,
+			URL:       rowURL(r),
+			Stage:     r.Stage,
+			StageFrom: r.StageFrom,
+			Who:       boardWho(r),
+		}
+
+		if r.Task != nil {
+			line.Title = r.Task.Title
+		} else if r.Where.PR != nil {
+			line.Title = r.Where.PR.Title
+		}
+
+		if r.Where.PR != nil {
+			line.PR, line.PRURL = r.Where.PR.Number, r.Where.PR.URL
+		}
+
+		if r.Next.Command != "" {
+			line.Next, line.NextCommand = r.Next.Command, true
+		} else {
+			line.Next = r.Next.Text
+		}
+
+		m.Rows = append(m.Rows, line)
+	}
+
+	return m
+}
+
 // renderBoard draws the board for a terminal: failed sources first, then
 // one line per row, grouped by stage in the board's order: the key, the
 // stage in the badge's palette, the title cut to fit, who, the request,
@@ -179,66 +344,58 @@ func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 	faint := lipgloss.NewStyle().Faint(true)
 	red := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))
 
-	for _, s := range b.Sources {
-		switch {
-		case s.Skipped:
-			fmt.Fprintln(w, faint.Render(s.Name+"  skipped"))
-		case !s.OK:
-			fmt.Fprintln(w, red.Render(s.Name+"  failed")+"  "+faint.Render(s.Error))
+	m := boardLines(b)
+
+	for _, n := range m.Notes {
+		if n.Status == "skipped" {
+			fmt.Fprintln(w, faint.Render(n.Name+"  skipped"))
+		} else {
+			fmt.Fprintln(w, red.Render(n.Name+"  failed")+"  "+faint.Render(n.Error))
 		}
 	}
 
-	if len(b.Rows) == 0 {
-		fmt.Fprintln(
-			w,
-			"nothing in flight, nothing next, nothing done since "+b.Window.Since.Local().Format("2006-01-02"),
-		)
+	if m.Empty != "" {
+		fmt.Fprintln(w, m.Empty)
 
 		return
 	}
 
 	keyW, stageW := 0, 0
-	for _, r := range b.Rows {
+	for _, r := range m.Rows {
 		keyW, stageW = max(keyW, len(r.Key)), max(stageW, len(r.Stage))
 	}
 
 	var last string
 
-	for _, r := range b.Rows {
-		if group := boardGroup(r.Stage); group != last {
-			fmt.Fprintf(w, "\n%s\n", faint.Render(group))
-			last = group
+	for _, r := range m.Rows {
+		if r.Group != last {
+			fmt.Fprintf(w, "\n%s\n", faint.Render(r.Group))
+			last = r.Group
 		}
-
-		title := ""
-		if r.Task != nil {
-			title = r.Task.Title
-		} else if r.Where.PR != nil {
-			title = r.Where.PR.Title
-		}
-
-		next := cmp.Or(r.Next.Command, r.Next.Text)
 
 		var tail []string
 
-		if r.Where.PR != nil {
-			tail = append(tail, fmt.Sprintf("#%d", r.Where.PR.Number))
+		if r.PR != 0 {
+			tail = append(tail, fmt.Sprintf("#%d", r.PR))
 		}
 
-		if who := boardWho(r); who != "" {
-			tail = append(tail, who)
+		if r.Who != "" {
+			tail = append(tail, r.Who)
 		}
 
-		if next != "" {
-			tail = append(tail, next)
+		if r.Next != "" {
+			tail = append(tail, r.Next)
 		}
 
 		// cut on runes: a byte offset would split a multibyte character
+		title := r.Title
 		fixed := keyW + 2 + stageW + 2 + 7 + 2 + len(strings.Join(tail, "  ")) + 4
+
 		if runes := []rune(title); limit > 0 && len(runes) > limit-fixed && limit-fixed > 8 {
 			title = string(runes[:limit-fixed-1]) + "…"
 		}
 
+		// local is the common case at a glance; the HTML shows every origin
 		from := ""
 		if r.StageFrom != lookaround.FromLocal {
 			from = r.StageFrom
@@ -246,7 +403,7 @@ func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 
 		key := r.Key
 		if limit > 0 {
-			key = hyperlink(rowURL(r), r.Key)
+			key = hyperlink(r.URL, r.Key)
 		}
 
 		fmt.Fprintf(w, "%s%s  %s  %s  %s  %s\n",
