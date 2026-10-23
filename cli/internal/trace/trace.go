@@ -99,7 +99,7 @@ func Render(t Trailers) (string, error) {
 // A trailer is a whole line, `Key: value`, the key case-insensitive. No
 // anchoring to the last paragraph: a squash merge buries a commit's
 // trailers mid-body under its `* subject` line.
-var lineRe = regexp.MustCompile(`(?i)^(task|step|review):[ \t]+(.+?)[ \t]*$`)
+var lineRe = regexp.MustCompile(`(?i)^(task|step|review):[ \t]+(\S.*?)[ \t]*$`)
 
 // Parse reads every trailer line a message holds. Nothing in a message is
 // an error: history nobody controlled is still read, and a message with no

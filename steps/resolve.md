@@ -50,7 +50,7 @@ Settle every file the same way, whoever wrote it: what the block says is wrong, 
    Never edit the reviewer's text.
 9. **Land the fixes on an open PR or MR.**
    When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes as `steps/commit.md` point 2 says and push them to that branch, never forcing.
-   The trailers are `f10 trace trailers --step resolve --round <n> --fixed <n> --skipped <n>`, the counts the entry's at this commit (round two's cover both rounds, as point 10's comment does).
+   The trailers are `f10 trace trailers --step resolve --round <n> --fixed <n> --skipped <n>`: `--round` is this file's round, `--fixed` and `--skipped` count the verdicts in it at the time of the commit, an open `ask` in neither; in round two the counts cover both files, as point 10's comment does.
    Outward-facing, under the run's authorization.
    With `traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.
    With no open PR or MR, the fixes stay in the working tree for the pipeline's next step (`pr`, `push`, `commit`) or the user.

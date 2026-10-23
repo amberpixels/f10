@@ -565,7 +565,16 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 
 		notes = appendNote(notes, note)
 
-		if p, err = in.host.mergePull(ctx, p, name, method, mergeBody(in, p, method)); err != nil {
+		// settleRiders may have just rewritten the description's closing
+		// keywords, and the body under the commit must be the host's current one
+		description := p.body()
+		if in.traces && len(in.task.Riders()) > 0 {
+			if description, err = in.host.pullBody(ctx, name); err != nil {
+				return pull{}, nil, err
+			}
+		}
+
+		if p, err = in.host.mergePull(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
 			return pull{}, nil, err
 		}
 	case pullMerged:
@@ -603,8 +612,8 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 // mergeBody is what the host's commit says under its subject: the request's
 // description, then one Task: line per member, so the commit that survives a
 // squash still names what it shipped. Only with traces on and for a squash or
-// merge commit; a rebase, like glab's plain merge (""), lands the branch's own trailers.
-func mergeBody(in finishInput, p pull, method string) string {
+// a GitHub merge commit; a rebase, like glab's merge (""), lands the branch's own trailers.
+func mergeBody(in finishInput, description, method string) string {
 	if !in.traces || (method != "--squash" && method != "--merge") {
 		return ""
 	}
@@ -614,7 +623,7 @@ func mergeBody(in finishInput, p pull, method string) string {
 		return ""
 	}
 
-	if body := strings.TrimSpace(p.body()); body != "" {
+	if body := strings.TrimSpace(description); body != "" {
 		return body + "\n\n" + trailers
 	}
 

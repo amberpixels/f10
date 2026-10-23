@@ -36,14 +36,14 @@ Review: round=1 fixed=1 skipped=1
 ## The commit on the default branch
 
 A squash merge keeps one commit, with the host's message, so the branch commits' trailers would be lost.
-`f10 finish` passes the commit's body on a squash or a merge commit: the PR's description, a blank line, then one `Task:` line per member of the task, and no `Step:`, since the merge is the host's commit, not a step's.
-A rebase merge lands the branch commits as they are, trailers included, and passes nothing.
+`f10 finish` passes the commit's body on a squash, and on a merge commit on GitHub: the PR's description as the host holds it at the merge, a blank line, then one `Task:` line per member of the task, and no `Step:`, since the merge is the host's commit, not a step's.
+A rebase merge lands the branch commits as they are, trailers included, and passes nothing; so does a GitLab merge commit, whose message the project fixes.
 
 ## Reading them back
 
 A reader parses a whole commit message leniently, since a squash merge concatenates several messages and a trailer can sit mid-body under a `* subject` line:
 
-- A trailer is a whole line matching `^(Task|Step|Review):[ \t]+(.+?)[ \t]*$`, the key compared case-insensitively, a trailing carriage return ignored.
+- A trailer is a whole line matching `^(Task|Step|Review):[ \t]+(\S.*?)[ \t]*$`, the key compared case-insensitively, a trailing carriage return ignored; a blank value is no trailer.
   Nothing anchors it to the last paragraph.
 - `Task:` values accumulate in order, one spelling per id, compared case-insensitively, the first spelling kept.
 - Every `Step:` line is kept in order; the last is the commit's step.
@@ -56,7 +56,7 @@ A reader parses a whole commit message leniently, since a squash merge concatena
 
 `cli/internal/trace/testdata/trailers/<name>.msg` is a commit message as git prints it; `<name>.json` is what parsing it yields.
 A reader passes when every `.msg` parses to its `.json`.
-The set at version 1 covers a plain commit, a bundle, a resolve fix, a squash of two commits with trailers mid-body, a squash whose body is a PR description ending in `Task:`, a message with no trailers, lowercase keys, CRLF line ends, a `Review:` with an unknown pair and a non-integer, and one id spelled in two cases.
+The set at version 1 covers a plain commit, a bundle, a resolve fix, a squash of two commits with trailers mid-body, a squash whose body is a PR description ending in `Task:`, a message with no trailers, lowercase keys, CRLF line ends, a `Review:` with an unknown pair and a non-integer, one id spelled in two cases, and blank values.
 
 ## Changing this spec
 

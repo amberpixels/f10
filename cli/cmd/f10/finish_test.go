@@ -143,28 +143,52 @@ func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 
 func TestMergeBody(t *testing.T) {
 	bundle := finishInput{traces: true, task: ref.Ref{ID: "GH-1", Bundle: []string{"GH-1", "GH-2"}}}
-	described := pull{Body: "  Adds the thing.\n"}
+	described := "  Adds the thing.\n"
 
 	cases := []struct {
-		name   string
-		in     finishInput
-		p      pull
-		method string
-		want   string
+		name        string
+		in          finishInput
+		description string
+		method      string
+		want        string
 	}{
 		{"off", finishInput{task: gh1}, described, "--squash", ""},
 		{"rebase", finishInput{traces: true, task: gh1}, described, "--rebase", ""},
 		{"glab plain merge", finishInput{traces: true, task: gh1}, described, "", ""},
 		{"squash", finishInput{traces: true, task: gh1}, described, "--squash", "Adds the thing.\n\nTask: GH-1\n"},
 		{"merge commit", finishInput{traces: true, task: gh1}, described, "--merge", "Adds the thing.\n\nTask: GH-1\n"},
-		{"empty description", finishInput{traces: true, task: gh1}, pull{}, "--squash", "Task: GH-1\n"},
-		{"bundle", bundle, pull{}, "--squash", "Task: GH-1\nTask: GH-2\n"},
+		{"empty description", finishInput{traces: true, task: gh1}, "", "--squash", "Task: GH-1\n"},
+		{"bundle", bundle, "", "--squash", "Task: GH-1\nTask: GH-2\n"},
 	}
 
 	for _, c := range cases {
-		if got := mergeBody(c.in, c.p, c.method); got != c.want {
+		if got := mergeBody(c.in, c.description, c.method); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// A kept rider's Closes was rewritten to Part of just before the merge, so
+// the squash body is read again from the host: the commit on the default
+// branch must not close what the PR body no longer closes.
+func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.traces = true
+	fx.in.method = "squash"
+	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`, `{"body":"Closes #1\nPart of #2"}`)
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
+
+	merge := "gh pr merge GH-1 --squash --body Closes #1\nPart of #2\n\nTask: GH-1\nTask: GH-2\n"
+	fx.f.script(merge, "")
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called(merge) {
+		t.Errorf("the squash body kept a stale Closes:\n%s", strings.Join(fx.f.calls, "\n"))
 	}
 }
 

@@ -117,6 +117,9 @@ func (r Ref) Label() string {
 type Lookup struct {
 	Prefix string // id prefix from facts ("ABC", "GH"); empty where nothing declares or implies one
 	Dir    string // checkout root - the branch is read from here
+	// NoSession stops the cascade at the branch: a commit's trailer names the
+	// branch's task or none, never one this session happens to have recorded
+	NoSession bool
 }
 
 // Find walks the cascade. An empty explicit reference falls through to
@@ -140,7 +143,7 @@ func (r Lookup) Find(ctx context.Context, explicit string) (Ref, error) {
 		return r.bundled(ctx, id, OriginBranch, members)
 	}
 
-	if id := sessionTask(); id != "" {
+	if id := sessionTask(); id != "" && !r.NoSession {
 		return r.bundled(ctx, id, OriginSession, nil)
 	}
 

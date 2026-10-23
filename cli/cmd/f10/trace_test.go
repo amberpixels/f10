@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // tracedRepo is a checkout on the given branch, its project.md declaring
@@ -97,6 +100,25 @@ func TestTraceTrailers(t *testing.T) {
 				t.Errorf("printed %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// A session that recorded a task does not lend it to a branch naming none:
+// the trailer is the branch's task or nothing.
+func TestTraceTrailersIgnoreTheSessionTask(t *testing.T) {
+	repo := tracedRepo(t, "main", "on")
+	dir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", dir)
+	t.Setenv("F10_SESSION_ID", "sess-1")
+
+	run := &state.Run{Session: "sess-1", Task: "DM-5"}
+	if err := run.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := runTrace(t, repo, "--step", "implement")
+	if err != nil || got != "Step: implement\n" {
+		t.Errorf("printed %q, %v; want Step: alone", got, err)
 	}
 }
 

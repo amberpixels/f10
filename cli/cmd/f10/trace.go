@@ -70,8 +70,9 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 
 	// the lookup itself, not target.reference: under -C the branch the
 	// trailers describe is the one -C points at, which is what a step
-	// committing there wants
-	r, err := ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir}.Find(ctx, cmd.String("task"))
+	// committing there wants; and never the session's task, since a commit
+	// on a branch naming no task carries none
+	r, err := ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir, NoSession: true}.Find(ctx, cmd.String("task"))
 
 	var tasks []string
 

@@ -114,7 +114,9 @@ func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 // has a reason, and it is the error. glab's auto-merge is turned off so a
 // running pipeline makes it refuse rather than queue and report success.
 // A body replaces the commit's default body: gh keeps its subject, glab
-// takes the whole message, so the request's title goes on top.
+// takes the whole squash message, so the request's title goes on top. A
+// glab merge commit never gets one: its method is "" and the project fixes
+// its message.
 func (h host) mergePull(ctx context.Context, p pull, branch, method, body string) (pull, error) {
 	args := h.pick(
 		[]string{"pr", "merge", branch},
@@ -127,12 +129,7 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 	if body != "" {
 		flag := "--body"
 		if h.glab() {
-			flag = "--message"
-			if method == "--squash" {
-				flag = "--squash-message"
-			}
-
-			body = p.Title + "\n\n" + body
+			flag, body = "--squash-message", p.Title+"\n\n"+body
 		}
 
 		args = append(args, flag, body)
