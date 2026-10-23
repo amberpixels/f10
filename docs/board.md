@@ -2,7 +2,7 @@
 
 Where every task of a project stands: done lately, in progress at which stage and who owes the next move, and what comes next.
 `f10 board` prints it; `--json` prints the **Board JSON** this file specifies, `docs/board.schema.json` is its JSON Schema, and `cli/internal/lookaround` the one implementation.
-A renderer (the terminal, the HTML report, the board skill) draws the JSON and decides no stage.
+A renderer (the terminal, the HTML report) draws the JSON and decides no stage; the board skill prints the terminal's drawing.
 
 ## Shape
 
