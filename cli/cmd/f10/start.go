@@ -3,8 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -83,9 +81,10 @@ const (
 // sets f10-landed to the base's id, so ship and catchup bring the default
 // branch in before anything else runs, then clear the mark.
 const (
-	cfgAfter       = "f10-after"
-	cfgAfterBranch = "f10-after-branch"
-	cfgLanded      = "f10-landed"
+	cfgAfter       = ref.AfterKey
+	cfgAfterBranch = ref.AfterBranchKey
+	cfgLanded      = ref.LandedKey
+	cfgModel       = ref.ModelKey
 	// cfgTaskID links a branch whose name need not carry the id to its task
 	cfgTaskID = ref.TaskKey
 	// cfgRiders lists a bundle's riders beside the lead cfgTaskID names
@@ -236,7 +235,7 @@ func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, err
 		return nil, pull{}, nil
 	case err != nil:
 		return nil, pull{}, err
-	case probe && h.glab():
+	case probe && h.GLab():
 		// GitLab numbers issues and MRs apart: #n is an issue there, !n an MR
 		return nil, pull{}, nil
 	}
@@ -401,7 +400,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		if err := herdr.Prompt(
 			ctx,
 			o.path,
-			agentName(in.task.ID, in.suffix, o.path),
+			herdr.AgentName(in.task.ID, in.suffix, o.path),
 			prompt(in.mode, o.task.Label(), o.dep, o.plan, in.pick),
 		); err != nil {
 			return err
@@ -659,7 +658,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	o := openedTask{task: in.task, branch: name, path: path, ws: ws, dep: dep}
 
-	agent := agentName(in.task.ID, in.suffix, path)
+	agent := herdr.AgentName(in.task.ID, in.suffix, path)
 
 	launch, note, err := needsAgent(ctx, path, ws)
 	if err != nil {
@@ -707,6 +706,14 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		}
 
 		o.fresh = true
+
+		// the model is the branch's fact from here on, for a reader of the
+		// branch (f10 board); a failed write loses nothing the agent needs
+		if in.model != "" {
+			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgModel, in.model); err != nil {
+				notes = append(notes, "the model was not recorded on the branch: "+err.Error())
+			}
+		}
 	}
 
 	if note != "" {
@@ -1025,35 +1032,12 @@ func recordDependency(ctx context.Context, dir, branch string, dep *dependency) 
 	return nil
 }
 
-// agentName names the task's agent. Herdr's live agent names share one
-// namespace across every project, capped at 32 characters, so the bare
-// name is cut to leave room for a short hash of the worktree path: the same
-// id in two checkouts never collides.
-func agentName(id, suffix, path string) string {
-	sum := sha256.Sum256([]byte(path))
-	base := bareAgentName(id, suffix)
-
-	return base[:min(len(base), 25)] + "-" + hex.EncodeToString(sum[:3])
-}
-
-// bareAgentName is the id lowercased, with the suffix so two attempts on one
-// task can both run: the whole name of an agent started before names carried
-// the path hash.
-func bareAgentName(id, suffix string) string {
-	name := strings.ToLower(id)
-	if suffix != "" {
-		name += "-" + strings.ToLower(suffix)
-	}
-
-	return name
-}
-
 // promptAgent prompts the task's agent in the worktree at path, falling back
 // to the bare name an agent started before the path hash still answers to.
 func promptAgent(ctx context.Context, path, id, suffix, text string) error {
-	err := herdr.Prompt(ctx, path, agentName(id, suffix, path), text)
+	err := herdr.Prompt(ctx, path, herdr.AgentName(id, suffix, path), text)
 	if herdr.IsCode(err, herdr.CodeAgentNotFound) {
-		return herdr.Prompt(ctx, path, bareAgentName(id, suffix), text)
+		return herdr.Prompt(ctx, path, herdr.BareAgentName(id, suffix), text)
 	}
 
 	return err

@@ -338,9 +338,9 @@ func (row *taskRow) finish(f rowFacts) {
 	}
 }
 
-// stageStyle colors a stage by how much it needs you: red stopped, yellow
+// rowStageStyle colors a status row's stage by how much it needs you: red stopped, yellow
 // building, orange under review, blue planning, green done, faint idle.
-func stageStyle(stage string) lipgloss.Style {
+func rowStageStyle(stage string) lipgloss.Style {
 	s := lipgloss.NewStyle()
 
 	switch stage {
@@ -403,7 +403,7 @@ func renderRows(w io.Writer, rows []taskRow, limit int) {
 	for i, r := range rows {
 		line := fmt.Sprintf("%s  %s  %s  %s  %s",
 			pad(ids[i], idW),
-			stageStyle(r.Stage).Render(pad(r.Stage, stageW)),
+			rowStageStyle(r.Stage).Render(pad(r.Stage, stageW)),
 			pad(cutTo(r.Title, titleW), titleW),
 			faint.Render(pad(r.Step, stepW)),
 			prs[i])

@@ -53,7 +53,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 		}
 	}
 
-	fx.in = finishInput{main: fx.main, task: gh1, host: host{name: "gh", dir: fx.main}, cwd: fx.main}
+	fx.in = finishInput{main: fx.main, task: gh1, host: newHost("gh", fx.main), cwd: fx.main}
 
 	f := fx.f
 	f.script(refsLocal, heads("GH-1"))
@@ -287,7 +287,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 // glab takes the whole message, so the title goes on top of the body.
 func TestMergePullGlabSquashMessage(t *testing.T) {
 	f := newFakes(t)
-	h := host{name: "glab", dir: t.TempDir()}
+	h := newHost("glab", t.TempDir())
 	view := "glab mr view GH-1 -F json"
 	merge := "glab mr merge GH-1 --remove-source-branch --auto-merge=false --yes --squash --squash-message Add the thing\n\nTask: GH-1\n"
 	f.script(merge, "")
@@ -811,7 +811,7 @@ func TestFinishRemovesThroughWorktrunk(t *testing.T) {
 // auto-merge off, the source branch removed by the merge itself.
 func TestFinishOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = host{name: "glab", dir: fx.main}
+	fx.in.host = newHost("glab", fx.main)
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"opened","web_url":"https://gl/mr/4","iid":4,"target_branch":"main"}`,
@@ -903,7 +903,7 @@ func TestMergeMethod(t *testing.T) {
 			f.script(ghRepo, c.repo)
 			f.script("glab repo view -F json", c.repo)
 
-			got, note, err := host{name: c.host, dir: "/repo"}.mergeMethod(t.Context(), c.declared)
+			got, note, err := newHost(c.host, "/repo").mergeMethod(t.Context(), c.declared)
 			if err != nil {
 				t.Fatal(err)
 			}

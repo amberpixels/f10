@@ -58,9 +58,9 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		return follow(ctx, cmd.Writer, h.dir, url, cmd.Bool("link"))
+		return follow(ctx, cmd.Writer, h.Dir, url, cmd.Bool("link"))
 	case cmd.Bool("print"):
-		return shell.Passthrough(ctx, h.dir, h.name, h.prArgs(number)...)
+		return shell.Passthrough(ctx, h.Dir, h.Name, h.prArgs(number)...)
 	}
 
 	if cmd.Bool("link") {
@@ -74,13 +74,13 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return shell.Passthrough(ctx, h.dir, h.name, h.prArgs(number, "--web")...)
+	return shell.Passthrough(ctx, h.Dir, h.Name, h.prArgs(number, "--web")...)
 }
 
 // prArgs is the subcommand each CLI names this thing: GitHub has pull
 // requests, GitLab has merge requests.
 func (h host) prArgs(number string, tail ...string) []string {
-	args := h.pick([]string{"pr", "view"}, []string{"mr", "view"})
+	args := h.Pick([]string{"pr", "view"}, []string{"mr", "view"})
 
 	if number != "" {
 		args = append(args, number)
@@ -94,7 +94,7 @@ func (h host) prArgs(number string, tail ...string) []string {
 func (h host) pullRows(ctx context.Context) ([]row, error) {
 	var found []pull
 
-	err := h.decode(ctx, &found, h.pick(
+	err := h.Decode(ctx, &found, h.Pick(
 		[]string{"pr", "list", "--json", "number,title,state,url", "--limit", "30"},
 		[]string{"mr", "list", "-F", "json", "--per-page", "30"},
 	)...)
@@ -103,7 +103,7 @@ func (h host) pullRows(ctx context.Context) ([]row, error) {
 	}
 
 	sigil := "#"
-	if h.glab() {
+	if h.GLab() {
 		sigil = "!"
 	}
 
@@ -124,7 +124,7 @@ func (h host) pullRows(ctx context.Context) ([]row, error) {
 func (h host) prURL(ctx context.Context, number string) (string, error) {
 	var payload map[string]any
 
-	err := h.decode(ctx, &payload, h.pick(
+	err := h.Decode(ctx, &payload, h.Pick(
 		h.prArgs(number, "--json", "url"),
 		h.prArgs(number, "-F", "json"),
 	)...)
@@ -133,13 +133,13 @@ func (h host) prURL(ctx context.Context, number string) (string, error) {
 	}
 
 	field := "url"
-	if h.glab() {
+	if h.GLab() {
 		field = "web_url"
 	}
 
 	url, _ := payload[field].(string)
 	if url == "" {
-		return "", fmt.Errorf("%s returned no %s", h.name, field)
+		return "", fmt.Errorf("%s returned no %s", h.Name, field)
 	}
 
 	return url, nil

@@ -386,7 +386,7 @@ func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
 		return false, nil
 	}
 
-	me, err := in.host.login(ctx)
+	me, err := in.host.Login(ctx)
 	if err != nil {
 		return false, fmt.Errorf("telling whose PR %s is: %w", p.url(), err)
 	}
@@ -590,7 +590,7 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 
 	if p.status() != pullMerged || p.sha() == "" {
 		return pull{}, nil, fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
-			in.host.name, p.url(), p.status())
+			in.host.Name, p.url(), p.status())
 	}
 
 	exists, err := gitx.RemoteBranchExists(ctx, in.main, name)

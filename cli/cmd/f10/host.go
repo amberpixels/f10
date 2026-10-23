@@ -10,7 +10,18 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/forge"
 )
+
+// A host is the forge binding with the nouns only this command acts on:
+// issues here, requests in merge.go, reviews in reviewhost.go. The reads
+// standup and the board share live on forge.Host itself.
+type host struct{ forge.Host }
+
+func newHost(name, dir string) host { return host{forge.Host{Name: name, Dir: dir}} }
+
+// at is the same host answering from another checkout of the repo.
+func (h host) at(dir string) host { return host{h.At(dir)} }
 
 // The host-issues fallback: what `task` does in a project with no driver,
 // so a repo tracking its work as issues on its own host needs no .f10/ at
@@ -98,7 +109,7 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 		fields += ",url"
 	}
 
-	err := h.decode(ctx, &iss, h.pick(
+	err := h.Decode(ctx, &iss, h.Pick(
 		[]string{"issue", "view", number, "--json", fields},
 		[]string{"issue", "view", number, "-F", "json"},
 	)...)
@@ -154,7 +165,7 @@ func (h host) issueURL(ctx context.Context, number string) (string, error) {
 		return url, nil
 	}
 
-	return "", fmt.Errorf("%s returned no url for issue %s", h.name, number)
+	return "", fmt.Errorf("%s returned no url for issue %s", h.Name, number)
 }
 
 // repoURL is the repository's web page, read from the host rather than the
@@ -165,7 +176,7 @@ func (h host) repoURL(ctx context.Context) (string, error) {
 		WebURL string `json:"web_url"`
 	}
 
-	if err := h.decode(ctx, &payload, h.pick(
+	if err := h.Decode(ctx, &payload, h.Pick(
 		[]string{"repo", "view", "--json", "url"},
 		[]string{"repo", "view", "-F", "json"},
 	)...); err != nil {
@@ -174,7 +185,7 @@ func (h host) repoURL(ctx context.Context) (string, error) {
 
 	url := cmp.Or(payload.URL, payload.WebURL)
 	if url == "" {
-		return "", fmt.Errorf("%s returned no repository url", h.name)
+		return "", fmt.Errorf("%s returned no repository url", h.Name)
 	}
 
 	return strings.TrimSuffix(url, "/"), nil
@@ -196,7 +207,7 @@ func (h host) repoPage(ctx context.Context, gh, glab string) (string, error) {
 		return "", err
 	}
 
-	if h.glab() {
+	if h.GLab() {
 		return url + glab, nil
 	}
 
@@ -215,16 +226,22 @@ func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 	}
 
 	if iss.Title == "" {
-		return "", fmt.Errorf("%s returned no title for issue %s", h.name, number)
+		return "", fmt.Errorf("%s returned no title for issue %s", h.Name, number)
 	}
 
 	return iss.Title, nil
 }
 
-// listIssues lists the open issues matching query, or the first page of
-// them for "", as task rows: ids carry prefix when the project has one, and
-// priorities, the lower-cased label to level index, ranks them; nil ranks none.
-func (h host) listIssues(ctx context.Context, query, prefix string, priorities map[string]string) ([]row, error) {
+// issuePage is the first page `task open --print` and `task search` show.
+const issuePage = 30
+
+// listIssues lists up to limit open issues matching query, or the first
+// of them for "", as task rows: ids carry prefix when the project has one,
+// and priorities, the lower-cased label to level index, ranks them; nil
+// ranks none. A row keeps the id its body's After: line names.
+func (h host) listIssues(
+	ctx context.Context, query, prefix string, priorities map[string]string, limit int,
+) ([]row, error) {
 	ghArgs := []string{"issue", "list"}
 	glabArgs := []string{"issue", "list"}
 
@@ -233,12 +250,12 @@ func (h host) listIssues(ctx context.Context, query, prefix string, priorities m
 		glabArgs = append(glabArgs, "--search", query)
 	}
 
-	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels", "--limit", "30")
-	glabArgs = append(glabArgs, "-F", "json", "--per-page", "30")
+	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels,body", "--limit", strconv.Itoa(limit))
+	glabArgs = append(glabArgs, "-F", "json", "--per-page", strconv.Itoa(limit))
 
 	var found []issue
 
-	err := h.decode(ctx, &found, h.pick(ghArgs, glabArgs)...)
+	err := h.Decode(ctx, &found, h.Pick(ghArgs, glabArgs)...)
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +273,7 @@ func (h host) listIssues(ctx context.Context, query, prefix string, priorities m
 			Status:   iss.State,
 			URL:      iss.url(),
 			Priority: priorityOf(iss.Labels, priorities),
+			After:    afterIn(iss.body()),
 		})
 	}
 

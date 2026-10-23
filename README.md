@@ -69,6 +69,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task, printed, and drafted where your settings or the project's overlay name a delivery adapter; the next one starts where it ended |
 | `/f10:status [id]` | nothing: a hook answers it; with an id, `f10 status <id>` | the run's status in words; with an id, another worktree's run and its agent's question, relayed and answered |
+| `/f10:board [--since <date>] [--remote] [-C <checkout>]` | nothing: it runs `f10 board` | the board printed: every task's stage and next action, your own next moves offered one per line (the `next` group as one line for its first task), none run |
 | `/f10:start <id \| PR url \| #n> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--task <id>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent; a PR's branch picked up |
 | `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; a parent id expands into the subtasks you pick; agents' questions relayed |
 | `/f10:finish <id> [--yes] [--merge \| --local]` | nothing: it runs `f10 finish` | PR merged (someone else's only when you say so), plan archived, workspace closed, worktree and branch gone, main pulled |
@@ -378,6 +379,7 @@ f10 pr open [n]          # a PR or MR, or with no number their list; gh or glab 
 f10 review pick|wait|ack|settle # the remote review on that PR: read it, await it, mark it handled, then settled
 f10 status               # where the run is: this session's, or this repo's live ones
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
+f10 board                # where every task stands: done, in progress with its stage and next action, next
 f10 ledger dump          # what runs recorded locally (--json, --project ., --task, --session)
 ```
 

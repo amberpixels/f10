@@ -72,6 +72,7 @@ func newApp() *cli.Command {
 			traceCommand(),
 			statusCommand(),
 			standupCommand(),
+			boardCommand(),
 			startCommand(),
 			forwardCommand(),
 			driveCommand(),

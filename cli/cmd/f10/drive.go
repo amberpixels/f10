@@ -1206,7 +1206,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
 	default:
 		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-		if err := refuseStalled(fwd, ws, agentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
+		if err := refuseStalled(fwd, ws, herdr.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
 			in.end(ctx, w, r, halted(id, skill, err.Error()))
 
 			return nil
@@ -1316,7 +1316,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 				w,
 				r,
 				halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
-					"it stopped without reporting, answer it in that pane", agentName(id, r.task.suffix, r.o.path),
+					"it stopped without reporting, answer it in that pane", herdr.AgentName(id, r.task.suffix, r.o.path),
 					workspaceName(ws), skill, run.PhaseText(skill))),
 			)
 		}

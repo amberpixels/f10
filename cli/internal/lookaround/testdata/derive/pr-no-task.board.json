@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": false,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "#38",
+      "stage": "pr-open",
+      "stage_from": "guessed",
+      "who": {
+        "author": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 38,
+          "title": "Fix a typo",
+          "url": "https://github.com/acme/widgets/pull/38",
+          "state": "open",
+          "head": "fix-typo",
+          "base": "main"
+        },
+        "branch": "fix-typo"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "text": "open, no review yet"
+      }
+    }
+  ]
+}

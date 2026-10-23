@@ -174,7 +174,7 @@ func closeAgain(body, number string) string {
 
 // reopenIssue reopens issue number.
 func (h host) reopenIssue(ctx context.Context, number string) error {
-	_, err := h.run(ctx, "issue", "reopen", number)
+	_, err := h.Run(ctx, "issue", "reopen", number)
 
 	return err
 }

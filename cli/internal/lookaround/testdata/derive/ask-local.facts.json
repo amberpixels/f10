@@ -1,0 +1,86 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets"
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    }
+  ],
+  "PRs": [
+    {
+      "Number": 10,
+      "Title": "FT-1: thing",
+      "URL": "https://github.com/acme/widgets/pull/10",
+      "Status": "open",
+      "Head": "FT-1/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z"
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "Skipped": false,
+      "TookMS": 1
+    }
+  ],
+  "Local": {
+    "Runs": [
+      {
+        "session": "s1",
+        "task": "FT-1",
+        "capture": "skipped",
+        "plan": "done",
+        "ship": "blocked",
+        "leaf": "resolve",
+        "updated": "2026-10-20T10:00:00Z",
+        "ask": "1. Keep the old name? [yes | no]"
+      }
+    ],
+    "Worktrees": [
+      {
+        "Path": "/code/widgets.FT-1-slug",
+        "Branch": "FT-1/slug",
+        "Ahead": 0
+      }
+    ],
+    "Branches": {
+      "FT-1/slug": {
+        "Task": "FT-1",
+        "Model": "opus"
+      }
+    },
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {
+      "/code/widgets.FT-1-slug": {
+        "ID": "ws-1",
+        "Label": "FT-1",
+        "AgentStatus": "idle"
+      }
+    }
+  }
+}

@@ -281,7 +281,7 @@ func writeReview(ctx context.Context, cmd *cli.Command, rv *reviewer, r remoteRe
 		return nil
 	}
 
-	return writeDoc(ctx, cmd.Writer, rv.h.dir, reviewDoc(r))
+	return writeDoc(ctx, cmd.Writer, rv.h.Dir, reviewDoc(r))
 }
 
 // reviewDoc is the review as a markdown document: who and where in the

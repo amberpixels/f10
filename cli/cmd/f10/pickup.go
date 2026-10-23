@@ -115,9 +115,9 @@ func refusePull(p pull) error {
 // the agent reads it by.
 func (h host) pickupOf(number string, p pull) *pickup {
 	cmd := func(verb string, tail ...string) string {
-		args := h.pick([]string{"pr", verb, number}, []string{"mr", verb, number})
+		args := h.Pick([]string{"pr", verb, number}, []string{"mr", verb, number})
 
-		return strings.Join(append(append([]string{h.name}, args...), tail...), " ")
+		return strings.Join(append(append([]string{h.Name}, args...), tail...), " ")
 	}
 
 	return &pickup{

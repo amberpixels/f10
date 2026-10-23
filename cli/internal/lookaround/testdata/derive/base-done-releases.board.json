@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": false,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-2",
+      "task": {
+        "id": "FT-2",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/2",
+        "status": "open"
+      },
+      "stage": "pr-open",
+      "stage_from": "trace",
+      "who": {
+        "author": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 11,
+          "title": "FT-2: other",
+          "url": "https://github.com/acme/widgets/pull/11",
+          "state": "open",
+          "head": "FT-2/slug",
+          "base": "main"
+        },
+        "branch": "FT-2/slug"
+      },
+      "review": {
+        "step": "pr"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "command": "/f10:review FT-2"
+      }
+    },
+    {
+      "key": "FT-1",
+      "stage": "done",
+      "stage_from": "guessed",
+      "who": {
+        "author": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 10,
+          "title": "FT-1: thing",
+          "url": "https://github.com/acme/widgets/pull/10",
+          "state": "merged",
+          "head": "FT-1/slug",
+          "base": "main"
+        },
+        "branch": "FT-1/slug"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {}
+    }
+  ]
+}

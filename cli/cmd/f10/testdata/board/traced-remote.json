@@ -1,0 +1,18 @@
+{
+  "now": "2026-10-23T12:00:00Z",
+  "since": "2026-10-16T12:00:00Z",
+  "prefix": "FT",
+  "host": "gh",
+  "calls": {
+    "gh pr list --state all --search is:open --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000": {
+      "stdout": "[{\"number\": 7, \"title\": \"FT-7: rate limit\", \"state\": \"OPEN\", \"headRefName\": \"FT-7/rate\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/7\", \"author\": {\"login\": \"ann\"}, \"updatedAt\": \"2026-10-20T10:00:00Z\", \"body\": \"Summary.\\n\\n<!-- state {\\\"v\\\":1,\\\"task\\\":\\\"FT-7\\\",\\\"step\\\":\\\"resolve\\\",\\\"round\\\":1,\\\"open\\\":2} -->\\n\"}, {\"number\": 8, \"title\": \"FT-8: quotas\", \"state\": \"OPEN\", \"headRefName\": \"FT-8/quota\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/8\", \"author\": {\"login\": \"ann\"}, \"updatedAt\": \"2026-10-20T10:00:00Z\", \"body\": \"Summary.\\n\\n<!-- state {\\\"v\\\":1,\\\"task\\\":\\\"FT-8\\\",\\\"step\\\":\\\"judge\\\",\\\"round\\\":1,\\\"after\\\":\\\"FT-7\\\"} -->\\n\", \"mergeable\": \"MERGEABLE\", \"mergeStateStatus\": \"CLEAN\"}, {\"number\": 9, \"title\": \"FT-9: export\", \"state\": \"OPEN\", \"headRefName\": \"FT-9/export\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/9\", \"author\": {\"login\": \"ann\"}, \"updatedAt\": \"2026-10-20T10:00:00Z\", \"body\": \"Summary.\\n\\n<!-- state {\\\"v\\\":1,\\\"task\\\":\\\"FT-9\\\",\\\"step\\\":\\\"judge\\\",\\\"round\\\":1} -->\\n\", \"mergeable\": \"MERGEABLE\", \"mergeStateStatus\": \"CLEAN\"}]"
+    },
+    "gh pr list --state all --search is:merged merged:>=2026-10-16T12:00:00Z --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000": {
+      "stdout": "[]"
+    },
+    "gh issue list --json number,title,state,url,labels,body --limit 100": {
+      "stdout": "[{\"number\": 7, \"title\": \"rate limit\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/7\", \"labels\": [], \"body\": \"\"}, {\"number\": 8, \"title\": \"quotas\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/8\", \"labels\": [], \"body\": \"After: FT-7\"}, {\"number\": 9, \"title\": \"export\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/9\", \"labels\": [], \"body\": \"\"}]"
+    }
+  },
+  "remote": true
+}

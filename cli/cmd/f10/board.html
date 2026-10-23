@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1b1f24;
+    --faint: #6b7280;
+    --line: #e5e7eb;
+    --code-bg: #f3f4f6;
+    --red: #b91c1c;
+    --green: #15803d;
+    --yellow: #a16207;
+    --magenta: #a21caf;
+    --blue: #1d4ed8;
+    --cyan: #0e7490;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115;
+      --fg: #e6e8eb;
+      --faint: #9aa3ad;
+      --line: #262b33;
+      --code-bg: #1a1f27;
+      --red: #f87171;
+      --green: #4ade80;
+      --yellow: #facc15;
+      --magenta: #e879f9;
+      --blue: #60a5fa;
+      --cyan: #22d3ee;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --fg: #e6e8eb;
+    --faint: #9aa3ad;
+    --line: #262b33;
+    --code-bg: #1a1f27;
+    --red: #f87171;
+    --green: #4ade80;
+    --yellow: #facc15;
+    --magenta: #e879f9;
+    --blue: #60a5fa;
+    --cyan: #22d3ee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    max-width: 1100px;
+    margin-inline: auto;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); margin: 28px 0 8px; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .key, .stage, .from { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  .meta, .faint { color: var(--faint); }
+  .meta { margin: 0; font-size: 13px; }
+  .notes { list-style: none; padding: 0; margin: 16px 0 0; }
+  .notes li { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; font-size: 14px; }
+  .notes .failed .status { color: var(--red); font-weight: 600; }
+  .notes .skipped { color: var(--faint); }
+  .notice { padding: 8px 10px; border: 1px solid var(--yellow); border-radius: 6px; margin: 16px 0 0; }
+  .empty { margin: 24px 0; color: var(--faint); }
+  .rows { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+  .row {
+    display: grid;
+    grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .key { font-weight: 600; white-space: nowrap; }
+  .stage { font-weight: 600; white-space: nowrap; }
+  .from { color: var(--faint); white-space: nowrap; }
+  .title { overflow-wrap: anywhere; }
+  .tail { grid-column: 1 / -1; color: var(--faint); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .tail code { color: var(--fg); }
+  .stage[data-stage="done"] { color: var(--green); font-weight: 400; }
+  .stage[data-stage="ready"] { color: var(--green); }
+  .stage[data-stage="asks-waiting"], .stage[data-stage="blocked"] { color: var(--red); }
+  .stage[data-stage="implementing"] { color: var(--yellow); }
+  .stage[data-stage="in-review"], .stage[data-stage="pr-open"] { color: var(--magenta); }
+  .stage[data-stage="planned"] { color: var(--blue); font-weight: 400; }
+  .stage[data-stage="merged-unfinished"] { color: var(--cyan); }
+  .stage[data-stage="next"] { color: var(--faint); font-weight: 400; }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: max-content max-content max-content minmax(0, 1fr); }
+    .title { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script type="application/json" id="board">__BOARD_JSON__</script>
+<script>
+// The renderer draws the Board JSON above and decides no stage. model()
+// reduces the board to lines, render() draws them; the terminal renderer
+// builds the same model, and a test holds the two to each other.
+var KNOWN_VERSION = 1;
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+function safeURL(u) {
+  return /^https?:\/\//i.test(u || "") ? u : "";
+}
+
+function pad(n) { return n < 10 ? "0" + n : String(n); }
+
+function localDate(iso) {
+  var d = new Date(iso);
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
+function group(stage) {
+  if (stage === "next") return "next";
+  if (stage === "done") return "done";
+  return "in progress";
+}
+
+function who(row) {
+  var w = row.who || {};
+  if (w.agent) return (w.agent + " " + (w.agent_status || "")).trim();
+  if (w.assignees && w.assignees.length) return w.assignees[0];
+  return w.author || "";
+}
+
+function model(board) {
+  var m = { notes: [], rows: [] };
+  (board.sources || []).forEach(function (s) {
+    if (s.skipped) m.notes.push({ name: s.name, status: "skipped" });
+    else if (!s.ok) m.notes.push({ name: s.name, status: "failed", error: s.error || "" });
+  });
+  var rows = board.rows || [];
+  if (!rows.length) {
+    m.empty = "nothing in flight, nothing next, nothing done since " + localDate(board.window.since);
+    return m;
+  }
+  rows.forEach(function (r) {
+    var pr = r.where && r.where.pr;
+    var line = {
+      group: group(r.stage),
+      key: r.key,
+      url: (r.task && r.task.url) || (pr && pr.url) || "",
+      stage: r.stage,
+      stage_from: r.stage_from,
+      title: r.task ? (r.task.title || "") : (pr && pr.title) || "",
+      pr: pr ? pr.number : 0,
+      pr_url: pr ? (pr.url || "") : "",
+      who: who(r),
+      next: (r.next && (r.next.command || r.next.text)) || "",
+      next_command: !!(r.next && r.next.command)
+    };
+    m.rows.push(line);
+  });
+  return m;
+}
+
+function heading(board) {
+  var name = board.project && board.project.name;
+  return name ? name + " board" : "board";
+}
+
+function link(url, text, cls) {
+  var u = safeURL(url);
+  var inner = esc(text);
+  return u
+    ? '<a class="' + cls + '" href="' + esc(u) + '" rel="noopener">' + inner + "</a>"
+    : '<span class="' + cls + '">' + inner + "</span>";
+}
+
+function render(board, m) {
+  var p = board.project || {};
+  var meta = [p.id, p.host, p.remote ? "remote view" : "", "generated " + new Date(board.generated_at).toLocaleString(),
+    "done since " + localDate(board.window.since)].filter(Boolean);
+  var okSources = (board.sources || []).filter(function (s) { return s.ok && !s.skipped; })
+    .map(function (s) { return s.name + " " + s.took_ms + " ms"; });
+  var out = "<header><h1>" + esc(heading(board)) + "</h1>" +
+    '<p class="meta">' + meta.map(esc).join(" · ") + "</p>" +
+    (okSources.length ? '<p class="meta">sources: ' + esc(okSources.join(" · ")) + "</p>" : "") + "</header>";
+
+  if (board.version > KNOWN_VERSION) {
+    out += '<p class="notice">This board is version ' + esc(board.version) + "; this page knows version " +
+      KNOWN_VERSION + " and draws what it can.</p>";
+  }
+
+  if (m.notes.length) {
+    out += '<ul class="notes">' + m.notes.map(function (n) {
+      return '<li class="' + esc(n.status) + '"><span class="name">' + esc(n.name) + '</span> <span class="status">' +
+        esc(n.status) + "</span>" + (n.error ? ' <span class="faint">' + esc(n.error) + "</span>" : "") + "</li>";
+    }).join("") + "</ul>";
+  }
+
+  if (m.empty) return out + '<p class="empty">' + esc(m.empty) + "</p>";
+
+  var last = null;
+  m.rows.forEach(function (r) {
+    if (r.group !== last) {
+      if (last !== null) out += "</ol></section>";
+      out += "<section><h2>" + esc(r.group) + '</h2><ol class="rows">';
+      last = r.group;
+    }
+    var tail = [];
+    if (r.pr) tail.push(link(r.pr_url, "#" + r.pr, "pr"));
+    if (r.who) tail.push('<span class="who">' + esc(r.who) + "</span>");
+    if (r.next) tail.push(r.next_command ? "<code>" + esc(r.next) + "</code>" : '<span class="next">' + esc(r.next) + "</span>");
+    out += '<li class="row">' + link(r.url, r.key, "key") +
+      '<span class="stage" data-stage="' + esc(r.stage) + '">' + esc(r.stage) + "</span>" +
+      '<span class="from">' + esc(r.stage_from) + "</span>" +
+      '<span class="title">' + esc(r.title) + "</span>" +
+      (tail.length ? '<span class="tail">' + tail.join("") + "</span>" : "") + "</li>";
+  });
+  if (last !== null) out += "</ol></section>";
+  return out;
+}
+
+if (typeof document !== "undefined") {
+  var board = JSON.parse(document.getElementById("board").textContent);
+  document.title = heading(board);
+  document.getElementById("app").innerHTML = render(board, model(board));
+}
+</script>
+</body>
+</html>
