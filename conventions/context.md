@@ -63,7 +63,7 @@ If it is ever unavailable, the points below say what to do by hand:
 
 A YAML frontmatter block holds the facts the `f10` binary acts on (an unknown key or value is an error), then prose under headings holds the rest.
 Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
-A fact belongs to the step or skill that acts on it, which says what it means: `pipelines` and `planless` to `/f10:ship`, `review` to the **review** step, `catchup` to the **catchup** step, `traces` to the **commit**, **resolve** and **judge** steps and `f10 finish`.
+A fact belongs to the step or skill that acts on it, which says what it means: `pipelines` and `planless` to `/f10:ship`, `review` to the **review** step, `catchup` to the **catchup** step, `traces` to the **commit**, **resolve**, **judge** and **catchup** steps and `f10 finish`.
 The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.

@@ -80,7 +80,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`, the commit, resolve and judge steps for `traces`).
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`, the commit, resolve, judge and catchup steps for `traces`).
 
 ## Overlays
 
