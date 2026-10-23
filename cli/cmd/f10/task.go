@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -214,7 +215,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		return writeRows(cmd.Writer, rows, "no open tasks")
+		return writeRows(cmd.Writer, rankRows(settlePriorities(rows, cmd.ErrWriter)), "no open tasks")
 	case listing:
 		url, err := taskListURL(ctx, t)
 		if err != nil {
@@ -301,7 +302,7 @@ func taskRows(ctx context.Context, t *target) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, "", t.eff.IDPrefix)
+	return h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels)
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -320,16 +321,71 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return writeRows(cmd.Writer, rows, "no matches")
+	// search keeps the tracker's relevance order; only the open list ranks
+	return writeRows(cmd.Writer, settlePriorities(rows, cmd.ErrWriter), "no matches")
 }
 
-// A row is what a search returns: the four fields f10 relies on. A driver
-// may carry more, and f10 neither requires nor reads them.
+// A row is what a search returns: the four fields f10 relies on, plus an
+// optional priority from the contract's vocabulary. A driver may carry more,
+// and f10 neither requires nor reads them.
 type row struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Status string `json:"status,omitempty"`
-	URL    string `json:"url,omitempty"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Status   string `json:"status,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Priority string `json:"priority,omitempty"`
+}
+
+// settlePriorities keeps each row's priority in its canonical form and
+// clears one outside the vocabulary, warning once per distinct value: a
+// driver emitting its tracker's own word does so on every row of the page.
+func settlePriorities(rows []row, warn io.Writer) []row {
+	var (
+		unknown []string
+		count   = map[string]int{}
+	)
+
+	for i, r := range rows {
+		if r.Priority == "" {
+			continue
+		}
+
+		if rank, ok := driver.PriorityRank(r.Priority); ok {
+			rows[i].Priority = driver.Priorities[rank]
+
+			continue
+		}
+
+		if count[r.Priority] == 0 {
+			unknown = append(unknown, r.Priority)
+		}
+
+		count[r.Priority]++
+		rows[i].Priority = ""
+	}
+
+	for _, v := range unknown {
+		fmt.Fprintf(warn, "f10: priority %q on %d row(s) is not one of %s; ignored\n",
+			v, count[v], strings.Join(driver.Priorities, ", "))
+	}
+
+	return rows
+}
+
+// rankRows orders rows by priority, most urgent first and unranked last,
+// keeping the tracker's order inside a level.
+func rankRows(rows []row) []row {
+	rank := func(r row) int {
+		if i, ok := driver.PriorityRank(r.Priority); ok {
+			return i
+		}
+
+		return len(driver.Priorities)
+	}
+
+	slices.SortStableFunc(rows, func(a, b row) int { return rank(a) - rank(b) })
+
+	return rows
 }
 
 func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
@@ -354,7 +410,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, query, t.eff.IDPrefix)
+	return h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels)
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a
@@ -379,10 +435,11 @@ func writeRows(w io.Writer, rows []row, none string) error {
 		return err
 	}
 
-	idW, statusW := 0, 0
+	idW, statusW, priorityW := 0, 0, 0
 	for _, r := range rows {
 		idW = max(idW, len(r.ID))
 		statusW = max(statusW, len(r.Status))
+		priorityW = max(priorityW, len(r.Priority))
 	}
 
 	for _, r := range rows {
@@ -395,7 +452,13 @@ func writeRows(w io.Writer, rows []row, none string) error {
 		id := hyperlink(r.URL, r.ID) + strings.Repeat(" ", idW-len(r.ID))
 		title := hyperlink(r.URL, r.Title)
 
-		if _, err := fmt.Fprintf(w, "%s%s  %-*s  %s\n", marker, id, statusW, r.Status, title); err != nil {
+		// the priority column exists only when a row carries one
+		priority := ""
+		if priorityW > 0 {
+			priority = fmt.Sprintf("%-*s  ", priorityW, r.Priority)
+		}
+
+		if _, err := fmt.Fprintf(w, "%s%s  %-*s  %s%s\n", marker, id, statusW, r.Status, priority, title); err != nil {
 			return fmt.Errorf("writing rows: %w", err)
 		}
 	}

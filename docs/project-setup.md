@@ -57,7 +57,7 @@ Go service for invoices.
 | `visibility` | `stealth` or `public` | `stealth` |
 | `storage` | `in-repo` or `out-of-tree` | `in-repo` |
 | `layering` | `extends` or `replaces`, in a linked worktree only | `extends` |
-| `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`) and `id`, the task id format | host issues via `gh` or `glab`; ids prefixed from the project's name |
+| `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, and an optional `priority` map from the four levels to the host labels that carry them | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
 | `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
 | `review_traces` | `on` or `off`: a local review or a judge run after the PR leaves a commit status, a PR comment and a commit naming its findings or changes | `off` |
@@ -128,6 +128,28 @@ Never `start`: every task gets its worktree first.
 In the default chain, review reads the remote review when one is declared, else runs the local reviewer, and resolve settles it before finish merges.
 A project whose ship pipeline already reviews drops `review` and `resolve` here.
 A chain typed after the tasks (`f10 drive GH-12 GH-15 judge ship`) replaces this one for that run.
+
+## Priority
+
+Tracker rows carry an optional priority, one of `urgent`, `high`, `medium`, `low`.
+`f10 task open --print` lists the open tasks most urgent first, unranked last.
+Notion, Jira and Linear have a native priority, which a driver maps onto those four words in its rows.
+GitHub and GitLab issues have none, so a project that marks priority with labels declares which label means which level:
+
+```yaml
+tracker:
+  kind: github
+  id: FT-###
+  priority:
+    urgent: P0
+    high: [P1, "priority:high"]
+    low: P3
+```
+
+Labels match case-insensitively, an issue carrying two mapped labels takes the more urgent level, and a level left out maps nothing.
+A level outside the four, or a label listed under two levels, is an error like any other value outside its vocabulary.
+`f10 config` shows the map as `tracker.priority` with its origin; `f10 init` never writes one, since no probe can tell which labels a project uses.
+With nothing declared, host issues have no priority and the list is in the host's order.
 
 ## Review
 

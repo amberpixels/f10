@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -35,10 +37,44 @@ type Declared struct {
 	Standup      StandupDecl      `yaml:"standup,omitempty"`
 }
 
-// TrackerDecl is the tracker's kind and its task id format (`FT-###`).
+// TrackerDecl is the tracker's kind, its task id format (`FT-###`) and the
+// priority map for host issues, which have no priority field of their own:
+// a level of the driver contract's vocabulary to the labels that carry it.
 type TrackerDecl struct {
-	Kind string `yaml:"kind,omitempty"`
-	ID   string `yaml:"id,omitempty"`
+	Kind     string            `yaml:"kind,omitempty"`
+	ID       string            `yaml:"id,omitempty"`
+	Priority map[string]Labels `yaml:"priority,omitempty"`
+}
+
+func (t TrackerDecl) empty() bool { return t.Kind == "" && t.ID == "" && t.Priority == nil }
+
+// Labels is a list of label names, written as a YAML list or as one string.
+type Labels []string
+
+// UnmarshalYAML accepts a sequence of strings or one string; blanks drop.
+func (l *Labels) UnmarshalYAML(node *yaml.Node) error {
+	var list []string
+
+	switch node.Kind {
+	case yaml.SequenceNode:
+		if err := node.Decode(&list); err != nil {
+			return err
+		}
+	case yaml.ScalarNode:
+		list = []string{node.Value}
+	default:
+		return fmt.Errorf("line %d: a label or a list of labels", node.Line)
+	}
+
+	*l = Labels{}
+
+	for _, name := range list {
+		if name = strings.TrimSpace(name); name != "" {
+			*l = append(*l, name)
+		}
+	}
+
+	return nil
 }
 
 // ReviewDecl is the remote review's four facts, in the vocabulary the
@@ -169,7 +205,45 @@ func (d Declared) check() []string {
 		}
 	}
 
+	bad = append(bad, d.Tracker.checkPriority()...)
+
 	slices.Sort(bad)
+
+	return bad
+}
+
+// checkPriority reports a level outside the contract's vocabulary and a
+// label listed under two levels, which would make the index ambiguous. A
+// level with no labels maps nothing and is not an error.
+func (t TrackerDecl) checkPriority() []string {
+	var bad []string
+
+	seen := map[string]string{} // lower-cased label to the level it was first seen under
+
+	for _, level := range slices.Sorted(maps.Keys(t.Priority)) {
+		if _, ok := driver.PriorityRank(level); !ok || level != strings.ToLower(level) {
+			bad = append(
+				bad,
+				fmt.Sprintf("tracker.priority: %q is not one of %s", level, strings.Join(driver.Priorities, ", ")),
+			)
+
+			continue
+		}
+
+		for _, name := range t.Priority[level] {
+			key := strings.ToLower(name)
+			if other, dup := seen[key]; dup && other != level {
+				bad = append(
+					bad,
+					fmt.Sprintf("tracker.priority: label %q is listed under both %s and %s", name, other, level),
+				)
+
+				continue
+			}
+
+			seen[key] = level
+		}
+	}
 
 	return bad
 }
@@ -199,7 +273,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("visibility", d.Visibility != "", func() { l.Visibility = d.Visibility })
 	set("storage", d.Storage != "", func() { l.Storage = d.Storage })
 	set("layering", d.Layering != "", func() { l.Layering = d.Layering })
-	set("tracker", d.Tracker != TrackerDecl{}, func() { l.Tracker = d.Tracker })
+	set("tracker", !d.Tracker.empty(), func() { l.Tracker = d.Tracker })
 	set("merge_method", d.MergeMethod != "", func() { l.MergeMethod = d.MergeMethod })
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
 	set("review_traces", d.ReviewTraces != "", func() { l.ReviewTraces = d.ReviewTraces })

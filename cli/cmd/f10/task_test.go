@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -141,27 +142,107 @@ func TestTaskListURL(t *testing.T) {
 	}
 }
 
-// The open-task list: a driver's list wins, a driver declining it falls back
-// to the host's open issues, ids in the project's format.
+// The open-task list: a driver's list wins, its priority carried; a driver
+// declining it falls back to the host's open issues, ids in the project's
+// format and priorities read from labels through the declared map.
 func TestTaskRows(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
 	writeDriver(t, tg.lay.StorageRoot)
 
-	f.script("driver list", `[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9"}]`)
+	f.script(
+		"driver list",
+		`[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9","priority":"high"}]`,
+	)
 
 	rows, err := taskRows(t.Context(), tg)
-	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" {
+	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" || rows[0].Priority != "high" {
 		t.Errorf("driver list = %+v, %v", rows, err)
 	}
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
-	f.script("gh issue list --json number,title,state,url --limit 30",
-		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7"}]`)
+	f.script(
+		"gh issue list --json number,title,state,url,labels --limit 30",
+		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[{"name":"P3"}]},`+
+			`{"number":8,"title":"unlabelled","state":"OPEN","url":"https://github.com/o/r/issues/8","labels":[]},`+
+			`{"number":9,"title":"two labels","state":"OPEN","url":"https://github.com/o/r/issues/9","labels":[{"name":"p1"},{"name":"P3"}]}]`,
+	)
 
 	rows, err = taskRows(t.Context(), tg)
-	if err != nil || len(rows) != 1 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" {
-		t.Errorf("fallback = %+v, %v", rows, err)
+	if err != nil || len(rows) != 3 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" || rows[0].Priority != "" {
+		t.Errorf("fallback without a map = %+v, %v", rows, err)
+	}
+
+	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
+
+	rows, err = taskRows(t.Context(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows = rankRows(rows)
+
+	got := make([]string, 0, len(rows))
+	for _, r := range rows {
+		got = append(got, r.ID+":"+r.Priority)
+	}
+
+	if want := "FT-9:high FT-7:low FT-8:"; strings.Join(got, " ") != want {
+		t.Errorf("ranked rows = %q, want %q", strings.Join(got, " "), want)
+	}
+}
+
+// A driver's priority outside the vocabulary is dropped with one warning per
+// value, not per row; a known one is kept in its canonical form. Ranking is
+// stable, unranked rows last.
+func TestSettleAndRankPriorities(t *testing.T) {
+	var warn bytes.Buffer
+
+	rows := settlePriorities([]row{
+		{ID: "a"},
+		{ID: "b", Priority: "Highest"},
+		{ID: "c", Priority: " LOW "},
+		{ID: "d", Priority: "Highest"},
+		{ID: "e", Priority: "urgent"},
+		{ID: "f", Priority: "low"},
+	}, &warn)
+
+	if want := "f10: priority \"Highest\" on 2 row(s) is not one of urgent, high, medium, low; ignored\n"; warn.String() != want {
+		t.Errorf("warning = %q, want %q", warn.String(), want)
+	}
+
+	if rows[1].Priority != "" || rows[2].Priority != "low" || rows[3].Priority != "" {
+		t.Errorf("settled = %+v", rows)
+	}
+
+	var order strings.Builder
+	for _, r := range rankRows(rows) {
+		order.WriteString(r.ID)
+	}
+
+	if order.String() != "ecfabd" {
+		t.Errorf("ranked order = %q, want ecfabd", order.String())
+	}
+
+	if len(rankRows(nil)) != 0 {
+		t.Error("ranking nothing produced rows")
+	}
+}
+
+// Into a pipe the rows are JSON, the priority present only where a row has
+// one, so a project with nothing declared sees today's bytes.
+func TestWriteRowsJSONPriority(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeRows(
+		&out,
+		[]row{{ID: "FT-1", Title: "a", Priority: "high"}, {ID: "FT-2", Title: "b"}},
+		"none",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), `"priority": "high"`) || strings.Count(out.String(), "priority") != 1 {
+		t.Errorf("rows = %s", out.String())
 	}
 }
 

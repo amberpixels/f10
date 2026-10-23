@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -245,6 +246,48 @@ func (e *Effective) resolveTracker(
 			e.Facts = append(e.Facts, Fact{Key: "tracker.id", Value: e.IDPrefix, Origin: e.IDPrefixOrigin})
 		}
 	}
+
+	// frontmatter only: no prose ever declared it, and nothing detects it
+	if fm.Tracker.Priority != nil {
+		e.PriorityLabels = priorityIndex(fm.Tracker.Priority)
+		e.Facts = append(e.Facts, Fact{
+			Key:    "tracker.priority",
+			Value:  priorityShown(fm.Tracker.Priority),
+			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+		})
+	}
+}
+
+// priorityIndex inverts the declared map: each label, lower-cased, to its
+// level. check() has already refused a label under two levels.
+func priorityIndex(declared map[string]Labels) map[string]string {
+	index := map[string]string{}
+
+	for level, names := range declared {
+		for _, name := range names {
+			index[strings.ToLower(name)] = level
+		}
+	}
+
+	return index
+}
+
+// priorityShown is the map as config prints it: `urgent: P0; high: P1,
+// priority:high`, levels in vocabulary order, levels with no labels left out.
+func priorityShown(declared map[string]Labels) string {
+	var shown []string
+
+	for _, level := range driver.Priorities {
+		if names := declared[level]; len(names) > 0 {
+			shown = append(shown, level+": "+strings.Join(names, ", "))
+		}
+	}
+
+	if len(shown) == 0 {
+		return "none"
+	}
+
+	return strings.Join(shown, "; ")
 }
 
 func (e *Effective) resolveHosting(
