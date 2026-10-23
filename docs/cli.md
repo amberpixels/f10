@@ -54,7 +54,7 @@ f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [-
 f10 status [id] [--all] [--json | --markdown]   # where the run is: this session's, a task's in its worktree, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
-f10 board [--since <time>] [--remote] [--json | --html] [--out <path>]   # where every task stands: done, in progress with its stage and next action, next
+f10 board [--since <time>] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # where every task stands: done, in progress with its stage and next action, next; one project or several
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -609,11 +609,42 @@ It reads three sources, each failing on its own: the host (open requests and the
 A failed source is printed first with its error, and every other row still renders.
 It writes nothing to the host.
 
+**The scope** is this checkout, or the union of `-C <path | name>` (repeatable), `--group <name>` (repeatable, a group in `~/.f10/board.md`) and `--all` (every checkout under `F10_ROOTS`, with it unset an error, plus the `repos` the file watches), as `f10 standup` takes them.
+Each project is collected on its own, a few at a time: one that cannot be read (a `project.md` that does not parse, a host CLI that errors) shows every source failed with the error, and every other project renders.
+Checkouts of one repository are read once, from the first given; a repository named outright that a checkout already covers is dropped.
+
+- `--all` or `--group` prints one line per project: `<n> in flight` (rows neither `done` nor `next`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
+- `--detail`, or a scope of more than one `-C` with no `--all` or `--group`, prints every project's rows under a heading with its name; one `-C` prints the board as this checkout's.
+- `--by person` prints rows grouped by `who.person` across projects, a heading per person, the unresolved last under `nobody`, each row naming its project.
+- `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 1 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
+
+**Your file**, `~/.f10/board.md`, YAML frontmatter then free prose, an unknown key an error:
+
+- `groups` maps a name to what `--group <name>` reads: absolute paths or globs (`~/` expanded) as `standup.md` has them, and repositories with no checkout written as `host/owner/repo` (`github.com/acme/widgets`).
+  Each file owns its `groups`; the board never reads `standup.md`'s.
+- `repos` lists repositories watched with no checkout, read with `--all`: a string `github.com/acme/widgets`, or `{repo: ..., prefix: WID}` where the name derives the wrong task id prefix.
+  `github.com` is read with `gh`, `gitlab.com` with `glab`; another host says which with a `gh:` or `glab:` prefix (`glab:git.example.com/acme/widgets`), and a GitLab host off gitlab.com needs `GITLAB_HOST` for its API calls.
+  Such a repository renders from the host and its issues alone, its local source skipped, as `--remote` reads.
+- `people` maps one person to the identities the sources know them by: `{name: ann, tracker: Ann Lee, host: annl, emails: [ann@acme.example]}`, every key but `name` optional.
+  A row's `who.person` is the tracker assignee's person, else the request author's, else the first committer's; without a map, or with none matching, it is that identity as the source spelled it, so a tracker name and a host login stay two names until the map joins them.
+  Where the tracker is the host's issues the assignee is a login, which `host` claims as well, so `tracker` is for a tracker of its own.
+
+  ```yaml
+  ---
+  groups:
+    work: [~/code/acme/*, github.com/acme/infra]
+  repos: [github.com/acme/widgets]
+  people:
+    - {name: ann, tracker: Ann Lee, host: annl, emails: [ann@acme.example]}
+  ---
+  ```
+
 - `--since` sets the window `done` rows cover: an RFC 3339 time or a `YYYY-MM-DD` date; default seven days.
   The host is asked once for the open requests and once for the merged ones, then once per merged request for its branch, once per open request for the declared remote reviewer's review, and once for the commits of a request nothing else names a task for; a long window on a busy repository costs that many calls.
 - `--remote` reads the host and the tracker only: what a viewer without the checkout sees.
 - `--json` prints the Board JSON, the contract every renderer reads; `docs/board.md` is its spec, the stages and their rules included, and `docs/board.schema.json` its schema.
 - `--html` prints one static page: the Board JSON embedded, drawn by a renderer inlined in the page, so it opens from disk with no server and no network and can be attached or hosted as is.
+  The page draws one project: over several (`--all`, `--group`, more than one `-C`) it is refused.
   The page shows every row with its stage, `stage_from` and next action, and the failed sources; it draws the same rows from the same JSON as the terminal and decides no stage.
 - `--out <path>` writes `--json` or `--html` to a file instead of stdout.
 
@@ -629,7 +660,7 @@ With no id, a reference is looked up in one cascade: the id you passed, else the
 The branch lookup needs the project's task id format, declared in `project.md` or derived from the project's name.
 
 `-C` answers for another checkout.
-It names one checkout; only `f10 standup` takes it more than once.
+It names one checkout; only `f10 standup` and `f10 board` take it more than once.
 A path always works.
 A bare name works once `F10_ROOTS` says where to look:
 

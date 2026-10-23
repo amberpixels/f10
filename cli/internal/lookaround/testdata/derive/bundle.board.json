@@ -42,7 +42,8 @@
       "who": {
         "agent": "ft-1-4f178e",
         "model": "opus",
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {
@@ -79,7 +80,8 @@
       "who": {
         "agent": "ft-1-4f178e",
         "model": "opus",
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

@@ -90,7 +90,7 @@ func rootDir(cmd *cli.Command) (string, bool, error) {
 
 		return dir, true, err
 	default:
-		return "", false, fmt.Errorf("-C names one checkout (got %d); only standup takes several", len(sels))
+		return "", false, fmt.Errorf("-C names one checkout (got %d); only standup and board take several", len(sels))
 	}
 }
 

@@ -65,8 +65,8 @@ func TestProjectPrefix(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := projectPrefix(c.name); got != c.want {
-				t.Errorf("projectPrefix(%q) = %q, want %q", c.name, got, c.want)
+			if got := ProjectPrefix(c.name); got != c.want {
+				t.Errorf("ProjectPrefix(%q) = %q, want %q", c.name, got, c.want)
 			}
 		})
 	}

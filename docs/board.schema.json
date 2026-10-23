@@ -251,6 +251,15 @@
           "items": {
             "type": "string"
           }
+        },
+        "committers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "person": {
+          "type": "string"
         }
       },
       "additionalProperties": false

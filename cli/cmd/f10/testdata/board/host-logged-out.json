@@ -17,8 +17,8 @@
     "git symbolic-ref --short refs/remotes/origin/HEAD": {
       "stdout": "origin/main"
     },
-    "git rev-list --count origin/main..FT-2/widgets": {
-      "stdout": "1"
+    "git log --no-show-signature --format=%H %ae origin/main..FT-2/widgets": {
+      "stdout": "00000000000000000000000000000000000000a1 ann@acme.example"
     }
   },
   "tasks": [

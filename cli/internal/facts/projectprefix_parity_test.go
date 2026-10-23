@@ -42,8 +42,8 @@ func TestProjectPrefixParity(t *testing.T) {
 				}
 			}
 
-			if want := projectPrefix(name); printed != want {
-				t.Errorf("f10-load-project.sh printed prefix %q, projectPrefix(%q) = %q", printed, name, want)
+			if want := ProjectPrefix(name); printed != want {
+				t.Errorf("f10-load-project.sh printed prefix %q, ProjectPrefix(%q) = %q", printed, name, want)
 			}
 		})
 	}

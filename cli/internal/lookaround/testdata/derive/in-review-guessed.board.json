@@ -43,7 +43,8 @@
         "author": "ann",
         "reviewers": [
           "bob"
-        ]
+        ],
+        "person": "ann"
       },
       "where": {
         "pr": {
@@ -72,7 +73,8 @@
       "stage": "in-review",
       "stage_from": "guessed",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

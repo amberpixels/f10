@@ -340,8 +340,9 @@ type row struct {
 	Status   string `json:"status,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Priority string `json:"priority,omitempty"`
-	After    string `json:"after,omitempty"` // the base its body's After: line names, where the source gives one
-	Body     string `json:"body,omitempty"`  // read for its After: line; never printed
+	After    string `json:"after,omitempty"`    // the base its body's After: line names, where the source gives one
+	Body     string `json:"body,omitempty"`     // read for its After: line; never printed
+	Assignee string `json:"assignee,omitempty"` // the tracker's assignee, where the source gives one
 }
 
 // settlePriorities keeps each row's priority in its canonical form and

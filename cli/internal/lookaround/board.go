@@ -113,7 +113,12 @@ type Who struct {
 	Model       string   `json:"model,omitempty"`
 	Author      string   `json:"author,omitempty"` // the request's author
 	Assignees   []string `json:"assignees,omitempty"`
-	Reviewers   []string `json:"reviewers,omitempty"` // requested and not yet heard from
+	Reviewers   []string `json:"reviewers,omitempty"`  // requested and not yet heard from
+	Committers  []string `json:"committers,omitempty"` // the author emails on the row's commits
+	// Person is the one name the row groups under: the tracker assignee's,
+	// else the author's, else the first committer's, each through the
+	// people map where one matches, else as the source spelled it.
+	Person string `json:"person,omitempty"`
 }
 
 // Where the work is.

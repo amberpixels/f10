@@ -20,12 +20,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// A standup's period is the person's, not a checkout's: two scopes run the
-// same morning agree. So both files live in ~/.f10/, beside the out-of-tree
-// project directories, with an extension no project directory carries.
+// A standup's period and a board's scope are the person's, not a
+// checkout's: two scopes run the same morning agree. So these files live in
+// ~/.f10/, beside the out-of-tree project directories, with an extension no
+// project directory carries.
 const (
 	standupStateFile  = "standup.json" // the last reported standup; f10 writes it
-	standupConfigFile = "standup.md"   // the user's settings; f10 only reads it
+	standupConfigFile = "standup.md"   // the user's standup settings; f10 only reads it
+	boardConfigFile   = "board.md"     // the user's board settings; f10 only reads it
 )
 
 func userF10Dir() (string, error) {
@@ -113,38 +115,101 @@ type standupConfig struct {
 	Groups   map[string][]string `yaml:"groups"` // a name to the paths and globs of its checkouts
 }
 
-// readStandupConfig is ~/.f10/standup.md's frontmatter and the file's path,
-// empty when the file or its frontmatter is missing. Each caller reads only
-// the key it needs, so a broken standup.md fails only a run that uses it.
-func readStandupConfig() (standupConfig, string, error) {
-	dir, err := userF10Dir()
-	if err != nil {
-		return standupConfig{}, "", err
+// boardConfig is the frontmatter of ~/.f10/board.md: groups as standup
+// has them, with repositories allowed beside paths; repositories watched
+// with no checkout, which --all reads; and the people map.
+type boardConfig struct {
+	Groups map[string][]string `yaml:"groups"`
+	Repos  []repoEntry         `yaml:"repos"`
+	People []person            `yaml:"people"`
+}
+
+// A person is one name and the identities the sources know them by.
+type person struct {
+	Name    string   `yaml:"name"`
+	Tracker string   `yaml:"tracker"`
+	Host    string   `yaml:"host"`
+	Emails  []string `yaml:"emails"`
+}
+
+// A repoEntry is a repository with no checkout: `github.com/acme/widgets`
+// as a string, or a map with `repo` and the task id `prefix` to read ids
+// with, where the name derives the wrong one.
+type repoEntry struct {
+	Repo   string `yaml:"repo"`
+	Prefix string `yaml:"prefix"`
+}
+
+func (r *repoEntry) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		r.Repo = node.Value
+
+		return nil
 	}
 
-	path := filepath.Join(dir, standupConfigFile)
+	type plain repoEntry
+
+	return node.Decode((*plain)(r))
+}
+
+// readUserConfig reads the frontmatter of ~/.f10/<file> into cfg and
+// returns the file's path for error texts; a missing file or one with no
+// frontmatter leaves cfg as it was. Each caller reads only the key it
+// needs, so a broken file fails only a run that uses it.
+func readUserConfig(file string, cfg any) (string, error) {
+	dir, err := userF10Dir()
+	if err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(dir, file)
 
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return standupConfig{}, path, nil
+		return path, nil
 	}
 
 	if err != nil {
-		return standupConfig{}, path, err
+		return path, err
 	}
 
 	block, _, ok := frontmatter.Split(data)
 	if !ok {
-		return standupConfig{}, path, nil
+		return path, nil
 	}
-
-	var cfg standupConfig
 
 	dec := yaml.NewDecoder(bytes.NewReader(block))
 	dec.KnownFields(true)
 
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return standupConfig{}, path, fmt.Errorf("%s: %w", path, err)
+	if err := dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
+		return path, fmt.Errorf("%s: %w", path, err)
+	}
+
+	return path, nil
+}
+
+func readStandupConfig() (standupConfig, string, error) {
+	var cfg standupConfig
+
+	path, err := readUserConfig(standupConfigFile, &cfg)
+
+	return cfg, path, err
+}
+
+// readBoardConfig is ~/.f10/board.md, with the people every run reads
+// checked; a repository entry is read only by the --all run that uses it.
+func readBoardConfig() (boardConfig, string, error) {
+	var cfg boardConfig
+
+	path, err := readUserConfig(boardConfigFile, &cfg)
+	if err != nil {
+		return cfg, path, err
+	}
+
+	for i, p := range cfg.People {
+		if strings.TrimSpace(p.Name) == "" {
+			return cfg, path, fmt.Errorf("%s: people[%d] has no name", path, i)
+		}
 	}
 
 	return cfg, path, nil
@@ -186,23 +251,24 @@ func readWorkdays() (standup.Workdays, error) {
 	return w, nil
 }
 
-// readGroups is the checkouts the named groups in ~/.f10/standup.md list,
-// in the order given. A glob keeps the checkouts it matches and skips
-// anything else; a plain path that is not a checkout is an error, since the
-// user named it. The user declared each entry, so expanding a group is not
-// the filesystem walk F10_ROOTS fences.
-func readGroups(names []string) ([]string, error) {
-	cfg, path, err := readStandupConfig()
+// readGroups is what the named groups in ~/.f10/<file> list, in the
+// order given: checkouts from paths and globs, and repositories with no
+// checkout. A glob keeps the checkouts it matches and skips anything else;
+// a plain path that is not a checkout is an error, since the user named
+// it. The user declared each entry, so expanding a group is not the
+// filesystem walk F10_ROOTS fences.
+func readGroups(file string, names []string) ([]scopeItem, error) {
+	groups, path, err := userGroups(file)
 	if err != nil {
 		return nil, err
 	}
 
-	var dirs []string
+	var items []scopeItem
 
 	for _, name := range names {
-		entries, ok := cfg.Groups[name]
+		entries, ok := groups[name]
 		if !ok {
-			declared := slices.Sorted(maps.Keys(cfg.Groups))
+			declared := slices.Sorted(maps.Keys(groups))
 			if len(declared) == 0 {
 				return nil, fmt.Errorf("no group %q: %s declares no groups (see docs/cli.md)", name, path)
 			}
@@ -216,16 +282,43 @@ func readGroups(names []string) ([]string, error) {
 				return nil, fmt.Errorf("%s: group %s: %w", path, name, err)
 			}
 
-			dirs = append(dirs, found...)
+			items = append(items, found...)
 		}
 	}
 
-	return dirs, nil
+	return items, nil
 }
 
-// groupEntry is the checkouts one group entry names.
-func groupEntry(entry string) ([]string, error) {
-	p, err := expandHome(strings.TrimSpace(entry))
+// userGroups is the groups one user file declares, read with that file's
+// own keys so an unknown one is still refused.
+func userGroups(file string) (map[string][]string, string, error) {
+	if file == boardConfigFile {
+		cfg, path, err := readBoardConfig()
+
+		return cfg.Groups, path, err
+	}
+
+	cfg, path, err := readStandupConfig()
+
+	return cfg.Groups, path, err
+}
+
+// groupEntry is what one group entry names: a repository where the entry
+// is one (no leading / or ~, no glob), else the checkouts of its path or
+// glob.
+func groupEntry(entry string) ([]scopeItem, error) {
+	entry = strings.TrimSpace(entry)
+
+	if isRepoEntry(entry) {
+		r, err := parseRepo(entry, "")
+		if err != nil {
+			return nil, err
+		}
+
+		return []scopeItem{{repo: &r}}, nil
+	}
+
+	p, err := expandHome(entry)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +332,7 @@ func groupEntry(entry string) ([]string, error) {
 			return nil, fmt.Errorf("%s is not a git checkout", p)
 		}
 
-		return []string{p}, nil
+		return []scopeItem{{dir: p}}, nil
 	}
 
 	matches, err := filepath.Glob(p)
@@ -247,11 +340,11 @@ func groupEntry(entry string) ([]string, error) {
 		return nil, fmt.Errorf("bad glob %q: %w", entry, err)
 	}
 
-	var out []string
+	var out []scopeItem
 
 	for _, m := range matches {
 		if projects.IsCheckout(m) {
-			out = append(out, m)
+			out = append(out, scopeItem{dir: m})
 		}
 	}
 

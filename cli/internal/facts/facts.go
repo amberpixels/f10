@@ -276,7 +276,7 @@ const (
 	wordPrefix = 3
 )
 
-// projectPrefix derives a task id prefix from the project's name, for a
+// ProjectPrefix derives a task id prefix from the project's name, for a
 // project that declares no id format. The host's letters would name every
 // GitLab project GL; the project's own name says which project in a branch
 // or a plan filename. A short name with a digit keeps its letters (f10 ->
@@ -284,7 +284,7 @@ const (
 // gives its first three characters (herdr -> HER). A name that yields
 // nothing usable (one letter, a leading digit) derives no prefix, so only
 // explicit ids are accepted and f10 init leaves the Tracker section to a human.
-func projectPrefix(name string) string {
+func ProjectPrefix(name string) string {
 	segments := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
 		return r == '-' || r == '_' || r == '.' || r == ' '
 	})

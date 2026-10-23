@@ -45,12 +45,17 @@ A renderer (the terminal, the HTML report) draws the JSON and decides no stage; 
 
 **A row** is one task, or one request naming no task.
 
+**Several projects** (`f10 board --all`, `--group`, more than one `-C`) print a JSON array of these documents, one per project in scope order; a project nothing could read is a document with every source failed and no rows.
+
+**People.** `who.person` is the one name a row groups under: the tracker assignee, else the request's author, else the first committer, each mapped through the user's people map (`~/.f10/board.md`, `docs/cli.md`) where one person claims that identity.
+With no map, or none claiming it, `person` is that identity as its source spelled it, in the same order: a tracker name on a task-only row, a host login on a request's row, an email on a row with only commits, so one person can sit under two headings until the map joins them.
+
 | field | meaning |
 |---|---|
 | `key` | the task id in the project's format; `#<number>` for a request naming no task |
-| `task` | the tracker's row: `id`, `title`, `url`, `status`, `priority` (`urgent`, `high`, `medium`, `low`), `assignee`, `after` (the base its body names); absent for a request naming no task |
+| `task` | the tracker's row: `id`, `title`, `url`, `status`, `priority` (`urgent`, `high`, `medium`, `low`), `assignee` (the first, where the tracker gives one), `after` (the base its body names); absent for a request naming no task |
 | `stage`, `stage_from` | below |
-| `who` | `agent` and `agent_status` (the Herdr agent in the task's worktree: `idle`, `working`, `done`), `model` (the one `f10 start --model` recorded on the branch), `author` (the request's), `assignees` (the tracker's first, then the request's), `reviewers` (requested and not yet heard from) |
+| `who` | `agent` and `agent_status` (the Herdr agent in the task's worktree: `idle`, `working`, `done`), `model` (the one `f10 start --model` recorded on the branch), `author` (the request's), `assignees` (the tracker's first, then the request's), `reviewers` (requested and not yet heard from), `committers` (the distinct author emails on the row's commits, where they were read), `person` (below) |
 | `where` | `pr` (`number`, `title`, `url`, `state` `open`, `merged` or `closed`, `draft`, `head`, `base`, `mergeable` `clean`, `conflicts` or `blocked`, `checks` `green`, `red` or `pending`), `branch`, `worktree`, `workspace` |
 | `review` | `step` (the step the state block names), `round`, `open` (findings awaiting a verdict), `asks` (questions waiting on a person), `approvals`, `changes_requested`, `remote_open` (the declared remote reviewer left one unhandled); absent with nothing to say |
 | `blocked_by` | the base task holding the row, when `stage` is `blocked` for that reason |
@@ -136,4 +141,5 @@ Nothing is ever written to the host.
 ## Changing this spec
 
 A stage rule, a field's meaning or the next-action table changes here and in the fixtures first, with a version bump at the top, then in the implementation.
+An optional field added with its meaning (`who.committers`, `who.person`) is written here and in the schema, the version kept.
 Nothing in a board names a plan, a findings file or a storage path except `where.worktree`, which is the reader's own machine.

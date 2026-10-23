@@ -240,7 +240,7 @@ func (e *Effective) resolveTracker(
 	default:
 		// no declared id format: the project's own name settles the prefix,
 		// until f10 init writes it down
-		if e.IDPrefix = projectPrefix(lay.Project); e.IDPrefix != "" {
+		if e.IDPrefix = ProjectPrefix(lay.Project); e.IDPrefix != "" {
 			e.IDPrefixOrigin = "derived from project name " + lay.Project
 			e.IDPrefixDerived = true
 			e.Facts = append(e.Facts, Fact{Key: "tracker.id", Value: e.IDPrefix, Origin: e.IDPrefixOrigin})

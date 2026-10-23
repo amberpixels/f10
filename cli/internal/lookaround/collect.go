@@ -29,6 +29,10 @@ type Inputs struct {
 	Remote bool
 	Local  *LocalInputs
 
+	// People is the user's map of one person's identities across the
+	// sources; nil groups rows by whatever identity each source gives.
+	People []Person
+
 	// Now is the clock; nil is time.Now. A test fixes it so timings are
 	// stable.
 	Now func() time.Time
@@ -43,7 +47,7 @@ func Collect(ctx context.Context, in Inputs) Facts {
 		now = in.Now
 	}
 
-	f := Facts{Project: in.Project, Prefix: in.Prefix, Tasks: []Task{}, PRs: []PR{}}
+	f := Facts{Project: in.Project, Prefix: in.Prefix, Tasks: []Task{}, PRs: []PR{}, People: in.People}
 
 	timed := func(name string, run func() ([]string, error)) {
 		start := now()
@@ -98,4 +102,26 @@ func Collect(ctx context.Context, in Inputs) Facts {
 	}
 
 	return f
+}
+
+// Unreachable is the board of a project no collector could run for: a
+// checkout whose instructions do not read, or a repository with no host
+// CLI. Every source carries the error, so a reader of several boards sees
+// the project failed rather than empty; a project with no checkout keeps
+// its local source skipped, as a remote read does.
+func Unreachable(p Project, err error, now, since time.Time) Board {
+	b := Board{
+		Version: Version, GeneratedAt: now, Project: p, Window: Window{Since: since}, Rows: []Row{},
+	}
+
+	for _, name := range []string{SourceHost, SourceTracker, SourceLocal} {
+		s := Source{Name: name, Error: err.Error()}
+		if name == SourceLocal && p.Remote {
+			s = Source{Name: name, OK: true, Skipped: true}
+		}
+
+		b.Sources = append(b.Sources, s)
+	}
+
+	return b
 }

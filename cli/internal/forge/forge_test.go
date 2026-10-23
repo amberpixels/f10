@@ -159,3 +159,95 @@ func TestBranchExists(t *testing.T) {
 		t.Error("down: want the error")
 	}
 }
+
+// A host naming its repository outright carries it on every command: -R
+// on a noun command, the placeholders filled on an api call, and nothing
+// at all once Repo is empty.
+func TestRunNamesTheRepository(t *testing.T) {
+	var got []string
+
+	prev := shell.Capture
+	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+		got = append(got, name+" "+strings.Join(args, " "))
+
+		return shell.Result{Stdout: "[]"}, nil
+	}
+
+	t.Cleanup(func() { shell.Capture = prev })
+
+	ctx := context.Background()
+
+	for _, c := range []struct {
+		host Host
+		args []string
+		want string
+	}{
+		{
+			Host{Name: "gh", Repo: "acme/widgets"},
+			[]string{"pr", "list", "--search", "is:open"},
+			"gh pr list --search is:open -R acme/widgets",
+		},
+		{
+			Host{Name: "gh", Repo: "acme/widgets"},
+			[]string{"api", "repos/{owner}/{repo}/branches/x"},
+			"gh api repos/acme/widgets/branches/x",
+		},
+		{
+			Host{Name: "gh", Repo: "acme/widgets"},
+			[]string{"api", "graphql", "-F", "owner={owner}", "-F", "name={repo}"},
+			"gh api graphql -F owner=acme -F name=widgets",
+		},
+		{
+			Host{Name: "gh", Repo: "ghe.example.com/acme/widgets"},
+			[]string{"issue", "list"},
+			"gh issue list -R ghe.example.com/acme/widgets",
+		},
+		{
+			Host{Name: "gh", Repo: "ghe.example.com/acme/widgets"},
+			[]string{"api", "repos/{owner}/{repo}/branches/x"},
+			"gh api repos/acme/widgets/branches/x --hostname ghe.example.com",
+		},
+		{
+			Host{Name: "glab", Repo: "acme/sub/widgets"},
+			[]string{"api", "projects/:fullpath/merge_requests?state=opened"},
+			"glab api projects/acme%2Fsub%2Fwidgets/merge_requests?state=opened",
+		},
+		{
+			Host{Name: "glab", Repo: "git.example.com/acme/widgets"},
+			[]string{"mr", "list"},
+			"glab mr list -R https://git.example.com/acme/widgets",
+		},
+		{
+			Host{Name: "gh", Dir: "/code/widgets"},
+			[]string{"api", "repos/{owner}/{repo}/branches/x"},
+			"gh api repos/{owner}/{repo}/branches/x",
+		},
+	} {
+		got = nil
+
+		if _, err := c.host.Run(ctx, c.args...); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(got) != 1 || got[0] != c.want {
+			t.Errorf("Run(%v) ran %q, want %q", c.args, got, c.want)
+		}
+	}
+}
+
+// Both hosts' commit APIs name the author's email beside the message.
+func TestPullCommitsKeepTheEmail(t *testing.T) {
+	script(t, map[string]string{
+		"gh api --paginate repos/{owner}/{repo}/pulls/7/commits?per_page=100": `[{"sha":"a1","commit":{"message":"x",` +
+			`"author":{"email":"ann@acme.example","date":"2026-10-20T10:00:00Z"}}}]`,
+		"glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100": `[{"id":"b2","title":"y",` +
+			`"message":"y","author_email":"bob@acme.example","authored_date":"2026-10-20T10:00:00Z"}]`,
+	})
+
+	for _, c := range []struct{ name, email string }{{"gh", "ann@acme.example"}, {"glab", "bob@acme.example"}} {
+		commits, err := Host{Name: c.name, Dir: "/code/widgets"}.PullCommits(context.Background(), 7)
+		if err != nil || len(commits) != 1 || commits[0].Email != c.email {
+			t.Errorf("%s: commits = %+v, %v, want one by %s", c.name, commits, err, c.email)
+		}
+	}
+}

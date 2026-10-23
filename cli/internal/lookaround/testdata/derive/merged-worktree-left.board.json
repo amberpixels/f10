@@ -36,7 +36,8 @@
       "who": {
         "agent": "ft-1-916fca",
         "agent_status": "idle",
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

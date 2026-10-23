@@ -68,6 +68,7 @@ type PRCommit struct {
 	SHA     string
 	Subject string
 	Message string // the whole message, trailers included
+	Email   string // the author's email, as the commit records it
 	At      time.Time
 }
 
@@ -482,13 +483,15 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 		Commit struct {
 			Message string `json:"message"`
 			Author  struct {
-				Date time.Time `json:"date"`
+				Email string    `json:"email"`
+				Date  time.Time `json:"date"`
 			} `json:"author"`
 		} `json:"commit"`
 
 		ID           string    `json:"id"`
 		Title        string    `json:"title"`
 		Message      string    `json:"message"`
+		AuthorEmail  string    `json:"author_email"`
 		AuthoredDate time.Time `json:"authored_date"`
 	}](ctx, h, path)
 	if err != nil {
@@ -507,6 +510,7 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 			),
 			Subject: subject,
 			Message: message,
+			Email:   cmp.Or(c.Commit.Author.Email, c.AuthorEmail),
 			At:      cmp.Or(c.Commit.Author.Date, c.AuthoredDate),
 		})
 	}

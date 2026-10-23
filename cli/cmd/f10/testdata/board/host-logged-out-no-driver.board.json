@@ -36,7 +36,11 @@
       "stage": "implementing",
       "stage_from": "local",
       "who": {
-        "agent": "ft-2-323608"
+        "agent": "ft-2-323608",
+        "committers": [
+          "ann@acme.example"
+        ],
+        "person": "ann@acme.example"
       },
       "where": {
         "branch": "FT-2/widgets",

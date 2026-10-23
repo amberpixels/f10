@@ -15,15 +15,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// A Host is one of the two forge CLIs, bound to the checkout it answers for.
+// A Host is one of the two forge CLIs, bound to the checkout it answers
+// for, or to a repository named outright where no checkout exists.
 type Host struct {
 	Name string // "gh" or "glab"
 	Dir  string // the checkout the CLI reads the remote from
+	// Repo names the repository when there is no checkout to read it from:
+	// `owner/repo`, or `host/owner/repo` off the CLI's default host. Set,
+	// every command carries it: a noun command as -R, an api call with its
+	// placeholders filled in.
+	Repo string
 }
 
 // GLab reports whether the host is GitLab's CLI.
@@ -47,7 +55,7 @@ func (h Host) Pick(gh, glab []string) []string {
 
 // Run runs one host CLI command and returns its stdout.
 func (h Host) Run(ctx context.Context, args ...string) (string, error) {
-	res, err := shell.Capture(ctx, h.Dir, h.Name, args...)
+	res, err := shell.Capture(ctx, h.Dir, h.Name, h.named(args)...)
 	if err != nil {
 		return "", fmt.Errorf("running %s: %w", h.Name, err)
 	}
@@ -90,6 +98,49 @@ func (h Host) Login(ctx context.Context) (string, error) {
 	}
 
 	return login, nil
+}
+
+// named is args with the repository Repo names on them: nothing without
+// one. The CLIs fill `{owner}`, `{repo}` and `:fullpath` from the checkout
+// they run in, so an api call gets them filled here instead, and gh's
+// goes to the repository's host; every other command takes -R, which
+// both CLIs spell the same. glab wants a repository off gitlab.com as a
+// url, and its api calls reach that host through GITLAB_HOST.
+func (h Host) named(args []string) []string {
+	if h.Repo == "" || len(args) == 0 {
+		return args
+	}
+
+	host, path := "", h.Repo
+	if i := strings.Index(path, "/"); i > 0 && strings.Count(path, "/") > 1 && strings.Contains(path[:i], ".") {
+		host, path = path[:i], path[i+1:]
+	}
+
+	if args[0] != "api" {
+		repo := h.Repo
+		if host != "" && h.GLab() {
+			repo = "https://" + h.Repo
+		}
+
+		return append(slices.Clone(args), "-R", repo)
+	}
+
+	owner, name, _ := strings.Cut(path, "/")
+	fill := strings.NewReplacer(
+		"{owner}", owner, "{repo}", name,
+		":fullpath", url.PathEscape(path), ":id", url.PathEscape(path),
+	)
+
+	out := slices.Clone(args)
+	for i := 1; i < len(out); i++ {
+		out[i] = fill.Replace(out[i])
+	}
+
+	if host != "" && !h.GLab() {
+		out = append(out, "--hostname", host)
+	}
+
+	return out
 }
 
 // DecodePages runs a `api --paginate` call and reads every page into one

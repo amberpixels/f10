@@ -35,7 +35,8 @@
       "stage_from": "local",
       "who": {
         "agent": "ft-4-9ff56a",
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

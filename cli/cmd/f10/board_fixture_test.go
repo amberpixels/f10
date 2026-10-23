@@ -37,6 +37,7 @@ type boardFixture struct {
 	Prefix string                 `json:"prefix"`
 	Host   string                 `json:"host"`
 	Remote bool                   `json:"remote,omitempty"`
+	Repo   string                 `json:"repo,omitempty"` // a repository with no checkout: owner/repo, read remote
 	Calls  map[string]fixtureCall `json:"calls"`
 	Tasks  []lookaround.Task      `json:"tasks,omitempty"` // a driver's list; absent, the host's issues answer from calls
 	Runs   map[string]string      `json:"runs,omitempty"`  // session id to state file
@@ -132,8 +133,14 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	}
 
 	f := newFakes(t)
-	f.absent = append(f.absent, "git rev-list --count", "git config --get-regexp", "git symbolic-ref",
-		"git for-each-ref", "git worktree list")
+	f.absent = append(
+		f.absent,
+		"git log --no-show-signature --format=%H %ae",
+		"git config --get-regexp",
+		"git symbolic-ref",
+		"git for-each-ref",
+		"git worktree list",
+	)
 
 	for key, res := range fx.Calls {
 		res.Stdout = sub(res.Stdout)
@@ -141,6 +148,9 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	}
 
 	h := newHost(fx.Host, root)
+	if fx.Repo != "" {
+		h, fx.Remote = host{forge.Host{Name: fx.Host, Repo: fx.Repo}}, true
+	}
 
 	in := lookaround.Inputs{
 		Project: lookaround.Project{ID: "github.com/acme/widgets", Name: "widgets", Host: fx.Host, Remote: fx.Remote},
