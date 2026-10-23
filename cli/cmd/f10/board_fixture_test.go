@@ -169,7 +169,7 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 			return nil, err
 		}
 
-		return boardTasks(rows), nil
+		return boardTasks(rows, fx.Prefix), nil
 	}
 
 	board := lookaround.Derive(lookaround.Collect(t.Context(), in), fx.Now, fx.Since)
@@ -265,7 +265,7 @@ func TestRecordBoardFixture(t *testing.T) {
 				return nil, err
 			}
 
-			return boardTasks(rows), nil
+			return boardTasks(rows, fx.Prefix), nil
 		},
 	}
 

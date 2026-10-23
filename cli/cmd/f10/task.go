@@ -341,6 +341,7 @@ type row struct {
 	URL      string `json:"url,omitempty"`
 	Priority string `json:"priority,omitempty"`
 	After    string `json:"after,omitempty"` // the base its body's After: line names, where the source gives one
+	Body     string `json:"body,omitempty"`  // read for its After: line; never printed
 }
 
 // settlePriorities keeps each row's priority in its canonical form and
@@ -426,6 +427,10 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 // turn, and a picker here would be wrong for one of the two.
 func writeRows(w io.Writer, rows []row, none string) error {
 	if !isTerminal(w) {
+		for i := range rows {
+			rows[i].Body = ""
+		}
+
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 

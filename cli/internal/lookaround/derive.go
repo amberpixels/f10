@@ -3,6 +3,7 @@ package lookaround
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -68,8 +69,9 @@ func Derive(f Facts, now, since time.Time) Board {
 type row struct {
 	Row
 
-	prs      []PR // every request naming the row's task, open first
-	pr       *PR  // the one the stage reads: open, else merged in the window
+	prs      []PR   // every request naming the row's task, open first
+	pr       *PR    // the one the stage reads: open, else merged in the window
+	lead     string // the bundle's lead, for a rider sharing its branch and run
 	run      *state.Run
 	branch   *Branch
 	worktree *Worktree
@@ -113,13 +115,20 @@ func gather(f Facts, since time.Time) []*row {
 			continue
 		}
 
-		key := taskOf(f.Prefix, p)
-		if key == "" {
-			key = fmt.Sprintf("#%d", p.Number)
+		members := membersOf(f.Prefix, p)
+		if len(members) == 0 {
+			members = []string{fmt.Sprintf("#%d", p.Number)}
 		}
 
-		r := find(key)
-		r.prs = append(r.prs, p)
+		// a bundle's request is every member's
+		for i, key := range members {
+			r := find(key)
+			r.prs = append(r.prs, p)
+
+			if i > 0 {
+				r.lead = members[0]
+			}
+		}
 	}
 
 	for _, r := range rows {
@@ -151,63 +160,93 @@ func gather(f Facts, since time.Time) []*row {
 	return rows
 }
 
-// taskOf is the task a request names: its head branch, then its title,
-// then the state block, then the first trailer.
-func taskOf(prefix string, p PR) string {
+// membersOf is the tasks a request names, lead first: a bundle spelled
+// in its head branch, else the one its branch, its title, the state block
+// (riders included) or the first trailer names.
+func membersOf(prefix string, p PR) []string {
 	if members := ref.Members(prefix, p.Head); members != nil {
-		return members[0]
+		return members
 	}
 
 	if id := ref.Match(prefix, p.Head); id != "" {
-		return id
+		return []string{id}
 	}
 
 	if id := ref.Match(prefix, p.Title); id != "" {
-		return id
+		return []string{id}
 	}
 
 	if p.Block != nil && p.Block.Task != "" {
-		return p.Block.Task
+		return append([]string{p.Block.Task}, p.Block.Riders...)
 	}
 
 	for _, t := range p.Trailers {
 		if len(t.Tasks) > 0 {
-			return t.Tasks[0]
+			return t.Tasks
 		}
 	}
 
-	return ""
+	return nil
 }
 
 // local attaches this machine's facts to the rows they name: a branch
-// by the task it is linked to or spells, a run by its task, plans,
-// findings, verdicts and the ledger by id.
+// by the tasks it is linked to or spells, a run by its task and the
+// riders sharing its branch, plans, findings, verdicts and the ledger by
+// id.
 func local(f Facts, rows []*row, find func(string) *row) {
 	l := f.Local
 
-	for name, br := range l.Branches {
-		id := br.Task
-		if id == "" {
-			if members := ref.Members(f.Prefix, name); members != nil {
-				id = members[0]
-			} else {
-				id = ref.Match(f.Prefix, name)
+	// one branch per task, chosen the same way every run: the one with a
+	// worktree, then the one linked by config, then the last by name
+	type candidate struct {
+		name     string
+		branch   Branch
+		worktree *Worktree
+		lead     string
+	}
+
+	best := map[string]candidate{}
+
+	for _, name := range slices.Sorted(maps.Keys(l.Branches)) {
+		br := l.Branches[name]
+
+		members := append([]string{br.Task}, br.Riders...)
+		if br.Task == "" {
+			if members = ref.Members(f.Prefix, name); members == nil {
+				members = []string{ref.Match(f.Prefix, name)}
 			}
 		}
 
-		if id == "" {
-			continue
-		}
-
-		r := find(id)
-		b := br
-		r.branch = &b
-		r.Where.Branch = name
+		c := candidate{name: name, branch: br, lead: members[0]}
 
 		for i := range l.Worktrees {
 			if l.Worktrees[i].Branch == name {
-				r.worktree = &l.Worktrees[i]
+				c.worktree = &l.Worktrees[i]
 			}
+		}
+
+		for _, id := range members {
+			if id == "" {
+				continue
+			}
+
+			have, seen := best[strings.ToUpper(id)]
+			if !seen ||
+				rank(c.worktree != nil, c.branch.Task != "") >= rank(have.worktree != nil, have.branch.Task != "") {
+				best[strings.ToUpper(id)] = c
+			}
+		}
+	}
+
+	for id, c := range best {
+		r := find(id)
+		b := c.branch
+		r.branch = &b
+		r.worktree = c.worktree
+		r.Where.Branch = c.name
+
+		if !strings.EqualFold(c.lead, id) {
+			r.lead = c.lead
 		}
 	}
 
@@ -217,9 +256,10 @@ func local(f Facts, rows []*row, find func(string) *row) {
 			continue
 		}
 
-		r := find(run.Task)
-		if r.run == nil || run.Updated.After(r.run.Updated) {
-			r.run = run
+		for _, r := range append([]*row{find(run.Task)}, ridersOf(rows, run.Task)...) {
+			if r.run == nil || run.Updated.After(r.run.Updated) {
+				r.run = run
+			}
 		}
 	}
 
@@ -331,6 +371,34 @@ func (r *row) fill() {
 	}
 }
 
+// rank orders a task's candidate branches: a worktree first, then a
+// config link, so the one being worked on wins.
+func rank(worktree, linked bool) int {
+	n := 0
+	if worktree {
+		n += 2
+	}
+
+	if linked {
+		n++
+	}
+
+	return n
+}
+
+// ridersOf is the rows riding on lead's branch.
+func ridersOf(rows []*row, lead string) []*row {
+	var out []*row
+
+	for _, r := range rows {
+		if strings.EqualFold(r.lead, lead) {
+			out = append(out, r)
+		}
+	}
+
+	return out
+}
+
 func (r *row) touch(times ...time.Time) {
 	for _, t := range times {
 		if t.After(r.LastActivity) {
@@ -400,7 +468,9 @@ func (r *row) stage(withLocal bool, since time.Time) {
 
 	case r.stopped():
 		set(StageBlocked, FromLocal)
-	case (r.verdict == "rethink" || r.verdict == "stop") && !r.live():
+	// a verdict file is never archived, so it holds only a task still
+	// open or with a request in the window
+	case (r.verdict == "rethink" || r.verdict == "stop") && !r.live() && (r.tracked() || r.pr != nil):
 		set(StageBlocked, FromLocal)
 
 	case r.open() && !r.pr.Draft && r.pr.Mergeable != forge.Conflicts && r.pr.Mergeable != forge.Blocked &&
@@ -476,7 +546,7 @@ func closed(status string) bool {
 }
 
 // settleBases applies the base rule in dependency order: a row whose base
-// row is not done is blocked, unless a run is working on it or it is
+// row is not merged is blocked, unless a run is working on it or it is
 // already past the point a base can hold it (done, merged, asking).
 func settleBases(rows []*row) {
 	index := map[string]*row{}
@@ -499,7 +569,9 @@ func settleBases(rows []*row) {
 		if r.base != "" && ok && base != r {
 			settle(base, path)
 
-			holds := !base.dropped && base.Stage != StageDone
+			// merging releases a dependent; the base's leftover worktree
+			// or branch is its own chore
+			holds := !base.dropped && base.Stage != StageDone && base.Stage != StageMergedUnfinished
 
 			if holds && !r.running() && !r.dropped && !earlyStage(r.Stage) {
 				r.Stage, r.StageFrom = StageBlocked, r.baseFrom

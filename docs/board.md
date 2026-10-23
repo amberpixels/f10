@@ -70,7 +70,7 @@ Rows are listed in this order:
 | `pr-open` | an open request nobody has reviewed |
 | `implementing` | code being written: a live run before `pr`, or a draft request |
 | `planned` | a plan saved, no code yet |
-| `merged-unfinished` | merged in the window, its worktree, local branch or host branch still there |
+| `merged-unfinished` | merged in the window, its worktree, local branch or host branch still there; releases its dependents like `done` |
 | `next` | open on the tracker, not started |
 | `done` | merged in the window, nothing left behind |
 
@@ -91,16 +91,17 @@ A request merged before the window, or closed unmerged, is no request.
 
 1. **Merged** in the window: `merged-unfinished` when a worktree or local branch is still here (`local`), or the head branch still exists on the host (`guessed`), unless the ledger holds the task finished; else `done` (`local` when the local collector ran, `guessed` otherwise).
 2. **Asks**: a live run holding an ask (`local`); the state block's `asks` above zero (`trace`).
-3. **Stopped**: a live run failed or blocked (`local`); the latest verdict file says rethink or stop and no run is live (`local`).
+3. **Stopped**: a live run failed or blocked (`local`); the latest verdict file says rethink or stop, no run is live, and the task is still open or has a request (`local`).
 4. **Ready**: an open request, not a draft, mergeable, checks not red, and the state block says a review round ran with nothing open (`trace`), or, with no block, the host's review decision is approved (`guessed`).
-5. **In review**: a live run at `review`, `resolve` or `judge` (`local`); the latest findings file has open findings (`local`); the block's step is one of those with `open` above zero (`trace`); a review submitted, a reviewer requested, changes requested, or the declared remote reviewer's review unhandled (`guessed`).
+5. **In review**: a live run at `review`, `resolve` or `judge` (`local`); the latest findings file has open findings and the request is open (`local`); the block's step is one of those with `open` above zero (`trace`); a review submitted, a reviewer requested, changes requested, or the declared remote reviewer's review unhandled (`guessed`).
 6. **Open**: an open request, not a draft: `trace` with a state block, `guessed` without.
 7. **Implementing**: a live run in `ship` (`local`); a draft request (`guessed`); a worktree with commits past the default branch, for a task the tracker lists as open (`local`).
 8. **Planned**: a plan file for a task the tracker lists as open, or a live run in `plan` (`local`).
 9. **Next**: a task the tracker lists as open.
 10. Nothing above: not a row.
 
-**The base rule** runs after, in dependency order: a row whose base task (the `f10-after` the branch records, else the block's `after`, else the task body's `After:`) has a row not `done` is `blocked` with that base in `blocked_by`, unless a run is working on it or it is already done, merged or asking; `stage_from` is the base link's source.
+**The base rule** runs after, in dependency order: a row whose base task (the `f10-after` the branch records, else the block's `after`, else the task body's `After:`) has a row neither `done` nor `merged-unfinished` is `blocked` with that base in `blocked_by`, unless a run is working on it or it is already done, merged or asking; `stage_from` is the base link's source.
+Merging releases a dependent; the base's leftover worktree or branch is its own chore.
 A base with no row on the board counts as done, so a reader with the checkout and one without agree.
 
 ## Next actions

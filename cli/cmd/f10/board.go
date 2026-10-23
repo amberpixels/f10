@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -102,15 +104,20 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 		in.Project.Host = h.Name
 
 		if t.eff.Review.Remote() {
-			in.RemoteOpen = func(ctx context.Context, number int) bool {
+			in.RemoteOpen = func(ctx context.Context, number int) (bool, error) {
 				rv, err := newReviewer(ctx, h, t.eff.Review, strconv.Itoa(number))
 				if err != nil {
-					return false
+					return false, err
 				}
 
-				_, err = rv.pick(ctx)
-
-				return err == nil
+				switch _, err := rv.pick(ctx); {
+				case err == nil:
+					return true, nil
+				case errors.Is(err, errNoReview):
+					return false, nil
+				default:
+					return false, err
+				}
 			}
 		}
 	}
@@ -121,7 +128,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			return nil, err
 		}
 
-		return boardTasks(settlePriorities(rows, warn)), nil
+		return boardTasks(settlePriorities(rows, warn), t.eff.IDPrefix), nil
 	}
 
 	if !remote {
@@ -142,13 +149,22 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 	return in
 }
 
-// boardTasks is tracker rows in the board's shape.
-func boardTasks(rows []row) []lookaround.Task {
+// boardTasks is tracker rows in the board's shape. The base is the row's
+// `after`, else the After: line of its body, in the project's id format:
+// a driver may send the bare number.
+func boardTasks(rows []row, prefix string) []lookaround.Task {
 	out := make([]lookaround.Task, 0, len(rows))
 
 	for _, r := range rows {
+		after := cmp.Or(r.After, afterIn(r.Body))
+		if id := ref.Match(prefix, after); id != "" {
+			after = id
+		} else if prefix != "" && after != "" && strings.Trim(after, "0123456789") == "" {
+			after = prefix + "-" + after
+		}
+
 		out = append(out, lookaround.Task{
-			ID: r.ID, Title: r.Title, URL: r.URL, Status: r.Status, Priority: r.Priority, After: r.After,
+			ID: r.ID, Title: r.Title, URL: r.URL, Status: r.Status, Priority: r.Priority, After: after,
 		})
 	}
 

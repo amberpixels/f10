@@ -1,0 +1,98 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets"
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    },
+    {
+      "id": "FT-2",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/2",
+      "status": "open"
+    }
+  ],
+  "PRs": [
+    {
+      "Number": 10,
+      "Title": "FT-1: both",
+      "URL": "https://github.com/acme/widgets/pull/10",
+      "Status": "open",
+      "Head": "FT-1+FT-2/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z",
+      "block": {
+        "v": 1,
+        "task": "FT-1",
+        "riders": [
+          "FT-2"
+        ],
+        "step": "review",
+        "round": 1,
+        "open": 1
+      }
+    }
+  ],
+  "Local": {
+    "Runs": [
+      {
+        "session": "s1",
+        "task": "FT-1",
+        "capture": "skipped",
+        "plan": "done",
+        "ship": "running",
+        "leaf": "resolve",
+        "updated": "2026-10-20T10:00:00Z"
+      }
+    ],
+    "Worktrees": [
+      {
+        "Path": "/code/widgets.FT-1-FT-2-slug",
+        "Branch": "FT-1+FT-2/slug",
+        "Ahead": 2
+      }
+    ],
+    "Branches": {
+      "FT-1+FT-2/slug": {
+        "Task": "FT-1",
+        "Riders": [
+          "FT-2"
+        ],
+        "Model": "opus"
+      }
+    },
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {}
+  },
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "Skipped": false,
+      "TookMS": 1
+    }
+  ]
+}

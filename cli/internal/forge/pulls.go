@@ -421,8 +421,15 @@ func (h Host) PullsSince(ctx context.Context, since time.Time) ([]PR, error) {
 // BranchExists reports whether the host still has branch: after a merge
 // that deleted it, the answer is false.
 func (h Host) BranchExists(ctx context.Context, branch string) (bool, error) {
+	// GitHub takes the branch's slashes as they are and the rest escaped;
+	// GitLab wants the whole name as one escaped segment
+	segments := strings.Split(branch, "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+
 	_, err := h.Run(ctx, h.Pick(
-		[]string{"api", "repos/{owner}/{repo}/branches/" + branch},
+		[]string{"api", "repos/{owner}/{repo}/branches/" + strings.Join(segments, "/")},
 		[]string{"api", "projects/:fullpath/repository/branches/" + url.PathEscape(branch)},
 	)...)
 	if err == nil {

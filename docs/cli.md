@@ -567,6 +567,7 @@ A failed source is printed first with its error, and every other row still rende
 It writes nothing to the host.
 
 - `--since` sets the window `done` rows cover: an RFC 3339 time or a `YYYY-MM-DD` date; default seven days.
+  The host is asked once for the open requests and once for the merged ones, then once per merged request for its branch, once per open request for the declared remote reviewer's review, and once for the commits of a request nothing else names a task for; a long window on a busy repository costs that many calls.
 - `--remote` reads the host and the tracker only: what a viewer without the checkout sees.
 - `--json` prints the Board JSON, the contract every renderer reads; `docs/board.md` is its spec, the stages and their rules included, and `docs/board.schema.json` its schema.
 

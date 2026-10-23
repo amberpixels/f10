@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "checkout": "/code/widgets",
+    "remote": false
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-1",
+      "task": {
+        "id": "FT-1",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/1",
+        "status": "open"
+      },
+      "stage": "in-review",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-1-4f178e",
+        "model": "opus",
+        "author": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 10,
+          "title": "FT-1: both",
+          "url": "https://github.com/acme/widgets/pull/10",
+          "state": "open",
+          "head": "FT-1+FT-2/slug",
+          "base": "main"
+        },
+        "branch": "FT-1+FT-2/slug",
+        "worktree": "/code/widgets.FT-1-FT-2-slug"
+      },
+      "review": {
+        "step": "review",
+        "round": 1,
+        "open": 1
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "command": "/f10:resolve FT-1"
+      }
+    },
+    {
+      "key": "FT-2",
+      "task": {
+        "id": "FT-2",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/2",
+        "status": "open"
+      },
+      "stage": "in-review",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-2-4f178e",
+        "model": "opus",
+        "author": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 10,
+          "title": "FT-1: both",
+          "url": "https://github.com/acme/widgets/pull/10",
+          "state": "open",
+          "head": "FT-1+FT-2/slug",
+          "base": "main"
+        },
+        "branch": "FT-1+FT-2/slug",
+        "worktree": "/code/widgets.FT-1-FT-2-slug"
+      },
+      "review": {
+        "step": "review",
+        "round": 1,
+        "open": 1
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "command": "/f10:resolve FT-2"
+      }
+    }
+  ]
+}

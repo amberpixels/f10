@@ -22,8 +22,9 @@ type Inputs struct {
 	Tasks func(ctx context.Context) ([]Task, error)
 
 	// RemoteOpen reports whether the project's declared remote reviewer
-	// left a review on the request nobody handled; nil declares none.
-	RemoteOpen func(ctx context.Context, number int) bool
+	// left a review on the request nobody handled; nil declares none. An
+	// error is a note on the host source, the request kept without it.
+	RemoteOpen func(ctx context.Context, number int) (bool, error)
 
 	Remote bool
 	Local  *LocalInputs
