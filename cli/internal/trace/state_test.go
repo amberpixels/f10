@@ -202,6 +202,16 @@ func TestPutState(t *testing.T) {
 			"Adds the thing.\n\n<!-- state {nope} -->\n",
 			"Adds the thing.\n\n" + block + "\n",
 		},
+		{
+			"a fenced example is text, the block goes after it",
+			"The shape:\n\n```\n<!-- state {\"v\":1,\"step\":\"review\",\"open\":9} -->\n```\n",
+			"The shape:\n\n```\n<!-- state {\"v\":1,\"step\":\"review\",\"open\":9} -->\n```\n\n" + block + "\n",
+		},
+		{
+			"a backtick span is text",
+			"Write `<!-- state {\"v\":1,\"step\":\"x\"} -->` by hand.\n",
+			"Write `<!-- state {\"v\":1,\"step\":\"x\"} -->` by hand.\n\n" + block + "\n",
+		},
 	}
 
 	for _, c := range cases {
@@ -253,6 +263,11 @@ func TestStripState(t *testing.T) {
 			"two",
 			"<!-- state {\"v\":1,\"step\":\"a\"} -->\n\nAdds.\n\n<!-- state {\"v\":1,\"step\":\"b\"} -->\n",
 			"Adds.\n",
+		},
+		{
+			"fenced stays",
+			"```\n<!-- state {\"v\":1,\"step\":\"a\"} -->\n```\n\n<!-- state {\"v\":1,\"step\":\"b\"} -->\n",
+			"```\n<!-- state {\"v\":1,\"step\":\"a\"} -->\n```\n",
 		},
 	}
 

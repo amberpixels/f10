@@ -99,6 +99,7 @@ A reader parses a whole commit message leniently, since a squash merge concatena
 
 A reader of a PR body takes the first `<!-- state {...} -->` it holds, the marker's spaces free, and reads the JSON:
 
+- A block inside a fenced code block or a backtick span is text, not the state: a body quoting this spec keeps its example.
 - No block, JSON that does not parse, or a `v` other than `1` is no state, never an error.
 - A key the reader does not know is ignored; a key missing is its zero.
 - A trailing carriage return before the marker's end is ignored.
@@ -110,7 +111,7 @@ A reader passes when every `.msg` parses to its `.json`.
 The set at version 1 covers a plain commit, a bundle, a resolve fix, a squash of two commits with trailers mid-body, a squash whose body is a PR description ending in `Task:`, a message with no trailers, lowercase keys, CRLF line ends, a `Review:` with an unknown pair and a non-integer, one id spelled in two cases, and blank values.
 
 `cli/internal/trace/testdata/state/<name>.md` is a PR body as the host returns it; `<name>.json` is the state it yields, or `null` for no state.
-The set at version 1 covers a block at the end, one mid-body, no block, malformed JSON, another version, CRLF line ends, an unknown key, a bundle with riders and a base, two blocks, the smallest block, a marker with extra spaces, and a block naming no task.
+The set at version 1 covers a block at the end, one mid-body, no block, malformed JSON, another version, CRLF line ends, an unknown key, a bundle with riders and a base, two blocks, the smallest block, a marker with extra spaces, a block naming no task, a fenced example beside the block, and a fenced example alone.
 
 ## Changing this spec
 

@@ -53,17 +53,20 @@ var (
 
 // A block is one HTML comment on a line of its own: `<!-- state {...} -->`.
 // The JSON is matched up to the first `}` that a closing marker follows,
-// so a block holds no nested object.
+// so a block holds no nested object. Not every match is the state: see
+// stateSpans.
 var blockRe = regexp.MustCompile(`<!--[ \t]*state[ \t]+(\{.*?\})[ \t]*-->`)
 
 // ParseState reads the first block a body holds. No block, JSON that does
 // not parse, or a version other than StateVersion is no state, never an
 // error: a body nobody controlled is still read. Unknown keys are ignored.
 func ParseState(body string) (State, bool) {
-	m := blockRe.FindStringSubmatch(body)
-	if m == nil {
+	spans := stateSpans(body)
+	if len(spans) == 0 {
 		return State{}, false
 	}
+
+	m := blockRe.FindStringSubmatch(body[spans[0][0]:spans[0][1]])
 
 	var s State
 	if err := json.Unmarshal([]byte(m[1]), &s); err != nil || s.V != StateVersion {
@@ -71,6 +74,37 @@ func ParseState(body string) (State, bool) {
 	}
 
 	return s, true
+}
+
+// stateSpans is every block in body that is the state and not text: one
+// inside a fenced code block or a backtick span is an example, as the
+// spec's own is, and a PR body quoting the spec must keep it.
+func stateSpans(body string) [][]int {
+	var spans [][]int
+
+	for _, span := range blockRe.FindAllStringIndex(body, -1) {
+		if !inCode(body, span[0]) {
+			spans = append(spans, span)
+		}
+	}
+
+	return spans
+}
+
+// inCode reports whether offset at sits inside a ``` or ~~~ fence, or
+// after an odd number of backticks on its own line.
+func inCode(body string, at int) bool {
+	lineStart := strings.LastIndexByte(body[:at], '\n') + 1
+
+	fenced := false
+
+	for line := range strings.SplitSeq(body[:lineStart], "\n") {
+		if t := strings.TrimSpace(line); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+			fenced = !fenced
+		}
+	}
+
+	return fenced || strings.Count(body[lineStart:at], "`")%2 == 1
 }
 
 // Merge is the state a rewrite leaves: the update's step, task, riders and
@@ -155,7 +189,7 @@ func PutState(body string, s State) (string, error) {
 		return "", err
 	}
 
-	spans := blockRe.FindAllStringIndex(body, -1)
+	spans := stateSpans(body)
 	if len(spans) == 0 {
 		if strings.TrimSpace(body) == "" {
 			return block + "\n", nil
@@ -184,7 +218,7 @@ func Rewrite(body string, u Update) (string, error) {
 // itself and the blank line above it, for a commit message built from a
 // PR body: the block describes the PR, not the commit.
 func StripState(body string) string {
-	for _, span := range slices.Backward(blockRe.FindAllStringIndex(body, -1)) {
+	for _, span := range slices.Backward(stateSpans(body)) {
 		body = removeSpan(body, span[0], span[1])
 	}
 
