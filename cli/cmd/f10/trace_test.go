@@ -171,6 +171,8 @@ func fakeGH(t *testing.T, branch, view string) *ghFake {
 		f.calls = append(f.calls, key)
 
 		switch {
+		case key == strings.ReplaceAll(stateView, "%s", branch) && strings.HasPrefix(view, "ERR:"):
+			return shell.Result{Code: 1, Stderr: strings.TrimPrefix(view, "ERR:")}, nil
 		case key == strings.ReplaceAll(stateView, "%s", branch):
 			return shell.Result{Stdout: view}, nil
 		case key == "gh api user":
@@ -283,13 +285,33 @@ func TestTraceStateOffMakesNoHostCall(t *testing.T) {
 func TestTraceStateDeclines(t *testing.T) {
 	const branch = "DM-7/thing"
 
-	t.Run("a merged PR is refused", func(t *testing.T) {
+	t.Run("a merged PR is left alone", func(t *testing.T) {
 		repo := tracedRepo(t, branch, "on")
-		fakeGH(t, branch, `{"state":"MERGED","url":"https://gh/pr/9","body":"x","author":{"login":"me"}}`)
+		gh := fakeGH(t, branch, `{"state":"MERGED","url":"https://gh/pr/9","body":"x","author":{"login":"me"}}`)
 
-		_, _, err := runTraceVerb(t, repo, "state", "--step", "pr")
-		if err == nil || !strings.Contains(err.Error(), "is merged") {
-			t.Errorf("err = %v, want the PR's state", err)
+		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "pr")
+		if err != nil || gh.edited != "" || !strings.Contains(errOut, "is merged") {
+			t.Errorf("err %v, edited %q, stderr %q", err, gh.edited, errOut)
+		}
+	})
+
+	t.Run("no PR yet is a note", func(t *testing.T) {
+		repo := tracedRepo(t, branch, "on")
+		gh := fakeGH(t, branch, `ERR:no pull requests found for branch "DM-7/thing"`)
+
+		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "review", "--round", "1", "--open", "2")
+		if err != nil || gh.edited != "" || !strings.Contains(errOut, "no PR for DM-7/thing yet") {
+			t.Errorf("err %v, edited %q, stderr %q", err, gh.edited, errOut)
+		}
+	})
+
+	t.Run("any other host error is returned", func(t *testing.T) {
+		repo := tracedRepo(t, branch, "on")
+		fakeGH(t, branch, "ERR:rate limited")
+
+		if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr"); err == nil ||
+			!strings.Contains(err.Error(), "rate limited") {
+			t.Errorf("err = %v, want the host's words", err)
 		}
 	})
 

@@ -571,7 +571,10 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 		if in.traces {
 			var note string
 
-			description, note = lastState(ctx, in, name, description)
+			if description, note, err = lastState(ctx, in, name, description); err != nil {
+				return pull{}, nil, err
+			}
+
 			notes = appendNote(notes, note)
 		}
 
@@ -613,32 +616,51 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 // lastState leaves the PR body's hidden state block saying finish, the
 // last state before the merge, and returns the body as the host now holds
 // it. A failed read or write is a note, never a failed finish: the merge is
-// the work, the block a trace of it.
-func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string) {
+// the work, the block a trace of it. The one exception is a bundle whose
+// body cannot be read: settleRiders just rewrote its closing keywords, and
+// the fallback would close a rider the user kept.
+func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string, error) {
 	body, err := in.host.pullBody(ctx, branch)
-	if err != nil {
-		return fallback, "the PR body's state block was not rewritten: " + err.Error()
+
+	switch {
+	case err != nil && len(in.task.Riders()) > 0:
+		return "", "", err
+	case err != nil:
+		body = fallback
+	default:
+		body, err = putLastState(ctx, in, branch, body)
 	}
 
+	return body, stateNote(err), nil
+}
+
+// putLastState rewrites body's block for finish and writes it back when
+// it changed, returning the body the host holds afterwards.
+func putLastState(ctx context.Context, in finishInput, branch, body string) (string, error) {
 	out, err := trace.Rewrite(body, trace.Update{
 		Step:   "finish",
 		Task:   in.task.ID,
 		Riders: in.task.Riders(),
 		After:  branchAfter(ctx, in.main, branch),
 	})
-	if err != nil {
-		return body, "the PR body's state block was not rewritten: " + err.Error()
-	}
-
-	if out == body {
-		return body, ""
+	if err != nil || out == body {
+		return body, err
 	}
 
 	if err := in.host.editPullBody(ctx, branch, out); err != nil {
-		return body, "the PR body's state block was not rewritten: " + err.Error()
+		return body, err
 	}
 
-	return out, ""
+	return out, nil
+}
+
+// stateNote is the report's line for a state block left as it was.
+func stateNote(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	return "the PR body's state block was not rewritten: " + err.Error()
 }
 
 // mergeBody is what the host's commit says under its subject: the request's

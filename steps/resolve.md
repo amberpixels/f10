@@ -65,11 +65,11 @@ Settle every file the same way, whoever wrote it: what the block says is wrong, 
       A run stopping on a waiting `ask` sets the failure status and posts no comment; the resolve that settles the ask sets the status again and posts the comment.
     - Both read as the user's own: findings by title, never an id, a round or the findings file (`conventions/context.md`).
       A failed post after a pushed fix is `partial` (`conventions/failure.md` rule 7); before posting again, check the PR's comments for one already up.
-11. **Rewrite the state block** (`traces: on`, an open PR or MR on the branch; `docs/traces.md`), every resolve, with the verdicts written and any fix pushed: `f10 trace state --step resolve --round <n> --open <n> --asks <n>`.
+11. **Rewrite the state block** (`docs/traces.md`), every resolve, with the verdicts written and any fix pushed: `f10 trace state --step resolve --round <n> --open <n> --asks <n>`.
     `--open` counts the findings whose last verdict is missing or `ask`, both files in round two.
     `--asks` counts the questions waiting on a person: findings parked for a remote answer (point 7) and a driven ask raised this run; an ask held for round two is open, not yet asked.
     In a driven run the call goes right before `f10-state.sh set ... blocked`, and the resolve that resumes on the answer passes both counts back down.
-    Nothing with `traces: off`; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
+    Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 12. **Report** per `conventions/report.md`: a `findings` row, a `commit` row when point 9 committed, a `status` row (the sha and its state) and a `comment` row (its url) when point 10 posted, then the verdict counts, what the fixes changed, and which asks were answered.
 
 **On failure:** red verify after a fix, a findings file naming a task this checkout lacks, or a malformed file: report and stop, keeping the verdicts written so far.

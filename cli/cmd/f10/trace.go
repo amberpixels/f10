@@ -134,9 +134,11 @@ func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) 
 }
 
 // runTraceState rewrites the block in the branch's open PR body, or puts
-// it into --body-file. The PR must be open and the user's own: another
-// author's body is left alone with a note, since the status and comment
-// traces read as the user's own but an edited description does not.
+// it into --body-file. No PR yet, one no longer open, or one someone else
+// opened is a note and exit 0, so every step calls it the same way and
+// nothing about the PR has to be checked by hand first: an edited
+// description is the author's, where a status or a comment reads as the
+// user's own on any PR.
 func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
@@ -175,12 +177,18 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	p, err := h.pull(ctx, branch)
-	if err != nil {
-		return err
-	}
 
-	if p.status() != pullOpen {
-		return fmt.Errorf("no open PR for %s: %s is %s", branch, p.url(), p.status())
+	switch {
+	case noPull(err):
+		fmt.Fprintf(errWriter(cmd), "f10: no PR for %s yet: no state to write\n", branch)
+
+		return nil
+	case err != nil:
+		return err
+	case p.status() != pullOpen:
+		fmt.Fprintf(errWriter(cmd), "f10: %s is %s: its body is left alone\n", p.url(), p.status())
+
+		return nil
 	}
 
 	login, err := h.login(ctx)
@@ -208,6 +216,18 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return h.editPullBody(ctx, branch, out)
+}
+
+// noPull reports the host CLI's own "no request for this branch", in
+// gh's and glab's words; any other error is the caller's to return.
+func noPull(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := err.Error()
+
+	return strings.Contains(msg, "no pull requests found") || strings.Contains(msg, "no open merge request")
 }
 
 // putStateInFile writes the block into the drafted body at file, its

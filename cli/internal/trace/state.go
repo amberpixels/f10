@@ -58,8 +58,9 @@ var (
 var blockRe = regexp.MustCompile(`<!--[ \t]*state[ \t]+(\{.*?\})[ \t]*-->`)
 
 // ParseState reads the first block a body holds. No block, JSON that does
-// not parse, or a version other than StateVersion is no state, never an
-// error: a body nobody controlled is still read. Unknown keys are ignored.
+// not parse, a version other than StateVersion, or a count below zero is
+// no state, never an error: a body nobody controlled is still read.
+// Unknown keys are ignored.
 func ParseState(body string) (State, bool) {
 	spans := stateSpans(body)
 	if len(spans) == 0 {
@@ -70,6 +71,12 @@ func ParseState(body string) (State, bool) {
 
 	var s State
 	if err := json.Unmarshal([]byte(m[1]), &s); err != nil || s.V != StateVersion {
+		return State{}, false
+	}
+
+	// a count below zero is a block nobody rendered: RenderState would
+	// refuse it, and carrying it would refuse every rewrite after
+	if s.Round < 0 || s.Open < 0 || s.Asks < 0 {
 		return State{}, false
 	}
 

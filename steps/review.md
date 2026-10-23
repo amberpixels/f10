@@ -82,9 +82,9 @@ It spawns **one fresh `general-purpose` agent, never `fork`, which inherits the 
 The reviewer writes the file and returns a one-paragraph summary: verdict and count per category.
 The main agent checks the header (and, in round two, a status for every prior id) and relays the summary unchanged.
 
-**The state block** (`traces: on`, an open PR or MR on the branch): with the file on disk, `f10 trace state --step review --round <n> --open <count>`.
+**The state block** (`docs/traces.md`): with the file on disk, `f10 trace state --step review --round <n> --open <count>`.
 The count is the findings awaiting a verdict: this round's, plus a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`); a clean round passes `--open 0`.
-Nothing with `traces: off`; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
+Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 The remote half writes the same block once its file is on disk (point 4 below).
 
 **The brief:**

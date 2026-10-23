@@ -79,7 +79,7 @@ A `pr` refresh that drafts the description from scratch puts the block into the 
 - `judge` after the PR; a driven rethink raises `asks` until its answer.
 - `f10 finish`, with `step: finish` just before the merge: the last state the PR keeps.
 
-A PR someone else opened is never rewritten.
+A branch with no PR yet, a PR no longer open, or one someone else opened is left alone: the command says so and exits 0, so a step calls it without checking the PR first.
 
 **The commit never carries it.**
 The squash or merge commit `f10 finish` lands takes the PR's description with the block stripped out: the block describes the PR, the trailers describe the commit.
@@ -100,9 +100,8 @@ A reader parses a whole commit message leniently, since a squash merge concatena
 A reader of a PR body takes the first `<!-- state {...} -->` it holds, the marker's spaces free, and reads the JSON:
 
 - A block inside a fenced code block or a backtick span is text, not the state: a body quoting this spec keeps its example.
-- No block, JSON that does not parse, or a `v` other than `1` is no state, never an error.
+- No block, JSON that does not parse, a `v` other than `1`, or a count below zero is no state, never an error.
 - A key the reader does not know is ignored; a key missing is its zero.
-- A trailing carriage return before the marker's end is ignored.
 
 ## Conformance
 
@@ -111,7 +110,7 @@ A reader passes when every `.msg` parses to its `.json`.
 The set at version 1 covers a plain commit, a bundle, a resolve fix, a squash of two commits with trailers mid-body, a squash whose body is a PR description ending in `Task:`, a message with no trailers, lowercase keys, CRLF line ends, a `Review:` with an unknown pair and a non-integer, one id spelled in two cases, and blank values.
 
 `cli/internal/trace/testdata/state/<name>.md` is a PR body as the host returns it; `<name>.json` is the state it yields, or `null` for no state.
-The set at version 1 covers a block at the end, one mid-body, no block, malformed JSON, another version, CRLF line ends, an unknown key, a bundle with riders and a base, two blocks, the smallest block, a marker with extra spaces, a block naming no task, a fenced example beside the block, and a fenced example alone.
+The set at version 1 covers a block at the end, one mid-body, no block, malformed JSON, another version, CRLF line ends, an unknown key, a bundle with riders and a base, two blocks, the smallest block, a marker with extra spaces, a block naming no task, a fenced example beside the block, a fenced example alone, and a count below zero.
 
 ## Changing this spec
 

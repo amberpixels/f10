@@ -203,6 +203,30 @@ func TestFinishStateBlockFailureIsANote(t *testing.T) {
 	}
 }
 
+// A bundle's body was just rewritten to keep a rider open, so a body the
+// host will not hand back stops the finish: the stale one would close it.
+func TestFinishStateBlockFailureStopsABundle(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.traces = true
+	fx.in.method = "squash"
+	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.f.answers["gh pr view GH-1 --json body"] = []shell.Result{
+		{Stdout: `{"body":"Closes #1\nCloses #2"}`},
+		{Code: 1, Stderr: "rate limited"},
+	}
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "rate limited") {
+		t.Errorf("err = %v, want the host's words", err)
+	}
+
+	if fx.f.called("gh pr merge") {
+		t.Errorf("merged on a stale body:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+}
+
 func TestMergeBody(t *testing.T) {
 	bundle := finishInput{traces: true, task: ref.Ref{ID: "GH-1", Bundle: []string{"GH-1", "GH-2"}}}
 	described := "  Adds the thing.\n"
