@@ -933,7 +933,7 @@ func TestReviewTriggerGlabSpelling(t *testing.T) {
 	rf := stickyFacts()
 	rf.Trigger, rf.TriggerHow = facts.TriggerManual, "comment `@claude` on the MR"
 
-	rv, err := newReviewer(t.Context(), host{name: "glab", dir: "."}, rf, "")
+	rv, err := newReviewer(t.Context(), newHost("glab", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}

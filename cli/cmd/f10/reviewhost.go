@@ -460,7 +460,7 @@ func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, err
 	}
 
 	path := rv.issuePath("issues/" + rv.pull.Number + "/comments")
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		path = rv.mrPath("notes")
 	}
 
@@ -470,7 +470,7 @@ func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, err
 		CreatedAt time.Time `json:"created_at"`
 	}
 
-	if err := rv.h.decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+text); err != nil {
+	if err := rv.h.Decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+text); err != nil {
 		return "", "", time.Time{}, err
 	}
 
@@ -488,11 +488,11 @@ func (rv *reviewer) requestReview(ctx context.Context, login string) (string, st
 		"api", "-X", "POST", rv.issuePath("pulls/" + rv.pull.Number + "/requested_reviewers"),
 		"-f", "reviewers[]=" + login,
 	}
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		args = []string{"mr", "update", rv.pull.Number, "--reviewer", "+" + login}
 	}
 
-	if _, err := rv.h.run(ctx, args...); err != nil {
+	if _, err := rv.h.Run(ctx, args...); err != nil {
 		return "", "", time.Time{}, err
 	}
 
