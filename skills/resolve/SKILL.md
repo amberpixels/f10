@@ -29,4 +29,4 @@ Running `/f10:resolve ci` authorizes the `f10 review ack` and `f10 review settle
 
 **Exit**
 - Stop once the verdicts are written, verify is green, and the fixes are landed or left as point 9 says.
-- Next: `/f10:review`, when nothing is left to settle.
+- Next: `/f10:finish <id> --merge` when nothing is left to settle and a PR is open; `/f10:review` only when the review step's **Rounds** calls for round two.

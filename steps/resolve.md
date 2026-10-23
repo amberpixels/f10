@@ -63,7 +63,7 @@ It never waits for one: `/f10:review ci` does.
    If the file's `reviewer:` is not `local` and `project.md → Review` names who answers there, the `ask` goes to them on the review and the finding waits: a normal end, badge `partial` on `review` (`conventions/failure.md` rule 7), a `note` naming the finding and `/f10:resolve`.
    No later pipeline step runs until a later `/f10:resolve` rewrites the parked verdict with the answer; the review step never reads a reply.
    Otherwise every `ask` goes to the user in **one `AskUserQuestion`**, a question per finding, the reviewer's fix first unless the task contradicts it (then skip first, citing the ask).
-   It fires at the end of the entry's **last** resolve: standalone, this one; in a pipeline, a resolve that recorded a `fix` holds its asks for round two, which asks for both rounds.
+   It fires at the end of the entry's **last** resolve: standalone, this one; in a pipeline, a resolve that opens round two (`steps/review.md` → Rounds) holds its asks for it, and round two asks for both rounds.
    Calls split by the tool's per-call limit still count as one checkpoint.
    Apply answers as `fix` or `skip`, re-verify after fixes, and rewrite each answered `verdict:` with the user's words on `reason:`.
    A fix chosen here is verified, not re-reviewed.
@@ -75,7 +75,7 @@ It never waits for one: `/f10:review ci` does.
    Outward-facing, under the run's authorization.
    With `traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.
    With no open PR or MR, the fixes stay in the working tree for the pipeline's next step (`pr`, `push`, `commit`) or the user.
-10. **Leave the trace** when the frontmatter says `traces: on`, the branch has an open PR or MR, the file's `reviewer:` is `local`, and this is the entry's last resolve (point 7's rule: a pipeline resolve that recorded a `fix` holds its trace for round two, which covers both rounds).
+10. **Leave the trace** when the frontmatter says `traces: on`, the branch has an open PR or MR, the file's `reviewer:` is `local`, and this is the entry's last resolve (point 7's rule: a pipeline resolve that opens round two holds its trace for it, which covers both rounds).
     The trace follows point 9's choice: fixes not pushed, nothing posted.
     In round two the counts and the comment cover both files, each finding at its last verdict, round one's skip reasons included.
     - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean and is the PR's head (`gh pr view --json headRefOid` / `glab mr view`); any other sha gets no status, and the report says why: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='review (local)' -f description='<counts>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='review (local)' -f description='<counts>'`.

@@ -179,6 +179,40 @@ func parseArrives(value string) string {
 	return ""
 }
 
+// The manual triggers `f10 review trigger` can perform: a comment on the
+// request, or a review requested from a login.
+const (
+	ManualComment = "comment"
+	ManualRequest = "request"
+)
+
+// ManualAction reads the manual how as the kind and its text: a comment
+// posting the first code span (`comment `@claude review“), or a review
+// requested from the span's login. Both need the code span: a request to a
+// word guessed from prose would reach a real account. false when the
+// trigger is not manual or the how reads as neither.
+func (r Review) ManualAction() (string, string, bool) {
+	if !strings.Contains(r.Trigger, TriggerManual) {
+		return "", "", false
+	}
+
+	lower := strings.ToLower(r.TriggerHow)
+	span := ""
+
+	if m := codeSpanRE.FindStringSubmatch(r.TriggerHow); m != nil {
+		span = strings.TrimSpace(m[1])
+	}
+
+	switch {
+	case strings.Contains(lower, "comment") && span != "":
+		return ManualComment, span, true
+	case strings.Contains(lower, "request") && span != "":
+		return ManualRequest, strings.TrimPrefix(span, "@"), true
+	}
+
+	return "", "", false
+}
+
 // parseTrigger reads `automatic, on open and on push` or `manual, comment
 // `@claude“: the kind words, then whatever follows as the human's how.
 func parseTrigger(value string) (string, string) {

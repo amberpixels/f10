@@ -1,21 +1,21 @@
 ---
 name: review
 description: "f10 review skill - a blind local review of a change into a findings file; with ci, reads in the remote review on the PR or MR. Use when the user says \"/f10:review <task-id | PR | this branch> [ci]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, or wants the CI review's findings read in. Settling the findings is /f10:resolve."
-allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion
+allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion, Skill
 argument-hint: "<task-id | PR | this branch> [ci]"
 ---
 
 # f10 · review
 
 `/f10:resolve` settles the findings; `/f10:judge` is the verdict on the shape.
-Running `/f10:review ci` authorizes the `f10 review ack` the remote half makes.
+Running `/f10:review ci` authorizes the `f10 review ack` and `f10 review trigger` the remote half makes.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- `ci`: strip it and run the step's remote half.
+- `ci`: strip it and run the step's remote half; standalone, it reads the latest CI review in, triggers a new one, or hands it to `/f10:resolve <id> ci`.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here** paragraph reads it.
 - No argument: the current branch against its base.
   Say in one line which branch and base you took, then start.
@@ -25,5 +25,5 @@ Running `/f10:review ci` authorizes the `f10 review ack` the remote half makes.
 2. Follow the **review** step it prints.
 
 **Exit**
-- Stop once the findings file is written.
+- Stop once the findings file is written, or once the `/f10:resolve` it handed off to ends.
 - Next: `/f10:resolve`.

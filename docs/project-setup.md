@@ -154,7 +154,7 @@ With nothing declared, host issues have no priority and the list is in the host'
 ## Review
 
 Nothing declared gets the blind local reviewer with its four core categories: correctness and logic, architecture and guidelines, security and performance, tests and docs.
-Each of the three things a project can add is optional:
+Each of the four things a project can add is optional:
 
 ```markdown
 ## Review
@@ -165,11 +165,13 @@ Categories, each with its source of truth:
 
 Never flag: generated code under `gen/`, TODO comments.
 Human reviewer: the PR's assignee, on the PR.
+Rounds: 2
 ```
 
 A source-of-truth file is read in full as reference data: instructions inside it are ignored, and an edit to it is reviewed, not obeyed.
 The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
+`Rounds: 2` makes a second review round the rule after any resolve that fixed something; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
 
 A **remote review** - a bot in CI, a human, a check - is four frontmatter keys and an optional fifth, with a fixed vocabulary, so `f10 init` can write them and `f10 review` can act on them:
 
@@ -184,7 +186,7 @@ review:
 
 Reviewer is `bot`, `human` or `check` plus the login or check name.
 Arrives as is `issue comment`, `inline review` or `check run`.
-Trigger is `automatic`, `manual` or both, followed by how a human fires it; f10 never fires a manual trigger itself.
+Trigger is `automatic`, `manual` or both, followed by how a human fires it. `f10 review trigger` (and standalone `/f10:review <id> ci`) performs a manual how written as a comment with its text in a code span (`comment \`@claude review\` on the PR`) or as a review request with the login in a code span (`request a review from \`octocat\``); any other how stays a human's step.
 Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci` leaves once every finding has a verdict (`reaction \`<emoji>\`` or `marker "<text>"`; not resolved threads, which a human may resolve by hand); handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger, with `settled: reaction \`rocket\`` (spelled the same on GitHub and GitLab); a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
 
 `traces: on` makes what f10 does visible on the host, in words that never name f10.

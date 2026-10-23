@@ -140,7 +140,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   A project adds categories under `project.md → Review`, each with a source-of-truth file, plus what never to flag.
   `resolve` gives each finding `fix`, `skip` or `ask` (`+note` for a code comment, `+reply` to answer the reviewer), re-verifies, and puts every `ask` to you in one questionnaire.
   Your stated choice beats the reviewer.
-  A second round reports on every prior finding first; there is no third, and what is still open goes to you.
+  One round is the default: a second runs only when round one fixed six or more findings, when `project.md → Review` says `Rounds: 2`, or when you ask for it. It reports on every prior finding first; there is no third, and what is still open goes to you.
   A `review` entry in a ship pipeline runs both halves.
 - **Demo** - *what was built*, before you merge code you did not write: what changed in plain words, then a **demo script** it runs for screenshots and a local `report.html`, or (`--hands-on`) seeds the state and hands you the running app.
   The executor is declared, never guessed: a project without a `demo` overlay gets one proposed from its e2e config, dev-server recipe, seed task and test user, written to `.f10/instructions/demo.md`, along with where reports go: a local file, a private published page, or both (`--publish` / `--local` per run).
@@ -197,7 +197,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   Fetch settles the areas; the plan file records the roles for ship.
 - **Adapter** - how a capability ("fetch a task", "open a PR", "verify") binds per project: a skill or a CLI command. f10 names the capability; the project supplies the adapter.
 - **Review** - local (pre-PR) or CI/human (post-PR), placed or omitted per pipeline; no review entry means ship stops at the PR.
-  A remote review is four facts under `project.md → Review` (who posts it, where it arrives, what triggers it, what marks it done and handled), plus the mark a settled review gets, inferred by `f10 init` from a Claude Code review workflow and acted on by `f10 review pick|wait|ack|settle`; `/f10:resolve <id> ci` reads the latest one in, settles it and marks it. f10 never fires a manual trigger.
+  A remote review is four facts under `project.md → Review` (who posts it, where it arrives, what triggers it, what marks it done and handled), plus the mark a settled review gets, inferred by `f10 init` from a Claude Code review workflow and acted on by `f10 review pick|wait|ack|settle|trigger`; `/f10:review <id> ci` reads the latest one in, triggers a new one or hands it to `/f10:resolve <id> ci`, which reads it in, settles it and marks it.
   A declared human reviewer answers asks on a remote review; a local round's asks come to you.
 - **Visibility** - `stealth` (default) or `public`.
   Stealth work reads as if f10 never existed: no mentions in commits, PRs, tickets or code comments, `.f10/` untracked via `.git/info/exclude`.
@@ -376,7 +376,7 @@ f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
 f10 demo open            # the demo report for it, in the browser
 f10 pr open [n]          # a PR or MR, or with no number their list; gh or glab decided by the remote
-f10 review pick|wait|ack|settle # the remote review on that PR: read it, await it, mark it handled, then settled
+f10 review pick|wait|ack|settle|trigger # the remote review on that PR: read it, await it, mark it handled, then settled, or ask for one
 f10 status               # where the run is: this session's, or this repo's live ones
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
 f10 board                # where every task stands: done, in progress with its stage and next action, next
