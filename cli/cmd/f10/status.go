@@ -58,9 +58,29 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
 		}
 
-		in, err := taskStatusFor(ctx, cmd, token)
+		t, err := targetFor(ctx, cmd)
 		if err != nil {
 			return err
+		}
+
+		id, suffix := ref.SplitSuffix(token)
+
+		r, err := t.reference(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		in, rows, err := routeTask(cmd.ErrWriter, taskRoute{
+			status:   func() (taskStatusInput, error) { return taskStatusFor(ctx, t, r, suffix) },
+			children: func() ([]taskRow, error) { return parentRows(ctx, t, r) },
+			finished: func() (*taskRow, error) { return finishedRow(ctx, t, r.Head()) },
+		})
+		if err != nil {
+			return err
+		}
+
+		if in == nil {
+			return writeTaskRows(cmd, rows)
 		}
 
 		live, err := state.List(dir, now, state.TTL())
@@ -74,7 +94,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		runs, others = taskRuns(inRoot(live, in.root), in.id)
 
 		if len(runs) == 0 {
-			fb := taskFallback(ctx, in, others)
+			fb := taskFallback(ctx, *in, others)
 
 			if cmd.Bool("json") {
 				return encodeJSON(cmd.Writer, fb)
@@ -156,21 +176,53 @@ type taskStatusInput struct {
 	host   *host  // nil without a host CLI: no PR row
 }
 
-// taskStatusFor resolves the task to its checkout. A task with no branch,
-// or a branch checked out nowhere, has no run to read.
-func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskStatusInput, error) {
-	t, err := targetFor(ctx, cmd)
-	if err != nil {
-		return taskStatusInput{}, err
+// taskRoute is what `status <id>` can report on a task, read lazily.
+type taskRoute struct {
+	status   func() (taskStatusInput, error)
+	children func() ([]taskRow, error)
+	finished func() (*taskRow, error)
+}
+
+// routeTask reads the task's own checkout first, so a task with a run never
+// waits on the host. With no run to read, a parent reports its children
+// and a finished task its done row; anything else keeps the error.
+func routeTask(warn io.Writer, rt taskRoute) (*taskStatusInput, []taskRow, error) {
+	in, err := rt.status()
+	if !errors.Is(err, errNoRunToRead) {
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return &in, nil, nil
 	}
 
-	id, suffix := ref.SplitSuffix(token)
+	rows, cerr := rt.children()
 
-	r, err := t.reference(ctx, id)
-	if err != nil {
-		return taskStatusInput{}, err
+	switch {
+	case cerr == nil && len(rows) > 0:
+		return nil, rows, nil
+	case cerr != nil && !errors.Is(cerr, errNoParentLink):
+		fmt.Fprintf(warn, "f10: reading the subtasks: %v\n", cerr)
 	}
 
+	row, ferr := rt.finished()
+	if ferr != nil {
+		return nil, nil, ferr
+	}
+
+	if row == nil {
+		return nil, nil, err
+	}
+
+	return nil, []taskRow{*row}, nil
+}
+
+// errNoRunToRead is a task with no branch, or a branch checked out
+// nowhere: no run to read, though a finished one still reports.
+var errNoRunToRead = errors.New("no run to read")
+
+// taskStatusFor resolves the task to its checkout.
+func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (taskStatusInput, error) {
 	// a bundle's run, plan and branch are its lead's
 	r = r.Head()
 
@@ -182,9 +234,9 @@ func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskSta
 	case err != nil:
 		return taskStatusInput{}, err
 	case name == "":
-		return taskStatusInput{}, fmt.Errorf("%s has no branch here: no run to read", r.ID)
+		return taskStatusInput{}, fmt.Errorf("%s has no branch here: %w", r.ID, errNoRunToRead)
 	case path == "":
-		return taskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: no run to read", name)
+		return taskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: %w", name, errNoRunToRead)
 	}
 
 	in := taskStatusInput{
@@ -275,6 +327,17 @@ func (fb fallback) render(w io.Writer, limit int) {
 	if fb.PR != "" {
 		headerRow(w, "pr", fb.PR+" ("+fb.PRState+")", limit, plain)
 	}
+}
+
+// writeTaskRows prints task rows, or encodes them under --json.
+func writeTaskRows(cmd *cli.Command, rows []taskRow) error {
+	if cmd.Bool("json") {
+		return encodeJSON(cmd.Writer, rows)
+	}
+
+	renderRows(cmd.Writer, rows, termWidth(cmd.Writer))
+
+	return nil
 }
 
 func encodeJSON(w io.Writer, v any) error {

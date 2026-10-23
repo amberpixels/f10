@@ -58,7 +58,9 @@ type tracker struct {
 	// children is the task's open subtasks; nil, like errNoParentLink, is a
 	// tracker with no parent link
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
-	archive  []string // the dirs finish moves a finished task's plan into
+	// allChildren is children with the closed ones kept, for status
+	allChildren func(ctx context.Context, task ref.Ref) ([]childRow, error)
+	archive     []string // the dirs finish moves a finished task's plan into
 }
 
 // tracker binds the lookups to this target: the driver's `read` for the
@@ -107,14 +109,18 @@ func (t *target) tracker() tracker {
 		archive: []string{archive},
 	}
 
-	tr.children = func(ctx context.Context, task ref.Ref) ([]childRow, error) {
-		raw, err := t.rawChildren(ctx, task)
-		if err != nil {
-			return nil, err
-		}
+	children := func(keepClosed bool) func(context.Context, ref.Ref) ([]childRow, error) {
+		return func(ctx context.Context, task ref.Ref) ([]childRow, error) {
+			raw, err := t.rawChildren(ctx, task)
+			if err != nil {
+				return nil, err
+			}
 
-		return shapeChildren(ctx, tr, main, raw)
+			return shapeChildren(ctx, tr, main, raw, keepClosed)
+		}
 	}
+
+	tr.children, tr.allChildren = children(false), children(true)
 
 	return tr
 }

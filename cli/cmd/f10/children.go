@@ -160,13 +160,15 @@ func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, err
 	return h.subIssues(ctx, task.Number)
 }
 
-// shapeChildren drops closed rows, resolves each id and After: base to the
-// project's format, marks the finished ones and puts them in tree order.
-func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild) ([]childRow, error) {
+// shapeChildren drops closed rows unless keepClosed, resolves each id and
+// After: base to the project's format, marks the finished ones and puts them
+// in tree order. A kept closed row is finished.
+func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild, keepClosed bool) ([]childRow, error) {
 	rows := []childRow{}
 
 	for _, c := range raw {
-		if strings.EqualFold(c.State, "closed") {
+		closed := strings.EqualFold(c.State, "closed")
+		if closed && !keepClosed {
 			continue
 		}
 
@@ -189,6 +191,13 @@ func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild)
 			}
 
 			row.After = base.ID
+		}
+
+		if closed {
+			row.Finished = true
+			rows = append(rows, row)
+
+			continue
 		}
 
 		branched, err := hasTaskBranch(ctx, main, r.ID)

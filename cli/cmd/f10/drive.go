@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -130,6 +131,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		plansDir: t.sharedPlansDir(),
 		settings: claudeSettingsPath(),
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		record:   recordAt,
 		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -348,6 +350,8 @@ type driveInput struct {
 	ttl      time.Duration
 	now      func() time.Time
 	sleep    func(context.Context, time.Duration) error
+	// record puts an event in the ledger, placed in dir; nil records nothing
+	record func(ctx context.Context, dir string, e ledger.Event)
 
 	answer  string            // a bare --answer, until the first task stopped on a question takes it
 	answers map[string]string // --answer ID=text, by task id, until that task takes it
@@ -372,6 +376,11 @@ type driveResult struct {
 	row   string
 	code  int
 	lines []string
+	// skill and reason name a halt, for the ledger
+	skill  string
+	reason string
+	// fromRun is a halt the run itself reported, already in the ledger
+	fromRun bool
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -440,7 +449,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	for _, i := range order {
 		r := &driveRun{task: tasks[i]}
 		if r.task.finished {
-			in.end(w, r, driveResult{row: "already finished"})
+			in.end(ctx, w, r, driveResult{row: "already finished"})
 		}
 
 		runs = append(runs, r)
@@ -981,7 +990,7 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 // first.
 func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
 	if r.pos >= len(in.chain) {
-		in.end(w, r, driveResult{row: "done: " + strings.Join(in.chain, " ")})
+		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(in.chain, " ")})
 
 		return nil
 	}
@@ -990,7 +999,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	if skill == "finish" && !in.landed(ctx, r) {
 		if res := in.readyToMerge(ctx, w, r); res != nil {
-			in.end(w, r, *res)
+			in.end(ctx, w, r, *res)
 
 			return nil
 		}
@@ -1000,7 +1009,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	case in.landed(ctx, r):
 		skill = "catchup"
 	case skill == "finish":
-		in.end(w, r, in.runFinish(ctx, w, r.task))
+		in.end(ctx, w, r, in.runFinish(ctx, w, r.task))
 
 		return nil
 	}
@@ -1114,6 +1123,17 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 		return halted(id, "finish", err.Error())
 	}
 
+	// finish runs in this process, where no hook sees it
+	if in.record != nil {
+		in.record(ctx, in.main, ledger.Event{
+			At:      in.now(),
+			Task:    id,
+			Kind:    ledger.TaskFinished,
+			Source:  ledger.Observed,
+			Payload: ledger.NewPayload(ledger.Payload{"args": []any{id}}),
+		})
+	}
+
 	return driveResult{row: "finished"}
 }
 
@@ -1174,7 +1194,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
-			in.end(w, r, in.verdict(r.task, skill, run))
+			in.end(ctx, w, r, in.verdict(r.task, skill, run))
 
 			return nil
 		}
@@ -1187,7 +1207,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	default:
 		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
 		if err := refuseStalled(fwd, ws, herdr.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
-			in.end(w, r, halted(id, skill, err.Error()))
+			in.end(ctx, w, r, halted(id, skill, err.Error()))
 
 			return nil
 		}
@@ -1254,7 +1274,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 	default:
 		// Herdr shows no agent yet: the start window bounds this wait too
 		if !r.begun && now.Sub(r.sentAt) > startWindow {
-			in.end(w, r, halted(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
+			in.end(ctx, w, r, halted(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
 				"check its pane, then rerun this drive", workspaceName(ws), startWindow)))
 		}
 
@@ -1263,8 +1283,13 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 
 	if !r.begun && !recent {
 		if now.Sub(r.sentAt) > startWindow {
-			in.end(w, r, halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
-				workspaceName(ws), startWindow)))
+			in.end(
+				ctx,
+				w,
+				r,
+				halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
+					workspaceName(ws), startWindow)),
+			)
 		}
 
 		return nil
@@ -1273,7 +1298,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 	r.begun = true
 
 	if recent && stoppedRun(run) {
-		in.end(w, r, in.verdict(r.task, skill, run))
+		in.end(ctx, w, r, in.verdict(r.task, skill, run))
 
 		return nil
 	}
@@ -1286,9 +1311,14 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 		}
 
 		if now.Sub(r.idleSince) >= stallGrace {
-			in.end(w, r, halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
-				"it stopped without reporting, answer it in that pane", herdr.AgentName(id, r.task.suffix, r.o.path),
-				workspaceName(ws), skill, run.PhaseText(skill))))
+			in.end(
+				ctx,
+				w,
+				r,
+				halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
+					"it stopped without reporting, answer it in that pane", herdr.AgentName(id, r.task.suffix, r.o.path),
+					workspaceName(ws), skill, run.PhaseText(skill))),
+			)
 		}
 
 		return nil
@@ -1298,7 +1328,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
-			in.end(w, r, halted(id, skill, "the catchup did not end clean: "+reason))
+			in.end(ctx, w, r, halted(id, skill, "the catchup did not end clean: "+reason))
 
 			return nil
 		}
@@ -1371,6 +1401,8 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 	}
 
 	res := halted(id, skill, reason)
+	res.fromRun = true
+
 	if run.Next != "" {
 		res.lines = append(res.lines, "next: "+run.Next)
 	}
@@ -1379,9 +1411,14 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 }
 
 // end ends the task with res and prints it now: a halt or an ask found
-// mid-drive is on screen when it happens, not only in the final report.
-func (*driveInput) end(w io.Writer, r *driveRun, res driveResult) {
+// mid-drive is on screen when it happens, not only in the final report. A
+// halt also goes to the ledger, where status reads it after the drive exits.
+func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
 	r.end = &res
+
+	if res.code == exitHalted && !res.fromRun {
+		in.recordHalt(ctx, r, res)
+	}
 
 	if len(res.lines) == 0 {
 		fmt.Fprintf(w, "%s: %s\n", r.task.ref.ID, res.row)
@@ -1396,10 +1433,37 @@ func (*driveInput) end(w io.Writer, r *driveRun, res driveResult) {
 
 func halted(id, skill, reason string) driveResult {
 	return driveResult{
-		row:   "halted at " + skill,
-		code:  exitHalted,
-		lines: []string{fmt.Sprintf("%s halted at %s: %s", id, skill, reason)},
+		row:    "halted at " + skill,
+		code:   exitHalted,
+		lines:  []string{fmt.Sprintf("%s halted at %s: %s", id, skill, reason)},
+		skill:  skill,
+		reason: reason,
 	}
+}
+
+// recordHalt puts a halt drive found itself, an idle agent or a refused
+// finish, in the ledger against the task, placed in its worktree when it
+// has one.
+func (in *driveInput) recordHalt(ctx context.Context, r *driveRun, res driveResult) {
+	if in.record == nil {
+		return
+	}
+
+	in.record(ctx, cmp.Or(r.o.path, in.main), ledger.Event{
+		At:      in.now(),
+		Task:    r.task.ref.ID,
+		Kind:    ledger.TaskHalted,
+		Source:  ledger.Observed,
+		Payload: ledger.NewPayload(ledger.Payload{"skill": res.skill, "reason": res.reason}),
+	})
+}
+
+// recordAt records e in the ledger, placed where dir is.
+func recordAt(ctx context.Context, dir string, e ledger.Event) {
+	place := ledger.Where(ctx, dir)
+	e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, place.Branch
+
+	ledger.Record(ctx, ledger.BusyAsync, e)
 }
 
 // stoppedRun reports whether any phase halted: blocked, failed or partial.

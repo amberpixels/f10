@@ -231,3 +231,30 @@ func TestOpenSubtasks(t *testing.T) {
 		})
 	}
 }
+
+// Drive and `task children` drop a closed child; status keeps it, finished,
+// in tree order under its base.
+func TestShapeChildrenKeepsClosedForStatus(t *testing.T) {
+	tr := tracker{resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
+		return ref.Lookup{Prefix: "FT"}.Find(ctx, tok)
+	}}
+	raw := []rawChild{
+		{ID: "FT-2", Title: "second", State: "closed", After: "FT-1"},
+		{ID: "FT-1", Title: "first", State: "CLOSED"},
+	}
+
+	dropped, err := shapeChildren(t.Context(), tr, t.TempDir(), raw, false)
+	if err != nil || len(dropped) != 0 {
+		t.Fatalf("drive's rows = %+v, %v; want none", dropped, err)
+	}
+
+	kept, err := shapeChildren(t.Context(), tr, t.TempDir(), raw, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(kept) != 2 || kept[0].ID != "FT-1" || kept[1].ID != "FT-2" || kept[1].Depth != 1 ||
+		!kept[0].Finished || !kept[1].Finished {
+		t.Errorf("status rows = %+v, want FT-1 then FT-2 under it, both finished", kept)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -408,6 +409,9 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
+	// the run's own stop is in the ledger as its claims already
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
+
 	err := fx.drive(t)
 	if exitCode(err) != exitHalted {
 		t.Fatalf("err = %v, want exit %d", err, exitHalted)
@@ -436,6 +440,16 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() { fx.writeRun(t, "running", "implement", "", "") }
 
+	var recorded []ledger.Event
+
+	fx.in.record = func(_ context.Context, dir string, e ledger.Event) {
+		if dir != "/code/repo.GH-1" {
+			t.Errorf("halt placed in %s, want the task's worktree", dir)
+		}
+
+		recorded = append(recorded, e)
+	}
+
 	err := fx.drive(t)
 	if exitCode(err) != exitHalted {
 		t.Fatalf("err = %v, want exit %d", err, exitHalted)
@@ -443,6 +457,17 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 
 	if !strings.Contains(fx.out.String(), "stopped without reporting") || !strings.Contains(fx.out.String(), "GH-1") {
 		t.Errorf("output = %s", fx.out.String())
+	}
+
+	// the halt outlives the drive: status reads it from the ledger
+	if len(recorded) != 1 {
+		t.Fatalf("recorded %d events, want one halt", len(recorded))
+	}
+
+	e := recorded[0]
+	if reason, _ := e.Payload.Val["reason"].(string); e.Kind != ledger.TaskHalted || e.Task != "GH-1" ||
+		e.Payload.Val["skill"] != "ship" || !strings.Contains(reason, "stopped without reporting") {
+		t.Errorf("halt event %+v", e)
 	}
 
 	if fx.sleeps < int(stallGrace/defaultEvery) {
@@ -1044,8 +1069,21 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 		unopened, all("idle", ids...), // GH-15's open, then the look before its judge
 		all("working", ids...), all("idle", ids...))
 
+	// finish runs in-process, where no hook records it: drive does
+	var finished []string
+
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) {
+		if e.Kind == ledger.TaskFinished {
+			finished = append(finished, e.Task)
+		}
+	}
+
 	if err := fx.drive(t); err != nil {
 		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if len(finished) != len(ids) {
+		t.Errorf("recorded finishes %v, want one per task", finished)
 	}
 
 	fx.assertOrder(t, []string{

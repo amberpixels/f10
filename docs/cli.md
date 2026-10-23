@@ -51,7 +51,7 @@ f10 review ack [n] [--id <id>]                        # leave the declared handl
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
+f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [--since <time>] [--remote] [--json | --html] [--out <path>]   # where every task stands: done, in progress with its stage and next action, next
@@ -259,6 +259,41 @@ The answer path: `f10 status 42` reads the run the worktree's agent reports, its
 `/f10:status 42` does both in one go, with the question put to you in between.
 
 Out of scope: more than one task or more than one command per call, tailing the remote agent's output, and answering Claude Code permission prompts.
+
+## Status
+
+`f10 status 116` on a parent prints one row per child, closed ones included, in `f10 task children` order and indented the same way:
+
+```
+FT-117    done       trailers + traces switch  finish        #128 merged
+FT-118    reviewing  PR state block            review        #129
+  FT-120  waiting    look-around + f10 board   after FT-118
+FT-121    halted     sidebar icons             ship
+          halt: agent gh-121-1a2b3c in workspace w3 is idle while its run says ship running: implement
+```
+
+The columns are the id, the stage, the title cut to fit the terminal, the current or last step, and the PR with its state when it is not open.
+Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
+
+| stage | when | color |
+|---|---|---|
+| `done` | finished (finish ran, the issue closed, the plan archived) or the PR merged | green |
+| `shipped` | the ship pipeline ended, the PR not merged yet | faint green |
+| `asking` | a driven run stopped on a question; the `ask:` line under it holds the question | red |
+| `halted` | a phase failed, partial or blocked, or drive halted the task itself (an idle agent, a refused finish) after its run's last word; `halt:` and `next:` lines under it | red |
+| `implementing` | ship running any step but the three below | yellow |
+| `reviewing`, `resolving` | ship running review, resolve | orange |
+| `judging`, `planning` | ship running judge; capture or plan under way | blue |
+| `planned` | the plan is saved, ship not begun | faint blue |
+| `waiting` | no run yet, and its `After:` base is not done | faint |
+| `not started` | nothing recorded | faint |
+
+Color is off when stdout is not a terminal or `NO_COLOR` is set.
+`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
+
+A task with no children reports as before: its live run, else its plan and PR.
+A task with no branch left (`f10 finish` removed it) prints its single `done` row when the ledger, the tracker or the plan archive says it finished, and `--json` a one-row array; otherwise it fails as before, with `no run to read`.
+A task whose checkout has its branch is read from there first, so only a task with no run to read asks the host for children.
 
 ## Drive
 
