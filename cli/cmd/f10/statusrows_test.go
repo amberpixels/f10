@@ -71,6 +71,8 @@ func TestRowsFromTheLedger(t *testing.T) {
 		event(at(3), "FT-9", ledger.TaskFinished, ledger.Payload{"args": []any{"FT-1", "--yes"}}),
 		// finish typed with the bare number, resolved to its id
 		event(at(3), "", ledger.TaskFinished, ledger.Payload{"args": []any{"--yes", "8"}}),
+		// a finish that named no task finishes none
+		event(at(3), "", ledger.TaskFinished, ledger.Payload{"args": []any{"--yes"}}),
 
 		event(
 			at(1),
@@ -101,7 +103,13 @@ func TestRowsFromTheLedger(t *testing.T) {
 			"next":    "rebase",
 		}),
 	}}
-	src.resolve = func(tok string) string { return "FT-" + strings.TrimPrefix(tok, "FT-") }
+	src.resolve = func(tok string) string {
+		if tok == "" {
+			t.Error("resolved an empty finish argument")
+		}
+
+		return "FT-" + strings.TrimPrefix(tok, "FT-")
+	}
 
 	rows := src.rowsFrom(t.Context(), []childRow{
 		{ID: "FT-1", Title: "trailers"},

@@ -1065,8 +1065,21 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 		unopened, all("idle", ids...), // GH-15's open, then the look before its judge
 		all("working", ids...), all("idle", ids...))
 
+	// finish runs in-process, where no hook records it: drive does
+	var finished []string
+
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) {
+		if e.Kind == ledger.TaskFinished {
+			finished = append(finished, e.Task)
+		}
+	}
+
 	if err := fx.drive(t); err != nil {
 		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if len(finished) != len(ids) {
+		t.Errorf("recorded finishes %v, want one per task", finished)
 	}
 
 	fx.assertOrder(t, []string{

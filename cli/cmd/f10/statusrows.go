@@ -234,8 +234,11 @@ type rowSource struct {
 	host    *host
 }
 
+// idOf is token as an id. An empty token, a finish run with no argument
+// from a session with no task, names nothing: resolving it would read the
+// reader's own branch.
 func (src rowSource) idOf(token string) string {
-	if src.resolve == nil {
+	if token == "" || src.resolve == nil {
 		return token
 	}
 
@@ -478,8 +481,8 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	}
 
 	k := childRow{ID: r.ID, Finished: true}
-	if src.host != nil {
-		k.Title, _ = src.host.issueTitle(ctx, r.Number)
+	if h, err := t.issues(); err == nil {
+		k.Title, _ = h.issueTitle(ctx, r.Number)
 	}
 
 	rows := src.rowsFrom(ctx, []childRow{k})
@@ -512,13 +515,29 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 		return name, root
 	}
 
+	// each finish event is resolved once per child: cache the lookups, which
+	// may start git, across the concurrent gathers
+	var (
+		mu  sync.Mutex
+		ids = map[string]string{}
+	)
+
 	src.resolve = func(token string) string {
-		r, err := t.reference(ctx, token)
-		if err != nil {
-			return token
+		mu.Lock()
+		defer mu.Unlock()
+
+		if id, ok := ids[token]; ok {
+			return id
 		}
 
-		return r.ID
+		id := token
+		if r, err := t.reference(ctx, token); err == nil {
+			id = r.ID
+		}
+
+		ids[token] = id
+
+		return id
 	}
 
 	if h, err := t.host(); err == nil {
