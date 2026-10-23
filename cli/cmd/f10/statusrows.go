@@ -401,17 +401,69 @@ func renderRows(w io.Writer, rows []taskRow, limit int) {
 	indent := strings.Repeat(" ", idW+2)
 
 	for i, r := range rows {
+		id, pr := pad(ids[i], idW), prs[i]
+
+		// links only on a terminal: piped output stays plain text
+		if limit > 0 {
+			lead := strings.Repeat("  ", r.Depth)
+			gap := strings.Repeat(" ", idW-lipgloss.Width(ids[i]))
+			id = lead + hyperlink(r.URL, r.ID) + gap
+			pr = hyperlink(r.PR, pr)
+		}
+
 		line := fmt.Sprintf("%s  %s  %s  %s  %s",
-			pad(ids[i], idW),
+			id,
 			rowStageStyle(r.Stage).Render(pad(r.Stage, stageW)),
 			pad(cutTo(r.Title, titleW), titleW),
 			faint.Render(pad(r.Step, stepW)),
-			prs[i])
+			pr)
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 
 		for _, sub := range [][2]string{{"ask", r.Ask}, {"halt", r.Note}, {"next", r.Next}} {
 			if sub[1] != "" {
 				fmt.Fprintf(w, "%s%s %s\n", indent, faint.Render(sub[0]+":"), sub[1])
+			}
+		}
+	}
+}
+
+// markdownRows writes rows as a markdown table, ids and PRs linked, for a
+// skill to print in chat where a fenced block would show no links. A child
+// is indented with no-break spaces, which a table cell does not trim, and
+// an ask, halt or next line takes a row of its own under its task.
+func markdownRows(w io.Writer, rows []taskRow) {
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no children")
+
+		return
+	}
+
+	cell := func(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
+	link := func(url, text string) string {
+		if url == "" {
+			return text
+		}
+
+		return "[" + text + "](" + url + ")"
+	}
+
+	fmt.Fprintln(w, "| task | stage | title | step | PR |")
+	fmt.Fprintln(w, "|---|---|---|---|---|")
+
+	for _, r := range rows {
+		pr := prColumn(r)
+		if r.PR != "" {
+			num, prState, _ := strings.Cut(pr, " ")
+			pr = strings.TrimSpace(link(r.PR, num) + " " + prState)
+		}
+
+		fmt.Fprintf(w, "| %s%s | %s | %s | %s | %s |\n",
+			strings.Repeat("\u00a0\u00a0", r.Depth), link(r.URL, r.ID),
+			r.Stage, cell(r.Title), cell(r.Step), pr)
+
+		for _, sub := range [][2]string{{"ask", r.Ask}, {"halt", r.Note}, {"next", r.Next}} {
+			if sub[1] != "" {
+				fmt.Fprintf(w, "| | | %s: %s | | |\n", sub[0], cell(sub[1]))
 			}
 		}
 	}

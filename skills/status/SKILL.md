@@ -20,7 +20,8 @@ The status-line badge draws the same facts as three glyphs.
 
 !`command -v f10 >/dev/null 2>&1 && f10 status || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
 
-1. Run `f10 status <task-id>` and print its output verbatim in a fenced block.
+1. Run `f10 status <task-id> --markdown`.
+   A table (a parent's rows, a finished task's row) is printed verbatim **outside any fence**, so ids and PRs stay links; anything else is printed verbatim in a fenced block.
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
    Put it to the user in **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the choices, the first as recommended.
@@ -32,9 +33,9 @@ The status-line badge draws the same facts as three glyphs.
 
    Print forward's block (task, workspace, sent) in a fenced `yaml` block and stop.
    The agent resumes in its own tab; this session's badge stays as it is.
-3. **A parent prints one row per child** (id, stage, title, step, PR) instead of a block.
-   Each `ask:` line sits under an `asking` child's row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
-   No `ask:` line: the rows are the whole answer.
+3. **A parent prints one table row per child** (task, stage, title, step, PR) instead of a block.
+   Each `ask:` row sits under an `asking` child's row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
+   No `ask:` row: the rows are the whole answer.
    Stop.
 4. No `ask` row: the status is the whole answer.
    Stop.

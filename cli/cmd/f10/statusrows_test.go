@@ -200,8 +200,15 @@ func TestRenderRows(t *testing.T) {
 	out.Reset()
 	renderRows(&out, rows[:1], 50)
 
-	if line := strings.TrimSuffix(out.String(), "\n"); len([]rune(line)) > 50 || !strings.Contains(line, "…") {
-		t.Errorf("a 50-column line = %q, want the title cut to fit", line)
+	line := strings.TrimSuffix(out.String(), "\n")
+	if !strings.Contains(line, hyperlink(rows[0].PR, "#128 merged")) {
+		t.Errorf("a terminal line = %q, want the PR linked", line)
+	}
+
+	// the link's escape sequences take no columns
+	visible := strings.ReplaceAll(line, hyperlink(rows[0].PR, "#128 merged"), "#128 merged")
+	if len([]rune(visible)) > 50 || !strings.Contains(visible, "…") {
+		t.Errorf("a 50-column line = %q, want the title cut to fit", visible)
 	}
 
 	out.Reset()
@@ -217,6 +224,33 @@ func TestRenderRows(t *testing.T) {
 
 	if decoded[0]["stage"] != "done" || decoded[0]["pr_state"] != "merged" || decoded[0]["step"] != "finish" {
 		t.Errorf("--json row = %v", decoded[0])
+	}
+}
+
+func TestMarkdownRows(t *testing.T) {
+	rows := []taskRow{
+		{
+			ID: "FT-117", URL: "https://github.com/a/b/issues/117", Title: "trailers", Stage: stageDone, Step: "finish",
+			PR: "https://github.com/a/b/pull/128", PRState: "merged",
+		},
+		{
+			ID: "FT-118", URL: "https://github.com/a/b/issues/118", Title: "a | pipe", Depth: 1, Stage: stageAsking,
+			Step: "judge", PR: "https://github.com/a/b/pull/129", PRState: pullOpen, Ask: "1. Proceed? [yes | no]",
+		},
+		{ID: "FT-120", Title: "no links", Depth: 2, Stage: stageWaiting, Step: "after FT-118"},
+	}
+
+	var out bytes.Buffer
+	markdownRows(&out, rows)
+
+	want := "| task | stage | title | step | PR |\n" +
+		"|---|---|---|---|---|\n" +
+		"| [FT-117](https://github.com/a/b/issues/117) | done | trailers | finish | [#128](https://github.com/a/b/pull/128) merged |\n" +
+		"|   [FT-118](https://github.com/a/b/issues/118) | asking | a \\| pipe | judge | [#129](https://github.com/a/b/pull/129) |\n" +
+		"| | | ask: 1. Proceed? [yes \\| no] | | |\n" +
+		"|     FT-120 | waiting | no links | after FT-118 |  |\n"
+	if got := out.String(); got != want {
+		t.Errorf("markdown rows:\n%s\nwant:\n%s", got, want)
 	}
 }
 

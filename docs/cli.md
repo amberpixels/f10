@@ -51,7 +51,7 @@ f10 review ack [n] [--id <id>]                        # leave the declared handl
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --markdown]   # where the run is: this session's, a task's in its worktree, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [--since <time>] [--remote] [--json | --html] [--out <path>]   # where every task stands: done, in progress with its stage and next action, next
@@ -274,6 +274,8 @@ FT-121    halted     sidebar icons             ship
 
 The columns are the id, the stage, the title cut to fit the terminal, the current or last step, and the PR with its state when it is not open.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
+On a terminal the id and the PR are links (OSC 8).
+`--markdown` writes the same rows as a markdown table, ids and PRs linked, for a skill to print in chat where a fenced block shows no links; it applies only to rows, and a run's block prints as without it.
 
 | stage | when | color |
 |---|---|---|

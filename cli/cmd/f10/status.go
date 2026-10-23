@@ -36,6 +36,10 @@ func statusCommand() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "all", Usage: "every live run on this machine, not only this repo's"},
 			&cli.BoolFlag{Name: "json", Usage: "emit the same runs as JSON"},
+			&cli.BoolFlag{
+				Name:  "markdown",
+				Usage: "print task rows (a parent's children, a finished task) as a markdown table with links",
+			},
 		},
 		Action: runStatus,
 	}
@@ -329,10 +333,17 @@ func (fb fallback) render(w io.Writer, limit int) {
 	}
 }
 
-// writeTaskRows prints task rows, or encodes them under --json.
+// writeTaskRows prints task rows, or encodes them under --json, or writes
+// them as a markdown table under --markdown.
 func writeTaskRows(cmd *cli.Command, rows []taskRow) error {
 	if cmd.Bool("json") {
 		return encodeJSON(cmd.Writer, rows)
+	}
+
+	if cmd.Bool("markdown") {
+		markdownRows(cmd.Writer, rows)
+
+		return nil
 	}
 
 	renderRows(cmd.Writer, rows, termWidth(cmd.Writer))
