@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -189,6 +190,65 @@ func TestTaskRows(t *testing.T) {
 
 	if want := "FT-9:high FT-7:low FT-8:"; strings.Join(got, " ") != want {
 		t.Errorf("ranked rows = %q, want %q", strings.Join(got, " "), want)
+	}
+}
+
+// The printed list goes through settle and rank: a driver's rows come out
+// most urgent first with the unknown value warned once on the error writer,
+// and host issues come out ranked through the label map.
+func TestWriteTaskListRanksAndWarns(t *testing.T) {
+	f := newFakes(t)
+	tg := childTarget(t, "gh")
+	writeDriver(t, tg.lay.StorageRoot)
+
+	f.script("driver list", `[{"id":"FT-1","title":"a","priority":"Highest"},{"id":"FT-2","title":"b"},`+
+		`{"id":"FT-3","title":"c","priority":"low"},{"id":"FT-4","title":"d","priority":"HIGH"},`+
+		`{"id":"FT-5","title":"e","priority":"Highest"}]`)
+
+	var out, warn bytes.Buffer
+	if err := writeTaskList(t.Context(), tg, &out, &warn); err != nil {
+		t.Fatal(err)
+	}
+
+	var rows []row
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+
+	got := make([]string, 0, len(rows))
+	for _, r := range rows {
+		got = append(got, r.ID+":"+r.Priority)
+	}
+
+	if want := "FT-4:high FT-3:low FT-1: FT-2: FT-5:"; strings.Join(got, " ") != want {
+		t.Errorf("printed order = %q, want %q", strings.Join(got, " "), want)
+	}
+
+	if want := "f10: priority \"Highest\" on 2 row(s) is not one of urgent, high, medium, low; ignored\n"; warn.String() != want {
+		t.Errorf("warning = %q, want %q", warn.String(), want)
+	}
+
+	// the host path, through the declared map
+	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
+	f.script("gh issue list --json number,title,state,url,labels --limit 30",
+		`[{"number":7,"title":"low","state":"OPEN","labels":[{"name":"P3"}]},`+
+			`{"number":8,"title":"none","state":"OPEN","labels":[]},`+
+			`{"number":9,"title":"high","state":"OPEN","labels":[{"name":"P1"}]}]`)
+	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
+
+	out.Reset()
+	warn.Reset()
+
+	if err := writeTaskList(t.Context(), tg, &out, &warn); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 3 || rows[0].ID != "FT-9" || rows[1].ID != "FT-7" || rows[2].ID != "FT-8" || warn.Len() != 0 {
+		t.Errorf("host rows = %+v, warn %q", rows, warn.String())
 	}
 }
 

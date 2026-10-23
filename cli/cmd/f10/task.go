@@ -210,12 +210,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 	// no task id is the list, never the branch's task: read is for that
 	switch {
 	case listing && cmd.Bool("print"):
-		rows, err := taskRows(ctx, t)
-		if err != nil {
-			return err
-		}
-
-		return writeRows(cmd.Writer, rankRows(settlePriorities(rows, cmd.ErrWriter)), "no open tasks")
+		return writeTaskList(ctx, t, cmd.Writer, cmd.ErrWriter)
 	case listing:
 		url, err := taskListURL(ctx, t)
 		if err != nil {
@@ -276,6 +271,17 @@ func taskListURL(ctx context.Context, t *target) (string, error) {
 	}
 
 	return h.issuesURL(ctx)
+}
+
+// writeTaskList is `task open --print` with no id: the first page of open
+// tasks, priorities settled (warnings to warn) and ranked, written to w.
+func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
+	rows, err := taskRows(ctx, t)
+	if err != nil {
+		return err
+	}
+
+	return writeRows(w, rankRows(settlePriorities(rows, warn)), "no open tasks")
 }
 
 // taskRows is the first page of the tracker's open tasks: the driver's list

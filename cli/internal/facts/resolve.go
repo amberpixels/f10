@@ -259,13 +259,17 @@ func (e *Effective) resolveTracker(
 }
 
 // priorityIndex inverts the declared map: each label, lower-cased, to its
-// level. check() has already refused a label under two levels.
+// level. Levels go in vocabulary order and the first level keeps a label, so
+// a label check() reports under two levels still indexes the same way on
+// every run, which config shows even while the error stops other commands.
 func priorityIndex(declared map[string]Labels) map[string]string {
 	index := map[string]string{}
 
-	for level, names := range declared {
-		for _, name := range names {
-			index[strings.ToLower(name)] = level
+	for _, level := range driver.Priorities {
+		for _, name := range declared[level] {
+			if key := strings.ToLower(name); index[key] == "" {
+				index[key] = level
+			}
 		}
 	}
 
