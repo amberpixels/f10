@@ -57,7 +57,7 @@ func newApp() *cli.Command {
 				Name:    "C",
 				Aliases: []string{"project"},
 				Usage: "answer for another checkout: a `PATH` always, or a project name once F10_ROOTS is set; " +
-					"standup takes it more than once",
+					"standup and board take it more than once",
 			},
 		},
 		Commands: []*cli.Command{

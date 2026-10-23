@@ -49,6 +49,7 @@ A fifth, `"priority": "high"`, is optional: one of `urgent`, `high`, `medium`, `
 A driver maps its tracker's own values onto these (Jira's `Highest` becomes `urgent`); a row without the field has no priority and ranks after every row with one.
 A value outside the vocabulary is dropped with a warning on stderr, never an error, so a driver that gets one word wrong still lists its tasks.
 A `list` row may also carry `after` (the id of the task it waits for) or a `body` with an `After:` line, as a `children` row does: `f10 board` reads the dependency from it, and a row with neither has no base.
+It may carry `assignee`, the tracker's name for who holds the task, which `f10 board` groups by.
 
 A `children` row is one subtask linked to the task as its parent.
 f10 drops rows whose `state` is `closed`, resolves `id` and `after` to the project's id format, and decides `finished` itself, so a driver returns every subtask it knows:

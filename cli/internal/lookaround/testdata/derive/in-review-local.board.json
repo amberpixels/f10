@@ -41,7 +41,8 @@
       "stage_from": "local",
       "who": {
         "agent": "ft-1-916fca",
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

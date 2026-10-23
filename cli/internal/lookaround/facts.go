@@ -15,7 +15,18 @@ type Facts struct {
 	Tasks   []Task
 	PRs     []PR
 	Local   *Local // nil when the local collector was skipped or failed
+	People  []Person
 	Sources []Source
+}
+
+// A Person joins the identities one person has across the sources: the
+// tracker's name for them, their host login, the emails their commits
+// carry. Every field but Name is optional.
+type Person struct {
+	Name    string
+	Tracker string
+	Host    string
+	Emails  []string
 }
 
 // A PR is a request with what the host says around it.
@@ -46,7 +57,8 @@ type Local struct {
 type Worktree struct {
 	Path   string
 	Branch string
-	Ahead  int // commits past its base
+	Ahead  int      // commits past its base
+	Emails []string // the distinct author emails on those commits
 }
 
 // A Branch is what the local config records on a branch.

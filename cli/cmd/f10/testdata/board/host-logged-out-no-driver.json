@@ -17,10 +17,10 @@
     "git symbolic-ref --short refs/remotes/origin/HEAD": {
       "stdout": "origin/main"
     },
-    "git rev-list --count origin/main..FT-2/widgets": {
-      "stdout": "1"
+    "git log --format=%ae origin/main..FT-2/widgets": {
+      "stdout": "ann@acme.example"
     },
-    "gh issue list --json number,title,state,url,labels,body --limit 100": {
+    "gh issue list --json number,title,state,url,labels,body,assignees --limit 100": {
       "code": 1,
       "stderr": "gh: To get started with GitHub CLI, please run:  gh auth login"
     }

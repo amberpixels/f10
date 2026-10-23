@@ -1,0 +1,66 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets",
+    "Remote": false
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    }
+  ],
+  "PRs": [],
+  "Local": {
+    "Worktrees": [
+      {
+        "Path": "/code/widgets.FT-1-slug",
+        "Branch": "FT-1/slug",
+        "Ahead": 2,
+        "Emails": [
+          "ann@acme.example",
+          "bob@acme.example"
+        ]
+      }
+    ],
+    "Branches": {
+      "FT-1/slug": {}
+    },
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {}
+  },
+  "People": [
+    {
+      "Name": "ann",
+      "Emails": [
+        "ann@acme.example"
+      ]
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "TookMS": 1
+    }
+  ]
+}

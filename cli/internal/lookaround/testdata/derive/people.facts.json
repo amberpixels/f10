@@ -1,0 +1,102 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Remote": true
+  },
+  "Prefix": "FT",
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": false,
+      "Skipped": true,
+      "TookMS": 1
+    }
+  ],
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open",
+      "assignee": "Ann Lee"
+    },
+    {
+      "id": "FT-2",
+      "title": "other",
+      "url": "https://github.com/acme/widgets/issues/2",
+      "status": "open",
+      "assignee": "Bob Ray"
+    },
+    {
+      "id": "FT-3",
+      "title": "third",
+      "url": "https://github.com/acme/widgets/issues/3",
+      "status": "open"
+    }
+  ],
+  "PRs": [
+    {
+      "Number": 10,
+      "Title": "FT-2: other",
+      "URL": "https://github.com/acme/widgets/pull/10",
+      "Status": "open",
+      "Head": "FT-2/slug",
+      "Base": "main",
+      "Author": "annl",
+      "UpdatedAt": "2026-10-20T10:00:00Z"
+    },
+    {
+      "Number": 11,
+      "Title": "no task here",
+      "URL": "https://github.com/acme/widgets/pull/11",
+      "Status": "open",
+      "Head": "tidy",
+      "Base": "main",
+      "Author": "someone",
+      "UpdatedAt": "2026-10-20T11:00:00Z",
+      "Commits": [
+        {
+          "SHA": "a1",
+          "Subject": "tidy",
+          "Message": "tidy",
+          "Email": "Ann@Acme.example",
+          "At": "2026-10-20T09:00:00Z"
+        },
+        {
+          "SHA": "a2",
+          "Subject": "more",
+          "Message": "more",
+          "Email": "ann@acme.example",
+          "At": "2026-10-20T10:00:00Z"
+        }
+      ]
+    }
+  ],
+  "People": [
+    {
+      "Name": "bob",
+      "Tracker": "Bob Ray",
+      "Host": "bobr"
+    },
+    {
+      "Name": "ann",
+      "Tracker": "Ann Lee",
+      "Host": "annl",
+      "Emails": [
+        "ann@acme.example"
+      ]
+    }
+  ]
+}

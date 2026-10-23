@@ -40,7 +40,8 @@
       "stage": "ready",
       "stage_from": "trace",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

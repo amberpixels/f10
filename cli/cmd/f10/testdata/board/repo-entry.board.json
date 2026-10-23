@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-7",
+      "task": {
+        "id": "FT-7",
+        "title": "rate limit",
+        "url": "https://github.com/acme/widgets/issues/7",
+        "status": "OPEN",
+        "assignee": "ann"
+      },
+      "stage": "pr-open",
+      "stage_from": "guessed",
+      "who": {
+        "author": "ann",
+        "assignees": [
+          "ann"
+        ],
+        "person": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 7,
+          "title": "FT-7: rate limit",
+          "url": "https://github.com/acme/widgets/pull/7",
+          "state": "open",
+          "head": "FT-7/rate",
+          "base": "main"
+        },
+        "branch": "FT-7/rate"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "command": "/f10:review FT-7"
+      }
+    },
+    {
+      "key": "FT-9",
+      "task": {
+        "id": "FT-9",
+        "title": "export",
+        "url": "https://github.com/acme/widgets/issues/9",
+        "status": "OPEN"
+      },
+      "stage": "next",
+      "stage_from": "guessed",
+      "who": {},
+      "where": {},
+      "next": {
+        "command": "f10 start FT-9"
+      }
+    },
+    {
+      "key": "FT-6",
+      "stage": "done",
+      "stage_from": "guessed",
+      "who": {
+        "author": "bob",
+        "person": "bob"
+      },
+      "where": {
+        "pr": {
+          "number": 6,
+          "title": "FT-6: login",
+          "url": "https://github.com/acme/widgets/pull/6",
+          "state": "merged",
+          "head": "FT-6/login",
+          "base": "main"
+        },
+        "branch": "FT-6/login"
+      },
+      "last_activity": "2026-10-19T10:00:00Z",
+      "next": {}
+    }
+  ]
+}

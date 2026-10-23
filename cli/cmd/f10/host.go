@@ -43,6 +43,11 @@ type issue struct {
 	Description string `json:"description"`
 	Labels      labels `json:"labels"`
 
+	Assignees []struct {
+		Login    string `json:"login"`
+		Username string `json:"username"`
+	} `json:"assignees"`
+
 	Comments []struct {
 		Body   string `json:"body"`
 		Author struct {
@@ -250,7 +255,7 @@ func (h host) listIssues(
 		glabArgs = append(glabArgs, "--search", query)
 	}
 
-	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels,body", "--limit", strconv.Itoa(limit))
+	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels,body,assignees", "--limit", strconv.Itoa(limit))
 	glabArgs = append(glabArgs, "-F", "json", "--per-page", strconv.Itoa(limit))
 
 	var found []issue
@@ -267,14 +272,20 @@ func (h host) listIssues(
 			id = prefix + "-" + id
 		}
 
-		rows = append(rows, row{
+		r := row{
 			ID:       id,
 			Title:    iss.Title,
 			Status:   iss.State,
 			URL:      iss.url(),
 			Priority: priorityOf(iss.Labels, priorities),
 			After:    afterIn(iss.body()),
-		})
+		}
+
+		if len(iss.Assignees) > 0 {
+			r.Assignee = cmp.Or(iss.Assignees[0].Login, iss.Assignees[0].Username)
+		}
+
+		rows = append(rows, r)
 	}
 
 	return rows, nil

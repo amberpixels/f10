@@ -41,7 +41,8 @@
       "stage": "blocked",
       "stage_from": "trace",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {
@@ -78,7 +79,8 @@
       "stage": "ready",
       "stage_from": "trace",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {
@@ -112,7 +114,8 @@
       "stage": "in-review",
       "stage_from": "trace",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {

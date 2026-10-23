@@ -157,6 +157,7 @@ func gather(f Facts, since time.Time) []*row {
 
 	for _, r := range rows {
 		r.fill()
+		r.person(f.People)
 	}
 
 	return rows
@@ -364,6 +365,20 @@ func (r *row) fill() {
 		r.Who.Assignees = append([]string{r.Task.Assignee}, r.Who.Assignees...)
 	}
 
+	// the committers are whoever wrote the row's commits, from the request
+	// where its commits were read and from the worktree past its base
+	if r.pr != nil {
+		for _, c := range r.pr.Commits {
+			r.commit(c.Email)
+		}
+	}
+
+	if r.worktree != nil {
+		for _, e := range r.worktree.Emails {
+			r.commit(e)
+		}
+	}
+
 	switch {
 	case r.branch != nil && r.branch.After != "":
 		r.base, r.baseFrom = r.branch.After, FromLocal
@@ -372,6 +387,52 @@ func (r *row) fill() {
 	case r.Task != nil && r.Task.After != "":
 		r.base, r.baseFrom = r.Task.After, FromGuessed
 	}
+}
+
+// commit adds one author email to the row's committers, once.
+func (r *row) commit(email string) {
+	if email == "" ||
+		slices.ContainsFunc(r.Who.Committers, func(e string) bool { return strings.EqualFold(e, email) }) {
+		return
+	}
+
+	r.Who.Committers = append(r.Who.Committers, email)
+}
+
+// person names who the row groups under: the tracker's assignee, else the
+// request's author, else the first committer, each mapped to a declared
+// person where one claims that identity, else spelled as the source gave
+// it. With no map a tracker name and a host login stay two names.
+func (r *row) person(people []Person) {
+	assignee := ""
+	if r.Task != nil {
+		assignee = r.Task.Assignee
+	}
+
+	committer := ""
+	if len(r.Who.Committers) > 0 {
+		committer = r.Who.Committers[0]
+	}
+
+	// a person claiming the assignee wins over one claiming the author,
+	// whatever order the map lists them in
+	byTracker := func(p Person) bool { return assignee != "" && strings.EqualFold(p.Tracker, assignee) }
+	byHost := func(p Person) bool { return r.Who.Author != "" && forge.SameLogin(p.Host, r.Who.Author) }
+	byEmail := func(p Person) bool {
+		return slices.ContainsFunc(r.Who.Committers, func(e string) bool {
+			return slices.ContainsFunc(p.Emails, func(known string) bool { return strings.EqualFold(known, e) })
+		})
+	}
+
+	for _, pick := range []func(Person) bool{byTracker, byHost, byEmail} {
+		if i := slices.IndexFunc(people, pick); i >= 0 {
+			r.Who.Person = people[i].Name
+
+			return
+		}
+	}
+
+	r.Who.Person = cmp.Or(assignee, r.Who.Author, committer)
 }
 
 // rank orders a task's candidate branches: a worktree first, then a

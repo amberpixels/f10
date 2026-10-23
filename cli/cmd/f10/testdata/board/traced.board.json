@@ -41,7 +41,8 @@
       "stage": "blocked",
       "stage_from": "trace",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {
@@ -78,7 +79,8 @@
       "stage": "ready",
       "stage_from": "trace",
       "who": {
-        "author": "ann"
+        "author": "ann",
+        "person": "ann"
       },
       "where": {
         "pr": {
@@ -114,7 +116,11 @@
       "who": {
         "agent": "ft-7-168001",
         "model": "opus",
-        "author": "ann"
+        "author": "ann",
+        "committers": [
+          "ann@acme.example"
+        ],
+        "person": "ann"
       },
       "where": {
         "pr": {

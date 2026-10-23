@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -54,10 +55,18 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 
 	def := gitx.Out(ctx, in.Main, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 
+	// one log per worktree gives the count of commits past the base and
+	// who wrote them, for the same call rev-list --count would cost
 	for _, wt := range wts {
 		w := Worktree{Path: wt.Path, Branch: wt.Branch}
 		if wt.Branch != "" && def != "" && wt.Branch != strings.TrimPrefix(def, "origin/") {
-			w.Ahead, _ = strconv.Atoi(gitx.Out(ctx, in.Main, "rev-list", "--count", def+".."+wt.Branch))
+			for email := range strings.FieldsSeq(gitx.Out(ctx, in.Main, "log", "--format=%ae", def+".."+wt.Branch)) {
+				w.Ahead++
+
+				if !slices.ContainsFunc(w.Emails, func(e string) bool { return strings.EqualFold(e, email) }) {
+					w.Emails = append(w.Emails, email)
+				}
+			}
 		}
 
 		l.Worktrees = append(l.Worktrees, w)

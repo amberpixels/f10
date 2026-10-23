@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": false,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "#11",
+      "stage": "pr-open",
+      "stage_from": "guessed",
+      "who": {
+        "author": "someone",
+        "committers": [
+          "Ann@Acme.example"
+        ],
+        "person": "someone"
+      },
+      "where": {
+        "pr": {
+          "number": 11,
+          "title": "no task here",
+          "url": "https://github.com/acme/widgets/pull/11",
+          "state": "open",
+          "head": "tidy",
+          "base": "main"
+        },
+        "branch": "tidy"
+      },
+      "last_activity": "2026-10-20T11:00:00Z",
+      "next": {
+        "text": "open, no review yet"
+      }
+    },
+    {
+      "key": "FT-2",
+      "task": {
+        "id": "FT-2",
+        "title": "other",
+        "url": "https://github.com/acme/widgets/issues/2",
+        "status": "open",
+        "assignee": "Bob Ray"
+      },
+      "stage": "pr-open",
+      "stage_from": "guessed",
+      "who": {
+        "author": "annl",
+        "assignees": [
+          "Bob Ray"
+        ],
+        "person": "Bob Ray"
+      },
+      "where": {
+        "pr": {
+          "number": 10,
+          "title": "FT-2: other",
+          "url": "https://github.com/acme/widgets/pull/10",
+          "state": "open",
+          "head": "FT-2/slug",
+          "base": "main"
+        },
+        "branch": "FT-2/slug"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "command": "/f10:review FT-2"
+      }
+    },
+    {
+      "key": "FT-1",
+      "task": {
+        "id": "FT-1",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/1",
+        "status": "open",
+        "assignee": "Ann Lee"
+      },
+      "stage": "next",
+      "stage_from": "guessed",
+      "who": {
+        "assignees": [
+          "Ann Lee"
+        ],
+        "person": "Ann Lee"
+      },
+      "where": {},
+      "next": {
+        "command": "f10 start FT-1"
+      }
+    },
+    {
+      "key": "FT-3",
+      "task": {
+        "id": "FT-3",
+        "title": "third",
+        "url": "https://github.com/acme/widgets/issues/3",
+        "status": "open"
+      },
+      "stage": "next",
+      "stage_from": "guessed",
+      "who": {},
+      "where": {},
+      "next": {
+        "command": "f10 start FT-3"
+      }
+    }
+  ]
+}
