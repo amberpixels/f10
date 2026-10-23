@@ -102,6 +102,11 @@ The main agent checks the header (and, in round two, a status for every prior id
 
 ## Rounds
 
+**One round is the default.**
+Round two runs only when `project.md → Review` says `Rounds: 2`, or when round one was heavy: its resolve fixed six or more findings.
+Otherwise never run, suggest or offer a second round: a resolve with every finding settled and verify green ends the review.
+A user who asks for round two by name gets it.
+
 Round = files present + 1.
 When `1.md` holds findings with no `verdict:`, **decline** in one line pointing at `/f10:resolve`: a round two then could only say `still open`.
 With `2.md` present, decline the same way, naming the findings whose last verdict is `ask` or whose last status is `still open` or `explanation disputed`.
@@ -109,7 +114,7 @@ Both declines are a normal end.
 Never delete or rewrite a round.
 
 **Inside a ship pipeline** a `review` entry runs this step, then `steps/resolve.md`.
-If that resolve recorded a `fix` of its own (before any questionnaire), round two runs both again; a round that was clean or settled by skips ends the entry, and a fix chosen in the final questionnaire opens no round.
+When round two applies (above) and that resolve recorded a `fix` of its own (before any questionnaire), round two runs both again; otherwise the first round ends the entry, and a fix chosen in the final questionnaire never opens one.
 Both rounds' `ask` verdicts go to the user in resolve's one questionnaire before the next pipeline step.
 The entry's trace on the PR (`traces: on`) is made the same way, by its last resolve, a clean entry's included.
 

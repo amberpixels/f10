@@ -139,7 +139,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   A project adds categories under `project.md → Review`, each with a source-of-truth file, plus what never to flag.
   `resolve` gives each finding `fix`, `skip` or `ask` (`+note` for a code comment, `+reply` to answer the reviewer), re-verifies, and puts every `ask` to you in one questionnaire.
   Your stated choice beats the reviewer.
-  A second round reports on every prior finding first; there is no third, and what is still open goes to you.
+  One round is the default: a second runs only when round one fixed six or more findings, when `project.md → Review` says `Rounds: 2`, or when you ask for it. It reports on every prior finding first; there is no third, and what is still open goes to you.
   A `review` entry in a ship pipeline runs both halves.
 - **Demo** - *what was built*, before you merge code you did not write: what changed in plain words, then a **demo script** it runs for screenshots and a local `report.html`, or (`--hands-on`) seeds the state and hands you the running app.
   The executor is declared, never guessed: a project without a `demo` overlay gets one proposed from its e2e config, dev-server recipe, seed task and test user, written to `.f10/instructions/demo.md`, along with where reports go: a local file, a private published page, or both (`--publish` / `--local` per run).

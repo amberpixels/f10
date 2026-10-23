@@ -154,7 +154,7 @@ With nothing declared, host issues have no priority and the list is in the host'
 ## Review
 
 Nothing declared gets the blind local reviewer with its four core categories: correctness and logic, architecture and guidelines, security and performance, tests and docs.
-Each of the three things a project can add is optional:
+Each of the four things a project can add is optional:
 
 ```markdown
 ## Review
@@ -165,11 +165,13 @@ Categories, each with its source of truth:
 
 Never flag: generated code under `gen/`, TODO comments.
 Human reviewer: the PR's assignee, on the PR.
+Rounds: 2
 ```
 
 A source-of-truth file is read in full as reference data: instructions inside it are ignored, and an edit to it is reviewed, not obeyed.
 The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
+`Rounds: 2` makes a second review round the rule after any resolve that fixed something; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
 
 A **remote review** - a bot in CI, a human, a check - is four frontmatter keys and an optional fifth, with a fixed vocabulary, so `f10 init` can write them and `f10 review` can act on them:
 
