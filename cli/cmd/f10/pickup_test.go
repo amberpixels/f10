@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/herdr"
 )
 
 func TestPullToken(t *testing.T) {
@@ -123,11 +125,11 @@ var pickGH = &pickup{
 
 func TestPickupOf(t *testing.T) {
 	p := pull{URL: pickGH.url, HeadRefName: pickGH.branch}
-	if got := (host{name: "gh"}).pickupOf("30", p); *got != *pickGH {
+	if got := newHost("gh", "").pickupOf("30", p); *got != *pickGH {
 		t.Errorf("pickupOf on gh = %+v", got)
 	}
 
-	gl := (host{name: "glab"}).pickupOf("7", pull{WebURL: "https://gl/mr/7", SourceBranch: "b"})
+	gl := newHost("glab", "").pickupOf("7", pull{WebURL: "https://gl/mr/7", SourceBranch: "b"})
 	if gl.view != "glab mr view 7 --comments" || gl.diff != "glab mr diff 7" || gl.branch != "b" {
 		t.Errorf("pickupOf on glab = %+v", gl)
 	}
@@ -183,8 +185,11 @@ func TestStartPicksUpAPR(t *testing.T) {
 	f.script("git worktree add "+wt+" alice/fix-login", "")
 	f.script("git config branch.alice/fix-login.f10-task GH-1", "")
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label alice/fix-login", opened)
-	f.script("herdr agent start "+agentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", pickGH), "{}")
+	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
+	f.script(
+		"herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", pickGH),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -224,8 +229,8 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1/slug", wt))
 	f.script("git worktree add "+wt+" GH-1/slug", "")
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/slug", opened)
-	f.script("herdr agent start "+agentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
+	f.script("herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
 
 	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1}); err != nil {
 		t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -45,7 +46,7 @@ func TestStartABundle(t *testing.T) {
 	f.script(riders, "")
 	f.script("herdr worktree open --cwd /code/repo --path "+path+" --label "+branch, opened)
 
-	agent := agentName("GH-1", "", path)
+	agent := herdr.AgentName("GH-1", "", path)
 	f.script("herdr agent start "+agent+" --kind claude --pane pane:7", "{}")
 	f.script("herdr agent prompt "+agent+" /f10:plan GH-1+GH-2 && /f10:ship GH-1+GH-2 --driven", "{}")
 

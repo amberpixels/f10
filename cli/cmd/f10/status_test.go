@@ -49,7 +49,7 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := host{name: "gh", dir: root}
+	h := newHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: plan, host: &h}
 	capture := &state.Run{Capture: "running", Plan: "pending", Ship: "pending"}
 
@@ -74,7 +74,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	f.fail(ghView, shell.Result{Code: 1, Stderr: `no pull requests found for branch "GH-1"`})
 
 	root := t.TempDir()
-	h := host{name: "gh", dir: root}
+	h := newHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: filepath.Join(root, "GH-1.md"), host: &h}
 
 	fb := taskFallback(t.Context(), in, nil)

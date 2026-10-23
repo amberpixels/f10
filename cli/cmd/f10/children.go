@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -152,7 +153,7 @@ func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, err
 		return nil, err
 	}
 
-	if h.glab() {
+	if h.GLab() {
 		return h.childItems(ctx, task.Number)
 	}
 
@@ -342,14 +343,14 @@ func (h host) subIssues(ctx context.Context, number string) ([]rawChild, error) 
 		Name string `json:"name"`
 	}
 
-	found, err := decodePages[struct {
+	found, err := forge.DecodePages[struct {
 		Number  int     `json:"number"`
 		Title   string  `json:"title"`
 		State   string  `json:"state"`
 		HTMLURL string  `json:"html_url"`
 		Body    string  `json:"body"`
 		Labels  []label `json:"labels"`
-	}](ctx, h, "repos/{owner}/{repo}/issues/"+number+"/sub_issues")
+	}](ctx, h.Host, "repos/{owner}/{repo}/issues/"+number+"/sub_issues")
 	if err != nil {
 		if strings.Contains(err.Error(), "HTTP 404") {
 			return nil, errNoParentLink
@@ -409,7 +410,7 @@ func (h host) childItems(ctx context.Context, number string) ([]rawChild, error)
 		Path string `json:"path_with_namespace"`
 	}
 
-	if err := h.decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
+	if err := h.Decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
 		return nil, err
 	}
 
@@ -444,7 +445,7 @@ func (h host) childItems(ctx context.Context, number string) ([]rawChild, error)
 		} `json:"data"`
 	}
 
-	err := h.decode(ctx, &payload, "api", "graphql", "-f", "query="+childItemsQuery,
+	err := h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+childItemsQuery,
 		"-f", "path="+repo.Path, "-f", "iid="+number)
 	if err != nil {
 		if strings.Contains(err.Error(), "doesn't exist on type") {

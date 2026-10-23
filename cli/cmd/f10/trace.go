@@ -177,7 +177,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	login, err := h.login(ctx)
+	login, err := h.Login(ctx)
 	if err != nil {
 		return err
 	}

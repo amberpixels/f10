@@ -54,6 +54,7 @@ f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [-
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
+f10 board [--since <time>] [--remote] [--json]   # where every task stands: done, in progress with its stage and next action, next
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -557,6 +558,21 @@ A breaking change bumps `schema`.
 | `upkeep` | on an upkeep commit or force-push: `base-merge`, `rebase`, `files` or `ci-fix`; absent on work |
 | `prs[].force_pushes` | your force-pushes to it in the period, by time, then after-sha |
 | `reviewed[].actions` | by time, then kind |
+
+## Board
+
+`f10 board` is where every task of the project stands: done lately, in progress at which stage and who owes the next move, and what comes next.
+It reads three sources, each failing on its own: the host (open requests and the ones merged in the window, their commits, reviews, checks and mergeable state), the tracker (open tasks through the driver's `list`, else the host's issues, up to 100), and this machine (live runs, worktrees, branches, plans, findings, verdicts, the ledger, Herdr's workspaces).
+A failed source is printed first with its error, and every other row still renders.
+It writes nothing to the host.
+
+- `--since` sets the window `done` rows cover: an RFC 3339 time or a `YYYY-MM-DD` date; default seven days.
+- `--remote` reads the host and the tracker only: what a viewer without the checkout sees.
+- `--json` prints the Board JSON, the contract every renderer reads; `docs/board.md` is its spec, the stages and their rules included, and `docs/board.schema.json` its schema.
+
+A row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished`, `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host (`docs/traces.md`), `guessed` for the host's own facts alone.
+On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
+The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
 
 ## References
 

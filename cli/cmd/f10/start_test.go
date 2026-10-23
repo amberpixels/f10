@@ -162,7 +162,7 @@ const (
 
 // agentOf is the name start gives the agent of a task with no suffix,
 // checked out at the sibling path these tests use.
-func agentOf(id string) string { return agentName(id, "", "/code/repo."+id) }
+func agentOf(id string) string { return herdr.AgentName(id, "", "/code/repo."+id) }
 
 var gh1 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit}
 
@@ -340,13 +340,13 @@ func TestHostIssueTitle(t *testing.T) {
 	f.script("gh issue view 4 --json title,url", `{"title":"Merged PR","url":"https://github.com/o/r/pull/4"}`)
 
 	for name, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
-		got, err := host{name: name, dir: "/code/repo"}.issueTitle(t.Context(), "1")
+		got, err := newHost(name, "/code/repo").issueTitle(t.Context(), "1")
 		if err != nil || got != want {
 			t.Errorf("%s title = %q, %v; want %q", name, got, err, want)
 		}
 	}
 
-	gh := host{name: "gh", dir: "/code/repo"}
+	gh := newHost("gh", "/code/repo")
 
 	if _, err := gh.issueTitle(t.Context(), "2"); err == nil || !strings.Contains(err.Error(), "no issue 2") {
 		t.Errorf("err = %v, want gh's stderr", err)
@@ -371,7 +371,7 @@ func TestHostRefusesPullRequests(t *testing.T) {
 	f.script("gh issue view 35 --json url", pr)
 	f.script("glab issue view 7 -F json", `{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7"}`)
 
-	gh := host{name: "gh", dir: "/code/repo"}
+	gh := newHost("gh", "/code/repo")
 
 	if _, err := gh.issueDoc(
 		t.Context(),
@@ -386,7 +386,7 @@ func TestHostRefusesPullRequests(t *testing.T) {
 		t.Errorf("issueURL = %v", err)
 	}
 
-	if _, err := (host{name: "glab", dir: "/code/repo"}).issueURL(t.Context(), "7"); err == nil {
+	if _, err := newHost("glab", "/code/repo").issueURL(t.Context(), "7"); err == nil {
 		t.Error("glab merge request taken for an issue")
 	}
 }
@@ -414,7 +414,7 @@ func TestHostIssueDocLabels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		doc, err := host{name: tt.host, dir: "/code/repo"}.issueDoc(t.Context(), "FT-"+tt.number, tt.number)
+		doc, err := newHost(tt.host, "/code/repo").issueDoc(t.Context(), "FT-"+tt.number, tt.number)
 		if err != nil || !strings.Contains(doc, tt.want) {
 			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
 		}
@@ -780,23 +780,23 @@ func TestSiblingPathAndAgentName(t *testing.T) {
 		t.Errorf("siblingPath = %q, want %q", got, want)
 	}
 
-	if got, want := bareAgentName("GH-1", ""), "gh-1"; got != want {
+	if got, want := herdr.BareAgentName("GH-1", ""), "gh-1"; got != want {
 		t.Errorf("bareAgentName = %q, want %q", got, want)
 	}
 
-	if got, want := bareAgentName("GH-1", "Attempt2"), "gh-1-attempt2"; got != want {
+	if got, want := herdr.BareAgentName("GH-1", "Attempt2"), "gh-1-attempt2"; got != want {
 		t.Errorf("bareAgentName = %q, want %q", got, want)
 	}
 
 	// the same task in two checkouts gets two names, each in herdr's shape
 	valid := regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
-	one, other := agentName("GH-1", "", "/code/repo.GH-1"), agentName("GH-1", "", "/code/other.GH-1")
+	one, other := herdr.AgentName("GH-1", "", "/code/repo.GH-1"), herdr.AgentName("GH-1", "", "/code/other.GH-1")
 
 	if one == other || !strings.HasPrefix(one, "gh-1-") || !valid.MatchString(one) {
 		t.Errorf("agentName = %q and %q, want two distinct gh-1-<hash> names", one, other)
 	}
 
-	if long := agentName("ABCDEFGH-123456", "a-very-long-attempt-suffix", "/p"); !valid.MatchString(long) {
+	if long := herdr.AgentName("ABCDEFGH-123456", "a-very-long-attempt-suffix", "/p"); !valid.MatchString(long) {
 		t.Errorf("agentName = %q (%d chars), want at most 32", long, len(long))
 	}
 }
@@ -1352,11 +1352,15 @@ func TestStartSlugsTheBranch(t *testing.T) {
 		opened,
 	)
 	f.script(
-		"herdr agent start "+agentName("GH-1", "", "/code/repo.GH-1-add-dark-mode")+" --kind claude --pane pane:7",
+		"herdr agent start "+herdr.AgentName(
+			"GH-1",
+			"",
+			"/code/repo.GH-1-add-dark-mode",
+		)+" --kind claude --pane pane:7",
 		"{}",
 	)
 	f.script(
-		"herdr agent prompt "+agentName(
+		"herdr agent prompt "+herdr.AgentName(
 			"GH-1",
 			"",
 			"/code/repo.GH-1-add-dark-mode",
@@ -1470,7 +1474,7 @@ func TestStartAdoptsMainsPlan(t *testing.T) {
 	dst := filepath.Join(wt, ".f10", "plans", "GH-1.md")
 	writePlan(t, src)
 
-	agent := agentName("GH-1", "", wt)
+	agent := herdr.AgentName("GH-1", "", wt)
 
 	f := newFakes(t)
 	f.has["wt"] = true
@@ -1545,7 +1549,7 @@ func TestStartNamesTheMovedPlanWhenTheAgentFails(t *testing.T) {
 	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
 	writePlan(t, src)
 
-	agent := agentName("GH-1", "", wt)
+	agent := herdr.AgentName("GH-1", "", wt)
 
 	f := newFakes(t)
 	f.has["wt"] = true
@@ -1569,9 +1573,12 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1/slug", "/code/repo.GH-1-slug"))
 	f.script("git worktree add /code/repo.GH-1-slug GH-1/slug", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1-slug --label GH-1/slug", opened)
-	f.script("herdr agent start "+agentName("GH-1", "", "/code/repo.GH-1-slug")+" --kind claude --pane pane:7", "{}")
 	f.script(
-		"herdr agent prompt "+agentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
+		"herdr agent start "+herdr.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" --kind claude --pane pane:7",
+		"{}",
+	)
+	f.script(
+		"herdr agent prompt "+herdr.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
 			prompt(modeDefault, "GH-1", nil, "", nil),
 		"{}",
 	)

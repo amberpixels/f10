@@ -1,0 +1,69 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets"
+  },
+  "Prefix": "FT",
+  "Tasks": [],
+  "PRs": [
+    {
+      "Number": 10,
+      "Title": "FT-1: thing",
+      "URL": "https://github.com/acme/widgets/pull/10",
+      "Status": "merged",
+      "Head": "FT-1/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z",
+      "MergedAt": "2026-10-20T10:00:00Z",
+      "head_exists": true
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "Skipped": false,
+      "TookMS": 1
+    }
+  ],
+  "Local": {
+    "Runs": [],
+    "Worktrees": [
+      {
+        "Path": "/code/widgets.FT-1-slug",
+        "Branch": "FT-1/slug",
+        "Ahead": 0
+      }
+    ],
+    "Branches": {
+      "FT-1/slug": {
+        "Task": "FT-1"
+      }
+    },
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {
+      "/code/widgets.FT-1-slug": {
+        "ID": "ws-1",
+        "Label": "FT-1",
+        "AgentStatus": "idle"
+      }
+    }
+  }
+}

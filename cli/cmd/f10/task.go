@@ -167,7 +167,7 @@ func (t *target) imagesDir(ctx context.Context, id string) string {
 // the request bare, so its error names the image.
 func githubAuth(ctx context.Context, t *target) func(*http.Request) {
 	h, err := t.host()
-	if err != nil || h.glab() {
+	if err != nil || h.GLab() {
 		return nil
 	}
 
@@ -183,7 +183,7 @@ func githubAuth(ctx context.Context, t *target) func(*http.Request) {
 		}
 
 		once.Do(func() {
-			out, err := h.run(ctx, "auth", "token")
+			out, err := h.Run(ctx, "auth", "token")
 			if err == nil {
 				token = strings.TrimSpace(out)
 			}
@@ -276,7 +276,7 @@ func taskListURL(ctx context.Context, t *target) (string, error) {
 // writeTaskList is `task open --print` with no id: the first page of open
 // tasks, priorities settled (warnings to warn) and ranked, written to w.
 func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
-	rows, err := taskRows(ctx, t)
+	rows, err := taskRows(ctx, t, issuePage)
 	if err != nil {
 		return err
 	}
@@ -284,9 +284,9 @@ func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
 	return writeRows(w, rankRows(settlePriorities(rows, warn)), "no open tasks")
 }
 
-// taskRows is the first page of the tracker's open tasks: the driver's list
-// when it has one, else the host's open issues.
-func taskRows(ctx context.Context, t *target) ([]row, error) {
+// taskRows is the tracker's open tasks: the driver's list when it has one,
+// else up to limit of the host's open issues.
+func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 	if d := t.driver(); d != nil {
 		out, err := d.Run(ctx, driver.VerbList)
 		if err == nil {
@@ -308,7 +308,7 @@ func taskRows(ctx context.Context, t *target) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels)
+	return h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels, limit)
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -340,6 +340,7 @@ type row struct {
 	Status   string `json:"status,omitempty"`
 	URL      string `json:"url,omitempty"`
 	Priority string `json:"priority,omitempty"`
+	After    string `json:"after,omitempty"` // the base its body's After: line names, where the source gives one
 }
 
 // settlePriorities keeps each row's priority in its canonical form and
@@ -416,7 +417,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels)
+	return h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a

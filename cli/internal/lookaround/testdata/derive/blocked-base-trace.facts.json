@@ -1,0 +1,74 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Remote": true
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    },
+    {
+      "id": "FT-2",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/2",
+      "status": "open"
+    }
+  ],
+  "PRs": [
+    {
+      "Number": 10,
+      "Title": "FT-1: thing",
+      "URL": "https://github.com/acme/widgets/pull/10",
+      "Status": "open",
+      "Head": "FT-1/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z",
+      "block": {
+        "v": 1,
+        "task": "FT-1",
+        "step": "pr"
+      }
+    },
+    {
+      "Number": 11,
+      "Title": "FT-2: other",
+      "URL": "https://github.com/acme/widgets/pull/11",
+      "Status": "open",
+      "Head": "FT-2/slug",
+      "Base": "FT-1/slug",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z",
+      "block": {
+        "v": 1,
+        "task": "FT-2",
+        "step": "pr",
+        "after": "FT-1"
+      }
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": false,
+      "Skipped": true,
+      "TookMS": 1
+    }
+  ]
+}

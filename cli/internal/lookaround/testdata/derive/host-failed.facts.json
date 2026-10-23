@@ -1,0 +1,54 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets"
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    },
+    {
+      "id": "FT-2",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/2",
+      "status": "open",
+      "priority": "high"
+    }
+  ],
+  "PRs": [],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": false,
+      "Error": "gh: To get started with GitHub CLI, please run:  gh auth login",
+      "TookMS": 12
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "TookMS": 1
+    }
+  ],
+  "Local": {
+    "Runs": [],
+    "Worktrees": [],
+    "Branches": {},
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {}
+  }
+}

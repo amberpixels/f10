@@ -1,0 +1,40 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Remote": true
+  },
+  "Prefix": "FT",
+  "Tasks": [],
+  "PRs": [
+    {
+      "Number": 38,
+      "Title": "Fix a typo",
+      "URL": "https://github.com/acme/widgets/pull/38",
+      "Status": "open",
+      "Head": "fix-typo",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z"
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": false,
+      "Skipped": true,
+      "TookMS": 1
+    }
+  ]
+}

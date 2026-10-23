@@ -125,6 +125,10 @@ func (fx *driveFixture) opensOn(id, ws, pane, model string) {
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id,
 		`{"result":{"workspace":{"workspace_id":"`+ws+`"},"root_pane":{"pane_id":"`+pane+`"},"already_open":false}}`)
 	fx.f.script(start, "{}")
+
+	if model != "" {
+		fx.f.script("git config branch."+id+"."+cfgModel+" "+model, "")
+	}
 }
 
 // expects scripts the prompt for one skill and the record of it done.

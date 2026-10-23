@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/forge"
 )
 
 // The host's side of `f10 finish`: read a branch's pull or merge request,
@@ -49,8 +51,8 @@ type pull struct {
 // the state. gh spells them OPEN / MERGED / CLOSED, glab opened / merged /
 // closed / locked.
 const (
-	pullOpen   = "open"
-	pullMerged = "merged"
+	pullOpen   = forge.Open
+	pullMerged = forge.Merged
 )
 
 func (p pull) url() string  { return cmp.Or(p.URL, p.WebURL) }
@@ -68,14 +70,7 @@ func (p pull) fork() bool {
 	return p.IsCrossRepository || p.SourceProjectID != p.TargetProjectID
 }
 
-func (p pull) status() string {
-	switch s := strings.ToLower(p.State); s {
-	case "opened", "locked":
-		return pullOpen
-	default:
-		return s
-	}
-}
+func (p pull) status() string { return forge.Status(p.State) }
 
 // noSuchPull reports whether the host answered that there is no such
 // request, by number or for a branch, as opposed to failing to answer at
@@ -107,7 +102,7 @@ func noSuchPull(err error) bool {
 func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	var p pull
 
-	err := h.decode(ctx, &p, h.pick(
+	err := h.Decode(ctx, &p, h.Pick(
 		[]string{
 			"pr",
 			"view",
@@ -125,7 +120,7 @@ func (h host) pull(ctx context.Context, branch string) (pull, error) {
 func (h host) pullBody(ctx context.Context, branch string) (string, error) {
 	var p pull
 
-	err := h.decode(ctx, &p, h.pick(
+	err := h.Decode(ctx, &p, h.Pick(
 		[]string{"pr", "view", branch, "--json", "body"},
 		[]string{"mr", "view", branch, "-F", "json"},
 	)...)
@@ -135,8 +130,8 @@ func (h host) pullBody(ctx context.Context, branch string) (string, error) {
 
 // editPullBody replaces the description of the request whose head is branch.
 func (h host) editPullBody(ctx context.Context, branch, body string) error {
-	if h.glab() {
-		_, err := h.run(ctx, "mr", "update", branch, "--description", body)
+	if h.GLab() {
+		_, err := h.Run(ctx, "mr", "update", branch, "--description", body)
 
 		return err
 	}
@@ -158,7 +153,7 @@ func (h host) editPullBody(ctx context.Context, branch, body string) error {
 		return fmt.Errorf("writing the PR body: %w", err)
 	}
 
-	_, err = h.run(ctx, "pr", "edit", branch, "--body-file", f.Name())
+	_, err = h.Run(ctx, "pr", "edit", branch, "--body-file", f.Name())
 
 	return err
 }
@@ -169,7 +164,7 @@ func (h host) editPullBody(ctx context.Context, branch, body string) error {
 func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 	var p pull
 
-	err := h.decode(ctx, &p, h.pick(
+	err := h.Decode(ctx, &p, h.Pick(
 		[]string{"pr", "view", number, "--json", "state,url,number,title,body,author,headRefName,isCrossRepository"},
 		[]string{"mr", "view", number, "-F", "json"},
 	)...)
@@ -186,7 +181,7 @@ func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 // glab merge commit never gets one: its method is "" and the project fixes
 // its message.
 func (h host) mergePull(ctx context.Context, p pull, branch, method, body string) (pull, error) {
-	args := h.pick(
+	args := h.Pick(
 		[]string{"pr", "merge", branch},
 		[]string{"mr", "merge", branch, "--remove-source-branch", "--auto-merge=false", "--yes"},
 	)
@@ -196,14 +191,14 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 
 	if body != "" {
 		flag := "--body"
-		if h.glab() {
+		if h.GLab() {
 			flag, body = "--squash-message", p.Title+"\n\n"+body
 		}
 
 		args = append(args, flag, body)
 	}
 
-	if _, err := h.run(ctx, args...); err != nil {
+	if _, err := h.Run(ctx, args...); err != nil {
 		return pull{}, err
 	}
 
@@ -216,7 +211,7 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 // worktree has it checked out, and gh then exits non-zero after the merge
 // landed.
 func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
-	_, err := h.run(ctx, h.pick(
+	_, err := h.Run(ctx, h.Pick(
 		[]string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + branch},
 		[]string{"api", "-X", "DELETE", "projects/:fullpath/repository/branches/" + branch},
 	)...)
@@ -233,19 +228,19 @@ func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 func (h host) mergeMethod(ctx context.Context, declared string) (string, string, error) {
 	if declared != "" {
 		method := strings.ToLower(declared)
-		if h.glab() && method == "merge" {
+		if h.GLab() && method == "merge" {
 			return "", "", nil
 		}
 
 		return "--" + method, "", nil
 	}
 
-	if h.glab() {
+	if h.GLab() {
 		var repo struct {
 			SquashOption string `json:"squash_option"`
 		}
 
-		if err := h.decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
+		if err := h.Decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
 			return "", "", err
 		}
 
@@ -262,7 +257,7 @@ func (h host) mergeMethod(ctx context.Context, declared string) (string, string,
 		Rebase bool `json:"rebaseMergeAllowed"`
 	}
 
-	err := h.decode(ctx, &repo, "repo", "view", "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed")
+	err := h.Decode(ctx, &repo, "repo", "view", "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed")
 	if err != nil {
 		return "", "", err
 	}
