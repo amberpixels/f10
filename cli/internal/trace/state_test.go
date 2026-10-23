@@ -222,6 +222,38 @@ func TestPutState(t *testing.T) {
 	}
 }
 
+func TestCarryState(t *testing.T) {
+	held := "Old.\n\n<!-- state {\"v\":1,\"step\":\"judge\",\"round\":1} -->\n"
+	raw := `<!-- state {"v":1,"step":"judge","round":1} -->`
+
+	cases := []struct {
+		name string
+		body string
+		from string
+		want string
+	}{
+		{"nothing held, nothing added", "New.\n", "Old.\n", "New.\n"},
+		{"held block appended as it is", "New.\n", held, "New.\n\n" + raw + "\n"},
+		{
+			"a draft's own block is replaced",
+			"New.\n\n<!-- state {\"v\":1,\"step\":\"pr\"} -->\n", held,
+			"New.\n\n" + raw + "\n",
+		},
+		{
+			"a malformed block is carried untouched",
+			"New.\n", "Old.\n\n<!-- state {nope} -->\n",
+			"New.\n\n<!-- state {nope} -->\n",
+		},
+		{"a fenced example is not a block", "New.\n", "```\n" + raw + "\n```\n", "New.\n"},
+	}
+
+	for _, c := range cases {
+		if got := CarryState(c.body, c.from); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestRewriteCarriesTheCounts(t *testing.T) {
 	body := "Adds the thing.\n\n<!-- state {\"v\":1,\"task\":\"GH-1\",\"step\":\"review\",\"round\":1,\"open\":2} -->\n"
 

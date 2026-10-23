@@ -34,7 +34,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
      The old body is read for these sections only.
    - **The state block** (`docs/traces.md`): with plain mechanics, run `f10 trace state --step pr --body-file <file>` on the draft before writing it, and the block and its counts come over from the old body.
      A skill adapter takes no draft: there the block is an owned section, copied verbatim whatever the switch, and `f10 trace state --step pr` runs after the skill's write.
-     Nothing with `traces: off`; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
+     With `traces: off` no block is written, and one the old body holds comes over as it is; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
    - **Write it** through the project's PR adapter: a skill adapter refreshes through that skill, and one with no way to refresh fails the step (`conventions/failure.md` rule 4).
      Plain mechanics: `gh pr edit <n> --title … --body-file <file>` / `glab mr update <n> --title … --description "$(cat <file>)"`, the draft in a temp file outside the repo.
      The base, labels and assignee stay as they are.

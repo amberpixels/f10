@@ -196,13 +196,33 @@ func PutState(body string, s State) (string, error) {
 		return "", err
 	}
 
+	return putBlock(body, block), nil
+}
+
+// CarryState copies the block from holds into body as it is, bytes and
+// all, where PutState would put a new one; a from without a block leaves
+// body as it was. It is what a body rewritten from scratch with traces
+// off does with the block the old body held: no block is written, and
+// the one already there is not dropped.
+func CarryState(body, from string) string {
+	spans := stateSpans(from)
+	if len(spans) == 0 {
+		return body
+	}
+
+	return putBlock(body, from[spans[0][0]:spans[0][1]])
+}
+
+// putBlock places one rendered block in body, replacing the first block
+// there, removing any later one, or appending after a blank line.
+func putBlock(body, block string) string {
 	spans := stateSpans(body)
 	if len(spans) == 0 {
 		if strings.TrimSpace(body) == "" {
-			return block + "\n", nil
+			return block + "\n"
 		}
 
-		return strings.TrimRight(body, " \t\r\n") + "\n\n" + block + "\n", nil
+		return strings.TrimRight(body, " \t\r\n") + "\n\n" + block + "\n"
 	}
 
 	// later blocks first, so the earlier offsets stay valid
@@ -210,7 +230,7 @@ func PutState(body string, s State) (string, error) {
 		body = removeSpan(body, span[0], span[1])
 	}
 
-	return body[:spans[0][0]] + block + body[spans[0][1]:], nil
+	return body[:spans[0][0]] + block + body[spans[0][1]:]
 }
 
 // Rewrite is PutState of Merge over the state body already holds: what a

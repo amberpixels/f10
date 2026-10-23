@@ -51,15 +51,6 @@ func pullToken(token string) (string, bool) {
 	return "", false
 }
 
-// noSuchPull reports whether the host answered that the number is no PR,
-// as opposed to failing to answer at all.
-func noSuchPull(err error) bool {
-	msg := err.Error()
-
-	return strings.Contains(msg, "Could not resolve to a PullRequest") ||
-		strings.Contains(msg, "no pull requests found")
-}
-
 func digits(s string) bool {
 	return s != "" && strings.Trim(s, "0123456789") == ""
 }

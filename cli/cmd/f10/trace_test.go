@@ -150,17 +150,31 @@ func TestTraceTrailersRefuses(t *testing.T) {
 }
 
 // A ghFake answers the host CLI while git stays real: the state verb reads
-// the branch and its config from the checkout and the PR from gh.
+// the branch and its config from the checkout and the PR from gh or glab.
 type ghFake struct {
 	calls  []string
-	edited string // the body the last `gh pr edit --body-file` carried
+	edited string // the body the last edit carried: gh's --body-file, glab's --description
 }
 
 const stateView = "gh pr view %s --json state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author"
 
 // fakeGH scripts gh: the PR view for branch, the signed-in login, and an
-// edit that records the body it was given.
+// edit that records the body it was given. A view starting ERR: is the
+// CLI failing with those words.
 func fakeGH(t *testing.T, branch, view string) *ghFake {
+	t.Helper()
+
+	return fakeHost(t, "gh", strings.ReplaceAll(stateView, "%s", branch), "gh pr edit "+branch+" --body-file ", view)
+}
+
+// fakeGlab is fakeGH for glab, whose edit carries the body inline.
+func fakeGlab(t *testing.T, branch, view string) *ghFake {
+	t.Helper()
+
+	return fakeHost(t, "glab", "glab mr view "+branch+" -F json", "glab mr update "+branch+" --description ", view)
+}
+
+func fakeHost(t *testing.T, cli, viewKey, editPrefix, view string) *ghFake {
 	t.Helper()
 
 	f := &ghFake{}
@@ -171,19 +185,22 @@ func fakeGH(t *testing.T, branch, view string) *ghFake {
 		f.calls = append(f.calls, key)
 
 		switch {
-		case key == strings.ReplaceAll(stateView, "%s", branch) && strings.HasPrefix(view, "ERR:"):
+		case key == viewKey && strings.HasPrefix(view, "ERR:"):
 			return shell.Result{Code: 1, Stderr: strings.TrimPrefix(view, "ERR:")}, nil
-		case key == strings.ReplaceAll(stateView, "%s", branch):
+		case key == viewKey:
 			return shell.Result{Stdout: view}, nil
-		case key == "gh api user":
-			return shell.Result{Stdout: `{"login":"Me"}`}, nil
-		case strings.HasPrefix(key, "gh pr edit "+branch+" --body-file "):
-			data, err := os.ReadFile(args[len(args)-1])
-			if err != nil {
-				t.Fatal(err)
-			}
+		case key == cli+" api user":
+			return shell.Result{Stdout: `{"login":"Me","username":"Me"}`}, nil
+		case strings.HasPrefix(key, editPrefix):
+			f.edited = args[len(args)-1]
+			if cli == "gh" {
+				data, err := os.ReadFile(f.edited)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			f.edited = string(data)
+				f.edited = string(data)
+			}
 
 			return shell.Result{}, nil
 		}
@@ -196,6 +213,16 @@ func fakeGH(t *testing.T, branch, view string) *ghFake {
 	t.Cleanup(func() { shell.Capture = prev })
 
 	return f
+}
+
+// glabRepo is tracedRepo on a GitLab remote, so the probe routes to glab.
+func glabRepo(t *testing.T, branch, traces string) string {
+	t.Helper()
+
+	repo := tracedRepo(t, branch, traces)
+	git(t, repo, "remote", "set-url", "origin", "git@gitlab.com:amberpixels/demo.git")
+
+	return repo
 }
 
 func openPR(body string) string {
@@ -280,6 +307,63 @@ func TestTraceStateOffMakesNoHostCall(t *testing.T) {
 	if len(gh.calls) != 0 {
 		t.Errorf("called the host: %v", gh.calls)
 	}
+}
+
+// With traces off a draft still takes over the block the PR holds, as it
+// is, and the PR itself is not edited: the switch writes nothing new and
+// drops nothing old.
+func TestTraceStateOffBodyFileCarriesTheBlock(t *testing.T) {
+	const branch = "DM-7/thing"
+
+	repo := tracedRepo(t, branch, "off")
+	held := "Old description.\n\n<!-- state {\"v\":1,\"task\":\"DM-7\",\"step\":\"judge\",\"round\":1} -->\n"
+	gh := fakeGH(t, branch, openPR(held))
+
+	draft := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(draft, []byte("New description.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr", "--body-file", draft); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := os.ReadFile(draft)
+	want := "New description.\n\n<!-- state {\"v\":1,\"task\":\"DM-7\",\"step\":\"judge\",\"round\":1} -->\n"
+
+	if string(got) != want || gh.edited != "" {
+		t.Errorf("draft %q, edited %q; want %q and no edit", got, gh.edited, want)
+	}
+}
+
+// The glab spelling: the view, the login and an update carrying the body inline.
+func TestTraceStateGlab(t *testing.T) {
+	const branch = "DM-7/thing"
+
+	t.Run("the body is rewritten through mr update", func(t *testing.T) {
+		repo := glabRepo(t, branch, "on")
+		view := `{"state":"opened","web_url":"https://gl/mr/9","description":"Adds the thing.\n","author":{"username":"me"}}`
+		gl := fakeGlab(t, branch, view)
+
+		if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr"); err != nil {
+			t.Fatal(err)
+		}
+
+		want := "Adds the thing.\n\n<!-- state {\"v\":1,\"task\":\"DM-7\",\"step\":\"pr\"} -->\n"
+		if gl.edited != want {
+			t.Errorf("edited body %q, want %q", gl.edited, want)
+		}
+	})
+
+	t.Run("no MR yet is a note", func(t *testing.T) {
+		repo := glabRepo(t, branch, "on")
+		gl := fakeGlab(t, branch, "ERR:no open merge request available for \"DM-7/thing\"")
+
+		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "pr")
+		if err != nil || gl.edited != "" || !strings.Contains(errOut, "no PR for DM-7/thing yet") {
+			t.Errorf("err %v, edited %q, stderr %q", err, gl.edited, errOut)
+		}
+	})
 }
 
 func TestTraceStateDeclines(t *testing.T) {

@@ -70,6 +70,7 @@ So a `pr` refresh or `f10 finish`, which know nothing about findings, leave a re
 A body without a block gets one appended after a blank line.
 A rewrite replaces the first block where it is, removes any later one, and changes no other byte.
 A `pr` refresh that drafts the description from scratch puts the block into the draft with `--body-file`, its counts carried from the body the host holds.
+With `traces: off` the same call writes no block and copies the one the body holds into the draft as it is, so turning the switch off never drops the last state.
 
 **Who writes it.**
 

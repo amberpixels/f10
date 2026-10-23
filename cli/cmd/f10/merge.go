@@ -77,6 +77,30 @@ func (p pull) status() string {
 	}
 }
 
+// noSuchPull reports whether the host answered that there is no such
+// request, by number or for a branch, as opposed to failing to answer at
+// all. Every phrase either CLI uses for it lives here.
+func noSuchPull(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := err.Error()
+
+	for _, phrase := range []string{
+		"Could not resolve to a PullRequest", // gh, by number
+		"no pull requests found",             // gh, by branch
+		"no open merge request",              // glab, by branch
+		"404 Not Found",                      // glab, by number
+	} {
+		if strings.Contains(msg, phrase) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // pull reads the request whose head is branch. No request is the host's
 // error, verbatim: finish has nothing to merge and says why in gh's or
 // glab's words.

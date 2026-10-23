@@ -138,37 +138,23 @@ func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) 
 // opened is a note and exit 0, so every step calls it the same way and
 // nothing about the PR has to be checked by hand first: an edited
 // description is the author's, where a status or a comment reads as the
-// user's own on any PR.
+// user's own on any PR. With traces off nothing is written, but a draft
+// still takes over the block the body already holds, as it is: the switch
+// turned off must not make the next refresh drop the last state.
 func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	if !t.eff.Traces {
+	file := cmd.String("body-file")
+	if !t.eff.Traces && file == "" {
 		return nil
-	}
-
-	tasks, err := traceTasks(ctx, cmd, t, "the block names none")
-	if err != nil {
-		return err
 	}
 
 	branch := gitx.CurrentBranch(ctx, t.dir)
 	if branch == "" {
 		return errors.New("no branch is checked out: the state block belongs to a branch's PR")
-	}
-
-	u := trace.Update{
-		Step:  cmd.String("step"),
-		After: branchAfter(ctx, t.dir, branch),
-		Round: countFlag(cmd, "round"),
-		Open:  countFlag(cmd, "open"),
-		Asks:  countFlag(cmd, "asks"),
-	}
-
-	if len(tasks) > 0 {
-		u.Task, u.Riders = tasks[0], tasks[1:]
 	}
 
 	h, err := t.host()
@@ -179,7 +165,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	p, err := h.pull(ctx, branch)
 
 	switch {
-	case noPull(err):
+	case noSuchPull(err):
 		fmt.Fprintf(errWriter(cmd), "f10: no PR for %s yet: no state to write\n", branch)
 
 		return nil
@@ -202,7 +188,28 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	if file := cmd.String("body-file"); file != "" {
+	if !t.eff.Traces {
+		return carryStateToFile(file, p.body())
+	}
+
+	tasks, err := traceTasks(ctx, cmd, t, "the block names none")
+	if err != nil {
+		return err
+	}
+
+	u := trace.Update{
+		Step:  cmd.String("step"),
+		After: branchAfter(ctx, t.dir, branch),
+		Round: countFlag(cmd, "round"),
+		Open:  countFlag(cmd, "open"),
+		Asks:  countFlag(cmd, "asks"),
+	}
+
+	if len(tasks) > 0 {
+		u.Task, u.Riders = tasks[0], tasks[1:]
+	}
+
+	if file != "" {
 		return putStateInFile(file, p.body(), u)
 	}
 
@@ -216,18 +223,6 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return h.editPullBody(ctx, branch, out)
-}
-
-// noPull reports the host CLI's own "no request for this branch", in
-// gh's and glab's words; any other error is the caller's to return.
-func noPull(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	msg := err.Error()
-
-	return strings.Contains(msg, "no pull requests found") || strings.Contains(msg, "no open merge request")
 }
 
 // putStateInFile writes the block into the drafted body at file, its
@@ -246,6 +241,24 @@ func putStateInFile(file, hostBody string, u trace.Update) error {
 	out, err := trace.PutState(string(draft), trace.Merge(prev, u))
 	if err != nil {
 		return err
+	}
+
+	return os.WriteFile(file, []byte(out), 0o600) //nolint:gosec // the step's own draft, named on the command line
+}
+
+// carryStateToFile copies the block hostBody holds into the draft at file
+// as it is, for a refresh with traces off.
+func carryStateToFile(file, hostBody string) error {
+	file = filepath.Clean(file)
+
+	draft, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+
+	out := trace.CarryState(string(draft), hostBody)
+	if out == string(draft) {
+		return nil
 	}
 
 	return os.WriteFile(file, []byte(out), 0o600) //nolint:gosec // the step's own draft, named on the command line
