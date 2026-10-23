@@ -58,7 +58,36 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
 		}
 
-		in, err := taskStatusFor(ctx, cmd, token)
+		t, err := targetFor(ctx, cmd)
+		if err != nil {
+			return err
+		}
+
+		id, suffix := ref.SplitSuffix(token)
+
+		r, err := t.reference(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		if rows, ok, err := parentRows(ctx, t, r); err != nil || ok {
+			if err != nil {
+				return err
+			}
+
+			return writeTaskRows(cmd, rows)
+		}
+
+		in, err := taskStatusFor(ctx, t, r, suffix)
+		if errors.Is(err, errNoRunToRead) {
+			row, ferr := finishedRow(ctx, t, r.Head())
+			if ferr != nil || row == nil {
+				return cmp.Or(ferr, err)
+			}
+
+			return writeTaskRows(cmd, []taskRow{*row})
+		}
+
 		if err != nil {
 			return err
 		}
@@ -156,21 +185,12 @@ type taskStatusInput struct {
 	host   *host  // nil without a host CLI: no PR row
 }
 
-// taskStatusFor resolves the task to its checkout. A task with no branch,
-// or a branch checked out nowhere, has no run to read.
-func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskStatusInput, error) {
-	t, err := targetFor(ctx, cmd)
-	if err != nil {
-		return taskStatusInput{}, err
-	}
+// errNoRunToRead is a task with no branch, or a branch checked out
+// nowhere: no run to read, though a finished one still reports.
+var errNoRunToRead = errors.New("no run to read")
 
-	id, suffix := ref.SplitSuffix(token)
-
-	r, err := t.reference(ctx, id)
-	if err != nil {
-		return taskStatusInput{}, err
-	}
-
+// taskStatusFor resolves the task to its checkout.
+func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (taskStatusInput, error) {
 	// a bundle's run, plan and branch are its lead's
 	r = r.Head()
 
@@ -182,9 +202,9 @@ func taskStatusFor(ctx context.Context, cmd *cli.Command, token string) (taskSta
 	case err != nil:
 		return taskStatusInput{}, err
 	case name == "":
-		return taskStatusInput{}, fmt.Errorf("%s has no branch here: no run to read", r.ID)
+		return taskStatusInput{}, fmt.Errorf("%s has no branch here: %w", r.ID, errNoRunToRead)
 	case path == "":
-		return taskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: no run to read", name)
+		return taskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: %w", name, errNoRunToRead)
 	}
 
 	in := taskStatusInput{
@@ -275,6 +295,17 @@ func (fb fallback) render(w io.Writer, limit int) {
 	if fb.PR != "" {
 		headerRow(w, "pr", fb.PR+" ("+fb.PRState+")", limit, plain)
 	}
+}
+
+// writeTaskRows prints task rows, or encodes them under --json.
+func writeTaskRows(cmd *cli.Command, rows []taskRow) error {
+	if cmd.Bool("json") {
+		return encodeJSON(cmd.Writer, rows)
+	}
+
+	renderRows(cmd.Writer, rows, termWidth(cmd.Writer))
+
+	return nil
 }
 
 func encodeJSON(w io.Writer, v any) error {

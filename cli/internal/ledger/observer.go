@@ -22,6 +22,7 @@ const (
 	Pushed         = "pushed"
 	PROpened       = "pr_opened"
 	TaskFinished   = "task_finished"
+	TaskHalted     = "task_halted" // drive's, not a hook's: a task it stopped
 	SessionStopped = "session_stopped"
 
 	PlanSaved         = "plan_saved"
