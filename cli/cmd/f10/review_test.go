@@ -865,3 +865,31 @@ func TestReviewRevisionIgnoresTheMarkerOnAnInlineReview(t *testing.T) {
 		t.Error("a new comment left the revision where it was")
 	}
 }
+
+// A marker settled mark is appended once and read back as settled, which
+// also reads as handled.
+func TestReviewSettleAppendsTheMarker(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Settled, rf.SettledText = facts.HandledMarker, "<!-- settled -->"
+	rv := ghReviewer(t, f, rf)
+
+	patch := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=findings\n\n<!-- settled -->"
+	f.script(patch, `{}`)
+
+	what, err := rv.settle(t.Context(), remoteReview{ID: "7", Kind: facts.ArrivesComment, stored: "findings\n"})
+	if err != nil || what != "marker appended" || !f.called(patch) {
+		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
+	}
+
+	f.script(commentsPath, `[{"id":7,"body":"findings\\n\\n<!-- settled -->","html_url":"u7",
+	  "created_at":"2026-10-06T13:00:00Z","updated_at":"2026-10-06T14:00:00Z","user":{"login":"claude[bot]"}}]`)
+	f.script("gh api user", viewerJSON)
+	f.script(strings.Replace(reactionsPath, "%s", "7", 1), `[]`)
+
+	r, err := rv.latest(t.Context())
+	if err != nil || !r.Settled || !r.Handled {
+		t.Errorf("latest = %+v, %v; want settled and handled through the marker", r, err)
+	}
+}
