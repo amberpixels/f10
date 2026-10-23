@@ -8,6 +8,8 @@ package herdr
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -336,4 +338,27 @@ func field(obj map[string]any, path ...string) string {
 	s, _ := cur.(string)
 
 	return s
+}
+
+// AgentName names a task's agent. Herdr's live agent names share one
+// namespace across every project, capped at 32 characters, so the bare
+// name is cut to leave room for a short hash of the worktree path: the same
+// id in two checkouts never collides.
+func AgentName(id, suffix, path string) string {
+	sum := sha256.Sum256([]byte(path))
+	base := BareAgentName(id, suffix)
+
+	return base[:min(len(base), 25)] + "-" + hex.EncodeToString(sum[:3])
+}
+
+// BareAgentName is the id lowercased, with the suffix so two attempts on
+// one task can both run: the whole name of an agent started before names
+// carried the path hash.
+func BareAgentName(id, suffix string) string {
+	name := strings.ToLower(id)
+	if suffix != "" {
+		name += "-" + strings.ToLower(suffix)
+	}
+
+	return name
 }

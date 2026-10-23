@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -42,7 +43,7 @@ func ghReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 
 	f.script(reviewPR, prJSON)
 
-	rv, err := newReviewer(t.Context(), host{name: "gh", dir: "."}, rf, "")
+	rv, err := newReviewer(t.Context(), newHost("gh", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -276,7 +277,7 @@ func TestReviewGlabSpelling(t *testing.T) {
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
-	rv, err := newReviewer(t.Context(), host{name: "glab", dir: "."}, stickyFacts(), "")
+	rv, err := newReviewer(t.Context(), newHost("glab", "."), stickyFacts(), "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -401,11 +402,11 @@ func TestReviewPickIgnoresALoginForgingTheBot(t *testing.T) {
 		t.Errorf("picked %+v, %v: a bare login passed for claude[bot]", r, err)
 	}
 
-	if !sameLogin("claude", "claude[bot]") || !sameLogin("Claude[bot]", "claude[bot]") {
+	if !forge.SameLogin("claude", "claude[bot]") || !forge.SameLogin("Claude[bot]", "claude[bot]") {
 		t.Error("sameLogin: a declaration must match the app's login")
 	}
 
-	if sameLogin("claude[bot]", "claude") {
+	if forge.SameLogin("claude[bot]", "claude") {
 		t.Error("sameLogin: a [bot] declaration matched a bare login")
 	}
 }
@@ -632,7 +633,7 @@ func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
-	rv, err := newReviewer(t.Context(), host{name: "glab", dir: "."}, rf, "")
+	rv, err := newReviewer(t.Context(), newHost("glab", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}

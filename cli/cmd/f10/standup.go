@@ -15,6 +15,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -245,15 +246,17 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 		return in, nil
 	}
 
-	login, err := src.host.login(ctx)
+	login, err := src.host.Login(ctx)
 	if err != nil {
 		return standup.Input{}, err
 	}
 
-	prs, err := src.host.standupPulls(ctx, login, since)
+	pulls, err := src.host.Pulls(ctx, login, since)
 	if err != nil {
 		return standup.Input{}, err
 	}
+
+	prs := hostPRs(pulls)
 
 	// a force-push's commits are taken against the PR's base: the base f10
 	// recorded, else the host's
@@ -279,14 +282,43 @@ func collectStandup(ctx context.Context, src standupSource, since time.Time) (st
 			continue
 		}
 
-		if ci, err := src.host.commitCI(ctx, c.Parents[0]); err == nil {
-			commits[i].ParentCI = ci
+		if ci, err := src.host.CommitCI(ctx, c.Parents[0]); err == nil && ci != nil {
+			commits[i].ParentCI = &standup.CI{Red: ci.Red, At: ci.At}
 		}
 	}
 
-	in.Host, in.User.Login, in.PRs = src.host.name, login, prs
+	in.Host, in.User.Login, in.PRs = src.host.Name, login, prs
 
 	return in, nil
+}
+
+// hostPRs is forge's requests in standup's shape, the fields Group reads.
+func hostPRs(pulls []forge.PR) []standup.HostPR {
+	out := make([]standup.HostPR, 0, len(pulls))
+
+	for _, p := range pulls {
+		hp := standup.HostPR{
+			Number: p.Number, Title: p.Title, URL: p.URL, Status: p.Status, Draft: p.Draft, Empty: p.Empty,
+			Head: p.Head, Base: p.Base, Author: p.Author, CreatedAt: p.CreatedAt, MergedAt: p.MergedAt,
+			MergedBy: p.MergedBy, MergeSHA: p.MergeSHA,
+		}
+
+		for _, c := range p.Commits {
+			hp.Commits = append(hp.Commits, standup.PRCommit{SHA: c.SHA, Subject: c.Subject, At: c.At})
+		}
+
+		for _, r := range p.Reviews {
+			hp.Reviews = append(hp.Reviews, standup.Review{Author: r.Author, At: r.At})
+		}
+
+		for _, fp := range p.ForcePushes {
+			hp.ForcePushes = append(hp.ForcePushes, standup.ForcePush{At: fp.At, Before: fp.Before, After: fp.After})
+		}
+
+		out = append(out, hp)
+	}
+
+	return out
 }
 
 // standupDefault is the default branch as a ref to walk and as a branch
@@ -308,7 +340,7 @@ func standupDefault(ctx context.Context, src standupSource, remotes []string) (s
 		)
 	}
 
-	name, err := src.host.defaultBranchName(ctx)
+	name, err := src.host.DefaultBranchName(ctx)
 	if err != nil {
 		return "", "", err
 	}

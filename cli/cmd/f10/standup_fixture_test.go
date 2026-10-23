@@ -150,7 +150,7 @@ func classes(t *testing.T, fx standupFixture, dir string) map[string]string {
 	t.Helper()
 
 	in, err := collectStandup(t.Context(), standupSource{
-		dir: dir, main: dir, prefix: fx.Prefix, host: host{name: fx.Host, dir: dir},
+		dir: dir, main: dir, prefix: fx.Prefix, host: newHost(fx.Host, dir),
 	}, fx.Since)
 	if err != nil {
 		t.Fatal(err)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -138,7 +139,7 @@ func TestForwardSendsPlainTextUnmarked(t *testing.T) {
 	fx.in.text = "1. no 2. client"
 	fx.f.script(refsLocal, heads("GH-1-v2"))
 	fx.f.script(worktrees, porcelain("GH-1-v2", fwdWT))
-	fx.f.script("herdr agent prompt "+agentName("GH-1", "v2", fwdWT)+" 1. no 2. client", "{}")
+	fx.f.script("herdr agent prompt "+herdr.AgentName("GH-1", "v2", fwdWT)+" 1. no 2. client", "{}")
 
 	out, err := fx.forward(t)
 	if err != nil {

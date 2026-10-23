@@ -128,7 +128,9 @@ func TestRenderRefuses(t *testing.T) {
 // Nothing that reaches the host names f10: not a fixture, not a rendered line.
 func TestNothingNamesF10(t *testing.T) {
 	files, _ := filepath.Glob(filepath.Join(fixtures, "*"))
-	for _, f := range files {
+	bodies, _ := filepath.Glob(filepath.Join(stateFixtures, "*"))
+
+	for _, f := range append(files, bodies...) {
 		data, _ := os.ReadFile(f)
 		if strings.Contains(strings.ToLower(string(data)), "f10") {
 			t.Errorf("%s names f10", f)
@@ -138,5 +140,10 @@ func TestNothingNamesF10(t *testing.T) {
 	out, _ := Render(Trailers{Tasks: []string{"GH-1"}, Step: "resolve", Review: &Review{Round: 1}})
 	if strings.Contains(strings.ToLower(out), "f10") {
 		t.Errorf("rendered output names f10: %q", out)
+	}
+
+	block, _ := RenderState(State{Task: "GH-1", Step: "resolve", Round: 1, Open: 1, Asks: 1, After: "GH-0"})
+	if strings.Contains(strings.ToLower(block), "f10") {
+		t.Errorf("rendered block names f10: %q", block)
 	}
 }

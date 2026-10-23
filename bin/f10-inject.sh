@@ -20,7 +20,7 @@ set -uo pipefail
 
 state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
 
-# The skills that run a step and so read the conventions. status, start, drive and finish run the binary
+# The skills that run a step and so read the conventions. status, board, start, drive and finish run the binary
 # alone; --help loads nothing (modes/help.md).
 skills="brainstorm capture catchup cleanup demo explain judge plan resolve review ship standup"
 

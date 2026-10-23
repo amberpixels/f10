@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -173,51 +172,9 @@ func closeAgain(body, number string) string {
 	return re.ReplaceAllString(body, "Closes $1")
 }
 
-// pullBody reads the description of the request whose head is branch.
-func (h host) pullBody(ctx context.Context, branch string) (string, error) {
-	var p pull
-
-	err := h.decode(ctx, &p, h.pick(
-		[]string{"pr", "view", branch, "--json", "body"},
-		[]string{"mr", "view", branch, "-F", "json"},
-	)...)
-
-	return p.body(), err
-}
-
-// editPullBody replaces the description of the request whose head is branch.
-func (h host) editPullBody(ctx context.Context, branch, body string) error {
-	if h.glab() {
-		_, err := h.run(ctx, "mr", "update", branch, "--description", body)
-
-		return err
-	}
-
-	f, err := os.CreateTemp("", "f10-pr-body-*.md")
-	if err != nil {
-		return fmt.Errorf("writing the PR body: %w", err)
-	}
-
-	defer os.Remove(f.Name())
-
-	if _, err := f.WriteString(body); err != nil {
-		_ = f.Close()
-
-		return fmt.Errorf("writing the PR body: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("writing the PR body: %w", err)
-	}
-
-	_, err = h.run(ctx, "pr", "edit", branch, "--body-file", f.Name())
-
-	return err
-}
-
 // reopenIssue reopens issue number.
 func (h host) reopenIssue(ctx context.Context, number string) error {
-	_, err := h.run(ctx, "issue", "reopen", number)
+	_, err := h.Run(ctx, "issue", "reopen", number)
 
 	return err
 }

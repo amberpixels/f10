@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -129,7 +130,7 @@ func TestRecordedBases(t *testing.T) {
 const numstatShow = "git show --no-renames --numstat " + numstatFormat
 
 func ghForcePushes(number int) string {
-	return "gh api graphql -f query=" + forcePushesQuery + " -F owner={owner} -F name={repo} -F number=" + strconv.Itoa(
+	return "gh api graphql -f query=" + forge.ForcePushesQuery + " -F owner={owner} -F name={repo} -F number=" + strconv.Itoa(
 		number,
 	)
 }
@@ -144,7 +145,7 @@ func ghSearch(query, fields string) string {
 func TestStandupPullsGitHub(t *testing.T) {
 	f := newFakes(t)
 
-	f.script(ghSearch("author:me updated:>="+ghStamp, ghOwnFields), `[
+	f.script(ghSearch("author:me updated:>="+ghStamp, forge.OwnFields), `[
 	  {"number":5,"title":"FT-2: b","state":"OPEN","isDraft":true,"headRefName":"FT-2/b","baseRefName":"FT-1/a",
 	   "url":"u5","author":{"login":"me"},"createdAt":"2026-10-14T08:00:00Z","changedFiles":0,"mergeCommit":null}]`)
 	f.script(
@@ -154,15 +155,15 @@ func TestStandupPullsGitHub(t *testing.T) {
 	f.script(ghForcePushes(5), `{"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[
 	  {"createdAt":"2026-10-14T09:00:00Z","actor":{"login":"me"},"beforeCommit":{"oid":"b0"},"afterCommit":{"oid":"b1"}},
 	  {"createdAt":"2026-10-14T10:00:00Z","actor":{"login":"bob"},"beforeCommit":{"oid":"b1"},"afterCommit":{"oid":"b2"}}]}}}}}`)
-	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, ghForeignFields+",reviews"), `[
+	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, forge.ForeignFields+",reviews"), `[
 	  {"number":9,"title":"theirs","state":"MERGED","url":"u9","author":{"login":"bob"},
 	   "reviews":[{"author":{"login":"me"},"submittedAt":"2026-10-14T09:00:00Z"}]},
 	  {"number":5,"title":"FT-2: b","state":"OPEN","url":"u5","author":{"login":"me"},"reviews":[]}]`)
-	f.script(ghSearch("is:merged merged:>="+ghStamp, ghForeignFields), `[
+	f.script(ghSearch("is:merged merged:>="+ghStamp, forge.ForeignFields), `[
 	  {"number":9,"title":"theirs","state":"MERGED","url":"u9","author":{"login":"bob"},
 	   "mergedAt":"2026-10-14T10:00:00Z","mergedBy":{"login":"me"}}]`)
 
-	got, err := host{name: "gh", dir: "."}.standupPulls(t.Context(), "me", standupSince)
+	got, err := newHost("gh", ".").Pulls(t.Context(), "me", standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +220,7 @@ func TestStandupPullsGitLab(t *testing.T) {
 	  {"body":"requested review from @me","system":true,"created_at":"2026-10-14T08:00:00Z","author":{"username":"bob"}},
 	  {"body":"looks good","system":false,"created_at":"2026-10-14T10:00:00Z","author":{"username":"me"}}]`)
 
-	got, err := host{name: "glab", dir: "."}.standupPulls(t.Context(), "me", standupSince)
+	got, err := newHost("glab", ".").Pulls(t.Context(), "me", standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +314,7 @@ func TestCollectStandupFailsOnAFailingHost(t *testing.T) {
 
 	_, err := collectStandup(
 		t.Context(),
-		standupSource{dir: ".", main: ".", host: host{name: "gh", dir: "."}},
+		standupSource{dir: ".", main: ".", host: newHost("gh", ".")},
 		standupSince,
 	)
 	if err == nil || !strings.Contains(err.Error(), "not logged in") {
@@ -341,7 +342,7 @@ func TestStandupDefaultFallsBackToTheHost(t *testing.T) {
 
 	ref, name, err := standupDefault(
 		t.Context(),
-		standupSource{dir: ".", host: host{name: "gh", dir: "."}},
+		standupSource{dir: ".", host: newHost("gh", ".")},
 		[]string{"origin"},
 	)
 	if err != nil || ref != "refs/remotes/origin/trunk" || name != "trunk" {
@@ -472,18 +473,18 @@ func TestCommitCI(t *testing.T) {
 	f.script("glab api projects/:fullpath/repository/commits/p3",
 		`{"last_pipeline":{"status":"failed","updated_at":"2026-10-14T11:00:00Z"}}`)
 
-	gh := host{name: "gh", dir: "."}
+	gh := newHost("gh", ".")
 
-	ci, err := gh.commitCI(t.Context(), "p1")
+	ci, err := gh.CommitCI(t.Context(), "p1")
 	if err != nil || ci == nil || !ci.Red || !ci.At.Equal(standupSince.Add(10*time.Hour)) {
 		t.Errorf("p1 = %+v, %v; want red at 10:00", ci, err)
 	}
 
-	if ci, err := gh.commitCI(t.Context(), "p2"); err != nil || ci != nil {
+	if ci, err := gh.CommitCI(t.Context(), "p2"); err != nil || ci != nil {
 		t.Errorf("p2 = %+v, %v; want unknown with no checks", ci, err)
 	}
 
-	if ci, err := (host{name: "glab", dir: "."}).commitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
+	if ci, err := newHost("glab", ".").CommitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
 		t.Errorf("p3 = %+v, %v; want a red pipeline", ci, err)
 	}
 }
@@ -524,15 +525,15 @@ func TestCollectStandupToleratesAnUnknownParent(t *testing.T) {
 	f.script("git check-attr linguist-generated -- a_test.go", "a_test.go: linguist-generated: unspecified")
 	f.script("git grep -l -E "+generatedHeader+" t1 t0 -- a_test.go", "")
 	f.script("gh api user", `{"login":"me"}`)
-	f.script(ghSearch("author:me updated:>="+ghStamp, ghOwnFields), `[]`)
-	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, ghForeignFields+",reviews"), `[]`)
-	f.script(ghSearch("is:merged merged:>="+ghStamp, ghForeignFields), `[]`)
+	f.script(ghSearch("author:me updated:>="+ghStamp, forge.OwnFields), `[]`)
+	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, forge.ForeignFields+",reviews"), `[]`)
+	f.script(ghSearch("is:merged merged:>="+ghStamp, forge.ForeignFields), `[]`)
 	f.fail("gh api repos/{owner}/{repo}/commits/p1/check-runs?per_page=100",
 		shell.Result{Code: 1, Stderr: "No commit found for SHA: p1 (HTTP 422)"})
 
 	in, err := collectStandup(
 		t.Context(),
-		standupSource{dir: ".", main: ".", prefix: "FT", host: host{name: "gh", dir: "."}},
+		standupSource{dir: ".", main: ".", prefix: "FT", host: newHost("gh", ".")},
 		standupSince,
 	)
 	if err != nil {

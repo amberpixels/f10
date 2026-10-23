@@ -386,7 +386,7 @@ func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
 		return false, nil
 	}
 
-	me, err := in.host.login(ctx)
+	me, err := in.host.Login(ctx)
 	if err != nil {
 		return false, fmt.Errorf("telling whose PR %s is: %w", p.url(), err)
 	}
@@ -568,10 +568,14 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 		// settleRiders may have just rewritten the description's closing
 		// keywords, and the body under the commit must be the host's current one
 		description := p.body()
-		if in.traces && len(in.task.Riders()) > 0 {
-			if description, err = in.host.pullBody(ctx, name); err != nil {
+		if in.traces {
+			var note string
+
+			if description, note, err = lastState(ctx, in, name, description); err != nil {
 				return pull{}, nil, err
 			}
+
+			notes = appendNote(notes, note)
 		}
 
 		if p, err = in.host.mergePull(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
@@ -586,7 +590,7 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 
 	if p.status() != pullMerged || p.sha() == "" {
 		return pull{}, nil, fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
-			in.host.name, p.url(), p.status())
+			in.host.Name, p.url(), p.status())
 	}
 
 	exists, err := gitx.RemoteBranchExists(ctx, in.main, name)
@@ -609,10 +613,61 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 	return p, notes, nil
 }
 
+// lastState leaves the PR body's hidden state block saying finish, the
+// last state before the merge, and returns the body as the host now holds
+// it. A failed read or write is a note, never a failed finish: the merge is
+// the work, the block a trace of it. The one exception is a bundle whose
+// body cannot be read: settleRiders just rewrote its closing keywords, and
+// the fallback would close a rider the user kept.
+func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string, error) {
+	body, err := in.host.pullBody(ctx, branch)
+
+	switch {
+	case err != nil && len(in.task.Riders()) > 0:
+		return "", "", err
+	case err != nil:
+		body = fallback
+	default:
+		body, err = putLastState(ctx, in, branch, body)
+	}
+
+	return body, stateNote(err), nil
+}
+
+// putLastState rewrites body's block for finish and writes it back when
+// it changed, returning the body the host holds afterwards.
+func putLastState(ctx context.Context, in finishInput, branch, body string) (string, error) {
+	out, err := trace.Rewrite(body, trace.Update{
+		Step:   "finish",
+		Task:   in.task.ID,
+		Riders: in.task.Riders(),
+		After:  branchAfter(ctx, in.main, branch),
+	})
+	if err != nil || out == body {
+		return body, err
+	}
+
+	if err := in.host.editPullBody(ctx, branch, out); err != nil {
+		return body, err
+	}
+
+	return out, nil
+}
+
+// stateNote is the report's line for a state block left as it was.
+func stateNote(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	return "the PR body's state block was not rewritten: " + err.Error()
+}
+
 // mergeBody is what the host's commit says under its subject: the request's
-// description, then one Task: line per member, so the commit that survives a
-// squash still names what it shipped. Only with traces on and for a squash or
-// a GitHub merge commit; a rebase, like glab's merge (""), lands the branch's own trailers.
+// description without its hidden state block, then one Task: line per
+// member, so the commit that survives a squash still names what it shipped.
+// Only with traces on and for a squash or a GitHub merge commit; a rebase,
+// like glab's merge (""), lands the branch's own trailers.
 func mergeBody(in finishInput, description, method string) string {
 	if !in.traces || (method != "--squash" && method != "--merge") {
 		return ""
@@ -623,7 +678,7 @@ func mergeBody(in finishInput, description, method string) string {
 		return ""
 	}
 
-	if body := strings.TrimSpace(description); body != "" {
+	if body := strings.TrimSpace(trace.StripState(description)); body != "" {
 		return body + "\n\n" + trailers
 	}
 

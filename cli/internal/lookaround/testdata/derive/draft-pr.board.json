@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": false,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-1",
+      "task": {
+        "id": "FT-1",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/1",
+        "status": "open"
+      },
+      "stage": "implementing",
+      "stage_from": "guessed",
+      "who": {
+        "author": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 10,
+          "title": "FT-1: thing",
+          "url": "https://github.com/acme/widgets/pull/10",
+          "state": "open",
+          "draft": true,
+          "head": "FT-1/slug",
+          "base": "main"
+        },
+        "branch": "FT-1/slug"
+      },
+      "last_activity": "2026-10-20T10:00:00Z",
+      "next": {
+        "text": "in progress"
+      }
+    }
+  ]
+}

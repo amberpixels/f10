@@ -51,15 +51,6 @@ func pullToken(token string) (string, bool) {
 	return "", false
 }
 
-// noSuchPull reports whether the host answered that the number is no PR,
-// as opposed to failing to answer at all.
-func noSuchPull(err error) bool {
-	msg := err.Error()
-
-	return strings.Contains(msg, "Could not resolve to a PullRequest") ||
-		strings.Contains(msg, "no pull requests found")
-}
-
 func digits(s string) bool {
 	return s != "" && strings.Trim(s, "0123456789") == ""
 }
@@ -124,9 +115,9 @@ func refusePull(p pull) error {
 // the agent reads it by.
 func (h host) pickupOf(number string, p pull) *pickup {
 	cmd := func(verb string, tail ...string) string {
-		args := h.pick([]string{"pr", verb, number}, []string{"mr", verb, number})
+		args := h.Pick([]string{"pr", verb, number}, []string{"mr", verb, number})
 
-		return strings.Join(append(append([]string{h.name}, args...), tail...), " ")
+		return strings.Join(append(append([]string{h.Name}, args...), tail...), " ")
 	}
 
 	return &pickup{

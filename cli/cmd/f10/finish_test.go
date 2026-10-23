@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 		}
 	}
 
-	fx.in = finishInput{main: fx.main, task: gh1, host: host{name: "gh", dir: fx.main}, cwd: fx.main}
+	fx.in = finishInput{main: fx.main, task: gh1, host: newHost("gh", fx.main), cwd: fx.main}
 
 	f := fx.f
 	f.script(refsLocal, heads("GH-1"))
@@ -121,16 +122,22 @@ func (fx *finishFixture) run(t *testing.T) (string, error) {
 // With traces on, the squash commit's body is the PR's description followed
 // by the task's trailer, so the commit on the default branch still names
 // the task; a rebase passes no body, since the branch commits keep theirs.
+// The PR body's state block says finish before the merge and never reaches
+// the commit.
 func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.traces = true
 	fx.in.method = "squash"
 	fx.plan(t, "GH-1.md", "# plan")
 
-	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"Adds the thing.\n\nCloses #1\n"}`
+	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"stale"}`
+	current := `{"body":"Adds the thing.\n\nCloses #1\n\n<!-- state {\"v\":1,\"task\":\"GH-1\",\"step\":\"judge\",\"round\":1} -->\n"}`
 	merge := "gh pr merge GH-1 --squash --body Adds the thing.\n\nCloses #1\n\nTask: GH-1\n"
 	fx.f.script(ghView, open, prMerged)
+	fx.f.script("gh pr view GH-1 --json body", current)
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ", "git config --get branch.GH-1.f10-after")
 	fx.f.script(merge, "")
+	edited := captureBodyEdits(t)
 
 	if _, err := fx.run(t); err != nil {
 		t.Fatal(err)
@@ -138,6 +145,85 @@ func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 
 	if !fx.f.called(merge) {
 		t.Errorf("the squash carried no body:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+
+	want := "Adds the thing.\n\nCloses #1\n\n<!-- state {\"v\":1,\"task\":\"GH-1\",\"step\":\"finish\",\"round\":1} -->\n"
+	if *edited != want {
+		t.Errorf("the PR body became %q, want %q", *edited, want)
+	}
+}
+
+// captureBodyEdits reads the body each `gh pr edit --body-file` carries,
+// which the fakes see only as a temp path, before the file is removed.
+func captureBodyEdits(t *testing.T) *string {
+	t.Helper()
+
+	var last string
+
+	prev := shell.Capture
+	shell.Capture = func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+		if name == "gh" && len(args) > 2 && args[0] == "pr" && args[1] == "edit" {
+			data, err := os.ReadFile(args[len(args)-1])
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			last = string(data)
+		}
+
+		return prev(ctx, dir, name, args...)
+	}
+
+	t.Cleanup(func() { shell.Capture = prev })
+
+	return &last
+}
+
+// A body the host will not hand over or take back is a note on the report;
+// the merge still runs, with the description finish read first.
+func TestFinishStateBlockFailureIsANote(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.traces = true
+	fx.in.method = "squash"
+	fx.plan(t, "GH-1.md", "# plan")
+
+	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"Adds the thing.\n"}`
+	merge := "gh pr merge GH-1 --squash --body Adds the thing.\n\nTask: GH-1\n"
+	fx.f.script(ghView, open, prMerged)
+	fx.f.answers["gh pr view GH-1 --json body"] = []shell.Result{{Code: 1, Stderr: "rate limited"}}
+	fx.f.script(merge, "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called(merge) || !strings.Contains(out, "state block was not rewritten: gh: rate limited") {
+		t.Errorf("merge called %v, report:\n%s", fx.f.called(merge), out)
+	}
+}
+
+// A bundle's body was just rewritten to keep a rider open, so a body the
+// host will not hand back stops the finish: the stale one would close it.
+func TestFinishStateBlockFailureStopsABundle(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.traces = true
+	fx.in.method = "squash"
+	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.f.answers["gh pr view GH-1 --json body"] = []shell.Result{
+		{Stdout: `{"body":"Closes #1\nCloses #2"}`},
+		{Code: 1, Stderr: "rate limited"},
+	}
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "rate limited") {
+		t.Errorf("err = %v, want the host's words", err)
+	}
+
+	if fx.f.called("gh pr merge") {
+		t.Errorf("merged on a stale body:\n%s", strings.Join(fx.f.calls, "\n"))
 	}
 }
 
@@ -158,6 +244,12 @@ func TestMergeBody(t *testing.T) {
 		{"squash", finishInput{traces: true, task: gh1}, described, "--squash", "Adds the thing.\n\nTask: GH-1\n"},
 		{"merge commit", finishInput{traces: true, task: gh1}, described, "--merge", "Adds the thing.\n\nTask: GH-1\n"},
 		{"empty description", finishInput{traces: true, task: gh1}, "", "--squash", "Task: GH-1\n"},
+		{
+			"state block stripped",
+			finishInput{traces: true, task: gh1},
+			"## Summary\n\n<!-- state {\"v\":1,\"step\":\"finish\"} -->\n\nAdds the thing.\n", "--squash",
+			"## Summary\n\nAdds the thing.\n\nTask: GH-1\n",
+		},
 		{"bundle", bundle, "", "--squash", "Task: GH-1\nTask: GH-2\n"},
 	}
 
@@ -178,7 +270,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 	fx.in.method = "squash"
 	fx.in.task, fx.in.close = bundle12, []string{}
 	fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`, `{"body":"Closes #1\nPart of #2"}`)
-	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ", "git config --get branch.GH-1.f10-after")
 
 	merge := "gh pr merge GH-1 --squash --body Closes #1\nPart of #2\n\nTask: GH-1\nTask: GH-2\n"
 	fx.f.script(merge, "")
@@ -195,7 +287,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 // glab takes the whole message, so the title goes on top of the body.
 func TestMergePullGlabSquashMessage(t *testing.T) {
 	f := newFakes(t)
-	h := host{name: "glab", dir: t.TempDir()}
+	h := newHost("glab", t.TempDir())
 	view := "glab mr view GH-1 -F json"
 	merge := "glab mr merge GH-1 --remove-source-branch --auto-merge=false --yes --squash --squash-message Add the thing\n\nTask: GH-1\n"
 	f.script(merge, "")
@@ -719,7 +811,7 @@ func TestFinishRemovesThroughWorktrunk(t *testing.T) {
 // auto-merge off, the source branch removed by the merge itself.
 func TestFinishOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = host{name: "glab", dir: fx.main}
+	fx.in.host = newHost("glab", fx.main)
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"opened","web_url":"https://gl/mr/4","iid":4,"target_branch":"main"}`,
@@ -811,7 +903,7 @@ func TestMergeMethod(t *testing.T) {
 			f.script(ghRepo, c.repo)
 			f.script("glab repo view -F json", c.repo)
 
-			got, note, err := host{name: c.host, dir: "/repo"}.mergeMethod(t.Context(), c.declared)
+			got, note, err := newHost(c.host, "/repo").mergeMethod(t.Context(), c.declared)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 )
 
 // The host's side of `f10 review`: find the reviews a declared reviewer left
@@ -113,6 +114,8 @@ type reviewer struct {
 }
 
 // newReviewer reads the request number names, or the current branch's.
+//
+//nolint:lostfield // h is kept whole on the reviewer
 func newReviewer(ctx context.Context, h host, f facts.Review, number string) (*reviewer, error) {
 	rv := &reviewer{h: h, facts: f}
 
@@ -124,7 +127,7 @@ func newReviewer(ctx context.Context, h host, f facts.Review, number string) (*r
 }
 
 func (rv *reviewer) loadPull(ctx context.Context, number string) error {
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		return rv.loadMergeRequest(ctx, number)
 	}
 
@@ -138,7 +141,7 @@ func (rv *reviewer) loadPull(ctx context.Context, number string) error {
 		} `json:"commits"`
 	}
 
-	if err := rv.h.decode(ctx, &p, rv.h.prArgs(number, "--json", "number,url,headRefOid,commits")...); err != nil {
+	if err := rv.h.Decode(ctx, &p, rv.h.prArgs(number, "--json", "number,url,headRefOid,commits")...); err != nil {
 		return err
 	}
 
@@ -160,7 +163,7 @@ func (rv *reviewer) loadMergeRequest(ctx context.Context, number string) error {
 		HeadPipeline *headPipeline `json:"head_pipeline"`
 	}
 
-	if err := rv.h.decode(ctx, &mr, rv.h.prArgs(number, "-F", "json")...); err != nil {
+	if err := rv.h.Decode(ctx, &mr, rv.h.prArgs(number, "-F", "json")...); err != nil {
 		return err
 	}
 
@@ -176,7 +179,7 @@ func (rv *reviewer) loadMergeRequest(ctx context.Context, number string) error {
 		CommittedDate time.Time `json:"committed_date"`
 	}
 
-	commits, err := decodePages[mrCommit](ctx, rv.h, rv.mrPath("commits?per_page=100"))
+	commits, err := forge.DecodePages[mrCommit](ctx, rv.h.Host, rv.mrPath("commits?per_page=100"))
 	if err != nil {
 		return err
 	}
@@ -204,30 +207,16 @@ func (rv *reviewer) mrPath(tail string) string {
 	return "projects/:fullpath/merge_requests/" + rv.pull.Number + "/" + tail
 }
 
-// sameLogin matches a declared identity against a login the host returned,
-// case-insensitive. A bare `claude` also matches `claude[bot]`, but a
-// declared `claude[bot]` never matches a bare `claude`: only an app's login
-// can carry the suffix, so dropping it on the host's side would let a user
-// who registered the bare name post as the declared bot.
-func sameLogin(declared, login string) bool {
-	d, l := strings.ToLower(declared), strings.ToLower(login)
-	if d == "" {
-		return false
-	}
-
-	return d == l || d+"[bot]" == l
-}
-
 // isReviewer is login matching the declared reviewer. GitLab names a bot
 // by its username alone, with no suffix anyone could forge or omit, so a
 // declared `[bot]` is dropped there; on GitHub sameLogin's rule stands.
 func (rv *reviewer) isReviewer(login string) bool {
 	declared := rv.facts.Reviewer
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		declared = strings.TrimSuffix(declared, "[bot]")
 	}
 
-	return sameLogin(declared, login)
+	return forge.SameLogin(declared, login)
 }
 
 // candidates lists every review the reviewer left, newest update first,
@@ -608,14 +597,14 @@ func (rv *reviewer) freshReactions(ctx context.Context, r remoteReview) (map[str
 		} `json:"user"`
 	}
 
-	if err := rv.h.decode(ctx, &reactions, "api", path); err != nil {
+	if err := rv.h.Decode(ctx, &reactions, "api", path); err != nil {
 		return nil, err
 	}
 
 	fresh := map[string]bool{}
 
 	for _, re := range reactions {
-		if sameLogin(viewer, cmp.Or(re.User.Login, re.User.Username)) && !re.CreatedAt.Before(r.UpdatedAt) {
+		if forge.SameLogin(viewer, cmp.Or(re.User.Login, re.User.Username)) && !re.CreatedAt.Before(r.UpdatedAt) {
 			fresh[cmp.Or(re.Content, re.Name)] = true
 		}
 	}
@@ -634,7 +623,7 @@ func (rv *reviewer) reactionPath(r remoteReview) (string, bool) {
 		id = r.commentID
 	}
 
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		return rv.mrPath("notes/" + id + "/award_emoji?per_page=100"), true
 	}
 
@@ -651,7 +640,7 @@ func (rv *reviewer) viewerLogin(ctx context.Context) (string, error) {
 		return rv.viewer, nil
 	}
 
-	login, err := rv.h.login(ctx)
+	login, err := rv.h.Login(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -726,11 +715,11 @@ func (rv *reviewer) react(ctx context.Context, r remoteReview, emoji string) (st
 	path, _, _ = strings.Cut(path, "?")
 
 	field := "content=" + emoji
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		field = "name=" + emoji
 	}
 
-	if _, err := rv.h.run(ctx, "api", "-X", "POST", path, "-f", field); err != nil {
+	if _, err := rv.h.Run(ctx, "api", "-X", "POST", path, "-f", field); err != nil {
 		return "", err
 	}
 
@@ -744,7 +733,7 @@ func (rv *reviewer) patchBody(ctx context.Context, r remoteReview, body, what st
 	var args []string
 
 	switch {
-	case rv.h.glab():
+	case rv.h.GLab():
 		id := cmp.Or(r.commentID, r.ID)
 		args = []string{"api", "-X", "PUT", rv.mrPath("notes/" + id), "-f", "body=" + body}
 	case r.Kind == facts.ArrivesInline:
@@ -760,7 +749,7 @@ func (rv *reviewer) patchBody(ctx context.Context, r remoteReview, body, what st
 		args = []string{"api", "-X", "PATCH", rv.issuePath("issues/comments/" + r.ID), "-f", "body=" + body}
 	}
 
-	if _, err := rv.h.run(ctx, args...); err != nil {
+	if _, err := rv.h.Run(ctx, args...); err != nil {
 		return "", err
 	}
 
@@ -785,10 +774,10 @@ func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string,
 	for _, id := range r.threads {
 		var err error
 
-		if rv.h.glab() {
-			_, err = rv.h.run(ctx, "api", "-X", "PUT", rv.mrPath("discussions/"+id+"?resolved=true"))
+		if rv.h.GLab() {
+			_, err = rv.h.Run(ctx, "api", "-X", "PUT", rv.mrPath("discussions/"+id+"?resolved=true"))
 		} else {
-			_, err = rv.h.run(
+			_, err = rv.h.Run(
 				ctx,
 				"api",
 				"graphql",
@@ -825,13 +814,13 @@ func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 	}
 
 	path := rv.issuePath("issues/" + rv.pull.Number + "/comments?per_page=100")
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		path = rv.mrPath("notes?per_page=100")
 	}
 
 	// every page: the oldest come first, so a review past the first page is
 	// the newest one
-	notes, err := decodePages[note](ctx, rv.h, path)
+	notes, err := forge.DecodePages[note](ctx, rv.h.Host, path)
 	if err != nil {
 		return nil, err
 	}
@@ -865,7 +854,7 @@ func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 // inlineReviews lists the reviewer's submitted reviews with their inline
 // comments folded into the body as `path:line` blocks.
 func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		return rv.discussions(ctx)
 	}
 
@@ -881,7 +870,11 @@ func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
 		} `json:"user"`
 	}
 
-	reviews, err := decodePages[pullReview](ctx, rv.h, rv.issuePath("pulls/"+rv.pull.Number+"/reviews?per_page=100"))
+	reviews, err := forge.DecodePages[pullReview](
+		ctx,
+		rv.h.Host,
+		rv.issuePath("pulls/"+rv.pull.Number+"/reviews?per_page=100"),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -925,9 +918,9 @@ func (rv *reviewer) foldReviewComments(ctx context.Context, review *remoteReview
 		UpdatedAt time.Time `json:"updated_at"`
 	}
 
-	comments, err := decodePages[reviewComment](
+	comments, err := forge.DecodePages[reviewComment](
 		ctx,
-		rv.h,
+		rv.h.Host,
 		rv.issuePath("pulls/"+rv.pull.Number+"/reviews/"+review.ID+"/comments?per_page=100"),
 	)
 	if err != nil {
@@ -1023,7 +1016,7 @@ func (rv *reviewer) reviewThreads(ctx context.Context) ([]reviewThread, error) {
 		} `json:"data"`
 	}
 
-	err := rv.h.decode(ctx, &payload, "api", "graphql", "-f", "query="+reviewThreadsQuery,
+	err := rv.h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+reviewThreadsQuery,
 		"-F", "owner="+rv.owner, "-F", "name="+rv.repo, "-F", "number="+rv.pull.Number)
 	if err != nil {
 		return nil, err
@@ -1055,7 +1048,7 @@ func (rv *reviewer) loadRepo(ctx context.Context) error {
 		} `json:"owner"`
 	}
 
-	if err := rv.h.decode(ctx, &repo, "repo", "view", "--json", "owner,name"); err != nil {
+	if err := rv.h.Decode(ctx, &repo, "repo", "view", "--json", "owner,name"); err != nil {
 		return err
 	}
 
@@ -1072,7 +1065,7 @@ func (rv *reviewer) threadsResolved(ctx context.Context, r remoteReview) (bool, 
 		return false, nil
 	}
 
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		return r.concluded, nil // discussions() folds "all resolved" into concluded
 	}
 
@@ -1116,7 +1109,7 @@ func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
 		} `json:"notes"`
 	}
 
-	discussions, err := decodePages[discussion](ctx, rv.h, rv.mrPath("discussions?per_page=100"))
+	discussions, err := forge.DecodePages[discussion](ctx, rv.h.Host, rv.mrPath("discussions?per_page=100"))
 	if err != nil {
 		return nil, err
 	}
@@ -1177,7 +1170,7 @@ func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
 // checkRuns lists the check run (gh) or pipeline job (glab) named as the
 // reviewer, on the request's head.
 func (rv *reviewer) checkRuns(ctx context.Context) ([]remoteReview, error) {
-	if rv.h.glab() {
+	if rv.h.GLab() {
 		return rv.pipelineJobs(ctx)
 	}
 
@@ -1198,7 +1191,7 @@ func (rv *reviewer) checkRuns(ctx context.Context) ([]remoteReview, error) {
 		} `json:"check_runs"`
 	}
 
-	err := rv.h.decode(ctx, &payload, "api", rv.issuePath("commits/"+rv.pull.HeadSHA+"/check-runs?per_page=100"))
+	err := rv.h.Decode(ctx, &payload, "api", rv.issuePath("commits/"+rv.pull.HeadSHA+"/check-runs?per_page=100"))
 	if err != nil {
 		return nil, err
 	}
@@ -1243,9 +1236,9 @@ func (rv *reviewer) pipelineJobs(ctx context.Context) ([]remoteReview, error) {
 		FinishedAt time.Time `json:"finished_at"`
 	}
 
-	jobs, err := decodePages[job](
+	jobs, err := forge.DecodePages[job](
 		ctx,
-		rv.h,
+		rv.h.Host,
 		"projects/:fullpath/pipelines/"+strconv.FormatInt(pipeline.ID, 10)+"/jobs?per_page=100",
 	)
 	if err != nil {
@@ -1274,7 +1267,7 @@ func (rv *reviewer) pipelineJobs(ctx context.Context) ([]remoteReview, error) {
 		}
 
 		if concluded {
-			if trace, err := rv.h.run(ctx, "api", "projects/:fullpath/jobs/"+id+"/trace"); err == nil {
+			if trace, err := rv.h.Run(ctx, "api", "projects/:fullpath/jobs/"+id+"/trace"); err == nil {
 				review.Body = strings.TrimSpace(trace)
 			}
 		}

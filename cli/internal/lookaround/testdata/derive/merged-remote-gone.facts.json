@@ -1,0 +1,42 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Remote": true
+  },
+  "Prefix": "FT",
+  "Tasks": [],
+  "PRs": [
+    {
+      "Number": 10,
+      "Title": "FT-1: thing",
+      "URL": "https://github.com/acme/widgets/pull/10",
+      "Status": "merged",
+      "Head": "FT-1/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z",
+      "MergedAt": "2026-10-20T10:00:00Z",
+      "head_exists": false
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": false,
+      "Skipped": true,
+      "TookMS": 1
+    }
+  ]
+}

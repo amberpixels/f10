@@ -111,7 +111,7 @@ func TestListURLs(t *testing.T) {
 		{"gh", "https://github.com/o/r/issues", "https://github.com/o/r/pulls"},
 		{"glab", "https://gitlab.example.com/g/r/-/issues", "https://gitlab.example.com/g/r/-/merge_requests"},
 	} {
-		h := host{name: tc.cli}
+		h := newHost(tc.cli, "")
 
 		if got, err := h.issuesURL(t.Context()); err != nil || got != tc.issues {
 			t.Errorf("%s issues = %q, %v; want %q", tc.cli, got, err, tc.issues)
@@ -153,30 +153,42 @@ func TestTaskRows(t *testing.T) {
 
 	f.script(
 		"driver list",
-		`[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9","priority":"high"}]`,
+		`[{"id":"FT-9","title":"from the driver","status":"Todo","url":"https://t/9","priority":"high",`+
+			`"body":"Some text.\n\nAfter: 12\n"}]`,
 	)
 
-	rows, err := taskRows(t.Context(), tg)
+	rows, err := taskRows(t.Context(), tg, issuePage)
 	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" || rows[0].Priority != "high" {
 		t.Errorf("driver list = %+v, %v", rows, err)
 	}
 
+	// the body is read for its After: line, a bare number in the project's
+	// format, and never printed
+	if tasks := boardTasks(rows, "FT"); len(tasks) != 1 || tasks[0].After != "FT-12" {
+		t.Errorf("board tasks = %+v, want After FT-12", tasks)
+	}
+
+	var printed bytes.Buffer
+	if err := writeRows(&printed, rows, "none"); err != nil || strings.Contains(printed.String(), "body") {
+		t.Errorf("printed rows = %q, %v; want no body", printed.String(), err)
+	}
+
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.script(
-		"gh issue list --json number,title,state,url,labels --limit 30",
+		"gh issue list --json number,title,state,url,labels,body --limit 30",
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"unlabelled","state":"OPEN","url":"https://github.com/o/r/issues/8","labels":[]},`+
 			`{"number":9,"title":"two labels","state":"OPEN","url":"https://github.com/o/r/issues/9","labels":[{"name":"p1"},{"name":"P3"}]}]`,
 	)
 
-	rows, err = taskRows(t.Context(), tg)
+	rows, err = taskRows(t.Context(), tg, issuePage)
 	if err != nil || len(rows) != 3 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" || rows[0].Priority != "" {
 		t.Errorf("fallback without a map = %+v, %v", rows, err)
 	}
 
 	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
-	rows, err = taskRows(t.Context(), tg)
+	rows, err = taskRows(t.Context(), tg, issuePage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +242,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 
 	// the host path, through the declared map
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
-	f.script("gh issue list --json number,title,state,url,labels --limit 30",
+	f.script("gh issue list --json number,title,state,url,labels,body --limit 30",
 		`[{"number":7,"title":"low","state":"OPEN","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"none","state":"OPEN","labels":[]},`+
 			`{"number":9,"title":"high","state":"OPEN","labels":[{"name":"P1"}]}]`)
@@ -319,7 +331,7 @@ func TestPullRows(t *testing.T) {
 		{"gh", "#113", "https://github.com/o/r/pull/113"},
 		{"glab", "!4", "https://gitlab.example.com/g/r/-/merge_requests/4"},
 	} {
-		rows, err := host{name: tc.cli}.pullRows(t.Context())
+		rows, err := newHost(tc.cli, "").pullRows(t.Context())
 		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != pullOpen || rows[0].URL != tc.url {
 			t.Errorf("%s rows = %+v, %v", tc.cli, rows, err)
 		}
