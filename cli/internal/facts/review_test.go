@@ -169,3 +169,31 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 		t.Errorf("Review without a workflow = %+v, want absent", f)
 	}
 }
+
+func TestReviewManualAction(t *testing.T) {
+	cases := []struct {
+		name, trigger, how string
+		kind, text         string
+		ok                 bool
+	}{
+		{"a comment", TriggerManual, "comment `@claude review` on the PR", ManualComment, "@claude review", true},
+		{
+			"init's re-review line", TriggerAutomatic + ", " + TriggerManual,
+			"on open and on push; manual, comment `@claude` on the PR for a re-review", ManualComment, "@claude", true,
+		},
+		{"a request by name", TriggerManual, "request a review from octocat", ManualRequest, "octocat", true},
+		{"a request in a code span", TriggerManual, "request a review from `@octocat`", ManualRequest, "octocat", true},
+		{"automatic only", TriggerAutomatic, "on open and on push", "", "", false},
+		{"a comment with no text", TriggerManual, "ping the bot in a comment", "", "", false},
+		{"neither", TriggerManual, "ask in Slack", "", "", false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			kind, text, ok := Review{Trigger: c.trigger, TriggerHow: c.how}.ManualAction()
+			if kind != c.kind || text != c.text || ok != c.ok {
+				t.Errorf("ManualAction = %q, %q, %v; want %q, %q, %v", kind, text, ok, c.kind, c.text, c.ok)
+			}
+		})
+	}
+}

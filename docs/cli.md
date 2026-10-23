@@ -341,7 +341,7 @@ Out of scope: more than one base per task, and ordering tasks by anything but th
 ## Review
 
 `f10 review` reads the remote review a project declares under `project.md → Review` - four facts: who posts it, where it arrives on the PR or MR, what triggers it, what signals done and marks it handled ([project setup](project-setup.md#review)) - off the current branch's request, or the one `[n]` names.
-Nothing declared, or a fact outside the vocabulary, is a refusal naming the line to fix; the trigger is never performed, and `pick` says `the trigger is manual (<how>)` when it finds nothing on a manual project.
+Nothing declared, or a fact outside the vocabulary, is a refusal naming the line to fix; `pick` says `the trigger is manual (<how>)` when it finds nothing on a manual project, and whether `trigger` can perform it.
 
 - `pick` writes the newest review by the reviewer that nobody handled: a title, a meta line (url, the sha it reviewed, posted at, done, handled, settled, its revision), the body verbatim.
   `--json` emits the struct.
@@ -349,12 +349,17 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
   A settled review counts as handled, so plain `pick` never returns it.
   The revision fingerprints the reviewer's text without f10's own marks: a sticky comment rewritten by a re-review keeps its id and sha, but not its revision.
   An issue comment stores no sha, so its sha is the request's last commit before it was posted; an inline review carries its own, a check run its head.
+  `stale` marks a review whose sha is not the request's head: commits landed after it.
 - `wait` polls `pick` every `--every` until the review is done, and gives up at `--budget` (10 minutes by default) with the last reason quoted.
+  `--since <RFC3339>` counts only a review posted or updated after that time, so an older review left unhandled is not taken for the one a trigger asked for.
   It returns within the budget whatever the host does, so one agent call covers it.
 - `ack` leaves the declared handled marker: a reaction, a marker appended to the text, the first checkbox ticked, or the inline review's threads resolved.
-  It and `settle` are the verbs here that write to the host.
+  It, `settle` and `trigger` are the verbs here that write to the host.
   A review already handled is confirmed, not marked twice; a check run has no marker and ack says so.
   A reaction counts as handled only when it is newer than the review's last edit, so a sticky comment re-edited by a re-review reads as unhandled again.
+- `trigger` performs the declared manual trigger: a how reading `comment \`<text>\`` posts the text as a comment on the request, `request a review from <login>` (or the login in a code span) requests that review.
+  It prints the host's time for the comment (the local clock for a request), what it did and the url; the time is what `wait --since` takes.
+  An automatic-only trigger, or a how in neither shape, is a refusal naming the Trigger line, and nothing is posted.
 - `settle` leaves the declared settled marker on the review `--id` names: a reaction or a marker.
   It refuses when the review's revision is no longer `--revision`: a re-review rewrote it, and its findings are unread.
   Already settled is confirmed; a check run has no marker; no `settled` declared is a refusal naming the fact.

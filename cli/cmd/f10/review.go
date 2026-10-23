@@ -17,13 +17,14 @@ import (
 // project.md, read off the branch's pull or merge request. `pick` returns the
 // latest review nobody handled (or with --latest the latest at all), `wait`
 // polls it to done within a budget, `ack` leaves the handled marker, `settle`
-// the settled one. The section's four facts (who, where it arrives, what
-// triggers it, what signals done and marks it handled) and the optional
-// settled mark are the whole configuration.
+// the settled one, `trigger` performs the declared manual trigger. The
+// section's four facts (who, where it arrives, what triggers it, what
+// signals done and marks it handled) and the optional settled mark are the
+// whole configuration.
 //
-// Only ack and settle write to the host, and the trigger is never performed
-// here: a manual trigger is a human's action, and pick says so when nothing
-// is there.
+// Only ack, settle and trigger write to the host. trigger performs a manual
+// how that reads as a comment or a review request; any other is a human's
+// action, and pick says so when nothing is there.
 func reviewCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "review",
@@ -47,8 +48,19 @@ func reviewCommand() *cli.Command {
 					jsonFlag(),
 					&cli.DurationFlag{Name: "budget", Value: 10 * time.Minute, Usage: "give up after this long"},
 					&cli.DurationFlag{Name: "every", Value: 20 * time.Second, Usage: "poll interval"},
+					&cli.TimestampFlag{
+						Name:   "since",
+						Usage:  "count only a review posted or updated after this time, as trigger printed it",
+						Config: cli.TimestampConfig{Layouts: []string{time.RFC3339}},
+					},
 				},
 				Action: runReviewWait,
+			},
+			{
+				Name:      "trigger",
+				Usage:     "perform the declared manual trigger: post its comment or request its review",
+				ArgsUsage: "[number]",
+				Action:    runReviewTrigger,
 			},
 			{
 				Name:      "ack",
@@ -166,7 +178,7 @@ func runReviewWait(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, err := awaitReview(ctx, rv, cmd.Duration("budget"), cmd.Duration("every"))
+	r, err := awaitReview(ctx, rv, cmd.Timestamp("since"), cmd.Duration("budget"), cmd.Duration("every"))
 	if err != nil {
 		return err
 	}
@@ -176,9 +188,14 @@ func runReviewWait(ctx context.Context, cmd *cli.Command) error {
 
 // awaitReview polls pick every `every` until it returns a done review or
 // the budget runs out. Anything short of done - nothing posted yet, a review
-// still running, a transient host error - is "not yet", and the last reason
-// is quoted when the budget expires.
-func awaitReview(ctx context.Context, rv *reviewer, budget, every time.Duration) (remoteReview, error) {
+// still running, one not updated after since, a transient host error - is
+// "not yet", and the last reason is quoted when the budget expires.
+func awaitReview(
+	ctx context.Context,
+	rv *reviewer,
+	since time.Time,
+	budget, every time.Duration,
+) (remoteReview, error) {
 	if every <= 0 {
 		return remoteReview{}, errors.New("--every must be positive")
 	}
@@ -191,6 +208,8 @@ func awaitReview(ctx context.Context, rv *reviewer, budget, every time.Duration)
 		r, err := rv.pick(ctx)
 
 		switch {
+		case err == nil && !since.IsZero() && !r.UpdatedAt.After(since):
+			last = "the latest review (" + r.URL + ") predates " + since.UTC().Format(time.RFC3339)
 		case err == nil && r.Done:
 			return r, nil
 		case err == nil:
@@ -219,6 +238,24 @@ func awaitReview(ctx context.Context, rv *reviewer, budget, every time.Duration)
 		case <-timer.C:
 		}
 	}
+}
+
+// runReviewTrigger performs the manual trigger and prints what it did, the
+// url, and the time `wait --since` takes.
+func runReviewTrigger(ctx context.Context, cmd *cli.Command) error {
+	rv, err := remoteReviewer(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	what, url, at, err := rv.trigger(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(cmd.Writer, "%s  %s  %s\n", at.UTC().Format(time.RFC3339), what, url)
+
+	return err
 }
 
 func runReviewAck(ctx context.Context, cmd *cli.Command) error {
@@ -305,6 +342,10 @@ func reviewDoc(r remoteReview) string {
 	meta := []string{r.URL, r.SHA, "posted " + r.CreatedAt.UTC().Format(time.RFC3339), state, handled}
 	if r.Settled {
 		meta = append(meta, "settled")
+	}
+
+	if r.Stale {
+		meta = append(meta, "stale")
 	}
 
 	meta = append(meta, "revision "+r.Revision)

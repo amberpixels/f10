@@ -113,7 +113,7 @@ func TestReviewPickNamesTheManualTriggerWhenNothingIsUnhandled(t *testing.T) {
 		t.Fatalf("err = %v, want errNoReview", err)
 	}
 
-	for _, want := range []string{"the trigger is manual", "@claude", "never performs it"} {
+	for _, want := range []string{"the trigger is manual", "@claude", "`f10 review trigger` performs it"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error missing %q: %v", want, err)
 		}
@@ -136,7 +136,7 @@ func TestAwaitReviewGivesUpWithinBudget(t *testing.T) {
 
 	start := time.Now()
 
-	_, err := awaitReview(t.Context(), rv, 40*time.Millisecond, 5*time.Millisecond)
+	_, err := awaitReview(t.Context(), rv, time.Time{}, 40*time.Millisecond, 5*time.Millisecond)
 	if err == nil {
 		t.Fatal("wait returned a review from an empty thread")
 	}
@@ -180,7 +180,7 @@ func TestAwaitReviewReturnsOnceDone(t *testing.T) {
 	f.script("gh api user", viewerJSON)
 	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
 
-	r, err := awaitReview(t.Context(), rv, time.Second, time.Millisecond)
+	r, err := awaitReview(t.Context(), rv, time.Time{}, time.Second, time.Millisecond)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
@@ -891,5 +891,150 @@ func TestReviewSettleAppendsTheMarker(t *testing.T) {
 	r, err := rv.latest(t.Context())
 	if err != nil || !r.Settled || !r.Handled {
 		t.Errorf("latest = %+v, %v; want settled and handled through the marker", r, err)
+	}
+}
+
+// A comment trigger posts the how's code span through the API and prints
+// the host's time for it; a review request adds the login.
+func TestReviewTriggerCommentsOrRequests(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Trigger, rf.TriggerHow = facts.TriggerManual, "comment `@claude review` on the PR"
+	rv := ghReviewer(t, f, rf)
+
+	f.script("gh api -X POST repos/{owner}/{repo}/issues/5/comments -f body=@claude review",
+		`{"id":900,"html_url":"https://github.com/o/r/pull/5#issuecomment-900","created_at":"2026-10-06T16:00:00Z"}`)
+
+	what, url, at, err := rv.trigger(t.Context())
+	if err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+
+	if what != "commented @claude review" || !strings.HasSuffix(url, "#issuecomment-900") ||
+		!at.Equal(time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)) {
+		t.Errorf("trigger = %q, %q, %s", what, url, at)
+	}
+
+	rv.facts.TriggerHow = "request a review from octocat"
+	f.script("gh api -X POST repos/{owner}/{repo}/pulls/5/requested_reviewers -f reviewers[]=octocat", `{}`)
+
+	if what, _, _, err = rv.trigger(t.Context()); err != nil || what != "requested a review from octocat" {
+		t.Errorf("request trigger = %q, %v", what, err)
+	}
+}
+
+func TestReviewTriggerGlabSpelling(t *testing.T) {
+	f := newFakes(t)
+	f.script("glab mr view -F json", `{"iid":7,"web_url":"https://gitlab.com/o/r/-/merge_requests/7","sha":"c3"}`)
+	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100", `[]`)
+
+	rf := stickyFacts()
+	rf.Trigger, rf.TriggerHow = facts.TriggerManual, "comment `@claude` on the MR"
+
+	rv, err := newReviewer(t.Context(), host{name: "glab", dir: "."}, rf, "")
+	if err != nil {
+		t.Fatalf("newReviewer: %v", err)
+	}
+
+	f.script("glab api -X POST projects/:fullpath/merge_requests/7/notes -f body=@claude",
+		`{"id":41,"created_at":"2026-10-06T16:00:00Z"}`)
+
+	_, url, _, err := rv.trigger(t.Context())
+	if err != nil || url != "https://gitlab.com/o/r/-/merge_requests/7#note_41" {
+		t.Errorf("trigger url = %q, %v", url, err)
+	}
+
+	rv.facts.TriggerHow = "request a review from `octocat`"
+	f.script("glab mr update 7 --reviewer +octocat", "")
+
+	if _, _, _, err = rv.trigger(t.Context()); err != nil {
+		t.Errorf("request trigger: %v", err)
+	}
+}
+
+// Automatic only, or a how that reads as neither shape, is refused naming
+// the Trigger line, and nothing reaches the host.
+func TestReviewTriggerRefuses(t *testing.T) {
+	f := newFakes(t)
+	rv := ghReviewer(t, f, stickyFacts())
+
+	if _, _, _, err := rv.trigger(t.Context()); err == nil || !strings.Contains(err.Error(), "automatic only") {
+		t.Errorf("automatic trigger: err = %v", err)
+	}
+
+	rv.facts.Trigger, rv.facts.TriggerHow = facts.TriggerManual, "ask in Slack"
+
+	if _, _, _, err := rv.trigger(t.Context()); err == nil || !strings.Contains(err.Error(), "Trigger how") {
+		t.Errorf("unreadable how: err = %v", err)
+	}
+
+	if f.called("gh api -X POST") {
+		t.Error("a refused trigger reached the host")
+	}
+}
+
+// After a trigger, an older review that is done and unhandled is not the
+// answer: wait holds out for one updated after since.
+func TestAwaitReviewSinceSkipsTheOlderReview(t *testing.T) {
+	f := newFakes(t)
+	rv := ghReviewer(t, f, stickyFacts())
+
+	old := `[{"id":100,"body":"round one","html_url":"u","created_at":"2026-10-06T11:00:00Z",
+	  "updated_at":"2026-10-06T11:00:00Z","user":{"login":"claude[bot]"}}]`
+	rewritten := strings.Replace(strings.Replace(old, "round one", "round two", 1),
+		`"updated_at":"2026-10-06T11:00:00Z"`, `"updated_at":"2026-10-06T16:05:00Z"`, 1)
+
+	f.script(commentsPath, old, old, rewritten)
+	f.script("gh api user", viewerJSON)
+	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
+
+	since := time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)
+
+	r, err := awaitReview(t.Context(), rv, since, time.Second, time.Millisecond)
+	if err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+
+	if r.Body != "round two" {
+		t.Errorf("wait returned %q, want the review updated after the trigger", r.Body)
+	}
+
+	f.script(commentsPath, old)
+
+	_, err = awaitReview(t.Context(), rv, since, 20*time.Millisecond, 5*time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "predates 2026-10-06T16:00:00Z") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// A comment's sha is the head when it was posted: one posted before the
+// last commit is stale, one after it is not.
+func TestReviewStaleAgainstTheHead(t *testing.T) {
+	f := newFakes(t)
+	rv := ghReviewer(t, f, stickyFacts())
+
+	f.script(commentsPath, `[
+	  {"id":100,"body":"at c2","html_url":"u1","created_at":"2026-10-06T13:00:00Z",
+	   "updated_at":"2026-10-06T13:00:00Z","user":{"login":"claude[bot]"}},
+	  {"id":200,"body":"at c3","html_url":"u2","created_at":"2026-10-06T15:00:00Z",
+	   "updated_at":"2026-10-06T15:00:00Z","user":{"login":"claude[bot]"}}
+	]`)
+	f.script("gh api user", viewerJSON)
+	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
+	f.script(strings.Replace(reactionsPath, "%s", "200", 1), `[]`)
+
+	found, err := rv.candidates(t.Context())
+	if err != nil {
+		t.Fatalf("candidates: %v", err)
+	}
+
+	stale := map[string]bool{}
+	for _, r := range found {
+		stale[r.SHA] = r.Stale
+	}
+
+	if !stale["c2"] || stale["c3"] {
+		t.Errorf("stale by sha = %v, want c2 stale and c3 current", stale)
 	}
 }

@@ -116,11 +116,12 @@ The entry's trace on the PR (`traces: on`) is made the same way, by its last res
 ## The remote review
 
 **`review (CI)` in a pipeline, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
-The four `review:` facts in the frontmatter, and an optional fifth, are the protocol, applied by `f10 review pick|wait|ack|settle` over `gh` or `glab`, each with a fixed vocabulary:
+The four `review:` facts in the frontmatter, and an optional fifth, are the protocol, applied by `f10 review pick|wait|ack|settle|trigger` over `gh` or `glab`, each with a fixed vocabulary:
 
 - **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
 - **arrives** - where it lands: `issue comment`, `inline review` or `check run`.
 - **trigger** - what fires it: `automatic` (on open, on push), `manual` followed by how (`manual, comment \`@claude\` on the PR`), or both.
+  `f10 review trigger` performs a manual how that reads as a comment (`comment \`<text>\``) or a review request (`request a review from <login>`); any other how is a human's step.
 - **done** - done, then handled.
   Done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only).
   A check run has no remote handled marker; a new push starts a new run.
@@ -131,12 +132,27 @@ The four `review:` facts in the frontmatter, and an optional fifth, are the prot
 For a value outside the vocabulary `f10 review` refuses, naming the fact.
 Without them this half **fails**: there is nothing to wait for.
 
-1. **Pick.**
+1. **Pick**, in a ship pipeline's `review (CI)`.
    `f10 review pick` prints the latest unhandled review by the declared reviewer (`--json` for a struct); a settled one is never picked.
    None done yet, with an **automatic** trigger: `f10 review wait --budget 8m`, once more if it expires, then fail.
    Keep the Bash timeout above the budget.
    **A manual trigger** (pick says `the trigger is manual (<how>)`): never perform it.
-   Say what the user does, in the declared words, and stop; in a ship run, ask once (AskUserQuestion) whether they triggered it and wait only on yes.
+   Say what the user does, in the declared words, and stop; in a non-driven ship run, ask once (AskUserQuestion) whether they triggered it and wait only on yes.
+
+   **Standalone `/f10:review ci`** chooses from the latest review instead: `f10 review pick --latest --json`.
+   - **No review by the reviewer.**
+     A manual-only trigger: **trigger and wait** (below).
+     `automatic, manual`: wait as for an automatic trigger, one budget; on expiry, trigger and wait.
+     Automatic only: wait as above.
+   - **The latest not done** (still running): `f10 review wait --budget 8m`, no question.
+   - **A done review**: one AskUserQuestion, two options, **Resolve this review** and **Trigger a new review**, naming the reviewer and the age from `updatedAt` ("claude[bot], ~10 minutes ago").
+     Unhandled, or handled and not settled: resolve first, recommended.
+     Settled, or `stale: true` (commits landed on the PR after the sha it reviewed): trigger first, recommended.
+     A **driven** run asks nothing: it takes the first option in that order and the report names it.
+   - **Resolve**: invoke `/f10:resolve <id> ci` with the Skill tool, `--driven` kept.
+     It reads the review in itself, so this step writes no file.
+   - **Trigger and wait**: `f10 review trigger` prints a time, what it did and the url; then `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fail, and points 2-4 on the review it returns.
+     A refused trigger (automatic only, or a how it cannot read): print the refusal in one line, name the declared words when there are any, and stop, a normal end.
 2. **Stale?**
    A picked sha equal to the previous round's `reviewed:` is already written: say so in one line and stop, a normal end.
    This is the only staleness rule, for every arrival kind, a check run included.
@@ -146,7 +162,7 @@ Without them this half **fails**: there is nothing to wait for.
    If the body is not in the findings shape, say once that this file's brief can be pasted into the workflow; do not print it.
 4. **Ack.**
    With the file on disk, `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
-   Ack is outward-facing, under the run's authorization; in stealth mode it reads as the user's own.
+   Ack and trigger are outward-facing, under the run's authorization; in stealth mode they read as the user's own.
 
 **Report** per `conventions/report.md`: a `findings` row, then the verdict and the count per category, in the reviewer's words.
 

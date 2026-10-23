@@ -39,6 +39,7 @@ type remoteReview struct {
 	Done      bool      `json:"done"`
 	Handled   bool      `json:"handled"`
 	Settled   bool      `json:"settled"`
+	Stale     bool      `json:"stale"` // commits landed on the request after the sha it reviewed
 	Revision  string    `json:"revision"`
 
 	// stored is the text as the host keeps it on the object ack edits. Body
@@ -264,6 +265,7 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 		}
 
 		found[i].Handled = found[i].Handled || found[i].Settled
+		found[i].Stale = found[i].SHA != "" && rv.pull.HeadSHA != "" && found[i].SHA != rv.pull.HeadSHA
 		found[i].Revision = rv.revision(found[i])
 	}
 
@@ -407,7 +409,8 @@ func firstUnhandled(found []remoteReview) (remoteReview, bool) {
 	return remoteReview{}, false
 }
 
-// manualHint names the boundary f10 stops at: the trigger is a human's.
+// manualHint names the manual trigger and who performs it: `f10 review
+// trigger` when the how reads as a comment or a review request, else a human.
 func (rv *reviewer) manualHint() string {
 	if !strings.Contains(rv.facts.Trigger, facts.TriggerManual) {
 		return ""
@@ -418,11 +421,76 @@ func (rv *reviewer) manualHint() string {
 		how = "see project.md"
 	}
 
-	if strings.Contains(rv.facts.Trigger, facts.TriggerAutomatic) {
-		return "; a re-review is manual (" + how + ") and f10 never performs it"
+	who := "f10 never performs it"
+	if _, _, ok := rv.facts.ManualAction(); ok {
+		who = "`f10 review trigger` performs it"
 	}
 
-	return "; the trigger is manual (" + how + ") and f10 never performs it"
+	if strings.Contains(rv.facts.Trigger, facts.TriggerAutomatic) {
+		return "; a re-review is manual (" + how + ") and " + who
+	}
+
+	return "; the trigger is manual (" + how + ") and " + who
+}
+
+// trigger performs the declared manual trigger: posts the comment, or
+// requests the review. It returns what it did, where, and when the host
+// says it happened, the time a new review must postdate.
+func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, error) {
+	if !strings.Contains(rv.facts.Trigger, facts.TriggerManual) {
+		return "", "", time.Time{}, errors.New("the Review section's Trigger is automatic only: " +
+			"a push fires the review, and there is no manual trigger to perform")
+	}
+
+	kind, text, ok := rv.facts.ManualAction()
+	if !ok {
+		return "", "", time.Time{}, fmt.Errorf("the Review section's Trigger how (%q) reads as neither "+
+			"a comment (comment `<text>`) nor a review request (request a review from <login>): "+
+			"perform it by hand", rv.facts.TriggerHow)
+	}
+
+	if kind == facts.ManualRequest {
+		return rv.requestReview(ctx, text)
+	}
+
+	path := rv.issuePath("issues/" + rv.pull.Number + "/comments")
+	if rv.h.glab() {
+		path = rv.mrPath("notes")
+	}
+
+	var posted struct {
+		ID        int64     `json:"id"`
+		HTMLURL   string    `json:"html_url"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	if err := rv.h.decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+text); err != nil {
+		return "", "", time.Time{}, err
+	}
+
+	url := cmp.Or(posted.HTMLURL, rv.pull.URL+"#note_"+strconv.FormatInt(posted.ID, 10))
+
+	return "commented " + text, url, cmp.Or(posted.CreatedAt, time.Now().UTC()), nil
+}
+
+// requestReview asks login for a review. Neither host dates the request,
+// so the local clock stands in: a human's review comes long after.
+func (rv *reviewer) requestReview(ctx context.Context, login string) (string, string, time.Time, error) {
+	at := time.Now().UTC().Truncate(time.Second)
+
+	args := []string{
+		"api", "-X", "POST", rv.issuePath("pulls/" + rv.pull.Number + "/requested_reviewers"),
+		"-f", "reviewers[]=" + login,
+	}
+	if rv.h.glab() {
+		args = []string{"mr", "update", rv.pull.Number, "--reviewer", "+" + login}
+	}
+
+	if _, err := rv.h.run(ctx, args...); err != nil {
+		return "", "", time.Time{}, err
+	}
+
+	return "requested a review from " + login, rv.pull.URL, at, nil
 }
 
 // isDone applies the declared done signal to a review.
