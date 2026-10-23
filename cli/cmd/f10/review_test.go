@@ -343,6 +343,24 @@ func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 				"- **Trigger** - automatic\n- **Done, handled** - posted, thread resolved\n",
 			want: "does not arrive inline",
 		},
+		{
+			name: "a settled mark outside the vocabulary",
+			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
+				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - checkbox\n",
+			want: "settled line(s) could not be read",
+		},
+		{
+			name: "a settled mark the same as handled",
+			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
+				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - reaction `eyes`\n",
+			want: "settled mark is the handled mark",
+		},
+		{
+			name: "settled threads on a comment",
+			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
+				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - thread resolved\n",
+			want: "settled line(s) could not be read",
+		},
 	}
 
 	for _, c := range cases {
@@ -433,7 +451,7 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 		t.Fatalf("pick: %v", err)
 	}
 
-	target, err := rv.ackTarget(t.Context())
+	target, err := rv.ackTarget(t.Context(), "")
 	if err != nil {
 		t.Fatalf("ackTarget: %v", err)
 	}
@@ -442,11 +460,20 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 		t.Errorf("pick = %s, ack target = %s; want both 200", picked.ID, target.ID)
 	}
 
+	// an id names the review resolve read in, even past an older unhandled one
+	if target, err := rv.ackTarget(t.Context(), "300"); err != nil || target.ID != "300" {
+		t.Errorf("ack --id 300 = %+v, %v", target, err)
+	}
+
+	if _, err := rv.ackTarget(t.Context(), "999"); !errors.Is(err, errNoReview) {
+		t.Errorf("ack --id of no review = %v", err)
+	}
+
 	// every review handled: the newest is confirmed, not marked twice
 	f.script(strings.Replace(reactionsPath, "%s", "200", 1),
 		`[{"content":"eyes","created_at":"2026-10-06T11:30:00Z","user":{"login":"eugene"}}]`)
 
-	if target, err := rv.ackTarget(t.Context()); err != nil || target.ID != "300" || !target.Handled {
+	if target, err := rv.ackTarget(t.Context(), ""); err != nil || target.ID != "300" || !target.Handled {
 		t.Errorf("all handled: ack target = %+v, %v; want 300, handled", target, err)
 	}
 }
@@ -694,5 +721,175 @@ func TestReviewGlabPipelineJob(t *testing.T) {
 
 	if r.ID != "2" || !r.Done || r.SHA != "d2" || r.Body != "a.go:3 nil map" {
 		t.Errorf("picked %+v", r)
+	}
+}
+
+func settledFacts() facts.Review {
+	rf := stickyFacts()
+	rf.Settled, rf.SettledText = facts.HandledReaction, "rocket"
+
+	return rf
+}
+
+// A settled review counts as handled, so pick passes over it, while
+// --latest returns it with both flags set.
+func TestReviewSettledReadsAsHandled(t *testing.T) {
+	f := newFakes(t)
+	rv := ghReviewer(t, f, settledFacts())
+
+	f.script(commentsPath, `[{"id":200,"body":"the review","html_url":"u200","created_at":"2026-10-06T13:00:00Z",
+	  "updated_at":"2026-10-06T13:00:00Z","user":{"login":"claude[bot]"}}]`)
+	f.script("gh api user", viewerJSON)
+	f.script(strings.Replace(reactionsPath, "%s", "200", 1),
+		`[{"content":"rocket","created_at":"2026-10-06T14:00:00Z","user":{"login":"eugene"}}]`)
+
+	if r, err := rv.pick(t.Context()); !errors.Is(err, errNoReview) {
+		t.Errorf("pick returned the settled review: %+v, %v", r, err)
+	}
+
+	r, err := rv.latest(t.Context())
+	if err != nil || r.ID != "200" || !r.Settled || !r.Handled || r.Revision == "" {
+		t.Errorf("latest = %+v, %v; want 200, settled and handled, with a revision", r, err)
+	}
+
+	// handled and settled share one reactions read per review
+	if n := strings.Count(strings.Join(f.calls, "\n"), strings.Replace(reactionsPath, "%s", "200", 1)); n != 2 {
+		t.Errorf("reactions read %d times over two calls, want 2", n)
+	}
+
+	if doc := reviewDoc(r); !strings.Contains(doc, "settled") || !strings.Contains(doc, "revision "+r.Revision) {
+		t.Errorf("doc missing the settled state or the revision:\n%s", doc)
+	}
+}
+
+// settle reacts once, confirms a settled review, and leaves nothing on a
+// check run; with no settled mark declared it refuses, naming the fact.
+func TestReviewSettleReactsOnceAndSkipsCheckRuns(t *testing.T) {
+	f := newFakes(t)
+	rv := ghReviewer(t, f, settledFacts())
+
+	post := "gh api -X POST repos/{owner}/{repo}/issues/comments/200/reactions -f content=rocket"
+	f.script(post, `{"id":1}`)
+
+	what, err := rv.settle(t.Context(), remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", Handled: true})
+	if err != nil || what != "reaction rocket" || !f.called(post) {
+		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
+	}
+
+	before := len(f.calls)
+
+	if what, err := rv.settle(
+		t.Context(),
+		remoteReview{ID: "200", Settled: true},
+	); err != nil ||
+		what != "already settled" {
+		t.Errorf("settle on settled = %q, %v", what, err)
+	}
+
+	if what, err := rv.settle(t.Context(), remoteReview{ID: "9", Kind: facts.ArrivesCheck}); err != nil ||
+		!strings.Contains(what, "no settled marker") {
+		t.Errorf("settle on a check run = %q, %v", what, err)
+	}
+
+	if len(f.calls) != before {
+		t.Errorf("a confirmed or check-run settle reached the host: %v", f.calls[before:])
+	}
+
+	none := ghReviewer(t, f, stickyFacts())
+	if _, err := none.settle(t.Context(), remoteReview{ID: "200", Kind: facts.ArrivesComment}); err == nil ||
+		!strings.Contains(err.Error(), "declare `settled`") {
+		t.Errorf("settle with none declared = %v", err)
+	}
+}
+
+// A sticky comment rewritten by a re-review keeps its id and sha; its
+// revision moves, and settle refuses it. The marks f10 leaves on the text
+// do not move the revision.
+func TestReviewSettleRefusesARewrittenReview(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Handled, rf.HandledText = facts.HandledMarker, "<!-- read -->"
+	rf.Settled, rf.SettledText = facts.HandledMarker, "<!-- settled -->"
+	rv := ghReviewer(t, f, rf)
+
+	comment := func(body string) string {
+		return `[{"id":200,"body":"` + body + `","html_url":"u200","created_at":"2026-10-06T13:00:00Z",
+		  "updated_at":"2026-10-06T15:00:00Z","user":{"login":"claude[bot]"}}]`
+	}
+
+	f.script(commentsPath, comment("round one"))
+
+	read, err := rv.latest(t.Context())
+	if err != nil {
+		t.Fatalf("latest: %v", err)
+	}
+
+	f.script(commentsPath, comment("round one\\n\\n<!-- read -->"))
+
+	if r, err := rv.settleTarget(t.Context(), "200", read.Revision); err != nil || r.ID != "200" {
+		t.Errorf("the handled marker moved the revision: %+v, %v", r, err)
+	}
+
+	f.script(commentsPath, comment("round two"))
+
+	if _, err := rv.settleTarget(t.Context(), "200", read.Revision); !errors.Is(err, errReviewChanged) {
+		t.Errorf("settled a rewritten review: %v", err)
+	}
+
+	if _, err := rv.settleTarget(t.Context(), "999", read.Revision); !errors.Is(err, errNoReview) {
+		t.Errorf("settled a review that is not there: %v", err)
+	}
+}
+
+// On an inline review the handled marker lands mid-text, before the folded
+// comments, after a blank line; the revision reads past both.
+func TestReviewRevisionIgnoresTheMarkerOnAnInlineReview(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Arrives = facts.ArrivesInline
+	rf.Handled, rf.HandledText = facts.HandledMarker, "<!-- read -->"
+	rv := ghReviewer(t, f, rf)
+
+	comments := "\n\n### a.go:3\n\nnil check"
+	read := rv.revision(remoteReview{Body: "summary" + comments})
+	acked := rv.revision(remoteReview{Body: "summary\n\n<!-- read -->" + comments})
+	rewritten := rv.revision(remoteReview{Body: "summary" + comments + "\n\n### b.go:9\n\nleak"})
+
+	if read != acked {
+		t.Errorf("the marker moved the revision: %s, then %s", read, acked)
+	}
+
+	if read == rewritten {
+		t.Error("a new comment left the revision where it was")
+	}
+}
+
+// A marker settled mark is appended once and read back as settled, which
+// also reads as handled.
+func TestReviewSettleAppendsTheMarker(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Settled, rf.SettledText = facts.HandledMarker, "<!-- settled -->"
+	rv := ghReviewer(t, f, rf)
+
+	patch := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=findings\n\n<!-- settled -->"
+	f.script(patch, `{}`)
+
+	what, err := rv.settle(t.Context(), remoteReview{ID: "7", Kind: facts.ArrivesComment, stored: "findings\n"})
+	if err != nil || what != "marker appended" || !f.called(patch) {
+		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
+	}
+
+	f.script(commentsPath, `[{"id":7,"body":"findings\\n\\n<!-- settled -->","html_url":"u7",
+	  "created_at":"2026-10-06T13:00:00Z","updated_at":"2026-10-06T14:00:00Z","user":{"login":"claude[bot]"}}]`)
+	f.script("gh api user", viewerJSON)
+	f.script(strings.Replace(reactionsPath, "%s", "7", 1), `[]`)
+
+	r, err := rv.latest(t.Context())
+	if err != nil || !r.Settled || !r.Handled {
+		t.Errorf("latest = %+v, %v; want settled and handled through the marker", r, err)
 	}
 }

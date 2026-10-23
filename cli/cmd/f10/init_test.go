@@ -269,6 +269,7 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 		"arrives: issue comment",
 		"trigger: automatic, on open and on push",
 		"done: posted, reaction `eyes`",
+		"settled: reaction `rocket`",
 	} {
 		if !strings.Contains(string(written), want) {
 			t.Errorf("project.md missing %q:\n%s", want, written)

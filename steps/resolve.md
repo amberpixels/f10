@@ -3,11 +3,32 @@
 Role: a **senior engineer** triaging review findings.
 Input: the latest findings file under `<storage root>/reviews/<TASK-ID>/` with unsettled findings (shape in `steps/review.md`), plus the task text and the plan.
 Output: a verdict under every finding, verify green, and the fixes committed and pushed when the branch has an open PR or MR, else left in the working tree.
-No plan edit, no new file.
+No plan edit, and no new file but the one the **CI review** section reads in.
 Context: `project.md → Verify`; `project.md → Review` for who answers an `ask`.
 Badge: none; inside a ship pipeline the leaf stays `review`.
 
 Settle every file the same way, whoever wrote it: what the block says is wrong, where, and its fix.
+
+## CI review
+
+With `ci`, resolve reads the latest remote review in before point 1 and marks it settled after point 10.
+It never waits for one: `/f10:review ci` does.
+
+1. **Latest.**
+   `f10 review pick --latest --json`.
+   No review, or the newest not done: a normal end naming `/f10:review ci`.
+   Remote facts missing or refused: fail, as the review step's remote half does.
+2. **Settled** (`settled: true`): "nothing to resolve", a normal end; nothing changes.
+3. **Stale**: a picked sha other than HEAD prints one warning line naming the sha and the commits since (`git rev-list --count <sha>..HEAD`), then the run goes on; point 3 already reads its lines as advisory.
+4. **Held?**
+   A findings file holds the review when its `reviewer:` is not `local`, its `review:` is the picked url and its `revision:` the picked revision; a file with no `revision:` line holds none, since a rewritten sticky comment keeps its sha.
+   One that does is the file point 1 takes.
+   None does: run the review step's **remote review** points 3 and 4 (shape the file, ack with the picked id), under its **Rounds** rules, whose declines are normal ends here; the new file is the one point 1 takes.
+5. **Settle**, after point 10: `f10 review settle --id <id> --revision <revision>`, both from point 1's pick.
+   Withheld while a verdict is a waiting `ask` (parked per point 7, or a driven ask pending), or while fixes exist that point 9 did not push; the report says which.
+   A held file whose every block already has a verdict skips points 2-10 and is settled the same way.
+   `settle` refusing a review that changed since it was read (a re-review rewrote it) is a normal end: one line, the new review is unread.
+   No `settled` declared: no mark, and one line saying so; the findings file is the record.
 
 1. **Find the file.**
    A task id or PR whose branch is not current: one line naming the worktree that holds it (`git worktree list`), or that none does; a normal end.
@@ -70,7 +91,7 @@ Settle every file the same way, whoever wrote it: what the block says is wrong, 
     `--asks` counts the questions waiting on a person: findings parked for a remote answer (point 7) and a driven ask raised this run; an ask held for round two is open, not yet asked.
     In a driven run the call goes right before `f10-state.sh set ... blocked`, and the resolve that resumes on the answer passes both counts back down.
     Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
-12. **Report** per `conventions/report.md`: a `findings` row, a `commit` row when point 9 committed, a `status` row (the sha and its state) and a `comment` row (its url) when point 10 posted, then the verdict counts, what the fixes changed, and which asks were answered.
+12. **Report** per `conventions/report.md`: a `findings` row, a `commit` row when point 9 committed, a `status` row (the sha and its state) and a `comment` row (its url) when point 10 posted, a `settled` row (what `settle` printed) when the **CI review** section marked it, then the verdict counts, what the fixes changed, and which asks were answered.
 
 **On failure:** red verify after a fix, a findings file naming a task this checkout lacks, or a malformed file: report and stop, keeping the verdicts written so far.
 A rejected push stops with the commits local; never force-push to clear it (`conventions/failure.md`).

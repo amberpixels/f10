@@ -64,6 +64,7 @@ func TestScaffoldSections(t *testing.T) {
 				"arrives: issue comment",
 				"trigger: automatic, on open and on push",
 				"done: posted, reaction `eyes`",
+				"settled: reaction `rocket`",
 			},
 			wantNotIn: []string{"review.yml", "@claude", "## Review"},
 		},
