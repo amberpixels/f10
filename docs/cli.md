@@ -349,7 +349,8 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
   A settled review counts as handled, so plain `pick` never returns it.
   The revision fingerprints the reviewer's text without f10's own marks: a sticky comment rewritten by a re-review keeps its id and sha, but not its revision.
   An issue comment stores no sha, so its sha is the request's last commit before it was posted; an inline review carries its own, a check run its head.
-  `stale` marks a review whose sha is not the request's head: commits landed after it.
+  `stale` marks a review whose sha is not the request's head: commits landed after it (an issue comment is judged at its last edit, since a re-review rewrites the sticky comment).
+  `triggerable` says `trigger` can perform the declared manual trigger.
 - `wait` polls `pick` every `--every` until the review is done, and gives up at `--budget` (10 minutes by default) with the last reason quoted.
   `--since <RFC3339>` counts only a review posted or updated after that time, so an older review left unhandled is not taken for the one a trigger asked for.
   It returns within the budget whatever the host does, so one agent call covers it.
@@ -357,7 +358,7 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
   It, `settle` and `trigger` are the verbs here that write to the host.
   A review already handled is confirmed, not marked twice; a check run has no marker and ack says so.
   A reaction counts as handled only when it is newer than the review's last edit, so a sticky comment re-edited by a re-review reads as unhandled again.
-- `trigger` performs the declared manual trigger: a how reading `comment \`<text>\`` posts the text as a comment on the request, `request a review from <login>` (or the login in a code span) requests that review.
+- `trigger` performs the declared manual trigger: a how reading `comment \`<text>\`` posts the text as a comment on the request, `request a review from \`<login>\`` requests that review; the login must sit in a code span, so a word guessed from prose never reaches a real account.
   It prints the host's time for the comment (the local clock for a request), what it did and the url; the time is what `wait --since` takes.
   An automatic-only trigger, or a how in neither shape, is a refusal naming the Trigger line, and nothing is posted.
 - `settle` leaves the declared settled marker on the review `--id` names: a reaction or a marker.

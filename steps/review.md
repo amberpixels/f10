@@ -121,7 +121,7 @@ The four `review:` facts in the frontmatter, and an optional fifth, are the prot
 - **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
 - **arrives** - where it lands: `issue comment`, `inline review` or `check run`.
 - **trigger** - what fires it: `automatic` (on open, on push), `manual` followed by how (`manual, comment \`@claude\` on the PR`), or both.
-  `f10 review trigger` performs a manual how that reads as a comment (`comment \`<text>\``) or a review request (`request a review from <login>`); any other how is a human's step.
+  `f10 review trigger` performs a manual how that reads as a comment (`comment \`<text>\``) or a review request (`request a review from \`<login>\``), the text or login in a code span; any other how is a human's step.
 - **done** - done, then handled.
   Done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only).
   A check run has no remote handled marker; a new push starts a new run.
@@ -146,16 +146,18 @@ Without them this half **fails**: there is nothing to wait for.
      Automatic only: wait as above.
    - **The latest not done** (still running): `f10 review wait --budget 8m`, no question.
    - **A done review**: one AskUserQuestion, two options, **Resolve this review** and **Trigger a new review**, naming the reviewer and the age from `updatedAt` ("claude[bot], ~10 minutes ago").
-     Unhandled, or handled and not settled: resolve first, recommended.
-     Settled, or `stale: true` (commits landed on the PR after the sha it reviewed): trigger first, recommended.
+     Unhandled: resolve first, recommended, even when stale, since its findings are unread.
+     Handled and not settled: resolve first, unless `stale: true` (commits landed on the PR after the review saw it).
+     Settled, or handled and stale: trigger first, recommended.
      A **driven** run asks nothing: it takes the first option in that order and the report names it.
+     With `triggerable: false` there is no question: resolve, or for a settled review say what the user does in the declared words and stop, a normal end.
    - **Resolve**: invoke `/f10:resolve <id> ci` with the Skill tool, `--driven` kept.
      It reads the review in itself, so this step writes no file.
-   - **Trigger and wait**: `f10 review trigger` prints a time, what it did and the url; then `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fail, and points 2-4 on the review it returns.
+   - **Trigger and wait**: `f10 review trigger` prints a time, what it did and the url; then `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fail, and points 3 and 4 on the review it returns; point 2 does not apply, since postdating the trigger proves it new.
      A refused trigger (automatic only, or a how it cannot read): print the refusal in one line, name the declared words when there are any, and stop, a normal end.
-2. **Stale?**
+2. **Already written?**
    A picked sha equal to the previous round's `reviewed:` is already written: say so in one line and stop, a normal end.
-   This is the only staleness rule, for every arrival kind, a check run included.
+   This rule holds for every arrival kind, a check run included; pick's `stale` only orders the standalone question.
 3. **Shape it into the findings file**: one block per finding, `where:` from its `path:line`, `category:` mapped to the core or project categories, its fix in the detail; nothing raised is `clean`.
    `reviewed:` is pick's sha, `reviewer:` the declared identity, `review:` the picked url, `revision:` pick's revision.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it, else `still open`.

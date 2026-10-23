@@ -40,7 +40,11 @@ type remoteReview struct {
 	Handled   bool      `json:"handled"`
 	Settled   bool      `json:"settled"`
 	Stale     bool      `json:"stale"` // commits landed on the request after the sha it reviewed
-	Revision  string    `json:"revision"`
+
+	// Triggerable says `f10 review trigger` can perform the declared trigger:
+	// the step offers a new review only when it is true.
+	Triggerable bool   `json:"triggerable"`
+	Revision    string `json:"revision"`
 
 	// stored is the text as the host keeps it on the object ack edits. Body
 	// differs for an inline review, which folds its comments in for the
@@ -265,13 +269,26 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 		}
 
 		found[i].Handled = found[i].Handled || found[i].Settled
-		found[i].Stale = found[i].SHA != "" && rv.pull.HeadSHA != "" && found[i].SHA != rv.pull.HeadSHA
+		found[i].Stale = rv.stale(found[i])
+		_, _, found[i].Triggerable = rv.facts.ManualAction()
 		found[i].Revision = rv.revision(found[i])
 	}
 
 	sort.SliceStable(found, func(i, j int) bool { return found[i].UpdatedAt.After(found[j].UpdatedAt) })
 
 	return found, nil
+}
+
+// stale is commits landing on the request after the review saw it. An issue
+// comment is judged at its last edit: a sticky comment rewritten by a
+// re-review keeps the sha of its first post but reviewed the newer head.
+func (rv *reviewer) stale(r remoteReview) bool {
+	sha := r.SHA
+	if r.Kind == facts.ArrivesComment {
+		sha = rv.pull.shaBefore(r.UpdatedAt)
+	}
+
+	return sha != "" && rv.pull.HeadSHA != "" && sha != rv.pull.HeadSHA
 }
 
 // pick is the newest review the reviewer left that nobody handled yet.

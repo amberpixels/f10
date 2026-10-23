@@ -186,12 +186,11 @@ const (
 	ManualRequest = "request"
 )
 
-var fromLoginRE = regexp.MustCompile(`(?i)\bfrom\s+@?([A-Za-z0-9][\w.\[\]-]*)`)
-
 // ManualAction reads the manual how as the kind and its text: a comment
 // posting the first code span (`comment `@claude review“), or a review
-// requested from the span's login, else the word after "from". false when
-// the trigger is not manual or the how reads as neither.
+// requested from the span's login. Both need the code span: a request to a
+// word guessed from prose would reach a real account. false when the
+// trigger is not manual or the how reads as neither.
 func (r Review) ManualAction() (string, string, bool) {
 	if !strings.Contains(r.Trigger, TriggerManual) {
 		return "", "", false
@@ -207,14 +206,8 @@ func (r Review) ManualAction() (string, string, bool) {
 	switch {
 	case strings.Contains(lower, "comment") && span != "":
 		return ManualComment, span, true
-	case strings.Contains(lower, "request"):
-		if span != "" {
-			return ManualRequest, strings.TrimPrefix(span, "@"), true
-		}
-
-		if m := fromLoginRE.FindStringSubmatch(r.TriggerHow); m != nil {
-			return ManualRequest, m[1], true
-		}
+	case strings.Contains(lower, "request") && span != "":
+		return ManualRequest, strings.TrimPrefix(span, "@"), true
 	}
 
 	return "", "", false

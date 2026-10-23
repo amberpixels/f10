@@ -916,7 +916,7 @@ func TestReviewTriggerCommentsOrRequests(t *testing.T) {
 		t.Errorf("trigger = %q, %q, %s", what, url, at)
 	}
 
-	rv.facts.TriggerHow = "request a review from octocat"
+	rv.facts.TriggerHow = "request a review from `octocat`"
 	f.script("gh api -X POST repos/{owner}/{repo}/pulls/5/requested_reviewers -f reviewers[]=octocat", `{}`)
 
 	if what, _, _, err = rv.trigger(t.Context()); err != nil || what != "requested a review from octocat" {
@@ -1036,5 +1036,30 @@ func TestReviewStaleAgainstTheHead(t *testing.T) {
 
 	if !stale["c2"] || stale["c3"] {
 		t.Errorf("stale by sha = %v, want c2 stale and c3 current", stale)
+	}
+}
+
+// A sticky comment created before the last commit and rewritten after it
+// reviewed the head: it is not stale.
+func TestReviewStaleReadsAStickyCommentAtItsLastEdit(t *testing.T) {
+	f := newFakes(t)
+	rv := ghReviewer(t, f, stickyFacts())
+
+	f.script(commentsPath, `[{"id":100,"body":"rewritten","html_url":"u","created_at":"2026-10-06T11:00:00Z",
+	  "updated_at":"2026-10-06T15:00:00Z","user":{"login":"claude[bot]"}}]`)
+	f.script("gh api user", viewerJSON)
+	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
+
+	found, err := rv.candidates(t.Context())
+	if err != nil {
+		t.Fatalf("candidates: %v", err)
+	}
+
+	if len(found) != 1 || found[0].Stale || found[0].SHA != "c1" {
+		t.Errorf("found = %+v, want one review at c1 that is not stale", found)
+	}
+
+	if found[0].Triggerable {
+		t.Error("an automatic-only trigger reads as triggerable")
 	}
 }
