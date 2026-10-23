@@ -60,7 +60,7 @@ verdict: fix
 reason: the Rounds section now declines on an unsettled round one
 ```
 
-- **Header**, in this order: `task:` (id, or the branch name), `round:` `1` or `2`, `reviewed:` HEAD's sha plus `dirty` when the tree differed (in `implement → review → pr` the review precedes any commit), `base:` branch and sha, `reviewer:` `local` or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`), `review:` remote rounds only, the url where a `+reply` posts, `verdict:` `clean` when every category found nothing, else `findings`.
+- **Header**, in this order: `task:` (id, or the branch name), `round:` `1` or `2`, `reviewed:` HEAD's sha plus `dirty` when the tree differed (in `implement → review → pr` the review precedes any commit), `base:` branch and sha, `reviewer:` `local` or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`), `review:` remote rounds only, the url where a `+reply` posts, `revision:` remote rounds only, pick's revision of the review's text, `verdict:` `clean` when every category found nothing, else `findings`.
 - **`## Prior round`**, round two only, first: one block per round-one id, its title, ` - ` and one of `fixed`, `still open`, `fix introduced a problem`, `explanation accepted`, `explanation disputed`; a line of evidence; `where:` (required for `fix introduced a problem`).
   A finding's **last verdict** is under the latest block naming its id.
 - **`## Categories`**: core first, then the project's, each `none found` or a count.
@@ -116,7 +116,7 @@ The entry's trace on the PR (`review_traces: on`) is made the same way, by its l
 ## The remote review
 
 **`review (CI)` in a pipeline, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
-The four `review:` facts in the frontmatter are the protocol, applied by `f10 review pick|wait|ack` over `gh` or `glab`, each with a fixed vocabulary:
+The four `review:` facts in the frontmatter, and an optional fifth, are the protocol, applied by `f10 review pick|wait|ack|settle` over `gh` or `glab`, each with a fixed vocabulary:
 
 - **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
 - **arrives** - where it lands: `issue comment`, `inline review` or `check run`.
@@ -124,13 +124,15 @@ The four `review:` facts in the frontmatter are the protocol, applied by `f10 re
 - **done** - done, then handled.
   Done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only).
   A check run has no remote handled marker; a new push starts a new run.
+- **settled** - optional: the mark `/f10:resolve ci` leaves once every finding has a verdict, `reaction \`<emoji>\``, `marker "<text>"` or `thread resolved` (inline only), never the handled mark itself.
+  A settled review counts as handled.
 
 `f10 init` infers them from a `.github/workflows` workflow running the Claude Code action; the shell loader does not, so they arrive through `project.md`, or `f10 config` shows them as detected while undeclared.
 For a value outside the vocabulary `f10 review` refuses, naming the fact.
 Without them this half **fails**: there is nothing to wait for.
 
 1. **Pick.**
-   `f10 review pick` prints the latest unhandled review by the declared reviewer (`--json` for a struct).
+   `f10 review pick` prints the latest unhandled review by the declared reviewer (`--json` for a struct); a settled one is never picked.
    None done yet, with an **automatic** trigger: `f10 review wait --budget 8m`, once more if it expires, then fail.
    Keep the Bash timeout above the budget.
    **A manual trigger** (pick says `the trigger is manual (<how>)`): never perform it.
@@ -139,11 +141,11 @@ Without them this half **fails**: there is nothing to wait for.
    A picked sha equal to the previous round's `reviewed:` is already written: say so in one line and stop, a normal end.
    This is the only staleness rule, for every arrival kind, a check run included.
 3. **Shape it into the findings file**: one block per finding, `where:` from its `path:line`, `category:` mapped to the core or project categories, its fix in the detail; nothing raised is `clean`.
-   `reviewed:` is pick's sha, `reviewer:` the declared identity, `review:` the picked url.
+   `reviewed:` is pick's sha, `reviewer:` the declared identity, `review:` the picked url, `revision:` pick's revision.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it, else `still open`.
    If the body is not in the findings shape, say once that this file's brief can be pasted into the workflow; do not print it.
 4. **Ack.**
-   With the file on disk, `f10 review ack` marks the review handled (consumed, not settled), so a run dying in resolve never re-picks it.
+   With the file on disk, `f10 review ack` marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
    Ack is outward-facing, under the run's authorization; in stealth mode it reads as the user's own.
 
 **Report** per `conventions/report.md`: a `findings` row, then the verdict and the count per category, in the reviewer's words.

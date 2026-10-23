@@ -41,13 +41,15 @@ type TrackerDecl struct {
 	ID   string `yaml:"id,omitempty"`
 }
 
-// ReviewDecl is the remote review's four facts, in the vocabulary the
-// prose items use, so the same sub-parsers read both.
+// ReviewDecl is the remote review's four facts and the optional settled
+// mark, in the vocabulary the prose items use, so the same sub-parsers read
+// both.
 type ReviewDecl struct {
 	Reviewer string `yaml:"reviewer,omitempty"`
 	Arrives  string `yaml:"arrives,omitempty"`
 	Trigger  string `yaml:"trigger,omitempty"`
 	Done     string `yaml:"done,omitempty"`
+	Settled  string `yaml:"settled,omitempty"`
 }
 
 // StandupDecl is what `f10 standup` reads: the paths that, alone in a

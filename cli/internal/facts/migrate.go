@@ -129,7 +129,7 @@ func Migrate(data []byte, path string) (*Migration, error) {
 
 	if r := proseReviewDecl(body("Review")); r != (ReviewDecl{}) {
 		d.Review = r
-		moved("review", "the Reviewer, Arrives as, Trigger and Done items in the Review section")
+		moved("review", "the Reviewer, Arrives as, Trigger, Done and Settled items in the Review section")
 	}
 
 	if bad := d.check(); len(bad) > 0 {
@@ -169,7 +169,7 @@ func kindKey(kind string) string {
 	return ""
 }
 
-// proseReviewDecl lifts the four remote items' values out of Review prose
+// proseReviewDecl lifts the remote items' values out of Review prose
 // as written, so the frontmatter keeps the same words.
 func proseReviewDecl(body string) ReviewDecl {
 	var d ReviewDecl
@@ -194,6 +194,8 @@ func proseReviewDecl(body string) ReviewDecl {
 			d.Trigger = value
 		case strings.HasPrefix(key, "done"):
 			d.Done = value
+		case key == "settled":
+			d.Settled = value
 		}
 	}
 

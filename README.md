@@ -196,7 +196,7 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
   Fetch settles the areas; the plan file records the roles for ship.
 - **Adapter** - how a capability ("fetch a task", "open a PR", "verify") binds per project: a skill or a CLI command. f10 names the capability; the project supplies the adapter.
 - **Review** - local (pre-PR) or CI/human (post-PR), placed or omitted per pipeline; no review entry means ship stops at the PR.
-  A remote review is four facts under `project.md → Review` (who posts it, where it arrives, what triggers it, what marks it done and handled), inferred by `f10 init` from a Claude Code review workflow and acted on by `f10 review pick|wait|ack`. f10 never fires a manual trigger.
+  A remote review is four facts under `project.md → Review` (who posts it, where it arrives, what triggers it, what marks it done and handled), plus the mark a settled review gets, inferred by `f10 init` from a Claude Code review workflow and acted on by `f10 review pick|wait|ack|settle`; `/f10:resolve <id> ci` reads the latest one in, settles it and marks it. f10 never fires a manual trigger.
   A declared human reviewer answers asks on a remote review; a local round's asks come to you.
 - **Visibility** - `stealth` (default) or `public`.
   Stealth work reads as if f10 never existed: no mentions in commits, PRs, tickets or code comments, `.f10/` untracked via `.git/info/exclude`.
@@ -375,7 +375,7 @@ f10 task search billing  # rows, not a picker
 f10 plan read            # the plan saved for that same task
 f10 demo open            # the demo report for it, in the browser
 f10 pr open [n]          # a PR or MR, or with no number their list; gh or glab decided by the remote
-f10 review pick|wait|ack # the remote review on that PR: read it, await it, mark it handled
+f10 review pick|wait|ack|settle # the remote review on that PR: read it, await it, mark it handled, then settled
 f10 status               # where the run is: this session's, or this repo's live ones
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
 f10 ledger dump          # what runs recorded locally (--json, --project ., --task, --session)

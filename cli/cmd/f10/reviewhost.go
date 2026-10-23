@@ -3,6 +3,8 @@ package main
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -18,7 +20,7 @@ import (
 // The host's side of `f10 review`: find the reviews a declared reviewer left
 // on a branch's pull or merge request, in whichever of the three places the
 // project said they arrive, tell whether each is done and whether it was
-// handled, and leave the handled marker. Both CLIs are asked for JSON and
+// handled or settled, and leave either marker. Both CLIs are asked for JSON and
 // read into one shape per object, as host.go and merge.go do, so the review
 // noun decides on facts and never on a CLI's spelling of them.
 
@@ -36,6 +38,8 @@ type remoteReview struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	Done      bool      `json:"done"`
 	Handled   bool      `json:"handled"`
+	Settled   bool      `json:"settled"`
+	Revision  string    `json:"revision"`
 
 	// stored is the text as the host keeps it on the object ack edits. Body
 	// differs for an inline review, which folds its comments in for the
@@ -220,7 +224,9 @@ func (rv *reviewer) isReviewer(login string) bool {
 }
 
 // candidates lists every review the reviewer left, newest update first,
-// done and handled already judged.
+// done, handled and settled already judged. A settled review counts as
+// handled: a settled marker appended to the text is an edit, which would
+// otherwise make the handled reaction before it read as stale.
 func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 	var (
 		found []remoteReview
@@ -248,6 +254,13 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 		if found[i].Handled, err = rv.isHandled(ctx, found[i]); err != nil {
 			return nil, err
 		}
+
+		if found[i].Settled, err = rv.isSettled(ctx, found[i]); err != nil {
+			return nil, err
+		}
+
+		found[i].Handled = found[i].Handled || found[i].Settled
+		found[i].Revision = rv.revision(found[i])
 	}
 
 	sort.SliceStable(found, func(i, j int) bool { return found[i].UpdatedAt.After(found[j].UpdatedAt) })
@@ -275,6 +288,22 @@ func (rv *reviewer) pick(ctx context.Context) (remoteReview, error) {
 		errNoReview, rv.facts.Reviewer, found[0].URL, rv.manualHint())
 }
 
+// latest is the newest review the reviewer left, whatever its state: the
+// one resolve reads, settled or not.
+func (rv *reviewer) latest(ctx context.Context) (remoteReview, error) {
+	found, err := rv.candidates(ctx)
+	if err != nil {
+		return remoteReview{}, err
+	}
+
+	if len(found) == 0 {
+		return remoteReview{}, fmt.Errorf("%w from %s on %s%s",
+			errNoReview, rv.facts.Reviewer, rv.pull.URL, rv.manualHint())
+	}
+
+	return found[0], nil
+}
+
 // ackTarget is the review ack marks: the one pick returns, or with every
 // review handled the newest, which ack confirms rather than marks twice.
 func (rv *reviewer) ackTarget(ctx context.Context) (remoteReview, error) {
@@ -293,6 +322,59 @@ func (rv *reviewer) ackTarget(ctx context.Context) (remoteReview, error) {
 	}
 
 	return found[0], nil
+}
+
+// revision fingerprints what the reviewer wrote, without the marks f10
+// leaves: a sticky comment rewritten by a re-review keeps its id and the
+// sha of its first post, so its text is what tells the new review apart.
+func (rv *reviewer) revision(r remoteReview) string {
+	body := checkboxRE.ReplaceAllStringFunc(r.Body, func(box string) string {
+		return strings.NewReplacer("[x]", "[ ]", "[X]", "[ ]").Replace(box)
+	})
+
+	for _, mark := range []struct{ kind, text string }{
+		{rv.facts.Handled, rv.facts.HandledText},
+		{rv.facts.Settled, rv.facts.SettledText},
+	} {
+		if mark.kind == facts.HandledMarker && mark.text != "" {
+			body = strings.ReplaceAll(body, mark.text, "")
+		}
+	}
+
+	sum := sha256.Sum256([]byte(strings.TrimSpace(body)))
+
+	return hex.EncodeToString(sum[:6])
+}
+
+// settleTarget is the review settle marks: the one with id, still at the
+// revision it was read at. A review now at another revision was rewritten
+// by a re-review, and marking it would settle findings nobody read.
+func (rv *reviewer) settleTarget(ctx context.Context, id, revision string) (remoteReview, error) {
+	found, err := rv.candidates(ctx)
+	if err != nil {
+		return remoteReview{}, err
+	}
+
+	for _, r := range found {
+		if r.ID != id {
+			continue
+		}
+
+		if r.Revision != revision {
+			return remoteReview{}, fmt.Errorf(
+				"%w: %s is at revision %s, not %s; nothing marked, the new review is unread",
+				errReviewChanged,
+				r.URL,
+				r.Revision,
+				revision,
+			)
+		}
+
+		return r, nil
+	}
+
+	return remoteReview{}, fmt.Errorf("nothing to settle: %w %s from %s on %s",
+		errNoReview, id, rv.facts.Reviewer, rv.pull.URL)
 }
 
 // firstUnhandled is the newest of found that nobody handled. pick returns
@@ -347,7 +429,7 @@ var checkboxRE = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ xX])\]`)
 func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error) {
 	switch rv.facts.Handled {
 	case facts.HandledReaction:
-		return rv.hasFreshReaction(ctx, r)
+		return rv.hasFreshReaction(ctx, r, rv.facts.HandledText)
 	case facts.HandledMarker:
 		return rv.facts.HandledText != "" && strings.Contains(r.stored, rv.facts.HandledText), nil
 	case facts.HandledCheckbox:
@@ -361,7 +443,26 @@ func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error)
 	}
 }
 
-func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview) (bool, error) {
+// isSettled applies the declared settled mark, read as isHandled reads the
+// same kinds. None declared, or a check run, is never settled on the host.
+func (rv *reviewer) isSettled(ctx context.Context, r remoteReview) (bool, error) {
+	if r.Kind == facts.ArrivesCheck {
+		return false, nil
+	}
+
+	switch rv.facts.Settled {
+	case facts.HandledReaction:
+		return rv.hasFreshReaction(ctx, r, rv.facts.SettledText)
+	case facts.HandledMarker:
+		return rv.facts.SettledText != "" && strings.Contains(r.stored, rv.facts.SettledText), nil
+	case facts.HandledThread:
+		return rv.threadsResolved(ctx, r)
+	default:
+		return false, nil
+	}
+}
+
+func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview, emoji string) (bool, error) {
 	if r.Kind == facts.ArrivesCheck {
 		return false, nil
 	}
@@ -392,7 +493,7 @@ func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview) (bool,
 	}
 
 	for _, re := range reactions {
-		if cmp.Or(re.Content, re.Name) == rv.facts.HandledText &&
+		if cmp.Or(re.Content, re.Name) == emoji &&
 			sameLogin(viewer, cmp.Or(re.User.Login, re.User.Username)) &&
 			!re.CreatedAt.Before(r.UpdatedAt) {
 			return true, nil
@@ -453,7 +554,7 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 
 	switch rv.facts.Handled {
 	case facts.HandledReaction:
-		return rv.react(ctx, r)
+		return rv.react(ctx, r, rv.facts.HandledText)
 	case facts.HandledMarker:
 		return rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+rv.facts.HandledText, "marker appended")
 	case facts.HandledCheckbox:
@@ -474,7 +575,31 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 	}
 }
 
-func (rv *reviewer) react(ctx context.Context, r remoteReview) (string, error) {
+// settle leaves the declared settled mark on r: resolve's word that every
+// finding in it has a verdict. Already settled is confirmed, as ack confirms.
+func (rv *reviewer) settle(ctx context.Context, r remoteReview) (string, error) {
+	if r.Settled {
+		return "already settled", nil
+	}
+
+	if r.Kind == facts.ArrivesCheck {
+		return "a check run carries no settled marker: the findings file is the record", nil
+	}
+
+	switch rv.facts.Settled {
+	case facts.HandledReaction:
+		return rv.react(ctx, r, rv.facts.SettledText)
+	case facts.HandledMarker:
+		return rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+rv.facts.SettledText, "marker appended")
+	case facts.HandledThread:
+		return rv.resolveThreads(ctx, r)
+	default:
+		return "", errors.New("project.md declares no review settled mark: declare `settled` " +
+			"(reaction `<emoji>`, marker \"<text>\" or thread resolved) under review")
+	}
+}
+
+func (rv *reviewer) react(ctx context.Context, r remoteReview, emoji string) (string, error) {
 	path, ok := rv.reactionPath(r)
 	if !ok {
 		return "", errors.New("the review has no comment to react to")
@@ -482,16 +607,16 @@ func (rv *reviewer) react(ctx context.Context, r remoteReview) (string, error) {
 
 	path, _, _ = strings.Cut(path, "?")
 
-	field := "content=" + rv.facts.HandledText
+	field := "content=" + emoji
 	if rv.h.glab() {
-		field = "name=" + rv.facts.HandledText
+		field = "name=" + emoji
 	}
 
 	if _, err := rv.h.run(ctx, "api", "-X", "POST", path, "-f", field); err != nil {
 		return "", err
 	}
 
-	return "reaction " + rv.facts.HandledText, nil
+	return "reaction " + emoji, nil
 }
 
 // patchBody rewrites the review's text with the marker in it. An issue

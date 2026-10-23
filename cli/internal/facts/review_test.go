@@ -53,6 +53,19 @@ func TestParseReview(t *testing.T) {
 			},
 		},
 		{
+			name: "a settled mark beside the four",
+			body: "- **Reviewer** - bot `claude[bot]`\n" +
+				"- **Arrives as** - issue comment\n" +
+				"- **Trigger** - automatic\n" +
+				"- **Done, handled** - posted, reaction `eyes`\n" +
+				"- **Settled** - marker \"All settled\"",
+			want: Review{
+				Reviewer: "claude[bot]", ReviewerKind: ReviewerBot, Arrives: ArrivesComment,
+				Trigger: TriggerAutomatic, Done: DonePosted, Handled: HandledReaction, HandledText: "eyes",
+				Settled: HandledMarker, SettledText: "All settled", settledAs: "marker \"All settled\"",
+			},
+		},
+		{
 			name: "the local-only section declares no remote reviewer",
 			body: "- **Categories** - UI, source of truth `docs/gallery.md`\n- **Never flag** - generated files",
 			want: Review{},
@@ -95,6 +108,20 @@ func TestReviewMissing(t *testing.T) {
 	r := Review{Reviewer: "x", ReviewerKind: ReviewerBot, Trigger: TriggerAutomatic}
 	if got := r.Missing(); !slices.Equal(got, []string{"Arrives as", "Done", "handled"}) {
 		t.Errorf("Missing = %v", got)
+	}
+
+	// settled is optional: absent is not missing, unreadable is
+	if got := (Review{Settled: HandledThread, settledAs: "thread resolved"}).Missing(); slices.Contains(
+		got,
+		"settled",
+	) {
+		t.Errorf("a readable settled reads as missing: %v", got)
+	}
+
+	for _, value := range []string{"checkbox", "a thumbs up from me"} {
+		if got := reviewFrom(ReviewDecl{Settled: value}).Missing(); !slices.Contains(got, "settled") {
+			t.Errorf("settled %q is not refused: Missing = %v", value, got)
+		}
 	}
 
 	if (Review{}).Remote() {

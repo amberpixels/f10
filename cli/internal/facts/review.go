@@ -9,6 +9,7 @@ import (
 )
 
 // The remote half of the Review section: four facts with a fixed vocabulary,
+// and an optional fifth, the mark a resolved review gets,
 // written as bold items the way Tracker writes its adapters, so f10 init can
 // render them and `f10 review` can act on them. Everything else in the
 // section (the local reviewer's categories, a never-flag list, who answers
@@ -18,6 +19,7 @@ import (
 //	- **Arrives as** - issue comment
 //	- **Trigger** - automatic, on open and on push
 //	- **Done, handled** - posted, reaction `eyes`
+//	- **Settled** - reaction `rocket`
 //
 // A line that fits no vocabulary leaves its fact empty: the binary refuses
 // naming the fact rather than guessing, and config shows the prose as is.
@@ -34,13 +36,20 @@ type Review struct {
 	DoneText     string `json:"doneText,omitempty"`     // the marker's text
 	Handled      string `json:"handled,omitempty"`      // reaction | marker | checkbox | thread resolved
 	HandledText  string `json:"handledText,omitempty"`  // the reaction's emoji, or the marker's text
+	Settled      string `json:"settled,omitempty"`      // reaction | marker | thread resolved
+	SettledText  string `json:"settledText,omitempty"`  // the reaction's emoji, or the marker's text
+
+	// settledAs is the settled value as declared, so a value outside the
+	// vocabulary is refused rather than read as none declared
+	settledAs string
 }
 
 // Remote reports whether the section names a remote reviewer at all.
 func (r Review) Remote() bool { return r.Reviewer != "" }
 
 // Missing names the facts a remote review still lacks, in contract order,
-// so a refusal can say which line to fix.
+// so a refusal can say which line to fix. Settled is optional: it is
+// missing only when declared and unreadable.
 func (r Review) Missing() []string {
 	var missing []string
 
@@ -54,6 +63,10 @@ func (r Review) Missing() []string {
 		if f.value == "" {
 			missing = append(missing, f.name)
 		}
+	}
+
+	if r.settledAs != "" && r.Settled == "" {
+		missing = append(missing, "settled")
 	}
 
 	return missing
@@ -118,6 +131,9 @@ func parseReview(body string) Review {
 			done, handled := splitDoneHandled(value)
 			r.Done, r.DoneText = parseDone(done)
 			r.Handled, r.HandledText = parseHandled(handled)
+		case key == "settled":
+			r.settledAs = value
+			r.Settled, r.SettledText = parseSettled(value)
 		}
 	}
 
@@ -246,6 +262,17 @@ func parseHandled(value string) (string, string) {
 	return "", ""
 }
 
+// parseSettled reads the handled vocabulary minus the checkbox: there is
+// one first box, and handled owns it.
+func parseSettled(value string) (string, string) {
+	settled, text := parseHandled(value)
+	if settled == HandledCheckbox {
+		return "", ""
+	}
+
+	return settled, text
+}
+
 // markedText is the code span or quoted string on a line: the emoji's
 // name, the marker's text.
 func markedText(value string) string {
@@ -258,7 +285,7 @@ func markedText(value string) string {
 	return ""
 }
 
-// reviewBody renders the four items from what the workflow probe found, in
+// reviewBody renders the five items from what the workflow probe found, in
 // the vocabulary parseReview reads: the file init writes parses back to the
 // detection it replaced. "" when no review workflow was found.
 func reviewBody(pb *probe.Probes) string {
@@ -270,11 +297,13 @@ func reviewBody(pb *probe.Probes) string {
 	return "- **Reviewer** - " + d.Reviewer + "\n" +
 		"- **Arrives as** - " + d.Arrives + "\n" +
 		"- **Trigger** - " + d.Trigger + "\n" +
-		"- **Done, handled** - " + d.Done
+		"- **Done, handled** - " + d.Done + "\n" +
+		"- **Settled** - " + d.Settled
 }
 
-// detectedReview is the remote review a CI workflow implies, as the four
-// strings the frontmatter's review key takes.
+// detectedReview is the remote review a CI workflow implies, as the
+// strings the frontmatter's review key takes. Settled is a rocket: GitHub
+// and GitLab spell it the same, unlike +1 or hooray.
 func detectedReview(pb *probe.Probes) ReviewDecl {
 	if pb == nil || pb.Review == nil {
 		return ReviewDecl{}
@@ -303,5 +332,6 @@ func detectedReview(pb *probe.Probes) ReviewDecl {
 		Arrives:  "issue comment",
 		Trigger:  trigger,
 		Done:     "posted, reaction `eyes`",
+		Settled:  "reaction `rocket`",
 	}
 }

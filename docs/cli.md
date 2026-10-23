@@ -45,9 +45,10 @@ f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path)
 f10 demo open [id]       # the demo report, in the browser (--link writes the path)
 f10 pr open [n]          # the PR or MR, no number their list; gh or glab decided by the remote (--link, --print as for task)
-f10 review pick [n] [--json]                          # the latest unhandled remote review, as markdown
+f10 review pick [n] [--latest] [--json]               # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it
+f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
@@ -341,15 +342,21 @@ Out of scope: more than one base per task, and ordering tasks by anything but th
 `f10 review` reads the remote review a project declares under `project.md → Review` - four facts: who posts it, where it arrives on the PR or MR, what triggers it, what signals done and marks it handled ([project setup](project-setup.md#review)) - off the current branch's request, or the one `[n]` names.
 Nothing declared, or a fact outside the vocabulary, is a refusal naming the line to fix; the trigger is never performed, and `pick` says `the trigger is manual (<how>)` when it finds nothing on a manual project.
 
-- `pick` writes the newest review by the reviewer that nobody handled: a title, a meta line (url, the sha it reviewed, posted at, done, handled), the body verbatim.
+- `pick` writes the newest review by the reviewer that nobody handled: a title, a meta line (url, the sha it reviewed, posted at, done, handled, settled, its revision), the body verbatim.
   `--json` emits the struct.
+  `--latest` takes the newest review whatever its state, for `/f10:resolve ci` to tell a settled one from one to read in.
+  A settled review counts as handled, so plain `pick` never returns it.
+  The revision fingerprints the reviewer's text without f10's own marks: a sticky comment rewritten by a re-review keeps its id and sha, but not its revision.
   An issue comment stores no sha, so its sha is the request's last commit before it was posted; an inline review carries its own, a check run its head.
 - `wait` polls `pick` every `--every` until the review is done, and gives up at `--budget` (10 minutes by default) with the last reason quoted.
   It returns within the budget whatever the host does, so one agent call covers it.
 - `ack` leaves the declared handled marker: a reaction, a marker appended to the text, the first checkbox ticked, or the inline review's threads resolved.
-  It is the one verb here that writes to the host.
+  It and `settle` are the verbs here that write to the host.
   A review already handled is confirmed, not marked twice; a check run has no marker and ack says so.
   A reaction counts as handled only when it is newer than the review's last edit, so a sticky comment re-edited by a re-review reads as unhandled again.
+- `settle` leaves the declared settled marker on the review `--id` names, the same kinds as `ack` but the checkbox.
+  It refuses when the review's revision is no longer `--revision`: a re-review rewrote it, and its findings are unread.
+  Already settled is confirmed; a check run has no marker; no `settled` declared is a refusal naming the fact.
 
 Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's notes, discussions and pipeline jobs.
 

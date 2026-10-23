@@ -161,7 +161,8 @@ func TestMigrate(t *testing.T) {
 		"## Hosting & PR\n\nOpen PRs with gh. merge method: squash.\n\n" +
 		"## Ship pipeline(s)\n\n- **local**: `implement → commit`\n\n" +
 		"## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
-		"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n"
+		"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n" +
+		"- **Settled** - reaction `rocket`\n"
 
 	m, err := Migrate([]byte(prose), "project.md")
 	if err != nil {
@@ -179,7 +180,8 @@ func TestMigrate(t *testing.T) {
 	}
 
 	if d.Visibility != "stealth" || d.Tracker.ID != "DM-###" || d.Tracker.Kind != "github" ||
-		d.MergeMethod != "squash" || len(d.Pipelines["local"]) != 2 || d.Review.Reviewer != "bot `claude[bot]`" {
+		d.MergeMethod != "squash" || len(d.Pipelines["local"]) != 2 || d.Review.Reviewer != "bot `claude[bot]`" ||
+		d.Review.Settled != "reaction `rocket`" {
 		t.Errorf("migrated = %+v", d)
 	}
 

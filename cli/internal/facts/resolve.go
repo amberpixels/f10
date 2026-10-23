@@ -498,7 +498,7 @@ func pipelinesShown(pipes map[string][]string) string {
 	return strings.Join(shown, "; ")
 }
 
-// reviewFrom reads the frontmatter's four strings with the prose items'
+// reviewFrom reads the frontmatter's strings with the prose items'
 // sub-parsers, so both forms mean the same.
 func reviewFrom(d ReviewDecl) Review {
 	var (
@@ -524,6 +524,8 @@ func reviewFrom(d ReviewDecl) Review {
 		handled, handledText = parseHandled(handledHalf)
 	}
 
+	settled, settledText := parseSettled(d.Settled)
+
 	return Review{
 		Reviewer:     reviewer,
 		ReviewerKind: kind,
@@ -534,6 +536,9 @@ func reviewFrom(d ReviewDecl) Review {
 		DoneText:     doneText,
 		Handled:      handled,
 		HandledText:  handledText,
+		Settled:      settled,
+		SettledText:  settledText,
+		settledAs:    d.Settled,
 	}
 }
 
@@ -546,8 +551,14 @@ func reviewShown(r Review) string {
 		return strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), " ")
 	}
 
-	return strings.Join([]string{
+	shown := []string{
 		join(r.ReviewerKind, r.Reviewer), r.Arrives, r.Trigger,
 		join(r.Done, r.DoneText), join(r.Handled, r.HandledText),
-	}, ", ")
+	}
+
+	if r.Settled != "" {
+		shown = append(shown, "settled "+join(r.Settled, r.SettledText))
+	}
+
+	return strings.Join(shown, ", ")
 }
