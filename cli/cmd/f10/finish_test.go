@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -23,7 +24,7 @@ type finishFixture struct {
 }
 
 const (
-	ghView  = "gh pr view GH-1 --json state,url,number,baseRefName,mergeStateStatus,mergeCommit,author"
+	ghView  = "gh pr view GH-1 --json state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author"
 	ghRepo  = "gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
@@ -115,6 +116,99 @@ func (fx *finishFixture) run(t *testing.T) (string, error) {
 	err := finish(t.Context(), &out, fx.in)
 
 	return out.String(), err
+}
+
+// With traces on, the squash commit's body is the PR's description followed
+// by the task's trailer, so the commit on the default branch still names
+// the task; a rebase passes no body, since the branch commits keep theirs.
+func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.traces = true
+	fx.in.method = "squash"
+	fx.plan(t, "GH-1.md", "# plan")
+
+	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"Adds the thing.\n\nCloses #1\n"}`
+	merge := "gh pr merge GH-1 --squash --body Adds the thing.\n\nCloses #1\n\nTask: GH-1\n"
+	fx.f.script(ghView, open, prMerged)
+	fx.f.script(merge, "")
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called(merge) {
+		t.Errorf("the squash carried no body:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+}
+
+func TestMergeBody(t *testing.T) {
+	bundle := finishInput{traces: true, task: ref.Ref{ID: "GH-1", Bundle: []string{"GH-1", "GH-2"}}}
+	described := "  Adds the thing.\n"
+
+	cases := []struct {
+		name        string
+		in          finishInput
+		description string
+		method      string
+		want        string
+	}{
+		{"off", finishInput{task: gh1}, described, "--squash", ""},
+		{"rebase", finishInput{traces: true, task: gh1}, described, "--rebase", ""},
+		{"glab plain merge", finishInput{traces: true, task: gh1}, described, "", ""},
+		{"squash", finishInput{traces: true, task: gh1}, described, "--squash", "Adds the thing.\n\nTask: GH-1\n"},
+		{"merge commit", finishInput{traces: true, task: gh1}, described, "--merge", "Adds the thing.\n\nTask: GH-1\n"},
+		{"empty description", finishInput{traces: true, task: gh1}, "", "--squash", "Task: GH-1\n"},
+		{"bundle", bundle, "", "--squash", "Task: GH-1\nTask: GH-2\n"},
+	}
+
+	for _, c := range cases {
+		if got := mergeBody(c.in, c.description, c.method); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// A kept rider's Closes was rewritten to Part of just before the merge, so
+// the squash body is read again from the host: the commit on the default
+// branch must not close what the PR body no longer closes.
+func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.traces = true
+	fx.in.method = "squash"
+	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`, `{"body":"Closes #1\nPart of #2"}`)
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
+
+	merge := "gh pr merge GH-1 --squash --body Closes #1\nPart of #2\n\nTask: GH-1\nTask: GH-2\n"
+	fx.f.script(merge, "")
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called(merge) {
+		t.Errorf("the squash body kept a stale Closes:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+}
+
+// glab takes the whole message, so the title goes on top of the body.
+func TestMergePullGlabSquashMessage(t *testing.T) {
+	f := newFakes(t)
+	h := host{name: "glab", dir: t.TempDir()}
+	view := "glab mr view GH-1 -F json"
+	merge := "glab mr merge GH-1 --remove-source-branch --auto-merge=false --yes --squash --squash-message Add the thing\n\nTask: GH-1\n"
+	f.script(merge, "")
+	f.script(view, `{"state":"merged","web_url":"https://gl/mr/9","squash_commit_sha":"sq"}`)
+
+	p, err := h.mergePull(t.Context(), pull{Title: "Add the thing"}, "GH-1", "--squash", "Task: GH-1\n")
+	if err != nil || p.sha() != "sq" {
+		t.Fatalf("merged = %+v, %v", p, err)
+	}
+
+	if !f.called(merge) {
+		t.Errorf("calls:\n%s", strings.Join(f.calls, "\n"))
+	}
 }
 
 // The happy path from main's checkout: view, merge, view again, delete the

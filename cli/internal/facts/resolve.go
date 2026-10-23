@@ -327,9 +327,9 @@ func (e *Effective) resolveHosting(
 	}
 
 	// frontmatter only: no prose ever declared it
-	e.settle("review_traces", fmSource("review_traces", fm.ReviewTraces), source{},
-		Fact{Key: "review_traces", Value: "off", Origin: OriginDefault})
-	e.ReviewTraces = fm.ReviewTraces == "on"
+	e.settle("traces", fmSource("traces", fm.Traces), source{},
+		Fact{Key: "traces", Value: "off", Origin: OriginDefault})
+	e.Traces = fm.Traces == "on"
 }
 
 func (e *Effective) resolvePipelines(

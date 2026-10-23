@@ -48,6 +48,7 @@ f10 pr open [n]          # the PR or MR, no number their list; gh or glab decide
 f10 review pick [n] [--json]                          # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n]                                    # leave the declared handled marker on it
+f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
