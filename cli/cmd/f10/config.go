@@ -39,7 +39,7 @@ type view struct {
 	Review          facts.Review        `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
 	MergeMethod     string              `json:"mergeMethod,omitempty"`
 	Catchup         string              `json:"catchup"`
-	ReviewTraces    bool                `json:"reviewTraces"`
+	Traces          bool                `json:"traces"`
 	Pipelines       map[string][]string `json:"pipelines"`
 	Planless        []string            `json:"planless,omitempty"`
 	DriveChain      []string            `json:"driveChain"`
@@ -90,7 +90,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Review:          eff.Review,
 		MergeMethod:     eff.MergeMethod,
 		Catchup:         eff.Catchup,
-		ReviewTraces:    eff.ReviewTraces,
+		Traces:          eff.Traces,
 		Pipelines:       eff.Pipelines,
 		Planless:        eff.Planless,
 		DriveChain:      eff.DriveChain,

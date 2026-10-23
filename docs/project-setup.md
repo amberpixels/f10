@@ -60,7 +60,7 @@ Go service for invoices.
 | `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, and an optional `priority` map from the four levels to the host labels that carry them | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
 | `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
-| `review_traces` | `on` or `off`: a local review or a judge run after the PR leaves a commit status, a PR comment and a commit naming its findings or changes | `off` |
+| `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
 | `planless` | the pipelines that skip capture and the plan file | none |
 | `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
@@ -80,7 +80,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`, the resolve and judge steps for `review_traces`).
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`, the commit, resolve and judge steps for `traces`).
 
 ## Overlays
 
@@ -186,14 +186,19 @@ Arrives as is `issue comment`, `inline review` or `check run`.
 Trigger is `automatic`, `manual` or both, followed by how a human fires it; f10 never fires a manual trigger itself.
 Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. `f10 init` writes these four from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger; a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
 
-`review_traces: on` makes a local review or a judge of a branch with an open PR or MR visible on it.
+`traces: on` makes what f10 does visible on the host, in words that never name f10.
+Every commit a step makes ends in `Task: <id>` and `Step: <step>` trailers, a resolve's fix commit also in `Review: round=<n> fixed=<n> skipped=<n>`.
+The squash commit `f10 finish` lands on the default branch keeps `Task: <id>` under the PR's description.
+`docs/traces.md` is the spec, with the fixtures a reader of the history conforms to.
+A local review or a judge of a branch with an open PR or MR is visible on it too.
 The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped".
 A round that found anything also gets a PR comment listing the findings by title, each with its verdict and each skip's reason.
 The fix commit's message names what it fixed and what it skipped.
 A judge after the PR leaves a `judge` status and a comment with its verdict; a proceed with changes pushes its changes first and lists them, and a stop marks the PR "do not merge" with its reason, leaving it open.
 The status is tied to a commit, so a later push shows the new head as unreviewed, a judge's own push included: judge plus green verify is not followed by a second review.
-It is off by default because on a shared repo every comment reaches your teammates.
+It is off by default because on a shared repo every trace reaches your teammates.
 In stealth mode every trace reads as your own.
+`review_traces`, the key's old name, still reads as `traces` with a warning from `f10 config`; `f10 init --migrate` renames it in a frontmatter that still has it.
 
 ## Storage and visibility
 

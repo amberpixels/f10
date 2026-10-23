@@ -3,7 +3,7 @@
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
 Output: a verdict in chat, the argument under it, and the **verdict file** (point 8); after `pr` in a ship run, also a pushed commit (yellow) and a status and comment on the PR.
-Context: after `pr` only, `project.md → Verify` and `→ Hosting & PR`, and the frontmatter's `review_traces`.
+Context: after `pr` only, `project.md → Verify` and `→ Hosting & PR`, and the frontmatter's `traces`.
 **It writes only its verdict file** (folding a verdict into the plan is the ship skill's; the badge note lives outside every repo).
 The one exception is a judge entry after `pr` in a ship run: its route writes code, commits and PR traces under the ship skill's authorization.
 A standalone `/f10:judge` never does, on a PR included.
@@ -114,8 +114,8 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 
 - **Green, proceed** - leave the trace (below) and continue (`decision: continue`); the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.
-  The ship skill folds them into the plan file as before `pr`; then make and verify them as `steps/implement.md` points 1 and 2 say, commit as `steps/commit.md` point 2 says, and push to the PR's branch, never forcing.
-  With `review_traces: on`, the commit body names each change in plain words for a reader of the PR.
+  The ship skill folds them into the plan file as before `pr`; then make and verify them as `steps/implement.md` points 1 and 2 say, commit as `steps/commit.md` point 2 says with `--step judge`, and push to the PR's branch, never forcing.
+  With `traces: on`, the commit body names each change in plain words for a reader of the PR.
   No second review round: a judge plus green verify is enough.
   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`), the changes left uncommitted and nothing posted.
   Green: leave the trace on the pushed commit and continue (`decision: continue`).
@@ -131,7 +131,7 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 Orange becomes one ask (objections numbered, **refactor as agreed** first, **stop** among the options), with `decision: asked` in the file, then `set ship blocked judge`.
 The answer resumes at `judge`: refactor runs yellow, stop runs red.
 
-**The trace** after `pr`, when the frontmatter says `review_traces: on` and the branch has an open PR or MR; off, every route still runs and only the status and comment are skipped.
+**The trace** after `pr`, when the frontmatter says `traces: on` and the branch has an open PR or MR; off, every route still runs and only the status and comment are skipped.
 
 - **Status** with context `judge` on the PR's head after this step's push (yellow: the pushed commit; green and red: `headRefOid`), the description under 140 characters: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='judge' -f description='<text>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='judge' -f description='<text>'`.
   The descriptions: green `success` with the reason; yellow `success` with `proceed with changes: <n> changes`; red `failure` with `do not merge: <the reason>`, cut to fit.

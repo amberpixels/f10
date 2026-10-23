@@ -47,10 +47,13 @@ No conflict, or nothing to bring in, is a **correct run**.
      Rename-and-modify keeps the rename and re-applies the change; both-added becomes one implementation; modify-versus-delete is decided from context, else asked.
    - **Never leave a marker** (`<<<<<<<`, `=======`, `>>>>>>>`), and never invent code beyond merge glue such as a combined import list.
    - **Genuine ambiguity** (both sides changed the same business logic incompatibly): collect every such file into **one** `AskUserQuestion`, per file what ours and theirs wanted, with options keep ours, keep theirs, a named reconciliation.
-   - `git add` each file, confirm no conflict or marker remains (`git grep` over the staged files), then `git merge --continue` or `git rebase --continue`; repeat for every conflicting commit of a rebase.
+   - `git add` each file, confirm no conflict or marker remains (`git grep` over the staged files), then conclude.
+     Under a merge, `git commit -m "<subject>" -m "$(f10 trace trailers --step catchup)"`, never `git merge --continue`, so the merge commit carries its trailers (`steps/commit.md` point 2).
+     Under a rebase, `git rebase --continue`, repeated for every conflicting commit; replayed commits keep their own messages.
+   - A clean merge takes the same message through `git merge <base> -m "<subject>" -m "$(f10 trace trailers --step catchup)"`.
 
 5. **Verify** with `project.md → Verify` (none declared: detect as `steps/implement.md` does).
-   Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge or folded into its commit under a rebase, and re-verify.
+   Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`steps/commit.md` point 2, `--step catchup`) or folded into its commit under a rebase, and re-verify.
    Green, with `f10-landed` found in point 2: `git config --unset branch."$(git branch --show-current)".f10-landed`, before the report.
    `f10 drive` reads the mark still set as a catchup that did not finish, and halts the task.
 

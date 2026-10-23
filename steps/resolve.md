@@ -50,10 +50,11 @@ Settle every file the same way, whoever wrote it: what the block says is wrong, 
    Never edit the reviewer's text.
 9. **Land the fixes on an open PR or MR.**
    When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes as `steps/commit.md` point 2 says and push them to that branch, never forcing.
+   The trailers are `f10 trace trailers --step resolve --round <n> --fixed <n> --skipped <n>`, the counts the entry's at this commit (round two's cover both rounds, as point 10's comment does).
    Outward-facing, under the run's authorization.
-   With `review_traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.
+   With `traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.
    With no open PR or MR, the fixes stay in the working tree for the pipeline's next step (`pr`, `push`, `commit`) or the user.
-10. **Leave the trace** when the frontmatter says `review_traces: on`, the branch has an open PR or MR, the file's `reviewer:` is `local`, and this is the entry's last resolve (point 7's rule: a pipeline resolve that recorded a `fix` holds its trace for round two, which covers both rounds).
+10. **Leave the trace** when the frontmatter says `traces: on`, the branch has an open PR or MR, the file's `reviewer:` is `local`, and this is the entry's last resolve (point 7's rule: a pipeline resolve that recorded a `fix` holds its trace for round two, which covers both rounds).
     The trace follows point 9's choice: fixes not pushed, nothing posted.
     In round two the counts and the comment cover both files, each finding at its last verdict, round one's skip reasons included.
     - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean and is the PR's head (`gh pr view --json headRefOid` / `glab mr view`); any other sha gets no status, and the report says why: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='review (local)' -f description='<counts>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='review (local)' -f description='<counts>'`.

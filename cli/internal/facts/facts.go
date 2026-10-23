@@ -68,13 +68,13 @@ type Effective struct {
 
 	// The rest of the typed facts (resolve.go). MergeMethod "" means none
 	// declared: finish asks the repo.
-	MergeMethod  string              `json:"mergeMethod,omitempty"`
-	Catchup      string              `json:"catchup"`
-	ReviewTraces bool                `json:"reviewTraces"` // review_traces: on; a review or judge after the PR leaves a status, a comment, a named commit
-	Pipelines    map[string][]string `json:"pipelines"`
-	Planless     []string            `json:"planless,omitempty"`
-	DriveChain   []string            `json:"driveChain"`
-	UpkeepPaths  []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	MergeMethod string              `json:"mergeMethod,omitempty"`
+	Catchup     string              `json:"catchup"`
+	Traces      bool                `json:"traces"` // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
+	Pipelines   map[string][]string `json:"pipelines"`
+	Planless    []string            `json:"planless,omitempty"`
+	DriveChain  []string            `json:"driveChain"`
+	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
@@ -176,6 +176,13 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 			for _, bad := range d.check() {
 				problems = append(problems, Problem{Error: true, Message: file + " frontmatter: " + bad})
 			}
+
+			folded, p, found := d.foldTraces(file)
+			if found {
+				problems = append(problems, p)
+			}
+
+			d = folded
 
 			fm.merge(d, layer.Label)
 		}

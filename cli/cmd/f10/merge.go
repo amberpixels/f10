@@ -82,7 +82,13 @@ func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	var p pull
 
 	err := h.decode(ctx, &p, h.pick(
-		[]string{"pr", "view", branch, "--json", "state,url,number,baseRefName,mergeStateStatus,mergeCommit,author"},
+		[]string{
+			"pr",
+			"view",
+			branch,
+			"--json",
+			"state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author",
+		},
 		[]string{"mr", "view", branch, "-F", "json"},
 	)...)
 
@@ -107,13 +113,29 @@ func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 // merge commit exists only afterwards. Never --admin: a host that refuses
 // has a reason, and it is the error. glab's auto-merge is turned off so a
 // running pipeline makes it refuse rather than queue and report success.
-func (h host) mergePull(ctx context.Context, branch, method string) (pull, error) {
+// A body replaces the commit's default body: gh keeps its subject, glab
+// takes the whole message, so the request's title goes on top.
+func (h host) mergePull(ctx context.Context, p pull, branch, method, body string) (pull, error) {
 	args := h.pick(
 		[]string{"pr", "merge", branch},
 		[]string{"mr", "merge", branch, "--remove-source-branch", "--auto-merge=false", "--yes"},
 	)
 	if method != "" {
 		args = append(args, method)
+	}
+
+	if body != "" {
+		flag := "--body"
+		if h.glab() {
+			flag = "--message"
+			if method == "--squash" {
+				flag = "--squash-message"
+			}
+
+			body = p.Title + "\n\n" + body
+		}
+
+		args = append(args, flag, body)
 	}
 
 	if _, err := h.run(ctx, args...); err != nil {

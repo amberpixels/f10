@@ -63,7 +63,7 @@ If it is ever unavailable, the points below say what to do by hand:
 
 A YAML frontmatter block holds the facts the `f10` binary acts on (an unknown key or value is an error), then prose under headings holds the rest.
 Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
-A fact belongs to the step or skill that acts on it, which says what it means: `pipelines` and `planless` to `/f10:ship`, `review` to the **review** step, `catchup` to the **catchup** step.
+A fact belongs to the step or skill that acts on it, which says what it means: `pipelines` and `planless` to `/f10:ship`, `review` to the **review** step, `catchup` to the **catchup** step, `traces` to the **commit**, **resolve** and **judge** steps and `f10 finish`.
 The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.
@@ -93,6 +93,8 @@ Unless `project.md` says `public`:
 - No f10 traces in anything that leaves the machine: no mention of f10, plan files, or `.f10/` paths in commits, branch names, PR/MR text, tracker comments, or code comments.
 - Never justify code or decisions by the pipeline (no "per the plan / per step 3"); state the *domain* reason the plan recorded.
 - Never commit or push files under `.f10/`.
+- The `Task:`, `Step:` and `Review:` trailers `f10 trace trailers` prints, and the `Task:` line `f10 finish` puts on a squash commit, are allowed: they name a task and a step, never f10, a plan or a findings file (`docs/traces.md`).
+  They exist only with `traces: on`; the default, `off`, writes none.
 
 ## Task references
 
