@@ -111,14 +111,14 @@ func TestReviewMissing(t *testing.T) {
 	}
 
 	// settled is optional: absent is not missing, unreadable is
-	if got := (Review{Settled: HandledThread, settledAs: "thread resolved"}).Missing(); slices.Contains(
+	if got := (Review{Settled: HandledReaction, SettledText: "rocket", settledAs: "reaction `rocket`"}).Missing(); slices.Contains(
 		got,
 		"settled",
 	) {
 		t.Errorf("a readable settled reads as missing: %v", got)
 	}
 
-	for _, value := range []string{"checkbox", "a thumbs up from me"} {
+	for _, value := range []string{"checkbox", "thread resolved", "a thumbs up from me"} {
 		if got := reviewFrom(ReviewDecl{Settled: value}).Missing(); !slices.Contains(got, "settled") {
 			t.Errorf("settled %q is not refused: Missing = %v", value, got)
 		}

@@ -21,9 +21,9 @@ It never waits for one: `/f10:review ci` does.
 2. **Settled** (`settled: true`): "nothing to resolve", a normal end; nothing changes.
 3. **Stale**: a picked sha other than HEAD prints one warning line naming the sha and the commits since (`git rev-list --count <sha>..HEAD`), then the run goes on; point 3 already reads its lines as advisory.
 4. **Held?**
-   A findings file holds the review when its `reviewer:` is not `local`, its `review:` is the picked url and its `revision:` the picked revision.
+   A findings file holds the review when its `reviewer:` is not `local`, its `review:` is the picked url and its `revision:` the picked revision; a file with no `revision:` line holds it when its `reviewed:` is the picked sha.
    One that does is the file point 1 takes.
-   None does: run the review step's **remote review** points 3 and 4 (shape the file, ack), under its **Rounds** rules, whose declines are normal ends here; the new file is the one point 1 takes.
+   None does: run the review step's **remote review** points 3 and 4 (shape the file, ack with the picked id), under its **Rounds** rules, whose declines are normal ends here; the new file is the one point 1 takes.
 5. **Settle**, after point 10: `f10 review settle --id <id> --revision <revision>`, both from point 1's pick.
    Withheld while a verdict is a waiting `ask` (parked per point 7, or a driven ask pending), or while fixes exist that point 9 did not push; the report says which.
    A held file whose every block already has a verdict skips points 2-10 and is settled the same way.

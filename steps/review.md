@@ -124,7 +124,7 @@ The four `review:` facts in the frontmatter, and an optional fifth, are the prot
 - **done** - done, then handled.
   Done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only).
   A check run has no remote handled marker; a new push starts a new run.
-- **settled** - optional: the mark `/f10:resolve ci` leaves once every finding has a verdict, `reaction \`<emoji>\``, `marker "<text>"` or `thread resolved` (inline only), never the handled mark itself.
+- **settled** - optional: the mark `/f10:resolve ci` leaves once every finding has a verdict, `reaction \`<emoji>\`` or `marker "<text>"`, never the handled mark itself, and never resolved threads, which a human may resolve by hand.
   A settled review counts as handled.
 
 `f10 init` infers them from a `.github/workflows` workflow running the Claude Code action; the shell loader does not, so they arrive through `project.md`, or `f10 config` shows them as detected while undeclared.
@@ -145,7 +145,7 @@ Without them this half **fails**: there is nothing to wait for.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it, else `still open`.
    If the body is not in the findings shape, say once that this file's brief can be pasted into the workflow; do not print it.
 4. **Ack.**
-   With the file on disk, `f10 review ack` marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
+   With the file on disk, `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
    Ack is outward-facing, under the run's authorization; in stealth mode it reads as the user's own.
 
 **Report** per `conventions/report.md`: a `findings` row, then the verdict and the count per category, in the reviewer's words.

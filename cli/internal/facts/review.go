@@ -36,7 +36,7 @@ type Review struct {
 	DoneText     string `json:"doneText,omitempty"`     // the marker's text
 	Handled      string `json:"handled,omitempty"`      // reaction | marker | checkbox | thread resolved
 	HandledText  string `json:"handledText,omitempty"`  // the reaction's emoji, or the marker's text
-	Settled      string `json:"settled,omitempty"`      // reaction | marker | thread resolved
+	Settled      string `json:"settled,omitempty"`      // reaction | marker
 	SettledText  string `json:"settledText,omitempty"`  // the reaction's emoji, or the marker's text
 
 	// settledAs is the settled value as declared, so a value outside the
@@ -262,11 +262,12 @@ func parseHandled(value string) (string, string) {
 	return "", ""
 }
 
-// parseSettled reads the handled vocabulary minus the checkbox: there is
-// one first box, and handled owns it.
+// parseSettled reads a reaction or a marker. Not the checkbox, which
+// handled owns, nor resolved threads, which a human resolving them by hand
+// would turn into a settled mark nobody left.
 func parseSettled(value string) (string, string) {
 	settled, text := parseHandled(value)
-	if settled == HandledCheckbox {
+	if settled != HandledReaction && settled != HandledMarker {
 		return "", ""
 	}
 

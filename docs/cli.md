@@ -47,7 +47,7 @@ f10 demo open [id]       # the demo report, in the browser (--link writes the pa
 f10 pr open [n]          # the PR or MR, no number their list; gh or glab decided by the remote (--link, --print as for task)
 f10 review pick [n] [--latest] [--json]               # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
-f10 review ack [n]                                    # leave the declared handled marker on it
+f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
@@ -354,7 +354,7 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
   It and `settle` are the verbs here that write to the host.
   A review already handled is confirmed, not marked twice; a check run has no marker and ack says so.
   A reaction counts as handled only when it is newer than the review's last edit, so a sticky comment re-edited by a re-review reads as unhandled again.
-- `settle` leaves the declared settled marker on the review `--id` names, the same kinds as `ack` but the checkbox.
+- `settle` leaves the declared settled marker on the review `--id` names: a reaction or a marker.
   It refuses when the review's revision is no longer `--revision`: a re-review rewrote it, and its findings are unread.
   Already settled is confirmed; a check run has no marker; no `settled` declared is a refusal naming the fact.
 

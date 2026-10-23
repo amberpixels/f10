@@ -359,7 +359,7 @@ func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 			name: "settled threads on a comment",
 			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
 				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - thread resolved\n",
-			want: "as settled for a review that does not arrive inline",
+			want: "settled line(s) could not be read",
 		},
 	}
 
@@ -451,7 +451,7 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 		t.Fatalf("pick: %v", err)
 	}
 
-	target, err := rv.ackTarget(t.Context())
+	target, err := rv.ackTarget(t.Context(), "")
 	if err != nil {
 		t.Fatalf("ackTarget: %v", err)
 	}
@@ -460,11 +460,20 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 		t.Errorf("pick = %s, ack target = %s; want both 200", picked.ID, target.ID)
 	}
 
+	// an id names the review resolve read in, even past an older unhandled one
+	if target, err := rv.ackTarget(t.Context(), "300"); err != nil || target.ID != "300" {
+		t.Errorf("ack --id 300 = %+v, %v", target, err)
+	}
+
+	if _, err := rv.ackTarget(t.Context(), "999"); !errors.Is(err, errNoReview) {
+		t.Errorf("ack --id of no review = %v", err)
+	}
+
 	// every review handled: the newest is confirmed, not marked twice
 	f.script(strings.Replace(reactionsPath, "%s", "200", 1),
 		`[{"content":"eyes","created_at":"2026-10-06T11:30:00Z","user":{"login":"eugene"}}]`)
 
-	if target, err := rv.ackTarget(t.Context()); err != nil || target.ID != "300" || !target.Handled {
+	if target, err := rv.ackTarget(t.Context(), ""); err != nil || target.ID != "300" || !target.Handled {
 		t.Errorf("all handled: ack target = %+v, %v; want 300, handled", target, err)
 	}
 }
@@ -743,6 +752,11 @@ func TestReviewSettledReadsAsHandled(t *testing.T) {
 		t.Errorf("latest = %+v, %v; want 200, settled and handled, with a revision", r, err)
 	}
 
+	// handled and settled share one reactions read per review
+	if n := strings.Count(strings.Join(f.calls, "\n"), strings.Replace(reactionsPath, "%s", "200", 1)); n != 2 {
+		t.Errorf("reactions read %d times over two calls, want 2", n)
+	}
+
 	if doc := reviewDoc(r); !strings.Contains(doc, "settled") || !strings.Contains(doc, "revision "+r.Revision) {
 		t.Errorf("doc missing the settled state or the revision:\n%s", doc)
 	}
@@ -825,5 +839,29 @@ func TestReviewSettleRefusesARewrittenReview(t *testing.T) {
 
 	if _, err := rv.settleTarget(t.Context(), "999", read.Revision); !errors.Is(err, errNoReview) {
 		t.Errorf("settled a review that is not there: %v", err)
+	}
+}
+
+// On an inline review the handled marker lands mid-text, before the folded
+// comments, after a blank line; the revision reads past both.
+func TestReviewRevisionIgnoresTheMarkerOnAnInlineReview(t *testing.T) {
+	f := newFakes(t)
+
+	rf := stickyFacts()
+	rf.Arrives = facts.ArrivesInline
+	rf.Handled, rf.HandledText = facts.HandledMarker, "<!-- read -->"
+	rv := ghReviewer(t, f, rf)
+
+	comments := "\n\n### a.go:3\n\nnil check"
+	read := rv.revision(remoteReview{Body: "summary" + comments})
+	acked := rv.revision(remoteReview{Body: "summary\n\n<!-- read -->" + comments})
+	rewritten := rv.revision(remoteReview{Body: "summary" + comments + "\n\n### b.go:9\n\nleak"})
+
+	if read != acked {
+		t.Errorf("the marker moved the revision: %s, then %s", read, acked)
+	}
+
+	if read == rewritten {
+		t.Error("a new comment left the revision where it was")
 	}
 }

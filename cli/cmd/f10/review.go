@@ -54,7 +54,13 @@ func reviewCommand() *cli.Command {
 				Name:      "ack",
 				Usage:     "mark the latest unhandled review handled, the way Review declares",
 				ArgsUsage: "[number]",
-				Action:    runReviewAck,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "id",
+						Usage: "the review to mark, as pick printed it, instead of the latest unhandled",
+					},
+				},
+				Action: runReviewAck,
 			},
 			{
 				Name:      "settle",
@@ -120,16 +126,11 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 }
 
 // settledConflict refuses a settled mark the host could not tell apart from
-// the handled one, or one the arrival kind cannot carry.
+// the handled one.
 func settledConflict(f facts.Review) error {
 	switch {
 	case f.Settled == "":
 		return nil
-	case f.Settled == facts.HandledThread && f.Arrives != facts.ArrivesInline:
-		return errors.New(
-			"the Review section declares `thread resolved` as settled for a review that does not arrive inline; " +
-				"declare a reaction or a marker instead",
-		)
 	case f.Settled == f.Handled && f.SettledText == f.HandledText:
 		return errors.New("the Review section's settled mark is the handled mark: settled could never be told " +
 			"from handled; declare a different reaction or marker")
@@ -226,7 +227,7 @@ func runReviewAck(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, err := rv.ackTarget(ctx)
+	r, err := rv.ackTarget(ctx, cmd.String("id"))
 	if err != nil {
 		return err
 	}

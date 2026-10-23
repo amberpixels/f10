@@ -100,6 +100,8 @@ type reviewer struct {
 	facts facts.Review
 	pull  reviewPull
 
+	reactions map[string]map[string]bool // per candidates call: review id to the viewer's fresh reactions
+
 	viewer string // the login gh or glab is signed in as
 	owner  string // gh GraphQL needs owner and name spelled out
 	repo   string
@@ -248,6 +250,8 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 		return nil, err
 	}
 
+	rv.reactions = map[string]map[string]bool{}
+
 	for i := range found {
 		found[i].Done = rv.isDone(found[i])
 
@@ -304,9 +308,10 @@ func (rv *reviewer) latest(ctx context.Context) (remoteReview, error) {
 	return found[0], nil
 }
 
-// ackTarget is the review ack marks: the one pick returns, or with every
-// review handled the newest, which ack confirms rather than marks twice.
-func (rv *reviewer) ackTarget(ctx context.Context) (remoteReview, error) {
+// ackTarget is the review ack marks: the one id names, else the one pick
+// returns, or with every review handled the newest, which ack confirms
+// rather than marks twice.
+func (rv *reviewer) ackTarget(ctx context.Context, id string) (remoteReview, error) {
 	found, err := rv.candidates(ctx)
 	if err != nil {
 		return remoteReview{}, err
@@ -315,6 +320,17 @@ func (rv *reviewer) ackTarget(ctx context.Context) (remoteReview, error) {
 	if len(found) == 0 {
 		return remoteReview{}, fmt.Errorf("nothing to acknowledge: %w from %s on %s",
 			errNoReview, rv.facts.Reviewer, rv.pull.URL)
+	}
+
+	if id != "" {
+		for _, r := range found {
+			if r.ID == id {
+				return r, nil
+			}
+		}
+
+		return remoteReview{}, fmt.Errorf("nothing to acknowledge: %w %s from %s on %s",
+			errNoReview, id, rv.facts.Reviewer, rv.pull.URL)
 	}
 
 	if r, ok := firstUnhandled(found); ok {
@@ -341,7 +357,9 @@ func (rv *reviewer) revision(r remoteReview) string {
 		}
 	}
 
-	sum := sha256.Sum256([]byte(strings.TrimSpace(body)))
+	// ack's marker arrives after a blank line, mid-text on an inline review
+	// whose comments are folded in after it: whitespace is not the review
+	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(body), " ")))
 
 	return hex.EncodeToString(sum[:6])
 }
@@ -455,8 +473,6 @@ func (rv *reviewer) isSettled(ctx context.Context, r remoteReview) (bool, error)
 		return rv.hasFreshReaction(ctx, r, rv.facts.SettledText)
 	case facts.HandledMarker:
 		return rv.facts.SettledText != "" && strings.Contains(r.stored, rv.facts.SettledText), nil
-	case facts.HandledThread:
-		return rv.threadsResolved(ctx, r)
 	default:
 		return false, nil
 	}
@@ -467,14 +483,33 @@ func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview, emoji 
 		return false, nil
 	}
 
-	viewer, err := rv.viewerLogin(ctx)
+	if fresh, ok := rv.reactions[r.ID]; ok {
+		return fresh[emoji], nil
+	}
+
+	fresh, err := rv.freshReactions(ctx, r)
 	if err != nil {
 		return false, err
 	}
 
+	if rv.reactions != nil {
+		rv.reactions[r.ID] = fresh
+	}
+
+	return fresh[emoji], nil
+}
+
+// freshReactions is the set of emoji the viewer left on r after its last
+// edit, read once so the handled and settled checks share one call.
+func (rv *reviewer) freshReactions(ctx context.Context, r remoteReview) (map[string]bool, error) {
+	viewer, err := rv.viewerLogin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	path, ok := rv.reactionPath(r)
 	if !ok {
-		return false, nil
+		return nil, nil
 	}
 
 	// gh calls them reactions with a content, glab award emoji with a name
@@ -489,18 +524,18 @@ func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview, emoji 
 	}
 
 	if err := rv.h.decode(ctx, &reactions, "api", path); err != nil {
-		return false, err
+		return nil, err
 	}
 
+	fresh := map[string]bool{}
+
 	for _, re := range reactions {
-		if cmp.Or(re.Content, re.Name) == emoji &&
-			sameLogin(viewer, cmp.Or(re.User.Login, re.User.Username)) &&
-			!re.CreatedAt.Before(r.UpdatedAt) {
-			return true, nil
+		if sameLogin(viewer, cmp.Or(re.User.Login, re.User.Username)) && !re.CreatedAt.Before(r.UpdatedAt) {
+			fresh[cmp.Or(re.Content, re.Name)] = true
 		}
 	}
 
-	return false, nil
+	return fresh, nil
 }
 
 // reactionPath is where a review's reactions live, per kind and CLI.
@@ -591,11 +626,9 @@ func (rv *reviewer) settle(ctx context.Context, r remoteReview) (string, error) 
 		return rv.react(ctx, r, rv.facts.SettledText)
 	case facts.HandledMarker:
 		return rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+rv.facts.SettledText, "marker appended")
-	case facts.HandledThread:
-		return rv.resolveThreads(ctx, r)
 	default:
 		return "", errors.New("project.md declares no review settled mark: declare `settled` " +
-			"(reaction `<emoji>`, marker \"<text>\" or thread resolved) under review")
+			"(reaction `<emoji>` or marker \"<text>\") under review")
 	}
 }
 
