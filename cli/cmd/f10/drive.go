@@ -379,6 +379,8 @@ type driveResult struct {
 	// skill and reason name a halt, for the ledger
 	skill  string
 	reason string
+	// fromRun is a halt the run itself reported, already in the ledger
+	fromRun bool
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -1121,6 +1123,17 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 		return halted(id, "finish", err.Error())
 	}
 
+	// finish runs in this process, where no hook sees it
+	if in.record != nil {
+		in.record(ctx, in.main, ledger.Event{
+			At:      in.now(),
+			Task:    id,
+			Kind:    ledger.TaskFinished,
+			Source:  ledger.Observed,
+			Payload: ledger.NewPayload(ledger.Payload{"args": []any{id}}),
+		})
+	}
+
 	return driveResult{row: "finished"}
 }
 
@@ -1388,6 +1401,8 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 	}
 
 	res := halted(id, skill, reason)
+	res.fromRun = true
+
 	if run.Next != "" {
 		res.lines = append(res.lines, "next: "+run.Next)
 	}
@@ -1401,7 +1416,7 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
 	r.end = &res
 
-	if res.code == exitHalted {
+	if res.code == exitHalted && !res.fromRun {
 		in.recordHalt(ctx, r, res)
 	}
 
@@ -1426,9 +1441,9 @@ func halted(id, skill, reason string) driveResult {
 	}
 }
 
-// recordHalt puts a halt in the ledger against the task, placed in its
-// worktree when it has one. A run's own stop is there already as its
-// claims; this one is what drive saw, an idle agent or a refused finish.
+// recordHalt puts a halt drive found itself, an idle agent or a refused
+// finish, in the ledger against the task, placed in its worktree when it
+// has one.
 func (in *driveInput) recordHalt(ctx context.Context, r *driveRun, res driveResult) {
 	if in.record == nil {
 		return

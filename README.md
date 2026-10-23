@@ -334,7 +334,7 @@ Overriding `F10_STATE_GLYPHS` takes all eight positions; the last two hold the r
 Steps report precisely, hooks reliably: `Stop` closes a run whose last badge line the agent dropped.
 A phase left `pending` means "nobody said".
 
-Both writers also append to a local ledger, `~/.f10/f10.db` (SQLite, outside every repo): what the hooks observed, what artifacts (plans, findings, verdicts) hold, every badge call as the model claimed it, and every halt `f10 drive` saw, each row tagged with that source.
+Both writers also append to a local ledger, `~/.f10/f10.db` (SQLite, outside every repo): what the hooks observed, what artifacts (plans, findings, verdicts) hold, every badge call as the model claimed it, and every halt and finish `f10 drive` made itself, each row tagged with that source.
 A write that fails goes to `~/.f10/ledger.spool`, replayed by the next one; `f10 ledger dump` prints the rows.
 
 </details>

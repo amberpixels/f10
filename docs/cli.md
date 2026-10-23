@@ -279,18 +279,20 @@ Each row reads the child's live run in its worktree, else the ledger's last reco
 | `done` | finished (finish ran, the issue closed, the plan archived) or the PR merged | green |
 | `shipped` | the ship pipeline ended, the PR not merged yet | faint green |
 | `asking` | a driven run stopped on a question; the `ask:` line under it holds the question | red |
-| `halted` | a phase failed, partial or blocked, or drive halted the task after its run's last word; `halt:` and `next:` lines under it | red |
+| `halted` | a phase failed, partial or blocked, or drive halted the task itself (an idle agent, a refused finish) after its run's last word; `halt:` and `next:` lines under it | red |
 | `implementing` | ship running any step but the three below | yellow |
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
+| `planned` | the plan is saved, ship not begun | faint blue |
 | `waiting` | no run yet, and its `After:` base is not done | faint |
 | `not started` | nothing recorded | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
-`--json` prints the rows: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
+`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 
 A task with no children reports as before: its live run, else its plan and PR.
-A task with no branch left (`f10 finish` removed it) prints its single `done` row when the ledger, the tracker or the plan archive says it finished; otherwise it fails as before, with `no run to read`.
+A task with no branch left (`f10 finish` removed it) prints its single `done` row when the ledger, the tracker or the plan archive says it finished, and `--json` a one-row array; otherwise it fails as before, with `no run to read`.
+A task whose checkout has its branch is read from there first, so only a task with no run to read asks the host for children.
 
 ## Drive
 

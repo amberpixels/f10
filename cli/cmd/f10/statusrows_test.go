@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +36,7 @@ func TestStageOf(t *testing.T) {
 		{"judging", rowFacts{run: run("prior", "done", "running", "judge")}, stageJudging, "judge"},
 		{"shipped", rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}}, stageShipped, "pr"},
 		{"planning", rowFacts{run: run("skipped", "running", "pending", "")}, stagePlanning, "plan"},
+		{"planned", rowFacts{run: run("skipped", "done", "pending", "")}, stagePlanned, "plan"},
 		{"waiting", rowFacts{after: "FT-1"}, stageWaiting, "after FT-1"},
 		{"base done", rowFacts{after: "FT-1", baseDone: true}, stageNotStarted, ""},
 		{"nothing", rowFacts{}, stageNotStarted, ""},
@@ -66,6 +69,8 @@ func TestRowsFromTheLedger(t *testing.T) {
 		),
 		event(at(2), "FT-1", ledger.PROpened, ledger.Payload{"url": "https://github.com/a/b/pull/128"}),
 		event(at(3), "FT-9", ledger.TaskFinished, ledger.Payload{"args": []any{"FT-1", "--yes"}}),
+		// finish typed with the bare number, resolved to its id
+		event(at(3), "", ledger.TaskFinished, ledger.Payload{"args": []any{"--yes", "8"}}),
 
 		event(
 			at(1),
@@ -96,6 +101,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 			"next":    "rebase",
 		}),
 	}}
+	src.resolve = func(tok string) string { return "FT-" + strings.TrimPrefix(tok, "FT-") }
 
 	rows := src.rowsFrom(t.Context(), []childRow{
 		{ID: "FT-1", Title: "trailers"},
@@ -105,6 +111,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 		{ID: "FT-5", Title: "board"},
 		{ID: "FT-6", Title: "after board", After: "FT-5", Depth: 1},
 		{ID: "FT-7", Title: "after trailers", After: "FT-1", Depth: 1},
+		{ID: "FT-8", Title: "finished by number"},
 	})
 
 	got := map[string]taskRow{}
@@ -127,6 +134,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 	check("FT-5", stageHalted, "pr")
 	check("FT-6", stageWaiting, "after FT-5")
 	check("FT-7", stageNotStarted, "")
+	check("FT-8", stageDone, "finish")
 
 	if r := got["FT-1"]; r.PR != "https://github.com/a/b/pull/128" {
 		t.Errorf("FT-1 PR = %q, want the ledger's url", r.PR)
@@ -201,5 +209,63 @@ func TestRenderRows(t *testing.T) {
 
 	if decoded[0]["stage"] != "done" || decoded[0]["pr_state"] != "merged" || decoded[0]["step"] != "finish" {
 		t.Errorf("--json row = %v", decoded[0])
+	}
+}
+
+// A task with a run is read from its checkout and never asks for children;
+// with no run, a parent lists its children, a finished task its done row,
+// and anything else keeps the error, a failed children read warned about.
+func TestRouteTask(t *testing.T) {
+	noRun := fmt.Errorf("FT-1 has no branch here: %w", errNoRunToRead)
+	kids := []taskRow{{ID: "FT-2", Stage: stageDone}}
+	done := &taskRow{ID: "FT-1", Stage: stageDone}
+
+	for _, tc := range []struct {
+		name     string
+		status   error
+		children []taskRow
+		childErr error
+		finished *taskRow
+		rows     int
+		err      error
+		warned   bool
+	}{
+		{name: "has a run", rows: 0},
+		{name: "parent", status: noRun, children: kids, rows: 1},
+		{name: "finished", status: noRun, childErr: errNoParentLink, finished: done, rows: 1},
+		{name: "neither", status: noRun, err: errNoRunToRead},
+		{name: "host down", status: noRun, childErr: errors.New("HTTP 502"), err: errNoRunToRead, warned: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			asked := false
+
+			var warn bytes.Buffer
+
+			in, rows, err := routeTask(&warn, taskRoute{
+				status: func() (taskStatusInput, error) { return taskStatusInput{id: "FT-1"}, tc.status },
+				children: func() ([]taskRow, error) {
+					asked = true
+
+					return tc.children, tc.childErr
+				},
+				finished: func() (*taskRow, error) { return tc.finished, nil },
+			})
+
+			if !errors.Is(err, tc.err) || (tc.err == nil && err != nil) {
+				t.Fatalf("err = %v, want %v", err, tc.err)
+			}
+
+			if tc.status == nil && (in == nil || asked) {
+				t.Errorf("a task with a run: in = %v, children asked = %v", in, asked)
+			}
+
+			if len(rows) != tc.rows {
+				t.Errorf("rows = %+v, want %d", rows, tc.rows)
+			}
+
+			if got := warn.Len() > 0; got != tc.warned {
+				t.Errorf("warned = %q, want a warning %v", warn.String(), tc.warned)
+			}
+		})
 	}
 }

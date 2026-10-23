@@ -70,26 +70,17 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		if rows, ok, err := parentRows(ctx, t, r); err != nil || ok {
-			if err != nil {
-				return err
-			}
-
-			return writeTaskRows(cmd, rows)
-		}
-
-		in, err := taskStatusFor(ctx, t, r, suffix)
-		if errors.Is(err, errNoRunToRead) {
-			row, ferr := finishedRow(ctx, t, r.Head())
-			if ferr != nil || row == nil {
-				return cmp.Or(ferr, err)
-			}
-
-			return writeTaskRows(cmd, []taskRow{*row})
-		}
-
+		in, rows, err := routeTask(cmd.ErrWriter, taskRoute{
+			status:   func() (taskStatusInput, error) { return taskStatusFor(ctx, t, r, suffix) },
+			children: func() ([]taskRow, error) { return parentRows(ctx, t, r) },
+			finished: func() (*taskRow, error) { return finishedRow(ctx, t, r.Head()) },
+		})
 		if err != nil {
 			return err
+		}
+
+		if in == nil {
+			return writeTaskRows(cmd, rows)
 		}
 
 		live, err := state.List(dir, now, state.TTL())
@@ -103,7 +94,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		runs, others = taskRuns(inRoot(live, in.root), in.id)
 
 		if len(runs) == 0 {
-			fb := taskFallback(ctx, in, others)
+			fb := taskFallback(ctx, *in, others)
 
 			if cmd.Bool("json") {
 				return encodeJSON(cmd.Writer, fb)
@@ -183,6 +174,47 @@ type taskStatusInput struct {
 	root   string // the checkout holding branch
 	plan   string // where the task's plan would be
 	host   *host  // nil without a host CLI: no PR row
+}
+
+// taskRoute is what `status <id>` can report on a task, read lazily.
+type taskRoute struct {
+	status   func() (taskStatusInput, error)
+	children func() ([]taskRow, error)
+	finished func() (*taskRow, error)
+}
+
+// routeTask reads the task's own checkout first, so a task with a run never
+// waits on the host. With no run to read, a parent reports its children
+// and a finished task its done row; anything else keeps the error.
+func routeTask(warn io.Writer, rt taskRoute) (*taskStatusInput, []taskRow, error) {
+	in, err := rt.status()
+	if !errors.Is(err, errNoRunToRead) {
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return &in, nil, nil
+	}
+
+	rows, cerr := rt.children()
+
+	switch {
+	case cerr == nil && len(rows) > 0:
+		return nil, rows, nil
+	case cerr != nil && !errors.Is(cerr, errNoParentLink):
+		fmt.Fprintf(warn, "f10: reading the subtasks: %v\n", cerr)
+	}
+
+	row, ferr := rt.finished()
+	if ferr != nil {
+		return nil, nil, ferr
+	}
+
+	if row == nil {
+		return nil, nil, err
+	}
+
+	return nil, []taskRow{*row}, nil
 }
 
 // errNoRunToRead is a task with no branch, or a branch checked out

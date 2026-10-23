@@ -28,6 +28,7 @@ const (
 	stageResolving    = "resolving"
 	stageJudging      = "judging"
 	stagePlanning     = "planning"
+	stagePlanned      = "planned"
 	stageWaiting      = "waiting"
 	stageNotStarted   = "not started"
 )
@@ -100,8 +101,11 @@ func stageOf(f rowFacts) (string, string) {
 		return stageShipped, cmp.Or(r.Final, "ship")
 	}
 
-	if r.Capture == "running" || r.Plan != "pending" {
+	switch {
+	case r.Capture == "running" || r.Plan == "running":
 		return stagePlanning, furthestPhase(r)
+	case r.Plan != "pending" && r.Plan != "":
+		return stagePlanned, "plan"
 	}
 
 	return stageNotStarted, ""
@@ -148,7 +152,8 @@ func readLedger(ctx context.Context, main string) []ledger.Event {
 
 // ledgerFor folds the task's events, oldest first, into its last claim,
 // whether finish ran on it, its PR and the halt drive saw after the claim.
-func ledgerFor(events []ledger.Event, id string) ledgerTask {
+// resolve turns finish's argument as typed (`117`, a url) into an id.
+func ledgerFor(events []ledger.Event, id string, resolve func(string) string) ledgerTask {
 	var lt ledgerTask
 
 	for _, e := range events {
@@ -158,7 +163,7 @@ func ledgerFor(events []ledger.Event, id string) ledgerTask {
 		case e.Kind == ledger.TaskFinished:
 			// finish runs from the main checkout, whose session may be on
 			// another task: the id it was given decides
-			if finishedID(p, e.Task) == id {
+			if strings.EqualFold(resolve(finishedArg(p, e.Task)), id) {
 				lt.finished = true
 			}
 		case !onTask(e, id):
@@ -177,18 +182,18 @@ func ledgerFor(events []ledger.Event, id string) ledgerTask {
 	return lt
 }
 
-// finishedID is the task a recorded `f10 finish` named: its first
+// finishedArg is the task a recorded `f10 finish` named: its first
 // argument that is not a flag, else the session's task.
-func finishedID(p ledger.Payload, task string) string {
+func finishedArg(p ledger.Payload, task string) string {
 	args, _ := p["args"].([]any)
 
 	for _, a := range args {
 		if s, ok := a.(string); ok && s != "" && !strings.HasPrefix(s, "-") {
-			return strings.ToUpper(s)
+			return s
 		}
 	}
 
-	return strings.ToUpper(task)
+	return task
 }
 
 // claimRun reads a recorded `f10 state` call back as the run it left.
@@ -223,7 +228,18 @@ type rowSource struct {
 	events []ledger.Event
 	// checkout is the task's branch and the checkout holding it, "" for none
 	checkout func(ctx context.Context, id string) (string, string)
-	host     *host
+	// resolve is a reference as typed, in the project's id format; nil
+	// takes it as written
+	resolve func(token string) string
+	host    *host
+}
+
+func (src rowSource) idOf(token string) string {
+	if src.resolve == nil {
+		return token
+	}
+
+	return src.resolve(token)
 }
 
 // rowsFrom builds a row per child, the reads for each running beside the
@@ -264,7 +280,7 @@ func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
 func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts) {
 	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
 	f := rowFacts{finished: k.Finished, after: k.After}
-	lt := ledgerFor(src.events, k.ID)
+	lt := ledgerFor(src.events, k.ID, src.idOf)
 
 	branch, root := "", ""
 	if src.checkout != nil {
@@ -337,6 +353,8 @@ func stageStyle(stage string) lipgloss.Style {
 		return s.Foreground(lipgloss.Color("208"))
 	case stagePlanning, stageJudging:
 		return s.Foreground(lipgloss.Color("4"))
+	case stagePlanned:
+		return s.Faint(true).Foreground(lipgloss.Color("4"))
 	default:
 		return s.Faint(true)
 	}
@@ -429,22 +447,19 @@ func cutTo(s string, width int) string {
 }
 
 // parentRows is `status <id>` for a parent: its children, closed ones
-// included, as rows. No parent link, or no children, is nil: the caller
-// reports the task as one.
-func parentRows(ctx context.Context, t *target, r ref.Ref) ([]taskRow, bool, error) {
-	tr := t.tracker()
-
-	kids, err := tr.allChildren(ctx, r)
+// included, as rows. errNoParentLink, or no rows, is not a parent.
+func parentRows(ctx context.Context, t *target, r ref.Ref) ([]taskRow, error) {
+	kids, err := t.tracker().allChildren(ctx, r)
 	if err != nil || len(kids) == 0 {
-		return nil, false, nil //nolint:nilerr // a tracker that cannot list children leaves the task's own report
+		return nil, err
 	}
 
 	src, err := statusSource(ctx, t)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	return src.rowsFrom(ctx, kids), true, nil
+	return src.rowsFrom(ctx, kids), nil
 }
 
 // finishedRow is `status <id>` for a task with no branch left: one done
@@ -458,7 +473,7 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	tr := t.tracker()
 	info, _ := tr.info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
-	if !finishedTask(info, tr.archive, r.ID, false) && !ledgerFor(src.events, r.ID).finished {
+	if !finishedTask(info, tr.archive, r.ID, false) && !ledgerFor(src.events, r.ID, src.idOf).finished {
 		return nil, nil
 	}
 
@@ -495,6 +510,15 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 		}
 
 		return name, root
+	}
+
+	src.resolve = func(token string) string {
+		r, err := t.reference(ctx, token)
+		if err != nil {
+			return token
+		}
+
+		return r.ID
 	}
 
 	if h, err := t.host(); err == nil {

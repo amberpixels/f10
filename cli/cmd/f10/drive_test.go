@@ -405,6 +405,9 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
+	// the run's own stop is in the ledger as its claims already
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
+
 	err := fx.drive(t)
 	if exitCode(err) != exitHalted {
 		t.Fatalf("err = %v, want exit %d", err, exitHalted)
