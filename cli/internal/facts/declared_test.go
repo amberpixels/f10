@@ -225,37 +225,150 @@ func TestStandupUpkeep(t *testing.T) {
 	}
 }
 
-// review_traces is off unless declared, takes only on or off, and a later
-// layer's value wins with its origin.
-func TestReviewTraces(t *testing.T) {
-	traces := func(eff *Effective) Fact {
-		t.Helper()
-
-		i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "review_traces" })
-		if i < 0 {
-			t.Fatalf("no review_traces fact in %+v", eff.Facts)
-		}
-
-		return eff.Facts[i]
-	}
-
+// traces is off unless declared, takes only on or off, and a later layer's
+// value wins with its origin.
+func TestTraces(t *testing.T) {
 	none := buildWith(t, "# demo\n", "")
-	if f := traces(none); none.ReviewTraces || f.Value != "off" || f.Origin != OriginDefault {
-		t.Errorf("undeclared = %v, %+v", none.ReviewTraces, f)
+	if f := tracesFact(t, none); none.Traces || f.Value != "off" || f.Origin != OriginDefault {
+		t.Errorf("undeclared = %v, %+v", none.Traces, f)
 	}
 
-	on := buildWith(t, "---\nreview_traces: on\n---\n# demo\n", "")
-	if f := traces(on); !on.ReviewTraces || f.Value != "on" || f.Origin != "declared (main, frontmatter)" {
-		t.Errorf("declared on = %v, %+v", on.ReviewTraces, f)
+	on := buildWith(t, "---\ntraces: on\n---\n# demo\n", "")
+	if f := tracesFact(t, on); !on.Traces || f.Value != "on" || f.Origin != "declared (main, frontmatter)" {
+		t.Errorf("declared on = %v, %+v", on.Traces, f)
 	}
 
-	layered := buildWith(t, "---\nreview_traces: on\n---\n", "---\nreview_traces: off\n---\n")
-	if f := traces(layered); layered.ReviewTraces || f.Origin != "declared (worktree, frontmatter)" {
-		t.Errorf("worktree off = %v, %+v", layered.ReviewTraces, f)
+	layered := buildWith(t, "---\ntraces: on\n---\n", "---\ntraces: off\n---\n")
+	if f := tracesFact(t, layered); layered.Traces || f.Origin != "declared (worktree, frontmatter)" {
+		t.Errorf("worktree off = %v, %+v", layered.Traces, f)
+	}
+
+	bad := buildWith(t, "---\ntraces: yes\n---\n", "")
+	if !strings.Contains(bad.Errors(), "traces") {
+		t.Errorf("errors = %q", bad.Errors())
+	}
+}
+
+func tracesFact(t *testing.T, eff *Effective) Fact {
+	t.Helper()
+
+	i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "traces" })
+	if i < 0 {
+		t.Fatalf("no traces fact in %+v", eff.Facts)
+	}
+
+	return eff.Facts[i]
+}
+
+// review_traces, the old spelling, still reads as traces with a warning
+// naming the migration; folded per layer, so a worktree's old spelling
+// still overrides main's new one. Both in one layer is an error.
+func TestReviewTracesIsDeprecatedTraces(t *testing.T) {
+	old := buildWith(t, "---\nreview_traces: on\n---\n# demo\n", "")
+	if f := tracesFact(t, old); !old.Traces || f.Origin != "declared (main, frontmatter)" {
+		t.Errorf("old spelling = %v, %+v", old.Traces, f)
+	}
+
+	if old.Errors() != "" {
+		t.Errorf("the old spelling is an error: %q", old.Errors())
+	}
+
+	if !slices.ContainsFunc(old.Problems, func(p Problem) bool {
+		return !p.Error && strings.Contains(p.Message, "review_traces is now traces")
+	}) {
+		t.Errorf("no migration warning in %+v", old.Problems)
+	}
+
+	layered := buildWith(t, "---\ntraces: off\n---\n", "---\nreview_traces: on\n---\n")
+	if f := tracesFact(t, layered); !layered.Traces || f.Origin != "declared (worktree, frontmatter)" {
+		t.Errorf("worktree's old spelling lost to main = %v, %+v", layered.Traces, f)
+	}
+
+	both := buildWith(t, "---\ntraces: on\nreview_traces: off\n---\n", "")
+	if !strings.Contains(both.Errors(), "both declared") {
+		t.Errorf("errors = %q", both.Errors())
 	}
 
 	bad := buildWith(t, "---\nreview_traces: yes\n---\n", "")
 	if !strings.Contains(bad.Errors(), "review_traces") {
 		t.Errorf("errors = %q", bad.Errors())
+	}
+}
+
+// tracker.priority maps host labels onto the contract's levels: a string or
+// a list per level, indexed case-insensitively, shown in vocabulary order
+// with its origin. A level outside the vocabulary or a label under two
+// levels is an error; an empty level is not.
+func TestTrackerPriority(t *testing.T) {
+	eff := buildWith(t, "---\ntracker:\n  kind: github\n  id: FT-###\n  priority:\n"+
+		"    low: P3\n    high: [P1, \"priority:high\"]\n    medium: []\n---\n# demo\n", "")
+
+	if len(eff.Problems) > 0 {
+		t.Fatalf("problems: %+v", eff.Problems)
+	}
+
+	if eff.IDPrefix != "FT" || eff.TrackerKind != "GitHub Issues" {
+		t.Errorf("tracker beside the map = %q, %q", eff.IDPrefix, eff.TrackerKind)
+	}
+
+	want := map[string]string{"p3": "low", "p1": "high", "priority:high": "high"}
+	if len(eff.PriorityLabels) != len(want) {
+		t.Errorf("index = %v, want %v", eff.PriorityLabels, want)
+	}
+
+	for label, level := range want {
+		if eff.PriorityLabels[label] != level {
+			t.Errorf("index[%q] = %q, want %q", label, eff.PriorityLabels[label], level)
+		}
+	}
+
+	i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "tracker.priority" })
+	if i < 0 || eff.Facts[i].Value != "high: P1, priority:high; low: P3" ||
+		eff.Facts[i].Origin != "declared (main, frontmatter)" {
+		t.Errorf("fact = %+v", eff.Facts)
+	}
+
+	none := buildWith(t, "---\ntracker: {kind: github, id: FT-###}\n---\n# demo\n", "")
+	if none.PriorityLabels != nil ||
+		slices.ContainsFunc(none.Facts, func(f Fact) bool { return f.Key == "tracker.priority" }) {
+		t.Errorf("undeclared map = %v, %+v", none.PriorityLabels, none.Facts)
+	}
+
+	// a worktree that declares tracker: replaces the whole block, map included
+	wt := buildWith(t, "---\ntracker:\n  id: FT-###\n  priority: {high: P1}\n---\n",
+		"---\ntracker: {id: FT-###}\n---\n")
+	if wt.PriorityLabels != nil {
+		t.Errorf("worktree tracker without a map kept main's: %v", wt.PriorityLabels)
+	}
+
+	bad := buildWith(t, "---\ntracker:\n  priority:\n    highest: P0\n    high: [P1, p2]\n    low: [P2]\n---\n", "")
+	for _, msg := range []string{`"highest" is not one of urgent, high, medium, low`, `label "P2" is listed under both high and low`} {
+		if !strings.Contains(bad.Errors(), msg) {
+			t.Errorf("errors = %q, want %q", bad.Errors(), msg)
+		}
+	}
+
+	if _, err := decodeDeclared([]byte("tracker:\n  priority:\n    high: {label: P1}\n")); err == nil {
+		t.Error("a mapping as a level's labels decoded")
+	}
+}
+
+// A frontmatter block with the old spelling is renamed in place, nothing
+// else in the file moving; one without it has nothing left to migrate.
+func TestMigrateRenamesReviewTraces(t *testing.T) {
+	file := "---\n# traces first\nreview_traces: on\nmerge_method: squash\n---\n# demo\n\nreview_traces: in prose stays\n"
+
+	m, err := Migrate([]byte(file), "project.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "---\n# traces first\ntraces: on\nmerge_method: squash\n---\n# demo\n\nreview_traces: in prose stays\n"
+	if m.Content != want || strings.Join(m.Moved, ",") != "traces" || len(m.Superseded) != 0 {
+		t.Errorf("migration = %+v", m)
+	}
+
+	if _, err := Migrate([]byte(want), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
+		t.Errorf("nothing left = %v", err)
 	}
 }

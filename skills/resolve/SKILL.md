@@ -10,7 +10,7 @@ argument-hint: "<task-id | PR | this branch> [ci]"
 Producing the findings is `/f10:review`.
 This skill does not authorize a remote `+reply` (`gh pr comment` / `glab mr note`): ask once before the first post.
 Landing fixes on an open PR or MR (the step's point 9): a `--driven` run commits and pushes, since the user started its chain; otherwise ask once, inside the step's questionnaire, **commit and push**, **commit only**, or **leave uncommitted**.
-With `review_traces: on`, the step's point 10 status and comment need no confirmation of their own: the project declared them. They are withheld only when fixes exist and were not pushed.
+With `traces: on`, the step's point 10 status and comment need no confirmation of their own: the project declared them. They are withheld only when fixes exist and were not pushed.
 Running `/f10:resolve ci` authorizes the `f10 review ack` and `f10 review settle` its **CI review** section makes.
 
 **Arguments**

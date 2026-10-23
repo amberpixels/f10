@@ -235,7 +235,12 @@ func runMigrate(w io.Writer, path string) error {
 		headerRow(w, label, where, limit, lipgloss.NewStyle().Faint(true))
 	}
 
-	headerRow(w, "next", "delete that prose, then `f10 config` should show no warning", limit, lipgloss.NewStyle())
+	next := "delete that prose, then `f10 config` should show no warning"
+	if len(m.Superseded) == 0 {
+		next = "run `f10 config`: the traces fact should show as declared"
+	}
+
+	headerRow(w, "next", next, limit, lipgloss.NewStyle())
 
 	return nil
 }

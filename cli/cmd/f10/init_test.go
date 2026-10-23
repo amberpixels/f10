@@ -314,6 +314,39 @@ func TestInitMigrate(t *testing.T) {
 	}
 }
 
+// A frontmatter still saying review_traces is renamed to traces in place;
+// nothing is superseded, so the report points at config instead of at prose
+// to delete.
+func TestInitMigrateRenamesTraces(t *testing.T) {
+	isolateEnv(t)
+
+	repo := mkRepo(t)
+	path := filepath.Join(repo, ".f10", "instructions", "project.md")
+	md := "---\nreview_traces: on\n---\n# demo\n"
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte(md), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runInitIn(t, repo, "--migrate")
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	written, _ := os.ReadFile(path)
+	if string(written) != "---\ntraces: on\n---\n# demo\n" {
+		t.Errorf("renamed file:\n%s", written)
+	}
+
+	if !strings.Contains(out, "traces") || strings.Contains(out, "delete") || !strings.Contains(out, "f10 config") {
+		t.Errorf("report:\n%s", out)
+	}
+}
+
 // A fact the two places declare differently stops the commands that act on
 // facts; config still runs, since it is how the problem is seen.
 func TestDeclarationErrorStopsCommands(t *testing.T) {

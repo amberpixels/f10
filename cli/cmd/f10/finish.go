@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
 // The finish verb is start's inverse across the host CLI, git and Herdr.
@@ -126,6 +127,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		suffix:    suffix,
 		host:      h.at(main),
 		method:    t.eff.MergeMethod,
+		traces:    t.eff.Traces,
 		cwd:       cwd,
 		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 		yes:       cmd.Bool("yes"),
@@ -167,6 +169,7 @@ type finishInput struct {
 	suffix    string
 	host      host
 	method    string // the merge method project.md declares, "" for none
+	traces    bool   // traces: on; the squash or merge commit's body ends in the task's trailers
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
 	yes       bool
@@ -562,7 +565,16 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 
 		notes = appendNote(notes, note)
 
-		if p, err = in.host.mergePull(ctx, name, method); err != nil {
+		// settleRiders may have just rewritten the description's closing
+		// keywords, and the body under the commit must be the host's current one
+		description := p.body()
+		if in.traces && len(in.task.Riders()) > 0 {
+			if description, err = in.host.pullBody(ctx, name); err != nil {
+				return pull{}, nil, err
+			}
+		}
+
+		if p, err = in.host.mergePull(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
 			return pull{}, nil, err
 		}
 	case pullMerged:
@@ -595,6 +607,27 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 	}
 
 	return p, notes, nil
+}
+
+// mergeBody is what the host's commit says under its subject: the request's
+// description, then one Task: line per member, so the commit that survives a
+// squash still names what it shipped. Only with traces on and for a squash or
+// a GitHub merge commit; a rebase, like glab's merge (""), lands the branch's own trailers.
+func mergeBody(in finishInput, description, method string) string {
+	if !in.traces || (method != "--squash" && method != "--merge") {
+		return ""
+	}
+
+	trailers, err := trace.Render(trace.Trailers{Tasks: in.task.Members()})
+	if err != nil {
+		return ""
+	}
+
+	if body := strings.TrimSpace(description); body != "" {
+		return body + "\n\n" + trailers
+	}
+
+	return trailers
 }
 
 // pullMain brings the local default branch up to the merge: a

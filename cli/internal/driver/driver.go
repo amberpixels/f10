@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -32,6 +34,20 @@ const (
 	VerbIndex    = "index"    // stdout: one url, the task list; no argument
 	VerbList     = "list"     // stdout: JSON rows, the first page of open tasks; no argument
 )
+
+// Priorities is the contract's ordered priority vocabulary, most urgent
+// first. A search or list row may carry one as its `priority`; a driver maps
+// its tracker's own values onto these, and a row without one has no priority.
+var Priorities = []string{"urgent", "high", "medium", "low"}
+
+// PriorityRank places a row's priority value in Priorities, case and
+// surrounding space ignored: its index and true, or -1 and false for a value
+// outside the vocabulary.
+func PriorityRank(value string) (int, bool) {
+	i := slices.Index(Priorities, strings.ToLower(strings.TrimSpace(value)))
+
+	return i, i >= 0
+}
 
 // ExitUnsupported is the contract's reserved exit code: the driver ran and
 // understood the call, but does not implement that verb. It is a normal

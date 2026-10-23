@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -38,8 +39,9 @@ func renderDeclared(d Declared) (string, error) {
 }
 
 func isEmpty(d Declared) bool {
-	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker == (TrackerDecl{}) &&
-		d.MergeMethod == "" && d.Catchup == "" && d.ReviewTraces == "" && d.Pipelines == nil && d.Planless == nil &&
+	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker.empty() &&
+		d.MergeMethod == "" && d.Catchup == "" && d.Traces == "" && d.ReviewTraces == "" &&
+		d.Pipelines == nil && d.Planless == nil &&
 		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
 }
 
@@ -53,15 +55,35 @@ type Migration struct {
 }
 
 // ErrHasFrontmatter refuses a second migration.
-var ErrHasFrontmatter = errors.New("already has a frontmatter block")
+var ErrHasFrontmatter = errors.New("already has a frontmatter block and nothing left to migrate")
+
+// oldTracesKey is the one key a frontmatter block can still need renamed.
+var oldTracesKey = regexp.MustCompile(`(?m)^review_traces:`)
+
+// renameTraces rewrites `review_traces:` to `traces:` inside the block,
+// byte for byte otherwise, since re-encoding would reorder keys and drop
+// comments. Nothing to rename is ErrHasFrontmatter.
+func renameTraces(data, block []byte) (*Migration, error) {
+	start := bytes.Index(data, block)
+	if start < 0 || !oldTracesKey.Match(block) {
+		return nil, ErrHasFrontmatter
+	}
+
+	renamed := oldTracesKey.ReplaceAll(block, []byte("traces:"))
+	content := append(append(append([]byte{}, data[:start]...), renamed...), data[start+len(block):]...)
+
+	return &Migration{Content: string(content), Moved: []string{"traces"}}, nil
+}
 
 // Migrate reads the facts one project.md declares in prose, with the same
 // readers the fallback uses, and puts them in a frontmatter block above the
 // untouched file. Only what the file declares moves: defaults and
-// detection stay out, so the block says no more than the prose did.
+// detection stay out, so the block says no more than the prose did. A file
+// that already has a block gets its one renamed key, review_traces, moved
+// to traces.
 func Migrate(data []byte, path string) (*Migration, error) {
-	if _, _, ok := frontmatter.Split(data); ok {
-		return nil, ErrHasFrontmatter
+	if block, _, ok := frontmatter.Split(data); ok {
+		return renameTraces(data, block)
 	}
 
 	secs, _ := parseFile(data, path, "main")

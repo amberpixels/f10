@@ -38,7 +38,7 @@ f10 config [--json]      # the effective configuration, with the origin of every
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
-f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page)
+f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json]   # the task's open subtasks, in After: order
 f10 plan read [id]       # the plan saved for that task
@@ -49,6 +49,7 @@ f10 review pick [n] [--latest] [--json]               # the latest unhandled rem
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
+f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 status [id] [--all] [--json]   # where the run is: this session's, a task's in its worktree, or every live one
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended

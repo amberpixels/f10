@@ -58,19 +58,23 @@ type Effective struct {
 	IDPrefixOrigin  string `json:"idPrefixOrigin,omitempty"`  // "declared (<layer>)" or "derived from project name <name>"
 	IDPrefixDerived bool   `json:"idPrefixDerived,omitempty"` // the prefix came from the project's name, not a declaration
 
+	// PriorityLabels is tracker.priority inverted: a lower-cased host label
+	// to the level it carries; nil when none is declared.
+	PriorityLabels map[string]string `json:"priorityLabels,omitempty"`
+
 	// The remote review's four facts (review.go); zero when Review declares
 	// no remote reviewer.
 	Review Review `json:"review"`
 
 	// The rest of the typed facts (resolve.go). MergeMethod "" means none
 	// declared: finish asks the repo.
-	MergeMethod  string              `json:"mergeMethod,omitempty"`
-	Catchup      string              `json:"catchup"`
-	ReviewTraces bool                `json:"reviewTraces"` // review_traces: on; a review or judge after the PR leaves a status, a comment, a named commit
-	Pipelines    map[string][]string `json:"pipelines"`
-	Planless     []string            `json:"planless,omitempty"`
-	DriveChain   []string            `json:"driveChain"`
-	UpkeepPaths  []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	MergeMethod string              `json:"mergeMethod,omitempty"`
+	Catchup     string              `json:"catchup"`
+	Traces      bool                `json:"traces"` // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
+	Pipelines   map[string][]string `json:"pipelines"`
+	Planless    []string            `json:"planless,omitempty"`
+	DriveChain  []string            `json:"driveChain"`
+	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
@@ -172,6 +176,13 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 			for _, bad := range d.check() {
 				problems = append(problems, Problem{Error: true, Message: file + " frontmatter: " + bad})
 			}
+
+			folded, p, found := d.foldTraces(file)
+			if found {
+				problems = append(problems, p)
+			}
+
+			d = folded
 
 			fm.merge(d, layer.Label)
 		}

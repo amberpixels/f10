@@ -12,6 +12,11 @@ The local alternative to `steps/push.md` and `steps/pr.md`: one or a few clean c
 2. **Commit clean.**
    Small, conventional commits in the repo's style; no AI attribution lines; in stealth mode, no f10 traces in messages (`conventions/context.md`).
    Another task named in a message carries its title (`conventions/context.md` → Task references).
+   **Trailers**: the message ends in the lines `f10 trace trailers` prints, as its own last `-m` paragraph.
+   Run it first, on its own: `trailers="$(f10 trace trailers --step implement)"`; a non-zero exit fails the step (`conventions/failure.md`), never a commit without its output.
+   Then `git commit -m "<subject>" [-m "<body>"] -m "$trailers"`.
+   With `traces: off` it prints nothing, and the message stays as it was (`docs/traces.md`).
+   `implement` is the step whose work these commits carry; a step committing its own work names itself (`resolve`, `judge`, `catchup`).
 3. **Report** per `conventions/report.md`: a `branch` row and a `commit` row with the sha(s), then a one-line summary of what changed as prose.
 
 **On failure:** a commit hook rejects the change, or the tree will not commit: stop and report, leaving the working tree as it is (`conventions/failure.md`).

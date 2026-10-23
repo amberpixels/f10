@@ -35,10 +35,11 @@ type view struct {
 	IDPrefix        string              `json:"idPrefix,omitempty"`
 	IDPrefixOrigin  string              `json:"idPrefixOrigin,omitempty"`
 	IDPrefixDerived bool                `json:"idPrefixDerived,omitempty"`
-	Review          facts.Review        `json:"review,omitzero"` // the remote review's four facts, zero when none is declared
+	PriorityLabels  map[string]string   `json:"priorityLabels,omitempty"` // host label to priority level, from tracker.priority
+	Review          facts.Review        `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
 	MergeMethod     string              `json:"mergeMethod,omitempty"`
 	Catchup         string              `json:"catchup"`
-	ReviewTraces    bool                `json:"reviewTraces"`
+	Traces          bool                `json:"traces"`
 	Pipelines       map[string][]string `json:"pipelines"`
 	Planless        []string            `json:"planless,omitempty"`
 	DriveChain      []string            `json:"driveChain"`
@@ -85,10 +86,11 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		IDPrefix:        eff.IDPrefix,
 		IDPrefixOrigin:  eff.IDPrefixOrigin,
 		IDPrefixDerived: eff.IDPrefixDerived,
+		PriorityLabels:  eff.PriorityLabels,
 		Review:          eff.Review,
 		MergeMethod:     eff.MergeMethod,
 		Catchup:         eff.Catchup,
-		ReviewTraces:    eff.ReviewTraces,
+		Traces:          eff.Traces,
 		Pipelines:       eff.Pipelines,
 		Planless:        eff.Planless,
 		DriveChain:      eff.DriveChain,

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -245,6 +246,52 @@ func (e *Effective) resolveTracker(
 			e.Facts = append(e.Facts, Fact{Key: "tracker.id", Value: e.IDPrefix, Origin: e.IDPrefixOrigin})
 		}
 	}
+
+	// frontmatter only: no prose ever declared it, and nothing detects it
+	if fm.Tracker.Priority != nil {
+		e.PriorityLabels = priorityIndex(fm.Tracker.Priority)
+		e.Facts = append(e.Facts, Fact{
+			Key:    "tracker.priority",
+			Value:  priorityShown(fm.Tracker.Priority),
+			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+		})
+	}
+}
+
+// priorityIndex inverts the declared map: each label, lower-cased, to its
+// level. Levels go in vocabulary order and the first level keeps a label, so
+// a label check() reports under two levels still indexes the same way on
+// every run, which config shows even while the error stops other commands.
+func priorityIndex(declared map[string]Labels) map[string]string {
+	index := map[string]string{}
+
+	for _, level := range driver.Priorities {
+		for _, name := range declared[level] {
+			if key := strings.ToLower(name); index[key] == "" {
+				index[key] = level
+			}
+		}
+	}
+
+	return index
+}
+
+// priorityShown is the map as config prints it: `urgent: P0; high: P1,
+// priority:high`, levels in vocabulary order, levels with no labels left out.
+func priorityShown(declared map[string]Labels) string {
+	var shown []string
+
+	for _, level := range driver.Priorities {
+		if names := declared[level]; len(names) > 0 {
+			shown = append(shown, level+": "+strings.Join(names, ", "))
+		}
+	}
+
+	if len(shown) == 0 {
+		return "none"
+	}
+
+	return strings.Join(shown, "; ")
 }
 
 func (e *Effective) resolveHosting(
@@ -280,9 +327,9 @@ func (e *Effective) resolveHosting(
 	}
 
 	// frontmatter only: no prose ever declared it
-	e.settle("review_traces", fmSource("review_traces", fm.ReviewTraces), source{},
-		Fact{Key: "review_traces", Value: "off", Origin: OriginDefault})
-	e.ReviewTraces = fm.ReviewTraces == "on"
+	e.settle("traces", fmSource("traces", fm.Traces), source{},
+		Fact{Key: "traces", Value: "off", Origin: OriginDefault})
+	e.Traces = fm.Traces == "on"
 }
 
 func (e *Effective) resolvePipelines(

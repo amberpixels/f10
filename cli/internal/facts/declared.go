@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -27,7 +29,8 @@ type Declared struct {
 	Tracker      TrackerDecl      `yaml:"tracker,omitempty"`
 	MergeMethod  string           `yaml:"merge_method,omitempty"`
 	Catchup      string           `yaml:"catchup,omitempty"`
-	ReviewTraces string           `yaml:"review_traces,omitempty"`
+	Traces       string           `yaml:"traces,omitempty"`
+	ReviewTraces string           `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
 	Pipelines    map[string]Steps `yaml:"pipelines,omitempty"`
 	Planless     []string         `yaml:"planless,omitempty"`
 	DriveChain   Steps            `yaml:"drive_chain,omitempty"`
@@ -35,10 +38,44 @@ type Declared struct {
 	Standup      StandupDecl      `yaml:"standup,omitempty"`
 }
 
-// TrackerDecl is the tracker's kind and its task id format (`FT-###`).
+// TrackerDecl is the tracker's kind, its task id format (`FT-###`) and the
+// priority map for host issues, which have no priority field of their own:
+// a level of the driver contract's vocabulary to the labels that carry it.
 type TrackerDecl struct {
-	Kind string `yaml:"kind,omitempty"`
-	ID   string `yaml:"id,omitempty"`
+	Kind     string            `yaml:"kind,omitempty"`
+	ID       string            `yaml:"id,omitempty"`
+	Priority map[string]Labels `yaml:"priority,omitempty"`
+}
+
+func (t TrackerDecl) empty() bool { return t.Kind == "" && t.ID == "" && t.Priority == nil }
+
+// Labels is a list of label names, written as a YAML list or as one string.
+type Labels []string
+
+// UnmarshalYAML accepts a sequence of strings or one string; blanks drop.
+func (l *Labels) UnmarshalYAML(node *yaml.Node) error {
+	var list []string
+
+	switch node.Kind {
+	case yaml.SequenceNode:
+		if err := node.Decode(&list); err != nil {
+			return err
+		}
+	case yaml.ScalarNode:
+		list = []string{node.Value}
+	default:
+		return fmt.Errorf("line %d: a label or a list of labels", node.Line)
+	}
+
+	*l = Labels{}
+
+	for _, name := range list {
+		if name = strings.TrimSpace(name); name != "" {
+			*l = append(*l, name)
+		}
+	}
+
+	return nil
 }
 
 // ReviewDecl is the remote review's four facts and the optional settled
@@ -125,6 +162,7 @@ var vocab = map[string][]string{
 	"tracker.kind":  {"github", "gitlab", "notion", "jira"},
 	"merge_method":  {"squash", "merge", "rebase"},
 	"catchup":       {"rebase", "merge"},
+	"traces":        {"on", "off"},
 	"review_traces": {"on", "off"},
 }
 
@@ -148,6 +186,7 @@ func (d Declared) check() []string {
 		"tracker.kind":  d.Tracker.Kind,
 		"merge_method":  d.MergeMethod,
 		"catchup":       d.Catchup,
+		"traces":        d.Traces,
 		"review_traces": d.ReviewTraces,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
@@ -171,9 +210,69 @@ func (d Declared) check() []string {
 		}
 	}
 
+	bad = append(bad, d.Tracker.checkPriority()...)
+
 	slices.Sort(bad)
 
 	return bad
+}
+
+// checkPriority reports a level outside the contract's vocabulary and a
+// label listed under two levels, which would make the index ambiguous. A
+// level with no labels maps nothing and is not an error.
+func (t TrackerDecl) checkPriority() []string {
+	var bad []string
+
+	seen := map[string]string{} // lower-cased label to the level it was first seen under
+
+	for _, level := range slices.Sorted(maps.Keys(t.Priority)) {
+		if _, ok := driver.PriorityRank(level); !ok || level != strings.ToLower(level) {
+			bad = append(
+				bad,
+				fmt.Sprintf("tracker.priority: %q is not one of %s", level, strings.Join(driver.Priorities, ", ")),
+			)
+
+			continue
+		}
+
+		for _, name := range t.Priority[level] {
+			key := strings.ToLower(name)
+			if other, dup := seen[key]; dup && other != level {
+				bad = append(
+					bad,
+					fmt.Sprintf("tracker.priority: label %q is listed under both %s and %s", name, other, level),
+				)
+
+				continue
+			}
+
+			seen[key] = level
+		}
+	}
+
+	return bad
+}
+
+// foldTraces moves the old spelling review_traces into traces, so one key
+// goes through the merge and a later layer's statement wins whichever word
+// it used. Reading it is a warning that names the migration; a layer
+// saying both is the ambiguity the block exists to end.
+func (d Declared) foldTraces(file string) (Declared, Problem, bool) {
+	switch {
+	case d.ReviewTraces == "":
+		return d, Problem{}, false
+	case d.Traces != "":
+		return d, Problem{
+			Error:   true,
+			Message: file + " frontmatter: traces and review_traces both declared; keep traces",
+		}, true
+	default:
+		d.Traces, d.ReviewTraces = d.ReviewTraces, ""
+
+		return d, Problem{
+			Message: file + " frontmatter: review_traces is now traces; f10 init --migrate renames it",
+		}, true
+	}
 }
 
 // layered is the frontmatter of every layer merged key by key: a key a
@@ -201,10 +300,10 @@ func (l *layered) merge(d Declared, label string) {
 	set("visibility", d.Visibility != "", func() { l.Visibility = d.Visibility })
 	set("storage", d.Storage != "", func() { l.Storage = d.Storage })
 	set("layering", d.Layering != "", func() { l.Layering = d.Layering })
-	set("tracker", d.Tracker != TrackerDecl{}, func() { l.Tracker = d.Tracker })
+	set("tracker", !d.Tracker.empty(), func() { l.Tracker = d.Tracker })
 	set("merge_method", d.MergeMethod != "", func() { l.MergeMethod = d.MergeMethod })
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
-	set("review_traces", d.ReviewTraces != "", func() { l.ReviewTraces = d.ReviewTraces })
+	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })
