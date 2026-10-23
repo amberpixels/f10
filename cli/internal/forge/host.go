@@ -102,9 +102,10 @@ func (h Host) Login(ctx context.Context) (string, error) {
 
 // named is args with the repository Repo names on them: nothing without
 // one. The CLIs fill `{owner}`, `{repo}` and `:fullpath` from the checkout
-// they run in, so an api call gets them filled here instead; every other
-// command takes -R, which both CLIs spell the same. glab wants a
-// repository off gitlab.com as a url.
+// they run in, so an api call gets them filled here instead, and gh's
+// goes to the repository's host; every other command takes -R, which
+// both CLIs spell the same. glab wants a repository off gitlab.com as a
+// url, and its api calls reach that host through GITLAB_HOST.
 func (h Host) named(args []string) []string {
 	if h.Repo == "" || len(args) == 0 {
 		return args
@@ -133,6 +134,10 @@ func (h Host) named(args []string) []string {
 	out := slices.Clone(args)
 	for i := 1; i < len(out); i++ {
 		out[i] = fill.Replace(out[i])
+	}
+
+	if host != "" && !h.GLab() {
+		out = append(out, "--hostname", host)
 	}
 
 	return out

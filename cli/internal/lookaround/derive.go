@@ -402,7 +402,9 @@ func (r *row) commit(email string) {
 // person names who the row groups under: the tracker's assignee, else the
 // request's author, else the first committer, each mapped to a declared
 // person where one claims that identity, else spelled as the source gave
-// it. With no map a tracker name and a host login stay two names.
+// it. A host login claims the assignee too, since a tracker that is the
+// host's issues names its assignees by login. With no map a tracker name
+// and a host login stay two names.
 func (r *row) person(people []Person) {
 	assignee := ""
 	if r.Task != nil {
@@ -417,7 +419,10 @@ func (r *row) person(people []Person) {
 	// a person claiming the assignee wins over one claiming the author,
 	// whatever order the map lists them in
 	byTracker := func(p Person) bool { return assignee != "" && strings.EqualFold(p.Tracker, assignee) }
-	byHost := func(p Person) bool { return r.Who.Author != "" && forge.SameLogin(p.Host, r.Who.Author) }
+	byHost := func(p Person) bool {
+		return assignee != "" && forge.SameLogin(p.Host, assignee) ||
+			r.Who.Author != "" && forge.SameLogin(p.Host, r.Who.Author)
+	}
 	byEmail := func(p Person) bool {
 		return slices.ContainsFunc(r.Who.Committers, func(e string) bool {
 			return slices.ContainsFunc(p.Emails, func(known string) bool { return strings.EqualFold(known, e) })

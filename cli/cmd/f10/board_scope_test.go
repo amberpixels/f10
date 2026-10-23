@@ -2,15 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The board over a scope: every project on its own, one that cannot be
@@ -103,6 +106,17 @@ func TestBoardCheckoutsExpand(t *testing.T) {
 
 	if !strings.Contains(out, "## a") || !strings.Contains(out, "## b") {
 		t.Errorf("output lacks a heading per project:\n%s", out)
+	}
+
+	// one -C is one project: one document, no array
+	one, err := runStandupApp(t, "-C", a, "board", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var board lookaround.Board
+	if err := json.Unmarshal([]byte(one), &board); err != nil || board.Project.Name != "a" {
+		t.Errorf("one -C --json = %v, %.80s, want one board for a", err, one)
 	}
 
 	if _, err := runStandupApp(
@@ -198,6 +212,82 @@ func TestBoardRepos(t *testing.T) {
 
 	if _, _, err := readBoardConfig(); err == nil || !strings.Contains(err.Error(), "no name") {
 		t.Errorf("err = %v, want the nameless person refused", err)
+	}
+}
+
+// A watched repository runs through the whole scope: --all adds it, the
+// host is asked with the repository named, and one a checkout in the
+// scope already covers is dropped. The host CLI is scripted; git is real.
+func TestBoardAllReadsWatchedRepos(t *testing.T) {
+	home := isolateEnv(t)
+
+	root := canonical(t, t.TempDir())
+	good := scopeRepo(t, root, "good")
+	git(t, good, "remote", "add", "origin", "https://github.com/acme/good.git")
+
+	writeUserFile(t, home, boardConfigFile, "---\nrepos: [github.com/acme/good, github.com/acme/other]\n---\n")
+	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
+
+	prev := shell.Capture
+	t.Cleanup(func() { shell.Capture = prev })
+
+	var calls []string
+
+	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+		call := filepath.Base(name) + " " + strings.Join(args, " ")
+		calls = append(calls, call)
+
+		switch {
+		case strings.HasPrefix(call, "gh issue list") && strings.HasSuffix(call, "-R acme/other"):
+			return shell.Result{Stdout: `[{"number": 3, "title": "ship it", "state": "OPEN", ` +
+				`"url": "https://github.com/acme/other/issues/3", "assignees": [{"login": "ann"}]}]`}, nil
+		case strings.HasPrefix(call, "gh pr list"), strings.HasPrefix(call, "gh issue list"):
+			return shell.Result{Stdout: "[]"}, nil
+		default:
+			return shell.Result{Code: 1, Stderr: "unscripted: " + call}, nil
+		}
+	}
+
+	out, err := runStandupApp(t, "board", "--all", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var boards []lookaround.Board
+	if err := json.Unmarshal([]byte(out), &boards); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	if len(boards) != 2 || boards[0].Project.ID != "github.com/acme/good" ||
+		boards[1].Project.ID != "github.com/acme/other" {
+		t.Fatalf("boards = %d, want good from its checkout then other: %s", len(boards), out)
+	}
+
+	if boards[0].Project.Checkout != good || boards[0].Project.Remote {
+		t.Errorf("good = %+v, want read from its checkout", boards[0].Project)
+	}
+
+	other := boards[1]
+	if other.Project.Checkout != "" || !other.Project.Remote || !other.Sources[2].Skipped ||
+		len(other.Rows) != 1 || other.Rows[0].Key != "OTH-3" || other.Rows[0].Who.Person != "ann" {
+		t.Errorf("other = %+v rows %+v, want remote, local skipped, one row by ann", other.Project, other.Rows)
+	}
+
+	for _, want := range []string{"gh pr list --state all --search is:open --json", "-R acme/other"} {
+		if !slices.ContainsFunc(calls, func(c string) bool { return strings.Contains(c, want) }) {
+			t.Errorf("no host call carrying %q:\n%s", want, strings.Join(calls, "\n"))
+		}
+	}
+
+	// a repository entry that does not parse fails only the run that reads it
+	writeUserFile(t, home, boardConfigFile, "---\nrepos: [git.example.com/acme/x]\n---\n")
+
+	if _, err := runStandupApp(t, "-C", good, "board", "--json"); err != nil {
+		t.Errorf("one checkout with a bad repos entry: %v, want it unread", err)
+	}
+
+	if _, err := runStandupApp(t, "board", "--all"); err == nil || !strings.Contains(err.Error(), "repos") {
+		t.Errorf("--all with a bad repos entry: %v, want it named", err)
 	}
 }
 

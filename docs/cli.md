@@ -616,7 +616,7 @@ Checkouts of one repository are read once, from the first given; a repository na
 - `--all` or `--group` prints one line per project: `<n> in flight` (rows neither `done` nor `next`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
 - `--detail`, or a scope built from `-C` alone, prints every project's rows under a heading with its name.
 - `--by person` prints rows grouped by `who.person` across projects, a heading per person, the unresolved last under `nobody`, each row naming its project.
-- `--json` over several projects prints a JSON array of Board documents, one per project in scope order, each the version 1 document `docs/board.md` specifies; a server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
+- `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 1 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
 
 **Your file**, `~/.f10/board.md`, YAML frontmatter then free prose, an unknown key an error:
 
@@ -627,6 +627,7 @@ Checkouts of one repository are read once, from the first given; a repository na
   Such a repository renders from the host and its issues alone, its local source skipped, as `--remote` reads.
 - `people` maps one person to the identities the sources know them by: `{name: ann, tracker: Ann Lee, host: annl, emails: [ann@acme.example]}`, every key but `name` optional.
   A row's `who.person` is the tracker assignee's person, else the request author's, else the first committer's; without a map, or with none matching, it is that identity as the source spelled it, so a tracker name and a host login stay two names until the map joins them.
+  Where the tracker is the host's issues the assignee is a login, which `host` claims as well, so `tracker` is for a tracker of its own.
 
   ```yaml
   ---

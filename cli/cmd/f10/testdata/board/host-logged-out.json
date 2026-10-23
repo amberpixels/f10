@@ -17,7 +17,7 @@
     "git symbolic-ref --short refs/remotes/origin/HEAD": {
       "stdout": "origin/main"
     },
-    "git log --format=%ae origin/main..FT-2/widgets": {
+    "git log --no-show-signature --format=%ae origin/main..FT-2/widgets": {
       "stdout": "ann@acme.example"
     }
   },

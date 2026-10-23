@@ -196,8 +196,8 @@ func readStandupConfig() (standupConfig, string, error) {
 	return cfg, path, err
 }
 
-// readBoardConfig is ~/.f10/board.md, validated: every person has a name
-// and every repository entry parses.
+// readBoardConfig is ~/.f10/board.md, with the people every run reads
+// checked; a repository entry is read only by the --all run that uses it.
 func readBoardConfig() (boardConfig, string, error) {
 	var cfg boardConfig
 
@@ -209,12 +209,6 @@ func readBoardConfig() (boardConfig, string, error) {
 	for i, p := range cfg.People {
 		if strings.TrimSpace(p.Name) == "" {
 			return cfg, path, fmt.Errorf("%s: people[%d] has no name", path, i)
-		}
-	}
-
-	for _, r := range cfg.Repos {
-		if _, err := parseRepo(r.Repo, r.Prefix); err != nil {
-			return cfg, path, fmt.Errorf("%s: repos: %w", path, err)
 		}
 	}
 

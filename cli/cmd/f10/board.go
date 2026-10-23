@@ -108,7 +108,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--by %q: rows group by person only", by)
 	}
 
-	cfg, _, err := readBoardConfig()
+	cfg, cfgPath, err := readBoardConfig()
 	if err != nil {
 		return err
 	}
@@ -116,65 +116,60 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 	people := boardPeople(cfg.People)
 	remote := cmd.Bool("remote")
 
-	if !scoped(cmd) {
+	// one pipeline whatever the scope: this checkout is a scope of one
+	var entries []scopeEntry
+
+	if scoped(cmd) {
+		items, err := scopeItems(cmd, boardConfigFile, cfg.Repos, cfgPath)
+		if err != nil {
+			return err
+		}
+
+		if entries = bindScope(ctx, items, cmd.Name); len(entries) == 0 {
+			return errors.New("the scope names no project: the groups and roots given matched none")
+		}
+	} else {
 		t, err := targetFor(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
-		in := boardInputs(ctx, t, cmd.ErrWriter, since, remote)
-		in.People = people
-
-		board := lookaround.Derive(lookaround.Collect(ctx, in), now, since)
-
-		switch {
-		case format != "":
-			data, err := boardBytes(board, format)
-			if err != nil {
-				return err
-			}
-
-			return emitBoard(cmd.Writer, cmd.String("out"), data)
-		case by == "person":
-			renderByPerson(cmd.Writer, []lookaround.Board{board}, termWidth(cmd.Writer))
-		default:
-			renderBoard(cmd.Writer, board, termWidth(cmd.Writer))
-		}
-
-		return nil
-	}
-
-	items, err := scopeItems(cmd, boardConfigFile, cfg.Repos)
-	if err != nil {
-		return err
-	}
-
-	entries := bindScope(ctx, items, cmd.Name)
-	if len(entries) == 0 {
-		return errors.New("the scope names no project: the groups and roots given matched none")
+		entries = []scopeEntry{{dir: t.dir, target: t}}
 	}
 
 	boards := collectBoards(ctx, entries, cmd.ErrWriter, now, since, remote, people)
 
-	// a scope from --all or --group is a glance, a line per project; one
-	// from -C alone, or --detail, is every project's rows
+	// several projects are --all, --group or more than one -C: their JSON
+	// is an array, the page draws one project, and their glance is a line
+	// each unless --detail asks for the rows; one project, named or not,
+	// is one document and its rows
+	several := cmd.Bool("all") || len(cmd.StringSlice("group")) > 0 || len(checkoutFlags(cmd)) > 1
 	summary := (cmd.Bool("all") || len(cmd.StringSlice("group")) > 0) && !cmd.Bool("detail")
 
 	// the page draws one project; several boards are one JSON array
 	switch {
-	case format == boardHTML:
+	case format == boardHTML && several:
 		return errors.New("--html draws one project: name one with -C, or none")
-	case format == boardJSON:
+	case format != "" && several:
 		var buf bytes.Buffer
 		if err := encodeJSON(&buf, boards); err != nil {
 			return err
 		}
 
 		return emitBoard(cmd.Writer, cmd.String("out"), buf.Bytes())
+	case format != "":
+		data, err := boardBytes(boards[0], format)
+		if err != nil {
+			return err
+		}
+
+		return emitBoard(cmd.Writer, cmd.String("out"), data)
 	case by == "person":
 		renderByPerson(cmd.Writer, boards, termWidth(cmd.Writer))
 	case summary:
 		renderSummary(cmd.Writer, boards, now, termWidth(cmd.Writer))
+	case !several:
+		renderBoard(cmd.Writer, boards[0], termWidth(cmd.Writer))
 	default:
 		faint := lipgloss.NewStyle().Faint(true).Bold(true)
 
@@ -670,6 +665,10 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		fmt.Fprintln(w, "nothing in flight, nothing next, nothing done in the window")
 
 		return
+	}
+
+	if len(boards) == 1 {
+		names = nil
 	}
 
 	lay := newBoardLayout(rows, names, limit)

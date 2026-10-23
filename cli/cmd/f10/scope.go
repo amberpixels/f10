@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/projects"
 )
 
@@ -116,7 +117,7 @@ func parseRepo(entry, prefix string) (repoRef, error) {
 // bound: -C values resolved to directories, groups expanded from the
 // user file given, --all's checkouts, and with --all the board's watched
 // repositories. Nothing named at all is the current checkout.
-func scopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry) ([]scopeItem, error) {
+func scopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPath string) ([]scopeItem, error) {
 	sels, groups := checkoutFlags(cmd), cmd.StringSlice("group")
 
 	var items []scopeItem
@@ -152,7 +153,7 @@ func scopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry) ([]scope
 		for _, r := range repos {
 			ref, err := parseRepo(r.Repo, r.Prefix)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%s: repos: %w", reposPath, err)
 			}
 
 			items = append(items, scopeItem{repo: &ref})
@@ -177,46 +178,60 @@ type scopeEntry struct {
 	err    error
 }
 
-// bindScope binds every item to its project. Checkouts of one repository
-// (a main checkout and its worktrees) see the same facts, so the
-// repository is read once, from the first of them given; a repository
-// named outright that a checkout already covers is dropped too, since the
-// checkout knows more.
+// bindScope binds every item to its project, in the order given.
+// Checkouts of one repository (a main checkout and its worktrees) see the
+// same facts, so the repository is read once, from the first of them
+// given. A repository named outright that a checkout anywhere in the
+// scope covers is dropped too, since the checkout knows more: the
+// checkouts are bound first, so every project id is known before a
+// repository is kept.
 func bindScope(ctx context.Context, items []scopeItem, cmdName string) []scopeEntry {
-	var entries []scopeEntry
+	entries := make([]scopeEntry, len(items))
+	keep := make([]bool, len(items))
 
-	seen := map[string]bool{}
+	roots, ids := map[string]bool{}, map[string]bool{}
 
-	for _, it := range items {
+	for i, it := range items {
 		if it.repo != nil {
-			if seen[it.repo.id()] {
-				continue
-			}
-
-			seen[it.repo.id()] = true
-			entries = append(entries, scopeEntry{repo: it.repo})
-
 			continue
 		}
 
 		lay := layout.Locate(ctx, it.dir)
 
 		main := cmp.Or(lay.MainRoot, lay.CheckoutRoot)
-		if seen[main] {
+		if roots[main] {
 			continue
 		}
 
-		seen[main] = true
+		roots[main] = true
+		ids[ledger.Where(ctx, main).Project] = true
 
 		e := scopeEntry{dir: it.dir}
 		if e.target, e.err = targetAt(ctx, it.dir, true, cmdName); e.err != nil {
 			e.err = fmt.Errorf("%s: %w", it.dir, e.err)
 		}
 
-		entries = append(entries, e)
+		entries[i], keep[i] = e, true
 	}
 
-	return entries
+	for i, it := range items {
+		if it.repo == nil || ids[it.repo.id()] {
+			continue
+		}
+
+		ids[it.repo.id()] = true
+		entries[i], keep[i] = scopeEntry{repo: it.repo}, true
+	}
+
+	var out []scopeEntry
+
+	for i, e := range entries {
+		if keep[i] {
+			out = append(out, e)
+		}
+	}
+
+	return out
 }
 
 // standupTargets is the checkouts a standup reads. A checkout that fails
@@ -232,7 +247,7 @@ func standupTargets(ctx context.Context, cmd *cli.Command) ([]*target, error) {
 		return []*target{t}, nil
 	}
 
-	items, err := scopeItems(cmd, standupConfigFile, nil)
+	items, err := scopeItems(cmd, standupConfigFile, nil, "")
 	if err != nil {
 		return nil, err
 	}

@@ -203,6 +203,11 @@ func TestRunNamesTheRepository(t *testing.T) {
 			"gh issue list -R ghe.example.com/acme/widgets",
 		},
 		{
+			Host{Name: "gh", Repo: "ghe.example.com/acme/widgets"},
+			[]string{"api", "repos/{owner}/{repo}/branches/x"},
+			"gh api repos/acme/widgets/branches/x --hostname ghe.example.com",
+		},
+		{
 			Host{Name: "glab", Repo: "acme/sub/widgets"},
 			[]string{"api", "projects/:fullpath/merge_requests?state=opened"},
 			"glab api projects/acme%2Fsub%2Fwidgets/merge_requests?state=opened",
