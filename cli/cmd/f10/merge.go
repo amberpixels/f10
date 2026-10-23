@@ -3,6 +3,8 @@ package main
 import (
 	"cmp"
 	"context"
+	"fmt"
+	"os"
 	"strings"
 )
 
@@ -75,6 +77,30 @@ func (p pull) status() string {
 	}
 }
 
+// noSuchPull reports whether the host answered that there is no such
+// request, by number or for a branch, as opposed to failing to answer at
+// all. Every phrase either CLI uses for it lives here.
+func noSuchPull(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := err.Error()
+
+	for _, phrase := range []string{
+		"Could not resolve to a PullRequest", // gh, by number
+		"no pull requests found",             // gh, by branch
+		"no open merge request",              // glab, by branch
+		"404 Not Found",                      // glab, by number
+	} {
+		if strings.Contains(msg, phrase) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // pull reads the request whose head is branch. No request is the host's
 // error, verbatim: finish has nothing to merge and says why in gh's or
 // glab's words.
@@ -93,6 +119,48 @@ func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	)...)
 
 	return p, err
+}
+
+// pullBody reads the description of the request whose head is branch.
+func (h host) pullBody(ctx context.Context, branch string) (string, error) {
+	var p pull
+
+	err := h.decode(ctx, &p, h.pick(
+		[]string{"pr", "view", branch, "--json", "body"},
+		[]string{"mr", "view", branch, "-F", "json"},
+	)...)
+
+	return p.body(), err
+}
+
+// editPullBody replaces the description of the request whose head is branch.
+func (h host) editPullBody(ctx context.Context, branch, body string) error {
+	if h.glab() {
+		_, err := h.run(ctx, "mr", "update", branch, "--description", body)
+
+		return err
+	}
+
+	f, err := os.CreateTemp("", "f10-pr-body-*.md")
+	if err != nil {
+		return fmt.Errorf("writing the PR body: %w", err)
+	}
+
+	defer os.Remove(f.Name())
+
+	if _, err := f.WriteString(body); err != nil {
+		_ = f.Close()
+
+		return fmt.Errorf("writing the PR body: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("writing the PR body: %w", err)
+	}
+
+	_, err = h.run(ctx, "pr", "edit", branch, "--body-file", f.Name())
+
+	return err
 }
 
 // pullNumber reads the request numbered number, with what start needs to

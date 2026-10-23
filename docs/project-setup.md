@@ -60,7 +60,7 @@ Go service for invoices.
 | `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, and an optional `priority` map from the four levels to the host labels that carry them | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
 | `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
-| `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
+| `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
 | `planless` | the pipelines that skip capture and the plan file | none |
 | `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
@@ -190,6 +190,7 @@ Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted
 `traces: on` makes what f10 does visible on the host, in words that never name f10.
 Every commit a step makes ends in `Task: <id>` and `Step: <step>` trailers, a resolve's fix commit also in `Review: round=<n> fixed=<n> skipped=<n>`.
 The squash commit `f10 finish` lands on the default branch keeps `Task: <id>` under the PR's description.
+The PR body holds one hidden comment, `<!-- state {...} -->`, saying which step last ran, the review round, what is still open and what waits on someone, rewritten by `pr`, `review`, `resolve`, `judge` and `f10 finish` through `f10 trace state`.
 `docs/traces.md` is the spec, with the fixtures a reader of the history conforms to.
 A local review or a judge of a branch with an open PR or MR is visible on it too.
 The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped".

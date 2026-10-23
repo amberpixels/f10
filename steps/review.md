@@ -82,6 +82,11 @@ It spawns **one fresh `general-purpose` agent, never `fork`, which inherits the 
 The reviewer writes the file and returns a one-paragraph summary: verdict and count per category.
 The main agent checks the header (and, in round two, a status for every prior id) and relays the summary unchanged.
 
+**The state block** (`docs/traces.md`): with the file on disk, `f10 trace state --step review --round <n> --open <count>`.
+The count is the findings awaiting a verdict: this round's, plus a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`); a clean round passes `--open 0`.
+Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
+The remote half writes the same block once its file is on disk (point 4 below).
+
 **The brief:**
 
 1. **Read the task and the whole diff**, untracked files included.
@@ -147,6 +152,7 @@ Without them this half **fails**: there is nothing to wait for.
 4. **Ack.**
    With the file on disk, `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
    Ack is outward-facing, under the run's authorization; in stealth mode it reads as the user's own.
+   Then the state block, as the blind reviewer's half writes it.
 
 **Report** per `conventions/report.md`: a `findings` row, then the verdict and the count per category, in the reviewer's words.
 

@@ -141,7 +141,10 @@ The answer resumes at `judge`: refactor runs yellow, stop runs red.
   Green: one line, the verdict and its reason.
   Yellow: the verdict and its reason, a line per change, the commit's short sha.
   Red: "Do not merge", the reason, and the smallest thing that would change the verdict.
-- Both read as the user's own (`conventions/context.md`).
+- **State block** (`docs/traces.md`): `f10 trace state --step judge` after the status.
+  A driven orange ask passes `--asks 1` beside its failure status, and the judge resuming on the answer passes `--asks 0` before its settled color's status.
+  Nothing with `traces: off`; a non-zero exit is `partial`, never a failed step.
+- Both status and comment read as the user's own (`conventions/context.md`).
   A failed post is `partial` (`conventions/failure.md` rule 7); before posting again, check the PR's comments for one already up.
 - The report adds a `commit` row when yellow pushed, a `status` row (the sha and its state) and a `comment` row (its url) when posted.
 
