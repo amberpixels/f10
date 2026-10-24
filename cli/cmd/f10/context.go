@@ -186,17 +186,40 @@ func (t *target) driver() *driver.Driver {
 	return nil
 }
 
-// issues is the host for the issue fallback, used when no driver answers.
+// verbNeeds says what needs each driver verb that falls back to host
+// issues, for the refusal when a non-host tracker's driver declines it.
+var verbNeeds = map[string]string{
+	driver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
+	driver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
+	driver.VerbURL:    "`f10 task open <id>` needs",
+	driver.VerbIndex:  "`f10 task open` with no id needs",
+	driver.VerbList:   "`f10 task open --print` and the board's next rows need",
+	driver.VerbSearch: "`f10 task search` needs",
+}
+
+// issues is the host for the issue fallback, used when no driver answers;
+// declined is the driver verb that exited 3, or "" when none was asked.
 // A project declaring a tracker no host CLI reaches is refused rather than
 // read from host issues, where an unrelated issue or PR shares the number.
-func (t *target) issues() (host, error) {
-	if !t.hostIssues() {
-		return host{}, fmt.Errorf("project.md declares a %s tracker, which f10 reads only through a driver, "+
-			"and none was found (looked for %s); see docs/driver-contract.md",
-			t.eff.TrackerKind, strings.Join(t.driverPaths(), ", "))
+func (t *target) issues(declined string) (host, error) {
+	if t.hostIssues() {
+		return t.host()
 	}
 
-	return t.host()
+	if d := t.driver(); d != nil && declined != "" {
+		need := ""
+		if n, ok := verbNeeds[declined]; ok {
+			need = ", which " + n
+		}
+
+		return host{}, fmt.Errorf("project.md declares a %s tracker, which has no host-issues fallback, "+
+			"and the driver at %s declines `%s`%s; add it per docs/driver-contract.md",
+			t.eff.TrackerKind, d.Path, declined, need)
+	}
+
+	return host{}, fmt.Errorf("project.md declares a %s tracker, which f10 reads only through a driver, "+
+		"and none was found (looked for %s); see docs/driver-contract.md",
+		t.eff.TrackerKind, strings.Join(t.driverPaths(), ", "))
 }
 
 // hostIssues reports whether the project's tracker is its host's issues:

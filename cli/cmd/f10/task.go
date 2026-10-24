@@ -122,7 +122,7 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 		}
 	}
 
-	h, err := t.issues()
+	h, err := t.issues(driver.VerbRead)
 	if err != nil {
 		return "", err
 	}
@@ -236,7 +236,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	h, err := t.issues()
+	h, err := t.issues(driver.VerbURL)
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func taskListURL(ctx context.Context, t *target) (string, error) {
 		}
 	}
 
-	h, err := t.issues()
+	h, err := t.issues(driver.VerbIndex)
 	if err != nil {
 		return "", err
 	}
@@ -303,7 +303,7 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 		}
 	}
 
-	h, err := t.issues()
+	h, err := t.issues(driver.VerbList)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +414,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		}
 	}
 
-	h, err := t.issues()
+	h, err := t.issues(driver.VerbSearch)
 	if err != nil {
 		return nil, err
 	}

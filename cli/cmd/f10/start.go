@@ -355,11 +355,12 @@ type startInput struct {
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
 }
 
-// titleLookup asks the host for the task's title. A checkout with no host
-// CLI answers with the reason, so the note beneath the report can quote it.
+// titleLookup asks the host for the task's title, needed only when no driver
+// names the branch. A checkout with no host CLI answers with the reason, so
+// the note beneath the report can quote it.
 func titleLookup(t *target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		h, err := t.issues()
+		h, err := t.issues(driver.VerbBranch)
 		if err != nil {
 			return "", err
 		}
