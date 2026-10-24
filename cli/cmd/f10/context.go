@@ -190,6 +190,7 @@ func (t *target) driver() *driver.Driver {
 // issues, for the refusal when a non-host tracker's driver declines it.
 var verbNeeds = map[string]string{
 	driver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
+	driver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
 	driver.VerbURL:    "`f10 task open <id>` needs",
 	driver.VerbIndex:  "`f10 task open` with no id needs",
 	driver.VerbList:   "`f10 task open --print` and the board's next rows need",

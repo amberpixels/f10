@@ -134,6 +134,33 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	}
 }
 
+// Every verb falling back to host issues is refused by name on a non-host
+// tracker, with what needs it; the title lookup behind the default branch
+// name answers for a declined branch.
+func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
+	tg := declaredTracker(t, "Notion")
+	path := writeDriver(t, tg.lay.StorageRoot)
+
+	verbs := []string{
+		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
+	}
+	for _, verb := range verbs {
+		_, err := tg.issues(verb)
+		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
+			!strings.Contains(err.Error(), verbNeeds[verb]) {
+			t.Errorf("issues(%s) = %v, want the driver path, the verb and what needs it", verb, err)
+		}
+	}
+
+	if !strings.Contains(verbNeeds[driver.VerbList], "`f10 task open --print` and the board's next rows") {
+		t.Errorf("list need = %q", verbNeeds[driver.VerbList])
+	}
+
+	if _, err := titleLookup(tg, "7")(t.Context()); err == nil || strings.Contains(err.Error(), "none was found") {
+		t.Errorf("title lookup = %v, want the declined branch, not a missing driver", err)
+	}
+}
+
 // A host tracker whose driver declines a verb still falls back to host issues.
 func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 	f := newFakes(t)
