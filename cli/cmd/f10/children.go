@@ -148,7 +148,7 @@ func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, err
 		}
 	}
 
-	h, err := t.issues()
+	h, err := t.issues(driver.VerbChildren)
 	if err != nil {
 		return nil, err
 	}

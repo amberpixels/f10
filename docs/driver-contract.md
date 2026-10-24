@@ -72,6 +72,7 @@ Exit `3` declines the verb as for any other: f10 falls back to the host's issues
 
 Code `3` is a normal answer, not an error.
 A driver may implement `read` without `search`, and f10 falls back to the host's issues rather than failing; a driver without `branch` gets the default `<ID>/<slug>` branch name.
+On a tracker that is not the host's issues (Notion, Jira), a declined verb has no fallback: f10 fails, naming your driver, the verb and the command that needs it.
 Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Two rules worth knowing

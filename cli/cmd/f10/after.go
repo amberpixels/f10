@@ -90,7 +90,7 @@ func (t *target) tracker() tracker {
 				}
 			}
 
-			h, err := t.issues()
+			h, err := t.issues(driver.VerbRead)
 			if err != nil {
 				return taskInfo{}, err
 			}

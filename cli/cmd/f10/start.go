@@ -359,7 +359,7 @@ type startInput struct {
 // CLI answers with the reason, so the note beneath the report can quote it.
 func titleLookup(t *target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		h, err := t.issues()
+		h, err := t.issues("")
 		if err != nil {
 			return "", err
 		}
