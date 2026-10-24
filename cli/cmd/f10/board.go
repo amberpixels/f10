@@ -482,7 +482,7 @@ func lineOf(r lookaround.Row) boardLine {
 	if r.Task != nil {
 		line.Title = r.Task.Title
 	} else if r.Where.PR != nil {
-		line.Title = r.Where.PR.Title
+		line.Title = titleAfterKey(r.Where.PR.Title, r.Key)
 	}
 
 	if r.Where.PR != nil {
@@ -496,6 +496,17 @@ func lineOf(r lookaround.Row) boardLine {
 	}
 
 	return line
+}
+
+// titleAfterKey drops the "<key>: " a request's title often starts with,
+// since the row already shows the key; FT-12 never matches FT-121.
+func titleAfterKey(title, key string) string {
+	rest, ok := strings.CutPrefix(title, key)
+	if !ok || key == "" || rest == "" || (rest[0] != ':' && rest[0] != ' ') {
+		return title
+	}
+
+	return cmp.Or(strings.TrimLeft(rest, ": -"), title)
 }
 
 // renderBoard draws the board for a terminal: failed sources first, then

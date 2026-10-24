@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -236,11 +237,17 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	prev := shell.Capture
 	t.Cleanup(func() { shell.Capture = prev })
 
-	var calls []string
+	var (
+		mu    sync.Mutex // projects are collected concurrently
+		calls []string
+	)
 
 	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		call := filepath.Base(name) + " " + strings.Join(args, " ")
+
+		mu.Lock()
 		calls = append(calls, call)
+		mu.Unlock()
 
 		switch {
 		case strings.HasPrefix(call, "gh issue list") && strings.HasSuffix(call, "-R acme/other"):
@@ -376,6 +383,21 @@ func TestRenderSummary(t *testing.T) {
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestTitleAfterKey(t *testing.T) {
+	for _, tc := range []struct{ title, key, want string }{
+		{"FT-121: Show f10 board", "FT-121", "Show f10 board"},
+		{"FT-121 - Show f10 board", "FT-121", "Show f10 board"},
+		{"FT-121: Show f10 board", "FT-12", "FT-121: Show f10 board"},
+		{"Show f10 board", "FT-121", "Show f10 board"},
+		{"FT-121", "FT-121", "FT-121"},
+		{"#12 title", "", "#12 title"},
+	} {
+		if got := titleAfterKey(tc.title, tc.key); got != tc.want {
+			t.Errorf("titleAfterKey(%q, %q) = %q, want %q", tc.title, tc.key, got, tc.want)
 		}
 	}
 }

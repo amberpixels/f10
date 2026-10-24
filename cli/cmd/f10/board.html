@@ -149,6 +149,13 @@ function model(board) {
     m.empty = "nothing in flight, nothing next, nothing done since " + localDate(board.window.since);
     return m;
   }
+  // a request titled "<key>: ..." repeats the key the row already shows
+  function afterKey(title, key) {
+    if (!key || title.indexOf(key) !== 0) return title;
+    var rest = title.slice(key.length);
+    if (rest[0] !== ":" && rest[0] !== " ") return title;
+    return rest.replace(/^[: -]+/, "") || title;
+  }
   rows.forEach(function (r) {
     var pr = r.where && r.where.pr;
     var line = {
@@ -157,7 +164,7 @@ function model(board) {
       url: (r.task && r.task.url) || (pr && pr.url) || "",
       stage: r.stage,
       stage_from: r.stage_from,
-      title: r.task ? (r.task.title || "") : (pr && pr.title) || "",
+      title: r.task ? (r.task.title || "") : afterKey((pr && pr.title) || "", r.key),
       pr: pr ? pr.number : 0,
       pr_url: pr ? (pr.url || "") : "",
       who: who(r),

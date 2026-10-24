@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,8 @@ import (
 // several answers hands them out in order and repeats the last, which is
 // how a listing changes once something was created.
 type fakes struct {
+	// mu guards calls and answers: the board's collectors call concurrently
+	mu      sync.Mutex
 	t       *testing.T
 	calls   []string
 	answers map[string][]shell.Result
@@ -70,6 +73,9 @@ func newFakes(t *testing.T) *fakes {
 }
 
 func (f *fakes) answer(key string) shell.Result {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	f.calls = append(f.calls, key)
 
 	queue, ok := f.answers[key]

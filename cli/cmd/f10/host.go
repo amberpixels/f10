@@ -256,7 +256,7 @@ func (h host) listIssues(
 	}
 
 	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels,body,assignees", "--limit", strconv.Itoa(limit))
-	glabArgs = append(glabArgs, "-F", "json", "--per-page", strconv.Itoa(limit))
+	glabArgs = append(glabArgs, "--output", "json", "--per-page", strconv.Itoa(limit))
 
 	var found []issue
 
