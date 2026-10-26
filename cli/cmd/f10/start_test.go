@@ -46,6 +46,8 @@ func newFakes(t *testing.T) *fakes {
 	f := &fakes{t: t, answers: map[string][]shell.Result{}, has: map[string]bool{"herdr": true}}
 	// Herdr shows no workspace until a test says otherwise
 	f.script("herdr workspace list", `{"result":{"workspaces":[]}}`)
+	// no local branch carries a task id past a prefix until a test says so
+	f.script(allHeads, "")
 	// no branch is linked to a task, and origin has no task branch, until a test says so
 	f.absent = []string{linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/"}
 
@@ -152,6 +154,7 @@ const (
 	refsLocal  = "git for-each-ref --format=%(refname) refs/heads/GH-1 refs/heads/GH-1-* refs/heads/GH-1+* refs/heads/GH-1+*/*"
 	refsAfter  = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-* refs/heads/GH-7+* refs/heads/GH-7+*/*"
 	refsAfterO = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-* refs/remotes/origin/GH-7+* refs/remotes/origin/GH-7+*/*"
+	allHeads   = "git for-each-ref --format=%(refname) refs/heads/"
 	shaAfter   = "git rev-parse --verify --quiet GH-7/base"
 	cfgTask    = "git config branch.GH-1.f10-after GH-7"
 	cfgBranch  = "git config branch.GH-1.f10-after-branch GH-7/base"
@@ -463,6 +466,21 @@ func TestTaskBranch(t *testing.T) {
 		}
 	})
 
+	t.Run("a branch carrying the id past a prefix is found before origin", func(t *testing.T) {
+		f := newFakes(t)
+		f.script(refsAfter, "")
+		f.script(allHeads, heads("main", "feat/GH-7-base"))
+
+		got, err := taskBranch(t.Context(), "/code/repo", "GH-7")
+		if err != nil || got != "feat/GH-7-base" {
+			t.Errorf("taskBranch = %q, %v", got, err)
+		}
+
+		if f.called("git for-each-ref --format=%(refname) refs/remotes") {
+			t.Error("origin was searched although a local branch matched")
+		}
+	})
+
 	t.Run("several is an error naming them", func(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsAfter, heads("GH-7", "GH-7-attempt2"))
@@ -529,6 +547,8 @@ func TestExistingBranch(t *testing.T) {
 	cases := []struct {
 		name    string
 		refs    string
+		heads   string // every local branch, read when refs finds none
+		linked  string // the branches' f10-task links, as git config lists them
 		want    string
 		suffix  string
 		got     string
@@ -557,17 +577,67 @@ func TestExistingBranch(t *testing.T) {
 			got:    "",
 		},
 		{name: "several without the intended name", refs: heads("GH-1/a", "GH-1/b"), want: "GH-1", wantErr: true},
+		{
+			name:  "the id past a prefix",
+			heads: heads("main", "feat/GH-1-workdays"),
+			want:  "GH-1/workdays",
+			got:   "feat/GH-1-workdays",
+		},
+		{
+			name:  "a longer id is another task",
+			heads: heads("feat/GH-10-other", "fix/gh-12"),
+			want:  "GH-1",
+			got:   "",
+		},
+		{
+			name:  "the strict shapes win over a prefixed branch",
+			refs:  heads("GH-1/slug"),
+			heads: heads("GH-1/slug", "feat/GH-1-old"),
+			want:  "GH-1/other",
+			got:   "GH-1/slug",
+		},
+		{
+			name:   "a prefixed branch linked to another task",
+			heads:  heads("feat/GH-1-followup"),
+			linked: "branch.feat/GH-1-followup.f10-task GH-5",
+			want:   "GH-1",
+			got:    "",
+		},
+		{
+			name:   "a suffix narrows prefixed branches",
+			heads:  heads("feat/GH-1-a", "feat/GH-1-a-attempt2"),
+			want:   "GH-1-attempt2",
+			suffix: "attempt2",
+			got:    "feat/GH-1-a-attempt2",
+		},
+		{
+			name:    "several prefixed branches",
+			heads:   heads("feat/GH-1-a", "fix/GH-1-b"),
+			want:    "GH-1",
+			wantErr: true,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFakes(t)
 			f.script(refsLocal, c.refs)
+			f.script(allHeads, c.heads)
+
+			if c.linked != "" {
+				f.script(linkedKeys, c.linked)
+			}
 
 			got, err := existingBranch(t.Context(), "/code/repo", c.want, "GH-1", c.suffix)
 			if c.wantErr {
 				if err == nil {
 					t.Fatalf("existingBranch = %+v, want an error", got)
+				}
+
+				for name := range strings.FieldsSeq(strings.ReplaceAll(c.refs+c.heads, "refs/heads/", "")) {
+					if !strings.Contains(err.Error(), name) {
+						t.Errorf("err = %v, want %s named", err, name)
+					}
 				}
 
 				return

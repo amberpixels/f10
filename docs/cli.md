@@ -157,7 +157,7 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   `--plan` prompts the plan instead, with the PR's diff as the starting point; nothing ships a picked-up PR unread.
   The report gains a `pr` row.
   A PR from a fork, a PR no longer open, `--local`, `--after` and `--base` are refused before anything is created
-- every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link and the `f10-tasks` riders first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`, `<id>+...`); a task read with no id in a picked-up worktree finds its task through the same link.
+- every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link and the `f10-tasks` riders first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`, `<id>+...`), then, for local branches only, to the id past a prefix (`feat/<id>-...`), as `f10 task read` reads a branch; a task read with no id in a picked-up worktree finds its task through the same link.
   With no local branch, start also finds the one task branch on origin (`refs/remotes/origin/`) and creates the local branch tracking it rather than a second branch from main.
   It reads what the last fetch saw; for a branch pushed since, run `git fetch` or pass the PR link
 - a task that already has a branch gets its worktree reused, or created when the branch has none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise for the base, while its dependency is recorded all the same; a workspace Herdr already shows is adopted rather than opened again, keeps its agent, and nothing is prompted twice.
@@ -189,7 +189,7 @@ Outside one it stops before touching anything and points at https://herdr.dev.
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
-It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
+It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch, else the one local branch carrying the id past a prefix, like `feat/<id>-slug`) and the checkout that has it checked out; without either it stops, since finish removes only a branch it can tie to the task.
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, and the finish skill asks.
 Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`; after a merge that already happened, each is reopened instead.
@@ -247,7 +247,7 @@ Out of scope: closing the tracker issue (the PR body does that with "Closes #n")
 The plan and ship skills run it first whenever their argument is a task id, because a task started with `f10 start` has its branch, its plan and its agent in a worktree of its own, and running the command anywhere else would run it on the wrong branch without the plan.
 
 1. **The lookup.**
-   The task's branch, found the way start and finish find it (the exact name, else the one `<id>` / `<id>-*` branch); the worktree that has it checked out; the Herdr workspace showing that worktree; the agent under the name start gave it (below), or under `<id>` lowercased with the suffix alone, the name an agent started by an older f10 carries.
+   The task's branch, found the way start and finish find it (the exact name, else the one `<id>` / `<id>-*` branch, else the one local branch carrying the id past a prefix); the worktree that has it checked out; the Herdr workspace showing that worktree; the agent under the name start gave it (below), or under `<id>` lowercased with the suffix alone, the name an agent started by an older f10 carries.
    A task started with a suffix is forwarded to with the same suffix.
 2. **Three outcomes.**
    Exit 0: the command was submitted, and the report has three rows - `task`, `workspace`, `sent`.

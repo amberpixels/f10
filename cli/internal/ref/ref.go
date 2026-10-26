@@ -400,17 +400,25 @@ func Members(prefix, branch string) []string {
 // subject. It is fromBranch minus git, so standup reads titles and subjects
 // by the same rule and a test needs no checkout.
 func Match(prefix, text string) string {
-	if prefix == "" || text == "" {
-		return ""
+	return Matcher(prefix)(text)
+}
+
+// Matcher is Match with the pattern compiled once, for a caller matching
+// many texts against one prefix.
+func Matcher(prefix string) func(text string) string {
+	if prefix == "" {
+		return func(string) string { return "" }
 	}
 
 	re := regexp.MustCompile(`(?i)(?:^|[^a-z0-9])` + regexp.QuoteMeta(prefix) + `-?([0-9]+)`)
 
-	if m := re.FindStringSubmatch(text); m != nil {
-		return prefix + "-" + m[1]
-	}
+	return func(text string) string {
+		if m := re.FindStringSubmatch(text); m != nil {
+			return prefix + "-" + m[1]
+		}
 
-	return ""
+		return ""
+	}
 }
 
 // sessionTask reads the task id the run state records for this session.

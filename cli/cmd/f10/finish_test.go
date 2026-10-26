@@ -1041,6 +1041,52 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 	}
 }
 
+// A branch named by the project's own shape, the id past a prefix and no
+// config link, is found by the id it carries: merged, its plan archived and
+// the branch deleted, from the main checkout and from a worktree.
+func TestFinishFindsTheIdPastAPrefix(t *testing.T) {
+	const branch = "feat/GH-1-workdays"
+
+	for _, inMain := range []bool{true, false} {
+		t.Run(map[bool]string{true: "main checkout", false: "worktree"}[inMain], func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.openPR()
+			fx.f.script(refsLocal, "")
+			fx.f.script(allHeads, heads("main", branch))
+			fx.f.script("git branch -D "+branch, "")
+
+			// the host and origin are asked by the branch's name
+			swap := strings.NewReplacer("GH-1 ", branch+" ", "heads/GH-1", "heads/"+branch,
+				"origin GH-1", "origin "+branch, "origin/GH-1", "origin/"+branch)
+			for _, key := range []string{ghView, ghMerge, ghDel, lsRem, dropRemoteRef} {
+				fx.f.answers[swap.Replace(key)] = fx.f.answers[key]
+			}
+
+			plan := fx.plan(t, "GH-1.md", "# plan")
+			if inMain {
+				plan = fx.onMain(t, "# plan")
+				fx.f.script(worktrees, porcelain(branch, fx.main))
+				fx.f.script(curBr, branch)
+				fx.in.workspace = "ws:1"
+			} else {
+				fx.f.script(worktrees, porcelain(branch, fx.wt))
+			}
+
+			if _, err := fx.run(t); err != nil {
+				t.Fatal(err)
+			}
+
+			if !fx.f.called("git branch -D " + branch) {
+				t.Errorf("%s was not deleted:\n%s", branch, strings.Join(fx.f.calls, "\n"))
+			}
+
+			if _, err := os.Stat(plan); !errors.Is(err, os.ErrNotExist) {
+				t.Error("the plan was not archived")
+			}
+		})
+	}
+}
+
 // Main's own archive stays as it is: the current plan takes the next number.
 func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	fx := newFinishFixture(t)
