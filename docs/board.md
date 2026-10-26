@@ -159,7 +159,7 @@ A row with no task id gets a sentence where a command would need one.
 | `follow_up_of` | the task's other requests, opened before this one |
 | `summary` | what happened, one sentence |
 | `at` | the latest event in the window |
-| `quiet` | `count`, the open requests with no activity in the window, and `oldest`, the earliest creation among them |
+| `quiet` | `count`, the open requests with no row in the window (no commits, reviews or status changes there; a comment, a label or a commit dated before the window may still have touched them), and `oldest`, the earliest creation among them |
 
 **The window.** The default is `today`, or the last working day while nothing happened today; every span is cut by [years](https://github.com/amberpixels/years), never by date code of f10's own.
 Over a scope every project shares the span.
@@ -184,6 +184,7 @@ In the feed, on GitHub, it reads the requests updated since the window's start w
 On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time; the version whose head is among the request's commits while the previous one's is not is a force push, so only the latest rewrite counts.
 Its search for a task's earlier requests reads titles only.
 GitLab's notes give no ready-for-review or review-requested event, so there a request out of draft is not `started` by that alone and `owes` never names a requested reviewer; its commits are dated by their author date.
+On GitHub a commit counts by its committer date, since GitHub records no push time for a plain push: commits made before the window and pushed inside it do not count, and their request is quiet unless something else happened to it.
 The tracker collector reads open tasks through the driver's `list`, else the host's issues.
 The local collector, in the state view, reads the worktrees and branches with what `f10 start` recorded on them, the live runs in them, plan, findings and verdict files under the storage root, what the ledger closed, and Herdr's workspaces; the feed skips it, but on a local-only checkout, where it reads each branch's last commit time.
 A local-only checkout skips the host, and the tracker unless a driver answers it.

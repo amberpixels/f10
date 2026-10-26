@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/amberpixels/r3 v0.8.0
-	github.com/amberpixels/years v0.6.0
+	github.com/amberpixels/years v0.7.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pressly/goose/v3 v3.29.0

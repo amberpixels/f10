@@ -605,7 +605,7 @@ A breaking change bumps `schema`.
 ## Board
 
 `f10 board` has two views.
-The default is **the feed**: what changed in a calendar window, one row per request or task in one of five groups, `started`, `updated`, `reviewed`, `finished` and `new tasks`, and one line counting the open requests nobody touched.
+The default is **the feed**: what changed in a calendar window, one row per request or task in one of five groups, `started`, `updated`, `reviewed`, `finished` and `new tasks`, and one line counting the open requests with no commits, reviews or status changes in the window.
 `--state` is where every task of the project stands: done lately, in progress at which stage and who owes the next move, and what comes next.
 
 **The window** is the argument (`f10 board yesterday`) or `--since`, never both: `today`, `yesterday`, `last-workday`, `this-week`, `last-week`, a `YYYY-MM-DD` date (that day), or an RFC 3339 time (from then until now).

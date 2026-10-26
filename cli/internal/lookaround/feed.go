@@ -48,8 +48,10 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 				continue
 			}
 
-			// read from the earliest span the default may show, so an open
-			// request touched before this window is quiet in it
+			// an open request with no row is quiet: touched before this
+			// window (read from the earliest span the default may show), or
+			// in it only by what the feed does not group (a comment, a
+			// label, a commit dated before the window)
 			if t.Status == forge.Open && !t.CreatedAt.After(windowEnd(w, now)) {
 				b.Feed.Quiet.Count++
 				if b.Feed.Quiet.Oldest.IsZero() || t.CreatedAt.Before(b.Feed.Quiet.Oldest) {

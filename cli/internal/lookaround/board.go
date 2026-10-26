@@ -207,7 +207,8 @@ type Feed struct {
 	Quiet Quiet     `json:"quiet"`
 }
 
-// Quiet is the open requests with no activity in the window.
+// Quiet is the open requests with no row in the window: no commits,
+// reviews or status changes there.
 type Quiet struct {
 	Count  int       `json:"count"`
 	Oldest time.Time `json:"oldest,omitzero"` // the oldest one's creation time

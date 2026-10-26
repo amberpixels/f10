@@ -581,7 +581,8 @@ func feedLines(b lookaround.Board, m boardModel) boardModel {
 		rows = b.Feed.Rows
 
 		if q := b.Feed.Quiet; q.Count > 0 {
-			m.Quiet = lookaround.Plural(q.Count, "open request") + " untouched in the window"
+			m.Quiet = lookaround.Plural(q.Count, "open request") +
+				" with no commits, reviews or status changes in the window"
 			if !q.Oldest.IsZero() {
 				m.Quiet += ", the oldest opened " + localDate(q.Oldest)
 			}

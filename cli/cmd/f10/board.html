@@ -208,7 +208,7 @@ function feedModel(board, m) {
   var feed = board.feed || {};
   var q = feed.quiet || {};
   if (q.count > 0) {
-    m.quiet = plural(q.count, "open request") + " untouched in the window";
+    m.quiet = plural(q.count, "open request") + " with no commits, reviews or status changes in the window";
     if (q.oldest) m.quiet += ", the oldest opened " + localDate(q.oldest);
   }
   var rows = feed.rows || [];

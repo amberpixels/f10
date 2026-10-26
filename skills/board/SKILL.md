@@ -29,7 +29,7 @@ f10 board <arguments>
 
 1. Print the command's output verbatim in a fenced block.
    Into the session it is plain text.
-   The feed: a header naming the span (`today · <date>`, or `last-workday · <date> (no activity today)`), a `<source>  failed  <error>` line per source that did not read, `local only` for a checkout with no origin remote, then one line per row under `started`, `updated`, `reviewed`, `finished` and `new tasks`, each ending in what happened and who owes the next move, and a closing line counting the open requests nobody touched; or `no activity in the window`.
+   The feed: a header naming the span (`today · <date>`, or `last-workday · <date> (no activity today)`), a `<source>  failed  <error>` line per source that did not read, `local only` for a checkout with no origin remote, then one line per row under `started`, `updated`, `reviewed`, `finished` and `new tasks`, each ending in what happened and who owes the next move, and a closing line counting the open requests with no commits, reviews or status changes in the window; or `no activity in the window`.
    The state: the source lines, then one line per row under `in progress`, `next` and `done`, or `nothing in flight, nothing next, nothing done since <date>`.
    None of those is a failure; a failure is printed as is and ends the turn.
 2. **The feed offers nothing**: it reports what happened. Under it, say in one line that `/f10:board --state` shows the moves.
