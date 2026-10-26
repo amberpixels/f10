@@ -7,6 +7,8 @@ Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route to, 
 **f10 specifies this contract and implements none of it.**
 What a driver talks to is your project's business, and so is the language it is written in - a shell script dispatching to what you already have is the usual shape. f10 fixes only the shape of the conversation.
 
+[f10-drivers](https://github.com/amberpixels/f10-drivers) implements it for Notion, configured per project by a `driver.toml`, with a conformance suite any driver can run.
+
 ## Where it lives
 
 An executable at `<storage root>/driver` - normally `.f10/driver`, or `~/.f10/<project>/driver` under out-of-tree storage. f10 runs it with the checkout root as the working directory.
