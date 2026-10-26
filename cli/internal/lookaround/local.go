@@ -232,7 +232,7 @@ func readRoot(root string, l *Local) []string {
 		// a prior block takes a verdict only in the three statuses that
 		// reopen it; a settled one carries none by design
 		for _, fi := range f.Findings {
-			if fi.Prior && !reopens(fi.Status) {
+			if fi.Prior && !findings.Reopens(fi.Status) {
 				continue
 			}
 
@@ -280,16 +280,6 @@ func readRoot(root string, l *Local) []string {
 	}
 
 	return notes
-}
-
-// reopens is a prior finding's status that awaits a verdict.
-func reopens(status string) bool {
-	switch status {
-	case "still open", "fix introduced a problem", "explanation disputed":
-		return true
-	default:
-		return false
-	}
 }
 
 // readLedger marks the tasks the ledger holds task_finished for.

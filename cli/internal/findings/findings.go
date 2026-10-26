@@ -145,3 +145,13 @@ func Parse(text string) (*File, error) {
 
 	return f, nil
 }
+
+// Reopens reports whether a prior finding's status awaits a verdict.
+func Reopens(status string) bool {
+	switch status {
+	case "still open", "fix introduced a problem", "explanation disputed":
+		return true
+	default:
+		return false
+	}
+}
