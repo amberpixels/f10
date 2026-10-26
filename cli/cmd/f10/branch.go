@@ -14,9 +14,9 @@ import (
 )
 
 // A task's branch: how it is named when start creates it, and how it is
-// found again by start, finish and --after once it exists. Both halves
-// live here so the name start would give and the patterns finish searches
-// with cannot drift apart.
+// found again by start, finish and --after once it exists, whether start
+// named it or the id sits past a prefix. Both halves live here so the name
+// start would give and the patterns finish searches with cannot drift apart.
 
 // branchName is the driver's answer to `branch`, else `<ID>/<slug>` from
 // the task's title, else the bare id with a note saying why no slug came -
@@ -163,11 +163,19 @@ func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []st
 }
 
 // branchesFor lists the branches under root that belong to task id,
-// narrowed to one suffix when the caller salted the name.
+// narrowed to one suffix when the caller salted the name. Locally, a miss
+// on the shapes start creates falls back to the id anywhere in the name
+// (`feat/ABC-6-slug`), read by the rule `task read` applies to a branch.
 func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, error) {
 	refs, err := gitx.Refs(ctx, dir, taskRefs(root, id)...)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(refs) == 0 && root == "refs/heads/" {
+		if refs, err = carryingBranches(ctx, dir, id); err != nil {
+			return nil, err
+		}
 	}
 
 	if suffix == "" {
@@ -175,6 +183,25 @@ func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, e
 	}
 
 	return slices.DeleteFunc(refs, func(r string) bool { return !strings.HasSuffix(r, "-"+suffix) }), nil
+}
+
+// carryingBranches are the local branches whose name carries id past a
+// prefix. The prefix is the id's own, so an id without one finds none, and
+// GH-10 never reads as GH-1.
+func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
+	cut := strings.LastIndexByte(id, '-')
+	if cut <= 0 {
+		return nil, nil
+	}
+
+	all, err := gitx.Refs(ctx, dir, "refs/heads/")
+	if err != nil {
+		return nil, err
+	}
+
+	return slices.DeleteFunc(all, func(b string) bool {
+		return !strings.EqualFold(ref.Match(id[:cut], b), id)
+	}), nil
 }
 
 // taskBranch is the branch --after names: the branch linked to the task,
