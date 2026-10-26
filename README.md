@@ -511,6 +511,7 @@ Next: the `/f10:init` skill over `f10 init` (the `Project` line and guardrails r
 - [The status line](docs/statusline.md): wiring the badge and reading it.
 - [The `f10` binary](docs/cli.md): every command, references, output.
 - [The driver contract](docs/driver-contract.md): a tracker without a CLI.
+- [Lore](docs/lore.md): why a line is the way it is, kept as entries per change next to the code.
 
 ## Feedback
 

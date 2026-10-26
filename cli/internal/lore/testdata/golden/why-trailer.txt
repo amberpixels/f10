@@ -1,0 +1,31 @@
+api/limit.go:15  last changed in 29a8699ad42d, linked by the commit's trailer
+
+== FT-1
+
+intent  01M5C8KYM0041061050R3GG28A  2026-10-20 09:00Z  dev@example.com
+
+    Why we do FT-1
+
+verdict  01M5EYEH802MB1E60S38DHR78Y  2026-10-21 10:00Z  dev@example.com
+  outcome: proceed
+  gate: judge
+  commit: abcdef1
+
+    judged proceed
+
+decision  01M5CAAWE03WG228H34GJJC9S8  2026-10-20 09:30Z  dev@example.com  with claude-opus-5-5 via claude-code
+  chosen: token bucket
+  rejected: fixed window - bursts at the edge
+  anchor: api/limit.go:10-20@29a8699#Allow
+
+    A bucket per key.
+
+    In memory: one instance.
+
+finding  01M5CFFNW054N2PB1D5RQK0C9J  2026-10-20 11:00Z  rev@example.com
+  severity: major
+  status: fixed
+  resolution: abcdef1
+  anchor: api/limit.go:30@29a8699#Allow
+
+    major fixed

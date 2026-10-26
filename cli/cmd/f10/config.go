@@ -40,6 +40,7 @@ type view struct {
 	MergeMethod     string              `json:"mergeMethod,omitempty"`
 	Catchup         string              `json:"catchup"`
 	Traces          bool                `json:"traces"`
+	Lore            string              `json:"lore"`
 	Pipelines       map[string][]string `json:"pipelines"`
 	Planless        []string            `json:"planless,omitempty"`
 	DriveChain      []string            `json:"driveChain"`
@@ -91,6 +92,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		MergeMethod:     eff.MergeMethod,
 		Catchup:         eff.Catchup,
 		Traces:          eff.Traces,
+		Lore:            eff.Lore,
 		Pipelines:       eff.Pipelines,
 		Planless:        eff.Planless,
 		DriveChain:      eff.DriveChain,

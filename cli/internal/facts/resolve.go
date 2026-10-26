@@ -1,6 +1,7 @@
 package facts
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"regexp"
@@ -330,6 +331,11 @@ func (e *Effective) resolveHosting(
 	e.settle("traces", fmSource("traces", fm.Traces), source{},
 		Fact{Key: "traces", Value: "off", Origin: OriginDefault})
 	e.Traces = fm.Traces == "on"
+
+	e.settle("lore", fmSource("lore", fm.Lore), source{},
+		Fact{Key: "lore", Value: "local", Origin: OriginDefault})
+
+	e.Lore = cmp.Or(fm.Lore, "local")
 }
 
 func (e *Effective) resolvePipelines(

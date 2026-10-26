@@ -1,0 +1,12 @@
+plain.go:4  last changed in 21d7cecb3101, linked by an anchor at the commit; the commit carries no trailer naming a change with entries
+
+== FT-5
+
+intent  01M5C8KYM0F5X7PZ3XFSZR10C2  2026-10-20 09:00Z  dev@example.com
+
+    Why we do FT-5
+
+lesson  01M5CC1T80GE28B1M7H24RN2WC  2026-10-20 10:00Z  dev@example.com
+  anchor: plain.go:4@21d7cecb3101aee8c8f28f5f10b2d294c0b3d679
+
+    learned

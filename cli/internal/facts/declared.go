@@ -30,6 +30,7 @@ type Declared struct {
 	MergeMethod  string           `yaml:"merge_method,omitempty"`
 	Catchup      string           `yaml:"catchup,omitempty"`
 	Traces       string           `yaml:"traces,omitempty"`
+	Lore         string           `yaml:"lore,omitempty"`
 	ReviewTraces string           `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
 	Pipelines    map[string]Steps `yaml:"pipelines,omitempty"`
 	Planless     []string         `yaml:"planless,omitempty"`
@@ -163,6 +164,7 @@ var vocab = map[string][]string{
 	"merge_method":  {"squash", "merge", "rebase"},
 	"catchup":       {"rebase", "merge"},
 	"traces":        {"on", "off"},
+	"lore":          {"local", "committed"},
 	"review_traces": {"on", "off"},
 }
 
@@ -187,6 +189,7 @@ func (d Declared) check() []string {
 		"merge_method":  d.MergeMethod,
 		"catchup":       d.Catchup,
 		"traces":        d.Traces,
+		"lore":          d.Lore,
 		"review_traces": d.ReviewTraces,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
@@ -304,6 +307,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("merge_method", d.MergeMethod != "", func() { l.MergeMethod = d.MergeMethod })
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
 	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
+	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })

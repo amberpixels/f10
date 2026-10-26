@@ -80,6 +80,7 @@ func newApp() *cli.Command {
 			hookCommand(),
 			stateCommand(),
 			ledgerCommand(),
+			loreCommand(),
 		},
 	}
 }
