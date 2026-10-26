@@ -63,7 +63,7 @@ Go service for invoices.
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
-| `planless` | the pipelines that skip capture and the plan file | none |
+| `planless` | the pipelines that write no plan file: free text also skips capture and fetch, a task id is fetched but not planned | none |
 | `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
@@ -116,7 +116,7 @@ planless: [direct]
 
 `default` runs unless the user names another.
 `local` is the one `f10 start --local` selects: the run ends in commits and nothing leaves the machine.
-A planless pipeline skips capture and the plan file for free-text input.
+A planless pipeline writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
 A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
@@ -128,6 +128,7 @@ A spike is the exception: its run ends after implement, whatever the pipeline, w
 Never `start`: every task gets its worktree first.
 In the default chain, review reads the remote review when one is declared, else runs the local reviewer, and resolve settles it before finish merges.
 A project whose ship pipeline already reviews drops `review` and `resolve` here.
+When the `default` pipeline is planless, `plan` drops out of the declared chain; a chain typed on the command line runs as typed.
 A chain typed after the tasks (`f10 drive GH-12 GH-15 judge ship`) replaces this one for that run.
 
 ## Priority

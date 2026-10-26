@@ -20,7 +20,7 @@ A normal end.
 `<storage root>/reviews/<TASK-ID>/<round>.md`, root verbatim from `storage root:`.
 `1.md`, then `2.md`; there is no third.
 Create the directory if missing.
-With no task id (a planless pipeline, a branch naming no task), use the branch name with `/` as `-`; resolve finds the directory by this naming alone.
+With no task id (free-text planless work, a branch naming no task), use the branch name with `/` as `-`; resolve finds the directory by this naming alone.
 `f10 finish` does not archive rounds yet.
 
 **Shape**, the same whoever reviewed:

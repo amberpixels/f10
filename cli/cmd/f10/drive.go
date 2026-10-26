@@ -110,6 +110,15 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		if chain, err = parseChain(t.eff.DriveChain); err != nil {
 			return fmt.Errorf("project.md Drive chain: %w", err)
 		}
+
+		var dropped bool
+		if chain, dropped = planlessChain(chain, t.eff.Planless); dropped {
+			fmt.Fprintln(cmd.Writer, "plan skipped: the default pipeline is planless")
+		}
+
+		if len(chain) == 0 {
+			return errors.New("project.md Drive chain: only plan, and the default pipeline is planless")
+		}
 	}
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
@@ -308,6 +317,16 @@ func parseChain(declared []string) ([]string, error) {
 	}
 
 	return chain, checkChain(chain)
+}
+
+// planlessChain drops plan from a declared chain when the default pipeline,
+// the one a driven ship runs, is planless: its ship writes no plan file.
+func planlessChain(chain, planless []string) ([]string, bool) {
+	if !slices.Contains(planless, "default") || !slices.Contains(chain, "plan") {
+		return chain, false
+	}
+
+	return slices.DeleteFunc(slices.Clone(chain), func(s string) bool { return s == "plan" }), true
 }
 
 // checkChain refuses a skill outside the vocabulary, and one named twice:
