@@ -124,9 +124,9 @@ An area is named in plain words, the way a task's _Areas_ note names it, with th
 ```
 
 The base role for a step is, highest first: an applicable Conditional `=`, the step overlay's own `Role:` line (`.f10/instructions/<step>.md`), an Always `=`, then the step's built-in role.
-At the same rank a step-scoped `=` wins over an unscoped one, and a linked worktree's statement over main's.
+At the same rank a step-scoped `=` wins over an unscoped one, and a linked worktree's statement over main's; two still tied are a contradiction, which the run names rather than picks.
 A role named per step in prose ("plan as a **senior software architect**") adds, like `+`; only `=` replaces.
-Capture, brainstorm and other steps that run without a fetch brief take the areas from the task's _Areas_ note, else none apply.
+A step takes its roles from the plan's `Roles` line, else the fetch brief, else the areas in the task's _Areas_ note (capture, brainstorm), else no area applies.
 Every applicable `+` is added on top of whichever base won.
 A task that touches two areas that both replace the base role runs under the role of the area its deliverable belongs to; the other area's role is added, and the fetch brief says so.
 Fetch settles the areas and the base role, and the plan's first line, `Roles:`, records the result, which `/f10:ship` inherits.
