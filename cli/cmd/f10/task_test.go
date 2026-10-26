@@ -175,7 +175,7 @@ func TestTaskRows(t *testing.T) {
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.script(
-		"gh issue list --json number,title,state,url,labels,body,assignees --limit 30",
+		"gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"unlabelled","state":"OPEN","url":"https://github.com/o/r/issues/8","labels":[]},`+
 			`{"number":9,"title":"two labels","state":"OPEN","url":"https://github.com/o/r/issues/9","labels":[{"name":"p1"},{"name":"P3"}]}]`,
@@ -242,7 +242,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 
 	// the host path, through the declared map
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
-	f.script("gh issue list --json number,title,state,url,labels,body,assignees --limit 30",
+	f.script("gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
 		`[{"number":7,"title":"low","state":"OPEN","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"none","state":"OPEN","labels":[]},`+
 			`{"number":9,"title":"high","state":"OPEN","labels":[{"name":"P1"}]}]`)

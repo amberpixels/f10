@@ -1,0 +1,207 @@
+{
+  "version": 2,
+  "generated_at": "2026-10-26T15:00:00Z",
+  "view": "feed",
+  "project": {
+    "id": "",
+    "name": "",
+    "remote": false
+  },
+  "window": {
+    "since": "2026-10-26T00:00:00Z",
+    "end": "2026-10-27T00:00:00Z",
+    "chosen": "today"
+  },
+  "sources": [],
+  "rows": [],
+  "feed": {
+    "rows": [
+      {
+        "group": "started",
+        "key": "#4",
+        "pr": {
+          "number": 4,
+          "title": "no task here",
+          "url": "https://x.io/pull/no task here",
+          "state": "open",
+          "head": "fix-typo",
+          "base": "main"
+        },
+        "from": "host",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "owes": "dan",
+        "summary": "opened",
+        "at": "2026-10-26T13:00:00Z"
+      },
+      {
+        "group": "started",
+        "key": "FT-3",
+        "task": {
+          "id": "FT-3",
+          "title": "the task with two requests",
+          "url": "https://x.io/issues/3"
+        },
+        "pr": {
+          "number": 3,
+          "title": "FT-3: again",
+          "url": "https://x.io/pull/FT-3: again",
+          "state": "open",
+          "head": "FT-3/b",
+          "base": "main"
+        },
+        "from": "host",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "follow_up_of": [
+          30
+        ],
+        "summary": "second request on FT-3",
+        "at": "2026-10-26T12:00:00Z"
+      },
+      {
+        "group": "updated",
+        "key": "FT-7",
+        "pr": {
+          "number": 7,
+          "title": "FT-7: work",
+          "url": "https://x.io/pull/FT-7: work",
+          "state": "open",
+          "head": "FT-7/a",
+          "base": "main"
+        },
+        "from": "guessed",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "2 commits, merged main, 1 force push",
+        "at": "2026-10-26T11:00:00Z"
+      },
+      {
+        "group": "updated",
+        "key": "FT-8",
+        "pr": {
+          "number": 8,
+          "title": "FT-8: traced",
+          "url": "https://x.io/pull/FT-8: traced",
+          "state": "open",
+          "head": "FT-8/a",
+          "base": "main"
+        },
+        "from": "trace",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "implement: 1 commit",
+        "at": "2026-10-26T08:00:00Z"
+      },
+      {
+        "group": "reviewed",
+        "key": "FT-5",
+        "pr": {
+          "number": 5,
+          "title": "FT-5: review me",
+          "url": "https://x.io/pull/FT-5: review me",
+          "state": "open",
+          "head": "FT-5/a",
+          "base": "main"
+        },
+        "from": "guessed",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "owes": "ann",
+        "summary": "approved by bob",
+        "at": "2026-10-26T11:00:00Z"
+      },
+      {
+        "group": "reviewed",
+        "key": "FT-6",
+        "pr": {
+          "number": 6,
+          "title": "FT-6: resolve",
+          "url": "https://x.io/pull/FT-6: resolve",
+          "state": "open",
+          "head": "FT-6/a",
+          "base": "main"
+        },
+        "from": "trace",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "resolve pushed",
+        "at": "2026-10-26T09:00:00Z"
+      },
+      {
+        "group": "finished",
+        "key": "FT-2",
+        "pr": {
+          "number": 2,
+          "title": "FT-2: drop me",
+          "url": "https://x.io/pull/FT-2: drop me",
+          "state": "closed",
+          "head": "FT-2/a",
+          "base": "main"
+        },
+        "from": "host",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "abandoned": true,
+        "summary": "abandoned",
+        "at": "2026-10-26T10:00:00Z"
+      },
+      {
+        "group": "finished",
+        "key": "FT-1",
+        "pr": {
+          "number": 1,
+          "title": "FT-1: merge me",
+          "url": "https://x.io/pull/FT-1: merge me",
+          "state": "merged",
+          "head": "FT-1/a",
+          "base": "main"
+        },
+        "from": "host",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "merged by bob",
+        "at": "2026-10-26T09:00:00Z"
+      },
+      {
+        "group": "new-tasks",
+        "key": "FT-20",
+        "task": {
+          "id": "FT-20",
+          "title": "a new task",
+          "assignee": "cat",
+          "created": "2026-10-26T07:00:00Z"
+        },
+        "from": "tracker",
+        "who": {
+          "assignees": [
+            "cat"
+          ],
+          "person": "cat"
+        },
+        "summary": "created",
+        "at": "2026-10-26T07:00:00Z"
+      }
+    ],
+    "quiet": {
+      "count": 4,
+      "oldest": "2026-09-01T00:00:00Z"
+    }
+  }
+}

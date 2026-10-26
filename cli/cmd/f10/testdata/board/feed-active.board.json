@@ -1,0 +1,152 @@
+{
+  "version": 2,
+  "generated_at": "2026-10-26T15:00:00Z",
+  "view": "feed",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-26T00:00:00Z",
+    "end": "2026-10-27T00:00:00Z",
+    "chosen": "today"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [],
+  "feed": {
+    "rows": [
+      {
+        "group": "started",
+        "key": "FT-11",
+        "task": {
+          "id": "FT-11",
+          "title": "second go",
+          "url": "https://github.com/acme/widgets/issues/11",
+          "status": "OPEN",
+          "assignee": "cat",
+          "created": "2026-09-01T00:00:00Z"
+        },
+        "pr": {
+          "number": 11,
+          "title": "FT-11: second go",
+          "url": "https://github.com/acme/widgets/pull/11",
+          "state": "open",
+          "head": "FT-11/b",
+          "base": "main"
+        },
+        "from": "host",
+        "who": {
+          "author": "ann",
+          "person": "cat"
+        },
+        "follow_up_of": [
+          5
+        ],
+        "summary": "second request on FT-11",
+        "at": "2026-10-26T09:00:00Z"
+      },
+      {
+        "group": "updated",
+        "key": "FT-14",
+        "pr": {
+          "number": 14,
+          "title": "FT-14: build",
+          "url": "https://github.com/acme/widgets/pull/14",
+          "state": "open",
+          "head": "FT-14/a",
+          "base": "main"
+        },
+        "from": "trace",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "implement: 1 commit, merged main, 1 force push",
+        "at": "2026-10-26T12:00:00Z"
+      },
+      {
+        "group": "reviewed",
+        "key": "FT-13",
+        "pr": {
+          "number": 13,
+          "title": "FT-13: review me",
+          "url": "https://github.com/acme/widgets/pull/13",
+          "state": "open",
+          "head": "FT-13/a",
+          "base": "main"
+        },
+        "from": "guessed",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "owes": "ann",
+        "summary": "changes requested by bob",
+        "at": "2026-10-26T11:00:00Z"
+      },
+      {
+        "group": "finished",
+        "key": "FT-12",
+        "pr": {
+          "number": 12,
+          "title": "FT-12: ship",
+          "url": "https://github.com/acme/widgets/pull/12",
+          "state": "merged",
+          "head": "FT-12/a",
+          "base": "main"
+        },
+        "from": "host",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "merged by bob",
+        "at": "2026-10-26T10:00:00Z"
+      },
+      {
+        "group": "new-tasks",
+        "key": "FT-20",
+        "task": {
+          "id": "FT-20",
+          "title": "a new task",
+          "url": "https://github.com/acme/widgets/issues/20",
+          "status": "OPEN",
+          "assignee": "cat",
+          "created": "2026-10-26T07:00:00Z"
+        },
+        "from": "tracker",
+        "who": {
+          "assignees": [
+            "cat"
+          ],
+          "person": "cat"
+        },
+        "summary": "created",
+        "at": "2026-10-26T07:00:00Z"
+      }
+    ],
+    "quiet": {
+      "count": 8,
+      "oldest": "2026-06-01T00:00:00Z"
+    }
+  }
+}

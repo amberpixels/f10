@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/amberpixels/r3 v0.8.0
+	github.com/amberpixels/years v0.6.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pressly/goose/v3 v3.29.0
@@ -23,6 +24,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/d3rty/json v0.0.2 // indirect
+	github.com/djherbis/times v1.6.0 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect

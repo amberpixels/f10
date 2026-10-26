@@ -61,6 +61,7 @@ func TestSchemaMatchesTypes(t *testing.T) {
 		"Source": reflect.TypeFor[Source](), "Row": reflect.TypeFor[Row](), "Task": reflect.TypeFor[Task](),
 		"Who": reflect.TypeFor[Who](), "Where": reflect.TypeFor[Where](), "PRRef": reflect.TypeFor[PRRef](),
 		"ReviewFacts": reflect.TypeFor[ReviewFacts](), "Next": reflect.TypeFor[Next](),
+		"Feed": reflect.TypeFor[Feed](), "FeedRow": reflect.TypeFor[FeedRow](), "Quiet": reflect.TypeFor[Quiet](),
 	} {
 		def, ok := s.Defs[name]
 		if !ok {
@@ -101,6 +102,8 @@ func TestFixturesFitSchema(t *testing.T) {
 	s := readSchema(t)
 
 	paths, _ := filepath.Glob("testdata/derive/*.board.json")
+	feeds, _ := filepath.Glob("testdata/feed/*.board.json")
+	paths = append(paths, feeds...)
 
 	for _, path := range paths {
 		raw, err := os.ReadFile(path)
@@ -117,11 +120,16 @@ func TestFixturesFitSchema(t *testing.T) {
 	}
 }
 
-// nested names the $defs entry a property's object is.
-var nested = map[string]string{
-	"project": "Project", "window": "Window", "sources": "Source", "rows": "Row", "task": "Task",
-	"who": "Who", "where": "Where", "pr": "PRRef", "review": "ReviewFacts", "next": "Next",
-}
+// nested names the $defs entry a property's object is; inFeed overrides
+// it inside the feed, whose rows are feed rows.
+var (
+	nested = map[string]string{
+		"project": "Project", "window": "Window", "sources": "Source", "rows": "Row", "task": "Task",
+		"who": "Who", "where": "Where", "pr": "PRRef", "review": "ReviewFacts", "next": "Next",
+		"feed": "Feed", "quiet": "Quiet",
+	}
+	inFeed = map[string]string{"Feed.rows": "FeedRow"}
+)
 
 func checkObject(t *testing.T, s schemaDoc, def string, obj map[string]any, at string) {
 	t.Helper()
@@ -133,7 +141,11 @@ func checkObject(t *testing.T, s schemaDoc, def string, obj map[string]any, at s
 			t.Errorf("%s: %s.%s is not in the schema", at, def, key)
 		}
 
-		child, ok := nested[key]
+		child, ok := inFeed[def+"."+key]
+		if !ok {
+			child, ok = nested[key]
+		}
+
 		if !ok {
 			continue
 		}

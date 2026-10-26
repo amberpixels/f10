@@ -104,6 +104,49 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 	}
 	boards["edges"] = edges
 
+	// the feed's shapes the recorded ones lack: a local-only checkout, a
+	// span over several days, a follow-up, an abandoned request, a move owed
+	feed := empty
+	feed.View = lookaround.ViewFeed
+	feed.Project.LocalOnly = true
+	feed.Sources = []lookaround.Source{
+		{Name: lookaround.SourceHost, OK: true, Skipped: true, Notes: []string{localOnly}},
+		{Name: lookaround.SourceTracker, OK: true, Skipped: true},
+		{Name: lookaround.SourceLocal, OK: true},
+	}
+	feed.Window = lookaround.Window{
+		Since: time.Date(2026, 10, 19, 0, 0, 0, 0, time.Local), End: time.Date(2026, 10, 26, 0, 0, 0, 0, time.Local),
+		Chosen: "last-week",
+	}
+	feed.Feed = &lookaround.Feed{
+		Quiet: lookaround.Quiet{Count: 1},
+		Rows: []lookaround.FeedRow{
+			{
+				Group: lookaround.GroupStarted, Key: "FT-2", From: lookaround.FromHost, FollowUpOf: []int{1},
+				PR:      &lookaround.PRRef{Number: 2, Title: "FT-2: again", URL: "https://x.io/pull/2", State: "open"},
+				Who:     lookaround.Who{Author: "ann"},
+				Owes:    "bob",
+				Summary: "second request on FT-2",
+			},
+			{
+				Group: lookaround.GroupFinished, Key: "#3", From: lookaround.FromHost, Abandoned: true,
+				PR:      &lookaround.PRRef{Number: 3, Title: "dropped", State: "closed"},
+				Summary: "abandoned",
+			},
+			{
+				Group: lookaround.GroupNewTasks, Key: "FT-4", From: lookaround.FromTracker,
+				Task: &lookaround.Task{ID: "FT-4", Title: "new"}, Who: lookaround.Who{Assignees: []string{"cat"}},
+				Summary: "created",
+			},
+		},
+	}
+	boards["feed-edges"] = feed
+
+	quiet := feed
+	quiet.Feed = &lookaround.Feed{Rows: []lookaround.FeedRow{}}
+	quiet.Window = lookaround.Window{Since: feed.Window.Since, Chosen: "since 2026-10-19", Fallback: true}
+	boards["feed-empty"] = quiet
+
 	return boards
 }
 

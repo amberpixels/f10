@@ -17,6 +17,12 @@ type Facts struct {
 	Local   *Local // nil when the local collector was skipped or failed
 	People  []Person
 	Sources []Source
+
+	// the feed's: what the host did in the window, each started task's
+	// other requests by id, and a local-only checkout's branch tips
+	Activity *forge.Activity
+	Earlier  map[string][]forge.PR
+	Tips     []Tip
 }
 
 // A Person joins the identities one person has across the sources: the
@@ -51,6 +57,13 @@ type Local struct {
 	Verdicts   map[string]string    // task id to its latest verdict
 	Finished   map[string]bool      // task ids the ledger holds task_finished for
 	Workspaces map[string]Workspace // worktree path to the Herdr workspace on it
+}
+
+// A Tip is a local branch's last commit, what a checkout with no host
+// shows in its feed.
+type Tip struct {
+	Branch string
+	At     time.Time
 }
 
 // A Worktree is one checkout of the repo.

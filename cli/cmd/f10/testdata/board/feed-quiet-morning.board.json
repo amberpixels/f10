@@ -1,0 +1,63 @@
+{
+  "version": 2,
+  "generated_at": "2026-10-26T15:00:00Z",
+  "view": "feed",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "remote": true
+  },
+  "window": {
+    "since": "2026-10-23T00:00:00Z",
+    "end": "2026-10-24T00:00:00Z",
+    "chosen": "last-workday",
+    "fallback": true
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "skipped": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [],
+  "feed": {
+    "rows": [
+      {
+        "group": "updated",
+        "key": "FT-15",
+        "pr": {
+          "number": 15,
+          "title": "FT-15: friday",
+          "url": "https://github.com/acme/widgets/pull/15",
+          "state": "open",
+          "head": "FT-15/a",
+          "base": "main"
+        },
+        "from": "guessed",
+        "who": {
+          "author": "ann",
+          "person": "ann"
+        },
+        "summary": "1 commit",
+        "at": "2026-10-23T09:00:00Z"
+      }
+    ],
+    "quiet": {
+      "count": 2,
+      "oldest": "2026-06-01T00:00:00Z"
+    }
+  }
+}

@@ -15,12 +15,16 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
 // The board checked on recorded runs: each fixture under testdata/board is
 // every git and host call the collectors make, with its answer, the
 // tracker's rows where a driver gives them, this machine's run state and
-// storage files, and beside it the Board JSON out (<name>.board.json).
+// storage files, and beside it the Board JSON out (<name>.board.json). A
+// feed fixture names its window as the argument would, "" for the
+// default, and its span is cut by years at the fixture's now; a call the
+// fixture does not record fails it, so a feed reading per request fails.
 // `{root}` in a call, an answer or a path stands for the main checkout,
 // which the test creates under a temp dir. F10_UPDATE=1 rewrites the
 // boards; read the diff before keeping one.
@@ -33,7 +37,9 @@ import (
 // Record only from public amberpixels repositories.
 type boardFixture struct {
 	Now    time.Time              `json:"now"`
-	Since  time.Time              `json:"since"`
+	Since  time.Time              `json:"since"`            // the state view's done window
+	Feed   bool                   `json:"feed,omitempty"`   // the feed view instead of the state
+	Window string                 `json:"window,omitempty"` // the feed's window argument
 	Prefix string                 `json:"prefix"`
 	Host   string                 `json:"host"`
 	Remote bool                   `json:"remote,omitempty"`
@@ -182,7 +188,28 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 		return boardTasks(rows, fx.Prefix), nil
 	}
 
-	board := lookaround.Derive(lookaround.Collect(t.Context(), in), fx.Now, fx.Since)
+	var board lookaround.Board
+
+	if fx.Feed {
+		span, err := resolveBoardSpan(fx.Window, false, fx.Now, func() (standup.Workdays, error) {
+			return standup.DefaultWorkdays(), nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		in.Since, in.Feed = span.from(), true
+		facts := lookaround.Collect(t.Context(), in)
+
+		w := lookaround.ChooseWindow(span.today, span.lastWorkday, facts)
+		if span.named != nil {
+			w = *span.named
+		}
+
+		board = lookaround.DeriveFeed(facts, fx.Now, w)
+	} else {
+		board = lookaround.Derive(lookaround.Collect(t.Context(), in), fx.Now, fx.Since)
+	}
 
 	// the temp root is the machine's, not the fixture's
 	board.Project.Checkout = sub2(board.Project.Checkout, root)
@@ -232,7 +259,7 @@ func TestRecordBoardFixture(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	fx := boardFixture{
 		Now:    now,
-		Since:  now.Add(-boardWindow),
+		Since:  now.Add(-boardStateWindow),
 		Prefix: parts[2],
 		Host:   "gh",
 		Calls:  map[string]fixtureCall{},

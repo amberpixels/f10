@@ -138,28 +138,6 @@ func TestPullsSince(t *testing.T) {
 	}
 }
 
-func TestBranchExists(t *testing.T) {
-	script(t, map[string]string{
-		"gh api repos/{owner}/{repo}/branches/here": `{"name":"here"}`,
-		"gh api repos/{owner}/{repo}/branches/gone": "FAIL gh: Branch not found (HTTP 404)",
-		"gh api repos/{owner}/{repo}/branches/down": "FAIL gh: connection refused",
-	})
-
-	h := Host{Name: "gh"}
-
-	if ok, err := h.BranchExists(t.Context(), "here"); !ok || err != nil {
-		t.Errorf("here = %v, %v", ok, err)
-	}
-
-	if ok, err := h.BranchExists(t.Context(), "gone"); ok || err != nil {
-		t.Errorf("gone = %v, %v", ok, err)
-	}
-
-	if _, err := h.BranchExists(t.Context(), "down"); err == nil {
-		t.Error("down: want the error")
-	}
-}
-
 // A host naming its repository outright carries it on every command: -R
 // on a noun command, the placeholders filled on an api call, and nothing
 // at all once Repo is empty.

@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "generated_at": "2026-10-23T12:00:00Z",
+  "view": "state",
   "project": {
     "id": "github.com/acme/widgets",
     "name": "widgets",
@@ -72,7 +73,7 @@
         "status": "OPEN"
       },
       "stage": "next",
-      "stage_from": "guessed",
+      "stage_from": "tracker",
       "who": {},
       "where": {},
       "next": {

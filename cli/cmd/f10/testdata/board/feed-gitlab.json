@@ -1,0 +1,28 @@
+{
+  "now": "2026-10-26T15:00:00Z",
+  "since": "2026-10-19T15:00:00Z",
+  "feed": true,
+  "prefix": "FT",
+  "host": "glab",
+  "remote": true,
+  "calls": {
+    "glab api --paginate projects/:fullpath/merge_requests?per_page=100&state=all&updated_after=2026-10-23T00%3A00%3A00Z": {
+      "stdout": "[{\"iid\": 4, \"title\": \"FT-4: land\", \"state\": \"merged\", \"source_branch\": \"FT-4/a\", \"target_branch\": \"main\", \"web_url\": \"https://gitlab.com/acme/widgets/-/merge_requests/4\", \"author\": {\"username\": \"ann\"}, \"created_at\": \"2026-10-20T00:00:00Z\", \"merged_at\": \"2026-10-26T09:00:00Z\", \"merged_by\": {\"username\": \"bob\"}}]"
+    },
+    "glab api --paginate projects/:fullpath/merge_requests?order_by=created_at&per_page=100&sort=asc&state=opened&updated_before=2026-10-23T00%3A00%3A00Z": {
+      "stdout": "[{\"iid\": 1, \"state\": \"opened\", \"created_at\": \"2026-05-01T00:00:00Z\"}]"
+    },
+    "glab api --paginate projects/:fullpath/merge_requests/4/commits?per_page=100": {
+      "stdout": "[{\"id\": \"a\", \"message\": \"land it\", \"authored_date\": \"2026-10-26T08:00:00Z\", \"parent_ids\": [\"p\"]}]"
+    },
+    "glab api --paginate projects/:fullpath/merge_requests/4/notes?per_page=100": {
+      "stdout": "[]"
+    },
+    "glab api --paginate projects/:fullpath/merge_requests/4/versions?per_page=100": {
+      "stdout": "[]"
+    },
+    "glab issue list --output json --per-page 100": {
+      "stdout": "[]"
+    }
+  }
+}

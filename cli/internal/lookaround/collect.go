@@ -14,7 +14,18 @@ import (
 type Inputs struct {
 	Project Project
 	Prefix  string
-	Since   time.Time
+	// Since is where reading starts: the state view's done window, or the
+	// earliest span the feed may show.
+	Since time.Time
+
+	// Feed reads what changed since Since instead of where every task
+	// stands: the host's activity, the tracker's list, and nothing local
+	// unless the checkout is local only.
+	Feed bool
+
+	// LocalOnly is a checkout with no origin remote: the host is skipped,
+	// and the tracker too unless a driver answers it (Tasks set).
+	LocalOnly bool
 
 	Host      *forge.Host
 	HostError string // why there is no host, for the source's error
@@ -61,35 +72,70 @@ func Collect(ctx context.Context, in Inputs) Facts {
 		f.Sources = append(f.Sources, s)
 	}
 
-	timed(SourceHost, func() ([]string, error) {
-		if in.Host == nil {
-			return nil, errors.New(cmp.Or(in.HostError, "no host CLI"))
-		}
+	skip := func(name string) { f.Sources = append(f.Sources, Source{Name: name, OK: true, Skipped: true}) }
 
-		prs, notes, err := collectHost(ctx, in)
-		if err == nil {
-			f.PRs = prs
-		}
+	switch {
+	case in.LocalOnly:
+		f.Sources = append(f.Sources, Source{Name: SourceHost, OK: true, Skipped: true, Notes: []string{"local only"}})
+	case in.Feed:
+		timed(SourceHost, func() ([]string, error) {
+			if in.Host == nil {
+				return nil, errors.New(cmp.Or(in.HostError, "no host CLI"))
+			}
 
-		return notes, err
-	})
+			a, earlier, notes, err := collectActivity(ctx, in)
+			if err == nil {
+				f.Activity, f.Earlier = a, earlier
+			}
 
-	timed(SourceTracker, func() ([]string, error) {
-		if in.Tasks == nil {
-			return nil, errors.New("no tracker")
-		}
+			return notes, err
+		})
+	default:
+		timed(SourceHost, func() ([]string, error) {
+			if in.Host == nil {
+				return nil, errors.New(cmp.Or(in.HostError, "no host CLI"))
+			}
 
-		tasks, err := in.Tasks(ctx)
-		if err == nil {
-			f.Tasks = tasks
-		}
+			prs, notes, err := collectHost(ctx, in)
+			if err == nil {
+				f.PRs = prs
+			}
 
-		return nil, err
-	})
+			return notes, err
+		})
+	}
+
+	if in.LocalOnly && in.Tasks == nil {
+		skip(SourceTracker)
+	} else {
+		timed(SourceTracker, func() ([]string, error) {
+			if in.Tasks == nil {
+				return nil, errors.New("no tracker")
+			}
+
+			tasks, err := in.Tasks(ctx)
+			if err == nil {
+				f.Tasks = tasks
+			}
+
+			return nil, err
+		})
+	}
 
 	switch {
 	case in.Remote || in.Local == nil:
-		f.Sources = append(f.Sources, Source{Name: SourceLocal, OK: true, Skipped: true})
+		skip(SourceLocal)
+	case in.Feed && in.LocalOnly:
+		timed(SourceLocal, func() ([]string, error) {
+			tips, err := collectTips(ctx, in.Local.Main)
+			if err == nil {
+				f.Tips = tips
+			}
+
+			return nil, err
+		})
+	case in.Feed:
+		skip(SourceLocal)
 	default:
 		timed(SourceLocal, func() ([]string, error) {
 			l, notes, err := collectLocal(ctx, *in.Local, now())
@@ -109,9 +155,13 @@ func Collect(ctx context.Context, in Inputs) Facts {
 // CLI. Every source carries the error, so a reader of several boards sees
 // the project failed rather than empty; a project with no checkout keeps
 // its local source skipped, as a remote read does.
-func Unreachable(p Project, err error, now, since time.Time) Board {
+func Unreachable(p Project, err error, now time.Time, w Window, view string) Board {
 	b := Board{
-		Version: Version, GeneratedAt: now, Project: p, Window: Window{Since: since}, Rows: []Row{},
+		Version: Version, GeneratedAt: now, View: view, Project: p, Window: w, Rows: []Row{},
+	}
+
+	if view == ViewFeed {
+		b.Feed = &Feed{Rows: []FeedRow{}}
 	}
 
 	for _, name := range []string{SourceHost, SourceTracker, SourceLocal} {
