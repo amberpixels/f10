@@ -75,10 +75,12 @@ The full reference for humans is `docs/project-setup.md`.
 - **Roles** - **Always** for every run, **Conditional** when the task touches a named area.
   A bullet `+ <role>` adds a role on top of the base role ("+ senior UI/UX engineer on user-facing UI"); `= <role>` sets the base role, replacing the step's `Role:` line.
   A step list scopes either (`plan, judge: = senior marketing analyst`); none means every step.
-  A role named per step in prose ("plan as a **senior software architect**") is an `=` for that step.
-  The base role is, highest first: an applicable **Conditional** `=`, the step overlay's own `Role:` line, an **Always** `=`, the generic step's `Role:`; between layers, the worktree's wins at the same rank.
+  A role named per step in prose ("plan as a **senior software architect**") adds, like `+`; only `=` replaces.
+  The base role is, highest first: an applicable **Conditional** `=`, the step overlay's own `Role:` line, an **Always** `=`, the generic step's `Role:`.
+  At the same rank a step-scoped `=` beats an unscoped one, and the worktree's beats main's; two left tied are a contradiction, said rather than picked.
   Every applicable `+` adds on top of whichever base won.
   `fetch` settles the areas and the base role; two applicable Conditional `=` roles leave the deliverable's area as the base and the other as an added role, named in the brief.
+  A step that runs before fetch or without its brief (capture, brainstorm, a standalone judge) takes the areas from the task's _Areas_ note, else none apply.
   The plan's `Roles` line records the result for `/f10:ship`.
 - **Review** - categories, a never-flag list and a human reviewer (`steps/review.md`).
 - **Guardrails** - domain rules the plan and its code must honour: a UI component gallery, PII handling, preferred dependencies.
