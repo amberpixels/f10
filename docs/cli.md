@@ -329,6 +329,7 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    Then, optionally, the chain: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, each once, `finish` last; arrows and commas between them are ignored.
    No chain named: `project.md → Drive chain`, else `plan → judge → ship → review → resolve → finish`.
+   When the `default` pipeline is planless, `plan` drops out of that chain; a chain named here runs as typed.
    `--model`, `--answer` and `--every` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--model` starts every agent on that model, read as start reads it; `<id>:<model>` starts one task's agent on its own, which wins (`42:sonnet 43 --model opus`).

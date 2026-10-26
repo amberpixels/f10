@@ -21,7 +21,7 @@ Rendered in that order: every `Task:`, then `Step:`, then `Review:`.
 `implement` for the pipeline's code, whichever delivery step (`commit`, `push`, `pr`) made the commit, since those steps carry implement's work and have none of their own; `resolve` for a review's fixes; `judge` for a judge's changes after the PR; `catchup` for a merge commit or a fix-up that brings the base in; a project-defined step's own name for its commits.
 A step name is a lowercase token (`[a-z][a-z0-9-]*`).
 
-A commit with no task (a planless pipeline) carries `Step:` alone; no id is ever invented.
+A commit with no task (free-text planless work) carries `Step:` alone; no id is ever invented.
 
 ```
 Guard the empty list

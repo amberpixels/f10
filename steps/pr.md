@@ -10,7 +10,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
 2. **The branch carries the task id**, where the run has one: `ABC-1042/dark-mode`, `feat/GH-22-lookaround`, whatever shape the project uses.
    The shape is the project's; the id being in it is not.
    `f10 task read` with no argument reads the id back out of the branch, so a branch without it breaks the chain later, silently.
-   A run with no task id (a planless pipeline, free-text work) names its branch however the project does.
+   A run with no task id (free-text planless work) names its branch however the project does.
 3. **Open or refresh.**
    `gh pr view --json state,number,url,title,body,author,baseRefName` / `glab mr view -F json` (`state`, `iid`, `web_url`, `title`, `description`, `author.username`, `target_branch`) on the current branch.
    Only an open PR counts (`OPEN`, `opened` on GitLab): one merged or closed, or none, means open a new one (points 4 and 5); an open one means refresh it (point 6).

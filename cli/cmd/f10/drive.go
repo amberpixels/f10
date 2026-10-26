@@ -48,7 +48,7 @@ func driveCommand() *cli.Command {
 		ArgsUsage: "<id>[:model]... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
 			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]",
 		Description: "The chain defaults to project.md's Drive chain, else " +
-			"plan → judge → ship → review → resolve → finish.\n" +
+			"plan → judge → ship → review → resolve → finish; plan drops out of it when the default pipeline is planless.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
 			"every task whose base is finished runs at once, and a halt stops only its dependents.\n" +
 			"--model starts every agent on MODEL; <id>:<model> starts one task's agent on its own, which wins.\n" +
@@ -109,6 +109,15 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	if len(chain) == 0 {
 		if chain, err = parseChain(t.eff.DriveChain); err != nil {
 			return fmt.Errorf("project.md Drive chain: %w", err)
+		}
+
+		var dropped bool
+		if chain, dropped = planlessChain(chain, t.eff.Planless); dropped {
+			fmt.Fprintln(cmd.Writer, "plan skipped: the default pipeline is planless")
+		}
+
+		if len(chain) == 0 {
+			return errors.New("project.md Drive chain: only plan, and the default pipeline is planless")
 		}
 	}
 
@@ -308,6 +317,16 @@ func parseChain(declared []string) ([]string, error) {
 	}
 
 	return chain, checkChain(chain)
+}
+
+// planlessChain drops plan from a declared chain when the default pipeline,
+// the one a driven ship runs, is planless: its ship writes no plan file.
+func planlessChain(chain, planless []string) ([]string, bool) {
+	if !slices.Contains(planless, "default") || !slices.Contains(chain, "plan") {
+		return chain, false
+	}
+
+	return slices.DeleteFunc(slices.Clone(chain), func(s string) bool { return s == "plan" }), true
 }
 
 // checkChain refuses a skill outside the vocabulary, and one named twice:

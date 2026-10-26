@@ -892,6 +892,30 @@ func TestParseChain(t *testing.T) {
 	}
 }
 
+func TestPlanlessChain(t *testing.T) {
+	full := strings.Fields("plan judge ship finish")
+
+	for _, c := range []struct {
+		chain, planless []string
+		want            string
+		dropped         bool
+	}{
+		{full, []string{"default"}, "judge ship finish", true},
+		{full, []string{"direct"}, "plan judge ship finish", false},
+		{full, nil, "plan judge ship finish", false},
+		{[]string{"ship", "finish"}, []string{"default"}, "ship finish", false},
+	} {
+		got, dropped := planlessChain(c.chain, c.planless)
+		if strings.Join(got, " ") != c.want || dropped != c.dropped {
+			t.Errorf("%q with planless %q = %q, %v", c.chain, c.planless, got, dropped)
+		}
+	}
+
+	if strings.Join(full, " ") != "plan judge ship finish" {
+		t.Errorf("the declared chain changed: %q", full)
+	}
+}
+
 func TestSkillPrompt(t *testing.T) {
 	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
 
