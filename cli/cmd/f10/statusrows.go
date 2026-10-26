@@ -48,6 +48,8 @@ type taskRow struct {
 	Note    string `json:"note,omitempty"`
 	Next    string `json:"next,omitempty"`
 	Ask     string `json:"ask,omitempty"`
+	// a finished task alone: what its last ship run went through
+	History *runHistory `json:"history,omitempty"`
 }
 
 // rowFacts is what a row's stage is decided from: the task's run, live in
@@ -419,10 +421,8 @@ func renderRows(w io.Writer, rows []taskRow, limit int) {
 			pr)
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 
-		for _, sub := range [][2]string{{"ask", r.Ask}, {"halt", r.Note}, {"next", r.Next}} {
-			if sub[1] != "" {
-				fmt.Fprintf(w, "%s%s %s\n", indent, faint.Render(sub[0]+":"), sub[1])
-			}
+		for _, sub := range r.subLines() {
+			fmt.Fprintf(w, "%s%s %s\n", indent, faint.Render(sub[0]+":"), sub[1])
 		}
 	}
 }
@@ -461,12 +461,28 @@ func markdownRows(w io.Writer, rows []taskRow) {
 			strings.Repeat("\u00a0\u00a0", r.Depth), link(r.URL, r.ID),
 			r.Stage, cell(r.Title), cell(r.Step), pr)
 
-		for _, sub := range [][2]string{{"ask", r.Ask}, {"halt", r.Note}, {"next", r.Next}} {
-			if sub[1] != "" {
-				fmt.Fprintf(w, "| | | %s: %s | | |\n", sub[0], cell(sub[1]))
-			}
+		for _, sub := range r.subLines() {
+			fmt.Fprintf(w, "| | | %s: %s | | |\n", sub[0], cell(sub[1]))
 		}
 	}
+}
+
+// subLines is what prints under a row: the ask, the halt reason and what
+// unblocks it, then a finished task's history.
+func (row *taskRow) subLines() [][2]string {
+	var out [][2]string
+
+	for _, sub := range [][2]string{{"ask", row.Ask}, {"halt", row.Note}, {"next", row.Next}} {
+		if sub[1] != "" {
+			out = append(out, sub)
+		}
+	}
+
+	if row.History != nil {
+		out = append(out, row.History.lines()...)
+	}
+
+	return out
 }
 
 // prColumn is `#128`, with the state beside it unless the PR is open.
@@ -528,7 +544,9 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	tr := t.tracker()
 	info, _ := tr.info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
-	if !finishedTask(info, tr.archive, r.ID, false) && !ledgerFor(src.events, r.ID, src.idOf).finished {
+	lt := ledgerFor(src.events, r.ID, src.idOf)
+
+	if !finishedTask(info, tr.archive, r.ID, false) && !lt.finished {
 		return nil, nil
 	}
 
@@ -538,6 +556,13 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	}
 
 	rows := src.rowsFrom(ctx, []childRow{k})
+
+	shared := ""
+	if t.sharedPlansDir() != "" {
+		shared = t.lay.StorageRoot
+	}
+
+	rows[0].History = claimHistory(src.events, lt.claim, shared)
 
 	return &rows[0], nil
 }

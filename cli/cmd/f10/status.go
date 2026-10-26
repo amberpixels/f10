@@ -16,6 +16,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -53,6 +54,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 
 	var (
 		runs     []*state.Run
+		hist     []*runHistory
 		showRoot bool
 	)
 
@@ -108,6 +110,8 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 
 			return nil
 		}
+
+		hist = finishedHistories(ctx, t, runs)
 	case sid != "" && !all:
 		r, err := state.Load(state.Path(dir, sid))
 		if errors.Is(err, os.ErrNotExist) {
@@ -152,8 +156,17 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	if hist == nil {
+		hist = make([]*runHistory, len(runs))
+	}
+
 	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, runs)
+		out := make([]runJSON, len(runs))
+		for i, r := range runs {
+			out[i] = runJSON{Run: r, History: hist[i]}
+		}
+
+		return encodeJSON(cmd.Writer, out)
 	}
 
 	limit := termWidth(cmd.Writer)
@@ -163,7 +176,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			fmt.Fprintln(cmd.Writer)
 		}
 
-		renderRun(cmd.Writer, r, showRoot, now, limit)
+		renderRun(cmd.Writer, r, hist[i], showRoot, now, limit)
 	}
 
 	return nil
@@ -410,10 +423,43 @@ func canonPath(p string) string {
 	return p
 }
 
+// runJSON is a run as --json prints it, a finished run's history beside
+// the state's own keys.
+type runJSON struct {
+	*state.Run
+
+	History *runHistory `json:"history,omitempty"`
+}
+
+// finishedHistories is the history of each run whose ship phase is done,
+// nil for the rest; the ledger is read only when one is.
+//
+//nolint:lostfield // the history comes from the ledger and the files, not the run
+func finishedHistories(ctx context.Context, t *target, runs []*state.Run) []*runHistory {
+	hist := make([]*runHistory, len(runs))
+
+	var events []ledger.Event
+
+	for i, r := range runs {
+		if r.Ship != "done" {
+			continue
+		}
+
+		if events == nil {
+			events = readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot))
+		}
+
+		hist[i] = doneHistory(events, r, layout.Locate(ctx, r.Root).StorageRoot)
+	}
+
+	return hist
+}
+
 // renderRun prints one run as the label/value block config uses, in the
-// order `f10 state show` prints the same facts. The root row appears only
-// when listing: for one session it is the directory you are in.
-func renderRun(w io.Writer, r *state.Run, showRoot bool, now time.Time, limit int) {
+// order `f10 state show` prints the same facts, then a finished run's
+// history when h holds one. The root row appears only when listing: for
+// one session it is the directory you are in.
+func renderRun(w io.Writer, r *state.Run, h *runHistory, showRoot bool, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
@@ -442,6 +488,12 @@ func renderRun(w io.Writer, r *state.Run, showRoot bool, now time.Time, limit in
 
 	if r.Final != "" {
 		headerRow(w, "final", r.Final, limit, faint)
+	}
+
+	if h != nil {
+		for _, l := range h.lines() {
+			headerRow(w, l[0], l[1], limit, plain)
+		}
 	}
 
 	age := ago(now, r.Updated)
