@@ -10,7 +10,7 @@
     "gh pr list --state all --search is:merged merged:>=2026-10-16T12:00:00Z --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000": {
       "stdout": "[]"
     },
-    "gh issue list --json number,title,state,url,labels,body,assignees --limit 100": {
+    "gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 100": {
       "stdout": "[{\"number\": 7, \"title\": \"rate limit\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/7\", \"labels\": [], \"body\": \"\"}, {\"number\": 8, \"title\": \"quotas\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/8\", \"labels\": [], \"body\": \"After: FT-7\"}, {\"number\": 9, \"title\": \"export\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/9\", \"labels\": [], \"body\": \"\"}]"
     },
     "git worktree list --porcelain": {

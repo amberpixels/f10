@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -33,15 +34,17 @@ func (h host) at(dir string) host { return host{h.At(dir)} }
 
 // issue is the union of the two CLIs' issue shapes, tagged for both.
 type issue struct {
-	Number      int    `json:"number"`
-	IID         int    `json:"iid"`
-	Title       string `json:"title"`
-	State       string `json:"state"`
-	URL         string `json:"url"`
-	WebURL      string `json:"web_url"`
-	Body        string `json:"body"`
-	Description string `json:"description"`
-	Labels      labels `json:"labels"`
+	Number      int       `json:"number"`
+	IID         int       `json:"iid"`
+	Title       string    `json:"title"`
+	State       string    `json:"state"`
+	URL         string    `json:"url"`
+	WebURL      string    `json:"web_url"`
+	Body        string    `json:"body"`
+	Description string    `json:"description"`
+	Labels      labels    `json:"labels"`
+	CreatedAt   time.Time `json:"createdAt"`
+	CreatedAtGL time.Time `json:"created_at"`
 
 	Assignees []struct {
 		Login    string `json:"login"`
@@ -255,7 +258,13 @@ func (h host) listIssues(
 		glabArgs = append(glabArgs, "--search", query)
 	}
 
-	ghArgs = append(ghArgs, "--json", "number,title,state,url,labels,body,assignees", "--limit", strconv.Itoa(limit))
+	ghArgs = append(
+		ghArgs,
+		"--json",
+		"number,title,state,url,labels,body,assignees,createdAt",
+		"--limit",
+		strconv.Itoa(limit),
+	)
 	glabArgs = append(glabArgs, "--output", "json", "--per-page", strconv.Itoa(limit))
 
 	var found []issue
@@ -279,6 +288,7 @@ func (h host) listIssues(
 			URL:      iss.url(),
 			Priority: priorityOf(iss.Labels, priorities),
 			After:    afterIn(iss.body()),
+			Created:  cmp.Or(iss.CreatedAt, iss.CreatedAtGL),
 		}
 
 		if len(iss.Assignees) > 0 {

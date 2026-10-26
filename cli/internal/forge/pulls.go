@@ -70,6 +70,7 @@ type PRCommit struct {
 	Message string // the whole message, trailers included
 	Email   string // the author's email, as the commit records it
 	At      time.Time
+	Parents int // more than one is a merge
 }
 
 // A Review is one review event on a PR: a submitted review, an approval or
@@ -419,31 +420,6 @@ func (h Host) PullsSince(ctx context.Context, since time.Time) ([]PR, error) {
 	return append(open, merged...), nil
 }
 
-// BranchExists reports whether the host still has branch: after a merge
-// that deleted it, the answer is false.
-func (h Host) BranchExists(ctx context.Context, branch string) (bool, error) {
-	// GitHub takes the branch's slashes as they are and the rest escaped;
-	// GitLab wants the whole name as one escaped segment
-	segments := strings.Split(branch, "/")
-	for i, s := range segments {
-		segments[i] = url.PathEscape(s)
-	}
-
-	_, err := h.Run(ctx, h.Pick(
-		[]string{"api", "repos/{owner}/{repo}/branches/" + strings.Join(segments, "/")},
-		[]string{"api", "projects/:fullpath/repository/branches/" + url.PathEscape(branch)},
-	)...)
-	if err == nil {
-		return true, nil
-	}
-
-	if strings.Contains(err.Error(), "404") {
-		return false, nil
-	}
-
-	return false, err
-}
-
 // DefaultBranchName is the repo's default branch as the host has it.
 func (h Host) DefaultBranchName(ctx context.Context) (string, error) {
 	var repo struct {
@@ -479,7 +455,10 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 	)[0]
 
 	commits, err := DecodePages[struct {
-		SHA    string `json:"sha"`
+		SHA     string `json:"sha"`
+		Parents []struct {
+			SHA string `json:"sha"`
+		} `json:"parents"`
 		Commit struct {
 			Message string `json:"message"`
 			Author  struct {
@@ -493,6 +472,7 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 		Message      string    `json:"message"`
 		AuthorEmail  string    `json:"author_email"`
 		AuthoredDate time.Time `json:"authored_date"`
+		ParentIDs    []string  `json:"parent_ids"`
 	}](ctx, h, path)
 	if err != nil {
 		return nil, err
@@ -512,6 +492,7 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 			Message: message,
 			Email:   cmp.Or(c.Commit.Author.Email, c.AuthorEmail),
 			At:      cmp.Or(c.Commit.Author.Date, c.AuthoredDate),
+			Parents: max(len(c.Parents), len(c.ParentIDs)),
 		})
 	}
 

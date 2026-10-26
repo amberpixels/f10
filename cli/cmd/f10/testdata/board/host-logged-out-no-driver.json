@@ -20,7 +20,7 @@
     "git log --no-show-signature --format=%H %ae origin/main..FT-2/widgets": {
       "stdout": "00000000000000000000000000000000000000a1 ann@acme.example"
     },
-    "gh issue list --json number,title,state,url,labels,body,assignees --limit 100": {
+    "gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 100": {
       "code": 1,
       "stderr": "gh: To get started with GitHub CLI, please run:  gh auth login"
     }

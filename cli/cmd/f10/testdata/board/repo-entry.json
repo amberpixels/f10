@@ -11,11 +11,10 @@
     "gh pr list --state all --search is:merged merged:>=2026-10-16T12:00:00Z --json number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees,reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,createdAt,updatedAt,mergedAt,mergedBy,closedAt,body,mergeCommit --limit 1000 -R acme/widgets": {
       "stdout": "[{\"number\": 6, \"title\": \"FT-6: login\", \"state\": \"MERGED\", \"headRefName\": \"FT-6/login\", \"baseRefName\": \"main\", \"url\": \"https://github.com/acme/widgets/pull/6\", \"author\": {\"login\": \"bob\"}, \"updatedAt\": \"2026-10-19T10:00:00Z\", \"mergedAt\": \"2026-10-19T10:00:00Z\", \"body\": \"\"}]"
     },
-    "gh api repos/acme/widgets/branches/FT-6/login": {
-      "code": 1,
-      "stderr": "gh: Branch not found (HTTP 404)"
+    "gh api --paginate repos/acme/widgets/branches?per_page=100": {
+      "stdout": "[{\"name\":\"main\"}]"
     },
-    "gh issue list --json number,title,state,url,labels,body,assignees --limit 100 -R acme/widgets": {
+    "gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 100 -R acme/widgets": {
       "stdout": "[{\"number\": 7, \"title\": \"rate limit\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/7\", \"labels\": [], \"body\": \"\", \"assignees\": [{\"login\": \"ann\"}]}, {\"number\": 9, \"title\": \"export\", \"state\": \"OPEN\", \"url\": \"https://github.com/acme/widgets/issues/9\", \"labels\": [], \"body\": \"\", \"assignees\": []}]"
     }
   }

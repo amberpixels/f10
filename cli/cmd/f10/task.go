@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
@@ -343,6 +344,8 @@ type row struct {
 	After    string `json:"after,omitempty"`    // the base its body's After: line names, where the source gives one
 	Body     string `json:"body,omitempty"`     // read for its After: line; never printed
 	Assignee string `json:"assignee,omitempty"` // the tracker's assignee, where the source gives one
+	// Created is when the tracker created the task, where the source says.
+	Created time.Time `json:"created,omitzero"`
 }
 
 // settlePriorities keeps each row's priority in its canonical form and

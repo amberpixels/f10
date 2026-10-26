@@ -354,3 +354,36 @@ func canon(p string) string {
 
 	return p
 }
+
+// collectTips is every local branch's last commit time, one git call: the
+// feed of a checkout with no host to read.
+func collectTips(ctx context.Context, main string) ([]Tip, error) {
+	out, err := gitx.Exec(
+		ctx,
+		main,
+		"for-each-ref",
+		"--format=%(refname:short) %(committerdate:iso-strict)",
+		"refs/heads/",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var tips []Tip
+
+	for line := range strings.SplitSeq(out, "\n") {
+		name, at, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+
+		t, err := time.Parse(time.RFC3339, at)
+		if err != nil {
+			continue
+		}
+
+		tips = append(tips, Tip{Branch: name, At: t})
+	}
+
+	return tips, nil
+}

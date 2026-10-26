@@ -2,18 +2,25 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/amberpixels/f10/docs/board.schema.json",
   "title": "Board",
-  "description": "Where every task of one project stands; docs/board.md is the spec.",
+  "description": "What changed in a project's window (the feed) or where every task stands (the state); docs/board.md is the spec.",
   "$ref": "#/$defs/Board",
   "$defs": {
     "Board": {
       "type": "object",
       "properties": {
         "version": {
-          "const": 1
+          "const": 2
         },
         "generated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "feed",
+            "state"
+          ]
         },
         "project": {
           "$ref": "#/$defs/Project"
@@ -32,12 +39,16 @@
           "items": {
             "$ref": "#/$defs/Row"
           }
+        },
+        "feed": {
+          "$ref": "#/$defs/Feed"
         }
       },
       "additionalProperties": false,
       "required": [
         "version",
         "generated_at",
+        "view",
         "project",
         "window",
         "sources",
@@ -65,6 +76,9 @@
         },
         "remote": {
           "type": "boolean"
+        },
+        "local_only": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -80,6 +94,16 @@
         "since": {
           "type": "string",
           "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "chosen": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -153,6 +177,7 @@
           "enum": [
             "local",
             "trace",
+            "tracker",
             "guessed"
           ]
         },
@@ -218,6 +243,10 @@
         },
         "after": {
           "type": "string"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time"
         }
       },
       "additionalProperties": false,
@@ -372,6 +401,105 @@
         }
       },
       "additionalProperties": false
+    },
+    "Feed": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FeedRow"
+          }
+        },
+        "quiet": {
+          "$ref": "#/$defs/Quiet"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "rows",
+        "quiet"
+      ]
+    },
+    "Quiet": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "oldest": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "count"
+      ]
+    },
+    "FeedRow": {
+      "type": "object",
+      "properties": {
+        "group": {
+          "type": "string",
+          "enum": [
+            "started",
+            "updated",
+            "reviewed",
+            "finished",
+            "new-tasks"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/Task"
+        },
+        "pr": {
+          "$ref": "#/$defs/PRRef"
+        },
+        "from": {
+          "type": "string",
+          "enum": [
+            "local",
+            "trace",
+            "host",
+            "tracker",
+            "guessed"
+          ]
+        },
+        "who": {
+          "$ref": "#/$defs/Who"
+        },
+        "owes": {
+          "type": "string"
+        },
+        "abandoned": {
+          "type": "boolean"
+        },
+        "follow_up_of": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "group",
+        "key",
+        "from",
+        "who",
+        "at"
+      ]
     }
   }
 }

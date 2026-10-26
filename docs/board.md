@@ -1,15 +1,18 @@
-# The board, version 1
+# The board, version 2
 
-Where every task of a project stands: done lately, in progress at which stage and who owes the next move, and what comes next.
+What changed in a project over a calendar window (**the feed**, `view: feed`, the default), or where every task of it stands: done lately, in progress at which stage and who owes the next move, and what comes next (**the state**, `view: state`, `f10 board --state`).
 `f10 board` prints it; `--json` prints the **Board JSON** this file specifies, `docs/board.schema.json` is its JSON Schema, and `cli/internal/lookaround` the one implementation.
-A renderer (the terminal, the HTML report) draws the JSON and decides no stage; the board skill prints the terminal's drawing.
+A renderer (the terminal, the HTML report) draws the JSON and decides no group or stage; the board skill prints the terminal's drawing.
 
 ## Shape
 
+The state view:
+
 ```json
 {
-  "version": 1,
+  "version": 2,
   "generated_at": "2026-10-23T12:00:00Z",
+  "view": "state",
   "project": { "id": "github.com/acme/widgets", "name": "widgets", "host": "gh", "checkout": "/code/widgets", "remote": false },
   "window": { "since": "2026-10-16T12:00:00Z" },
   "sources": [
@@ -36,12 +39,14 @@ A renderer (the terminal, the HTML report) draws the JSON and decides no stage; 
 
 | field | meaning |
 |---|---|
-| `version` | `1`, this version of the spec |
+| `version` | `2`, this version of the spec |
 | `generated_at` | when the board was derived |
-| `project` | `id` is the normalised remote (`github.com/org/repo`); `name` the main checkout's basename; `host` `gh` or `glab`; `checkout` the main checkout, absent with `--remote`; `remote` true when the local collector was skipped |
-| `window.since` | the start of the period `done` rows cover |
-| `sources` | one entry per collector, in order `host`, `tracker`, `local`: `ok`, `skipped` (on purpose), `error` (why it failed), `notes` (what it could not read, the rest kept), `took_ms` |
-| `rows` | the rows, in stage order (below), `next` rows by priority then the tracker's order, the rest by last activity |
+| `view` | `feed` or `state` |
+| `project` | `id` is the normalised remote (`github.com/org/repo`); `name` the main checkout's basename; `host` `gh` or `glab`; `checkout` the main checkout, absent with `--remote`; `remote` true when the local collector was skipped; `local_only` true for a checkout with no origin remote |
+| `window` | `since`, the start of the feed's span or of the period the state's `done` rows cover; for the feed, `end` (exclusive; absent for a span from a time until now), `chosen` (the window named, `since <time>` for a time, or the default's pick: `today` or `last-workday`) and `fallback` (true when the default fell back because today has no activity yet) |
+| `sources` | one entry per collector, in order `host`, `tracker`, `local`: `ok`, `skipped` (on purpose), `error` (why it failed), `notes` (what it could not read, the rest kept; `local only` on a local-only checkout's skipped host), `took_ms` |
+| `rows` | the state's rows, in stage order (below), `next` rows by priority then the tracker's order, the rest by last activity; empty in the feed |
+| `feed` | the feed's rows and quiet line (below); absent in the state |
 
 **A row** is one task, or one request naming no task.
 
@@ -53,7 +58,7 @@ With no map, or none claiming it, `person` is that identity as its source spelle
 | field | meaning |
 |---|---|
 | `key` | the task id in the project's format; `#<number>` for a request naming no task |
-| `task` | the tracker's row: `id`, `title`, `url`, `status`, `priority` (`urgent`, `high`, `medium`, `low`), `assignee` (the first, where the tracker gives one), `after` (the base its body names); absent for a request naming no task |
+| `task` | the tracker's row: `id`, `title`, `url`, `status`, `priority` (`urgent`, `high`, `medium`, `low`), `assignee` (the first, where the tracker gives one), `after` (the base its body names), `created` (when the tracker created it, where it says); absent for a request naming no task |
 | `stage`, `stage_from` | below |
 | `who` | `agent` and `agent_status` (the Herdr agent in the task's worktree: `idle`, `working`, `done`), `model` (the one `f10 start --model` recorded on the branch), `author` (the request's), `assignees` (the tracker's first, then the request's), `reviewers` (requested and not yet heard from), `committers` (the distinct author emails on the row's commits, where they were read), `person` (below) |
 | `where` | `pr` (`number`, `title`, `url`, `state` `open`, `merged` or `closed`, `draft`, `head`, `base`, `mergeable` `clean`, `conflicts` or `blocked`, `checks` `green`, `red` or `pending`), `branch`, `worktree`, `workspace` |
@@ -83,6 +88,7 @@ Rows are listed in this order:
 
 - `local`: this machine's state: a live run, a worktree or branch, a plan, findings or verdict file, the ledger.
 - `trace`: what the project's traces left on the host (`docs/traces.md`): the state block in the request's body, the trailers on its commits.
+- `tracker`: the tracker's list alone: a `next` row, an open task with nothing started.
 - `guessed`: the host's own facts alone: the request's state, draft flag, reviews, review decision, checks, mergeable state, whether its branch still exists.
 
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
@@ -102,7 +108,7 @@ A request merged before the window, or closed unmerged, is no request.
 6. **Open**: an open request, not a draft: `trace` with a state block, `guessed` without.
 7. **Implementing**: a live run in `ship` (`local`); a draft request (`guessed`); a worktree with commits past the default branch, for a task the tracker lists as open (`local`).
 8. **Planned**: a plan file for a task the tracker lists as open, or a live run in `plan` (`local`).
-9. **Next**: a task the tracker lists as open.
+9. **Next**: a task the tracker lists as open (`tracker`).
 10. Nothing above: not a row.
 
 **The base rule** runs after, in dependency order: a row whose base task (the `f10-after` the branch records, else the block's `after`, else the task body's `After:`) has a row neither `done` nor `merged-unfinished` is `blocked` with that base in `blocked_by`, unless a run is working on it or it is already done, merged or asking; `stage_from` is the base link's source.
@@ -125,18 +131,70 @@ A base with no row on the board counts as done, so a reader with the checkout an
 
 A row with no task id gets a sentence where a command would need one.
 
+## The feed
+
+```json
+"feed": {
+  "rows": [
+    {
+      "group": "started", "key": "FT-71", "task": { "id": "FT-71", "title": "Rate limit the public API" },
+      "pr": { "number": 84, "url": "https://…/pull/84", "state": "open", "head": "FT-71/again", "base": "main" },
+      "from": "host", "who": { "author": "ann", "person": "ann" }, "owes": "bob",
+      "follow_up_of": [80], "summary": "second request on FT-71", "at": "2026-10-26T09:00:00Z"
+    }
+  ],
+  "quiet": { "count": 12, "oldest": "2026-06-01T00:00:00Z" }
+}
+```
+
+| field | meaning |
+|---|---|
+| `group` | `started`, `updated`, `reviewed`, `finished` or `new-tasks`; rows list in that order, the latest first within a group |
+| `key` | the task id the request names, as a state row's; `#<number>` for a request naming none; a branch name for a local-only checkout's row naming none |
+| `task`, `pr` | the tracker's row where the tracker lists the task; the request, as `where.pr` |
+| `from` | where the group came from: `host` (a merge, a close, an opening), `trace` (a `Step:` trailer on a commit in the window), `tracker` (a new task), `local` (a local-only checkout's branch), `guessed` (the host's other facts) |
+| `who` | `author`, `assignees`, `person` as a state row's |
+| `owes` | who the next move waits on: the author after a review's verdict, a reviewer requested in the window and not heard from since |
+| `abandoned` | closed without merging |
+| `follow_up_of` | the task's other requests, opened before this one |
+| `summary` | what happened, one sentence |
+| `at` | the latest event in the window |
+| `quiet` | `count`, the open requests with no row in the window (no commits, reviews or status changes there; a comment, a label or a commit dated before the window may still have touched them), and `oldest`, the earliest creation among them |
+
+**The window.** The default is `today`, or the last working day while nothing happened today; every span is cut by [years](https://github.com/amberpixels/years), never by date code of f10's own.
+Over a scope every project shares the span.
+
+**The groups.** One request is one row, in the first group whose rule matches, its events read only where they fall in the window:
+
+1. **Finished**: merged in the window (`merged`, `merged by <login>` when another merged it), or closed unmerged there (`abandoned`); `host`.
+2. **Started**: opened in the window, or out of draft there; `host`.
+   A request naming a task that already has another request, opened before it, open or merged, is a follow-up: `second request on <task>`; a request closed unmerged does not count.
+3. **Reviewed**: a review approving or requesting changes submitted in the window, naming the reviewer, the author owing the next move (`guessed`); or a commit there whose `Step:` trailer names `review`, `resolve` or `judge` (`trace`).
+4. **Updated**: commits, merges from the base (a commit with more than one parent) or force pushes in the window, counted, or a review requested there; `trace` when a commit's `Step:` trailer names the step, else `guessed`.
+5. Nothing in the window (a comment, a label, activity outside it): no row; an open request counts in `quiet`.
+
+**New tasks** are the tracker's open tasks whose `created` falls in the window: the host's issues' creation time, or a driver row's optional `created` (`docs/driver-contract.md`).
+`merged-unfinished` never appears in the feed: its author sees it in `--state` and `f10 status`.
+
 ## Sources
 
 Each collector fetches and interprets nothing, and fails on its own: a failed source carries its error and every other row still renders.
-The host collector reads every open request and every one merged since the window, the commits of a request nothing else names a task for (for the trailers' task), each merged one's head branch, and the declared remote reviewer's unhandled review.
+In the state view, the host collector reads every open request and every one merged since the window, the commits of a request nothing else names a task for (for the trailers' task), every branch the host has once a request merged in the window (for whether each merged head is still there), and the declared remote reviewer's unhandled review.
+In the feed, on GitHub, it reads the requests updated since the window's start with their newest 100 timeline events since then in one paged query, the count of open requests nobody touched, and, for the tasks a request started there, their other requests by title and head branch in one more; nothing per request.
+On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time; the version whose head is among the request's commits while the previous one's is not is a force push, so only the latest rewrite counts.
+Its search for a task's earlier requests reads titles only.
+GitLab's notes give no ready-for-review or review-requested event, so there a request out of draft is not `started` by that alone and `owes` never names a requested reviewer; its commits are dated by their author date.
+On GitHub a commit counts by its committer date, since GitHub records no push time for a plain push: commits made before the window and pushed inside it do not count, and their request is quiet unless something else happened to it.
 The tracker collector reads open tasks through the driver's `list`, else the host's issues.
-The local collector reads the worktrees and branches with what `f10 start` recorded on them, the live runs in them, plan, findings and verdict files under the storage root, what the ledger closed, and Herdr's workspaces.
+The local collector, in the state view, reads the worktrees and branches with what `f10 start` recorded on them, the live runs in them, plan, findings and verdict files under the storage root, what the ledger closed, and Herdr's workspaces; the feed skips it, but on a local-only checkout, where it reads each branch's last commit time.
+A local-only checkout skips the host, and the tracker unless a driver answers it.
 Nothing is ever written to the host.
 
 ## Conformance
 
 `cli/internal/lookaround/testdata/derive/<name>.facts.json` is one collector result; `<name>.board.json` the board it derives to at a fixed clock.
-`cli/cmd/f10/testdata/board/<name>.json` is a recorded run: the git and host calls with their answers, tracker rows and local state, beside the board out.
+`cli/internal/lookaround/testdata/feed/<name>.board.json` is a feed derived from facts the test builds.
+`cli/cmd/f10/testdata/board/<name>.json` is a recorded run: the git and host calls with their answers, tracker rows and local state, beside the board out; a `feed` one names its window, cut by years at the fixture's clock, and fails on any call it does not record.
 
 ## Changing this spec
 

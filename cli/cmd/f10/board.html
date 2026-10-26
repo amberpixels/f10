@@ -93,6 +93,14 @@
   .stage[data-stage="planned"] { color: var(--blue); font-weight: 400; }
   .stage[data-stage="merged-unfinished"] { color: var(--cyan); }
   .stage[data-stage="next"] { color: var(--faint); font-weight: 400; }
+  .stage[data-stage="finished"] { color: var(--green); font-weight: 400; }
+  .stage[data-stage="started"], .stage[data-stage="follow-up"] { color: var(--blue); }
+  .stage[data-stage="updated"] { color: var(--yellow); }
+  .stage[data-stage="reviewed"] { color: var(--magenta); }
+  .stage[data-stage="abandoned"] { color: var(--red); font-weight: 400; }
+  .stage[data-stage="new"] { color: var(--faint); font-weight: 400; }
+  .window { font-weight: 600; color: var(--fg); margin-top: 4px; }
+  .quiet { margin: 16px 0 0; color: var(--faint); font-size: 14px; }
   @media (max-width: 640px) {
     .row { grid-template-columns: max-content max-content max-content minmax(0, 1fr); }
     .title { grid-column: 1 / -1; }
@@ -103,10 +111,10 @@
 <main id="app"></main>
 <script type="application/json" id="board">__BOARD_JSON__</script>
 <script>
-// The renderer draws the Board JSON above and decides no stage. model()
-// reduces the board to lines, render() draws them; the terminal renderer
-// builds the same model, and a test holds the two to each other.
-var KNOWN_VERSION = 1;
+// The renderer draws the Board JSON above and decides no stage or group.
+// model() reduces the board to lines, render() draws them; the terminal
+// renderer builds the same model, and a test holds the two to each other.
+var KNOWN_VERSION = 2;
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -138,23 +146,95 @@ function who(row) {
   return w.author || "";
 }
 
+// a request titled "<key>: ..." repeats the key the row already shows
+function afterKey(title, key) {
+  if (!key || title.indexOf(key) !== 0) return title;
+  var rest = title.slice(key.length);
+  if (rest[0] !== ":" && rest[0] !== " ") return title;
+  return rest.replace(/^[: -]+/, "") || title;
+}
+
+// plural is lookaround.Plural: "-sh" takes "es"
+function plural(n, word) {
+  if (n === 1) return "1 " + word;
+  return n + " " + word + (/sh$/.test(word) ? "es" : "s");
+}
+
+// windowLabel names the feed's span: how it was chosen, its first day, its
+// last where it spans several, and the fallback's reason.
+function windowLabel(w) {
+  var from = localDate(w.since);
+  var label = (w.chosen || "since") + " · " + from;
+  if (w.end) {
+    var to = localDate(Date.parse(w.end) - 1000);
+    if (to !== from) label += " to " + to;
+  }
+  if (w.fallback) label += " (no activity today)";
+  return label;
+}
+
+function feedLine(r) {
+  var pr = r.pr;
+  var w = r.who || {};
+  var stage = r.group;
+  if (r.abandoned) stage = "abandoned";
+  else if (r.follow_up_of && r.follow_up_of.length) stage = "follow-up";
+  else if (r.group === "new-tasks") stage = "new";
+  var title = (r.task && r.task.title) || "";
+  var url = (r.task && r.task.url) || "";
+  if (pr) {
+    url = url || pr.url || "";
+    if (!title) title = afterKey(pr.title || "", r.key);
+  }
+  var next = r.summary || "";
+  if (r.owes) next += ", " + r.owes + " owes the next move";
+  return {
+    group: r.group.replace(/-/g, " "),
+    key: r.key,
+    url: url,
+    stage: stage,
+    stage_from: r.from,
+    title: title,
+    pr: pr ? pr.number : 0,
+    pr_url: pr ? (pr.url || "") : "",
+    who: w.author || (w.assignees && w.assignees.length ? w.assignees[0] : ""),
+    next: next,
+    next_command: false
+  };
+}
+
+function feedModel(board, m) {
+  m.header = windowLabel(board.window);
+  var feed = board.feed || {};
+  var q = feed.quiet || {};
+  if (q.count > 0) {
+    m.quiet = plural(q.count, "open request") + " with no commits, reviews or status changes in the window";
+    if (q.oldest) m.quiet += ", the oldest opened " + localDate(q.oldest);
+  }
+  var rows = feed.rows || [];
+  if (!rows.length) {
+    m.empty = "no activity in the window";
+    return m;
+  }
+  rows.forEach(function (r) { m.rows.push(feedLine(r)); });
+  return m;
+}
+
 function model(board) {
   var m = { notes: [], rows: [] };
+  var feed = board.view === "feed";
+  var localOnly = !!(board.project && board.project.local_only);
   (board.sources || []).forEach(function (s) {
-    if (s.skipped) m.notes.push({ name: s.name, status: "skipped" });
+    if (s.skipped && (s.notes || []).indexOf("local only") >= 0) m.notes.push({ name: s.name, status: "local only" });
+    else if (s.skipped && (feed || localOnly)) return;
+    else if (s.skipped) m.notes.push({ name: s.name, status: "skipped" });
     else if (!s.ok) m.notes.push({ name: s.name, status: "failed", error: s.error || "" });
   });
+  if (feed) return feedModel(board, m);
   var rows = board.rows || [];
   if (!rows.length) {
     m.empty = "nothing in flight, nothing next, nothing done since " + localDate(board.window.since);
     return m;
-  }
-  // a request titled "<key>: ..." repeats the key the row already shows
-  function afterKey(title, key) {
-    if (!key || title.indexOf(key) !== 0) return title;
-    var rest = title.slice(key.length);
-    if (rest[0] !== ":" && rest[0] !== " ") return title;
-    return rest.replace(/^[: -]+/, "") || title;
   }
   rows.forEach(function (r) {
     var pr = r.where && r.where.pr;
@@ -191,13 +271,16 @@ function link(url, text, cls) {
 
 function render(board, m) {
   var p = board.project || {};
-  var meta = [p.id, p.host, p.remote ? "remote view" : "", "generated " + new Date(board.generated_at).toLocaleString(),
-    "done since " + localDate(board.window.since)].filter(Boolean);
+  var meta = [p.id, p.host, p.remote ? "remote view" : "", p.local_only ? "local only" : "",
+    "generated " + new Date(board.generated_at).toLocaleString(),
+    m.header ? "" : "done since " + localDate(board.window.since)].filter(Boolean);
   var okSources = (board.sources || []).filter(function (s) { return s.ok && !s.skipped; })
     .map(function (s) { return s.name + " " + s.took_ms + " ms"; });
   var out = "<header><h1>" + esc(heading(board)) + "</h1>" +
     '<p class="meta">' + meta.map(esc).join(" · ") + "</p>" +
-    (okSources.length ? '<p class="meta">sources: ' + esc(okSources.join(" · ")) + "</p>" : "") + "</header>";
+    (okSources.length ? '<p class="meta">sources: ' + esc(okSources.join(" · ")) + "</p>" : "") +
+    (m.header ? '<p class="meta window">' + esc(m.header) + "</p>" : "") + "</header>";
+  var quiet = m.quiet ? '<p class="quiet">' + esc(m.quiet) + "</p>" : "";
 
   if (board.version > KNOWN_VERSION) {
     out += '<p class="notice">This board is version ' + esc(board.version) + "; this page knows version " +
@@ -211,7 +294,7 @@ function render(board, m) {
     }).join("") + "</ul>";
   }
 
-  if (m.empty) return out + '<p class="empty">' + esc(m.empty) + "</p>";
+  if (m.empty) return out + '<p class="empty">' + esc(m.empty) + "</p>" + quiet;
 
   var last = null;
   m.rows.forEach(function (r) {
@@ -231,7 +314,7 @@ function render(board, m) {
       (tail.length ? '<span class="tail">' + tail.join("") + "</span>" : "") + "</li>";
   });
   if (last !== null) out += "</ol></section>";
-  return out;
+  return out + quiet;
 }
 
 if (typeof document !== "undefined") {

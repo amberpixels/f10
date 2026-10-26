@@ -54,7 +54,7 @@ f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [-
 f10 status [id] [--all] [--json | --markdown]   # where the run is: this session's, a task's in its worktree, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
-f10 board [--since <time>] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # where every task stands: done, in progress with its stage and next action, next; one project or several
+f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -604,19 +604,34 @@ A breaking change bumps `schema`.
 
 ## Board
 
-`f10 board` is where every task of the project stands: done lately, in progress at which stage and who owes the next move, and what comes next.
-It reads three sources, each failing on its own: the host (open requests and the ones merged in the window, their commits, reviews, checks and mergeable state), the tracker (open tasks through the driver's `list`, else the host's issues, up to 100), and this machine (live runs, worktrees, branches, plans, findings, verdicts, the ledger, Herdr's workspaces).
+`f10 board` has two views.
+The default is **the feed**: what changed in a calendar window, one row per request or task in one of five groups, `started`, `updated`, `reviewed`, `finished` and `new tasks`, and one line counting the open requests with no commits, reviews or status changes in the window.
+`--state` is where every task of the project stands: done lately, in progress at which stage and who owes the next move, and what comes next.
+
+**The window** is the argument (`f10 board yesterday`) or `--since`, never both: `today`, `yesterday`, `last-workday`, `this-week`, `last-week`, a `YYYY-MM-DD` date (that day), or an RFC 3339 time (from then until now).
+[years](https://github.com/amberpixels/years) reads each one; weeks start on Monday, and working days are the `workdays` in `~/.f10/standup.md` (Monday to Friday by default), read only by the default and `last-workday`.
+With no window the feed shows **today**, or the last working day while today has no activity yet, so a Monday-morning run shows Friday; the header names the span and says when it fell back.
+Over a scope every project shares the span.
+With `--state` the window sets where `done` rows start, seven days back without one.
+
+On GitHub the feed asks the host once per repository: one GraphQL search for the requests updated since the window's start, each with its newest 100 timeline events since then (commits with their parent count, force pushes, reviews, ready for review, review requests, merges, closes), paged as needed, and the count of open requests nobody touched.
+On GitLab it lists the merge requests updated since and the open ones nobody touched, then reads the commits, notes and versions of the touched ones alone, eight at a time.
+The earlier requests of the tasks a request started in the window are read to tell a follow-up from a first request: one more GraphQL call on GitHub, searching titles and head branches; one list per task on GitLab, whose search reads titles only.
+`docs/board.md` holds the groups' rules.
+
+Each view reads three sources, each failing on its own: the host (the feed's activity; for `--state`, open requests and the ones merged in the window, their commits, reviews, checks and mergeable state), the tracker (open tasks through the driver's `list`, else the host's issues, up to 100), and this machine (for `--state`: live runs, worktrees, branches, plans, findings, verdicts, the ledger, Herdr's workspaces; the feed skips it).
 A failed source is printed first with its error, and every other row still renders.
+A checkout with no origin remote is **local only**: no host, no tracker but a driver, and the line says `local only` instead of two failures; its feed is its branches committed in the window.
 It writes nothing to the host.
 
 **The scope** is this checkout, or the union of `-C <path | name>` (repeatable), `--group <name>` (repeatable, a group in `~/.f10/board.md`) and `--all` (every checkout under `F10_ROOTS`, with it unset an error, plus the `repos` the file watches), as `f10 standup` takes them.
 Each project is collected on its own, a few at a time: one that cannot be read (a `project.md` that does not parse, a host CLI that errors) shows every source failed with the error, and every other project renders.
 Checkouts of one repository are read once, from the first given; a repository named outright that a checkout already covers is dropped.
 
-- `--all` or `--group` prints one line per project: `<n> in flight` (rows neither `done` nor `next`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
+- `--all` or `--group` prints one line per project. The feed's line counts its rows per group and the quiet requests, under one header naming the shared span; `--state`'s is `<n> in flight` (rows neither `done` nor `next`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
 - `--detail`, or a scope of more than one `-C` with no `--all` or `--group`, prints every project's rows under a heading with its name; one `-C` prints the board as this checkout's.
 - `--by person` prints rows grouped by `who.person` across projects, a heading per person, the unresolved last under `nobody`, each row naming its project.
-- `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 1 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
+- `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 2 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
 
 **Your file**, `~/.f10/board.md`, YAML frontmatter then free prose, an unknown key an error:
 
@@ -639,19 +654,19 @@ Checkouts of one repository are read once, from the first given; a repository na
   ---
   ```
 
-- `--since` sets the window `done` rows cover: an RFC 3339 time or a `YYYY-MM-DD` date; default seven days.
-  The host is asked once for the open requests and once for the merged ones, then once per merged request for its branch, once per open request for the declared remote reviewer's review, and once for the commits of a request nothing else names a task for; a long window on a busy repository costs that many calls.
+- With `--state` the host is asked once for the open requests and once for the merged ones, then once for every branch when a request merged in the window, once per open request for the declared remote reviewer's review, and once for the commits of a request nothing else names a task for.
 - `--remote` reads the host and the tracker only: what a viewer without the checkout sees.
 - `--json` prints the Board JSON, the contract every renderer reads; `docs/board.md` is its spec, the stages and their rules included, and `docs/board.schema.json` its schema.
 - `--html` prints one static page: the Board JSON embedded, drawn by a renderer inlined in the page, so it opens from disk with no server and no network and can be attached or hosted as is.
   The page draws one project: over several (`--all`, `--group`, more than one `-C`) it is refused.
-  The page shows every row with its stage, `stage_from` and next action, and the failed sources; it draws the same rows from the same JSON as the terminal and decides no stage.
+  The page shows the feed's span, groups and quiet line, or every row with its stage, `stage_from` and next action, and the failed sources; it draws the same rows from the same JSON as the terminal and decides no group or stage.
 - `--out <path>` writes `--json` or `--html` to a file instead of stdout.
 
-A row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished`, `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host (`docs/traces.md`), `guessed` for the host's own facts alone.
+A feed row says what happened (`opened`, `second request on FT-12`, `3 commits, merged main`, `approved by bob`, `merged`, `abandoned`), who owes the next move where a review left one, and where the group came from: `host` for a merge, a close or an opening, `trace` for a commit's `Step:` trailer (`docs/traces.md`), `tracker` for a new task, `guessed` for the rest of the host's facts.
+A state row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished`, `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host, `tracker` for a `next` row, `guessed` for the host's own facts alone.
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
 The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
-Inside a session, `/f10:board` runs the command with the same flags, prints its output, and offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.
+Inside a session, `/f10:board` runs the command with the same flags and prints its output; with `--state` it offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.
 
 ## References
 

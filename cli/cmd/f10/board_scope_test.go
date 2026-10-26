@@ -85,16 +85,29 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 		t.Errorf("good: local %+v, checkout %q, want ok at %s", local, boards[1].Project.Checkout, good)
 	}
 
-	// the glance: a line per project, the broken one failed
-	text, err := runStandupApp(t, "board", "--all")
+	// the glance: a line per project, the broken one failed, the good one
+	// local only with no failed source, its feed its branch committed today
+	text, err := runStandupApp(t, "board", "--all", "--state")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	if len(lines) != 2 || !strings.HasPrefix(lines[0], "broken") || !strings.Contains(lines[0], "failed") ||
-		!strings.HasPrefix(lines[1], "good") || !strings.Contains(lines[1], "nothing in flight") {
+		!strings.HasPrefix(lines[1], "good") || !strings.Contains(lines[1], "nothing in flight") ||
+		!strings.Contains(lines[1], "local only") || strings.Contains(lines[1], "failed") {
 		t.Errorf("summary =\n%s", text)
+	}
+
+	feed, err := runStandupApp(t, "board", "--all")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines = strings.Split(strings.TrimSpace(feed), "\n")
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "today · ") ||
+		!strings.HasPrefix(lines[2], "good") || !strings.Contains(lines[2], "1 updated  local only") {
+		t.Errorf("feed summary =\n%s", feed)
 	}
 }
 
@@ -252,15 +265,18 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 		switch {
 		case strings.HasPrefix(call, "gh issue list") && strings.HasSuffix(call, "-R acme/other"):
 			return shell.Result{Stdout: `[{"number": 3, "title": "ship it", "state": "OPEN", ` +
-				`"url": "https://github.com/acme/other/issues/3", "assignees": [{"login": "ann"}]}]`}, nil
+				`"url": "https://github.com/acme/other/issues/3", "assignees": [{"login": "ann"}], ` +
+				`"createdAt": "` + time.Now().UTC().Format(time.RFC3339) + `"}]`}, nil
 		case strings.HasPrefix(call, "gh pr list"), strings.HasPrefix(call, "gh issue list"):
 			return shell.Result{Stdout: "[]"}, nil
+		case strings.HasPrefix(call, "gh api graphql --paginate"):
+			return shell.Result{Stdout: `{"data":{"search":{"nodes":[]},"quiet":{"issueCount":2,"nodes":[]}}}`}, nil
 		default:
 			return shell.Result{Code: 1, Stderr: "unscripted: " + call}, nil
 		}
 	}
 
-	out, err := runStandupApp(t, "board", "--all", "--json")
+	out, err := runStandupApp(t, "board", "--all", "--json", "--state")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,6 +305,42 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 		if !slices.ContainsFunc(calls, func(c string) bool { return strings.Contains(c, want) }) {
 			t.Errorf("no host call carrying %q:\n%s", want, strings.Join(calls, "\n"))
 		}
+	}
+
+	// the feed asks the host once per repository, the repository named,
+	// and finds the task created today
+	calls = nil
+
+	out, err = runStandupApp(t, "board", "--all", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := json.Unmarshal([]byte(out), &boards); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	if f := boards[1].Feed; f == nil || len(f.Rows) != 1 || f.Rows[0].Group != lookaround.GroupNewTasks ||
+		f.Rows[0].Who.Person != "ann" || f.Quiet.Count != 2 {
+		t.Errorf("other's feed = %+v", f)
+	}
+
+	var graphql []string
+
+	for _, c := range calls {
+		if strings.HasPrefix(c, "gh api graphql") {
+			graphql = append(graphql, c)
+		}
+
+		if strings.HasPrefix(c, "gh pr list") {
+			t.Errorf("the feed listed requests: %s", c)
+		}
+	}
+
+	if len(graphql) != 2 || !slices.ContainsFunc(graphql, func(c string) bool {
+		return strings.Contains(c, "-F q=repo:acme/other is:pr updated:>=")
+	}) {
+		t.Errorf("graphql calls = %q, want one per repository, other named", graphql)
 	}
 
 	// a repository entry that does not parse fails only the run that reads it
@@ -366,7 +418,9 @@ func TestRenderSummary(t *testing.T) {
 				{Key: "FT-4", Stage: lookaround.StageDone},
 			},
 		},
-		lookaround.Unreachable(lookaround.Project{Name: "web"}, os.ErrNotExist, now, now),
+		lookaround.Unreachable(
+			lookaround.Project{Name: "web"}, os.ErrNotExist, now, lookaround.Window{Since: now}, lookaround.ViewState,
+		),
 		{Project: lookaround.Project{Name: "ops"}, Sources: []lookaround.Source{
 			{Name: "host", Error: "gh: down"}, {Name: "tracker", OK: true}, {Name: "local", OK: true},
 		}},

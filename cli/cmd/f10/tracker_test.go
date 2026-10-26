@@ -169,7 +169,7 @@ func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.script(
-		"gh issue list --json number,title,state,url,labels,body,assignees --limit 30",
+		"gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[]}]`,
 	)
 

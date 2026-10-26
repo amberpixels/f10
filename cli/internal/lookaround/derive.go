@@ -23,6 +23,7 @@ func Derive(f Facts, now, since time.Time) Board {
 	b := Board{
 		Version:     Version,
 		GeneratedAt: now,
+		View:        ViewState,
 		Project:     f.Project,
 		Window:      Window{Since: since},
 		Sources:     f.Sources,
@@ -411,9 +412,15 @@ func (r *row) person(people []Person) {
 		assignee = r.Task.Assignee
 	}
 
+	r.Who.Person = personOf(people, assignee, r.Who.Author, r.Who.Committers)
+}
+
+// personOf is the one name a row groups under, by the rules row.person
+// gives.
+func personOf(people []Person, assignee, author string, committers []string) string {
 	committer := ""
-	if len(r.Who.Committers) > 0 {
-		committer = r.Who.Committers[0]
+	if len(committers) > 0 {
+		committer = committers[0]
 	}
 
 	// a person claiming the assignee wins over one claiming the author,
@@ -421,23 +428,21 @@ func (r *row) person(people []Person) {
 	byTracker := func(p Person) bool { return assignee != "" && strings.EqualFold(p.Tracker, assignee) }
 	byHost := func(p Person) bool {
 		return assignee != "" && forge.SameLogin(p.Host, assignee) ||
-			r.Who.Author != "" && forge.SameLogin(p.Host, r.Who.Author)
+			author != "" && forge.SameLogin(p.Host, author)
 	}
 	byEmail := func(p Person) bool {
-		return slices.ContainsFunc(r.Who.Committers, func(e string) bool {
+		return slices.ContainsFunc(committers, func(e string) bool {
 			return slices.ContainsFunc(p.Emails, func(known string) bool { return strings.EqualFold(known, e) })
 		})
 	}
 
 	for _, pick := range []func(Person) bool{byTracker, byHost, byEmail} {
 		if i := slices.IndexFunc(people, pick); i >= 0 {
-			r.Who.Person = people[i].Name
-
-			return
+			return people[i].Name
 		}
 	}
 
-	r.Who.Person = cmp.Or(assignee, r.Who.Author, committer)
+	return cmp.Or(assignee, author, committer)
 }
 
 // rank orders a task's candidate branches: a worktree first, then a
@@ -580,7 +585,7 @@ func (r *row) stage(withLocal bool, since time.Time) {
 		set(StagePlanned, FromLocal)
 
 	case r.Task != nil && !closed(r.Task.Status):
-		set(StageNext, FromGuessed)
+		set(StageNext, FromTracker)
 
 	default:
 		r.dropped = true
