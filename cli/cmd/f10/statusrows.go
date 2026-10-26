@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -558,31 +557,14 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 
 	rows := src.rowsFrom(ctx, []childRow{k})
 
-	if c := lt.claim; c != nil {
-		h := historyFor(src.events, c.Session, c.Updated, finishedStorage(t, c.Root), r.ID)
-		rows[0].History = &h
+	shared := ""
+	if t.sharedPlansDir() != "" {
+		shared = t.lay.StorageRoot
 	}
+
+	rows[0].History = claimHistory(src.events, lt.claim, shared)
 
 	return &rows[0], nil
-}
-
-// finishedStorage is where a finished task's findings and verdicts still
-// are: the shared root with out-of-tree storage, else the .f10 of the
-// checkout its last run was in, while that is on disk.
-func finishedStorage(t *target, checkout string) string {
-	if t.sharedPlansDir() != "" {
-		return t.lay.StorageRoot
-	}
-
-	if checkout == "" {
-		return ""
-	}
-
-	if root := filepath.Join(checkout, ".f10"); exists(root) {
-		return root
-	}
-
-	return ""
 }
 
 // statusSource binds the row reads to this target: live runs, the ledger,

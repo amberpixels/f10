@@ -449,8 +449,7 @@ func finishedHistories(ctx context.Context, t *target, runs []*state.Run) []*run
 			events = readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot))
 		}
 
-		h := historyFor(events, r.Session, r.Updated, layout.Locate(ctx, r.Root).StorageRoot, r.Task)
-		hist[i] = &h
+		hist[i] = doneHistory(events, r, layout.Locate(ctx, r.Root).StorageRoot)
 	}
 
 	return hist

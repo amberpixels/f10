@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
@@ -41,8 +42,8 @@ type judgeOutcome struct {
 
 // historyFor gathers a run's history: steps from the session's claims up
 // to until, review and judge from the task's files under storageRoot ("" for
-// none reachable).
-func historyFor(events []ledger.Event, session string, until time.Time, storageRoot, task string) runHistory {
+// none reachable). Nothing found is nil, so an older run prints as before.
+func historyFor(events []ledger.Event, session string, until time.Time, storageRoot, task string) *runHistory {
 	h := runHistory{Steps: shipSteps(events, session, until)}
 
 	if storageRoot != "" {
@@ -50,12 +51,55 @@ func historyFor(events []ledger.Event, session string, until time.Time, storageR
 		h.Judge = latestJudge(storageRoot, task)
 	}
 
-	return h
+	if h.Steps == nil && h.Review == nil && h.Judge == nil {
+		return nil
+	}
+
+	return &h
+}
+
+// doneHistory is a live run's history once its ship phase is done.
+func doneHistory(events []ledger.Event, r *state.Run, storageRoot string) *runHistory {
+	if r.Ship != "done" {
+		return nil
+	}
+
+	return historyFor(events, r.Session, r.Updated, storageRoot, r.Task)
+}
+
+// claimHistory is a finished task's history from the ledger's last claim
+// on it; shared is the out-of-tree storage root, "" with in-repo storage.
+func claimHistory(events []ledger.Event, claim *state.Run, shared string) *runHistory {
+	if claim == nil {
+		return nil
+	}
+
+	return historyFor(events, claim.Session, claim.Updated, finishedStorage(shared, claim.Root), claim.Task)
+}
+
+// finishedStorage is where a finished task's findings and verdicts still
+// are: the shared root with out-of-tree storage, else the .f10 of the
+// checkout its last run was in, while that is on disk.
+func finishedStorage(shared, checkout string) string {
+	if shared != "" {
+		return shared
+	}
+
+	if checkout == "" {
+		return ""
+	}
+
+	if root := filepath.Join(checkout, ".f10"); exists(root) {
+		return root
+	}
+
+	return ""
 }
 
 // shipSteps is the steps the session's last ship run up to until entered,
 // in order: each `set ship running <step>` claim after the ship skill
-// started. A step claimed again right after itself is one entry (a resent
+// started. Only a phase skill begins a run; one a step calls mid-pipeline
+// (resolve, catchup) does not end it. A step claimed again right after itself is one entry (a resent
 // badge, a driven run resuming); one that comes back after another step is
 // listed again.
 func shipSteps(events []ledger.Event, session string, until time.Time) []string {
@@ -70,7 +114,12 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 
 		switch e.Kind {
 		case ledger.RunStarted:
-			inShip = payloadString(e.Payload.Val, "skill") == "ship"
+			skill := payloadString(e.Payload.Val, "skill")
+			if !slices.Contains(state.Phases, skill) {
+				continue
+			}
+
+			inShip = skill == "ship"
 			steps = nil
 		case ledger.StateSet:
 			if !inShip {

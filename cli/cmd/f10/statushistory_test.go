@@ -39,6 +39,8 @@ func TestShipSteps(t *testing.T) {
 		shipClaim(at(4), "s1", "pr"),
 		sessionEvent(at(4), "s1", ledger.StateNote, ledger.Payload{"args": []any{"why"}}),
 		shipClaim(at(5), "s1", "review"),
+		// resolve called by a review step through the Skill tool: still the ship run
+		sessionEvent(at(5), "s1", ledger.RunStarted, ledger.Payload{"skill": "resolve"}),
 		// a driven run resuming at the step it blocked on
 		sessionEvent(at(6), "s1", ledger.StateSet, ledger.Payload{"args": []any{"ship", "blocked", "judge"}}),
 		shipClaim(at(6), "s1", "judge"),
@@ -250,5 +252,63 @@ func TestFinishedRowHistory(t *testing.T) {
 		if !strings.Contains(string(raw), s) {
 			t.Errorf("row JSON lacks %s: %s", s, raw)
 		}
+	}
+}
+
+func TestHistoryOfARun(t *testing.T) {
+	t0 := time.Unix(1_800_000_000, 0)
+	events := []ledger.Event{
+		sessionEvent(t0, "s1", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
+		shipClaim(t0.Add(time.Minute), "s1", "implement"),
+	}
+
+	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Updated: t0.Add(2 * time.Minute)}
+	if h := doneHistory(events, done, ""); h == nil || !slices.Equal(h.Steps, []string{"implement"}) {
+		t.Errorf("doneHistory = %+v, want the implement step", h)
+	}
+
+	running := *done
+	running.Ship = "running"
+
+	if h := doneHistory(events, &running, ""); h != nil {
+		t.Errorf("a running ship has a history: %+v", h)
+	}
+
+	// an older run: no claims, no files
+	older := &state.Run{Session: "s9", Task: "FT-1", Ship: "done", Updated: t0}
+	if h := doneHistory(events, older, t.TempDir()); h != nil {
+		t.Errorf("an older run has a history: %+v", h)
+	}
+}
+
+func TestClaimHistoryStorage(t *testing.T) {
+	t0 := time.Unix(1_800_000_000, 0)
+	verdictText := "task: FT-1\nverdict: proceed\n"
+
+	shared := t.TempDir()
+	writeFile(t, filepath.Join(shared, "verdicts", "FT-1", "1.md"), verdictText)
+
+	checkout := t.TempDir()
+	writeFile(t, filepath.Join(checkout, ".f10", "verdicts", "FT-1", "1.md"), verdictText)
+
+	claim := &state.Run{Session: "s1", Task: "FT-1", Root: checkout, Updated: t0}
+
+	if h := claimHistory(nil, claim, shared); h == nil || h.Judge == nil {
+		t.Errorf("out-of-tree storage: claimHistory = %+v, want the shared verdict", h)
+	}
+
+	if h := claimHistory(nil, claim, ""); h == nil || h.Judge == nil {
+		t.Errorf("in-repo, checkout on disk: claimHistory = %+v, want its verdict", h)
+	}
+
+	gone := *claim
+	gone.Root = filepath.Join(checkout, "removed")
+
+	if h := claimHistory(nil, &gone, ""); h != nil {
+		t.Errorf("in-repo, checkout gone: claimHistory = %+v, want nil", h)
+	}
+
+	if claimHistory(nil, nil, shared) != nil {
+		t.Error("no claim has a history")
 	}
 }
