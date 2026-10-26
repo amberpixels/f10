@@ -76,7 +76,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Tracker | the fetch and create adapters, and a parent adapter linking a subtask to its parent | the host CLI's issue commands; GitHub sub-issues or GitLab child links for the parent |
 | Hosting & PR | where code lives, how to open or refresh a PR or MR | from the git remote |
 | Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
-| Roles | the role per step, always or by area | each step's base role |
+| Roles | the base role per step, replaced or added to, always or by area ([Roles](#roles)) | each step's base role |
 | Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask` | the four core categories, reviewed locally by a blind agent; every ask goes to you |
 | Guardrails | domain rules a plan and its code must honour | none |
 
@@ -100,6 +100,74 @@ Cleanup replaces em and en dashes by default; a project that keeps them says so 
 
 `pr.md` sets the PR's title shape, body shape and labels.
 It may name **owned sections**, headings whose content something else maintains (a screenshots section a script regenerates): a `pr` entry that refreshes an open PR rewrites the rest of the description from the full diff and copies those sections verbatim.
+
+## Roles
+
+Every step opens with a base role: a senior engineer for implement and review, a senior software architect for plan.
+`## Roles` in `project.md` adds to it or replaces it, one bullet per role:
+
+- `+ <role>` adds a role on top of the base role.
+- `= <role>` sets the base role, replacing the step's own.
+- A step list in front scopes either to those steps: `plan, judge: = senior data architect`.
+  No list means every step.
+
+Bullets sit under **Always**, for every task, or **Conditional**, for a task that touches a named area.
+An area is named in plain words, the way a task's _Areas_ note names it, with the paths that define it where that helps.
+
+```markdown
+## Roles
+
+- **Always**: + senior Go developer
+- **Conditional**:
+  - user-facing UI (`web/`): + senior UI/UX engineer
+  - schema (`db/migrations/`): plan, review: = senior database engineer
+```
+
+The base role for a step is, highest first: an applicable Conditional `=`, the step overlay's own `Role:` line (`.f10/instructions/<step>.md`), an Always `=`, then the step's built-in role.
+At the same rank a step-scoped `=` wins over an unscoped one, and a linked worktree's statement over main's; two still tied are a contradiction, which the run names rather than picks.
+A role named per step in prose ("plan as a **senior software architect**") adds, like `+`; only `=` replaces.
+A step takes its roles from the plan's `Roles` line, else the fetch brief, else the areas in the task's _Areas_ note (capture, brainstorm), else no area applies.
+Every applicable `+` is added on top of whichever base won.
+A task that touches two areas that both replace the base role runs under the role of the area its deliverable belongs to; the other area's role is added, and the fetch brief says so.
+Fetch settles the areas and the base role, and the plan's first line, `Roles:`, records the result, which `/f10:ship` inherits.
+A project with no `=` bullet sees every step run under its own role.
+
+### Worked example: a non-code deliverable
+
+A repo that generates marketing reports with a Python and JS framework, tracked in Notion, used by someone who does not write code.
+It holds two kinds of task: report work (a new report, a revised analysis) and framework work (the templates and the scripts that build the reports).
+Report work should be planned and built by an analyst, framework work by an engineer:
+
+```markdown
+## Roles
+
+- **Conditional**:
+  - report work (`reports/`, a new or revised analysis): = senior marketing analyst
+  - framework work (`templates/`, `scripts/`): + senior Python developer
+```
+
+The steps still speak of code: critical files, migrations, a failing test.
+Under a replaced role such an instruction applies by analogy or not at all, and the project's overlays carry the vocabulary.
+A `.f10/instructions/plan.md` overlay says what a report plan holds:
+
+```markdown
+For report work, a plan holds, in place of stages over files:
+- the questions the report answers, and for whom
+- the sources, each with its period and owner
+- the metric definitions, each with its formula and source
+- the sections, in reading order
+- the caveats: gaps in the data, assumptions, what the report does not claim
+
+Critical files, data/migration work and tests do not apply to report work; Consequences and Gaps do.
+Framework work plans as the generic step says.
+```
+
+A `.f10/instructions/capture.md` overlay says how a report task reads:
+
+```markdown
+A report task names its audience, the question it answers, the period and sources, and the date it is needed by.
+The _Areas_ note says report work or framework work, so fetch can settle the role.
+```
 
 ## Pipelines
 

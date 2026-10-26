@@ -193,8 +193,8 @@ To pin a fact instead (the tracker, the verify commands, the PR flow), declare i
 
 - **Project instructions** - `<checkout root>/.f10/instructions/`: `project.md` (typed facts in its frontmatter, prose below) plus optional per-step **overlays**.
   A linked worktree's instructions layer on main's unless they declare `layering: replaces`.
-- **Role** - a base role per step, plus **conditional** roles by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
-  Fetch settles the areas; the plan file records the roles for ship.
+- **Role** - a base role per step, which a project can replace always or by area (`= senior marketing analyst` on report work), plus added roles, always or by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
+  Fetch settles the areas and the base role; the plan file records the roles for ship ([Roles](docs/project-setup.md#roles)).
 - **Adapter** - how a capability ("fetch a task", "open a PR", "verify") binds per project: a skill or a CLI command. f10 names the capability; the project supplies the adapter.
 - **Review** - local (pre-PR) or CI/human (post-PR), placed or omitted per pipeline; no review entry means ship stops at the PR.
   A remote review is four facts under `project.md → Review` (who posts it, where it arrives, what triggers it, what marks it done and handled), plus the mark a settled review gets, inferred by `f10 init` from a Claude Code review workflow and acted on by `f10 review pick|wait|ack|settle|trigger`; `/f10:review <id> ci` reads the latest one in, triggers a new one or hands it to `/f10:resolve <id> ci`, which reads it in, settles it and marks it.
