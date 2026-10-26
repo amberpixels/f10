@@ -113,8 +113,11 @@ func TestActivityGitLab(t *testing.T) {
 		  {"iid":1,"state":"opened","created_at":"2026-01-01T00:00:00Z"},{"iid":2,"state":"opened"}]`,
 		"glab api --paginate projects/:fullpath/merge_requests/4/commits?per_page=100": `[
 		  {"id":"a","message":"m","authored_date":"2026-10-23T07:00:00Z","parent_ids":["p1","p2"]}]`,
-		"glab api --paginate projects/:fullpath/merge_requests/4/notes?per_page=100":    `[]`,
-		"glab api --paginate projects/:fullpath/merge_requests/4/versions?per_page=100": `[]`,
+		"glab api --paginate projects/:fullpath/merge_requests/4/notes?per_page=100": `[]`,
+		"glab api --paginate projects/:fullpath/merge_requests/4/versions?per_page=100": `[
+		  {"head_commit_sha":"gone","created_at":"2026-10-22T00:00:00Z"},
+		  {"head_commit_sha":"a","created_at":"2026-10-23T09:00:00Z"},
+		  {"head_commit_sha":"b","created_at":"2026-10-23T10:00:00Z"}]`,
 	})
 
 	a, err := Host{Name: "glab"}.Activity(t.Context(), since)
@@ -131,7 +134,9 @@ func TestActivityGitLab(t *testing.T) {
 		kinds = append(kinds, e.Kind)
 	}
 
-	if !slices.Equal(kinds, []string{EventMergeFromBase, EventOpened, EventMerged}) {
+	// "gone" is no longer among the commits: replaced at 09:00; "a" still
+	// is, so 10:00 was a plain push, whatever the local clone holds
+	if !slices.Equal(kinds, []string{EventMergeFromBase, EventForcePush, EventOpened, EventMerged}) {
 		t.Errorf("kinds = %v", kinds)
 	}
 }

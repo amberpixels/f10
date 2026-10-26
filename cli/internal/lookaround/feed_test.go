@@ -222,3 +222,39 @@ func golden(t *testing.T, path string, v any) {
 		t.Errorf("differs from %s:\n%s", path, got)
 	}
 }
+
+// A fourth request reads as one; a request closed unmerged before it was
+// never the task's, so it is not counted.
+func TestDeriveFeedFollowUps(t *testing.T) {
+	f := Facts{
+		Prefix: "FT",
+		Activity: &forge.Activity{Requests: []forge.Touched{
+			touched(9, "FT-3: fourth try", "FT-3/d", forge.Open, hourToday(12)),
+		}},
+		Earlier: map[string][]forge.PR{"FT-3": {
+			{Number: 1, Head: "FT-3/a", Status: forge.Merged, CreatedAt: longAgo},
+			{Number: 2, Head: "FT-3/b", Status: forge.Open, CreatedAt: longAgo},
+			{Number: 3, Head: "FT-3/c", Status: forge.Merged, CreatedAt: longAgo},
+			{Number: 4, Head: "FT-3/x", Status: forge.Closed, CreatedAt: longAgo},
+		}},
+	}
+
+	r := DeriveFeed(f, feedNow, feedToday).Feed.Rows[0]
+	if r.Summary != "fourth request on FT-3" || !slices.Equal(r.FollowUpOf, []int{1, 2, 3}) {
+		t.Errorf("row = %q %v", r.Summary, r.FollowUpOf)
+	}
+}
+
+// A review comment this morning makes no row, so the default still falls
+// back to the last working day.
+func TestChooseWindowIgnoresRowlessActivity(t *testing.T) {
+	f := Facts{Activity: &forge.Activity{Requests: []forge.Touched{
+		touched(9, "FT-9", "FT-9/a", forge.Open, longAgo,
+			commitEvent(hourFriday(9), "friday"),
+			forge.Event{Kind: forge.EventReview, At: hourToday(8), Actor: "bob", State: forge.Commented}),
+	}}}
+
+	if w := ChooseWindow(feedToday, feedFriday, f); !w.Fallback {
+		t.Errorf("window = %+v, want the fallback", w)
+	}
+}

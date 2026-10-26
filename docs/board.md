@@ -168,7 +168,7 @@ Over a scope every project shares the span.
 
 1. **Finished**: merged in the window (`merged`, `merged by <login>` when another merged it), or closed unmerged there (`abandoned`); `host`.
 2. **Started**: opened in the window, or out of draft there; `host`.
-   A request naming a task that already has another request, opened before it, open or merged, is a follow-up: `second request on <task>`.
+   A request naming a task that already has another request, opened before it, open or merged, is a follow-up: `second request on <task>`; a request closed unmerged does not count.
 3. **Reviewed**: a review approving or requesting changes submitted in the window, naming the reviewer, the author owing the next move (`guessed`); or a commit there whose `Step:` trailer names `review`, `resolve` or `judge` (`trace`).
 4. **Updated**: commits, merges from the base (a commit with more than one parent) or force pushes in the window, counted, or a review requested there; `trace` when a commit's `Step:` trailer names the step, else `guessed`.
 5. Nothing in the window (a comment, a label, activity outside it): no row; an open request counts in `quiet`.
@@ -180,7 +180,9 @@ Over a scope every project shares the span.
 
 Each collector fetches and interprets nothing, and fails on its own: a failed source carries its error and every other row still renders.
 In the state view, the host collector reads every open request and every one merged since the window, the commits of a request nothing else names a task for (for the trailers' task), every branch the host has once a request merged in the window (for whether each merged head is still there), and the declared remote reviewer's unhandled review.
-In the feed, it reads the requests updated since the window's start with their timelines in one paged query, the count of open requests nobody touched, and, for the tasks a request started there, their other requests in one more; nothing per request.
+In the feed, on GitHub, it reads the requests updated since the window's start with their timelines in one paged query, the count of open requests nobody touched, and, for the tasks a request started there, their other requests in one more; nothing per request.
+On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time; a version whose previous head is no longer among the request's commits is a force push.
+GitLab's notes give no ready-for-review or review-requested event, so there a request out of draft is not `started` by that alone and `owes` never names a requested reviewer; its commits are dated by their author date.
 The tracker collector reads open tasks through the driver's `list`, else the host's issues.
 The local collector, in the state view, reads the worktrees and branches with what `f10 start` recorded on them, the live runs in them, plan, findings and verdict files under the storage root, what the ledger closed, and Herdr's workspaces; the feed skips it, but on a local-only checkout, where it reads each branch's last commit time.
 A local-only checkout skips the host, and the tracker unless a driver answers it.

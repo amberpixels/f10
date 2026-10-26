@@ -116,13 +116,13 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 	return b
 }
 
-// ChooseWindow is the default's span: today when anything in the facts
-// happened today, else the last working day, marked as the fallback. The
-// facts are read from the last working day's start, so one collection
-// answers both.
+// ChooseWindow is the default's span: today when the facts give today's
+// feed a row, else the last working day, marked as the fallback. Activity
+// that makes no row (a review comment) keeps the fallback. The facts are
+// read from the last working day's start, so one collection answers both.
 func ChooseWindow(today, lastWorkday Window, facts ...Facts) Window {
 	for _, f := range facts {
-		if active(f, today) {
+		if len(DeriveFeed(f, today.End, today).Feed.Rows) > 0 {
 			return today
 		}
 	}
@@ -130,20 +130,6 @@ func ChooseWindow(today, lastWorkday Window, facts ...Facts) Window {
 	lastWorkday.Fallback = true
 
 	return lastWorkday
-}
-
-// active reports anything in the facts happening in the window.
-func active(f Facts, w Window) bool {
-	if a := f.Activity; a != nil {
-		for _, t := range a.Requests {
-			if slices.ContainsFunc(t.Events, func(e forge.Event) bool { return inWindow(w, e.At) }) {
-				return true
-			}
-		}
-	}
-
-	return slices.ContainsFunc(f.Tasks, func(t Task) bool { return inWindow(w, t.Created) }) ||
-		slices.ContainsFunc(f.Tips, func(t Tip) bool { return inWindow(w, t.At) })
 }
 
 func inWindow(w Window, t time.Time) bool {
@@ -320,7 +306,7 @@ func updateSummary(commits, merges, pushes int, base string, steps []string) str
 	var parts []string
 
 	if commits > 0 {
-		parts = append(parts, plural(commits, "commit"))
+		parts = append(parts, Plural(commits, "commit"))
 	}
 
 	if merges > 0 {
@@ -333,7 +319,7 @@ func updateSummary(commits, merges, pushes int, base string, steps []string) str
 	}
 
 	if pushes > 0 {
-		parts = append(parts, plural(pushes, "force push"))
+		parts = append(parts, Plural(pushes, "force push"))
 	}
 
 	s := strings.Join(parts, ", ")
@@ -350,9 +336,11 @@ func updateSummary(commits, merges, pushes int, base string, steps []string) str
 func earlierOf(f Facts, t forge.Touched, id string) []int {
 	var out []int
 
+	// a request closed unmerged was never the task's: only an open or
+	// merged one makes this a follow-up
 	consider := func(p PR) {
-		if p.Number == t.Number || !p.CreatedAt.IsZero() && !p.CreatedAt.Before(t.CreatedAt) ||
-			slices.Contains(out, p.Number) {
+		if p.Number == t.Number || p.Status == forge.Closed ||
+			!p.CreatedAt.IsZero() && !p.CreatedAt.Before(t.CreatedAt) || slices.Contains(out, p.Number) {
 			return
 		}
 
@@ -376,18 +364,19 @@ func earlierOf(f Facts, t forge.Touched, id string) []int {
 	return out
 }
 
+// ordinal names the nth request in words, the caller adding " request".
 func ordinal(n int) string {
-	switch n {
-	case 2:
-		return "second"
-	case 3:
-		return "third"
-	default:
-		return fmt.Sprintf("request %d", n)
+	if words := []string{"second", "third", "fourth", "fifth"}; n >= 2 && n-2 < len(words) {
+		return words[n-2]
 	}
+
+	return fmt.Sprintf("%dth", n)
 }
 
-func plural(n int, word string) string {
+// Plural is n and word, the word in its plural past one: "-sh" takes
+// "es" ("2 force pushes"). Every renderer counting a word goes through
+// it.
+func Plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word
 	}

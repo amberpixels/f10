@@ -154,8 +154,10 @@ function afterKey(title, key) {
   return rest.replace(/^[: -]+/, "") || title;
 }
 
+// plural is lookaround.Plural: "-sh" takes "es"
 function plural(n, word) {
-  return n === 1 ? "1 " + word : n + " " + word + "s";
+  if (n === 1) return "1 " + word;
+  return n + " " + word + (/sh$/.test(word) ? "es" : "s");
 }
 
 // windowLabel names the feed's span: how it was chosen, its first day, its

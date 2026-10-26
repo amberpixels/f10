@@ -581,7 +581,7 @@ func feedLines(b lookaround.Board, m boardModel) boardModel {
 		rows = b.Feed.Rows
 
 		if q := b.Feed.Quiet; q.Count > 0 {
-			m.Quiet = plural(q.Count, "open request") + " untouched in the window"
+			m.Quiet = lookaround.Plural(q.Count, "open request") + " untouched in the window"
 			if !q.Oldest.IsZero() {
 				m.Quiet += ", the oldest opened " + localDate(q.Oldest)
 			}
@@ -668,14 +668,6 @@ func windowLabel(w lookaround.Window) string {
 }
 
 func localDate(t time.Time) string { return t.Local().Format(time.DateOnly) }
-
-func plural(n int, word string) string {
-	if n == 1 {
-		return "1 " + word
-	}
-
-	return fmt.Sprintf("%d %ss", n, word)
-}
 
 // titleAfterKey drops the "<key>: " a request's title often starts with,
 // since the row already shows the key; FT-12 never matches FT-121.

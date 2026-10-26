@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -254,54 +255,114 @@ func (h Host) mrActivity(ctx context.Context, since time.Time) (Activity, error)
 		a.QuietOldest = quiet[0].CreatedAt
 	}
 
-	for _, p := range touched {
-		t := Touched{PR: p}
+	a.Requests = make([]Touched, len(touched))
+	errs := make([]error, len(touched))
+	sem := make(chan struct{}, mrParallel)
 
-		commits, err := h.PullCommits(ctx, p.Number)
-		if err != nil {
-			return Activity{}, err
-		}
+	var wg sync.WaitGroup
 
-		for _, c := range commits {
-			kind := EventCommit
-			if c.Parents > 1 {
-				kind = EventMergeFromBase
-			}
+	for i, p := range touched {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-			t.Events = append(t.Events, Event{Kind: kind, At: c.At, Actor: c.Email, Message: c.Message})
-		}
+			a.Requests[i], errs[i] = h.mrTouched(ctx, p, since)
+		})
+	}
 
-		reviews, err := h.MRReviews(ctx, p.Number)
-		if err != nil {
-			return Activity{}, err
-		}
+	wg.Wait()
 
-		for _, r := range reviews {
-			t.Events = append(t.Events, Event{Kind: EventReview, At: r.At, Actor: r.Author, State: r.State})
-		}
-
-		pushes, err := h.MRForcePushes(ctx, p.Number, since)
-		if err != nil {
-			return Activity{}, err
-		}
-
-		for _, fp := range pushes {
-			t.Events = append(t.Events, Event{Kind: EventForcePush, At: fp.At})
-		}
-
-		t.Events = append(t.Events, Event{Kind: EventOpened, At: p.CreatedAt, Actor: p.Author})
-
-		switch p.Status {
-		case Merged:
-			t.Events = append(t.Events, Event{Kind: EventMerged, At: p.MergedAt, Actor: p.MergedBy})
-		case Closed:
-			t.Events = append(t.Events, Event{Kind: EventClosed, At: p.ClosedAt})
-		}
-
-		a.Requests = append(a.Requests, t)
+	if err := errors.Join(errs...); err != nil {
+		return Activity{}, err
 	}
 
 	return a, nil
+}
+
+// mrParallel bounds the reads in flight for one GitLab project's feed:
+// three per merge request touched in the window.
+const mrParallel = 8
+
+// mrTouched is one merge request with its events: its commits, the notes
+// that review it, and the force pushes among its versions.
+func (h Host) mrTouched(ctx context.Context, p PR, since time.Time) (Touched, error) {
+	t := Touched{PR: p}
+
+	commits, err := h.PullCommits(ctx, p.Number)
+	if err != nil {
+		return Touched{}, err
+	}
+
+	for _, c := range commits {
+		kind := EventCommit
+		if c.Parents > 1 {
+			kind = EventMergeFromBase
+		}
+
+		t.Events = append(t.Events, Event{Kind: kind, At: c.At, Actor: c.Email, Message: c.Message})
+	}
+
+	reviews, err := h.MRReviews(ctx, p.Number)
+	if err != nil {
+		return Touched{}, err
+	}
+
+	for _, r := range reviews {
+		t.Events = append(t.Events, Event{Kind: EventReview, At: r.At, Actor: r.Author, State: r.State})
+	}
+
+	pushes, err := h.mrRewrites(ctx, p.Number, since, commits)
+	if err != nil {
+		return Touched{}, err
+	}
+
+	t.Events = append(t.Events, pushes...)
+	t.Events = append(t.Events, Event{Kind: EventOpened, At: p.CreatedAt, Actor: p.Author})
+
+	switch p.Status {
+	case Merged:
+		t.Events = append(t.Events, Event{Kind: EventMerged, At: p.MergedAt, Actor: p.MergedBy})
+	case Closed:
+		t.Events = append(t.Events, Event{Kind: EventClosed, At: p.ClosedAt})
+	}
+
+	return t, nil
+}
+
+// mrRewrites is the force pushes among a merge request's versions since
+// the time, read from GitLab alone: a version whose previous head is no
+// longer among the request's commits replaced history. The local clone
+// is never asked, since the feed fetches nothing and may run with no
+// checkout.
+func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits []PRCommit) ([]Event, error) {
+	type version struct {
+		Head      string    `json:"head_commit_sha"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	versions, err := DecodePages[version](
+		ctx, h, fmt.Sprintf("projects/:fullpath/merge_requests/%d/versions?per_page=100", iid),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	slices.SortStableFunc(versions, func(a, b version) int { return a.CreatedAt.Compare(b.CreatedAt) })
+
+	kept := map[string]bool{}
+	for _, c := range commits {
+		kept[c.SHA] = true
+	}
+
+	var out []Event
+
+	for i := 1; i < len(versions); i++ {
+		if prev, cur := versions[i-1], versions[i]; !cur.CreatedAt.Before(since) && !kept[prev.Head] {
+			out = append(out, Event{Kind: EventForcePush, At: cur.CreatedAt})
+		}
+	}
+
+	return out, nil
 }
 
 // EarlierRequests is every request whose title or branch may name each
