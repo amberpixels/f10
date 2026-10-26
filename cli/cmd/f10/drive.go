@@ -48,7 +48,7 @@ func driveCommand() *cli.Command {
 		ArgsUsage: "<id>[:model]... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
 			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]",
 		Description: "The chain defaults to project.md's Drive chain, else " +
-			"plan → judge → ship → review → resolve → finish.\n" +
+			"plan → judge → ship → review → resolve → finish; plan drops out of it when the default pipeline is planless.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
 			"every task whose base is finished runs at once, and a halt stops only its dependents.\n" +
 			"--model starts every agent on MODEL; <id>:<model> starts one task's agent on its own, which wins.\n" +

@@ -40,14 +40,14 @@ Each name is a generic step plus its overlay, or a project-defined one.
 A `pr` entry opens the branch's PR, or refreshes it when one is open, so a pipeline may name `pr` again after review or judge to bring the description up to date.
 A pipeline listed in `planless:` writes no plan file; a brief inline plan in chat stands in for it.
 Free-text input also skips capture and fetch, so the run has no task id.
-A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched.
+A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
 Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.
 The last step is the **shipment**.
 
 **A spike ends after implement**, whatever the pipeline: a `Kind: spike` plan answers a question, and its code never leaves the machine.
 No step after implement runs (no cleanup, commit, push, pr, review, judge or deploy); the shipment is the spike report.
 `f10 finish` cannot close it (it needs a PR and a clean worktree, and archives only the plan), so the final report ends with the manual close.
-In a linked worktree with in-repo storage: copy the spike report and the plan into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
+In a linked worktree with in-repo storage: copy the spike report and the plan, when there is one, into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
 In the main checkout, or with out-of-tree storage, the report already outlives the code: discard the experiment code by the paths the report names.
 It also offers, in one line, to post the report's answer and recommendation as a comment on the task, outward-facing and free of f10 traces; a driven run lists the offer and posts nothing.
 The kind is known from the plan, or a planless run's inline plan, before the pipeline starts, so the badge declares `f10-state.sh final implement`, and a dry run prints the path cut at implement.

@@ -22,7 +22,7 @@ Every question the steps call for (**wait or proceed** on a base with no code, a
    The print is for a person looking at this pane: end it with "Answer here", never a command for another session (`f10 forward`, `f10 status`, `f10 drive --answer`).
    The driving session reads the ask through `f10 status <task-id>` and knows its own way back.
 
-Two questions never become asks: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`), and ships a saved plan as it stands rather than asking **reuse or re-plan**.
+Two questions never become asks: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`), and ships a saved plan as it stands rather than asking **reuse or re-plan** (or, on a planless pipeline, **reuse or run planless**).
 
 ## The answer
 
