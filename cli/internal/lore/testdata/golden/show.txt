@@ -1,0 +1,52 @@
+FT-1  7 entries
+
+intent  01M5C8KYM0041061050R3GG28A  2026-10-20 09:00Z  dev@example.com
+
+    Why we do FT-1
+
+decision  01M5CAAWE03WG228H34GJJC9S8  2026-10-20 09:30Z  dev@example.com  with claude-opus-5-5 via claude-code
+  chosen: token bucket
+  rejected: fixed window - bursts at the edge
+  anchor: api/limit.go:10-20@29a8699#Allow
+
+    A bucket per key.
+
+    In memory: one instance.
+
+verdict  01M5CC1T801C60T3GF208H44RM  2026-10-20 10:00Z  dev@example.com
+  outcome: rethink
+  gate: judge
+  commit: abcdef1
+
+    judged rethink
+
+finding  01M5CFFNW054N2PB1D5RQK0C9J  2026-10-20 11:00Z  rev@example.com
+  severity: major
+  status: fixed
+  resolution: abcdef1
+  anchor: api/limit.go:30@29a8699#Allow
+
+    major fixed
+
+decision  01M5CH6KP06CT3ADHQ70WKMESW  2026-10-20 11:30Z  dev@example.com
+  chosen: token bucket
+  rejected: fixed window - bursts at the edge
+  anchor: api/limit.go:35@29a8699
+
+    A bucket per key.
+
+    In memory: one instance.
+
+lesson  01M5CPBD408X44JJJB9H6MWKTG  2026-10-20 13:00Z  dev@example.com
+  anchor: api/limit.go:15@29a8699
+  supersedes: 01M5CJXHG07MZ3YG21891M8HA6
+  retired: yes
+
+    learned
+
+verdict  01M5EYEH802MB1E60S38DHR78Y  2026-10-21 10:00Z  dev@example.com
+  outcome: proceed
+  gate: judge
+  commit: abcdef1
+
+    judged proceed

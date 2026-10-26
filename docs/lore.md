@@ -1,0 +1,283 @@
+# Lore, version 1
+
+Code loses its "why".
+The reasons behind a change live in PR threads, plan files and agent sessions that are gone by the time someone, human or agent, is about to edit the line.
+Lore keeps that knowledge as plain markdown entries next to the code, linked to commits by a trailer, and answers two questions:
+
+- **why is this line the way it is** (`f10 lore why <path:line>`)
+- **what must I know before editing this file** (`f10 lore lessons <path>`)
+
+This file is the spec.
+`cli/internal/lore` is the implementation and `f10 lore` its CLI.
+The package imports nothing else from f10, so it can be copied out as a standalone tool.
+
+## Glossary
+
+- **Change**: the unit of work.
+  Its id is the task id (`FT-138`).
+  It is a directory holding every entry for that change.
+- **Entry kinds**, following the life of a change:
+  - `intent`: what we are doing and why, written before code.
+  - `decision`: a choice made: the option taken, the options rejected, and why.
+  - `finding`: something a reviewer challenged: where, how severe, and how it was settled.
+  - `verdict`: a gate's judgment on the change at a given commit.
+  - `lesson`: lasting knowledge anchored to code, which outlives the change.
+- **Anchor**: where an entry points in the code: `path:line[-end]@commit`, plus an optional symbol.
+- **Trailer**: `Change: <id>` on a commit, the link from code to its change.
+  f10's `Task: <id>` trailer is accepted as an alias.
+
+## Rules
+
+- **Entries are immutable.**
+  A correction or a status change is a new entry with `supersedes: <id>`, and the latest entry in a chain is the effective one.
+  Settling a finding is a new `finding` entry with `status: fixed` that supersedes the original.
+- **One file per entry**, at `<root>/<change-id>/<ulid>-<kind>.md`, so concurrent branches never conflict.
+  The id is the ULID in the filename, never a frontmatter field.
+- **Every entry has a `human`**, the accountable person, taken from `git config user.email`.
+  `agent` is optional and set only when an agent did the work.
+- **Plain files are the source of truth.**
+  Nothing is written but the entry files; everything shown is computed from them and from git.
+- **The root is a parameter.**
+  The package takes it; where f10 points it is under [Where the root lives](#where-the-root-lives).
+
+### Supersedes
+
+- The target must exist in the same change and be of the same kind.
+- An entry is **effective** when nothing supersedes it: a chain `A <- B <- C` leaves `C`.
+- Superseding an entry that is already superseded forks the chain.
+  `f10 lore add` refuses it and names the chain's head; a fork that arrives anyway (two branches each settling the same finding) is a `validate` error, and reads keep the later entry by `at`, then by id.
+- A dangling `supersedes` (the target is missing) is a `validate` error; reads treat the entry as effective.
+- `retired: true` is allowed only on a superseding `lesson`.
+  A retired lesson ends its chain: `lessons` and `why` no longer show it.
+
+## Entry format
+
+YAML frontmatter, then a markdown body.
+The body is free markdown, the human-readable reason, and is never empty.
+An unknown frontmatter field is an error.
+
+Common fields:
+
+| field | value | |
+|---|---|---|
+| `kind` | `intent`, `decision`, `finding`, `verdict` or `lesson`; matches the filename | required |
+| `change` | the change id; matches the directory | required |
+| `human` | the accountable person's email | required |
+| `agent` | `model`, `via`, `session`, each optional | optional |
+| `at` | UTC, RFC 3339, seconds | required |
+| `anchors` | a list of `path`, `line`, `end_line`, `commit`, `symbol`; `path` repo-relative, `line` from 1, `end_line` not before `line`, `commit` a sha; `end_line` and `symbol` optional | optional, except on `lesson` |
+| `supersedes` | the id of the entry this one replaces | optional |
+
+Fields per kind; a kind's field on another kind is an error:
+
+| kind | fields |
+|---|---|
+| `intent` | none |
+| `decision` | `chosen` (required); `rejected`, a list of `option` and `reason`, both required |
+| `finding` | `severity`: `blocker`, `major`, `minor` or `nit`; `status`: `open`, `fixed`, `wontfix` or `duplicate`; `resolution`, a sha or a reason, required unless the status is `open` |
+| `verdict` | `outcome`: `proceed`, `proceed with changes`, `rethink` or `stop`; `gate`: `judge`, `review` or `human`; `commit`, the sha judged; all required |
+| `lesson` | at least one anchor; `retired: true` only with `supersedes` |
+
+The `verdict` outcomes are the four a judge's verdict file holds (`cli/internal/verdict`), spelled the same.
+
+### Relation to review and judge files
+
+Today a review writes `reviews/<task>/<round>.md` and a judge `verdicts/<key>/<n>.md` under the storage root.
+Lore's `finding` and `verdict` kinds borrow their vocabulary and are where those facts move once the skills write into lore; until then both exist, and lore is the one meant to last.
+
+## Verbs
+
+```bash
+f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]
+f10 lore show <change> [--json]
+f10 lore why <path:line> [--json]
+f10 lore lessons <path> [--json]
+f10 lore check <change>
+f10 lore validate [<change>]
+```
+
+Every verb takes `--root <dir>`.
+
+- **`add`** validates and writes one entry and prints its id.
+  Kind flags: `--chosen`, `--rejected 'option: reason'` (repeatable) for a decision; `--severity`, `--status`, `--resolution` for a finding; `--outcome`, `--gate`, `--commit` for a verdict; `--retired` for a lesson.
+  An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
+  `human` is `git config user.email`.
+  Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.
+- **`show`** prints the change's effective entries, the intent first, then by time.
+- **`why`** blames the line, reads the commit's `Change:` trailers (else its `Task:` trailers), loads each change, and prints the intent, the latest verdict, and the effective decisions, findings and lessons with an anchor on the same path that covers the line, or that share a symbol with such an anchor.
+  A commit with no trailer, or whose changes hold no entries, falls back to every change's entries with an anchor on the same path whose `commit` is the blamed one, or with an anchor on the line whose `commit` is an ancestor of it (an anchor written before its code was committed); the output says the link came from an anchor, a weaker one than a trailer.
+  `why` and `lessons` skip a file that does not parse; `validate` reports it.
+  Nothing found: `no record`, exit 0.
+  A line not yet committed is `no record` too; a path git does not know is an error.
+- **`lessons`** prints the effective, non-retired lessons anchored to the path, across every change.
+  An agent reads it before editing a file.
+- **`check`** exits 1, naming each reason, when the intent is missing, no verdict exists, the latest verdict is `rethink` or `stop`, or a `blocker` or `major` finding is still effectively `open`.
+  It exits 0 otherwise.
+- **`validate`** lints every entry of the change, or of every change: parse errors, missing or misplaced fields, bad anchors, a filename or directory that disagrees with the frontmatter, dangling `supersedes`, cross-kind `supersedes` and forks.
+  It exits 1 when it finds any.
+
+## Where the root lives
+
+`project.md`'s frontmatter key `lore` decides (`docs/project-setup.md`):
+
+- **`local`** (default): `lore/` under the main checkout's storage root (`.f10/lore`), or under `~/.f10/<project>/` with out-of-tree storage.
+  Every worktree of the project writes there, so a task's entries outlive its worktree.
+  Under stealth the storage root is never committed, so lore stays on this machine: `why` answers only here.
+- **`committed`**: `.lore/` at the checkout root, committed with the code, so `why` works on any clone.
+  This is an explicit opt-in, so it holds under `visibility: stealth` too.
+
+`--root <dir>` overrides both and is how lore runs outside an f10 project.
+
+## Example
+
+One change, `FT-1`, rate limiting a public API, with all five kinds: an intent, a decision, a finding settled by a superseding entry, a verdict, and a lesson corrected by a superseding one.
+`f10 lore validate FT-1` passes on it; a test lifts these files out of this document and checks that.
+
+`FT-1/01M5C8KYM0248H248H248H248H-intent.md`
+
+```markdown
+---
+kind: intent
+change: FT-1
+human: dev@example.com
+at: 2026-10-20T09:00:00Z
+---
+
+Rate limit the public API per key, so one client's burst cannot starve the others.
+Requests over the limit get 429 with a Retry-After header.
+```
+
+`FT-1/01M5CCX950248H248H248H248H-decision.md`
+
+```markdown
+---
+kind: decision
+change: FT-1
+human: dev@example.com
+agent:
+    model: claude-opus-5-5
+    via: claude-code
+at: 2026-10-20T10:15:00Z
+anchors:
+    - path: api/limit.go
+      line: 12
+      end_line: 30
+      commit: a1b2c3d
+      symbol: Allow
+chosen: token bucket per key
+rejected:
+    - option: fixed window counter
+      reason: lets a client send twice the limit across a window edge
+    - option: a shared limiter service
+      reason: a network hop on every request for a single-instance API
+---
+
+A bucket per key refills at the plan's rate and holds one second of burst.
+Buckets live in memory: the API runs as one instance.
+```
+
+`FT-1/01M5FC5ZR0248H248H248H248H-finding.md`
+
+```markdown
+---
+kind: finding
+change: FT-1
+human: reviewer@example.com
+at: 2026-10-21T14:00:00Z
+anchors:
+    - path: api/limit.go
+      line: 22
+      commit: a1b2c3d
+      symbol: Allow
+severity: major
+status: open
+---
+
+The bucket map is never pruned: every key ever seen stays in memory.
+```
+
+`FT-1/01M5FMRMT0248H248H248H248H-finding.md`
+
+```markdown
+---
+kind: finding
+change: FT-1
+human: dev@example.com
+at: 2026-10-21T16:30:00Z
+anchors:
+    - path: api/limit.go
+      line: 22
+      commit: a1b2c3d
+      symbol: Allow
+supersedes: 01M5FC5ZR0248H248H248H248H
+severity: major
+status: fixed
+resolution: 9f8e7d6
+---
+
+Buckets idle for ten minutes are dropped by a sweep on each refill tick.
+```
+
+`FT-1/01M5HM93W0248H248H248H248H-verdict.md`
+
+```markdown
+---
+kind: verdict
+change: FT-1
+human: dev@example.com
+agent:
+    model: claude-opus-5-5
+    via: claude-code
+at: 2026-10-22T11:00:00Z
+outcome: proceed with changes
+gate: judge
+commit: 9f8e7d6
+---
+
+Sound for one instance.
+Name the single-instance assumption where the limiter is built, so a second replica does not silently double every limit.
+```
+
+`FT-1/01M5HMJ8V0248H248H248H248H-lesson.md`
+
+```markdown
+---
+kind: lesson
+change: FT-1
+human: dev@example.com
+at: 2026-10-22T11:05:00Z
+anchors:
+    - path: api/limit.go
+      line: 12
+      end_line: 30
+      commit: 9f8e7d6
+      symbol: Allow
+---
+
+Limits are per process.
+Running a second replica doubles every key's effective limit.
+```
+
+`FT-1/01M5M1H1E0248H248H248H248H-lesson.md`
+
+```markdown
+---
+kind: lesson
+change: FT-1
+human: dev@example.com
+at: 2026-10-23T09:30:00Z
+anchors:
+    - path: api/limit.go
+      line: 12
+      end_line: 30
+      commit: 9f8e7d6
+      symbol: Allow
+supersedes: 01M5HMJ8V0248H248H248H248H
+---
+
+Limits are per process.
+Running N replicas multiplies every key's effective limit by N; move the buckets to a shared store before scaling out.
+```
+
+`f10 lore show FT-1` prints five entries: the intent, the decision, the fixed finding, the verdict and the corrected lesson.
+`f10 lore check FT-1` passes: the intent exists, the verdict is `proceed with changes`, and the major finding is fixed.

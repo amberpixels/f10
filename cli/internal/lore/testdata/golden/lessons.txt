@@ -1,0 +1,11 @@
+plain.go  2 lessons
+
+lesson  01M5CC1T80GE28B1M7H24RN2WC  2026-10-20 10:00Z  dev@example.com
+  anchor: plain.go:4@21d7cecb3101aee8c8f28f5f10b2d294c0b3d679
+
+    learned
+
+lesson  01M5CC1T80HP78Z44HJA9S95CP  2026-10-20 10:00Z  dev@example.com
+  anchor: plain.go:4@1234567
+
+    learned

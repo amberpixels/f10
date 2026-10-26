@@ -60,6 +60,13 @@ f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
 f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
+
+f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
+f10 lore show <change> [--json]     # the change's effective entries, the intent first
+f10 lore why <path:line> [--json]   # the change behind a line: intent, latest verdict, entries on the line
+f10 lore lessons <path> [--json]    # the lessons to read before editing a file
+f10 lore check <change>             # exit 1 naming why the change does not pass its gate
+f10 lore validate [<change>]        # lint entries against the schema
 ```
 
 A verb means one thing under every noun.
@@ -667,6 +674,12 @@ A state row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, 
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
 The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
 Inside a session, `/f10:board` runs the command with the same flags and prints its output; with `--state` it offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.
+
+## Lore
+
+`f10 lore` keeps a change's intent, decisions, findings, verdicts and lessons as entry files and answers why a line is the way it is.
+[docs/lore.md](lore.md) is the spec: the schema per kind, the rules, every verb and an example change.
+The root is `.f10/lore` in the main checkout, shared by its worktrees (`~/.f10/<project>/lore` with out-of-tree storage), or `.lore/` at the checkout root with `lore: committed` in `project.md`; `--root <dir>` overrides both.
 
 ## References
 

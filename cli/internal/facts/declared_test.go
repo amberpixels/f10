@@ -252,12 +252,36 @@ func TestTraces(t *testing.T) {
 func tracesFact(t *testing.T, eff *Effective) Fact {
 	t.Helper()
 
-	i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "traces" })
+	return factFor(t, eff, "traces")
+}
+
+func factFor(t *testing.T, eff *Effective, key string) Fact {
+	t.Helper()
+
+	i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == key })
 	if i < 0 {
-		t.Fatalf("no traces fact in %+v", eff.Facts)
+		t.Fatalf("no %s fact in %+v", key, eff.Facts)
 	}
 
 	return eff.Facts[i]
+}
+
+// lore is local unless declared and takes only local or committed.
+func TestLore(t *testing.T) {
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "lore"); none.Lore != "local" || f.Origin != OriginDefault {
+		t.Errorf("undeclared = %q, %+v", none.Lore, f)
+	}
+
+	committed := buildWith(t, "---\nlore: committed\n---\n# demo\n", "")
+	if f := factFor(t, committed, "lore"); committed.Lore != "committed" || f.Origin != "declared (main, frontmatter)" {
+		t.Errorf("declared committed = %q, %+v", committed.Lore, f)
+	}
+
+	bad := buildWith(t, "---\nlore: shared\n---\n", "")
+	if !strings.Contains(bad.Errors(), "lore") {
+		t.Errorf("errors = %q", bad.Errors())
+	}
 }
 
 // review_traces, the old spelling, still reads as traces with a warning
