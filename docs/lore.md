@@ -100,12 +100,13 @@ Every verb takes `--root <dir>`.
 
 - **`add`** validates and writes one entry and prints its id.
   Kind flags: `--chosen`, `--rejected 'option: reason'` (repeatable) for a decision; `--severity`, `--status`, `--resolution` for a finding; `--outcome`, `--gate`, `--commit` for a verdict; `--retired` for a lesson.
-  An anchor without `@commit` takes `HEAD`'s.
+  An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
   `human` is `git config user.email`.
   Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.
 - **`show`** prints the change's effective entries, the intent first, then by time.
 - **`why`** blames the line, reads the commit's `Change:` trailers (else its `Task:` trailers), loads each change, and prints the intent, the latest verdict, and the effective decisions, findings and lessons with an anchor on the same path that covers the line, or that share a symbol with such an anchor.
-  A commit with no trailer, or whose changes hold no entries, falls back to every change's entries with an anchor on the same path whose `commit` is the blamed one; the output says the link came from an anchor, a weaker one than a trailer.
+  A commit with no trailer, or whose changes hold no entries, falls back to every change's entries with an anchor on the same path whose `commit` is the blamed one, or with an anchor on the line whose `commit` is an ancestor of it (an anchor written before its code was committed); the output says the link came from an anchor, a weaker one than a trailer.
+  `why` and `lessons` skip a file that does not parse; `validate` reports it.
   Nothing found: `no record`, exit 0.
   A line not yet committed is `no record` too; a path git does not know is an error.
 - **`lessons`** prints the effective, non-retired lessons anchored to the path, across every change.
@@ -119,8 +120,9 @@ Every verb takes `--root <dir>`.
 
 `project.md`'s frontmatter key `lore` decides (`docs/project-setup.md`):
 
-- **`local`** (default): `<storage root>/lore`.
-  Under stealth the storage root is never committed, so lore stays on this machine: `why` answers only in the checkout that wrote the entries.
+- **`local`** (default): `lore/` under the main checkout's storage root (`.f10/lore`), or under `~/.f10/<project>/` with out-of-tree storage.
+  Every worktree of the project writes there, so a task's entries outlive its worktree.
+  Under stealth the storage root is never committed, so lore stays on this machine: `why` answers only here.
 - **`committed`**: `.lore/` at the checkout root, committed with the code, so `why` works on any clone.
   This is an explicit opt-in, so it holds under `visibility: stealth` too.
 

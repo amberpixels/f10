@@ -83,7 +83,8 @@ func newWhyFixture(t *testing.T) whyFixture {
 	s.mustAdd(t, intent("FT-4", "2026-10-20T09:00:00Z"))
 	s.mustAdd(t, intent("FT-5", "2026-10-20T09:00:00Z"))
 	s.mustAdd(t, lesson("FT-5", "2026-10-20T10:00:00Z", anchorAt("plain.go", 4, 0, fx.plain, "")))
-	s.mustAdd(t, lesson("FT-6", "2026-10-20T10:00:00Z", anchorAt("plain.go", 4, 0, fx.alias, "")))
+	// a commit this clone lacks, as after a squash: never an ancestor
+	s.mustAdd(t, lesson("FT-6", "2026-10-20T10:00:00Z", anchorAt("plain.go", 4, 0, "1234567", "")))
 
 	return fx
 }
@@ -378,5 +379,72 @@ func TestGolden(t *testing.T) {
 				t.Errorf("differs from %s:\n%s", golden, b.String())
 			}
 		})
+	}
+}
+
+// The order a change is actually written in: the decision first, anchored
+// at the HEAD before the code, then the code in a commit with no trailer.
+func TestWhyFallbackFindsEntryWrittenBeforeItsCode(t *testing.T) {
+	r := newRepo(t)
+	s := testStore(t, filepath.Join(r.dir, ".lore"), CLIGit{Dir: r.dir})
+
+	base := r.commit("base", map[string]string{"x.go": lines(5)})
+
+	d := Entry{
+		Kind: KindDecision, Change: "FT-1", Human: "dev@example.com", At: at("2026-10-20T09:00:00Z"),
+		Anchors: []Anchor{anchorAt("x.go", 3, 0, base[:7], "")}, Chosen: "b", Body: "why b",
+	}
+	s.mustAdd(t, d)
+
+	elsewhere := d
+	elsewhere.Anchors = []Anchor{anchorAt("x.go", 5, 0, base[:7], "")}
+	s.mustAdd(t, elsewhere)
+
+	r.commit("change line 3", map[string]string{"x.go": "line\nline\nchanged\nline\nline\n"})
+
+	res, err := s.Why(t.Context(), "x.go", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.Via != ViaAnchor || len(res.Records) != 1 || len(res.Records[0].Entries) != 1 {
+		t.Fatalf("why = %+v, want the one decision on line 3 via its anchor", res)
+	}
+
+	// line 5 was not touched: blame names base itself, the exact match
+	res, err = s.Why(t.Context(), "x.go", 5)
+	if err != nil || len(res.Records[0].Entries) != 2 {
+		t.Errorf("why x.go:5 = %+v, %v; want both decisions anchored at base", res, err)
+	}
+}
+
+// A stray file in one change never fails a query about another.
+func TestQueriesSkipStrayFiles(t *testing.T) {
+	fx := newWhyFixture(t)
+
+	for name, data := range map[string]string{
+		"FT-9/README.md": "notes\n",
+		"FT-9/01M5C8KYM0248H248H248H248H-lesson.md": "---\nkind: [broken\n---\n",
+	} {
+		path := filepath.Join(fx.store.Root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got, err := fx.store.Lessons("plain.go"); err != nil || len(got) != 2 {
+		t.Errorf("lessons = %d, %v; want 2", len(got), err)
+	}
+
+	if _, err := fx.store.Why(t.Context(), "plain.go", 1); err != nil {
+		t.Errorf("why: %v", err)
+	}
+
+	if problems, err := fx.store.Validate("FT-9"); err != nil || len(problems) != 2 {
+		t.Errorf("validate FT-9 = %v, %v; want both files reported", problems, err)
 	}
 }

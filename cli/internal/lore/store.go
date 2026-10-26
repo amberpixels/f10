@@ -154,8 +154,12 @@ func (s *Store) Effective(change string) ([]Entry, error) {
 }
 
 func effective(entries []Entry) []Entry {
+	byID := make(map[string]Entry, len(entries))
 	superseded := map[string]bool{}
+
 	for _, e := range entries {
+		byID[e.ID] = e
+
 		if e.Supersedes != "" {
 			superseded[e.Supersedes] = true
 		}
@@ -171,7 +175,7 @@ func effective(entries []Entry) []Entry {
 			continue
 		}
 
-		root := rootOf(entries, e)
+		root := rootOf(byID, e)
 
 		cur, ok := best[root]
 		if !ok {
@@ -209,18 +213,18 @@ func effective(entries []Entry) []Entry {
 
 // rootOf follows supersedes back to the first entry of the chain; a
 // dangling target ends the walk at the entry that names it.
-func rootOf(entries []Entry, e Entry) string {
+func rootOf(byID map[string]Entry, e Entry) string {
 	seen := map[string]bool{}
 
 	for e.Supersedes != "" && !seen[e.ID] {
 		seen[e.ID] = true
 
-		i := slices.IndexFunc(entries, func(x Entry) bool { return x.ID == e.Supersedes })
-		if i < 0 {
+		prev, ok := byID[e.Supersedes]
+		if !ok {
 			break
 		}
 
-		e = entries[i]
+		e = prev
 	}
 
 	return e.ID
@@ -328,6 +332,18 @@ func (s *Store) Validate(change string) ([]Problem, error) {
 	})
 
 	return problems, nil
+}
+
+// effectiveLoose is Effective for a query across changes: a file that does
+// not parse is skipped, so one stray file cannot fail every path's answer.
+// validate is where it gets reported.
+func (s *Store) effectiveLoose(change string) ([]Entry, error) {
+	entries, _, err := s.load(change)
+	if err != nil {
+		return nil, err
+	}
+
+	return effective(entries), nil
 }
 
 // checkSupersedes refuses a target outside the change, of another kind, or

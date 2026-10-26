@@ -26,6 +26,11 @@ type Git interface {
 	Trailers(ctx context.Context, commit string) (map[string][]string, error)
 	// UserEmail is `git config user.email`; ErrNoRecord when unset.
 	UserEmail(ctx context.Context) (string, error)
+	// Head is HEAD's abbreviated sha; ErrNoRecord before the first commit.
+	Head(ctx context.Context) (string, error)
+	// IsAncestor reports whether ancestor is reachable from commit; a sha
+	// this clone does not have is false, not an error.
+	IsAncestor(ctx context.Context, ancestor, commit string) (bool, error)
 }
 
 // CLIGit answers through the git binary, run in Dir, the repository root.
@@ -131,6 +136,40 @@ func (g CLIGit) UserEmail(ctx context.Context) (string, error) {
 	}
 
 	return email, nil
+}
+
+// Head asks rev-parse, which fails on an unborn branch.
+func (g CLIGit) Head(ctx context.Context) (string, error) {
+	if _, err := g.run(ctx, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+		if ge, ok := errors.AsType[*gitError](err); ok && ge.code == 1 && ge.stderr == "" {
+			return "", ErrNoRecord
+		}
+
+		return "", err
+	}
+
+	out, err := g.run(ctx, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(out), nil
+}
+
+// IsAncestor reads merge-base's exit code: 0 yes, 1 no; an unknown object
+// is a no too, since an anchor may name a commit squashed away.
+func (g CLIGit) IsAncestor(ctx context.Context, ancestor, commit string) (bool, error) {
+	_, err := g.run(ctx, "merge-base", "--is-ancestor", ancestor, commit)
+	if err == nil {
+		return true, nil
+	}
+
+	ge, ok := errors.AsType[*gitError](err)
+	if ok && (ge.code == 1 || strings.Contains(ge.stderr, "Not a valid") || strings.Contains(ge.stderr, "bad object")) {
+		return false, nil
+	}
+
+	return false, err
 }
 
 func (g CLIGit) run(ctx context.Context, args ...string) (string, error) {

@@ -60,7 +60,7 @@ func (s *Store) Why(ctx context.Context, path string, line int) (*WhyResult, err
 			continue
 		}
 
-		entries, err := s.Effective(change)
+		entries, err := s.effectiveLoose(change)
 		if errors.Is(err, ErrNoRecord) {
 			continue
 		}
@@ -84,14 +84,16 @@ func (s *Store) Why(ctx context.Context, path string, line int) (*WhyResult, err
 	}
 
 	for _, change := range all {
-		entries, err := s.Effective(change)
+		entries, err := s.effectiveLoose(change)
 		if err != nil {
 			return nil, err
 		}
 
-		matched := filterEntries(entries, func(a Anchor) bool {
-			return a.Path == path && sameCommit(a.Commit, commit)
-		})
+		matched, err := s.atCommit(ctx, entries, path, line, commit)
+		if err != nil {
+			return nil, err
+		}
+
 		if len(matched) > 0 {
 			res.Records = append(res.Records, recordFor(change, entries, matched))
 		}
@@ -102,6 +104,44 @@ func (s *Store) Why(ctx context.Context, path string, line int) (*WhyResult, err
 	}
 
 	return res, nil
+}
+
+// atCommit keeps the entries anchored on path at the blamed commit, and
+// those anchored on the line at an ancestor of it: an anchor written before
+// its code was committed names the parent of the commit blame finds.
+func (s *Store) atCommit(ctx context.Context, entries []Entry, path string, line int, commit string) ([]Entry, error) {
+	near := map[string]bool{}
+	for _, e := range onLine(entries, path, line) {
+		near[e.ID] = true
+	}
+
+	var out []Entry
+
+	for _, e := range filterEntries(entries, func(a Anchor) bool { return a.Path == path }) {
+		for _, a := range e.Anchors {
+			if a.Path != path {
+				continue
+			}
+
+			hit := sameCommit(a.Commit, commit)
+			if !hit && near[e.ID] {
+				ok, err := s.Git.IsAncestor(ctx, a.Commit, commit)
+				if err != nil {
+					return nil, err
+				}
+
+				hit = ok
+			}
+
+			if hit {
+				out = append(out, e)
+
+				break
+			}
+		}
+	}
+
+	return out, nil
 }
 
 // onLine keeps the anchored entries covering the line, and those sharing a
@@ -194,7 +234,7 @@ func (s *Store) Lessons(path string) ([]Entry, error) {
 	var out []Entry
 
 	for _, change := range changes {
-		entries, err := s.Effective(change)
+		entries, err := s.effectiveLoose(change)
 		if err != nil {
 			return nil, err
 		}

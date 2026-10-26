@@ -679,7 +679,7 @@ Inside a session, `/f10:board` runs the command with the same flags and prints i
 
 `f10 lore` keeps a change's intent, decisions, findings, verdicts and lessons as entry files and answers why a line is the way it is.
 [docs/lore.md](lore.md) is the spec: the schema per kind, the rules, every verb and an example change.
-The root is `<storage root>/lore`, or `.lore/` at the checkout root with `lore: committed` in `project.md`; `--root <dir>` overrides both.
+The root is `.f10/lore` in the main checkout, shared by its worktrees (`~/.f10/<project>/lore` with out-of-tree storage), or `.lore/` at the checkout root with `lore: committed` in `project.md`; `--root <dir>` overrides both.
 
 ## References
 

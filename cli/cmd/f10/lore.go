@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/lore"
 )
 
@@ -123,12 +124,17 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 		return nil, fmt.Errorf("getwd: %w", err)
 	}
 
-	top := gitx.Out(ctx, cwd, "rev-parse", "--show-toplevel")
-	if top == "" {
+	root := cmd.String("root")
+
+	// outside git only --root can name the store, and paths stay cwd-relative
+	top, err := gitx.Exec(ctx, cwd, "rev-parse", "--show-toplevel")
+	if err != nil {
+		if root == "" {
+			return nil, fmt.Errorf("lore needs a git repository or --root: %w", err)
+		}
+
 		top = cwd
 	}
-
-	root := cmd.String("root")
 
 	switch {
 	case root != "":
@@ -141,7 +147,7 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 			return nil, err
 		}
 
-		root = filepath.Join(t.lay.StorageRoot, "lore")
+		root = localLoreRoot(t.lay)
 		if t.eff.Lore == "committed" {
 			root = filepath.Join(t.lay.CheckoutRoot, ".lore")
 		}
@@ -152,6 +158,18 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 		cwd:   cwd,
 		top:   top,
 	}, nil
+}
+
+// localLoreRoot is the lore root every checkout of the project shares: an
+// in-repo storage root is per checkout, and a task's worktree is removed
+// when the task finishes, so a worktree writes into main's storage root.
+func localLoreRoot(lay *layout.Layout) string {
+	inRepo := lay.StorageRoot == filepath.Join(lay.CheckoutRoot, ".f10")
+	if inRepo && lay.MainRoot != "" {
+		return filepath.Join(lay.MainRoot, ".f10", "lore")
+	}
+
+	return filepath.Join(lay.StorageRoot, "lore")
 }
 
 // repoPath turns a path given on the command line, relative to the cwd,
@@ -237,7 +255,16 @@ func runLoreAdd(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if a.Commit == "" {
-			a.Commit = gitx.Out(ctx, l.top, "rev-parse", "--short", "HEAD")
+			head, err := l.store.Git.Head(ctx)
+
+			switch {
+			case errors.Is(err, lore.ErrNoRecord):
+				return fmt.Errorf("anchor %s needs @commit: the repository has no commits yet", s)
+			case err != nil:
+				return err
+			}
+
+			a.Commit = head
 		}
 
 		e.Anchors = append(e.Anchors, a)

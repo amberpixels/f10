@@ -24,12 +24,19 @@ func TestLoreOutcomesAreVerdicts(t *testing.T) {
 func runLore(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 
+	return runLoreAt(t, append([]string{"--root", ".lore"}, args...)...)
+}
+
+// runLoreAt runs the lore noun with args as given, no --root added.
+func runLoreAt(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+
 	var out bytes.Buffer
 
 	app := newApp()
 	app.Writer, app.ErrWriter = &out, &out
 
-	err := app.Run(t.Context(), append([]string{"f10", "lore", "--root", ".lore"}, args...))
+	err := app.Run(t.Context(), append([]string{"f10", "lore"}, args...))
 
 	return out.String(), err
 }
@@ -181,5 +188,69 @@ func TestLoreWhyNoRecord(t *testing.T) {
 	out, err := runLore(t, "why", "new.go:1")
 	if err != nil || strings.TrimSpace(out) != "no record" {
 		t.Errorf("why on an uncommitted line = %q, %v", out, err)
+	}
+}
+
+// An entry added from a task's worktree lands in main's storage root, so
+// removing the worktree when the task finishes keeps it.
+func TestLoreLocalRootIsMains(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+	main := t.TempDir()
+	wt := filepath.Join(t.TempDir(), "wt")
+
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"},
+		{"config", "user.email", "dev@example.com"},
+		{"config", "user.name", "Dev"},
+		{"commit", "-q", "--allow-empty", "-m", "root"},
+		{"worktree", "add", "-q", "-b", "FT-1/x", wt},
+	} {
+		cmd := exec.CommandContext(t.Context(), "git", args...)
+		cmd.Dir = main
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	t.Chdir(wt)
+
+	out, err := runLoreAt(t, "add", "intent", "--change", "FT-1", "-m", "why")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	mainRoot, _ := filepath.EvalSymlinks(main)
+	id := strings.TrimSpace(out)
+
+	if _, err := os.Stat(filepath.Join(mainRoot, ".f10", "lore", "FT-1", id+"-intent.md")); err != nil {
+		t.Errorf("entry not in main's storage root: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(wt, ".f10", "lore")); err == nil {
+		t.Error("the worktree holds a lore root of its own")
+	}
+}
+
+func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+	dir := t.TempDir()
+
+	cmd := exec.CommandContext(t.Context(), "git", "init", "-q")
+	cmd.Dir = dir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+
+	t.Chdir(dir)
+
+	_, err := runLore(t, "add", "lesson", "--change", "FT-1", "--anchor", "a.go:1", "-m", "x")
+	if err == nil || !strings.Contains(err.Error(), "no commits yet") {
+		t.Errorf("err = %v, want one saying the repository has no commits", err)
 	}
 }
