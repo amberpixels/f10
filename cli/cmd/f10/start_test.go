@@ -548,6 +548,7 @@ func TestExistingBranch(t *testing.T) {
 		name    string
 		refs    string
 		heads   string // every local branch, read when refs finds none
+		linked  string // the branches' f10-task links, as git config lists them
 		want    string
 		suffix  string
 		got     string
@@ -592,8 +593,15 @@ func TestExistingBranch(t *testing.T) {
 			name:  "the strict shapes win over a prefixed branch",
 			refs:  heads("GH-1/slug"),
 			heads: heads("GH-1/slug", "feat/GH-1-old"),
-			want:  "GH-1/slug",
+			want:  "GH-1/other",
 			got:   "GH-1/slug",
+		},
+		{
+			name:   "a prefixed branch linked to another task",
+			heads:  heads("feat/GH-1-followup"),
+			linked: "branch.feat/GH-1-followup.f10-task GH-5",
+			want:   "GH-1",
+			got:    "",
 		},
 		{
 			name:   "a suffix narrows prefixed branches",
@@ -615,6 +623,10 @@ func TestExistingBranch(t *testing.T) {
 			f := newFakes(t)
 			f.script(refsLocal, c.refs)
 			f.script(allHeads, c.heads)
+
+			if c.linked != "" {
+				f.script(linkedKeys, c.linked)
+			}
 
 			got, err := existingBranch(t.Context(), "/code/repo", c.want, "GH-1", c.suffix)
 			if c.wantErr {

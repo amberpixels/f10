@@ -186,8 +186,9 @@ func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, e
 }
 
 // carryingBranches are the local branches whose name carries id past a
-// prefix. The prefix is the id's own, so an id without one finds none, and
-// GH-10 never reads as GH-1.
+// prefix, minus any linked to another task: a picked-up PR's branch may
+// mention an id it does not ship. The prefix is the id's own, so an id
+// without one finds none, and GH-10 never reads as GH-1.
 func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 	cut := strings.LastIndexByte(id, '-')
 	if cut <= 0 {
@@ -199,8 +200,22 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 		return nil, err
 	}
 
+	linked := map[string]string{}
+
+	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
+		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
+			linked[strings.TrimPrefix(b, "branch.")] = e.Value
+		}
+	}
+
+	match := ref.Matcher(id[:cut])
+
 	return slices.DeleteFunc(all, func(b string) bool {
-		return !strings.EqualFold(ref.Match(id[:cut], b), id)
+		if task, ok := linked[b]; ok && !strings.EqualFold(task, id) {
+			return true
+		}
+
+		return !strings.EqualFold(match(b), id)
 	}), nil
 }
 

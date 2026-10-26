@@ -189,7 +189,7 @@ Outside one it stops before touching anything and points at https://herdr.dev.
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
-It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch, else the one local branch carrying the id past a prefix, like `feat/<id>-slug`) and the checkout that has it checked out; without either it stops, since finish removes only what start could have created.
+It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch, else the one local branch carrying the id past a prefix, like `feat/<id>-slug`) and the checkout that has it checked out; without either it stops, since finish removes only a branch it can tie to the task.
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, and the finish skill asks.
 Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`; after a merge that already happened, each is reopened instead.
@@ -247,7 +247,7 @@ Out of scope: closing the tracker issue (the PR body does that with "Closes #n")
 The plan and ship skills run it first whenever their argument is a task id, because a task started with `f10 start` has its branch, its plan and its agent in a worktree of its own, and running the command anywhere else would run it on the wrong branch without the plan.
 
 1. **The lookup.**
-   The task's branch, found the way start and finish find it (the exact name, else the one `<id>` / `<id>-*` branch); the worktree that has it checked out; the Herdr workspace showing that worktree; the agent under the name start gave it (below), or under `<id>` lowercased with the suffix alone, the name an agent started by an older f10 carries.
+   The task's branch, found the way start and finish find it (the exact name, else the one `<id>` / `<id>-*` branch, else the one local branch carrying the id past a prefix); the worktree that has it checked out; the Herdr workspace showing that worktree; the agent under the name start gave it (below), or under `<id>` lowercased with the suffix alone, the name an agent started by an older f10 carries.
    A task started with a suffix is forwarded to with the same suffix.
 2. **Three outcomes.**
    Exit 0: the command was submitted, and the report has three rows - `task`, `workspace`, `sent`.
