@@ -533,7 +533,7 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	}
 
 	k := childRow{ID: r.ID, Finished: true}
-	if h, err := t.issues(); err == nil {
+	if h, err := t.issues(""); err == nil {
 		k.Title, _ = h.issueTitle(ctx, r.Number)
 	}
 
