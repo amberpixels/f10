@@ -29,7 +29,8 @@ Every f10 run starts by loading it.
   A spike's is its spike report, whatever the pipeline.
 
 **Step headers.**
-A step's `Role:` is its base role; add the project's `project.md → Roles` on top, including conditional roles the plan recorded.
+A step's `Role:` is its base role unless `project.md → Roles` or the step's overlay replaces it (the Roles bullet below); added roles go on top.
+Under a replaced role, a step instruction phrased for code (critical files, migrations, a failing test) applies by analogy or not at all, and the project's overlay for that step says which.
 `Context:` names the `project.md` sections the step reads; its same-named overlay (`.f10/instructions/<step>.md`) extends it.
 
 ## Reading the project load
@@ -49,7 +50,7 @@ If it is ever unavailable, the points below say what to do by hand:
    A `.f10/instructions/` *below* the checkout root is ignored.
    Neither checkout holding one, the loader tries **`~/.f10/<project>/instructions/`** (`<project>` = main checkout's basename, or the cwd's outside git), which makes the whole storage root out-of-tree (**Storage** below).
 3. **Precedence is scope-major, specificity-minor**: the generic step, then `main/project.md`, `main/<step>.md`, `worktree/project.md`, `worktree/<step>.md`.
-   The last statement stands.
+   The last statement stands, except for the base role, which the Roles bullet below ranks.
    A field the worktree does not mention keeps main's value.
    Incompatible stacks call for `replaces main`, never a field-by-field merge.
    A contradiction you cannot resolve: say so rather than pick.
@@ -71,8 +72,14 @@ The full reference for humans is `docs/project-setup.md`.
 - **Hosting & PR** - how to open or refresh a PR/MR: a skill, or `gh pr create` / `glab mr create` and `gh pr edit` / `glab mr update` mechanics (branch naming, labels, assignee).
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.
-- **Roles** - per step, on top of each step's base role: **Always** for every run, **Conditional** when the task touches a named area ("+ senior UI/UX engineer on user-facing UI").
-  `fetch` settles the areas and the plan file records the roles for `/f10:ship`.
+- **Roles** - **Always** for every run, **Conditional** when the task touches a named area.
+  A bullet `+ <role>` adds a role on top of the base role ("+ senior UI/UX engineer on user-facing UI"); `= <role>` sets the base role, replacing the step's `Role:` line.
+  A step list scopes either (`plan, judge: = senior marketing analyst`); none means every step.
+  A role named per step in prose ("plan as a **senior software architect**") is an `=` for that step.
+  The base role is, highest first: an applicable **Conditional** `=`, the step overlay's own `Role:` line, an **Always** `=`, the generic step's `Role:`; between layers, the worktree's wins at the same rank.
+  Every applicable `+` adds on top of whichever base won.
+  `fetch` settles the areas and the base role; two applicable Conditional `=` roles leave the deliverable's area as the base and the other as an added role, named in the brief.
+  The plan's `Roles` line records the result for `/f10:ship`.
 - **Review** - categories, a never-flag list and a human reviewer (`steps/review.md`).
 - **Guardrails** - domain rules the plan and its code must honour: a UI component gallery, PII handling, preferred dependencies.
 

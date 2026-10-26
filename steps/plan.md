@@ -1,6 +1,6 @@
 # Step · plan - from investigation to an architect-grade plan
 
-Role: a **senior software architect** in the project's stack, plus the conditional roles the fetch brief's areas trigger.
+Role: a **senior software architect** in the project's stack, or the base role the fetch brief settled, plus the conditional roles the fetch brief's areas trigger.
 Input: the fetch step's investigation brief.
 Context: `project.md` guardrails and house style.
 Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phase; `f10-state.sh set plan done` once the plan file is on disk.
@@ -8,6 +8,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
 1. **Design a conventional solution**: reuse existing abstractions, follow the project's CLAUDE.md and declared guardrails (e.g. a canonical UI component gallery means designing with its components, never a parallel one).
 2. **Write a staged plan.**
    First line: **Roles**, the roles it was written under, for `/f10:ship` to inherit.
+   Where Roles replaces a base role, the line names it per step group with its source, then the added roles (`Roles: plan, implement, review: senior marketing analyst (replaces base, report work) + senior Python developer`); no replacement, no per-step form.
    A **Kind** line follows for a `bug`, `refactor` or `spike` (`Kind: bug`); a plan without one is a feature.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
    A bundle adds a **Bundle** line (`Bundle: ABC-1+ABC-2`) and a `## Riders` section listing each rider's acceptance criteria under its id; the stages cover every member.
