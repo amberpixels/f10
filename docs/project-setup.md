@@ -223,5 +223,6 @@ Plans always land in the worktree that ran.
 ## Trackers without a CLI
 
 Notion, Jira, a wiki: drop an executable at `.f10/driver` and `f10 task` routes through it.
+For Notion, [f10-drivers](https://github.com/amberpixels/f10-drivers) is that executable: `exec f10-drivers notion "$@"` plus a `.f10/driver.toml`.
 Its `branch` verb is also where the project encodes its branch shape for `f10 start`; without one, the branch is `<ID>/<slug>` from the task's title.
 See [the driver contract](driver-contract.md).
