@@ -68,19 +68,28 @@ func TestActivityGitHub(t *testing.T) {
 	}
 }
 
-// Earlier requests for every id are one query, each id its own alias.
+// Earlier requests for every id are one query, a text and a head-branch
+// search per id, a request both find kept once.
 func TestEarlierRequestsOneCall(t *testing.T) {
-	query := "query($q0: String!, $q1: String!) { " +
-		"t0: search(query: $q0, type: ISSUE, first: 50) { nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } } " +
-		"t1: search(query: $q1, type: ISSUE, first: 50) { nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } } }"
+	nodes := "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } }"
+	query := "query($t0: String!, $h0: String!, $t1: String!, $h1: String!) { " +
+		"t0: search(query: $t0, type: ISSUE, first: 50) " + nodes + " " +
+		"h0: search(query: $h0, type: ISSUE, first: 50) " + nodes + " " +
+		"t1: search(query: $t1, type: ISSUE, first: 50) " + nodes + " " +
+		"h1: search(query: $h1, type: ISSUE, first: 50) " + nodes + " }"
 
 	script(t, map[string]string{
-		"gh api graphql -f query=" + query + " -F q0=repo:{owner}/{repo} is:pr FT-1 -F q1=repo:{owner}/{repo} is:pr FT-2": `{"data":{
-		  "t0":{"nodes":[{"number":3,"state":"MERGED","headRefName":"FT-1/a"}]},"t1":{"nodes":[]}}}`,
+		"gh api graphql -f query=" + query +
+			" -F t0=repo:{owner}/{repo} is:pr FT-1 -F h0=repo:{owner}/{repo} is:pr head:FT-1" +
+			" -F t1=repo:{owner}/{repo} is:pr FT-2 -F h1=repo:{owner}/{repo} is:pr head:FT-2": `{"data":{
+		  "t0":{"nodes":[{"number":3,"state":"MERGED","headRefName":"FT-1/a"}]},
+		  "h0":{"nodes":[{"number":3,"state":"MERGED","headRefName":"FT-1/a"},{"number":4,"headRefName":"FT-1/b"}]},
+		  "t1":{"nodes":[]},"h1":{"nodes":[]}}}`,
 	})
 
 	got, err := Host{Name: "gh"}.EarlierRequests(t.Context(), []string{"FT-1", "FT-2"})
-	if err != nil || len(got["FT-1"]) != 1 || got["FT-1"][0].Number != 3 || len(got["FT-2"]) != 0 {
+	if err != nil || len(got["FT-1"]) != 2 || got["FT-1"][0].Number != 3 || got["FT-1"][1].Number != 4 ||
+		len(got["FT-2"]) != 0 {
 		t.Errorf("got %+v, %v", got, err)
 	}
 
@@ -115,7 +124,8 @@ func TestActivityGitLab(t *testing.T) {
 		  {"id":"a","message":"m","authored_date":"2026-10-23T07:00:00Z","parent_ids":["p1","p2"]}]`,
 		"glab api --paginate projects/:fullpath/merge_requests/4/notes?per_page=100": `[]`,
 		"glab api --paginate projects/:fullpath/merge_requests/4/versions?per_page=100": `[
-		  {"head_commit_sha":"gone","created_at":"2026-10-22T00:00:00Z"},
+		  {"head_commit_sha":"old1","created_at":"2026-10-22T00:00:00Z"},
+		  {"head_commit_sha":"old2","created_at":"2026-10-23T08:00:00Z"},
 		  {"head_commit_sha":"a","created_at":"2026-10-23T09:00:00Z"},
 		  {"head_commit_sha":"b","created_at":"2026-10-23T10:00:00Z"}]`,
 	})
@@ -134,8 +144,9 @@ func TestActivityGitLab(t *testing.T) {
 		kinds = append(kinds, e.Kind)
 	}
 
-	// "gone" is no longer among the commits: replaced at 09:00; "a" still
-	// is, so 10:00 was a plain push, whatever the local clone holds
+	// old1 to old2 at 08:00 was a plain push the 09:00 rebase then
+	// replaced: only the rebase counts, since "a" is the first head still
+	// among the commits; 10:00 was a plain push, whatever the clone holds
 	if !slices.Equal(kinds, []string{EventMergeFromBase, EventForcePush, EventOpened, EventMerged}) {
 		t.Errorf("kinds = %v", kinds)
 	}

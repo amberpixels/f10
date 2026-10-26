@@ -614,8 +614,9 @@ With no window the feed shows **today**, or the last working day while today has
 Over a scope every project shares the span.
 With `--state` the window sets where `done` rows start, seven days back without one.
 
-The feed asks the host once per repository: on GitHub one GraphQL search for the requests updated since the window's start, each with its timeline (commits with their parent count, force pushes, reviews, ready for review, review requests, merges, closes), paged as needed, and the count of open requests nobody touched; on GitLab one list of the merge requests updated since, then the commits, notes and versions of those alone.
-One more call reads the earlier requests of the tasks a request started in the window, to tell a follow-up from a first request.
+On GitHub the feed asks the host once per repository: one GraphQL search for the requests updated since the window's start, each with its newest 100 timeline events since then (commits with their parent count, force pushes, reviews, ready for review, review requests, merges, closes), paged as needed, and the count of open requests nobody touched.
+On GitLab it lists the merge requests updated since and the open ones nobody touched, then reads the commits, notes and versions of the touched ones alone, eight at a time.
+The earlier requests of the tasks a request started in the window are read to tell a follow-up from a first request: one more GraphQL call on GitHub, searching titles and head branches; one list per task on GitLab, whose search reads titles only.
 `docs/board.md` holds the groups' rules.
 
 Each view reads three sources, each failing on its own: the host (the feed's activity; for `--state`, open requests and the ones merged in the window, their commits, reviews, checks and mergeable state), the tracker (open tasks through the driver's `list`, else the host's issues, up to 100), and this machine (for `--state`: live runs, worktrees, branches, plans, findings, verdicts, the ledger, Herdr's workspaces; the feed skips it).

@@ -57,14 +57,15 @@ type Activity struct {
 // ActivityQuery is the GraphQL a GitHub feed reads: every request updated
 // since the window's start with its timeline since then, and the open
 // requests nobody touched, counted, the oldest first. gh pages it on the
-// main search's cursor.
+// main search's cursor; a timeline keeps its newest 100 events, which a
+// request rarely passes within a window.
 const ActivityQuery = `query($q: String!, $quiet: String!, $since: DateTime!, $endCursor: String) {
   search(query: $q, type: ISSUE, first: 50, after: $endCursor) {
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest {
       number title url state isDraft headRefName baseRefName createdAt updatedAt mergedAt closedAt body
       author { login } mergedBy { login } assignees(first: 10) { nodes { login } }
-      timelineItems(since: $since, first: 100, itemTypes: [PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT,
+      timelineItems(since: $since, last: 100, itemTypes: [PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT,
         PULL_REQUEST_REVIEW, READY_FOR_REVIEW_EVENT, REVIEW_REQUESTED_EVENT, MERGED_EVENT, CLOSED_EVENT]) {
         nodes {
           __typename
@@ -329,11 +330,12 @@ func (h Host) mrTouched(ctx context.Context, p PR, since time.Time) (Touched, er
 	return t, nil
 }
 
-// mrRewrites is the force pushes among a merge request's versions since
-// the time, read from GitLab alone: a version whose previous head is no
-// longer among the request's commits replaced history. The local clone
-// is never asked, since the feed fetches nothing and may run with no
-// checkout.
+// mrRewrites is the force push among a merge request's versions since
+// the time, read from GitLab alone: the version whose head is among the
+// request's commits while the one before it is not replaced history. An
+// earlier rewrite leaves no trace in today's commits, so at most the
+// latest one counts. The local clone is never asked, since the feed
+// fetches nothing and may run with no checkout.
 func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits []PRCommit) ([]Event, error) {
 	type version struct {
 		Head      string    `json:"head_commit_sha"`
@@ -357,7 +359,8 @@ func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits 
 	var out []Event
 
 	for i := 1; i < len(versions); i++ {
-		if prev, cur := versions[i-1], versions[i]; !cur.CreatedAt.Before(since) && !kept[prev.Head] {
+		if prev, cur := versions[i-1], versions[i]; !cur.CreatedAt.Before(since) && !kept[prev.Head] &&
+			kept[cur.Head] {
 			out = append(out, Event{Kind: EventForcePush, At: cur.CreatedAt})
 		}
 	}
@@ -367,9 +370,10 @@ func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits 
 
 // EarlierRequests is every request whose title or branch may name each
 // id, read to tell a task's first request from a follow-up: one GraphQL
-// call on GitHub for every id at once, one list per id on GitLab. The
-// caller matches each request's branch and title against the id; the
-// search only narrows.
+// call on GitHub for every id at once, a search on the text and one on
+// the head branch per id; on GitLab, whose search reads titles alone, one
+// list per id, a few at a time. The caller matches each request's branch
+// and title against the id; the searches only narrow.
 func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]PR, error) {
 	out := map[string][]PR{}
 	if len(ids) == 0 {
@@ -377,13 +381,29 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 	}
 
 	if h.GLab() {
-		for _, id := range ids {
-			found, err := h.listMRs(ctx, url.Values{"state": {"all"}, "search": {id}, "per_page": {"100"}})
-			if err != nil {
-				return nil, err
-			}
+		found := make([][]PR, len(ids))
+		errs := make([]error, len(ids))
+		sem := make(chan struct{}, mrParallel)
 
-			out[id] = found
+		var wg sync.WaitGroup
+
+		for i, id := range ids {
+			wg.Go(func() {
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				found[i], errs[i] = h.listMRs(ctx, url.Values{"state": {"all"}, "search": {id}, "per_page": {"100"}})
+			})
+		}
+
+		wg.Wait()
+
+		if err := errors.Join(errs...); err != nil {
+			return nil, err
+		}
+
+		for i, id := range ids {
+			out[id] = found[i]
 		}
 
 		return out, nil
@@ -395,13 +415,15 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 		args   = []string{"api", "graphql"}
 	)
 
+	const nodes = "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } }"
+
 	for i, id := range ids {
-		v := "q" + strconv.Itoa(i)
-		decl = append(decl, "$"+v+": String!")
-		fields = append(fields, fmt.Sprintf(
-			"t%d: search(query: $%s, type: ISSUE, first: 50) "+
-				"{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } }", i, v))
-		args = append(args, "-F", v+"=repo:{owner}/{repo} is:pr "+id)
+		for _, q := range []struct{ alias, search string }{{"t", id}, {"h", "head:" + id}} {
+			v := q.alias + strconv.Itoa(i)
+			decl = append(decl, "$"+v+": String!")
+			fields = append(fields, fmt.Sprintf("%s: search(query: $%s, type: ISSUE, first: 50) %s", v, v, nodes))
+			args = append(args, "-F", v+"=repo:{owner}/{repo} is:pr "+q.search)
+		}
 	}
 
 	query := "query(" + strings.Join(decl, ", ") + ") { " + strings.Join(fields, " ") + " }"
@@ -418,9 +440,14 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 	}
 
 	for i, id := range ids {
-		for _, p := range payload.Data["t"+strconv.Itoa(i)].Nodes {
-			if p.number() != 0 {
-				out[id] = append(out[id], p.pr())
+		seen := map[int]bool{}
+
+		for _, alias := range []string{"t", "h"} {
+			for _, p := range payload.Data[alias+strconv.Itoa(i)].Nodes {
+				if n := p.number(); n != 0 && !seen[n] {
+					seen[n] = true
+					out[id] = append(out[id], p.pr())
+				}
 			}
 		}
 	}
