@@ -75,6 +75,13 @@ func TestApplied(t *testing.T) {
 		}
 	}
 
+	// a template that is not a prefix is still recognized once written
+	suffix := Template("{title} ({id})")
+	if once := suffix.Render("FT-12", "12", "Drive"); !suffix.Applied(once, "FT-12", "12") ||
+		suffix.Applied("Drive", "FT-12", "12") {
+		t.Errorf("suffix template: Applied(%q) is not the only match", once)
+	}
+
 	if !Template("").Applied("anything", "FT-12", "12") {
 		t.Error("no template should count as applied")
 	}

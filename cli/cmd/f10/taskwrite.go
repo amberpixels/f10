@@ -200,6 +200,8 @@ func updateTask(ctx context.Context, warnTo io.Writer, t *target, d *driver.Driv
 				fmt.Fprintln(warnTo, warn)
 			}
 
+			retitleAfter(ctx, warnTo, t, r, "updated")
+
 			return nil
 		}
 

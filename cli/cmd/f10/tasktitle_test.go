@@ -5,6 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // titledHost is a gh host whose project declares tracker.title.
@@ -125,5 +130,56 @@ func TestTaskRetitleRefuses(t *testing.T) {
 
 	if _, _, err := runWrite(t, repo, "", "retitle", "--all"); exitCode(err) != exitNoWrite {
 		t.Errorf("notion tracker: err = %v, want exit %d", err, exitNoWrite)
+	}
+}
+
+func TestOneIDHeading(t *testing.T) {
+	r := ref.Ref{ID: "FT-12", Number: "12"}
+
+	for doc, want := range map[string]string{
+		"# FT-12: FT-12: Drive\n\nbody": "# FT-12: Drive\n\nbody",
+		"# FT-12: Drive\n\nbody":        "# FT-12: Drive\n\nbody",
+		"# Drive":                       "# Drive",
+		"no heading":                    "no heading",
+	} {
+		if got := oneIDHeading(doc, r, "{id}: {title}"); got != want {
+			t.Errorf("oneIDHeading(%q) = %q, want %q", doc, got, want)
+		}
+	}
+}
+
+// After a driver writes an issue on the host's tracker, its title goes
+// through tracker.title; a failed retitle warns, since the write stands.
+func TestRetitleAfter(t *testing.T) {
+	f := newFakes(t)
+
+	tg := &target{
+		dir: t.TempDir(),
+		pb:  &probe.Probes{CLI: probe.Signal{Value: "gh"}},
+		eff: &facts.Effective{TrackerKind: "GitHub Issues", IDPrefix: "FT", TitleTemplate: "{id}: {title}"},
+	}
+	r := ref.Ref{ID: "FT-12", Number: "12"}
+
+	f.script(
+		"gh issue view 12 --json number,title,url",
+		`{"number":12,"title":"Drive","url":"https://github.com/o/r/issues/12"}`,
+	)
+	f.script("gh issue edit 12 --title FT-12: Drive", "")
+
+	var warn strings.Builder
+
+	retitleAfter(t.Context(), &warn, tg, r, "created")
+
+	if !f.called("gh issue edit 12 --title FT-12: Drive") || warn.Len() != 0 {
+		t.Errorf("retitle: calls %v, warning %q", f.calls, warn.String())
+	}
+
+	f.fail("gh issue edit 12 --title FT-12: Drive", shell.Result{Code: 1, Stderr: "HTTP 502"})
+
+	retitleAfter(t.Context(), &warn, tg, r, "created")
+
+	if !strings.Contains(warn.String(), "FT-12 was created") ||
+		!strings.Contains(warn.String(), "f10 task retitle FT-12") {
+		t.Errorf("failed retitle warned %q", warn.String())
 	}
 }
