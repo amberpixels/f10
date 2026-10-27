@@ -87,7 +87,7 @@ The count is the findings awaiting a verdict: this round's, plus a prior block w
 Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 The remote half writes the same block once its file is on disk (point 4 below).
 
-**Lore** (`docs/lore.md`), with the file on disk and a task id known: one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source remote` when `reviewer:` is not `local`).
+**Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source remote` when `reviewer:` is not `local`).
 The severity is the reviewer's call per finding, `blocker`, `major`, `minor` or `nit`, `minor` when it cannot tell.
 Each call prints the entry's id: add it to the finding's block as a `lore: <id>` line, which resolve supersedes.
 A failing `lore add` is one line in the report, never a failed step: the findings file stays the record `f10 status` falls back to.
@@ -178,7 +178,7 @@ Without them this half **fails**: there is nothing to wait for.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it, else `still open`.
    If the body is not in the findings shape, say once that this file's brief can be pasted into the workflow; do not print it.
 4. **Ack.**
-   With the file on disk, `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
+   With the file on disk and its **Lore** entries written (above, `--source remote`), `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
    Ack and trigger are outward-facing, under the run's authorization; in stealth mode they read as the user's own.
    Then the state block, as the blind reviewer's half writes it.
 

@@ -43,6 +43,7 @@ The package imports nothing else from f10, so it can be copied out as a standalo
 ### Supersedes
 
 - The target must exist in the same change and be of the same kind.
+- A superseding `finding` that leaves out `severity`, `source` or its anchors takes them from the entry it supersedes, so a settle names only its new status, resolution and body.
 - An entry is **effective** when nothing supersedes it: a chain `A <- B <- C` leaves `C`.
 - Superseding an entry that is already superseded forks the chain.
   `f10 lore add` refuses it and names the chain's head; a fork that arrives anyway (two branches each settling the same finding) is a `validate` error, and reads keep the later entry by `at`, then by id.

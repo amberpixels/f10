@@ -61,6 +61,10 @@ func (s *Store) Add(ctx context.Context, e Entry) (string, error) {
 
 	e.ID = id.String()
 
+	if e.Supersedes != "" {
+		s.inherit(&e)
+	}
+
 	if err := Validate(e); err != nil {
 		return "", err
 	}
@@ -373,6 +377,33 @@ func (s *Store) checkSupersedes(e Entry) error {
 	}
 
 	return nil
+}
+
+// inherit fills a superseding finding's severity, source and anchors from
+// the entry it supersedes where it leaves them out, so settling a finding
+// needs only its new status. A missing target is checkSupersedes' to report.
+func (s *Store) inherit(e *Entry) {
+	if e.Kind != KindFinding {
+		return
+	}
+
+	entries, err := s.Load(e.Change)
+	if err != nil {
+		return
+	}
+
+	i := slices.IndexFunc(entries, func(x Entry) bool { return x.ID == e.Supersedes })
+	if i < 0 || entries[i].Kind != e.Kind {
+		return
+	}
+
+	old := entries[i]
+	e.Severity = cmp.Or(e.Severity, old.Severity)
+	e.Source = cmp.Or(e.Source, old.Source)
+
+	if len(e.Anchors) == 0 {
+		e.Anchors = old.Anchors
+	}
 }
 
 // load reads a change, returning a parse failure as a problem, not an error.

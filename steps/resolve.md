@@ -23,7 +23,7 @@ It never waits for one: `/f10:review ci` does.
 4. **Held?**
    A findings file holds the review when its `reviewer:` is not `local`, its `review:` is the picked url and its `revision:` the picked revision; a file with no `revision:` line holds none, since a rewritten sticky comment keeps its sha.
    One that does is the file point 1 takes.
-   None does: run the review step's **remote review** points 3 and 4 (shape the file, ack with the picked id), under its **Rounds** rules, whose declines are normal ends here; the new file is the one point 1 takes.
+   None does: run the review step's **remote review** points 3 and 4 (shape the file, write its lore entries, ack with the picked id), under its **Rounds** rules, whose declines are normal ends here; the new file is the one point 1 takes.
 5. **Settle**, after point 10: `f10 review settle --id <id> --revision <revision>`, both from point 1's pick.
    Withheld while a verdict is a waiting `ask` (parked per point 7, or a driven ask pending), or while fixes exist that point 9 did not push; the report says which.
    A held file whose every block already has a verdict skips points 2-10 and is settled the same way.
@@ -68,7 +68,7 @@ It never waits for one: `/f10:review ci` does.
    Apply answers as `fix` or `skip`, re-verify after fixes, and rewrite each answered `verdict:` with the user's words on `reason:`.
    A fix chosen here is verified, not re-reviewed.
 8. **Write the verdicts**: `verdict:` and any `reason:` under each block, one `verdict:` line per block.
-   Then, for each block with a `lore:` line, settle its entry: `f10 lore add finding --change <task> --supersedes <id> --source <its source> --severity <its severity> --status fixed --resolution <sha, or "working tree">` for a `fix`, `--status wontfix --resolution <the reason>` for a `skip`; an `ask` writes nothing until answered.
+   Then, for each block with a `lore:` line, settle its entry: `f10 lore add finding --change <task> --supersedes <id> --status fixed --resolution <sha, or "working tree"> -m <what the fix changed>` for a `fix`, `--status wontfix --resolution <the reason> -m <the reason>` for a `skip`; severity, source and anchors carry over from the entry it supersedes, and an `ask` writes nothing until answered.
    A block with no `lore:` line (a round from before lore) writes nothing; a failing `lore add` is one line in the report, never a failed step.
    Never edit the reviewer's text.
 9. **Land the fixes on an open PR or MR.**

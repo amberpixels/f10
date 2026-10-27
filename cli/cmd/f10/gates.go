@@ -145,7 +145,7 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	remote = remote || (in.remoteFlow && isPR)
 
 	lh, rh := in.half(entries, steps, false, local), in.half(entries, steps, true, remote)
-	if remote && rh.State != gateSettled && in.remote != nil {
+	if remote && rh.State != gateSettled && rh.State != gateRunning && in.remote != nil {
 		in.hostHalf(ctx, rh)
 	}
 
@@ -158,12 +158,28 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 		gates[review].Local, gates[review].Remote = lh, rh
 	}
 
-	if len(judges) == 0 {
-		gates = append(gates, gate{Step: "judge", State: gateOff})
-	}
-
 	for judged, i := range judges {
 		in.judge(&gates[i], judged, entries, steps)
+	}
+
+	// a judge the flow does not declare shows once something ran it
+	extra := false
+
+	for _, judged := range []string{"plan", "change"} {
+		if _, ok := judges[judged]; ok {
+			continue
+		}
+
+		g := gate{Step: "judge", Judged: judged}
+		in.judge(&g, judged, entries, steps)
+
+		if g.State != gatePending {
+			gates, extra = append(gates, g), true
+		}
+	}
+
+	if len(judges) == 0 && !extra {
+		gates = append(gates, gate{Step: "judge", State: gateOff})
 	}
 
 	return gates
@@ -334,6 +350,11 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 		case s == gateRunning:
 			h.State, h.Via, h.Action = gateRunning, viaShip, "review"
 
+			// a round written since ship entered the review is being resolved
+			if in.run != nil && last.After(in.claimedAt(in.run.Session, e)) {
+				h.Action = "resolve"
+			}
+
 			return h
 		case state.Stopped(s):
 			h.State = s
@@ -415,6 +436,24 @@ func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
 	}
 }
 
+// claimedAt is when the session last claimed ship running step.
+func (in gateInput) claimedAt(session, step string) time.Time {
+	var at time.Time
+
+	for _, e := range in.events {
+		if e.Session != session || e.Kind != ledger.StateSet {
+			continue
+		}
+
+		args, _ := e.Payload.Val["args"].([]any)
+		if len(args) >= 3 && args[0] == "ship" && args[1] == "running" && args[2] == step {
+			at = e.At
+		}
+	}
+
+	return at
+}
+
 // startMark is a skill call outside ship, tied to the task.
 type startMark struct {
 	at      time.Time
@@ -423,14 +462,17 @@ type startMark struct {
 }
 
 // started is the newest call of skill on the task's branch or checkout
-// after since, not made by a ship run, whose session has not stopped
-// since: a skill still running. A review's `ci` argument makes it the
-// remote half's. The hook writes run_started before any fetch, with no
-// task, so the branch and the checkout tie it to the task.
+// after since, not made by a ship run, and still running: its session
+// neither stopped nor started another skill since, and it is younger than
+// the state TTL, since the Stop hook writes no stop for a session that ran
+// no phase. A review's `ci` argument makes it the remote half's. The hook
+// writes run_started before any fetch, with no task, so the branch and the
+// checkout tie it to the task.
 func (in gateInput) started(skill string, remote bool, since time.Time) *startMark {
 	var (
 		mark *startMark
-		// a session's ship run is on until a claim takes ship off running
+		// a session's ship run is on until a claim takes ship off running;
+		// ship calls only resolve through the Skill tool, never review or judge
 		inShip = map[string]bool{}
 	)
 
@@ -439,13 +481,17 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 		case ledger.RunStarted:
 			s := payloadString(e.Payload.Val, "skill")
 
+			if mark != nil && e.Session == mark.session && e.At.After(mark.at) {
+				mark = nil
+			}
+
 			if slices.Contains(state.Phases, s) {
 				inShip[e.Session] = s == "ship"
 
 				continue
 			}
 
-			if s != skill || inShip[e.Session] || !in.onTask(e) || !e.At.After(since) {
+			if s != skill || (s == "resolve" && inShip[e.Session]) || !in.onTask(e) || !e.At.After(since) {
 				continue
 			}
 
@@ -471,6 +517,10 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 				mark = nil
 			}
 		}
+	}
+
+	if mark != nil && in.now.Sub(mark.at) > state.TTL() {
+		return nil
 	}
 
 	return mark
@@ -511,23 +561,50 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 
 	l := loreOutcomes(entries)
 
-	if l.local != nil {
-		o.local, o.localAt = roundsFromLore(l.local, o.local), l.localAt
+	if current(l.local, o.local, l.localAt, o.localAt) {
+		o.local = roundsFromLore(l.local, o.local)
 	}
 
-	if l.remote != nil {
-		o.remote, o.remoteAt = roundsFromLore(l.remote, o.remote), l.remoteAt
+	if current(l.remote, o.remote, l.remoteAt, o.remoteAt) {
+		o.remote = roundsFromLore(l.remote, o.remote)
 	}
 
-	if l.planJudge != nil {
-		o.planJudge, o.planAt = l.planJudge, l.planAt
+	o.localAt, o.remoteAt = latest(o.localAt, l.localAt), latest(o.remoteAt, l.remoteAt)
+
+	if l.planJudge != nil && !l.planAt.Add(time.Second).Before(o.planAt) {
+		o.planJudge = l.planJudge
 	}
 
-	if l.changeJudge != nil {
-		o.changeJudge, o.changeAt = l.changeJudge, l.changeAt
+	if l.changeJudge != nil && !l.changeAt.Add(time.Second).Before(o.changeAt) {
+		o.changeJudge = l.changeJudge
 	}
+
+	o.planAt, o.changeAt = latest(o.planAt, l.planAt), latest(o.changeAt, l.changeAt)
 
 	return o
+}
+
+// current is lore's counts for a half answering for it: as new as the
+// newest findings file (lore keeps whole seconds) and holding at least that
+// round's findings, so a lore write that failed leaves the files the
+// answer.
+func current(fromLore, files []reviewRound, loreAt, fileAt time.Time) bool {
+	switch {
+	case fromLore == nil:
+		return false
+	case len(files) == 0:
+		return true
+	}
+
+	return !loreAt.Add(time.Second).Before(fileAt) && fromLore[0].Found >= files[len(files)-1].Found
+}
+
+func latest(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+
+	return a
 }
 
 // roundsFromLore is lore's counts as the latest round, numbered after the
@@ -865,7 +942,11 @@ func readRemote(ctx context.Context, h host, f facts.Review, branch string) remo
 	switch {
 	case ctx.Err() != nil:
 		return remoteState{err: ctx.Err()}
-	case err != nil || p.url() == "":
+	case noSuchPull(err):
+		return remoteState{}
+	case err != nil:
+		return remoteState{err: err}
+	case p.url() == "":
 		return remoteState{}
 	}
 

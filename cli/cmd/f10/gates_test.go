@@ -90,6 +90,14 @@ func TestGatesDuringShip(t *testing.T) {
 	if n := len(gates); n != 6 {
 		t.Errorf("%d gates, want implement, cleanup, pr, review, judge, pr", n)
 	}
+
+	// the reviewer wrote round 1 after ship entered the review: resolve is on it
+	gates = taskGates(context.Background(), gateInput{
+		task: "FT-1", run: run, events: events, now: at(6),
+		outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 2, Ask: 2}}, localAt: at(4).Add(30 * time.Second)},
+	})
+
+	checkTexts(t, gates, map[string]string{"review": "local: resolve running (in ship)"})
 }
 
 func TestGatesStartedOutsideShip(t *testing.T) {
@@ -125,12 +133,34 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 			map[string]string{"review": "local: pending · remote: round 1 running (manual)"},
 		},
 		{
-			"a review whose turn ended",
+			"a review in the ship's session whose turn ended",
 			[]ledger.Event{
-				hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"}),
-				hookEvent(at(5), "s2", ledger.SessionStopped, ledger.Payload{}),
+				hookEvent(at(4), "s1", ledger.RunStarted, ledger.Payload{"skill": "review"}),
+				hookEvent(at(5), "s1", ledger.SessionStopped, ledger.Payload{}),
 			},
 			map[string]string{"review": "local: pending"},
+		},
+		{
+			"a review whose session moved on to another skill",
+			[]ledger.Event{
+				hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"}),
+				hookEvent(at(5), "s2", ledger.RunStarted, ledger.Payload{"skill": "explain"}),
+			},
+			map[string]string{"review": "local: pending"},
+		},
+		{
+			"a review older than the state TTL, its stop never written",
+			[]ledger.Event{hookEvent(at(4).Add(-48*time.Hour), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"})},
+			map[string]string{"review": "local: pending"},
+		},
+		{
+			"a review typed in a session whose ship stopped blocked",
+			[]ledger.Event{
+				sessionEvent(at(4), "s3", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
+				sessionEvent(at(5), "s3", ledger.StateSet, ledger.Payload{"args": []any{"ship", "blocked", "judge"}, "ship": "blocked"}),
+				hookEvent(at(6), "s3", ledger.RunStarted, ledger.Payload{"skill": "review"}),
+			},
+			map[string]string{"review": "local: round 1 running (manual)"},
 		},
 		{
 			"a review on another branch",
@@ -213,8 +243,20 @@ func TestGatesOutcomes(t *testing.T) {
 		})
 	}
 
-	// a plan judge before ship and a change judge after it
+	// a judge the flow does not declare shows once it ran
 	gates := taskGates(context.Background(), gateInput{
+		task: "FT-1", run: ship, now: time.Now(),
+		outcomes: outcomes{planJudge: &judgeOutcome{Verdict: "proceed"}},
+	})
+
+	checkTexts(t, gates, map[string]string{"judge plan": "plan: proceed"})
+
+	if _, ok := texts(gates)["judge"]; ok {
+		t.Errorf("a ran judge also reads not in this flow: %v", texts(gates))
+	}
+
+	// a plan judge before ship and a change judge after it
+	gates = taskGates(context.Background(), gateInput{
 		task: "FT-1", run: ship, now: time.Now(),
 		chain: []string{"plan", "judge", "ship", "review", "resolve", "judge", "finish"},
 		outcomes: outcomes{
@@ -271,7 +313,18 @@ func TestOutcomesPreferLore(t *testing.T) {
 		t.Fatalf("files fallback = %+v", o)
 	}
 
-	when := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	// lore written before the files is behind them: the files answer
+	stale := t.TempDir()
+	writeLore(t, stale, lore.Entry{
+		Kind: lore.KindFinding, Change: "FT-1", Human: "h@x", At: time.Now().Add(-time.Hour),
+		Severity: "minor", Status: "fixed", Resolution: "abcdef1", Source: "local", Body: "old",
+	})
+
+	if o := readOutcomes(&lore.Store{Root: stale}, storage, "FT-1"); len(o.local) != 1 || o.local[0].Ask != 1 {
+		t.Errorf("stale lore won over the newer file: %+v", o.local)
+	}
+
+	when := time.Now().UTC().Truncate(time.Second)
 	finding := func(minute int, source, status string) lore.Entry {
 		e := lore.Entry{
 			Kind: lore.KindFinding, Change: "FT-1", Human: "h@x", At: when.Add(time.Duration(minute) * time.Minute),

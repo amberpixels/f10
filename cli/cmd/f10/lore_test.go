@@ -255,3 +255,85 @@ func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
 		t.Errorf("err = %v, want one saying the repository has no commits", err)
 	}
 }
+
+// The lore commands the review, resolve and judge steps run, as they spell
+// them: a settle names only the new status, and validate passes on the lot.
+func TestLoreStepCommands(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+	dir := t.TempDir()
+
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "dev@example.com"},
+		{"config", "user.name", "Dev"},
+	} {
+		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).
+			CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("a\nb\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{{"add", "."}, {"commit", "-q", "-m", "a"}} {
+		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).
+			CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	t.Chdir(dir)
+
+	must := func(args ...string) string {
+		t.Helper()
+
+		out, err := runLore(t, args...)
+		if err != nil {
+			t.Fatalf("lore %q: %v\n%s", args, err, out)
+		}
+
+		return strings.TrimSpace(out)
+	}
+
+	// review: one open finding per finding
+	local := must("add", "finding", "--change", "FT-1", "--source", "local", "--severity", "major",
+		"--status", "open", "--anchor", "a.go:2", "-m", "Off by one")
+	remote := must("add", "finding", "--change", "FT-1", "--source", "remote", "--severity", "minor",
+		"--status", "open", "--anchor", "a.go:1", "-m", "Name drift")
+
+	// resolve: the settle carries the status, resolution and reason alone
+	must("add", "finding", "--change", "FT-1", "--supersedes", local, "--status", "fixed",
+		"--resolution", "working tree", "-m", "Bounded the loop")
+	must("add", "finding", "--change", "FT-1", "--supersedes", remote, "--status", "wontfix",
+		"--resolution", "house style", "-m", "house style")
+
+	// judge
+	head := strings.TrimSpace(func() string {
+		out, _ := exec.CommandContext(t.Context(), "git", "-C", dir, "rev-parse", "HEAD").Output()
+
+		return string(out)
+	}())
+	must("add", "verdict", "--change", "FT-1", "--outcome", "proceed", "--gate", "judge",
+		"--commit", head, "--judged", "change", "-m", "sound")
+
+	if out := must("validate", "FT-1"); !strings.Contains(out, "valid") {
+		t.Errorf("validate = %q", out)
+	}
+
+	show := must("show", "FT-1")
+	for _, want := range []string{"severity: major", "source: local", "severity: minor", "source: remote", "a.go:2@", "judged: change"} {
+		if !strings.Contains(show, want) {
+			t.Errorf("show lacks %q, the settle did not inherit it:\n%s", want, show)
+		}
+	}
+
+	o := readOutcomes(&lore.Store{Root: filepath.Join(dir, ".lore")}, "", "FT-1")
+	if len(o.local) != 1 || o.local[0].Fixed != 1 || len(o.remote) != 1 || o.remote[0].Skipped != 1 ||
+		o.changeJudge == nil {
+		t.Errorf("status reads %+v", o)
+	}
+}
