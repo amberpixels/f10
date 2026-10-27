@@ -87,6 +87,7 @@ Name a bug only where it changes the verdict.
    Write it once the verdict is final for this run: standalone, after the reply; in a ship run, once the route is chosen.
    A verdict that changes later in the same discussion rewrites the same file.
    The file stays under the storage root: never name it or its path in a commit, PR comment, status or tracker text.
+   Then, with a task id, the lore entry beside it: `f10 lore add verdict --change <task> --outcome <verdict> --gate judge --commit <HEAD's sha> --judged <plan|change> -m <reason>`, `plan` when the subject is `plan <id>`; an idea writes none, and a failing `lore add` is one line in the report, never a failed step.
 
 **Blind** (`--blind`): for work this session produced.
 Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`), follow this step except point 8, write no file, and return the verdict and its argument.

@@ -113,9 +113,11 @@ func renderEntry(w io.Writer, e Entry) error {
 	field("severity", e.Severity)
 	field("status", e.Status)
 	field("resolution", e.Resolution)
+	field("source", e.Source)
 	field("outcome", e.Outcome)
 	field("gate", e.Gate)
 	field("commit", e.Commit)
+	field("judged", e.Judged)
 	field("chosen", e.Chosen)
 
 	for _, r := range e.Rejected {

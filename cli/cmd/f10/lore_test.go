@@ -106,7 +106,7 @@ func TestLoreVerbs(t *testing.T) {
 		"Per key",
 	)
 	open := must("add", "finding", "--change", "FT-1", "--anchor", "limit.go:3",
-		"--severity", "major", "--status", "open", "-m", "Never pruned")
+		"--severity", "major", "--status", "open", "--source", "remote", "-m", "Never pruned")
 
 	if _, err := runLore(t, "check", "FT-1"); err == nil || !strings.Contains(err.Error(), "no verdict") ||
 		!strings.Contains(err.Error(), "major finding "+open) {
@@ -116,7 +116,7 @@ func TestLoreVerbs(t *testing.T) {
 	must("add", "finding", "--change", "FT-1", "--anchor", "limit.go:3", "--supersedes", open,
 		"--severity", "major", "--status", "fixed", "--resolution", "abcdef1", "-m", "Pruned")
 	must("add", "verdict", "--change", "FT-1", "--outcome", "proceed with changes", "--gate", "judge",
-		"--commit", "abcdef1", "-m", "Fine")
+		"--commit", "abcdef1", "--judged", "change", "-m", "Fine")
 	must("add", "lesson", "--change", "FT-1", "--anchor", "limit.go:2", "-m", "Per process")
 
 	if out := must("check", "FT-1"); out != "FT-1 passes" {
@@ -125,7 +125,8 @@ func TestLoreVerbs(t *testing.T) {
 
 	show := must("show", "FT-1")
 	if !strings.HasPrefix(show, "FT-1  5 entries") || !strings.Contains(show, "anchor: api/limit.go:2-3@") ||
-		!strings.Contains(show, "with claude-opus-5-5") || strings.Contains(show, "Never pruned") {
+		!strings.Contains(show, "with claude-opus-5-5") || strings.Contains(show, "Never pruned") ||
+		!strings.Contains(show, "judged: change") {
 		t.Errorf("show:\n%s", show)
 	}
 
@@ -252,5 +253,96 @@ func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
 	_, err := runLore(t, "add", "lesson", "--change", "FT-1", "--anchor", "a.go:1", "-m", "x")
 	if err == nil || !strings.Contains(err.Error(), "no commits yet") {
 		t.Errorf("err = %v, want one saying the repository has no commits", err)
+	}
+}
+
+// The lore commands the review, resolve and judge steps run, as they spell
+// them: a settle names only the new status, and validate passes on the lot.
+func TestLoreStepCommands(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+	dir := t.TempDir()
+
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "dev@example.com"},
+		{"config", "user.name", "Dev"},
+	} {
+		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).
+			CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("a\nb\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{{"add", "."}, {"commit", "-q", "-m", "a"}} {
+		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).
+			CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	t.Chdir(dir)
+
+	must := func(args ...string) string {
+		t.Helper()
+
+		out, err := runLore(t, args...)
+		if err != nil {
+			t.Fatalf("lore %q: %v\n%s", args, err, out)
+		}
+
+		return strings.TrimSpace(out)
+	}
+
+	// review: one open finding per finding
+	local := must("add", "finding", "--change", "FT-1", "--source", "local", "--severity", "major",
+		"--status", "open", "--anchor", "a.go:2", "-m", "Off by one")
+	remote := must("add", "finding", "--change", "FT-1", "--source", "remote", "--severity", "minor",
+		"--status", "open", "--anchor", "a.go:1", "-m", "Name drift")
+
+	// resolve: the settle carries the status, resolution and reason alone
+	settled := must("add", "finding", "--change", "FT-1", "--supersedes", local, "--status", "fixed",
+		"--resolution", "working tree", "-m", "Bounded the loop")
+	must("add", "finding", "--change", "FT-1", "--supersedes", remote, "--status", "wontfix",
+		"--resolution", "house style", "-m", "house style")
+
+	// judge
+	head := strings.TrimSpace(func() string {
+		out, _ := exec.CommandContext(t.Context(), "git", "-C", dir, "rev-parse", "HEAD").Output()
+
+		return string(out)
+	}())
+	must("add", "verdict", "--change", "FT-1", "--outcome", "proceed", "--gate", "judge",
+		"--commit", head, "--judged", "change", "-m", "sound")
+
+	if out := must("validate", "FT-1"); !strings.Contains(out, "valid") {
+		t.Errorf("validate = %q", out)
+	}
+
+	show := must("show", "FT-1")
+	for _, want := range []string{"severity: major", "source: local", "severity: minor", "source: remote", "a.go:2@", "judged: change"} {
+		if !strings.Contains(show, want) {
+			t.Errorf("show lacks %q, the settle did not inherit it:\n%s", want, show)
+		}
+	}
+
+	store := &lore.Store{Root: filepath.Join(dir, ".lore")}
+
+	o := readOutcomes(store, "", "FT-1")
+	if len(o.local) != 1 || o.local[0].Fixed != 1 || len(o.remote) != 1 || o.remote[0].Skipped != 1 ||
+		o.changeJudge == nil {
+		t.Errorf("status reads %+v", o)
+	}
+
+	// round two reopens the fixed finding from the settle's id, the chain's head
+	must("add", "finding", "--change", "FT-1", "--supersedes", settled, "--status", "open", "-m", "Still off by one")
+
+	if o := readOutcomes(store, "", "FT-1"); len(o.local) != 1 || o.local[0].Ask != 1 || o.local[0].Fixed != 0 {
+		t.Errorf("a reopened finding reads %+v, want it open", o.local)
 	}
 }

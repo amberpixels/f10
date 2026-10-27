@@ -63,13 +63,13 @@ Three glyphs in the status line (capture, plan, ship) track a running run:
 f10-state.sh set <capture|plan|ship> <running|done|failed|partial|prior|blocked> [<leaf>]
 f10-state.sh task <id> [<url>]
 f10-state.sh note <reason> [<next>]
-f10-state.sh final <step>
+f10-state.sh pipeline <step>...
 ```
 
 The bare name is the whole command (`bin/` is on the Bash tool's `PATH`).
 Each step's `Badge:` line says what it reports; a step without one opens no phase.
 Entering a phase retires the ones before it.
-Inside a pipeline, `/f10:ship` passes the current step as `<leaf>` and declares the last with `final`.
+Inside a pipeline, `/f10:ship` passes the current step as `<leaf>` and declares every step with `pipeline`, the last one final, so `f10 status` lists the steps not reached yet.
 
 - `prior` - the work exists from an earlier run.
   `task <id>` marks capture `prior` by itself; the ship skill marks a reused plan.

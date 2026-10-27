@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -54,7 +55,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 
 	var (
 		runs     []*state.Run
-		hist     []*runHistory
+		gates    [][]gate
 		showRoot bool
 	)
 
@@ -111,7 +112,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return nil
 		}
 
-		hist = finishedHistories(ctx, t, runs)
+		gates = runGates(ctx, t, *in, runs)
 	case sid != "" && !all:
 		r, err := state.Load(state.Path(dir, sid))
 		if errors.Is(err, os.ErrNotExist) {
@@ -156,14 +157,14 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	if hist == nil {
-		hist = make([]*runHistory, len(runs))
+	if gates == nil {
+		gates = make([][]gate, len(runs))
 	}
 
 	if cmd.Bool("json") {
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
-			out[i] = runJSON{Run: r, History: hist[i]}
+			out[i] = runJSON{Run: r, Gates: gates[i]}
 		}
 
 		return encodeJSON(cmd.Writer, out)
@@ -176,7 +177,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			fmt.Fprintln(cmd.Writer)
 		}
 
-		renderRun(cmd.Writer, r, hist[i], showRoot, now, limit)
+		renderRun(cmd.Writer, r, gates[i], showRoot, now, limit)
 	}
 
 	return nil
@@ -423,43 +424,54 @@ func canonPath(p string) string {
 	return p
 }
 
-// runJSON is a run as --json prints it, a finished run's history beside
-// the state's own keys.
+// runJSON is a run as --json prints it, a task's gates beside the state's
+// own keys.
 type runJSON struct {
 	*state.Run
 
-	History *runHistory `json:"history,omitempty"`
+	Gates []gate `json:"gates,omitempty"`
 }
 
-// finishedHistories is the history of each run whose ship phase is done,
-// nil for the rest; the ledger is read only when one is.
-//
-//nolint:lostfield // the history comes from the ledger and the files, not the run
-func finishedHistories(ctx context.Context, t *target, runs []*state.Run) []*runHistory {
-	hist := make([]*runHistory, len(runs))
-
-	var events []ledger.Event
+// runGates is each of the task's runs' gates, the ledger read once.
+func runGates(ctx context.Context, t *target, in taskStatusInput, runs []*state.Run) [][]gate {
+	src := newGateSource(t, readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)), in.host)
+	out := make([][]gate, len(runs))
 
 	for i, r := range runs {
-		if r.Ship != "done" {
-			continue
-		}
-
-		if events == nil {
-			events = readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot))
-		}
-
-		hist[i] = doneHistory(events, r, layout.Locate(ctx, r.Root).StorageRoot)
+		out[i] = src.gatesOf(ctx, in.id, in.branch, in.root, layout.Locate(ctx, r.Root).StorageRoot, r)
 	}
 
-	return hist
+	return out
+}
+
+// newGateSource binds the gate reads to this target.
+func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
+	root := localLoreRoot(t.lay)
+	if t.eff.Lore == "committed" {
+		root = filepath.Join(t.lay.CheckoutRoot, ".lore")
+	}
+
+	src := gateSource{
+		events:   events,
+		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		pipeline: t.eff.Pipelines["default"],
+		review:   t.eff.Review,
+		store:    &lore.Store{Root: root},
+		host:     h,
+	}
+
+	if t.sharedPlansDir() != "" {
+		src.shared = t.lay.StorageRoot
+	}
+
+	return src
 }
 
 // renderRun prints one run as the label/value block config uses, in the
-// order `f10 state show` prints the same facts, then a finished run's
-// history when h holds one. The root row appears only when listing: for
+// order `f10 state show` prints the same facts, the task's gates under
+// ship when it has them. The root row appears only when listing: for
 // one session it is the directory you are in.
-func renderRun(w io.Writer, r *state.Run, h *runHistory, showRoot bool, now time.Time, limit int) {
+func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
@@ -472,6 +484,10 @@ func renderRun(w io.Writer, r *state.Run, h *runHistory, showRoot bool, now time
 
 	for _, p := range state.Phases {
 		headerRow(w, p, r.PhaseText(p), limit, statusStyle(r.Status(p)))
+	}
+
+	for _, g := range gates {
+		headerRow(w, "  "+g.Step, g.text(), limit, statusStyle(g.style()))
 	}
 
 	if r.Note != "" {
@@ -488,12 +504,6 @@ func renderRun(w io.Writer, r *state.Run, h *runHistory, showRoot bool, now time
 
 	if r.Final != "" {
 		headerRow(w, "final", r.Final, limit, faint)
-	}
-
-	if h != nil {
-		for _, l := range h.lines() {
-			headerRow(w, l[0], l[1], limit, plain)
-		}
 	}
 
 	age := ago(now, r.Updated)

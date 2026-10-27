@@ -100,6 +100,7 @@ func (r *Run) Save(dir string, now time.Time) error {
 		{"ship", r.Ship},
 		{"leaf", r.Leaf},
 		{"final", r.Final},
+		{"pipeline", strings.Join(r.Pipeline, PipelineSep)},
 		{"note", r.Note},
 		{"next", r.Next},
 		{"ask", r.Ask},
@@ -268,6 +269,25 @@ func (r *Run) SetFinal(step string) error {
 	return nil
 }
 
+// SetPipeline declares the ship pipeline's steps, in order; its last is the
+// final step.
+func (r *Run) SetPipeline(steps []string) error {
+	var kept []string
+
+	for _, s := range steps {
+		kept = append(kept, SplitPipeline(s)...)
+	}
+
+	if len(kept) == 0 {
+		return usagef("pipeline needs at least one step")
+	}
+
+	r.Pipeline = kept
+	r.Final = kept[len(kept)-1]
+
+	return nil
+}
+
 // PlanWritten is the plan step's output landing: plan done, unreported, and
 // the file's name is the task id.
 func (r *Run) PlanWritten(task string) {
@@ -378,6 +398,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	r.Skill = skill
 	r.Leaf, r.Final, r.Note, r.Next, r.Ask = "", "", "", "", ""
+	r.Pipeline = nil
 	r.Ship = "pending"
 
 	// the checkout root, so a terminal with no session id can still find its

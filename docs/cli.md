@@ -310,20 +310,28 @@ On a terminal the id and the PR are links (OSC 8).
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
 
-A finished ship run, `f10 status <id>` on a task whose run says `ship done` or the one `done` row of a task with no branch left, adds what the run went through:
+`f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the one `done` row of a task with no branch left prints them as lines under it:
 
 ```
-steps   implement, cleanup, pr, review, judge, pr
-review  round 1: 3 found (2 fixed, 1 skipped); round 2: clean
-judge   proceed with changes - tighten the parser
+ship            running: review (local)
+  implement     done
+  cleanup       done
+  pr            done
+  review        local: round 1 running (in ship) · remote: pending
+  judge         change: pending
+  pr            pending
 ```
 
-- `steps` are the `f10 state set ship running <step>` claims the ledger holds for the run's session since the ship skill started, in order; a step claimed again right after itself counts once, one that comes back after another step counts again.
-- `review` counts each `reviews/<id>/<round>.md` by its verdict lines: `fix`, `skip`, and `ask` for a finding still waiting on one; a prior-round finding counts with its round only when the round reopened it.
-- `judge` is the newest `verdicts/<id>/<n>.md` on the task, its verdict and reason.
+- **The flow** is ship's pipeline as `f10 state pipeline` recorded it (else the project's `default` pipeline), inside the chain `f10 drive` recorded on the branch (`branch.<name>.f10-chain`): a chain `judge` before `ship` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
+- **A plain step** is `done` before the step ship is on, that step takes the run's status (`running`, `blocked`, ...), the rest are `pending`; once ship is done, a step it never entered is `skipped`.
+- **Review** has a local and a remote half, each `pending`, `running` (its round, and `in ship`, `driven` or `manual`; `resolve running` while a resolve settles it), `open` (`N open of M found`, or `open (not handled)` on the host), `settled` (`3 found (2 fixed, 1 skipped)`, `clean`), or `unknown`.
+  A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote half's, and inside ship the half reads `resolve running` once a round lands after ship entered the review.
+  The remote half is in the flow when a pipeline entry names a remote review, or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
+- **Judge** reads `pending`, `running`, or its outcome and reason; a judge or review half the flow does not declare shows once one ran, and otherwise the row reads `not in this flow`.
+- **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), the remote half's when its `reviewer:` is not `local`; the newest `verdicts/<id>/<n>.md`, the plan judge's when its `subject:` is a plan.
 
-Each row appears only where its source exists: a run with no ledger claims, an older one, prints as before, and a finished task's review and judge rows need its findings and verdicts on disk (out-of-tree storage, or the checkout its last run was in).
-On a row they print as `steps:`, `review:` and `judge:` lines under it, `--markdown` carries them, and `--json` holds them in a `history` object (`steps`, `review`, `judge`).
+A parent's rows carry the same gates as one column after the step, `L 3/4 · R open · J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `PJ` and `J` the plan and change judges, `-` not in the flow, `…` running, `?` unknown; `--markdown` adds it as a `gates` column.
+`--json` holds them in a `gates` array, on a run and on a row.
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 
 A task with no children reports as before: its live run, else its plan and PR.

@@ -49,6 +49,8 @@ func stateCommand() *cli.Command {
 				func(r *state.Run, a cli.Args) error { return r.SetAsk(a.Get(0)) }),
 			verb("final", "<step>", "declare the ship pipeline's last step",
 				func(r *state.Run, a cli.Args) error { return r.SetFinal(a.Get(0)) }),
+			verb("pipeline", "<step>...", "declare the ship pipeline's steps, the last one final",
+				func(r *state.Run, a cli.Args) error { return r.SetPipeline(a.Slice()) }),
 			{
 				Name:  "show",
 				Usage: "the current run, one line per fact",
@@ -135,6 +137,10 @@ func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, 
 		if v != "" {
 			payload[key] = v
 		}
+	}
+
+	if len(r.Pipeline) > 0 {
+		payload["pipeline"] = r.Pipeline
 	}
 
 	cwd, _ := os.Getwd()

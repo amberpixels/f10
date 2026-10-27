@@ -64,7 +64,7 @@ reason: the Rounds section now declines on an unsettled round one
 - **`## Prior round`**, round two only, first: one block per round-one id, its title, ` - ` and one of `fixed`, `still open`, `fix introduced a problem`, `explanation accepted`, `explanation disputed`; a line of evidence; `where:` (required for `fix introduced a problem`).
   A finding's **last verdict** is under the latest block naming its id.
 - **`## Categories`**: core first, then the project's, each `none found` or a count.
-- **`## Findings`**: heading `<round>.<n>` (`1.3`, `2.1`) and title; `summary:` one line; `where:` `path/to/file.go:123`; `category:`; then what is wrong, why it matters, and a concrete fix.
+- **`## Findings`**: heading `<round>.<n>` (`1.3`, `2.1`) and title; `summary:` one line; `where:` `path/to/file.go:123`; `category:`; `lore:` once the lore entry exists; then what is wrong, why it matters, and a concrete fix.
 - Resolve appends `verdict:` (with `+reply` / `+note` attachments) and `reason:`, **one** `verdict:` per block, rewritten when an `ask` is answered.
 - Malformed (no header; a finding without id, `where:` or `category:`; a round-two file missing a round-one id): the step fails.
 
@@ -86,6 +86,12 @@ The main agent checks the header (and, in round two, a status for every prior id
 The count is the findings awaiting a verdict: this round's, plus a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`); a clean round passes `--open 0`.
 Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 The remote half writes the same block once its file is on disk (point 4 below).
+
+**Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source remote` when `reviewer:` is not `local`).
+The severity is the reviewer's call per finding, `blocker`, `major`, `minor` or `nit`, `minor` when it cannot tell.
+Each call prints the entry's id: add it to the finding's block as a `lore: <id>` line, which resolve supersedes.
+Round two reopens in lore what it reopens in the file: a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`) gets `f10 lore add finding --change <task> --supersedes <the round-one block's lore id> --status open -m <the evidence line>`, and its new id as the prior block's `lore:` line; a round-one block with no `lore:` line writes nothing.
+A failing `lore add` is one line in the report, never a failed step: the findings file stays the record `f10 status` falls back to.
 
 **The brief:**
 
@@ -173,7 +179,7 @@ Without them this half **fails**: there is nothing to wait for.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it, else `still open`.
    If the body is not in the findings shape, say once that this file's brief can be pasted into the workflow; do not print it.
 4. **Ack.**
-   With the file on disk, `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
+   With the file on disk and its **Lore** entries written (above, `--source remote`), `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
    Ack and trigger are outward-facing, under the run's authorization; in stealth mode they read as the user's own.
    Then the state block, as the blind reviewer's half writes it.
 
