@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // The typed half of project.md: the facts the binary acts on, declared in a
@@ -53,17 +54,18 @@ type Declared struct {
 // TrackerDecl is the tracker's kind, its task id format (`FT-###`), the
 // priority map for host issues, which have no priority field of their own
 // (a level of the driver contract's vocabulary to the labels that carry
-// it), and the status map: a moment f10 reports, `started` or `shipped`, to
-// the tracker's own word for it.
+// it), the status map: a moment f10 reports, `started` or `shipped`, to
+// the tracker's own word for it, and the title template (`{id}: {title}`).
 type TrackerDecl struct {
 	Kind     string            `yaml:"kind,omitempty"`
 	ID       string            `yaml:"id,omitempty"`
 	Priority map[string]Labels `yaml:"priority,omitempty"`
 	Status   map[string]string `yaml:"status,omitempty"`
+	Title    string            `yaml:"title,omitempty"`
 }
 
 func (t TrackerDecl) empty() bool {
-	return t.Kind == "" && t.ID == "" && t.Priority == nil && t.Status == nil
+	return t.Kind == "" && t.ID == "" && t.Priority == nil && t.Status == nil && t.Title == ""
 }
 
 // StatusMoments are the moments tracker.status may name.
@@ -285,6 +287,12 @@ func (d Declared) check() []string {
 	}
 
 	bad = append(bad, d.Tracker.checkPriority()...)
+
+	if d.Tracker.Title != "" {
+		if _, err := tasktitle.Parse(d.Tracker.Title); err != nil {
+			bad = append(bad, "tracker.title: "+err.Error())
+		}
+	}
 
 	slices.Sort(bad)
 

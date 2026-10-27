@@ -155,7 +155,7 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 
 	h := newHost(fx.Host, root)
 	if fx.Repo != "" {
-		h, fx.Remote = host{forge.Host{Name: fx.Host, Repo: fx.Repo}}, true
+		h, fx.Remote = host{Name: fx.Host, Repo: fx.Repo}, true
 	}
 
 	in := lookaround.Inputs{

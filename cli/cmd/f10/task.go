@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // The task noun goes through the project's driver when it has one, and
@@ -89,6 +90,17 @@ func taskCommand() *cli.Command {
 					"(exit 3: this tracker takes no comments here)",
 				ArgsUsage: "[task-id]",
 				Action:    runTaskComment,
+			},
+			{
+				Name: "retitle",
+				Usage: "write tracker.title onto the task's title on the host's issues, or onto every issue's " +
+					"with --all (exit 3: the tracker is not the host's)",
+				ArgsUsage: "[task-id]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "all", Usage: "every issue, open and closed"},
+					&cli.BoolFlag{Name: "dry-run", Usage: "print the changes and write nothing"},
+				},
+				Action: runTaskRetitle,
 			},
 			{
 				Name: "update",
@@ -167,7 +179,8 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
-			t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)})
+			doc = oneIDHeading(doc, r, t.eff.TitleTemplate)
+			t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: t.driverTitle(r, doc)})
 
 			return doc, nil
 		}
@@ -184,10 +197,36 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 
 	doc, iss, err := h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
 	if err == nil {
-		t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, iss.Title), URL: iss.url()})
+		t.rememberRefs(
+			ctx,
+			ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, h.title(iss.Title, r.Number)), URL: iss.url()},
+		)
 	}
 
 	return doc, err
+}
+
+// oneIDHeading collapses a driver document's `# <id>: <id>: <title>`
+// heading, the id the driver adds over the one tracker.title wrote, to one
+// id; any other heading stays as the driver wrote it.
+func oneIDHeading(doc string, r ref.Ref, titles tasktitle.Template) string {
+	first, rest, _ := strings.Cut(doc, "\n")
+
+	heading, ok := strings.CutPrefix(first, "# ")
+	if !ok {
+		return doc
+	}
+
+	once := titles.Strip(heading, r.ID, r.Number)
+	if twice := titles.Strip(once, r.ID, r.Number); once != heading && twice != once {
+		first = "# " + r.ID + ": " + twice
+	}
+
+	if rest == "" && !strings.Contains(doc, "\n") {
+		return first
+	}
+
+	return first + "\n" + rest
 }
 
 // withImages downloads every image doc links into dir and ends doc with
@@ -355,6 +394,7 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver list rows: %w", err)
 			}
 
+			rows = stripTitles(rows, t.eff.TitleTemplate)
 			t.rememberRefs(ctx, rowRefs(rows)...)
 
 			return rows, nil
@@ -473,6 +513,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver search rows: %w", err)
 			}
 
+			rows = stripTitles(rows, t.eff.TitleTemplate)
 			t.rememberRefs(ctx, rowRefs(rows)...)
 
 			return rows, nil
@@ -492,6 +533,17 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 	t.rememberRefs(ctx, rowRefs(rows)...)
 
 	return rows, err
+}
+
+// stripTitles takes the prefix tracker.title wrote off each driver row's
+// title; the host's rows come stripped from listIssues.
+func stripTitles(rows []row, titles tasktitle.Template) []row {
+	for i, r := range rows {
+		n := strings.TrimPrefix(r.ID[strings.LastIndexByte(r.ID, '-')+1:], "#")
+		rows[i].Title = titles.Strip(r.Title, r.ID, n)
+	}
+
+	return rows
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a
@@ -627,6 +679,9 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
 	}
 
+	// the number exists only now, so the template goes on in a second write
+	retitleAfter(ctx, cmd.ErrWriter, t, r, "created")
+
 	// the url too, best effort, so naming the new task costs no tracker call
 	created := ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)}
 	if url, err := d.Run(ctx, driver.VerbURL, r.Number); err == nil {
@@ -638,6 +693,36 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
 	return err
+}
+
+// retitleAfter writes tracker.title onto an issue a driver just wrote, on
+// the host's issues: a driver has no title verb. The driver's write stands,
+// so a failure here is a warning.
+func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, verb string) {
+	if t.eff.TitleTemplate == "" || !t.hostIssues() {
+		return
+	}
+
+	if err := retitleOne(ctx, t, r.Number); err != nil {
+		fmt.Fprintf(warnTo, "f10: %s was %s, but its title was not written through tracker.title: %v; "+
+			"run `f10 task retitle %s`\n", r.ID, verb, err, r.ID)
+	}
+}
+
+// retitleOne writes tracker.title onto one issue through the host, when
+// its title is not written through it yet.
+func retitleOne(ctx context.Context, t *target, number string) error {
+	h, err := t.host()
+	if err != nil {
+		return err
+	}
+
+	changes, err := h.titleChanges(ctx, number)
+	if err != nil || len(changes) == 0 {
+		return err
+	}
+
+	return h.setTitle(ctx, number, changes[0].to)
 }
 
 // taskTitle is the title on doc's first line, `# <title>`, or "".

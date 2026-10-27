@@ -439,8 +439,8 @@ func inPeriod(p HostPR, since time.Time, active bool) bool {
 }
 
 // chainBases maps each PR to the PR whose head is its base. The base f10
-// recorded wins over the host's, which the host retargets to the default
-// branch once the base PR merges.
+// recorded wins over the host's, which the base's finish retargets to the
+// default branch.
 func chainBases(own []HostPR, bases map[string]string, def string) map[int]int {
 	byHead := map[string]int{}
 

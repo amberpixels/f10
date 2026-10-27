@@ -157,7 +157,12 @@ func (t *target) reference(ctx context.Context, explicit string) (ref.Ref, error
 func (t *target) host() (host, error) {
 	switch t.pb.CLI.Value {
 	case "gh", "glab":
-		return newHost(t.pb.CLI.Value, t.dir), nil
+		h := newHost(t.pb.CLI.Value, t.dir)
+		if t.eff != nil {
+			h.titles, h.prefix = t.eff.TitleTemplate, t.eff.IDPrefix
+		}
+
+		return h, nil
 	default:
 		return host{}, errors.New("no host CLI for this checkout: " + t.pb.CLI.Evidence)
 	}

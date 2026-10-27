@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // Resolution gives every fact the binary acts on one typed value. The
@@ -255,6 +256,16 @@ func (e *Effective) resolveTracker(
 		e.Facts = append(e.Facts, Fact{
 			Key:    "tracker.priority",
 			Value:  priorityShown(fm.Tracker.Priority),
+			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+		})
+	}
+
+	// a template check() refuses stays unset, so nothing writes through it
+	if t, err := tasktitle.Parse(fm.Tracker.Title); fm.Tracker.Title != "" && err == nil {
+		e.TitleTemplate = t
+		e.Facts = append(e.Facts, Fact{
+			Key:    "tracker.title",
+			Value:  fm.Tracker.Title,
 			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
 		})
 	}

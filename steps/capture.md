@@ -39,6 +39,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
 3. **Create it** through `f10 task create` first: the drafted task on stdin, `# <title>` on the first line and the body after it, and its properties as flags (`--status`, `--priority`, `--label` once per label, `--parent <id>` for a subtask).
    It prints the new id; `f10 task open <id> --link` prints the url for the report.
    **Exit 3** means no driver creates tasks here: create it via the project's create adapter instead, a skill to invoke or a CLI command such as `gh issue create` / `glab issue create`.
+   With the frontmatter's `tracker.title` declared, run `f10 task retitle <id>` right after the adapter creates it, which puts the id on its title (`f10 task create` does this itself); the task exists, so a failure is reported, never a reason to create it again.
    **Never re-run a failed `f10 task create` whose error says the task may exist**, whatever `conventions/failure.md` rule 3 allows: report the failure and let the user check the tracker.
    Any other failure (a missing title, an unknown priority or id) ran before the driver did: fix the input and run it again.
    Apply the project's declared default status/labels.

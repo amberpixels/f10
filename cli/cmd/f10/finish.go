@@ -567,10 +567,11 @@ func resolved(p string) string {
 }
 
 // landPull makes sure the branch's request is merged: merges it when open,
-// confirms it when already merged, refuses otherwise. It then deletes the
-// remote branch when the host still has it, which is what retargets a PR
-// stacked on this branch, and the local copy of it. The notes say when the merge was not this run's
-// and when the merge method was a default rather than a declaration.
+// confirms it when already merged, refuses otherwise. When the host still
+// has the remote branch, it moves every open request based on it to the
+// merged one's base, then deletes the branch and the local copy of it. The
+// notes say which requests moved, when the merge was not this run's and
+// when the merge method was a default rather than a declaration.
 func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pull, []string, error) {
 	var notes []string
 
@@ -579,7 +580,7 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 		if base := p.base(); base != "" && base != def {
 			return pull{}, nil, fmt.Errorf(
 				"%s is stacked on %s, not %s: finish the task that branch belongs to first, "+
-					"and the host retargets this PR to %s",
+					"and its finish retargets this PR to %s",
 				p.url(),
 				base,
 				def,
@@ -628,6 +629,13 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 	}
 
 	if exists {
+		moved, err := retargetStacked(ctx, in.host, p, name, cmp.Or(p.base(), def))
+		if err != nil {
+			return pull{}, nil, err
+		}
+
+		notes = append(notes, moved...)
+
 		if err := in.host.deleteRemoteBranch(ctx, name); err != nil {
 			return pull{}, nil, fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.url(), err)
 		}
@@ -640,6 +648,36 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 	}
 
 	return p, notes, nil
+}
+
+// retargetStacked moves every open request based on branch to base, a
+// note each. A failure stops before the branch is deleted, so the request
+// stays open and a rerun, reaching the merged case, retries it; its error
+// names the requests already moved, since no report follows it.
+func retargetStacked(ctx context.Context, h host, merged pull, branch, base string) ([]string, error) {
+	stacked, err := h.stackedPulls(ctx, branch)
+	if err != nil {
+		return nil, fmt.Errorf("%s merged, but listing the requests based on %s failed, "+
+			"so origin/%s is left in place: %w", merged.url(), branch, branch, err)
+	}
+
+	var notes, moved []string
+
+	for _, s := range stacked {
+		if err := h.retargetPull(ctx, s, base); err != nil {
+			if len(moved) > 0 {
+				err = fmt.Errorf("%w (already retargeted: %s)", err, strings.Join(moved, ", "))
+			}
+
+			return nil, fmt.Errorf("%s merged, but retargeting %s to %s failed, "+
+				"so origin/%s is left in place to keep it open: %w", merged.url(), s.url(), base, branch, err)
+		}
+
+		moved = append(moved, s.url())
+		notes = append(notes, fmt.Sprintf("retargeted %s to %s", s.url(), base))
+	}
+
+	return notes, nil
 }
 
 // lastState leaves the PR body's hidden state block saying finish, the

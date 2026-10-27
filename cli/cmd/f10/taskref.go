@@ -82,6 +82,12 @@ func docTitle(id, doc string) string {
 	return cleanTitle(id, taskTitle(strings.TrimLeft(doc, " \t\r\n")))
 }
 
+// driverTitle is the title on a driver document's heading, with any prefix
+// tracker.title wrote taken off, as the host's titles are.
+func (t *target) driverTitle(r ref.Ref, doc string) string {
+	return cleanTitle(r.ID, t.eff.TitleTemplate.Strip(docTitle(r.ID, doc), r.ID, r.Number))
+}
+
 // mdLink is the task as a markdown link, brackets in the title escaped so
 // the link text always ends where the link does.
 func mdLink(id, title, url string) string {
@@ -200,7 +206,7 @@ func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, erro
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
-			k := ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)}
+			k := ledger.TaskRef{ID: r.ID, Title: t.driverTitle(r, doc)}
 			if url, err := d.Run(ctx, driver.VerbURL, r.Number); err == nil {
 				k.URL = strings.TrimSpace(url)
 			}
@@ -235,7 +241,7 @@ func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, erro
 		return ledger.TaskRef{}, fmt.Errorf("%s returned no title for issue %s", h.Name, r.Number)
 	}
 
-	return ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, iss.Title), URL: iss.url()}, nil
+	return ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, h.title(iss.Title, r.Number)), URL: iss.url()}, nil
 }
 
 // linkBodyAfter turns the body's bare `After: <id>` line into a link titled

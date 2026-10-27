@@ -506,3 +506,25 @@ func TestStaleAfter(t *testing.T) {
 		t.Errorf("3w = %v, %v", d, err)
 	}
 }
+
+// tracker.title is read into the effective template and shown as a fact; a
+// template with no {title} is an error and leaves titles bare.
+func TestTrackerTitle(t *testing.T) {
+	eff := buildWith(t, "---\ntracker: {id: FT-###, title: \"{id}: {title}\"}\n---\n", "")
+	if eff.TitleTemplate != "{id}: {title}" {
+		t.Errorf("TitleTemplate = %q", eff.TitleTemplate)
+	}
+
+	if !slices.ContainsFunc(eff.Facts, func(f Fact) bool { return f.Key == "tracker.title" }) {
+		t.Errorf("no tracker.title fact: %+v", eff.Facts)
+	}
+
+	bad := buildWith(t, "---\ntracker: {title: \"{id}\"}\n---\n", "")
+	if !strings.Contains(bad.Errors(), "tracker.title:") || bad.TitleTemplate != "" {
+		t.Errorf("a template without {title} passed: %q, %+v", bad.TitleTemplate, bad.Problems)
+	}
+
+	if none := buildWith(t, "---\ntracker: {id: FT-###}\n---\n", ""); none.TitleTemplate != "" {
+		t.Errorf("no key gave template %q", none.TitleTemplate)
+	}
+}
