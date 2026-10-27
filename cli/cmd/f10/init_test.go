@@ -303,7 +303,7 @@ func TestInitMigrate(t *testing.T) {
 		t.Errorf("want a block above the untouched prose:\n%s", written)
 	}
 
-	for _, want := range []string{"moved", "pipelines", "delete"} {
+	for _, want := range []string{"moved", "flows", "delete"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q:\n%s", want, out)
 		}

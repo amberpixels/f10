@@ -25,16 +25,16 @@ A two-letter abbreviation of a one-word name is your choice to make, in `tracker
 Two halves.
 A YAML **frontmatter** block holds the facts the `f10` binary acts on, typed, so a typo is an error rather than a silent default.
 Free-form markdown under the headings below holds everything else, for the model.
-Only **Tracker** matters for the pipeline's contracts; the rest have workable defaults.
+Only **Tracker** matters for the flow's contracts; the rest have workable defaults.
 
 ```markdown
 ---
 visibility: stealth
 tracker: {kind: github, id: GH-###}
 merge_method: squash
-pipelines:
-  default: implement → review (local) → pr
-  local: [implement, commit]
+flows:
+  default: plan implement review:local pr
+  local: plan implement commit
 ---
 # my-project · f10 project instructions
 
@@ -62,11 +62,10 @@ Go service for invoices.
 | `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
-| `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
-| `planless` | the pipelines that write no plan file: free text also skips capture and fetch, a task id is fetched but not planned | none |
-| `pipeline_by_area` | an area, in the plain words Roles uses, to the pipeline its tasks ship through when the user names none | `default` for every task |
+| `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |
+| `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
+| `drive_finish` | `on` or `off`: `f10 drive` ends each task with `finish`, merging its PR | `off` |
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
-| `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
 
@@ -83,13 +82,13 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the area map and reporting back, the review step for the remote review, the catchup step for `catchup`, the commit, resolve, judge and catchup steps for `traces`).
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for flows, the area map and reporting back, the review step for the remote review, the catchup step for `catchup`, the commit, resolve, judge and catchup steps for `traces`).
 
 ## Overlays
 
 A file `.f10/instructions/<step>.md` extends the generic step of that name.
 A name with no generic step, `e2e` say, *is* the step: the overlay is its whole definition.
-That is how a pipeline gets project-specific steps.
+That is how a flow gets project-specific steps.
 
 `standup.md` is the overlay `/f10:standup` reads: the report's wording, sections and audience, in prose, and optionally an **Assigned** adapter, the command listing your open tasks for the Next questionnaire where `f10 task search "is:open assignee:@me"` does not (GitLab, most drivers).
 It may also name a **Deliver** adapter, a skill, an MCP tool or a command that turns the report into a draft (a Gmail draft to your lead, say): f10 creates drafts and never sends, and an adapter that fails leaves the printed report to send by hand.
@@ -172,7 +171,7 @@ The _Areas_ note says report work or framework work, so fetch can settle the rol
 ```
 
 Report work ships as a link on the deployed site; framework work ships as a merge request.
-The frontmatter routes each area to its pipeline and names the statuses the Notion board uses:
+The frontmatter routes each area to its flow and names the statuses the Notion board uses:
 
 ```yaml
 tracker:
@@ -181,10 +180,10 @@ tracker:
   status:
     started: In progress
     shipped: Published
-pipelines:
-  default: implement → publish
-  engine: implement → cleanup → pr
-pipeline_by_area:
+flows:
+  default: plan implement publish
+  engine: plan implement cleanup pr
+flow_by_area:
   framework work: engine
 ```
 
@@ -202,49 +201,52 @@ Shipment: report - the published report's url
 A report task ships through `default` and ends with a `report` row and a comment on the Notion task carrying the link, the task moved to Published.
 A framework task ships through `engine` without anyone naming it, and ends with the merge request.
 
-## Pipelines
+## Flows
 
-One pipeline, or several named ones, in the frontmatter:
+A flow is every step a task runs through, in order; one, or several named ones, in the frontmatter:
 
 ```yaml
-pipelines:
-  default: implement → cleanup → review (local) → pr
-  direct: implement → push
-  local: [implement, commit]
-  judged: implement → pr → review (local) → judge → pr
-planless: [direct]
+flows:
+  default: plan judge implement cleanup review:local pr
+  direct: implement push
+  local: plan implement commit
+  judged: plan implement pr review:local judge pr
+drive_finish: off
 ```
 
-`default` runs unless the user names another.
-`local` is the one `f10 start --local` selects: the run ends in commits and nothing leaves the machine.
-A planless pipeline writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
-A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
+`f10 flow` lists them with what selects each.
+`f10 start` and `f10 drive` run `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` stops after `plan`.
+`plan` leads a flow or is absent: it runs only for a task with no plan file, so a planned task never plans again, and `/f10:ship` runs the entries after it.
+A flow with no `plan` writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
+An entry takes an argument after a colon, so each is one shell word: `review:local` and `review:ci` name the review's half, `cleanup:comments,prose` the cleanup targets, `deploy:staging` the environment; bare `cleanup` runs the targets that apply.
+Every `review` entry runs its resolve.
+`judge` reads by position: before `implement` it judges the plan, a yellow verdict revising the plan file in place; after it, the change.
+A judge before `implement` needs a leading `plan`, since a planless flow has no plan file to judge.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
-The last step names what a run ships: an open PR, a pushed branch, a running deploy.
+The last entry names what a run ships: an open PR, a pushed branch, a running deploy.
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
-Putting a project-defined step in a declared pipeline is the selection: unlike `push`, it needs no user naming the pipeline.
-A spike is the exception: its run ends after implement, whatever the pipeline, with a spike report.
+Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.
+A spike is the exception: its run ends after implement, whatever the flow, with a spike report.
 
-`pipeline_by_area` routes a task to a pipeline by its area, in the plain words Roles uses:
+`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when `drive_finish: on`.
+A rerun keeps the flow a task's branch recorded when it started.
+A project whose only merges are a human's leaves `drive_finish` off.
+
+`flow_by_area` routes a task to a flow by its area, in the plain words Roles uses:
 
 ```yaml
-pipeline_by_area:
+flow_by_area:
   framework work: judged
 ```
 
-A pipeline the user names still wins; a task whose areas map to nothing ships through `default`.
-Each value must name a declared pipeline.
-Never map an area to a pipeline with `push`: `push` runs only in a pipeline the user picked.
-`f10 drive` sends `/f10:ship` without a pipeline, so ship applies the map there too; drive's own planless check reads `default` alone, so a task routed to a planless pipeline still gets drive's `plan`.
+A flow the user names still wins; a task whose areas map to nothing ships through `default`.
+Each value must name a declared flow.
+Never map an area to a flow with `push`: `push` runs only in a flow the user picked.
+With the map declared and no flow named, `f10 start` and `f10 drive` send `/f10:ship <id>` alone and record no flow on the branch: ship picks the flow from the task's area and plans as that flow says.
 
-## Drive chain
-
-`drive_chain` lists the skills `f10 drive` runs each task through: any subset of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, each at most once, `finish` last.
-Never `start`: every task gets its worktree first.
-In the default chain, review reads the remote review when one is declared, else runs the local reviewer, and resolve settles it before finish merges.
-A project whose ship pipeline already reviews drops `review` and `resolve` here.
-When the `default` pipeline is planless, `plan` drops out of the declared chain; a chain typed on the command line runs as typed.
-A chain typed after the tasks (`f10 drive GH-12 GH-15 judge ship`) replaces this one for that run.
+The keys flows replaces still read, converted with a warning: `pipelines` (each becomes a flow led by `plan`), `planless` (those flows drop `plan`), `pipeline_by_area` (read as `flow_by_area`) and `drive_chain` (its `judge` before `ship` goes after `plan` in `default`, its `review` after `ship` is appended to `default` unless that already reviews, and a trailing `finish` turns `drive_finish` on).
+The old entry form `review (local)` reads as `review:local`, with a warning.
+`f10 init --migrate` rewrites all of them in the frontmatter, keeping key order and comments.
 
 ## Priority
 
@@ -285,9 +287,9 @@ tracker:
 
 Nothing declared, f10 changes no status.
 On host issues a status is `open` or `closed`, the only two an issue has.
-`shipped: closed` there closes the issue when the run ends, before any merge, so declare it only for pipelines that end past the merge (a `deploy`, a `push`); a pipeline ending at `pr` leaves the closing to the PR's closing keyword.
+`shipped: closed` there closes the issue when the run ends, before any merge, so declare it only for flows that end past the merge (a `deploy`, a `push`); a flow ending at `pr` leaves the closing to the PR's closing keyword.
 `report_back: off` stops the comment and the shipped status.
-A pipeline ending in `implement` or `commit` reports nothing back, since nothing left the machine; a spike still posts its answer.
+A flow ending in `implement` or `commit` reports nothing back, since nothing left the machine; a spike still posts its answer.
 A tracker whose driver declines `comment` (`docs/driver-contract.md`) gets the shipment in the final report alone.
 
 ## Review
@@ -326,7 +328,7 @@ review:
 Reviewer is `bot`, `human` or `check` plus the login or check name.
 Arrives as is `issue comment`, `inline review` or `check run`.
 Trigger is `automatic`, `manual` or both, followed by how a human fires it. `f10 review trigger` (and standalone `/f10:review <id> ci`) performs a manual how written as a comment with its text in a code span (`comment \`@claude review\` on the PR`) or as a review request with the login in a code span (`request a review from \`octocat\``); any other how stays a human's step.
-Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci` leaves once every finding has a verdict (`reaction \`<emoji>\`` or `marker "<text>"`; not resolved threads, which a human may resolve by hand); handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger, with `settled: reaction \`rocket\`` (spelled the same on GitHub and GitLab); a checkout without one declares no remote review, and a pipeline naming `review (CI)` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
+Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci` leaves once every finding has a verdict (`reaction \`<emoji>\`` or `marker "<text>"`; not resolved threads, which a human may resolve by hand); handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger, with `settled: reaction \`rocket\`` (spelled the same on GitHub and GitLab); a checkout without one declares no remote review, and a flow naming `review:ci` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
 
 `traces: on` makes what f10 does visible on the host, in words that never name f10.
 Every commit a step makes ends in `Task: <id>` and `Step: <step>` trailers, a resolve's fix commit also in `Review: round=<n> fixed=<n> skipped=<n>`.

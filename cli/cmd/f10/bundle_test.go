@@ -225,7 +225,7 @@ func TestBundleAfter(t *testing.T) {
 }
 
 func TestDriveParsesABundle(t *testing.T) {
-	a, err := parseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3 ship"))
+	a, err := parseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestSkillPromptForABundle(t *testing.T) {
 		"review": "/f10:review GH-1 --driven",
 		"finish": "/f10:finish GH-1 --driven",
 	} {
-		if got := skillPrompt(skill, "GH-1+GH-2", nil, false); got != want {
+		if got := skillPrompt(skill, "GH-1+GH-2", nil, shipFlow{}); got != want {
 			t.Errorf("skillPrompt(%s) = %q, want %q", skill, got, want)
 		}
 	}

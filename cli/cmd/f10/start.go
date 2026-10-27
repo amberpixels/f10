@@ -39,7 +39,8 @@ func startCommand() *cli.Command {
 				Name:  "discuss",
 				Usage: "prompt only the task's fetch: the agent summarises it and waits to discuss it before any plan",
 			},
-			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local pipeline: commits, nothing pushed"},
+			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local flow: --flow local"},
+			flowFlag(),
 			&cli.StringFlag{
 				Name:  "after",
 				Usage: "base the branch on `TASK-ID`'s branch and record the dependency: ship rebases onto it, the PR stacks on it; default: the task body's After: line",
@@ -58,18 +59,18 @@ func startCommand() *cli.Command {
 					"near misses are corrected, and a name that is no model falls back to claude's default",
 			},
 		},
-		Action: runStart,
+		Action:        runStart,
+		ShellComplete: completeFlow,
 	}
 }
 
 // The prompt per mode. The default is the whole flow with every gap on
-// its default; --plan stops after the plan; --local is the default flow
-// with the ship routed through the `local` pipeline; --discuss stops after
-// the fetch, for a task the user talks through in the agent's own pane.
+// its default, through the flow --flow or --local names; --plan stops
+// after the plan; --discuss stops after the fetch, for a task the user
+// talks through in the agent's own pane.
 const (
 	modeDefault = ""
 	modePlan    = "plan"
-	modeLocal   = "local"
 	modeDiscuss = "discuss"
 
 	agentKind = "claude"
@@ -98,6 +99,20 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	flowName, err := flowFlags(cmd)
+	if err != nil {
+		return err
+	}
+
+	if flowName != "" && mode != modeDefault {
+		return fmt.Errorf(
+			"--flow %s and --%s are exclusive: --%s stops before ship, which runs the flow",
+			flowName,
+			mode,
+			mode,
+		)
+	}
+
 	after, base := strings.TrimSpace(cmd.String("after")), strings.TrimSpace(cmd.String("base"))
 	if after != "" && base != "" {
 		return errors.New("--base and --after are exclusive: one names a git ref, the other a task to depend on")
@@ -117,9 +132,9 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if mode == modeLocal && !declaresPipeline(t, modeLocal) {
-		return errors.New("--local: project.md declares no `local` pipeline; " +
-			"add `local: implement -> commit` under Ship pipeline(s), since ship never picks one unasked")
+	fl, err := resolveShipFlow(t.eff, flowName)
+	if err != nil {
+		return err
 	}
 
 	pick, pr, err := pickupFor(ctx, t, token)
@@ -145,7 +160,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	switch {
 	case pick != nil:
-		if err := refusePickupFlags(mode, after, base); err != nil {
+		if err := refusePickupFlags(flowName, after, base); err != nil {
 			return err
 		}
 
@@ -181,6 +196,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		task:     r,
 		suffix:   suffix,
 		mode:     mode,
+		flow:     fl,
 		base:     base,
 		plansDir: t.sharedPlansDir(),
 		title:    titleLookup(t, r.Number),
@@ -300,12 +316,14 @@ func refuseNote(mode string, pick *pickup, note string) error {
 
 // refusePickupFlags stops the flags a picked-up PR has no use for: its
 // branch and base are the PR's, and nobody ships someone else's PR unread.
-func refusePickupFlags(mode, after, base string) error {
+func refusePickupFlags(flow, after, base string) error {
 	switch {
 	case after != "" || base != "":
 		return errors.New("--after and --base do not apply to a PR: its branch and its base are the PR's")
-	case mode == modeLocal:
-		return errors.New("--local does not apply to a PR: the agent summarises it and waits, or plans with --plan")
+	case flow != "":
+		return errors.New(
+			"--local and --flow do not apply to a PR: the agent summarises it and waits, or plans with --plan",
+		)
 	}
 
 	return nil
@@ -314,7 +332,7 @@ func refusePickupFlags(mode, after, base string) error {
 func startMode(cmd *cli.Command) (string, error) {
 	var set []string
 
-	for _, m := range []string{modePlan, modeLocal, modeDiscuss} {
+	for _, m := range []string{modePlan, modeDiscuss} {
 		if cmd.Bool(m) {
 			set = append(set, "--"+m)
 		}
@@ -328,17 +346,6 @@ func startMode(cmd *cli.Command) (string, error) {
 	default:
 		return "", fmt.Errorf("%s are exclusive: each names how far the agent runs", strings.Join(set, " and "))
 	}
-}
-
-// declaresPipeline reports whether project.md names a pipeline, in any case.
-func declaresPipeline(t *target, name string) bool {
-	for declared := range t.eff.Pipelines {
-		if strings.EqualFold(declared, name) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // afterFromBody reads the task's body for an After: line. A body that
@@ -365,6 +372,8 @@ type startInput struct {
 	task     ref.Ref
 	suffix   string
 	mode     string
+	flow     shipFlow                              // the flow ship runs; zero for default
+	flowKept bool                                  // drive records the flow itself, keeping one the branch has
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	base     string                                // branch whose ref is the base, or ""
 	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
@@ -429,7 +438,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 			ctx,
 			o.path,
 			herdr.AgentName(in.task.ID, in.suffix, o.path),
-			prompt(in.mode, o.task.Label(), o.dep, o.plan, in.pick, in.note),
+			prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note),
 		); err != nil {
 			return err
 		}
@@ -769,6 +778,14 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 		o.fresh = true
 
+		// the flow is the branch's fact from here on: status lists its gates,
+		// and a rerun of drive keeps it
+		if !in.flowKept && in.flow.recorded() != "" {
+			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgFlow, in.flow.recorded()); err != nil {
+				notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
+			}
+		}
+
 		// the model is the branch's fact from here on, for a reader of the
 		// branch (f10 board); a failed write loses nothing the agent needs
 		if in.model != "" {
@@ -1106,13 +1123,14 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 }
 
 // prompt is what the agent is told: the skills, the dependency where the
-// task has one, and the driven marker. A saved plan turns plan-then-ship
-// into ship alone; --plan still plans, and the plan step archives the saved
-// one. Driven mode takes every gap on its default and the fetch step carries
+// task has one, and the driven marker. A saved plan, or a flow with no
+// plan entry, turns plan-then-ship into ship alone, told the flow by
+// name unless it is default; --plan still plans, and the plan step
+// archives the saved one. Driven mode takes every gap on its default and the fetch step carries
 // the dependency's contract, so the prompt states neither. A picked-up PR is
 // summarised and discussed, or planned from its diff with --plan: never
 // shipped unread. A note goes only to the prompts that stop and wait.
-func prompt(mode, id string, dep *dependency, plan string, pick *pickup, note string) string {
+func prompt(mode string, fl shipFlow, id string, dep *dependency, plan string, pick *pickup, note string) string {
 	switch {
 	case pick != nil && mode == modePlan:
 		return driven(fmt.Sprintf("/f10:plan %s continue PR %s: its diff is the starting point", id, pick.url))
@@ -1127,14 +1145,10 @@ func prompt(mode, id string, dep *dependency, plan string, pick *pickup, note st
 	switch {
 	case mode == modePlan:
 		p = "/f10:plan " + id
-	case mode == modeLocal && plan != "":
-		p = "/f10:ship local: " + id
-	case mode == modeLocal:
-		p = fmt.Sprintf("/f10:plan %s && /f10:ship local: %s", id, id)
-	case plan != "":
-		p = "/f10:ship " + id
+	case plan != "" || !fl.plans():
+		p = "/f10:ship " + fl.word() + id
 	default:
-		p = fmt.Sprintf("/f10:plan %s && /f10:ship %s", id, id)
+		p = fmt.Sprintf("/f10:plan %s && /f10:ship %s%s", id, fl.word(), id)
 	}
 
 	if dep != nil {

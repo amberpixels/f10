@@ -72,7 +72,7 @@ func buildWith(t *testing.T, main, worktree string) *Effective {
 func TestBuildFrontmatter(t *testing.T) {
 	eff := buildWith(t, "---\n"+
 		"visibility: public\ntracker: {kind: gitlab, id: AB-###}\nmerge_method: rebase\ncatchup: merge\n"+
-		"pipelines: {default: [implement, pr], local: [implement, commit]}\ndrive_chain: [plan, ship]\n"+
+		"flows: {default: plan implement pr, local: [implement, commit]}\ndrive_finish: on\n"+
 		"review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n"+
 		"---\n# demo\n\n## Verify\n\n`just test`\n", "")
 
@@ -81,8 +81,8 @@ func TestBuildFrontmatter(t *testing.T) {
 	}
 
 	if eff.Visibility != "public" || eff.TrackerKind != "GitLab work items" || eff.IDPrefix != "AB" ||
-		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || len(eff.Pipelines) != 2 ||
-		strings.Join(eff.DriveChain, " ") != "plan ship" || eff.Review.Reviewer != "claude[bot]" {
+		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || len(eff.Flows) != 2 ||
+		!eff.DriveFinish || eff.Review.Reviewer != "claude[bot]" {
 		t.Errorf("typed facts = %+v", eff)
 	}
 
@@ -101,15 +101,15 @@ func TestBuildFrontmatter(t *testing.T) {
 // A key a later layer sets wins outright; one it leaves alone keeps main's.
 func TestBuildFrontmatterLayersKeyByKey(t *testing.T) {
 	eff := buildWith(t,
-		"---\nmerge_method: squash\npipelines: {local: [implement, commit]}\n---\n",
+		"---\nmerge_method: squash\nflows: {local: [implement, commit]}\n---\n",
 		"---\nmerge_method: rebase\n---\n")
 
 	if eff.MergeMethod != "rebase" {
 		t.Errorf("merge method = %q, want the worktree's rebase", eff.MergeMethod)
 	}
 
-	if _, ok := eff.Pipelines["local"]; !ok {
-		t.Errorf("pipelines = %v, want main's local kept", eff.Pipelines)
+	if _, ok := eff.Flows["local"]; !ok {
+		t.Errorf("flows = %v, want main's local kept", eff.Flows)
 	}
 }
 
@@ -118,21 +118,24 @@ func TestBuildProseFallback(t *testing.T) {
 		"## Ship pipelines\n\n- **default**: `implement → pr`\n- **local**: implement → commit\n"+
 		"- **direct** (planless): `implement → push`\n\n## Drive chain\n\n`plan` → ship\n", "")
 
-	if eff.MergeMethod != "squash" || strings.Join(eff.DriveChain, " ") != "plan ship" {
-		t.Errorf("merge method %q, chain %v", eff.MergeMethod, eff.DriveChain)
+	// the prose pipelines and chain convert to flows: the chain names no
+	// judge, review or finish, so nothing folds into default
+	if eff.MergeMethod != "squash" || eff.DriveFinish {
+		t.Errorf("merge method %q, drive finish %v", eff.MergeMethod, eff.DriveFinish)
 	}
 
-	if got := strings.Join(
-		eff.Pipelines["direct"],
-		" ",
-	); got != "implement push" ||
-		!slices.Equal(eff.Planless, []string{"direct"}) {
-		t.Errorf("direct = %q, planless = %v", got, eff.Planless)
+	if got := strings.Join(eff.Flows["direct"], " "); got != "implement push" {
+		t.Errorf("direct = %q, want it planless", got)
 	}
 
-	if eff.Errors() != "" || len(eff.Problems) != 1 ||
-		!strings.Contains(eff.Problems[0].Message, "f10 init --migrate") {
-		t.Errorf("want one migrate warning, got %+v", eff.Problems)
+	if got := strings.Join(eff.Flows["default"], " "); got != "plan implement pr" {
+		t.Errorf("default = %q", got)
+	}
+
+	if eff.Errors() != "" || len(eff.Problems) != 2 ||
+		!strings.Contains(eff.Problems[0].Message, "converted to flows") ||
+		!strings.Contains(eff.Problems[1].Message, "f10 init --migrate") {
+		t.Errorf("want a conversion and a migrate warning, got %+v", eff.Problems)
 	}
 }
 
@@ -180,7 +183,11 @@ func TestMigrate(t *testing.T) {
 	}
 
 	if d.Visibility != "stealth" || d.Tracker.ID != "DM-###" || d.Tracker.Kind != "github" ||
-		d.MergeMethod != "squash" || len(d.Pipelines["local"]) != 2 || d.Review.Reviewer != "bot `claude[bot]`" ||
+		d.MergeMethod != "squash" || strings.Join(d.Flows["local"], " ") != "plan implement commit" ||
+		strings.Join(
+			d.Flows["default"],
+			" ",
+		) != "plan judge implement pr review:ci" || d.DriveFinish != "on" || d.Review.Reviewer != "bot `claude[bot]`" ||
 		d.Review.Settled != "reaction `rocket`" {
 		t.Errorf("migrated = %+v", d)
 	}
@@ -398,42 +405,42 @@ func TestMigrateRenamesReviewTraces(t *testing.T) {
 }
 
 // The report-back facts: the status map, the area map onto declared
-// pipelines, and report_back on unless declared off; a worktree's area map
-// replaces main's whole and may name main's pipelines.
+// flows, and report_back on unless declared off; a worktree's area map
+// replaces main's whole and may name main's flows.
 func TestBuildReportBackFacts(t *testing.T) {
 	eff := buildWith(t, "---\n"+
 		"tracker: {kind: notion, id: MR-###, status: {started: In progress, shipped: Published}}\n"+
-		"pipelines: {default: implement → publish, engine: implement → cleanup → pr}\n"+
-		"pipeline_by_area: {report work: default, framework work: engine}\n"+
+		"flows: {default: implement publish, engine: implement cleanup pr}\n"+
+		"flow_by_area: {report work: default, framework work: engine}\n"+
 		"---\n", "")
 
 	if len(eff.Problems) > 0 {
 		t.Fatalf("problems: %+v", eff.Problems)
 	}
 
-	if eff.TrackerStatus["shipped"] != "Published" || eff.ByArea["framework work"] != "engine" || !eff.ReportBack {
-		t.Errorf("status %v, by area %v, report back %v", eff.TrackerStatus, eff.ByArea, eff.ReportBack)
+	if eff.TrackerStatus["shipped"] != "Published" || eff.FlowByArea["framework work"] != "engine" || !eff.ReportBack {
+		t.Errorf("status %v, by area %v, report back %v", eff.TrackerStatus, eff.FlowByArea, eff.ReportBack)
 	}
 
 	layered := buildWith(
 		t,
-		"---\npipelines: {default: [implement, pr], engine: [implement, pr]}\npipeline_by_area: {a: engine, b: engine}\n---\n",
-		"---\npipeline_by_area: {c: engine}\nreport_back: off\n---\n",
+		"---\nflows: {default: [implement, pr], engine: [implement, pr]}\nflow_by_area: {a: engine, b: engine}\n---\n",
+		"---\nflow_by_area: {c: engine}\nreport_back: off\n---\n",
 	)
 
-	if len(layered.Problems) > 0 || len(layered.ByArea) != 1 || layered.ReportBack {
+	if len(layered.Problems) > 0 || len(layered.FlowByArea) != 1 || layered.ReportBack {
 		t.Errorf(
 			"layered: by area %v, report back %v, problems %+v",
-			layered.ByArea,
+			layered.FlowByArea,
 			layered.ReportBack,
 			layered.Problems,
 		)
 	}
 
-	// one layer, no pipelines of its own: the map is checked against the default
-	unknown := buildWith(t, "---\npipeline_by_area: {report work: publish}\n---\n", "")
-	if !strings.Contains(unknown.Errors(), `pipeline_by_area: "report work" maps to "publish"`) {
-		t.Errorf("an area mapped to no pipeline passed: %+v", unknown.Problems)
+	// one layer, no flows of its own: the map is checked against the default
+	unknown := buildWith(t, "---\nflow_by_area: {report work: publish}\n---\n", "")
+	if !strings.Contains(unknown.Errors(), `flow_by_area: "report work" maps to "publish"`) {
+		t.Errorf("an area mapped to no flow passed: %+v", unknown.Problems)
 	}
 
 	bad := Declared{

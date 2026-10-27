@@ -16,13 +16,13 @@ Never open `AskUserQuestion`, never end a turn on a question in chat.
 Every question the steps call for (**wait or proceed** on a base with no code, a judge's rethink, a resolve `ask`, a conflict catchup cannot settle, a deploy confirmation) goes through run state:
 
 1. **The whole batch as one ask**: `f10-state.sh ask "<text>"`, one line, numbered questions, options in brackets, the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Base GH-7 has no code yet: [wait | proceed on its plan]`.
-2. **Stop blocked, in the same call**: `; f10-state.sh set <phase> blocked [<leaf>]` (for ship, the pipeline step as leaf).
+2. **Stop blocked, in the same call**: `; f10-state.sh set <phase> blocked [<leaf>]` (for ship, the flow entry as leaf).
    The `Stop` hook leaves `blocked` alone.
 3. **End the turn**, printing the ask once under a facts block carrying the task.
    The print is for a person looking at this pane: end it with "Answer here", never a command for another session (`f10 forward`, `f10 status`, `f10 drive --answer`).
    The driving session reads the ask through `f10 status <task-id>` and knows its own way back.
 
-Two questions never become asks: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`), and ships a saved plan as it stands rather than asking **reuse or re-plan** (or, on a planless pipeline, **reuse or run planless**).
+A gap never becomes an ask: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`).
 
 ## The answer
 

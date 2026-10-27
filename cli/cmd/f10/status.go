@@ -507,12 +507,12 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 	}
 
 	src := gateSource{
-		events:   events,
-		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		pipeline: t.eff.Pipelines["default"],
-		review:   t.eff.Review,
-		store:    &lore.Store{Root: root},
-		host:     h,
+		events: events,
+		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		flows:  t.eff.Flows,
+		review: t.eff.Review,
+		store:  &lore.Store{Root: root},
+		host:   h,
 	}
 
 	if t.sharedPlansDir() != "" {

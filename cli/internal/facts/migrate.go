@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -41,6 +40,7 @@ func renderDeclared(d Declared) (string, error) {
 func isEmpty(d Declared) bool {
 	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker.empty() &&
 		d.MergeMethod == "" && d.Catchup == "" && d.Traces == "" && d.ReviewTraces == "" && d.Lore == "" &&
+		d.Flows == nil && d.FlowByArea == nil && d.DriveFinish == "" &&
 		d.Pipelines == nil && d.Planless == nil && d.ByArea == nil && d.ReportBack == "" &&
 		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
 }
@@ -79,10 +79,16 @@ func renameTraces(data, block []byte) (*Migration, error) {
 // readers the fallback uses, and puts them in a frontmatter block above the
 // untouched file. Only what the file declares moves: defaults and
 // detection stay out, so the block says no more than the prose did. A file
-// that already has a block gets its one renamed key, review_traces, moved
-// to traces.
+// that already has a block gets its old keys rewritten: pipelines,
+// planless, pipeline_by_area and drive_chain into flows, old-form entries
+// into the colon form, review_traces into traces.
 func Migrate(data []byte, path string) (*Migration, error) {
-	if block, _, ok := frontmatter.Split(data); ok {
+	if block, body, ok := frontmatter.Split(data); ok {
+		m, err := migrateFlows(data, block, body, path)
+		if !errors.Is(err, ErrHasFrontmatter) {
+			return m, err
+		}
+
 		return renameTraces(data, block)
 	}
 
@@ -134,24 +140,28 @@ func Migrate(data []byte, path string) (*Migration, error) {
 		moved("catchup", "`catchup:` in the Hosting & PR section")
 	}
 
-	if pipes, planless := prosePipelines(body("Ship pipeline(s)")); pipes != nil {
-		d.Pipelines = map[string]Steps{}
-		for _, name := range slices.Sorted(maps.Keys(pipes)) {
-			d.Pipelines[name] = pipes[name]
-		}
-
-		d.Planless = planless
-		moved("pipelines", "the Ship pipeline(s) section")
-	}
-
-	if chain := proseChain(body("Drive chain")); len(chain) > 0 {
-		d.DriveChain = chain
-		moved("drive_chain", "the Drive chain section")
-	}
-
-	if r := proseReviewDecl(body("Review")); r != (ReviewDecl{}) {
+	r := proseReviewDecl(body("Review"))
+	if r != (ReviewDecl{}) {
 		d.Review = r
 		moved("review", "the Reviewer, Arrives as, Trigger, Done and Settled items in the Review section")
+	}
+
+	pipes, planless := prosePipelines(body("Ship pipeline(s)"))
+	if chain := proseChain(body("Drive chain")); pipes != nil || len(chain) > 0 {
+		flows, finish := convertLegacy(pipes, planless, chain, r.Reviewer != "")
+
+		d.Flows = flows
+		if finish {
+			d.DriveFinish = "on"
+		}
+
+		for _, name := range []string{"Ship pipeline(s)", "Drive chain"} {
+			if strings.TrimSpace(body(name)) != "" {
+				m.Superseded = append(m.Superseded, "flows: the "+name+" section")
+			}
+		}
+
+		m.Moved = append(m.Moved, "flows")
 	}
 
 	if bad := d.check(); len(bad) > 0 {
@@ -222,4 +232,224 @@ func proseReviewDecl(body string) ReviewDecl {
 	}
 
 	return d
+}
+
+// convertLegacy is legacyFlows over what a file declares: no pipelines is
+// the old default one, no chain the old default chain.
+func convertLegacy(pipes map[string][]string, planless, chain []string, remote bool) (map[string]Flow, bool) {
+	if pipes == nil {
+		pipes = map[string][]string{"default": {"implement", "pr"}}
+	}
+
+	if len(chain) == 0 {
+		chain = strings.Fields(legacyDriveChain)
+	}
+
+	converted, finish := legacyFlows(pipes, planless, lowered(chain), remote)
+
+	flows := map[string]Flow{}
+	for name, entries := range converted {
+		flows[name] = entries
+	}
+
+	return flows, finish
+}
+
+// migrateFlows rewrites the old flow keys inside an existing block, and
+// review_traces with them. The block is edited as a YAML node, so key
+// order and comments stay; indentation comes back as the encoder's two
+// spaces. Nothing to rewrite but review_traces, or nothing at all, is
+// ErrHasFrontmatter, and renameTraces keeps that case byte for byte.
+func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
+	d, err := decodeDeclared(block)
+	if err != nil {
+		return nil, fmt.Errorf("reading the frontmatter: %w", err)
+	}
+
+	secs, _ := parseFile(body, path, "main")
+	prosePipes, prosePlanless := prosePipelines(secs["Ship pipeline(s)"].body)
+	proseChainSteps := proseChain(secs["Drive chain"].body)
+
+	paren := false
+
+	for _, f := range d.Flows {
+		_, old := normalizeFlow(f)
+		paren = paren || old
+	}
+
+	// prose sections count too: config warns about them under a block, and
+	// this is the command its warning names
+	prose := d.Flows == nil && (prosePipes != nil || len(proseChainSteps) > 0)
+	legacy := d.Pipelines != nil || d.Planless != nil || d.ByArea != nil || d.DriveChain != nil || prose
+	if !legacy && !paren {
+		return nil, ErrHasFrontmatter
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(block, &doc); err != nil || len(doc.Content) == 0 ||
+		doc.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("reading the frontmatter: not a mapping")
+	}
+
+	root := doc.Content[0]
+	m := &Migration{}
+
+	flows, finish := d.Flows, false
+
+	if flows == nil {
+		pipes, planless := map[string][]string(nil), d.Planless
+		if d.Pipelines != nil {
+			pipes = map[string][]string{}
+			for name, steps := range d.Pipelines {
+				pipes[strings.ToLower(name)] = steps
+			}
+		} else if prosePipes != nil {
+			pipes, planless = prosePipes, prosePlanless
+		}
+
+		chain := []string(d.DriveChain)
+		if chain == nil {
+			chain = proseChainSteps
+		}
+
+		remote := d.Review.Reviewer != "" || proseReviewDecl(secs["Review"].body).Reviewer != ""
+		flows, finish = convertLegacy(pipes, planless, chain, remote)
+	}
+
+	normalized := map[string]Flow{}
+	for name, f := range flows {
+		entries, _ := normalizeFlow(f)
+		normalized[name] = entries
+	}
+
+	flowsNode := &yaml.Node{}
+	if err := flowsNode.Encode(normalized); err != nil {
+		return nil, fmt.Errorf("rendering flows: %w", err)
+	}
+
+	sortFlowKeys(flowsNode)
+
+	var (
+		out   []*yaml.Node
+		wrote bool
+	)
+
+	put := func(key string, value *yaml.Node, comment *yaml.Node) {
+		k := &yaml.Node{Kind: yaml.ScalarNode, Value: key}
+		if comment != nil {
+			k.HeadComment, k.LineComment = comment.HeadComment, comment.LineComment
+		}
+
+		out = append(out, k, value)
+	}
+
+	writeFlows := func(at *yaml.Node) {
+		if wrote {
+			return
+		}
+
+		wrote = true
+
+		put("flows", flowsNode, at)
+
+		if finish && d.DriveFinish == "" {
+			put("drive_finish", &yaml.Node{Kind: yaml.ScalarNode, Value: "on"}, nil)
+			m.Moved = append(m.Moved, "drive_finish")
+		}
+	}
+
+	m.Moved = append(m.Moved, "flows")
+
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key, value := root.Content[i], root.Content[i+1]
+
+		switch key.Value {
+		case "flows", "pipelines":
+			writeFlows(key)
+		case "planless", "drive_chain":
+			if d.Flows == nil && d.Pipelines == nil {
+				writeFlows(key)
+			}
+		case "pipeline_by_area":
+			if d.FlowByArea == nil {
+				key.Value = "flow_by_area"
+				out = append(out, key, value)
+				m.Moved = append(m.Moved, "flow_by_area")
+			}
+		case "review_traces":
+			if d.Traces == "" {
+				key.Value = "traces"
+				out = append(out, key, value)
+				m.Moved = append(m.Moved, "traces")
+			}
+		default:
+			out = append(out, key, value)
+		}
+	}
+
+	writeFlows(nil)
+
+	root.Content = out
+
+	var b bytes.Buffer
+
+	enc := yaml.NewEncoder(&b)
+	enc.SetIndent(2)
+
+	if err := enc.Encode(&doc); err != nil {
+		return nil, fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	rewritten, err := decodeDeclared(b.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("the rewritten frontmatter does not read back: %w", err)
+	}
+
+	if bad := rewritten.check(); len(bad) > 0 {
+		return nil, fmt.Errorf("the old keys do not migrate cleanly: %s", strings.Join(bad, "; "))
+	}
+
+	for _, name := range []string{"Ship pipeline(s)", "Drive chain"} {
+		if d.Flows == nil && strings.TrimSpace(secs[name].body) != "" {
+			m.Superseded = append(m.Superseded, "flows: the "+name+" section")
+		}
+	}
+
+	start := bytes.Index(data, block)
+	m.Content = string(data[:start]) + b.String() + string(data[start+len(block):])
+
+	return m, nil
+}
+
+// sortFlowKeys puts default first in an encoded flows mapping, the rest by
+// name, as f10 flow lists them.
+func sortFlowKeys(n *yaml.Node) {
+	type pair struct{ k, v *yaml.Node }
+
+	pairs := make([]pair, 0, len(n.Content)/2)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		pairs = append(pairs, pair{n.Content[i], n.Content[i+1]})
+	}
+
+	slices.SortStableFunc(pairs, func(a, b pair) int {
+		switch {
+		case a.k.Value == b.k.Value:
+			return 0
+		case a.k.Value == "default":
+			return -1
+		case b.k.Value == "default":
+			return 1
+		default:
+			return strings.Compare(a.k.Value, b.k.Value)
+		}
+	})
+
+	n.Content = n.Content[:0]
+	for _, p := range pairs {
+		n.Content = append(n.Content, p.k, p.v)
+	}
 }

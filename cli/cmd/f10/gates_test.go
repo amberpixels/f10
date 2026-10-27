@@ -11,8 +11,11 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -495,5 +498,43 @@ func TestRenderGates(t *testing.T) {
 
 	if !strings.Contains(out.String(), "| | | implement: done | | |") {
 		t.Errorf("a finished row lacks its gate lines:\n%s", out.String())
+	}
+}
+
+// A project migrated from pipelines and the default drive chain shows a
+// driven task the same gates, in the same order, as before flows.
+func TestGatesSameAfterMigration(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "project.md"),
+		"---\npipelines:\n  default: implement → cleanup → pr → review (local) → judge → pr\n---\n")
+
+	eff := facts.Build(&layout.Layout{Project: "demo", Layers: []layout.Layer{{Label: "main", Dir: dir}}},
+		&probe.Probes{})
+	flow := eff.Flows["default"]
+
+	if got := strings.Join(flow, " "); got != "plan judge implement cleanup pr review:local judge pr" {
+		t.Fatalf("migrated default = %q", got)
+	}
+
+	order := func(gates []gate) string {
+		var steps []string
+		for _, g := range gates {
+			steps = append(steps, strings.TrimSpace(g.Step+" "+g.Judged)+"="+g.text())
+		}
+
+		return strings.Join(steps, ", ")
+	}
+
+	before := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: gatePipeline, now: time.Now(),
+		chain: []string{"plan", "judge", "ship", "review", "resolve", "finish"},
+	})
+	after := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: facts.ShipEntries(flow), now: time.Now(),
+		chain: driveChain(shipFlow{}, eff.DriveFinish),
+	})
+
+	if order(before) != order(after) {
+		t.Errorf("gates drifted across the migration:\nbefore %s\nafter  %s", order(before), order(after))
 	}
 }

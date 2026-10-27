@@ -8,7 +8,7 @@ The direct-flow alternative to `steps/pr.md`: one or a few clean commits pushed 
 For tiny, low-risk changes: chores, annotations, typos.
 
 1. **Authorization is stricter than for a PR.**
-   Run this step only in a pipeline the **user explicitly selected** (by name, or in their own words); for a tiny task, *suggest* it and proceed only on their pick.
+   Run this step only in a flow the **user explicitly selected** (`--flow`, `--local`, by name, or in their own words); for a tiny task, *suggest* it and proceed only on their pick.
 2. **Verify first.**
    The implement step's verify must have passed.
 3. **Commit clean.**

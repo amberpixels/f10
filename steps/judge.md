@@ -94,8 +94,9 @@ Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, 
 Relay its verdict unchanged; you may dispute it in one line.
 The agent writes nothing: you write the verdict file with `blind: yes`, your dispute, if any, under `## Argument`.
 
-**In a ship pipeline** the verdict routes the run; none is a failure.
-The route depends on whether a `pr` entry ran earlier in the same pipeline run, never on whether the branch happens to have a PR.
+**In a ship flow** the verdict routes the run; none is a failure.
+A `judge` entry before `implement` is the **plan judge**: its subject is `plan <id>`, it routes as before `pr` below, and a yellow verdict's changes fold into the plan file in place, with no code written.
+After `implement` it is the **change judge**, whose route depends on whether a `pr` entry ran earlier in the same run, never on whether the branch happens to have a PR.
 
 **Before `pr`** (`plan → judge → implement`, `implement → judge → pr`):
 

@@ -52,6 +52,8 @@ func newApp() *cli.Command {
 		Version: version(debug.ReadBuildInfo()),
 		// -C takes a path whole, commas included
 		DisableSliceFlagSeparator: true,
+		// `f10 completion <shell>` prints the script; --flow completes the declared flows
+		EnableShellCompletion: true,
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
 				Name:    "C",
@@ -63,6 +65,7 @@ func newApp() *cli.Command {
 		Commands: []*cli.Command{
 			initCommand(),
 			configCommand(),
+			flowCommand(),
 			doctorCommand(),
 			taskCommand(),
 			planCommand(),

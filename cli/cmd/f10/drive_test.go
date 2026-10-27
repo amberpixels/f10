@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +46,23 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	fx.f.absent = append(fx.f.absent, "git rev-list --count ", "git rev-parse -q --verify refs/heads/",
 		"git rev-parse -q --verify refs/remotes/origin/", "git reflog show ")
 
-	a, err := parseDriveArgs(args)
+	// a test names the chain after the ids, as drive once took it, to run
+	// its machinery on any skill; drive itself derives the chain
+	var chain, rest []string
+
+	for i := 0; i < len(args); i++ {
+		switch {
+		case slices.Contains(oldChainSkills, args[i]):
+			chain = append(chain, args[i])
+		case args[i] == "--answer" || args[i] == "--model" || args[i] == "--every" || args[i] == "--flow":
+			rest = append(rest, args[i], args[i+1])
+			i++
+		default:
+			rest = append(rest, args[i])
+		}
+	}
+
+	a, err := parseDriveArgs(rest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +85,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		},
 		args:     a,
 		argv:     args,
-		chain:    a.chain,
+		chain:    chain,
 		stateDir: t.TempDir(),
 		ttl:      state.DefaultTTL,
 		now:      func() time.Time { return fx.clock },
@@ -137,7 +154,7 @@ func (fx *driveFixture) opensOn(id, ws, pane, model string) {
 
 // expects scripts the prompt for one skill and the record of it done.
 func (fx *driveFixture) expects(id, skill string) {
-	fx.f.script("herdr agent prompt "+agentOf(id)+" "+skillPrompt(skill, id, nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf(id)+" "+skillPrompt(skill, id, nil, shipFlow{}), "{}")
 	fx.f.script("git config branch."+id+"."+cfgDrive+" "+skill, "")
 }
 
@@ -373,7 +390,7 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
@@ -439,7 +456,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.f.script(headRef, "origin/main") // GH-1 has no commit, so GH-2 waits
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
@@ -470,7 +487,7 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, shipFlow{}), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() { fx.writeRun(t, "running", "implement", "", "") }
 
@@ -598,10 +615,10 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1")
-			fx.in.chain = tc.chain
 			fx.f.script("git config --get branch.GH-1."+cfgDrive, tc.recorded)
 
-			pos, err := fx.in.position(t.Context(), openedTask{branch: "GH-1", path: "/code/repo.GH-1", plan: tc.plan})
+			pos, err := fx.in.position(t.Context(), openedTask{branch: "GH-1", path: "/code/repo.GH-1", plan: tc.plan},
+				tc.chain)
 			if err != nil || pos != tc.want {
 				t.Errorf("position = %d, %v; want %d", pos, err, tc.want)
 			}
@@ -838,26 +855,28 @@ func TestParseDriveArgs(t *testing.T) {
 		args    []string
 		tasks   string
 		span    bool
-		chain   string
+		flow    string
 		answers string
 		every   time.Duration
 		model   string
 		models  string // each task's :model, | between, checked when set
 		wantErr string
 	}{
-		{args: []string{"GH-1", "GH-2", "judge", "ship"}, tasks: "GH-1 GH-2", chain: "judge ship", every: defaultEvery},
+		{args: []string{"GH-1", "GH-2", "--flow", "Direct"}, tasks: "GH-1 GH-2", flow: "direct", every: defaultEvery},
+		{args: []string{"GH-1", "--local"}, tasks: "GH-1", flow: "local", every: defaultEvery},
+		{args: []string{"GH-1", "--local", "--flow=local"}, tasks: "GH-1", flow: "local", every: defaultEvery},
 		{args: []string{"GH-1", "--", "GH-4"}, tasks: "GH-1 GH-4", span: true, every: defaultEvery},
 		{
-			args:  []string{"--every", "5s", "GH-1", "plan", "→", "ship", "--answer=1. yes"},
-			tasks: "GH-1", chain: "plan ship", answers: "1. yes", every: 5 * time.Second,
+			args:  []string{"--every", "5s", "GH-1", "--answer=1. yes"},
+			tasks: "GH-1", answers: "1. yes", every: 5 * time.Second,
 		},
 		{
 			args:  []string{"GH-1", "GH-2", "--answer", "GH-1=1. yes", "--answer=GH-2=1. no"},
 			tasks: "GH-1 GH-2", answers: "GH-1=1. yes|GH-2=1. no", every: defaultEvery,
 		},
 		{
-			args:  []string{"GH-1:sonnet", "GH-2", "--model", "opus", "ship"},
-			tasks: "GH-1 GH-2", chain: "ship", model: "opus", models: "sonnet|", every: defaultEvery,
+			args:  []string{"GH-1:sonnet", "GH-2", "--model", "opus"},
+			tasks: "GH-1 GH-2", model: "opus", models: "sonnet|", every: defaultEvery,
 		},
 		{
 			args:  []string{"--model=fable", "GH-1-retry:opus"},
@@ -873,14 +892,15 @@ func TestParseDriveArgs(t *testing.T) {
 		{args: []string{"GH-1:opus", "--", "GH-4"}, wantErr: "run-wide --model"},
 		{args: []string{"GH-1", "--model", "opus", "--model", "fable"}, wantErr: "given twice"},
 		{args: []string{"GH-1", "--model"}, wantErr: "needs a value"},
-		{args: []string{"GH-1", "judge", "GH-2"}, wantErr: "follows the chain"},
+		{args: []string{"GH-1", "judge", "GH-2"}, wantErr: "drive takes no chain"},
+		{args: []string{"GH-1", "ship"}, wantErr: "f10 flow lists them"},
+		{args: []string{"GH-1", "--local", "--flow", "direct"}, wantErr: "already names the local flow"},
+		{args: []string{"GH-1", "--flow"}, wantErr: "needs a value"},
 		{args: []string{"GH-1", "GH-2", "--", "GH-4"}, wantErr: "a range is one id"},
-		{args: []string{"judge"}, wantErr: "needs the tasks"},
+		{args: []string{"--model", "opus"}, wantErr: "needs the tasks"},
 		{args: []string{"GH-1", "--every", "soon"}, wantErr: "positive duration"},
 		{args: []string{"GH-1", "--answer"}, wantErr: "needs a value"},
 		{args: []string{"GH-1", "--force"}, wantErr: "unknown flag"},
-		{args: []string{"GH-1", "finish", "ship"}, wantErr: "ends the chain"},
-		{args: []string{"GH-1", "ship", "ship"}, wantErr: "twice"},
 	}
 
 	for _, c := range cases {
@@ -900,7 +920,7 @@ func TestParseDriveArgs(t *testing.T) {
 			continue
 		}
 
-		if strings.Join(a.tasks, " ") != c.tasks || a.span != c.span || strings.Join(a.chain, " ") != c.chain ||
+		if strings.Join(a.tasks, " ") != c.tasks || a.span != c.span || a.flow != c.flow ||
 			strings.Join(a.answers, "|") != c.answers || a.every != c.every || a.model != c.model ||
 			(c.models != "" && strings.Join(a.models, "|") != c.models) {
 			t.Errorf("%q = %+v", c.args, a)
@@ -908,45 +928,20 @@ func TestParseDriveArgs(t *testing.T) {
 	}
 }
 
-func TestParseChain(t *testing.T) {
-	chain, err := parseChain(strings.Fields("plan judge ship review resolve finish"))
-	if err != nil || strings.Join(chain, " ") != "plan judge ship review resolve finish" {
-		t.Errorf("default = %q, %v", chain, err)
-	}
-
-	if chain, err := parseChain([]string{"Judge", "ship", "finish"}); err != nil ||
-		strings.Join(chain, " ") != "judge ship finish" {
-		t.Errorf("declared = %q, %v", chain, err)
-	}
-
-	for _, bad := range [][]string{nil, {"start", "ship"}, {"ship", "deploy"}} {
-		if _, err := parseChain(bad); err == nil {
-			t.Errorf("%q parsed", bad)
-		}
-	}
-}
-
-func TestPlanlessChain(t *testing.T) {
-	full := strings.Fields("plan judge ship finish")
-
+func TestDriveChain(t *testing.T) {
 	for _, c := range []struct {
-		chain, planless []string
-		want            string
-		dropped         bool
+		fl     shipFlow
+		finish bool
+		want   string
 	}{
-		{full, []string{"default"}, "judge ship finish", true},
-		{full, []string{"direct"}, "plan judge ship finish", false},
-		{full, nil, "plan judge ship finish", false},
-		{[]string{"ship", "finish"}, []string{"default"}, "ship finish", false},
+		{shipFlow{}, false, "plan ship"},
+		{shipFlow{}, true, "plan ship finish"},
+		{shipFlow{name: "direct", planless: true}, true, "ship finish"},
+		{shipFlow{name: "direct", planless: true}, false, "ship"},
 	} {
-		got, dropped := planlessChain(c.chain, c.planless)
-		if strings.Join(got, " ") != c.want || dropped != c.dropped {
-			t.Errorf("%q with planless %q = %q, %v", c.chain, c.planless, got, dropped)
+		if got := strings.Join(driveChain(c.fl, c.finish), " "); got != c.want {
+			t.Errorf("%+v finish %v = %q, want %q", c.fl, c.finish, got, c.want)
 		}
-	}
-
-	if strings.Join(full, " ") != "plan judge ship finish" {
-		t.Errorf("the declared chain changed: %q", full)
 	}
 }
 
@@ -954,11 +949,11 @@ func TestSkillPrompt(t *testing.T) {
 	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
 
 	cases := map[string]string{
-		skillPrompt("plan", "GH-1", nil, false):   "/f10:plan GH-1 --driven",
-		skillPrompt("ship", "GH-1", nil, false):   "/f10:ship GH-1 --driven",
-		skillPrompt("review", "GH-1", nil, true):  "/f10:review GH-1 ci --driven",
-		skillPrompt("review", "GH-1", nil, false): "/f10:review GH-1 --driven",
-		skillPrompt("judge", "GH-1", dep, false):  "/f10:judge GH-1 --driven",
+		skillPrompt("plan", "GH-1", nil, shipFlow{}):              "/f10:plan GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, shipFlow{}):              "/f10:ship GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, shipFlow{name: "local"}): "/f10:ship local: GH-1 --driven",
+		skillPrompt("plan", "GH-1", nil, shipFlow{name: "local"}): "/f10:plan GH-1 --driven",
+		skillPrompt("judge", "GH-1", dep, shipFlow{}):             "/f10:judge GH-1 --driven",
 	}
 
 	for got, want := range cases {
@@ -967,7 +962,7 @@ func TestSkillPrompt(t *testing.T) {
 		}
 	}
 
-	if p := skillPrompt("ship", "GH-1", dep, false); !strings.Contains(p, "GH-1 depends on GH-7") {
+	if p := skillPrompt("ship", "GH-1", dep, shipFlow{}); !strings.Contains(p, "GH-1 depends on GH-7") {
 		t.Errorf("a dependent ship carries no contract: %q", p)
 	}
 }
@@ -1608,7 +1603,7 @@ func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "unknown"))
 
 	err := fx.drive(t)

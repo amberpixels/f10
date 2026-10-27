@@ -159,18 +159,14 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 
 	e.resolveTracker(fm, fmSource, proseSource, body, lay, pb)
 	e.resolveHosting(fm, fmSource, proseSource, body)
-	e.resolvePipelines(fm, fmSource, proseSource, body)
 
-	chain := proseChain(body("Drive chain"))
-	switch e.settle("drive_chain", fmSource("drive_chain", arrows(fm.DriveChain)),
-		proseSource("Drive chain", arrows(chain)),
-		Fact{Key: "drive_chain", Value: DefaultDriveChain, Origin: OriginDefault}) {
-	case "frontmatter":
-		e.DriveChain = fm.DriveChain
-	case "prose":
-		e.DriveChain = chain
-	default:
-		e.DriveChain = splitSteps(DefaultDriveChain)
+	e.ReportBack = fm.ReportBack != "off"
+	if fm.ReportBack != "" {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "report_back",
+			Value:  fm.ReportBack,
+			Origin: "declared (" + fm.origin["report_back"] + ", frontmatter)",
+		})
 	}
 
 	// frontmatter only: no prose ever declared it
@@ -184,6 +180,10 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 
 	_, reviewDeclared := declared["Review"]
 	e.resolveReview(fm, fmSource, proseSource, body, reviewDeclared, pb)
+
+	// after review: converting the old drive chain asks whether a remote
+	// reviewer is declared
+	e.resolveFlows(fm, declared)
 
 	// one warning per file and kind, naming every fact it concerns
 	for file, keys := range groupByFile(e.proseRead) {
@@ -357,68 +357,6 @@ func (e *Effective) resolveHosting(
 	e.Lore = cmp.Or(fm.Lore, "local")
 }
 
-func (e *Effective) resolvePipelines(
-	fm *layered,
-	fmSource func(key, shown string) source,
-	proseSource func(name, shown string) source,
-	body func(string) string,
-) {
-	prosePipes, prosePlanless := prosePipelines(body("Ship pipeline(s)"))
-
-	fmPipes := map[string][]string{}
-	for name, steps := range fm.Pipelines {
-		fmPipes[name] = steps
-	}
-
-	switch e.settle("pipelines", fmSource("pipelines", pipelinesShown(fmPipes)),
-		proseSource("Ship pipeline(s)", pipelinesShown(prosePipes)),
-		Fact{Key: "pipelines", Value: "default: implement → pr", Origin: OriginDefault}) {
-	case "frontmatter":
-		e.Pipelines, e.Planless = fmPipes, fm.Planless
-	case "prose":
-		e.Pipelines, e.Planless = prosePipes, prosePlanless
-	default:
-		e.Pipelines = map[string][]string{"default": {"implement", "pr"}}
-	}
-
-	// frontmatter only: neither has a prose form. The area map is checked
-	// against the merged pipelines, since a layer may map onto another's.
-	if e.ByArea = fm.ByArea; e.ByArea != nil {
-		e.Facts = append(e.Facts, Fact{
-			Key:    "pipeline_by_area",
-			Value:  mapShown(e.ByArea),
-			Origin: "declared (" + fm.origin["pipeline_by_area"] + ", frontmatter)",
-		})
-
-		for _, area := range slices.Sorted(maps.Keys(e.ByArea)) {
-			if _, ok := e.Pipelines[e.ByArea[area]]; !ok {
-				e.problem(true, "project.md frontmatter: pipeline_by_area: %q maps to %q, which names no pipeline",
-					area, e.ByArea[area])
-			}
-		}
-	}
-
-	e.ReportBack = fm.ReportBack != "off"
-	if fm.ReportBack != "" {
-		e.Facts = append(e.Facts, Fact{
-			Key:    "report_back",
-			Value:  fm.ReportBack,
-			Origin: "declared (" + fm.origin["report_back"] + ", frontmatter)",
-		})
-	}
-
-	if len(fm.Planless) > 0 {
-		e.Facts = append(
-			e.Facts,
-			Fact{
-				Key:    "planless",
-				Value:  strings.Join(fm.Planless, ", "),
-				Origin: "declared (" + fm.origin["planless"] + ", frontmatter)",
-			},
-		)
-	}
-}
-
 func (e *Effective) resolveReview(
 	fm *layered,
 	fmSource func(key, shown string) source,
@@ -579,21 +517,6 @@ func proseChain(text string) []string {
 	}
 
 	return chain
-}
-
-func arrows(steps []string) string { return strings.Join(steps, " → ") }
-
-func pipelinesShown(pipes map[string][]string) string {
-	if len(pipes) == 0 {
-		return ""
-	}
-
-	shown := make([]string, 0, len(pipes))
-	for _, name := range slices.Sorted(maps.Keys(pipes)) {
-		shown = append(shown, name+": "+arrows(pipes[name]))
-	}
-
-	return strings.Join(shown, "; ")
 }
 
 // reviewFrom reads the frontmatter's strings with the prose items'

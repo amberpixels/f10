@@ -29,7 +29,7 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
    Settle ~90% of open questions yourself from the code and its house style.
    The _major_ forks left over (they change scope or are hard to reverse) become **gaps**: note each with the default you'd proceed on and carry them into the plan's Gaps section (`conventions/gaps.md`).
 6. **Output** a short investigation brief: the kind (with a bug's reproduction and root cause, a refactor's invariant, or a spike's question), what changes, where, the **areas** the task really touches (correct the task's _Areas_ note if investigation disagrees, or derive areas from the code when the task carries none; name the conditional roles in `project.md → Roles` they trigger), the base role each step runs under where Roles replaces one, and what set it (`conventions/context.md` → Roles), the obstacles found, the decisions you took, and the gaps with their defaults for the plan to record.
-   A planless pipeline has no plan step: the brief becomes the inline plan `/f10:ship` prints in chat, its gaps listed there on their defaults.
+   A planless flow (no leading `plan` entry) has no plan step: the brief becomes the inline plan `/f10:ship` prints in chat, its gaps listed there on their defaults.
 
 **On failure:** the tracker does not know the id, or is unreachable (`conventions/failure.md`).
 A bug fetch could not reproduce is a declined outcome, not a failure.

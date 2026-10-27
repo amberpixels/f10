@@ -27,8 +27,8 @@ Every f10 run starts by loading it.
 - **spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's answer (`steps/implement.md`).
 - **shipment** - what the ship pipeline leaves, named by its **last step**: verified code (`implement`, reported in prose), local commits (`commit`: a sha), pushed commits (`push`: the branch and a sha), an open PR/MR (`pr`: its url), a running environment (`deploy`: its url), or a project-defined step's output.
   A project-defined step declares its own in its overlay, on a `Shipment:` line naming each row, its label and what it holds (`Shipment: report - the published report's url`).
-  It carries no explicit-selection rule like `push`'s: the project naming it in a pipeline it declares is the selection.
-  A spike's shipment is its spike report, whatever the pipeline.
+  It carries no explicit-selection rule like `push`'s: the project naming it in a flow it declares is the selection.
+  A spike's shipment is its spike report, whatever the flow.
 
 **Step headers.**
 A step's `Role:` is its base role unless `project.md → Roles` or the step's overlay replaces it (the Roles bullet below); added roles go on top.
@@ -57,7 +57,7 @@ If it is ever unavailable, the points below say what to do by hand:
    Incompatible stacks call for `replaces main`, never a field-by-field merge.
    A contradiction you cannot resolve: say so rather than pick.
 4. **`instructions files:`** names every `.md` per layer; layer blocks and `absent:` cover only requested names.
-   A pipeline name with no generic step (like `e2e`) is a **project-defined step**: its `.f10/instructions/e2e.md` *is* the step.
+   A flow entry with no generic step (like `e2e`) is a **project-defined step**: its `.f10/instructions/e2e.md` *is* the step.
 5. **Inferred defaults**, when `project.md` is absent or partial: the remote host gives `gh`/`glab`; the project name gives the task id prefix (`f10` is `F10`, `git-undo` is `GU`, `herdr` is `HER`); `go.mod` / `Gemfile` / `package.json` give stack and role; `justfile` / `Makefile` give verify commands.
    State them once, the prefix included, and suggest `f10 init`, which writes `.f10/instructions/project.md` from the same probes.
    Never refuse to run for missing config.
@@ -66,7 +66,7 @@ If it is ever unavailable, the points below say what to do by hand:
 
 A YAML frontmatter block holds the facts the `f10` binary acts on (an unknown key or value is an error), then prose under headings holds the rest.
 Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
-A fact belongs to the step or skill that acts on it, which says what it means: `pipelines`, `planless`, `pipeline_by_area`, `report_back` and `tracker.status` to `/f10:ship` (`tracker.status`'s `started` also to `f10 start` and `f10 drive`), `review` to the **review** step, `catchup` to the **catchup** step, `traces` to the **commit**, **resolve**, **judge** and **catchup** steps and `f10 finish`.
+A fact belongs to the step or skill that acts on it, which says what it means: `flows`, `flow_by_area`, `report_back` and `tracker.status` to `/f10:ship` (`flows` and `tracker.status`'s `started` also to `f10 start` and `f10 drive`), `drive_finish` to `f10 drive`, `review` to the **review** step, `catchup` to the **catchup** step, `traces` to the **commit**, **resolve**, **judge** and **catchup** steps and `f10 finish`.
 The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.

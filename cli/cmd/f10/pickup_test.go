@@ -139,7 +139,7 @@ func TestPickupOf(t *testing.T) {
 // planned from its diff with --plan; never shipped.
 func TestPromptForAPickup(t *testing.T) {
 	for _, mode := range []string{modeDefault, modeDiscuss} {
-		got := prompt(mode, "GH-1", nil, "", pickGH, "")
+		got := prompt(mode, shipFlow{}, "GH-1", nil, "", pickGH, "")
 		for _, want := range []string{"f10 task read GH-1", "gh pr view 30 --comments", "gh pr diff 30", "stop and wait"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("prompt(%q) for a PR = %q, missing %q", mode, got, want)
@@ -152,21 +152,32 @@ func TestPromptForAPickup(t *testing.T) {
 	}
 
 	want := "/f10:plan GH-1 continue PR " + pickGH.url + ": its diff is the starting point " + drivenMarker
-	if got := prompt(modePlan, "GH-1", nil, "", pickGH, ""); got != want {
+	if got := prompt(modePlan, shipFlow{}, "GH-1", nil, "", pickGH, ""); got != want {
 		t.Errorf("prompt(plan) for a PR = %q, want %q", got, want)
 	}
 
-	if got := prompt(modeDefault, "GH-1", nil, "/p/GH-1.md", pickGH, ""); !strings.Contains(got, "/p/GH-1.md") {
+	if got := prompt(
+		modeDefault,
+		shipFlow{},
+		"GH-1",
+		nil,
+		"/p/GH-1.md",
+		pickGH,
+		"",
+	); !strings.Contains(
+		got,
+		"/p/GH-1.md",
+	) {
 		t.Errorf("prompt for a PR with a plan = %q, want the plan named", got)
 	}
 }
 
 func TestRefusePickupFlags(t *testing.T) {
-	if err := refusePickupFlags(modePlan, "", ""); err != nil {
-		t.Errorf("--plan with a PR was refused: %v", err)
+	if err := refusePickupFlags("", "", ""); err != nil {
+		t.Errorf("a PR with no flow named was refused: %v", err)
 	}
 
-	for _, c := range [][3]string{{modeLocal, "", ""}, {modeDefault, "GH-7", ""}, {modeDefault, "", "main"}} {
+	for _, c := range [][3]string{{"local", "", ""}, {"direct", "", ""}, {"", "GH-7", ""}, {"", "", "main"}} {
 		if err := refusePickupFlags(c[0], c[1], c[2]); err == nil {
 			t.Errorf("refusePickupFlags%v = nil, want a refusal", c)
 		}
@@ -187,7 +198,19 @@ func TestStartPicksUpAPR(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label alice/fix-login", opened)
 	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
-		"herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", pickGH, ""),
+		"herdr agent prompt "+herdr.AgentName(
+			"GH-1",
+			"",
+			wt,
+		)+" "+prompt(
+			modeDefault,
+			shipFlow{},
+			"GH-1",
+			nil,
+			"",
+			pickGH,
+			"",
+		),
 		"{}",
 	)
 
@@ -231,7 +254,19 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/slug", opened)
 	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
-		"herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""),
+		"herdr agent prompt "+herdr.AgentName(
+			"GH-1",
+			"",
+			wt,
+		)+" "+prompt(
+			modeDefault,
+			shipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
 		"{}",
 	)
 
