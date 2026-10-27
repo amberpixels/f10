@@ -381,13 +381,21 @@ func (e *Effective) resolvePipelines(
 		e.Pipelines = map[string][]string{"default": {"implement", "pr"}}
 	}
 
-	// frontmatter only: neither has a prose form
+	// frontmatter only: neither has a prose form. The area map is checked
+	// against the merged pipelines, since a layer may map onto another's.
 	if e.ByArea = fm.ByArea; e.ByArea != nil {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "pipeline_by_area",
 			Value:  mapShown(e.ByArea),
 			Origin: "declared (" + fm.origin["pipeline_by_area"] + ", frontmatter)",
 		})
+
+		for _, area := range slices.Sorted(maps.Keys(e.ByArea)) {
+			if _, ok := e.Pipelines[e.ByArea[area]]; !ok {
+				e.problem(true, "project.md frontmatter: pipeline_by_area: %q maps to %q, which names no pipeline",
+					area, e.ByArea[area])
+			}
+		}
 	}
 
 	e.ReportBack = fm.ReportBack != "off"

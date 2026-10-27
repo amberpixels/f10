@@ -430,13 +430,17 @@ func TestBuildReportBackFacts(t *testing.T) {
 		)
 	}
 
+	// one layer, no pipelines of its own: the map is checked against the default
+	unknown := buildWith(t, "---\npipeline_by_area: {report work: publish}\n---\n", "")
+	if !strings.Contains(unknown.Errors(), `pipeline_by_area: "report work" maps to "publish"`) {
+		t.Errorf("an area mapped to no pipeline passed: %+v", unknown.Problems)
+	}
+
 	bad := Declared{
 		ReportBack: "yes",
-		Pipelines:  map[string]Steps{"default": {"implement"}},
-		ByArea:     map[string]string{"report work": "publish"},
 		Tracker:    TrackerDecl{Status: map[string]string{"done": "Done", "shipped": " "}},
 	}.check()
-	for _, want := range []string{"report_back", `pipeline_by_area: "report work"`, `tracker.status: "done"`, "tracker.status: shipped"} {
+	for _, want := range []string{"report_back", `tracker.status: "done"`, "tracker.status: shipped"} {
 		if !slices.ContainsFunc(bad, func(b string) bool { return strings.HasPrefix(b, want) }) {
 			t.Errorf("check misses %s: %v", want, bad)
 		}

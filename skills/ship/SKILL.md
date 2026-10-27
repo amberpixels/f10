@@ -52,7 +52,7 @@ No step after implement runs (no cleanup, commit, push, pr, review, judge or dep
 `f10 finish` cannot close it (it would merge the experiment code, and needs a clean worktree), so the final report ends with the manual close.
 In a linked worktree with in-repo storage: copy the spike report and the plan, when there is one, into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
 In the main checkout, or with out-of-tree storage, the report already outlives the code: discard the experiment code by the paths the report names.
-Its report back (below) carries the question, the answer and the recommendation, and names the spike report's path for whoever holds the checkout.
+Its report back (below) carries the question, the answer and the recommendation; it names the spike report's path only under `visibility: public`, since stealth keeps `.f10/` paths off the tracker.
 The kind is known from the plan, or a planless run's inline plan, before the pipeline starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
@@ -79,8 +79,9 @@ Stopping mid-way with durable artifacts is `set ship partial <step>` with a `not
    It leaves the machine: no f10, plan or findings mention under stealth (`conventions/context.md`), and other tasks named by title.
    A bundle comments on the lead and names the riders.
 2. `f10 task comment <id>` with it on stdin, in a call of its own.
-   Skip it when the tracker is the host's issues and the shipment is a PR/MR carrying the task's closing keyword: the host already links the two.
 3. With `tracker.status.shipped` declared, `f10 task update <id> --status <that word>`, for every bundle member.
+
+When the tracker is the host's issues and the shipment is a PR/MR carrying the task's closing keyword, skip points 2 and 3: the host links the two, and closes the issue on merge, not when the PR opens.
 
 Exit 3 from either is a normal end: the tracker takes no such write, and the final report alone carries the shipment.
 Any other failure leaves the shipment standing: `f10-state.sh set ship partial <last step>` with a `note`, and the comment is never retried, since it may have posted.

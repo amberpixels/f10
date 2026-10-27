@@ -280,7 +280,8 @@ func (h host) comment(ctx context.Context, number, body string) (string, error) 
 // update sets an issue's properties. An issue has two states and no custom
 // properties, so `--status` takes open or closed only and `--set` is refused.
 // A priority is the label tracker.priority maps the level to, and the labels
-// of every other level come off, so the issue carries one level.
+// of every other level come off, so the issue carries one level. An
+// assignee replaces the ones the issue has, as glab's flag does.
 func (h host) update(ctx context.Context, number string, p props, priorities map[string]string) error {
 	if len(p.set) > 0 {
 		return fmt.Errorf("%s issues have no custom properties for --set %s", h.Name, strings.Join(p.set, ", "))
@@ -298,7 +299,7 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 		return fmt.Errorf("status %q: %s issues are open or closed", p.status, h.Name)
 	}
 
-	iss, err := h.issue(ctx, number, "labels")
+	iss, err := h.issue(ctx, number, "labels,assignees")
 	if err != nil {
 		return err
 	}
@@ -324,8 +325,19 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 		}
 	}
 
+	// gh only adds an assignee, so the others come off by name
+	var unassign []string
+
+	if p.assignee != "" && !h.GLab() {
+		for _, a := range iss.Assignees {
+			if a.Login != "" && !strings.EqualFold(a.Login, p.assignee) {
+				unassign = append(unassign, a.Login)
+			}
+		}
+	}
+
 	if len(add) > 0 || len(remove) > 0 || p.assignee != "" {
-		if _, err := h.Run(ctx, h.editArgs(number, add, remove, p.assignee)...); err != nil {
+		if _, err := h.Run(ctx, h.editArgs(number, add, remove, p.assignee, unassign)...); err != nil {
 			return err
 		}
 	}
@@ -339,7 +351,7 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 	return nil
 }
 
-func (h host) editArgs(number string, add, remove []string, assignee string) []string {
+func (h host) editArgs(number string, add, remove []string, assignee string, unassign []string) []string {
 	if h.GLab() {
 		args := []string{"issue", "update", number}
 		if len(add) > 0 {
@@ -368,6 +380,10 @@ func (h host) editArgs(number string, add, remove []string, assignee string) []s
 
 	if assignee != "" {
 		args = append(args, "--add-assignee", assignee)
+	}
+
+	for _, a := range unassign {
+		args = append(args, "--remove-assignee", a)
 	}
 
 	return args

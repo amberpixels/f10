@@ -57,13 +57,15 @@ Go service for invoices.
 | `visibility` | `stealth` or `public` | `stealth` |
 | `storage` | `in-repo` or `out-of-tree` | `in-repo` |
 | `layering` | `extends` or `replaces`, in a linked worktree only | `extends` |
-| `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, and an optional `priority` map from the four levels to the host labels that carry them | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority |
+| `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, an optional `priority` map from the four levels to the host labels that carry them, and an optional `status` map from `started` and `shipped` to the tracker's own words ([Reporting back](#reporting-back)) | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority; no status moved |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
 | `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `pipelines` | name to the ordered steps `/f10:ship` runs after planning, as a list or one `a → b` string | `default: implement → pr` |
 | `planless` | the pipelines that write no plan file: free text also skips capture and fetch, a task id is fetched but not planned | none |
+| `pipeline_by_area` | an area, in the plain words Roles uses, to the pipeline its tasks ship through when the user names none | `default` for every task |
+| `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
 | `drive_chain` | the skills `f10 drive` runs each task through, in order: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, with `finish` last | `plan → judge → ship → review → resolve → finish` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
@@ -81,7 +83,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the review step for the remote review, the catchup step for `catchup`, the commit, resolve, judge and catchup steps for `traces`).
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for pipelines, the area map and reporting back, the review step for the remote review, the catchup step for `catchup`, the commit, resolve, judge and catchup steps for `traces`).
 
 ## Overlays
 
@@ -268,8 +270,8 @@ With nothing declared, host issues have no priority and the list is in the host'
 ## Reporting back
 
 A ship run with a task id ends by posting its shipment on the task as one comment: the report link, the deploy url, the PR or MR, the commits.
-A spike posts its answer and recommendation, with the spike report's path.
-Where the tracker is the host's issues and the shipment is a PR carrying the task's closing keyword, no comment is posted: the host already links them.
+A spike posts its answer and recommendation; the spike report's path goes in only for a `public` project, since stealth keeps `.f10/` paths off the tracker.
+Where the tracker is the host's issues and the shipment is a PR carrying the task's closing keyword, ship posts no comment and moves no status: the host links the two, and closes the issue when the PR merges.
 
 `tracker.status` names the tracker's own words for two moments, and f10 moves the task to them:
 
@@ -282,6 +284,7 @@ tracker:
 
 Nothing declared, f10 changes no status.
 On host issues a status is `open` or `closed`, the only two an issue has.
+`shipped: closed` there closes the issue when the run ends, before any merge, so declare it only for pipelines that end past the merge (a `deploy`, a `push`); a pipeline ending at `pr` leaves the closing to the PR's closing keyword.
 `report_back: off` stops the comment and the shipped status.
 A tracker whose driver declines `comment` (`docs/driver-contract.md`) gets the shipment in the final report alone.
 

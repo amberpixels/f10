@@ -225,14 +225,6 @@ func (d Declared) check() []string {
 		}
 	}
 
-	for _, area := range slices.Sorted(maps.Keys(d.ByArea)) {
-		name := d.ByArea[area]
-		// a layer without pipelines maps onto another layer's, checked there
-		if _, ok := d.Pipelines[name]; !ok && name != "default" && d.Pipelines != nil {
-			bad = append(bad, fmt.Sprintf("pipeline_by_area: %q maps to %q, which names no pipeline", area, name))
-		}
-	}
-
 	for _, moment := range slices.Sorted(maps.Keys(d.Tracker.Status)) {
 		switch {
 		case !slices.Contains(StatusMoments, moment):

@@ -162,9 +162,13 @@ func TestHostComment(t *testing.T) {
 func TestHostUpdate(t *testing.T) {
 	f := newFakes(t)
 
-	view := `{"url":"https://github.com/o/r/issues/7","labels":[{"name":"P2"},{"name":"bug"}]}`
-	f.script("gh issue view 7 --json labels,url", view)
-	f.script("gh issue edit 7 --add-label shipped --add-label p1 --remove-label P2 --add-assignee ann", "")
+	view := `{"url":"https://github.com/o/r/issues/7","labels":[{"name":"P2"},{"name":"bug"}],` +
+		`"assignees":[{"login":"bob"},{"login":"Ann"}]}`
+	f.script("gh issue view 7 --json labels,assignees,url", view)
+	f.script(
+		"gh issue edit 7 --add-label shipped --add-label p1 --remove-label P2 --add-assignee ann --remove-assignee bob",
+		"",
+	)
 	f.script("gh issue close 7", "")
 	f.script("glab issue view 7 -F json", `{"web_url":"https://gitlab.example.com/g/r/-/issues/7","labels":["P2"]}`)
 	f.script("glab issue update 7 --label p1 --unlabel P2", "")

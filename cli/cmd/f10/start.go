@@ -192,10 +192,8 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		in.children = t.tracker().children
 	}
 
-	if word := t.eff.TrackerStatus["started"]; word != "" && pick == nil {
-		in.started = func(ctx context.Context, task ref.Ref) error {
-			return updateTask(ctx, io.Discard, t, t.driver(), task, props{status: word})
-		}
+	if pick == nil {
+		in.started = startedMove(t)
 	}
 
 	// before the body's After: line, whose own refusal would hide this one
@@ -458,6 +456,19 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
 		o.notes,
 	)
+}
+
+// startedMove moves a task to tracker.status's started word, or is nil when
+// none is declared.
+func startedMove(t *target) func(context.Context, ref.Ref) error {
+	word := t.eff.TrackerStatus["started"]
+	if word == "" {
+		return nil
+	}
+
+	return func(ctx context.Context, task ref.Ref) error {
+		return updateTask(ctx, io.Discard, t, t.driver(), task, props{status: word})
+	}
 }
 
 // markStarted moves every member of a freshly started task to its started
