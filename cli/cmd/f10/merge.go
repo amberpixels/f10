@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -60,6 +61,9 @@ func (p pull) base() string { return cmp.Or(p.BaseRefName, p.TargetBranch) }
 func (p pull) sha() string  { return cmp.Or(p.MergeCommit.OID, p.SquashCommitSHA, p.MergeCommitSHA) }
 func (p pull) head() string { return cmp.Or(p.HeadRefName, p.SourceBranch) }
 func (p pull) body() string { return cmp.Or(p.Body, p.Description) }
+
+// id is the request's number as the host CLI takes it: gh's number, glab's iid.
+func (p pull) id() string { return strconv.Itoa(cmp.Or(p.Number, p.IID)) }
 
 // author is who opened the request: gh names it login, glab username.
 func (p pull) author() string { return cmp.Or(p.Author.Login, p.Author.Username) }
@@ -205,11 +209,35 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 	return h.pull(ctx, branch)
 }
 
+// stackedPulls reads the open requests whose base is branch.
+func (h host) stackedPulls(ctx context.Context, branch string) ([]pull, error) {
+	var ps []pull
+
+	err := h.Decode(ctx, &ps, h.Pick(
+		[]string{"pr", "list", "--base", branch, "--state", "open", "--json", "number,url,headRefName"},
+		[]string{"mr", "list", "--target-branch", branch, "-F", "json"},
+	)...)
+
+	return ps, err
+}
+
+// retargetPull moves the request p onto base. It goes by number, since a
+// stacked request's head is another task's branch.
+func (h host) retargetPull(ctx context.Context, p pull, base string) error {
+	_, err := h.Run(ctx, h.Pick(
+		[]string{"pr", "edit", p.id(), "--base", base},
+		[]string{"mr", "update", p.id(), "--target-branch", base},
+	)...)
+
+	return err
+}
+
 // deleteRemoteBranch deletes branch on origin through the host's API, the
 // same call `gh pr merge --delete-branch` makes. That flag is not used
 // because it also deletes the local branch, which git refuses while a
 // worktree has it checked out, and gh then exits non-zero after the merge
-// landed.
+// landed. Unlike the host's own delete on merge, this one closes every
+// request still based on branch, so callers retarget them first.
 func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 	_, err := h.Run(ctx, h.Pick(
 		[]string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + branch},

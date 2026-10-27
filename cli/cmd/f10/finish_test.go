@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -30,6 +31,7 @@ const (
 	ghRepo  = "gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
+	ghStack = "gh pr list --base GH-1 --state open --json number,url,headRefName"
 	cfgDeps = `git config --get-regexp ^branch\..*\.f10-after-branch$`
 	lsRem   = "git ls-remote --heads origin GH-1"
 	// finish drops the local copy of origin's branch along with the branch
@@ -67,6 +69,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 	f.script("git merge-base --is-ancestor m3rge main", "")
 	f.script(cfgDeps, "")
 	f.script(lsRem, "abc\trefs/heads/GH-1")
+	f.script(ghStack, "[]")
 	f.script(ghDel, "")
 	f.script(dropRemoteRef, "")
 	f.script("herdr workspace close ws:9", "{}")
@@ -535,6 +538,104 @@ func TestFinishRefusesStackedPR(t *testing.T) {
 
 	if fx.f.called("gh pr merge") || fx.f.called(ghRepo) {
 		t.Error("the stacked PR was merged")
+	}
+}
+
+// A PR stacked on the branch moves to main before the branch goes: a
+// refs-API delete closes every PR still based on it.
+func TestFinishRetargetsStackedPRsBeforeDelete(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script(ghStack, `[{"number":12,"url":"https://gh/pr/12","headRefName":"GH-2/next"}]`)
+	fx.f.script("gh pr edit 12 --base main", "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	edit, del := slices.Index(fx.f.calls, "gh pr edit 12 --base main"), slices.Index(fx.f.calls, ghDel)
+	if edit < 0 || del < 0 || edit > del {
+		t.Errorf("want the retarget before the delete:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+
+	if !strings.Contains(out, "retargeted https://gh/pr/12 to main") {
+		t.Errorf("report missing the retarget:\n%s", out)
+	}
+}
+
+// A retarget the host refuses stops finish with the branch on origin, so
+// the stacked PR stays open; a rerun retries it.
+func TestFinishKeepsBranchWhenRetargetFails(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script(ghStack, `[{"number":12,"url":"https://gh/pr/12","headRefName":"GH-2/next"}]`)
+	fx.f.fail("gh pr edit 12 --base main", shell.Result{Code: 1, Stderr: "GraphQL: Resource not accessible"})
+	fx.plan(t, "GH-1.md", "# plan")
+
+	_, err := fx.run(t)
+	if err == nil {
+		t.Fatal("finish went on after a failed retarget")
+	}
+
+	for _, want := range []string{"https://gh/pr/12", "Resource not accessible", "origin/GH-1 is left in place"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want it to carry %q", err, want)
+		}
+	}
+
+	for _, p := range []string{ghDel, dropRemoteRef, "git worktree remove", "git branch -D"} {
+		if fx.f.called(p) {
+			t.Errorf("%q ran after the retarget failed", p)
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(fx.wt, ".f10", "plans", "GH-1.md")); err != nil {
+		t.Error("the plan was moved although the retarget failed")
+	}
+}
+
+// A rerun on a PR already merged retargets what the branch still holds.
+func TestFinishRetargetsAfterEarlierMerge(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, prMerged)
+	fx.f.script(ghStack, `[{"number":12,"url":"https://gh/pr/12","headRefName":"GH-2/next"}]`)
+	fx.f.script("gh pr edit 12 --base main", "")
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if fx.f.called("gh pr merge") || !fx.f.called("gh pr edit 12 --base main") || !fx.f.called(ghDel) {
+		t.Errorf("calls:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+}
+
+// On GitLab a source branch the merge left behind has its MRs retargeted
+// by iid before the API deletes it.
+func TestFinishRetargetsStackedMRsOnGitLab(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.host = newHost("glab", fx.main)
+	fx.f.script(
+		"glab mr view GH-1 -F json",
+		`{"state":"merged","web_url":"https://gl/mr/4","iid":4,"target_branch":"main","squash_commit_sha":"m3rge"}`,
+	)
+	fx.f.script(
+		"glab mr list --target-branch GH-1 -F json",
+		`[{"iid":7,"web_url":"https://gl/mr/7","source_branch":"GH-2/next"}]`,
+	)
+	fx.f.script("glab mr update 7 --target-branch main", "")
+	fx.f.script("glab api -X DELETE projects/:fullpath/repository/branches/GH-1", "")
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	edit := slices.Index(fx.f.calls, "glab mr update 7 --target-branch main")
+	del := slices.Index(fx.f.calls, "glab api -X DELETE projects/:fullpath/repository/branches/GH-1")
+
+	if edit < 0 || del < 0 || edit > del {
+		t.Errorf("want the retarget before the delete:\n%s", strings.Join(fx.f.calls, "\n"))
 	}
 }
 
@@ -1059,7 +1160,7 @@ func TestFinishFindsTheIdPastAPrefix(t *testing.T) {
 			// the host and origin are asked by the branch's name
 			swap := strings.NewReplacer("GH-1 ", branch+" ", "heads/GH-1", "heads/"+branch,
 				"origin GH-1", "origin "+branch, "origin/GH-1", "origin/"+branch)
-			for _, key := range []string{ghView, ghMerge, ghDel, lsRem, dropRemoteRef} {
+			for _, key := range []string{ghView, ghMerge, ghStack, ghDel, lsRem, dropRemoteRef} {
 				fx.f.answers[swap.Replace(key)] = fx.f.answers[key]
 			}
 

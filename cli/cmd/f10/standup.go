@@ -651,7 +651,7 @@ func refBranch(r string, remotes []string, def string) string {
 }
 
 // recordedBases is every head branch's base as `f10 start --after` wrote
-// it: the real base of a stacked PR after the host retargets it.
+// it: the real base of a stacked PR after the base's finish retargets it.
 func recordedBases(ctx context.Context, main string) map[string]string {
 	out := map[string]string{}
 
