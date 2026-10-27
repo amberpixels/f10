@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -513,5 +514,28 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), mayExist) {
 			t.Errorf("%q: err = %v, want %q and the may-exist warning", script, err, want)
 		}
+	}
+}
+
+// failingReader fails a test that reads it.
+type failingReader struct{ t *testing.T }
+
+func (r failingReader) Read([]byte) (int, error) {
+	r.t.Error("stdin was read")
+
+	return 0, io.EOF
+}
+
+// With no driver, create exits 3 without reading stdin, so a run with
+// nothing piped in never waits on a terminal.
+func TestTaskCreateNoDriverLeavesStdin(t *testing.T) {
+	app := newApp()
+	app.Reader = failingReader{t}
+	app.Writer, app.ErrWriter = &bytes.Buffer{}, &bytes.Buffer{}
+	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
+
+	err := app.Run(t.Context(), []string{"f10", "-C", createRepo(t, ""), "task", "create"})
+	if exitCode(err) != exitNoCreate {
+		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
 	}
 }

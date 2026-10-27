@@ -44,7 +44,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
    A spike gets its label only when the user calls the task one, since the label alone makes ship skip the PR.
    A split creates the parent first, then links each subtask to it: through the driver, `--parent` is the link; through the adapter, the tracker's native parent link, the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
-   Through the driver, `f10 task children <parent>` confirms the link: an exit 3, or a subtask missing from its rows, means the driver dropped `--parent`, and the report names each unlinked subtask for the user to link by hand.
+   Through the driver, `f10 task children <parent>` confirms the link: an exit 3 is a tracker with no parent link, so the checklist goes in; a subtask missing from its rows means the driver dropped `--parent`, and the report names it for the user to link by hand.
 4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; several tasks report as the convention's tree.
    Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, the parent's id for a split.
 

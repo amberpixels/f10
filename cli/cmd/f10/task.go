@@ -515,21 +515,21 @@ const mayExist = "the task may exist already: check the tracker before running c
 // runTaskCreate sends the task on stdin to the driver's create. f10 never
 // retries it, since a failed write is an unknown outcome.
 func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
-	in, err := io.ReadAll(cmd.Reader)
-	if err != nil {
-		return fmt.Errorf("reading the task from stdin: %w", err)
-	}
-
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	// no driver answers before any check, so capture falls back on exit 3
+	// no driver answers before stdin or any check, so capture falls back on exit 3
 	d := t.driver()
 	if d == nil {
 		return cli.Exit("f10: no driver creates tasks here (looked for "+strings.Join(t.driverPaths(), ", ")+
 			"); create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+	}
+
+	in, err := io.ReadAll(cmd.Reader)
+	if err != nil {
+		return fmt.Errorf("reading the task from stdin: %w", err)
 	}
 
 	// the contract puts the title on the first line, so leading blanks go
