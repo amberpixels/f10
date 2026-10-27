@@ -147,7 +147,7 @@ func TestInjectSkillsMatchDir(t *testing.T) {
 	}
 
 	// these run the f10 binary and no step
-	binaryOnly := []string{"board", "drive", "finish", "start", "status"}
+	binaryOnly := []string{"board", "drive", "finish", "read", "start", "status"}
 
 	var onDisk []string
 	for _, d := range dirs {

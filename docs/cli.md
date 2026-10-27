@@ -736,6 +736,7 @@ f10 -C r3 task read 12
 `f10 task read | glow` works because a pipe is not a terminal.
 Into a pipe, `read` also downloads every image the task links (markdown and HTML image syntax, and bare image urls, in the body and the comments) into `<storage root>/images/<ID>/`, replaced on each read, and ends with a line naming each local path; an image that fails is named with its url and the reason.
 At most 20 images per read, never from a loopback or link-local address.
+In a session, `/f10:read <id>` runs it, opens every image it downloaded, and stops without planning or starting anything.
 On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private repo's attachments download.
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.

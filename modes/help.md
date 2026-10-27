@@ -19,4 +19,4 @@ Say the effect, not the mechanism: "report what would run, change nothing", neve
 Mark a flag only another session sends (`--driven`) as `(sent by f10 start / f10 drive)`.
 Then stop.
 
-A skill that only runs the `f10` binary (start, drive, finish, board) runs `f10 <command> --help` in the foreground instead and prints its output verbatim.
+A skill that only runs the `f10` binary (start, drive, finish, board) runs `f10 <command> --help` in the foreground instead and prints its output verbatim; read runs `f10 task read --help`.
