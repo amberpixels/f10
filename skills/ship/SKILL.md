@@ -7,7 +7,7 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and, for a judge entry after `pr`, push its changes to that PR and post its status and comment.
+Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, for a judge entry after `pr`, push its changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -16,7 +16,10 @@ Deploy has its own confirmation (the **deploy** step).
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`), or named in the user's own words: run that pipeline.
-  Otherwise `default`; never self-select another, though for tiny work you may suggest one.
+  Otherwise the pipeline the frontmatter's `pipeline_by_area` maps the task's area to (the fetch brief's areas, or the plan's `Roles` line), else `default`.
+  Two areas mapping to different pipelines: the deliverable's area wins, as for Roles, and the brief names the other.
+  The area map is the project's choice, not yours: never self-select another pipeline, though for tiny work you may suggest one.
+  Name the pipeline an area chose, and the area, in one line before the first step.
 - A **plan file** (`*.md` path): run the pipeline with it.
 - A **task id** (project id format / id / url), or a **bundle** joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
@@ -42,14 +45,14 @@ A pipeline listed in `planless:` writes no plan file; a brief inline plan in cha
 Free-text input also skips capture and fetch, so the run has no task id.
 A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
 Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.
-The last step is the **shipment**.
+The last step is the **shipment**: its rows are the ones that step declares (`conventions/context.md` → shipment), a project-defined step's on its overlay's `Shipment:` line.
 
 **A spike ends after implement**, whatever the pipeline: a `Kind: spike` plan answers a question, and its code never leaves the machine.
 No step after implement runs (no cleanup, commit, push, pr, review, judge or deploy); the shipment is the spike report.
 `f10 finish` cannot close it (it would merge the experiment code, and needs a clean worktree), so the final report ends with the manual close.
 In a linked worktree with in-repo storage: copy the spike report and the plan, when there is one, into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
 In the main checkout, or with out-of-tree storage, the report already outlives the code: discard the experiment code by the paths the report names.
-It also offers, in one line, to post the report's answer and recommendation as a comment on the task, outward-facing and free of f10 traces; a driven run lists the offer and posts nothing.
+Its report back (below) carries the question, the answer and the recommendation, and names the spike report's path for whoever holds the checkout.
 The kind is known from the plan, or a planless run's inline plan, before the pipeline starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
@@ -70,5 +73,18 @@ After `pr`, the changes folded into the plan are built by the judge step's own r
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
+**Report back**, after the last step (a spike's: implement), when the run has a task id and the frontmatter's `report_back` is not `off`:
+
+1. Compose one comment from the shipment rows (each url, the PR/MR, commits by sha) and two or three lines on what changed.
+   It leaves the machine: no f10, plan or findings mention under stealth (`conventions/context.md`), and other tasks named by title.
+   A bundle comments on the lead and names the riders.
+2. `f10 task comment <id>` with it on stdin, in a call of its own.
+   Skip it when the tracker is the host's issues and the shipment is a PR/MR carrying the task's closing keyword: the host already links the two.
+3. With `tracker.status.shipped` declared, `f10 task update <id> --status <that word>`, for every bundle member.
+
+Exit 3 from either is a normal end: the tracker takes no such write, and the final report alone carries the shipment.
+Any other failure leaves the shipment standing: `f10-state.sh set ship partial <last step>` with a `note`, and the comment is never retried, since it may have posted.
+A driven run reports back too; nothing is asked.
+
 **Exit**
-- Stop after the pipeline's last step (a spike's: implement), with the final report: the facts block with the **shipment** (branch, PR/MR url, sha, deploy url, a spike report's path, as produced), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.
+- Stop after the pipeline's last step (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last step declares (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.

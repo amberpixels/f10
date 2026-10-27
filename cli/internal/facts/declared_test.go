@@ -396,3 +396,49 @@ func TestMigrateRenamesReviewTraces(t *testing.T) {
 		t.Errorf("nothing left = %v", err)
 	}
 }
+
+// The report-back facts: the status map, the area map onto declared
+// pipelines, and report_back on unless declared off; a worktree's area map
+// replaces main's whole and may name main's pipelines.
+func TestBuildReportBackFacts(t *testing.T) {
+	eff := buildWith(t, "---\n"+
+		"tracker: {kind: notion, id: MR-###, status: {started: In progress, shipped: Published}}\n"+
+		"pipelines: {default: implement → publish, engine: implement → cleanup → pr}\n"+
+		"pipeline_by_area: {report work: default, framework work: engine}\n"+
+		"---\n", "")
+
+	if len(eff.Problems) > 0 {
+		t.Fatalf("problems: %+v", eff.Problems)
+	}
+
+	if eff.TrackerStatus["shipped"] != "Published" || eff.ByArea["framework work"] != "engine" || !eff.ReportBack {
+		t.Errorf("status %v, by area %v, report back %v", eff.TrackerStatus, eff.ByArea, eff.ReportBack)
+	}
+
+	layered := buildWith(
+		t,
+		"---\npipelines: {default: [implement, pr], engine: [implement, pr]}\npipeline_by_area: {a: engine, b: engine}\n---\n",
+		"---\npipeline_by_area: {c: engine}\nreport_back: off\n---\n",
+	)
+
+	if len(layered.Problems) > 0 || len(layered.ByArea) != 1 || layered.ReportBack {
+		t.Errorf(
+			"layered: by area %v, report back %v, problems %+v",
+			layered.ByArea,
+			layered.ReportBack,
+			layered.Problems,
+		)
+	}
+
+	bad := Declared{
+		ReportBack: "yes",
+		Pipelines:  map[string]Steps{"default": {"implement"}},
+		ByArea:     map[string]string{"report work": "publish"},
+		Tracker:    TrackerDecl{Status: map[string]string{"done": "Done", "shipped": " "}},
+	}.check()
+	for _, want := range []string{"report_back", `pipeline_by_area: "report work"`, `tracker.status: "done"`, "tracker.status: shipped"} {
+		if !slices.ContainsFunc(bad, func(b string) bool { return strings.HasPrefix(b, want) }) {
+			t.Errorf("check misses %s: %v", want, bad)
+		}
+	}
+}

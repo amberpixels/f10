@@ -36,6 +36,7 @@ type view struct {
 	IDPrefixOrigin  string              `json:"idPrefixOrigin,omitempty"`
 	IDPrefixDerived bool                `json:"idPrefixDerived,omitempty"`
 	PriorityLabels  map[string]string   `json:"priorityLabels,omitempty"` // host label to priority level, from tracker.priority
+	TrackerStatus   map[string]string   `json:"trackerStatus,omitempty"`  // started and shipped to the tracker's words, from tracker.status
 	Review          facts.Review        `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
 	MergeMethod     string              `json:"mergeMethod,omitempty"`
 	Catchup         string              `json:"catchup"`
@@ -43,6 +44,8 @@ type view struct {
 	Lore            string              `json:"lore"`
 	Pipelines       map[string][]string `json:"pipelines"`
 	Planless        []string            `json:"planless,omitempty"`
+	ByArea          map[string]string   `json:"pipelineByArea,omitempty"`
+	ReportBack      bool                `json:"reportBack"`
 	DriveChain      []string            `json:"driveChain"`
 	Facts           []facts.Fact        `json:"facts"` // every typed value with its origin
 	Problems        []facts.Problem     `json:"problems,omitempty"`
@@ -88,6 +91,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		IDPrefixOrigin:  eff.IDPrefixOrigin,
 		IDPrefixDerived: eff.IDPrefixDerived,
 		PriorityLabels:  eff.PriorityLabels,
+		TrackerStatus:   eff.TrackerStatus,
 		Review:          eff.Review,
 		MergeMethod:     eff.MergeMethod,
 		Catchup:         eff.Catchup,
@@ -95,6 +99,8 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Lore:            eff.Lore,
 		Pipelines:       eff.Pipelines,
 		Planless:        eff.Planless,
+		ByArea:          eff.ByArea,
+		ReportBack:      eff.ReportBack,
 		DriveChain:      eff.DriveChain,
 		Facts:           eff.Facts,
 		Problems:        eff.Problems,

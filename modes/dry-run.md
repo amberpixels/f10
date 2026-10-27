@@ -17,7 +17,7 @@ f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
 
 Routing
   arg "<stripped>"  → <interpretation, e.g. matches ABC-#### → ABC-1042 | free-text | plan file>
-  path              <steps in order>   (<what's skipped and why, e.g. a saved plan's `Kind: spike` ends it at implement, or plan skipped: the pipeline is planless>)
+  path              <steps in order>   (<what's skipped and why, e.g. a saved plan's `Kind: spike` ends it at implement, or plan skipped: the pipeline is planless; the area that chose the pipeline, when `pipeline_by_area` did>)
   stops at          <the task, plan, shipment or verdict this run would end on>
 
 Step: <name>

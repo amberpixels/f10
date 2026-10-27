@@ -41,7 +41,7 @@ func renderDeclared(d Declared) (string, error) {
 func isEmpty(d Declared) bool {
 	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker.empty() &&
 		d.MergeMethod == "" && d.Catchup == "" && d.Traces == "" && d.ReviewTraces == "" && d.Lore == "" &&
-		d.Pipelines == nil && d.Planless == nil &&
+		d.Pipelines == nil && d.Planless == nil && d.ByArea == nil && d.ReportBack == "" &&
 		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
 }
 

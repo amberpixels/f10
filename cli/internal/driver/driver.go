@@ -25,7 +25,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// Verbs a driver may implement. All but create are read verbs.
+// Verbs a driver may implement. All but create, comment and update are
+// read verbs.
 const (
 	VerbRead     = "read"     // stdout: the task as markdown
 	VerbURL      = "url"      // stdout: one url
@@ -38,6 +39,14 @@ const (
 	// VerbCreate is the first write verb: stdin is the task as markdown,
 	// `# <title>` first; stdout is the new task's id.
 	VerbCreate = "create"
+
+	// VerbComment adds a comment to a task: stdin is the comment as
+	// markdown; stdout is the comment's url, or nothing.
+	VerbComment = "comment"
+
+	// VerbUpdate sets a task's properties from flags, each an absolute
+	// value; stdin is empty and stdout ignored.
+	VerbUpdate = "update"
 )
 
 // Priorities is the contract's ordered priority vocabulary, most urgent

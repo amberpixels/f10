@@ -169,6 +169,37 @@ A report task names its audience, the question it answers, the period and source
 The _Areas_ note says report work or framework work, so fetch can settle the role.
 ```
 
+Report work ships as a link on the deployed site; framework work ships as a merge request.
+The frontmatter routes each area to its pipeline and names the statuses the Notion board uses:
+
+```yaml
+tracker:
+  kind: notion
+  id: MR-###
+  status:
+    started: In progress
+    shipped: Published
+pipelines:
+  default: implement → publish
+  engine: implement → cleanup → pr
+pipeline_by_area:
+  framework work: engine
+```
+
+`publish` is a project-defined step, so `.f10/instructions/publish.md` is the step, and its first line declares what it ships:
+
+```markdown
+Shipment: report - the published report's url
+
+1. Run the report, rebuilding its data from the sources the plan names.
+2. Rebuild the public site and push to the default branch.
+3. Wait for the deploy to finish, then open the report's url and check it renders.
+4. Report the url.
+```
+
+A report task ships through `default` and ends with a `report` row and a comment on the Notion task carrying the link, the task moved to Published.
+A framework task ships through `engine` without anyone naming it, and ends with the merge request.
+
 ## Pipelines
 
 One pipeline, or several named ones, in the frontmatter:
@@ -188,7 +219,20 @@ A planless pipeline writes no plan file: free-text input also skips capture and 
 A `cleanup` entry runs the targets that apply to the change; `cleanup (comments, prose)` names them.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 The last step names what a run ships: an open PR, a pushed branch, a running deploy.
+A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
+Putting a project-defined step in a declared pipeline is the selection: unlike `push`, it needs no user naming the pipeline.
 A spike is the exception: its run ends after implement, whatever the pipeline, with a spike report.
+
+`pipeline_by_area` routes a task to a pipeline by its area, in the plain words Roles uses:
+
+```yaml
+pipeline_by_area:
+  framework work: engine
+  docs: direct
+```
+
+A pipeline the user names still wins; a task whose areas map to nothing ships through `default`.
+Each value must name a declared pipeline.
 
 ## Drive chain
 
@@ -220,6 +264,26 @@ Labels match case-insensitively, an issue carrying two mapped labels takes the m
 A level outside the four, or a label listed under two levels, is an error like any other value outside its vocabulary.
 `f10 config` shows the map as `tracker.priority` with its origin; `f10 init` never writes one, since no probe can tell which labels a project uses.
 With nothing declared, host issues have no priority and the list is in the host's order.
+
+## Reporting back
+
+A ship run with a task id ends by posting its shipment on the task as one comment: the report link, the deploy url, the PR or MR, the commits.
+A spike posts its answer and recommendation, with the spike report's path.
+Where the tracker is the host's issues and the shipment is a PR carrying the task's closing keyword, no comment is posted: the host already links them.
+
+`tracker.status` names the tracker's own words for two moments, and f10 moves the task to them:
+
+```yaml
+tracker:
+  status:
+    started: In progress   # f10 start, once the worktree exists
+    shipped: Done          # a ship run, after its last step
+```
+
+Nothing declared, f10 changes no status.
+On host issues a status is `open` or `closed`, the only two an issue has.
+`report_back: off` stops the comment and the shipped status.
+A tracker whose driver declines `comment` (`docs/driver-contract.md`) gets the shipment in the final report alone.
 
 ## Review
 

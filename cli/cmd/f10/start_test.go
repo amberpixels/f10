@@ -985,6 +985,46 @@ func TestStartWithWorktrunk(t *testing.T) {
 	}
 }
 
+// A fresh start moves the task to its started status; a failure is a note
+// beneath the report, never a refusal.
+func TestStartMarksStarted(t *testing.T) {
+	for name, fail := range map[string]bool{"moved": false, "failed": true} {
+		f := newFakes(t)
+		f.has["wt"] = true
+		f.script(refsLocal, "")
+		f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+		f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
+		f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
+		f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
+		f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
+
+		var moved []string
+
+		started := func(_ context.Context, task ref.Ref) error {
+			moved = append(moved, task.ID)
+			if fail {
+				return errors.New("notion: 503")
+			}
+
+			return nil
+		}
+
+		var out bytes.Buffer
+
+		if err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, started: started}); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+
+		if len(moved) != 1 || moved[0] != "GH-1" {
+			t.Errorf("%s: moved %v, want GH-1", name, moved)
+		}
+
+		if got := strings.Contains(out.String(), "not moved to its started status: notion: 503"); got != fail {
+			t.Errorf("%s: note shown = %v:\n%s", name, got, out.String())
+		}
+	}
+}
+
 // Without worktrunk, git creates the worktree at the sibling path, and
 // --after swaps the default base for the task's branch and records the
 // dependency. The base task has no checkout here, so the prompt names it

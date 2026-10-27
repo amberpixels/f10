@@ -1,6 +1,6 @@
 # The f10 driver contract
 
-`f10 task` and `f10 start` need to reach your tracker, and the capture step needs to create tasks in it.
+`f10 task` and `f10 start` need to reach your tracker, the capture step needs to create tasks in it, and a ship run reports its result back to the task.
 Where that tracker is the host's own issues, it already can: the git remote says GitHub or GitLab and `gh` / `glab` do the rest, with nothing to declare.
 Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route to, and that is what a driver is for.
 
@@ -20,7 +20,7 @@ A file that is missing, is a directory, or has no execute bit is simply "no driv
 <driver> <verb> [argument]
 ```
 
-Eight verbs, each writing its answer to stdout.
+Ten verbs, each writing its answer to stdout.
 Seven are **read verbs**:
 
 | verb | argument | stdout |
@@ -33,13 +33,15 @@ Seven are **read verbs**:
 | `index` | none | one url, the task list, alone on a line |
 | `list` | none | a JSON array of task rows, the first page of open tasks |
 
-One is a **write verb**:
+Three are **write verbs**:
 
 | verb | input | stdout |
 |---|---|---|
 | `create` | the task as markdown on stdin, its properties as flags | the new task's id, alone on a line |
+| `comment` | task number; the comment as markdown on stdin | the comment's url alone on a line, or nothing |
+| `update` | task number; the properties to set as flags | ignored |
 
-The argument for `read`, `url`, `branch` and `children` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
+The argument for `read`, `url`, `branch`, `children`, `comment` and `update` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 `index` and `list` take no argument: `index` is the page `f10 task open` with no id opens, `list` the rows `f10 task open --print` writes, in `search`'s row shape.
 f10 ranks them by `priority` itself, so a driver returns them in its own order.
 A driver without them gets the host's open issues.
@@ -91,6 +93,28 @@ The task's properties arrive as flags, and only the ones the caller set:
 A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
 Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
 
+## Commenting on and updating a task
+
+`f10 task comment <id>` runs `comment <n>` with markdown on stdin; a ship run posts what it shipped this way (a report link, a deploy url, a PR, commits).
+Print the comment's url if the tracker gives one; f10 prints it back.
+
+`f10 task update <id>` runs `update <n>` with only the flags the caller set:
+
+```
+<driver> update <n> [--status <s>] [--priority <p>] [--label <l>]... [--assignee <a>] [--set <key>=<value>]...
+```
+
+- `--status` is the tracker's own word, as for `create`: `project.md` maps the moments f10 reports (`started`, `shipped`) to those words in `tracker.status`.
+- `--priority` is one of the contract's four levels; `--label` repeats and adds a label.
+- `--assignee` is the tracker's own name for who holds the task.
+- `--set` names a property the project's driver config knows (a Notion property, a Jira field) and the value to give it.
+
+Every value is absolute: running the same update twice leaves the task as once.
+A property the tracker has no field for is dropped with a warning on stderr, as for `create`.
+
+Where the tracker is the host's issues, a driver that declines either verb (or no driver) leaves it to the host: `gh issue comment` / `glab issue note`, labels and assignee through `issue edit` / `issue update`, and `--status` as close or reopen, the only two states an issue has.
+A priority there is the label `tracker.priority` maps the level to.
+
 ## Exit codes
 
 | code | meaning |
@@ -104,6 +128,7 @@ A driver may implement `read` without `search`, and f10 falls back to the host's
 On a tracker that is not the host's issues (Notion, Jira), a declined `read`, `url`, `index`, `list` or `search` has no fallback: f10 fails, naming your driver, the verb and the command that needs it.
 A declined `branch` there names the branch by the bare id, and a declined `children` reads as no parent link.
 A declined `create`, on any tracker, makes `f10 task create` exit 3 too, and the capture step creates the task through the Create adapter in `project.md`, as it does for a project with no driver.
+A declined `comment` or `update` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task comment` and `f10 task update` exit 3, and a ship run puts its shipment in the final report alone.
 Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Rules worth knowing
@@ -115,11 +140,12 @@ A driver prints a branch name; f10 creates the branch.
 That separation is what lets `open` mean the same thing for a task as it does for a pull request, where no driver is involved at all - and it keeps `f10 task open --link` pipeable.
 Creating a task is a side effect only the tracker can perform, so it belongs to the driver; opening and branching are the machine's, so they stay with f10.
 
-**Write verbs are not safe to retry blindly.**
-A read can be retried after a 5xx; a `create` retried after a 5xx or a timeout can make the task twice.
-Retry only a failure the tracker reports as rejected before acting, such as a 429.
+**Write verbs are not all safe to retry.**
+A read can be retried after a 5xx; a `create` or `comment` retried after a 5xx or a timeout can make the task, or the comment, twice.
+Retry those only after a failure the tracker reports as rejected before acting, such as a 429.
 Treat any other failure as an unknown outcome and say so on stderr, so the user checks the tracker before running it again.
-f10 never retries a write verb, and its own error after a failed `create` says the task may exist.
+`update` sets absolute values, so a driver may retry it after a transient 5xx.
+f10 itself never retries a write verb, and its own error after a failed `create` or `comment` says the task or comment may exist.
 
 **Print the whole task.**
 `read` includes the task's comments after its body, as the host path does: an agent reads the task through this verb alone, and a decision made in a comment is part of what it asks.
@@ -146,6 +172,8 @@ case "${1:-}" in
   search) exec bash "$here/scripts/notion-search.sh" "${2:-}" ;;
   branch) echo "ABC-${2:-}/$(bash "$here/scripts/notion-slug.sh" "${2:-}")" ;;
   create) shift; exec bash "$here/scripts/notion-create.sh" "$@" ;;  # stdin passes through
+  comment) exec bash "$here/scripts/notion-comment.sh" "${2:-}" ;;   # stdin passes through
+  update) shift; exec bash "$here/scripts/notion-update.sh" "$@" ;;
   *)      exit 3 ;;
 esac
 ```
