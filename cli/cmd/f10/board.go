@@ -19,7 +19,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
@@ -419,7 +418,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 // host CLI named outright for its requests and its issues, no driver, no
 // priority labels, and nothing local, as --remote reads.
 func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
-	h := host{forge.Host{Name: r.CLI, Repo: r.repo()}}
+	h := host{Name: r.CLI, Repo: r.repo()}
 
 	return lookaround.Inputs{
 		Project: lookaround.Project{ID: r.id(), Name: r.name(), Host: r.CLI, Remote: true},

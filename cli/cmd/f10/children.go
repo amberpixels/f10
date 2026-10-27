@@ -177,7 +177,13 @@ func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild,
 			return nil, fmt.Errorf("child %s: %w", c.ID, err)
 		}
 
-		row := childRow{ID: r.ID, Title: c.Title, URL: c.URL, State: c.State, Labels: c.Labels}
+		row := childRow{
+			ID:     r.ID,
+			Title:  tr.titles.Strip(c.Title, r.ID, r.Number),
+			URL:    c.URL,
+			State:  c.State,
+			Labels: c.Labels,
+		}
 		if row.Labels == nil {
 			row.Labels = []string{}
 		}

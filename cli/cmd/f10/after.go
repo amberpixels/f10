@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // A dependency before git: a task that has not started has no branch and
@@ -60,7 +61,8 @@ type tracker struct {
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
 	// allChildren is children with the closed ones kept, for status
 	allChildren func(ctx context.Context, task ref.Ref) ([]childRow, error)
-	archive     []string // the dirs finish moves a finished task's plan into
+	archive     []string           // the dirs finish moves a finished task's plan into
+	titles      tasktitle.Template // tracker.title, whose prefix comes off each child's title
 }
 
 // tracker binds the lookups to this target: the driver's `read` for the
@@ -107,6 +109,7 @@ func (t *target) tracker() tracker {
 			}, nil
 		},
 		archive: []string{archive},
+		titles:  t.eff.TitleTemplate,
 	}
 
 	children := func(keepClosed bool) func(context.Context, ref.Ref) ([]childRow, error) {

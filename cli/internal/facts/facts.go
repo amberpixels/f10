@@ -25,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // Origins an effective value can have. Declared origins are qualified by
@@ -61,6 +62,10 @@ type Effective struct {
 	// PriorityLabels is tracker.priority inverted: a lower-cased host label
 	// to the level it carries; nil when none is declared.
 	PriorityLabels map[string]string `json:"priorityLabels,omitempty"`
+
+	// TitleTemplate is tracker.title, the template a task's title is written
+	// through on the tracker; "" when none is declared, and titles stay bare.
+	TitleTemplate tasktitle.Template `json:"titleTemplate,omitempty"`
 
 	// TrackerStatus is tracker.status: `started` and `shipped` to the
 	// tracker's own word; nil when none is declared, and f10 moves no status.
