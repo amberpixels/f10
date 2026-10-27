@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -432,20 +433,34 @@ func outOfTree(lay *layout.Layout) bool {
 	return false
 }
 
-// proseTrackerKind is the kind a Tracker section names, or "".
+// proseTrackerKind is the kind a Tracker section names, or "". Only a
+// whole word of prose counts: a name in code, a url or a compound word
+// (`create-notion-task`, api.github.com) names a skill or a host instead.
 func proseTrackerKind(lower string) string {
+	words := map[string]bool{}
+
+	for _, w := range strings.FieldsFunc(mdline.Prose(lower), isWordBreak) {
+		words[strings.TrimSuffix(strings.TrimRight(w, "."), "'s")] = true
+	}
+
 	for _, k := range []struct{ needle, kind string }{
 		{needle: "notion", kind: "Notion"},
 		{needle: "github", kind: "GitHub Issues"},
 		{needle: "gitlab", kind: "GitLab work items"},
 		{needle: "jira", kind: "Jira"},
 	} {
-		if strings.Contains(lower, k.needle) {
+		if words[k.needle] {
 			return k.kind
 		}
 	}
 
 	return ""
+}
+
+// isWordBreak splits prose into words, keeping the - . / _ inside a
+// compound word, a host or a url so that it stays one word.
+func isWordBreak(r rune) bool {
+	return unicode.IsSpace(r) || strings.ContainsRune(`[](){}<>,;:!?"*|`, r)
 }
 
 // cliTrackerKind is what the CLI routing implies when nothing declares one.

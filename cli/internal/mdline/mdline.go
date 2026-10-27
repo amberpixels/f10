@@ -4,7 +4,10 @@
 // Go reader goes through here to read them alike too.
 package mdline
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // marks are markdown's emphasis and code characters, which may wrap a key
 // or a value without changing what it says.
@@ -67,6 +70,34 @@ func Bare(s string) string {
 func Unmark(s string) string {
 	return strings.NewReplacer("*", "", "`", "").Replace(s)
 }
+
+// Prose drops fenced blocks and inline code spans, each leaving a space,
+// for a phrase that must come from the prose and not from a command or a
+// name quoted in code. A backtick with no closing one on its line stays.
+func Prose(s string) string {
+	lines := strings.Split(s, "\n")
+	fenced := false
+
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		fence := strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~")
+
+		switch {
+		case fence || fenced:
+			lines[i] = " "
+		default:
+			lines[i] = codeSpanRe.ReplaceAllString(line, " ")
+		}
+
+		if fence {
+			fenced = !fenced
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+var codeSpanRe = regexp.MustCompile("`[^`]*`")
 
 func containsAny(s string, subs []string) bool {
 	for _, sub := range subs {
