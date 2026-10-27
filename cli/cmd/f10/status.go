@@ -23,13 +23,14 @@ import (
 )
 
 // The status noun reads what the badge reads, and says the rest: which
-// step a run stopped on, why, and what unblocks it. Inside a session the
-// session id is in the environment and the answer is that one run; from a
-// plain terminal there is none, so it lists this repo's live runs, and
-// --all every live run on the machine. A task id names another run: the
-// task's own, reported from the checkout that has the task's branch, which
-// is how a session reads the question a driven agent stopped on. With no
-// run of its own, the task gets what is durable: its plan file and its PR.
+// step a run stopped on, why, and what unblocks it. With no id, the task
+// this session's run records, else the branch's, stands in for one; naming
+// none, the answer is the session's run, or from a plain terminal this
+// repo's live runs, and --all every live run on the machine. A task id
+// names another run: the task's own, reported from the checkout that has
+// the task's branch, which is how a session reads the question a driven
+// agent stopped on. With no run of its own, the task gets what is durable:
+// its plan file and its PR.
 func statusCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
@@ -52,15 +53,9 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	now := time.Now()
 	all := cmd.Bool("all")
 	token := strings.TrimSpace(cmd.Args().First())
+	sid := state.Session()
 
-	var (
-		runs     []*state.Run
-		gates    [][]gate
-		showRoot bool
-	)
-
-	switch sid := state.Session(); {
-	case token != "":
+	if token != "" {
 		if all {
 			return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
 		}
@@ -70,49 +65,27 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		id, suffix := ref.SplitSuffix(token)
+		_, err = taskStatus(ctx, cmd, t, token, false)
 
-		r, err := t.reference(ctx, id)
-		if err != nil {
-			return err
-		}
+		return err
+	}
 
-		in, rows, err := routeTask(cmd.ErrWriter, taskRoute{
-			status:   func() (taskStatusInput, error) { return taskStatusFor(ctx, t, r, suffix) },
-			children: func() ([]taskRow, error) { return parentRows(ctx, t, r) },
-			finished: func() (*taskRow, error) { return finishedRow(ctx, t, r.Head()) },
-		})
-		if err != nil {
-			return err
-		}
-
-		if in == nil {
-			return writeTaskRows(cmd, rows)
-		}
-
-		live, err := state.List(dir, now, state.TTL())
-		if err != nil {
-			return err
-		}
-
-		var others []*state.Run
-
-		showRoot = true
-		runs, others = taskRuns(inRoot(live, in.root), in.id)
-
-		if len(runs) == 0 {
-			fb := taskFallback(ctx, *in, others)
-
-			if cmd.Bool("json") {
-				return encodeJSON(cmd.Writer, fb)
+	// a bare call reads the current task the way `status <id>` does; a
+	// target that cannot be built only loses the guess, since status only reads
+	if t, err := targetFor(ctx, cmd); err == nil && !all && !t.scoped {
+		if id := bareTaskID(ctx, t, sid); id != "" {
+			if done, err := taskStatus(ctx, cmd, t, id, true); done || err != nil {
+				return err
 			}
-
-			fb.render(cmd.Writer, termWidth(cmd.Writer))
-
-			return nil
 		}
+	}
 
-		gates = runGates(ctx, t, *in, runs)
+	var (
+		runs     []*state.Run
+		showRoot bool
+	)
+
+	switch {
 	case sid != "" && !all:
 		r, err := state.Load(state.Path(dir, sid))
 		if errors.Is(err, os.ErrNotExist) {
@@ -157,10 +130,83 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	if gates == nil {
-		gates = make([][]gate, len(runs))
+	return writeRuns(cmd, runs, make([][]gate, len(runs)), showRoot, now)
+}
+
+// bareTaskID is the task a bare `status` stands for: the session run's,
+// else the one the branch names, else the one the worktree's directory
+// names (a detached HEAD), or "" when nothing names one.
+func bareTaskID(ctx context.Context, t *target, sid string) string {
+	if sid != "" {
+		if r, err := state.Load(state.Path(state.Dir(), sid)); err == nil && r.Task != "" {
+			return r.Task
+		}
 	}
 
+	if r, err := (ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir, NoSession: true}).Find(ctx, ""); err == nil {
+		return r.Label()
+	}
+
+	return ref.Match(t.eff.IDPrefix, filepath.Base(t.lay.CheckoutRoot))
+}
+
+// taskStatus prints what `status <token>` prints. A guessed token whose
+// task has no run to read is not handled, so the bare output stands.
+func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, guessed bool) (bool, error) {
+	id, suffix := ref.SplitSuffix(token)
+
+	r, err := t.reference(ctx, id)
+	if err != nil {
+		return false, err
+	}
+
+	// a guess that comes to nothing warns about nothing
+	warn := cmd.ErrWriter
+	if guessed {
+		warn = io.Discard
+	}
+
+	in, rows, err := routeTask(warn, taskRoute{
+		status:   func() (taskStatusInput, error) { return taskStatusFor(ctx, t, r, suffix) },
+		children: func() ([]taskRow, error) { return parentRows(ctx, t, r) },
+		finished: func() (*taskRow, error) { return finishedRow(ctx, t, r.Head()) },
+	})
+
+	switch {
+	case guessed && errors.Is(err, errNoRunToRead):
+		return false, nil
+	case err != nil:
+		return false, err
+	case in == nil:
+		return true, writeTaskRows(cmd, rows)
+	}
+
+	now := time.Now()
+
+	live, err := state.List(state.Dir(), now, state.TTL())
+	if err != nil {
+		return false, err
+	}
+
+	runs, others := taskRuns(inRoot(live, in.root), in.id)
+
+	if len(runs) == 0 {
+		fb := taskFallback(ctx, *in, others)
+
+		if cmd.Bool("json") {
+			return true, encodeJSON(cmd.Writer, fb)
+		}
+
+		fb.render(cmd.Writer, termWidth(cmd.Writer))
+
+		return true, nil
+	}
+
+	return true, writeRuns(cmd, runs, runGates(ctx, t, *in, runs), true, now)
+}
+
+// writeRuns prints runs, each with its gates, or encodes them under --json.
+func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot bool, now time.Time) error {
 	if cmd.Bool("json") {
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
