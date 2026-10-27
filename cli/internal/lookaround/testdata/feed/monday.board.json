@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "generated_at": "2026-10-26T15:00:00Z",
   "view": "feed",
   "project": {
@@ -57,10 +57,14 @@
           "author": "ann",
           "person": "ann"
         },
-        "follow_up_of": [
-          30
+        "related": [
+          {
+            "number": 30,
+            "state": "merged",
+            "relation": "follow-up"
+          }
         ],
-        "summary": "second request on FT-3",
+        "summary": "opened, follow-up to #30",
         "at": "2026-10-26T12:00:00Z"
       },
       {

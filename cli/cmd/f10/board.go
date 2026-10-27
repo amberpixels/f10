@@ -483,17 +483,24 @@ type boardNote struct {
 
 // A boardLine is one row, reduced to what a glance needs.
 type boardLine struct {
-	Group       string `json:"group"`
-	Key         string `json:"key"`
-	URL         string `json:"url,omitempty"`
-	Stage       string `json:"stage"`
-	StageFrom   string `json:"stage_from"`
-	Title       string `json:"title,omitempty"`
-	PR          int    `json:"pr,omitempty"`
-	PRURL       string `json:"pr_url,omitempty"`
-	Who         string `json:"who,omitempty"`
-	Next        string `json:"next,omitempty"`
-	NextCommand bool   `json:"next_command,omitempty"`
+	Group       string    `json:"group"`
+	Key         string    `json:"key"`
+	URL         string    `json:"url,omitempty"`
+	Stage       string    `json:"stage"`
+	StageFrom   string    `json:"stage_from"`
+	Title       string    `json:"title,omitempty"`
+	PR          int       `json:"pr,omitempty"`
+	PRURL       string    `json:"pr_url,omitempty"`
+	Parts       []boardPR `json:"parts,omitempty"` // a feed row's task's other requests overlapping PR
+	Who         string    `json:"who,omitempty"`
+	Next        string    `json:"next,omitempty"`
+	NextCommand bool      `json:"next_command,omitempty"`
+}
+
+// A boardPR is a request a line lists beside its own.
+type boardPR struct {
+	Number int    `json:"number"`
+	URL    string `json:"url,omitempty"`
 }
 
 // localOnly is the note a local-only checkout's host source carries.
@@ -616,8 +623,6 @@ func feedLine(r lookaround.FeedRow) boardLine {
 	switch {
 	case r.Abandoned:
 		line.Stage = "abandoned"
-	case len(r.FollowUpOf) > 0:
-		line.Stage = "follow-up"
 	case r.Group == lookaround.GroupNewTasks:
 		line.Stage = "new"
 	}
@@ -632,6 +637,12 @@ func feedLine(r lookaround.FeedRow) boardLine {
 
 		if line.Title == "" {
 			line.Title = titleAfterKey(r.PR.Title, r.Key)
+		}
+	}
+
+	for _, p := range r.Related {
+		if p.Relation == lookaround.RelationPart {
+			line.Parts = append(line.Parts, boardPR{p.Number, p.URL})
 		}
 	}
 
@@ -1012,7 +1023,12 @@ func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 	var tail []string
 
 	if r.PR != 0 {
-		tail = append(tail, fmt.Sprintf("#%d", r.PR))
+		var prs []string
+		for _, p := range r.Parts {
+			prs = append(prs, fmt.Sprintf("#%d", p.Number))
+		}
+
+		tail = append(tail, strings.Join(append(prs, fmt.Sprintf("#%d", r.PR)), " + "))
 	}
 
 	if r.Who != "" {
@@ -1103,7 +1119,7 @@ func stageStyle(stage string) lipgloss.Style {
 	switch stage {
 	case lookaround.StageDone, lookaround.GroupFinished:
 		return s.Foreground(lipgloss.Color("2"))
-	case lookaround.GroupStarted, "follow-up":
+	case lookaround.GroupStarted:
 		return s.Bold(true).Foreground(lipgloss.Color("4"))
 	case lookaround.GroupUpdated:
 		return s.Bold(true).Foreground(lipgloss.Color("3"))

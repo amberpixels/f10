@@ -105,7 +105,8 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 	boards["edges"] = edges
 
 	// the feed's shapes the recorded ones lack: a local-only checkout, a
-	// span over several days, a follow-up, an abandoned request, a move owed
+	// span over several days, a task in two parts, an abandoned request, a
+	// move owed
 	feed := empty
 	feed.View = lookaround.ViewFeed
 	feed.Project.LocalOnly = true
@@ -122,11 +123,14 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 		Quiet: lookaround.Quiet{Count: 1},
 		Rows: []lookaround.FeedRow{
 			{
-				Group: lookaround.GroupStarted, Key: "FT-2", From: lookaround.FromHost, FollowUpOf: []int{1},
-				PR:      &lookaround.PRRef{Number: 2, Title: "FT-2: again", URL: "https://x.io/pull/2", State: "open"},
+				Group: lookaround.GroupStarted, Key: "FT-2", From: lookaround.FromHost,
+				PR: &lookaround.PRRef{Number: 2, Title: "FT-2: again", URL: "https://x.io/pull/2", State: "open"},
+				Related: []lookaround.RelatedPR{
+					{Number: 1, URL: "https://x.io/pull/1", State: "open", Relation: lookaround.RelationPart},
+				},
 				Who:     lookaround.Who{Author: "ann"},
 				Owes:    "bob",
-				Summary: "second request on FT-2",
+				Summary: "opened",
 			},
 			{
 				Group: lookaround.GroupFinished, Key: "#3", From: lookaround.FromHost, Abandoned: true,

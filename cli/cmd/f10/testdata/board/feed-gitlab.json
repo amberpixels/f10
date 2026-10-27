@@ -23,6 +23,9 @@
     },
     "glab issue list --output json --per-page 100": {
       "stdout": "[]"
+    },
+    "glab api --paginate projects/:fullpath/merge_requests?per_page=100&search=FT-4&state=all": {
+      "stdout": "[]"
     }
   }
 }

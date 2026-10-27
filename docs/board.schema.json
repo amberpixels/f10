@@ -9,7 +9,7 @@
       "type": "object",
       "properties": {
         "version": {
-          "const": 2
+          "const": 3
         },
         "generated_at": {
           "type": "string",
@@ -421,6 +421,39 @@
         "quiet"
       ]
     },
+    "RelatedPR": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "merged",
+            "closed"
+          ]
+        },
+        "relation": {
+          "type": "string",
+          "enum": [
+            "part",
+            "follow-up",
+            "replaced"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "state",
+        "relation"
+      ]
+    },
     "Quiet": {
       "type": "object",
       "properties": {
@@ -478,10 +511,10 @@
         "abandoned": {
           "type": "boolean"
         },
-        "follow_up_of": {
+        "related": {
           "type": "array",
           "items": {
-            "type": "integer"
+            "$ref": "#/$defs/RelatedPR"
           }
         },
         "summary": {
