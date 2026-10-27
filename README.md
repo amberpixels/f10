@@ -85,6 +85,9 @@ Per-repo setup is optional.
 With no `.f10/`, steps infer what they can from the git remote and build files, so you can run immediately.
 To pin a fact instead (the tracker, the verify commands, the PR flow), declare it in `.f10/instructions/project.md`; anything you leave out stays inferred.
 
+Tasks on GitHub or GitLab issues need nothing more.
+For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-drivers) and point `.f10/driver` at it.
+
 ## Quick start
 
 ```text
@@ -513,6 +516,7 @@ Next: the `/f10:init` skill over `f10 init` (the `Project` line and guardrails r
 - [The status line](docs/statusline.md): wiring the badge and reading it.
 - [The `f10` binary](docs/cli.md): every command, references, output.
 - [The driver contract](docs/driver-contract.md): a tracker without a CLI.
+- [f10-drivers](https://github.com/amberpixels/f10-drivers): ready drivers for that contract, Notion first.
 - [Lore](docs/lore.md): why a line is the way it is, kept as entries per change next to the code.
 
 ## Feedback
