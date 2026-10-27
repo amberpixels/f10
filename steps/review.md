@@ -136,11 +136,12 @@ The entry's trace on the PR (`traces: on`) is made the same way, by its last res
 The CI review is fired or awaited first, so it runs while the local reviewer reads.
 
 1. **Facts first**: `f10 review pick --json`; remote facts missing or refused fail the entry before any reviewer is spawned.
-2. **Fire now** when the remote review's **Pick** says to fire.
-3. **The blind reviewer** writes the round file, as above, every block tagged `source: local`.
-   In round two it writes the whole `## Prior round`: a status for every round-one id, of either source.
+2. **Fire now** when the remote review's **Pick** says to fire, keeping the time `f10 review trigger` prints.
+3. **The blind reviewer** writes the round file, as above, every block it raises tagged `source: local`.
+   In round two it writes the whole `## Prior round`: a status for every round-one id, of either source, each prior block keeping its round-one block's `source:`.
    Then the local blocks' **Lore** entries; the state block waits for point 5.
 4. **The CI review**: the remote review's **Pick**, **Already written?** and **Shape** (points 1 to 3 below), shaped into **the same file**.
+   Fired at point 2, Pick never fires again: it waits with `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fails.
    Its blocks are appended under `## Findings`, numbered on from the local ones and tagged `source: remote`; its counts are added to `## Categories`; `verdict:` becomes `findings` when either half raised one; the header's `reviewer:` lists both, and `review:` and `revision:` are the CI review's.
    A stop in **Pick** or **Already written?** (a manual trigger nobody can fire, a refused trigger, a review already written) ends the CI half only: the header keeps `reviewer: local`, point 5 and the resolve run on the local blocks, and the report says the CI half was skipped and why.
    It adds no prior blocks: the **Shape** point's "no longer raises" rule is for a round with the CI half alone.

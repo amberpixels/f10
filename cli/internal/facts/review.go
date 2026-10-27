@@ -99,6 +99,7 @@ const (
 
 var (
 	codeSpanRE = regexp.MustCompile("`([^`]+)`")
+	manualRE   = regexp.MustCompile(`(?i)` + TriggerManual)
 	quotedRE   = regexp.MustCompile(`"([^"]+)"`)
 )
 
@@ -236,12 +237,13 @@ func manualPart(value string) string {
 		return ""
 	}
 
-	i := strings.Index(lower, TriggerManual)
-	if i < 0 {
+	// matched on value itself: lowercasing can change a rune's byte length
+	loc := manualRE.FindStringIndex(value)
+	if loc == nil {
 		return ""
 	}
 
-	rest, _, _ := strings.Cut(value[i+len(TriggerManual):], ";")
+	rest, _, _ := strings.Cut(value[loc[1]:], ";")
 
 	return strings.Trim(rest, " ,:-")
 }

@@ -179,6 +179,7 @@ func TestManualHow(t *testing.T) {
 		"automatic, on a push to `main`":                                                      "",
 		"automatic, on a push to `main`; manual, ask in Slack":                                "ask in Slack",
 		"automatic, on a push to `main`; manual, comment `@claude` on the PR":                 "comment `@claude` on the PR",
+		"automatic ȺȺȺȺȺȺȺȺ Manual, comment `@claude`":                                        "comment `@claude`",
 	} {
 		trigger, how := parseTrigger(line)
 
