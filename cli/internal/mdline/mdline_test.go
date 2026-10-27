@@ -72,3 +72,18 @@ func TestBareAndUnmark(t *testing.T) {
 		t.Errorf("Unmark = %q", got)
 	}
 }
+
+func TestProse(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{in: "invoke the `create-notion-task` skill", want: "invoke the   skill"},
+		{in: "before\n```sh\ngh issue view\n```\nafter", want: "before\n \n \n \nafter"},
+		{in: "a lone ` backtick", want: "a lone ` backtick"},
+		{in: "~~~\n```\nnotion\n~~~\nafter", want: " \n \n \n \nafter"},
+	}
+
+	for _, c := range cases {
+		if got := Prose(c.in); got != c.want {
+			t.Errorf("Prose(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

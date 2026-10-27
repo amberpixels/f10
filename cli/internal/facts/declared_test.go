@@ -153,6 +153,14 @@ func TestBuildBothPlaces(t *testing.T) {
 	}
 }
 
+func TestBuildTrackerNameInCode(t *testing.T) {
+	eff := buildWith(t, "---\ntracker:\n  kind: github\n---\n"+
+		"## Tracker\n\n- **Create** - invoke the `create-notion-task` skill\n", "")
+	if eff.TrackerKind != "GitHub Issues" || len(eff.Problems) != 0 {
+		t.Errorf("a skill name is no tracker: kind %q, problems %+v", eff.TrackerKind, eff.Problems)
+	}
+}
+
 func TestBuildFrontmatterErrors(t *testing.T) {
 	eff := buildWith(t, "---\nmerge_method: fast\nshipping: yes\n---\n", "")
 	if !strings.Contains(eff.Errors(), "shipping") {
