@@ -162,7 +162,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   Skills are thin routers over steps.
 - **Flow** - every step a task runs through, declared under `flows:` in `project.md` (default `plan implement pr`); `f10 flow` lists them.
   `plan` leads and runs only for a task with no plan file; `/f10:ship` runs the entries after it.
-  An entry takes an argument after a colon: `review:local`, `review:ci`, `cleanup:comments,prose`, `deploy:staging`.
+  An entry takes an argument after a colon: `review:local`, `review:ci`, `review:local+ci` (both halves, one resolve), `cleanup:comments,prose`, `deploy:staging`.
   `judge` before `implement` judges the plan, after it the change.
   A name with no generic step (e.g. `e2e`) is project-defined: `.f10/instructions/<name>.md` *is* the step.
   `f10 start` and `f10 drive` run `default`, `--local` runs `local`, `--flow <name>` any other.

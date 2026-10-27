@@ -422,7 +422,7 @@ func (rv *reviewer) manualHint() string {
 		return ""
 	}
 
-	how := rv.facts.TriggerHow
+	how := rv.facts.Manual()
 	if how == "" {
 		how = "see project.md"
 	}
@@ -452,7 +452,7 @@ func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, err
 	if !ok {
 		return "", "", time.Time{}, fmt.Errorf("the Review section's Trigger how (%q) reads as neither "+
 			"a comment (comment `<text>`) nor a review request (request a review from <login>): "+
-			"perform it by hand", rv.facts.TriggerHow)
+			"perform it by hand", rv.facts.Manual())
 	}
 
 	if kind == facts.ManualRequest {

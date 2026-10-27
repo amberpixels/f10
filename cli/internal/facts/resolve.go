@@ -553,6 +553,7 @@ func reviewFrom(d ReviewDecl) Review {
 		Arrives:      arrives,
 		Trigger:      trigger,
 		TriggerHow:   how,
+		ManualHow:    manualPart(d.Trigger),
 		Done:         done,
 		DoneText:     doneText,
 		Handled:      handled,

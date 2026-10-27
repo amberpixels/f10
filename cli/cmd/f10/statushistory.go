@@ -32,8 +32,9 @@ type judgeOutcome struct {
 }
 
 // fileOutcomes reads the task's findings and verdict files: a round is the
-// remote half's when its reviewer is not local, a verdict the plan judge's
-// when its subject is a plan.
+// remote half's when its reviewer is not local (a file both halves wrote
+// counts once for each), a verdict the plan judge's when its subject is a
+// plan.
 func fileOutcomes(storageRoot, task string) outcomes {
 	var o outcomes
 
@@ -122,8 +123,8 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 	return steps
 }
 
-// roundFile is one findings file: its counts, whether a remote reviewer
-// wrote it, and when it was last written.
+// roundFile is one half of a findings file: its counts, whether it is the
+// remote half, and when the file was last written.
 type roundFile struct {
 	round  reviewRound
 	raised int // findings new in this round, a prior one reopened not counted
@@ -131,8 +132,9 @@ type roundFile struct {
 	at     time.Time
 }
 
-// reviewRounds counts every findings file of the task, in round order. A
-// prior-round block counts with its round only when the round reopened it.
+// reviewRounds counts every findings file of the task, in round order, one
+// entry per half the file holds. A prior-round block counts with its round
+// only when the round reopened it.
 func reviewRounds(storageRoot, task string) []roundFile {
 	var rounds []roundFile
 
@@ -147,35 +149,60 @@ func reviewRounds(storageRoot, task string) []roundFile {
 			continue
 		}
 
-		r, raised := reviewRound{Round: f.Round}, 0
+		// indexed by remote: the local half, then the remote one
+		var halves [2]*roundFile
+
+		half := func(remote bool) *roundFile {
+			i := 0
+			if remote {
+				i = 1
+			}
+
+			if halves[i] == nil {
+				halves[i] = &roundFile{round: reviewRound{Round: f.Round}, remote: remote, at: modTime(path)}
+			}
+
+			return halves[i]
+		}
+
+		// a half the header names shows even with nothing found, a file
+		// naming none the local one
+		local, remote := f.Halves()
+		if remote {
+			half(true)
+		}
+
+		if local || !remote {
+			half(false)
+		}
 
 		for _, fd := range f.Findings {
 			if fd.Prior && !findings.Reopens(fd.Status) {
 				continue
 			}
 
-			r.Found++
+			h := half(f.Remote(fd))
+			h.round.Found++
 
 			if !fd.Prior {
-				raised++
+				h.raised++
 			}
 
 			switch v, _, _ := strings.Cut(strings.ToLower(fd.Verdict), " "); v {
 			case "fix":
-				r.Fixed++
+				h.round.Fixed++
 			case "skip":
-				r.Skipped++
+				h.round.Skipped++
 			case "ask", "":
-				r.Ask++
+				h.round.Ask++
 			}
 		}
 
-		rounds = append(rounds, roundFile{
-			round:  r,
-			raised: raised,
-			remote: f.Reviewer != "" && f.Reviewer != "local",
-			at:     modTime(path),
-		})
+		for _, h := range halves {
+			if h != nil {
+				rounds = append(rounds, *h)
+			}
+		}
 	}
 
 	return rounds

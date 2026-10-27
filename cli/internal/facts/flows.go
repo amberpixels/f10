@@ -125,6 +125,22 @@ func ShipEntries(flow []string) []string {
 	return flow
 }
 
+// ReviewHalves is which halves a review entry's argument runs: none or
+// `local` the local review, `ci` the remote one, `local+ci` both, in
+// either order. Neither for any other argument.
+func ReviewHalves(arg string) (bool, bool) {
+	switch strings.ToLower(arg) {
+	case "", "local":
+		return true, false
+	case "ci":
+		return false, true
+	case "local+ci", "ci+local":
+		return true, true
+	}
+
+	return false, false
+}
+
 // Planless reports a flow that writes no plan file.
 func Planless(flow []string) bool { return len(flow) == 0 || flow[0] != "plan" }
 
@@ -168,6 +184,9 @@ func checkFlow(name string, flow []string) []string {
 			bad = append(bad, fmt.Sprintf("flows.%s: %q is not a step name", name, e))
 		case colon && arg == "":
 			bad = append(bad, fmt.Sprintf("flows.%s: %q has a colon and no argument", name, e))
+		case step == "review" && !anyHalf(arg):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q names no review half; write review:local, review:ci "+
+				"or review:local+ci", name, e))
 		case step == "plan" && i > 0:
 			bad = append(bad, fmt.Sprintf("flows.%s: plan comes first, since ship runs only the entries after it; "+
 				"stale_after judges a task before planning it", name))
@@ -178,6 +197,43 @@ func checkFlow(name string, flow []string) []string {
 	}
 
 	return bad
+}
+
+func anyHalf(arg string) bool {
+	local, remote := ReviewHalves(arg)
+
+	return local || remote
+}
+
+// checkRemoteHalves warns about a CI half that cannot run: no remote
+// reviewer declared, or no pr or push before it for a review to arrive on.
+// Warnings, not errors: a legacy drive chain converts to a trailing
+// review:ci on a default that may open no PR.
+func (e *Effective) checkRemoteHalves() {
+	for _, name := range e.FlowNames() {
+		published := false
+
+		for _, entry := range e.Flows[name] {
+			step, arg := SplitEntry(entry)
+			if step == "pr" || step == "push" {
+				published = true
+			}
+
+			if _, remote := ReviewHalves(arg); step != "review" || !remote {
+				continue
+			}
+
+			switch {
+			case !e.Review.Remote():
+				e.problem(false, "flows.%s: %s reads a CI review, and Review declares no remote reviewer", name, entry)
+			case !published:
+				e.problem(false, "flows.%s: %s reads a CI review on the PR, and no pr or push comes before it",
+					name, entry)
+			}
+
+			break
+		}
+	}
 }
 
 // legacyFlows converts the old keys: each pipeline becomes a flow, led by
@@ -369,6 +425,8 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 	}
 
 	e.Facts = append(e.Facts, Fact{Key: "drive_finish", Value: onOff(e.DriveFinish), Origin: finishOrigin})
+
+	e.checkRemoteHalves()
 
 	if e.FlowByArea != nil {
 		e.Facts = append(e.Facts, Fact{

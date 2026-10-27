@@ -96,6 +96,20 @@ func TestReviewPickSkipsHandledAndSeesThroughStaleReactions(t *testing.T) {
 	}
 }
 
+// A line naming both kinds hints with its manual part alone.
+func TestManualHintNamesTheManualPart(t *testing.T) {
+	rf := stickyFacts()
+	rf.Trigger = facts.TriggerAutomatic + ", " + facts.TriggerManual
+	rf.TriggerHow = "on open and on push; manual, comment `@claude` on the PR for a re-review"
+	rf.ManualHow = "comment `@claude` on the PR for a re-review"
+
+	got := (&reviewer{facts: rf}).manualHint()
+	if want := "; a re-review is manual (comment `@claude` on the PR for a re-review) and " +
+		"`f10 review trigger` performs it"; got != want {
+		t.Errorf("hint = %q, want %q", got, want)
+	}
+}
+
 func TestReviewPickNamesTheManualTriggerWhenNothingIsUnhandled(t *testing.T) {
 	f := newFakes(t)
 

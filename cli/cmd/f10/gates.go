@@ -114,11 +114,9 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 
 		switch base {
 		case "review":
-			if qual == "" || strings.EqualFold(qual, "local") {
-				local = true
-			} else {
-				remote = true
-			}
+			// review:local+ci is one entry with both halves
+			l, r := facts.ReviewHalves(qual)
+			local, remote = local || l, remote || r
 
 			if review < 0 {
 				review = len(gates)
@@ -328,12 +326,12 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 		}
 	}
 
-	// ship on a review entry of this half
+	// ship on a review entry running this half, alone or beside the other
 	for i, e := range entries {
 		base, qual := facts.SplitEntry(e)
-		isRemote := qual != "" && !strings.EqualFold(qual, "local")
+		l, r := facts.ReviewHalves(qual)
 
-		if base != "review" || isRemote != remote {
+		if base != "review" || (remote && !r) || (!remote && !l) {
 			continue
 		}
 
