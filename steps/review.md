@@ -88,7 +88,7 @@ The count is the findings awaiting a verdict: this round's, plus a prior block w
 Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 The remote half writes the same block once its file is on disk (point 4 below).
 
-**Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source` the block's `source:`, else `remote` when `reviewer:` is not `local`).
+**Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source` the block's `source:`, else `remote` only when `reviewer:` names a remote identity and not `local`).
 The severity is the reviewer's call per finding, `blocker`, `major`, `minor` or `nit`, `minor` when it cannot tell.
 Each call prints the entry's id: add it to the finding's block as a `lore: <id>` line, which resolve supersedes.
 Round two reopens in lore what it reopens in the file: a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`) gets `f10 lore add finding --change <task> --supersedes <the round-one block's lore id> --status open -m <the evidence line>`, and its new id as the prior block's `lore:` line; a round-one block with no `lore:` line writes nothing.
@@ -136,13 +136,16 @@ The entry's trace on the PR (`traces: on`) is made the same way, by its last res
 The CI review is fired or awaited first, so it runs while the local reviewer reads.
 
 1. **Facts first**: `f10 review pick --json`; remote facts missing or refused fail the entry before any reviewer is spawned.
-2. **Fire now** when the remote review's **Pick** says to fire.
-3. **The blind reviewer** writes the round file, as above, every block tagged `source: local`.
-   In round two it writes the whole `## Prior round`: a status for every round-one id, of either source.
+2. **Fire now** when the remote review's **Pick** says to fire, keeping the time `f10 review trigger` prints.
+3. **The blind reviewer** writes the round file, as above, every block it raises tagged `source: local`.
+   In round two it writes the whole `## Prior round`: a status for every round-one id, of either source, each prior block keeping its round-one block's `source:`.
+   Then the local blocks' **Lore** entries; the state block waits for point 5.
 4. **The CI review**: the remote review's **Pick**, **Already written?** and **Shape** (points 1 to 3 below), shaped into **the same file**.
-   Its blocks are appended under `## Findings`, numbered on from the local ones and tagged `source: remote`; its counts are added to `## Categories`; the header's `reviewer:` lists both, and `review:` and `revision:` are the CI review's.
+   Fired at point 2, Pick never fires again: it waits with `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fails.
+   Its blocks are appended under `## Findings`, numbered on from the local ones and tagged `source: remote`; its counts are added to `## Categories`; `verdict:` becomes `findings` when either half raised one; the header's `reviewer:` lists both, and `review:` and `revision:` are the CI review's.
+   A stop in **Pick** or **Already written?** (a manual trigger nobody can fire, a refused trigger, a review already written) ends the CI half only: the header keeps `reviewer: local`, point 5 and the resolve run on the local blocks, and the report says the CI half was skipped and why.
    It adds no prior blocks: the **Shape** point's "no longer raises" rule is for a round with the CI half alone.
-5. **Lore and ack**: the remote review's **Ack** (point 4 below), the remote blocks' lore entries `--source remote`; then one state block with both halves' open count.
+5. **Lore and ack**: the remote blocks' lore entries `--source remote`, then the remote review's **Ack** (point 4 below); then the entry's one state block, with both halves' open count.
 
 ## The remote review
 
