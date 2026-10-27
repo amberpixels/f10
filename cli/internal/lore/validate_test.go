@@ -85,7 +85,38 @@ func TestValidate(t *testing.T) {
 			"outcome is only for a verdict",
 		},
 
+		{
+			"remote finding",
+			with(finding("FT-1", "2026-10-20T09:00:00Z", "minor", "open"), func(e *Entry) { e.Source = "remote" }),
+			"",
+		},
+		{
+			"bad source",
+			with(finding("FT-1", "2026-10-20T09:00:00Z", "minor", "open"), func(e *Entry) { e.Source = "ci" }),
+			"source \"ci\"",
+		},
+		{
+			"verdict with source",
+			with(verdictEntry("FT-1", "2026-10-20T09:00:00Z", "stop"), func(e *Entry) { e.Source = "local" }),
+			"source is only for a finding",
+		},
+
 		{"verdict", verdictEntry("FT-1", "2026-10-20T09:00:00Z", "proceed with changes"), ""},
+		{
+			"plan verdict",
+			with(verdictEntry("FT-1", "2026-10-20T09:00:00Z", "proceed"), func(e *Entry) { e.Judged = "plan" }),
+			"",
+		},
+		{
+			"bad judged",
+			with(verdictEntry("FT-1", "2026-10-20T09:00:00Z", "proceed"), func(e *Entry) { e.Judged = "pr" }),
+			"judged \"pr\"",
+		},
+		{
+			"finding with judged",
+			with(finding("FT-1", "2026-10-20T09:00:00Z", "minor", "open"), func(e *Entry) { e.Judged = "change" }),
+			"judged is only for a verdict",
+		},
 		{
 			"verdict bad outcome",
 			verdictEntry("FT-1", "2026-10-20T09:00:00Z", "proceed_with_changes"),

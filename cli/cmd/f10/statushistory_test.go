@@ -1,17 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 func sessionEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Event {
@@ -121,15 +117,20 @@ verdict: fix
 category: correctness
 `)
 	writeFile(t, filepath.Join(reviews, "3.md"), "no header here\n")
+	writeFile(t, filepath.Join(reviews, "4.md"), "task: FT-1\nround: 1\nreviewer: claude[bot]\nverdict: clean\n")
 
-	got := reviewRounds(root, "FT-1")
+	o := fileOutcomes(root, "FT-1")
 	want := []reviewRound{
 		{Round: "1", Found: 3, Fixed: 1, Skipped: 1, Ask: 1},
 		{Round: "2", Found: 2, Fixed: 1, Ask: 1},
 	}
 
-	if !slices.Equal(got, want) {
-		t.Errorf("reviewRounds = %+v, want %+v", got, want)
+	if !slices.Equal(o.local, want) {
+		t.Errorf("local rounds = %+v, want %+v", o.local, want)
+	}
+
+	if !slices.Equal(o.remote, []reviewRound{{Round: "1"}}) || o.remoteAt.IsZero() {
+		t.Errorf("remote rounds = %+v at %v, want 4.md's clean round", o.remote, o.remoteAt)
 	}
 
 	verdicts := filepath.Join(root, "verdicts", "FT-1")
@@ -137,178 +138,22 @@ category: correctness
 	writeFile(t, filepath.Join(verdicts, "10.md"),
 		"task: FT-1\nverdict: proceed with changes\nreason: tighten the parser\n")
 	writeFile(t, filepath.Join(verdicts, "11.md"), "subject: idea something else\nverdict: stop\n")
+	writeFile(t, filepath.Join(verdicts, "12.md"), "task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: sound\n")
 
-	j := latestJudge(root, "FT-1")
-	if j == nil || j.Verdict != "proceed with changes" || j.Reason != "tighten the parser" {
-		t.Errorf("latestJudge = %+v, want 10.md's verdict", j)
+	o = fileOutcomes(root, "FT-1")
+	if j := o.changeJudge; j == nil || j.Verdict != "proceed with changes" || j.Reason != "tighten the parser" {
+		t.Errorf("change judge = %+v, want 10.md's verdict", j)
 	}
 
-	if reviewRounds(root, "FT-2") != nil || latestJudge(root, "FT-2") != nil {
-		t.Error("a task with no files has a review or judge")
-	}
-}
-
-func TestHistoryLines(t *testing.T) {
-	h := runHistory{
-		Steps:  []string{"implement", "pr"},
-		Review: []reviewRound{{Round: "1", Found: 3, Fixed: 2, Skipped: 1}, {Round: "2"}},
-		Judge:  &judgeOutcome{Verdict: "proceed", Reason: "sound"},
+	if j := o.planJudge; j == nil || j.Verdict != "proceed" {
+		t.Errorf("plan judge = %+v, want 12.md's verdict", j)
 	}
 
-	want := [][2]string{
-		{"steps", "implement, pr"},
-		{"review", "round 1: 3 found (2 fixed, 1 skipped); round 2: clean"},
-		{"judge", "proceed - sound"},
-	}
-
-	if got := h.lines(); !slices.Equal(got, want) {
-		t.Errorf("lines = %v, want %v", got, want)
-	}
-
-	if got := (runHistory{Review: []reviewRound{{Round: "1", Found: 1, Ask: 1}}}).lines(); got[0][1] != "1 found (1 ask)" {
-		t.Errorf("one round = %q", got[0][1])
-	}
-
-	if got := (runHistory{}).lines(); got != nil {
-		t.Errorf("an empty history prints %v", got)
-	}
-}
-
-func TestRenderRunHistory(t *testing.T) {
-	r := &state.Run{Task: "FT-1", Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}
-
-	var before, with bytes.Buffer
-
-	renderRun(&before, r, nil, false, time.Now(), 0)
-	renderRun(&with, r, &runHistory{}, false, time.Now(), 0)
-
-	// an older run with nothing recorded prints as it did
-	if before.String() != with.String() {
-		t.Errorf("an empty history changed the block:\n%s\nvs\n%s", before.String(), with.String())
-	}
-
-	var out bytes.Buffer
-
-	h := &runHistory{Steps: []string{"implement", "pr"}, Judge: &judgeOutcome{Verdict: "proceed"}}
-	renderRun(&out, r, h, false, time.Now(), 0)
-
-	for _, s := range []string{"implement, pr", "proceed"} {
-		if !strings.Contains(out.String(), s) {
-			t.Errorf("output lacks %q:\n%s", s, out.String())
-		}
-	}
-
-	raw, err := json.Marshal([]runJSON{{Run: r, History: &runHistory{Steps: []string{"pr"}}}, {Run: r}})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var back []map[string]any
-	if err := json.Unmarshal(raw, &back); err != nil {
-		t.Fatal(err)
-	}
-
-	hj, _ := back[0]["history"].(map[string]any)
-	if back[0]["ship"] != "done" || hj["steps"] == nil || hj["judge"] != nil {
-		t.Errorf("history JSON = %s", raw)
-	}
-
-	if _, ok := back[1]["history"]; ok {
-		t.Errorf("a run with no history carries one: %s", raw)
-	}
-}
-
-func TestFinishedRowHistory(t *testing.T) {
-	row := taskRow{ID: "FT-1", Title: "Thing", Stage: stageDone, Step: "finish", History: &runHistory{
-		Steps:  []string{"implement", "pr"},
-		Review: []reviewRound{{Round: "1", Found: 1, Fixed: 1}},
-		Judge:  &judgeOutcome{Verdict: "proceed"},
-	}}
-
-	var md bytes.Buffer
-
-	markdownRows(&md, []taskRow{row})
-
-	for _, s := range []string{"| | | steps: implement, pr | | |", "review: 1 found (1 fixed)", "judge: proceed"} {
-		if !strings.Contains(md.String(), s) {
-			t.Errorf("markdown lacks %q:\n%s", s, md.String())
-		}
-	}
-
-	var plain bytes.Buffer
-
-	renderRows(&plain, []taskRow{row}, 0)
-
-	if !strings.Contains(plain.String(), "steps: implement, pr") {
-		t.Errorf("rows lack the steps:\n%s", plain.String())
-	}
-
-	raw, err := json.Marshal(row)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, s := range []string{`"history":{"steps":["implement","pr"]`, `"judge":{"verdict":"proceed"}`} {
-		if !strings.Contains(string(raw), s) {
-			t.Errorf("row JSON lacks %s: %s", s, raw)
-		}
-	}
-}
-
-func TestHistoryOfARun(t *testing.T) {
-	t0 := time.Unix(1_800_000_000, 0)
-	events := []ledger.Event{
-		sessionEvent(t0, "s1", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
-		shipClaim(t0.Add(time.Minute), "s1", "implement"),
-	}
-
-	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Updated: t0.Add(2 * time.Minute)}
-	if h := doneHistory(events, done, ""); h == nil || !slices.Equal(h.Steps, []string{"implement"}) {
-		t.Errorf("doneHistory = %+v, want the implement step", h)
-	}
-
-	running := *done
-	running.Ship = "running"
-
-	if h := doneHistory(events, &running, ""); h != nil {
-		t.Errorf("a running ship has a history: %+v", h)
-	}
-
-	// an older run: no claims, no files
-	older := &state.Run{Session: "s9", Task: "FT-1", Ship: "done", Updated: t0}
-	if h := doneHistory(events, older, t.TempDir()); h != nil {
-		t.Errorf("an older run has a history: %+v", h)
-	}
-}
-
-func TestClaimHistoryStorage(t *testing.T) {
-	t0 := time.Unix(1_800_000_000, 0)
-	verdictText := "task: FT-1\nverdict: proceed\n"
-
-	shared := t.TempDir()
-	writeFile(t, filepath.Join(shared, "verdicts", "FT-1", "1.md"), verdictText)
-
-	checkout := t.TempDir()
-	writeFile(t, filepath.Join(checkout, ".f10", "verdicts", "FT-1", "1.md"), verdictText)
-
-	claim := &state.Run{Session: "s1", Task: "FT-1", Root: checkout, Updated: t0}
-
-	if h := claimHistory(nil, claim, shared); h == nil || h.Judge == nil {
-		t.Errorf("out-of-tree storage: claimHistory = %+v, want the shared verdict", h)
-	}
-
-	if h := claimHistory(nil, claim, ""); h == nil || h.Judge == nil {
-		t.Errorf("in-repo, checkout on disk: claimHistory = %+v, want its verdict", h)
-	}
-
-	gone := *claim
-	gone.Root = filepath.Join(checkout, "removed")
-
-	if h := claimHistory(nil, &gone, ""); h != nil {
-		t.Errorf("in-repo, checkout gone: claimHistory = %+v, want nil", h)
-	}
-
-	if claimHistory(nil, nil, shared) != nil {
-		t.Error("no claim has a history")
+	if o := fileOutcomes(
+		root,
+		"FT-2",
+	); o.local != nil || o.remote != nil || o.changeJudge != nil ||
+		o.planJudge != nil {
+		t.Errorf("a task with no files has outcomes: %+v", o)
 	}
 }

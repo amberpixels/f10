@@ -16,15 +16,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
-// runHistory is what a finished ship run went through: its pipeline steps
-// as the ledger's claims recorded them, its review rounds and its latest
-// judge verdict, each empty where its source is missing.
-type runHistory struct {
-	Steps  []string      `json:"steps,omitempty"`
-	Review []reviewRound `json:"review,omitempty"`
-	Judge  *judgeOutcome `json:"judge,omitempty"`
-}
-
 // reviewRound counts one findings file. Ask is a finding still waiting on
 // a verdict: an `ask`, or none written yet.
 type reviewRound struct {
@@ -40,41 +31,29 @@ type judgeOutcome struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
-// historyFor gathers a run's history: steps from the session's claims up
-// to until, review and judge from the task's files under storageRoot ("" for
-// none reachable). Nothing found is nil, so an older run prints as before.
-func historyFor(events []ledger.Event, session string, until time.Time, storageRoot, task string) *runHistory {
-	h := runHistory{Steps: shipSteps(events, session, until)}
+// fileOutcomes reads the task's findings and verdict files: a round is the
+// remote half's when its reviewer is not local, a verdict the plan judge's
+// when its subject is a plan.
+func fileOutcomes(storageRoot, task string) outcomes {
+	var o outcomes
 
-	if storageRoot != "" {
-		h.Review = reviewRounds(storageRoot, task)
-		h.Judge = latestJudge(storageRoot, task)
+	for _, rf := range reviewRounds(storageRoot, task) {
+		if rf.remote {
+			o.remote, o.remoteAt = append(o.remote, rf.round), rf.at
+		} else {
+			o.local, o.localAt = append(o.local, rf.round), rf.at
+		}
 	}
 
-	if h.Steps == nil && h.Review == nil && h.Judge == nil {
-		return nil
+	for _, v := range judgeFiles(storageRoot, task) {
+		if v.plan {
+			o.planJudge, o.planAt = &v.outcome, v.at
+		} else {
+			o.changeJudge, o.changeAt = &v.outcome, v.at
+		}
 	}
 
-	return &h
-}
-
-// doneHistory is a live run's history once its ship phase is done.
-func doneHistory(events []ledger.Event, r *state.Run, storageRoot string) *runHistory {
-	if r.Ship != "done" {
-		return nil
-	}
-
-	return historyFor(events, r.Session, r.Updated, storageRoot, r.Task)
-}
-
-// claimHistory is a finished task's history from the ledger's last claim
-// on it; shared is the out-of-tree storage root, "" with in-repo storage.
-func claimHistory(events []ledger.Event, claim *state.Run, shared string) *runHistory {
-	if claim == nil {
-		return nil
-	}
-
-	return historyFor(events, claim.Session, claim.Updated, finishedStorage(shared, claim.Root), claim.Task)
+	return o
 }
 
 // finishedStorage is where a finished task's findings and verdicts still
@@ -141,10 +120,18 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 	return steps
 }
 
+// roundFile is one findings file: its counts, whether a remote reviewer
+// wrote it, and when it was last written.
+type roundFile struct {
+	round  reviewRound
+	remote bool
+	at     time.Time
+}
+
 // reviewRounds counts every findings file of the task, in round order. A
 // prior-round block counts with its round only when the round reopened it.
-func reviewRounds(storageRoot, task string) []reviewRound {
-	var rounds []reviewRound
+func reviewRounds(storageRoot, task string) []roundFile {
+	var rounds []roundFile
 
 	for _, path := range numbered(filepath.Join(storageRoot, "reviews", task)) {
 		raw, err := os.ReadFile(path)
@@ -176,29 +163,56 @@ func reviewRounds(storageRoot, task string) []reviewRound {
 			}
 		}
 
-		rounds = append(rounds, r)
+		rounds = append(rounds, roundFile{
+			round:  r,
+			remote: f.Reviewer != "" && f.Reviewer != "local",
+			at:     modTime(path),
+		})
 	}
 
 	return rounds
 }
 
-// latestJudge is the newest verdict file of the task that parses and judges
-// the task, not an idea.
-func latestJudge(storageRoot, task string) *judgeOutcome {
-	files := numbered(filepath.Join(storageRoot, "verdicts", task))
+// verdictFile is one verdict file that judges the task, not an idea.
+type verdictFile struct {
+	outcome judgeOutcome
+	plan    bool // its subject is the task's plan
+	at      time.Time
+}
 
-	for _, path := range slices.Backward(files) {
+// judgeFiles is the task's verdict files that parse, oldest first.
+func judgeFiles(storageRoot, task string) []verdictFile {
+	var out []verdictFile
+
+	for _, path := range numbered(filepath.Join(storageRoot, "verdicts", task)) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
 
-		if v, err := verdict.Parse(string(raw)); err == nil && !v.Idea() {
-			return &judgeOutcome{Verdict: v.Verdict, Reason: v.Reason}
+		v, err := verdict.Parse(string(raw))
+		if err != nil || v.Idea() {
+			continue
 		}
+
+		kind, _, _ := strings.Cut(v.Subject, " ")
+		out = append(out, verdictFile{
+			outcome: judgeOutcome{Verdict: v.Verdict, Reason: v.Reason},
+			plan:    kind == "plan",
+			at:      modTime(path),
+		})
 	}
 
-	return nil
+	return out
+}
+
+func modTime(path string) time.Time {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return fi.ModTime()
 }
 
 // numbered is dir's `<n>.md` files by n, so 10.md sorts after 9.md.
@@ -238,32 +252,6 @@ func dirEntries(dir string) []os.DirEntry {
 	}
 
 	return entries
-}
-
-// lines is the history as label and value, only the parts it holds:
-// `steps implement, pr`, `review 3 found (2 fixed, 1 skipped)`,
-// `judge proceed - <reason>`.
-func (h runHistory) lines() [][2]string {
-	var out [][2]string
-
-	if len(h.Steps) > 0 {
-		out = append(out, [2]string{"steps", strings.Join(h.Steps, ", ")})
-	}
-
-	if len(h.Review) > 0 {
-		out = append(out, [2]string{"review", reviewText(h.Review)})
-	}
-
-	if h.Judge != nil {
-		text := h.Judge.Verdict
-		if h.Judge.Reason != "" {
-			text += " - " + h.Judge.Reason
-		}
-
-		out = append(out, [2]string{"judge", text})
-	}
-
-	return out
 }
 
 // reviewText is one round's counts, or each round's, named, when there are

@@ -367,8 +367,12 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 		}
 	}
 
-	if fx.f.called("git config branch.GH-1") {
+	if fx.f.called("git config branch.GH-1." + cfgDrive) {
 		t.Error("an asked skill was recorded as done")
+	}
+
+	if !fx.f.called("git config branch.GH-1." + cfgChain + " judge") {
+		t.Error("the chain was not recorded on the branch")
 	}
 }
 

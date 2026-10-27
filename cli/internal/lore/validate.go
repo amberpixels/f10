@@ -87,9 +87,11 @@ func kindFields(e Entry, add func(string, ...any)) {
 	own(KindFinding, "severity", e.Severity != "")
 	own(KindFinding, "status", e.Status != "")
 	own(KindFinding, "resolution", e.Resolution != "")
+	own(KindFinding, "source", e.Source != "")
 	own(KindVerdict, "outcome", e.Outcome != "")
 	own(KindVerdict, "gate", e.Gate != "")
 	own(KindVerdict, "commit", e.Commit != "")
+	own(KindVerdict, "judged", e.Judged != "")
 	own(KindLesson, "retired", e.Retired)
 
 	switch e.Kind {
@@ -107,12 +109,20 @@ func kindFields(e Entry, add func(string, ...any)) {
 		oneOf(add, "severity", e.Severity, Severities)
 		oneOf(add, "status", e.Status, Statuses)
 
+		if e.Source != "" {
+			oneOf(add, "source", e.Source, Sources)
+		}
+
 		if e.Status != "open" && e.Status != "" && strings.TrimSpace(e.Resolution) == "" {
 			add("resolution is required unless the status is open")
 		}
 	case KindVerdict:
 		oneOf(add, "outcome", e.Outcome, Outcomes)
 		oneOf(add, "gate", e.Gate, Gates)
+
+		if e.Judged != "" {
+			oneOf(add, "judged", e.Judged, Judged)
+		}
 
 		if !isSHA(e.Commit) {
 			add("commit %q is not a sha", e.Commit)

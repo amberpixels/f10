@@ -80,6 +80,8 @@ const (
 	// cfgDrive is the last chain skill drive saw a task finish, under
 	// `branch.<name>.` beside f10-after: local, and deleted with the branch.
 	cfgDrive = "f10-drive"
+	// cfgChain is the chain drive runs the task through, space-joined.
+	cfgChain = "f10-chain"
 )
 
 // chainSkills is the chain's vocabulary. start is implicit: a task needs a
@@ -1049,6 +1051,11 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s\n", task.ref.ID, o.branch, o.path, o.ws.ID)
+
+	// status reads the chain to list the gates drive runs outside ship
+	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(in.chain, " ")); err != nil {
+		return fmt.Errorf("recording the chain: %w", err)
+	}
 
 	for _, n := range appendNote(o.notes, note) {
 		fmt.Fprintf(w, "  %s\n", n)

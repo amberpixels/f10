@@ -50,7 +50,7 @@ No step after implement runs (no cleanup, commit, push, pr, review, judge or dep
 In a linked worktree with in-repo storage: copy the spike report and the plan, when there is one, into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
 In the main checkout, or with out-of-tree storage, the report already outlives the code: discard the experiment code by the paths the report names.
 It also offers, in one line, to post the report's answer and recommendation as a comment on the task, outward-facing and free of f10 traces; a driven run lists the offer and posts nothing.
-The kind is known from the plan, or a planless run's inline plan, before the pipeline starts, so the badge declares `f10-state.sh final implement`, and a dry run prints the path cut at implement.
+The kind is known from the plan, or a planless run's inline plan, before the pipeline starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
 
 **Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
 Run the **catchup** step's points 2 and 3, with three differences:
@@ -66,7 +66,7 @@ A plan written this run needs no re-confirming.
 A `judge` step routes the run by its verdict, differently before and after a `pr` entry (the **judge** step).
 After `pr`, the changes folded into the plan are built by the judge step's own route, not by a rerun of `implement`.
 
-**Badge** (`conventions/report.md`): `f10-state.sh final <step>` once the pipeline is selected; `f10-state.sh set ship running <step>` before each step, named as the pipeline names it, in the call that loads it; `f10-state.sh set ship done` after the last.
+**Badge** (`conventions/report.md`): `f10-state.sh pipeline <step>...` once the pipeline is selected, every step as the pipeline names it, one argument each (`pipeline implement cleanup pr 'review (local)' judge pr`), which also declares the last as final; `f10-state.sh set ship running <step>` before each step, named as the pipeline names it, in the call that loads it; `f10-state.sh set ship done` after the last.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 

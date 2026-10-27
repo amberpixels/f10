@@ -68,6 +68,8 @@ It never waits for one: `/f10:review ci` does.
    Apply answers as `fix` or `skip`, re-verify after fixes, and rewrite each answered `verdict:` with the user's words on `reason:`.
    A fix chosen here is verified, not re-reviewed.
 8. **Write the verdicts**: `verdict:` and any `reason:` under each block, one `verdict:` line per block.
+   Then, for each block with a `lore:` line, settle its entry: `f10 lore add finding --change <task> --supersedes <id> --source <its source> --severity <its severity> --status fixed --resolution <sha, or "working tree">` for a `fix`, `--status wontfix --resolution <the reason>` for a `skip`; an `ask` writes nothing until answered.
+   A block with no `lore:` line (a round from before lore) writes nothing; a failing `lore add` is one line in the report, never a failed step.
    Never edit the reviewer's text.
 9. **Land the fixes on an open PR or MR.**
    When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes as `steps/commit.md` point 2 says and push them to that branch, never forcing.

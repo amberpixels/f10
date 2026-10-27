@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -36,11 +37,12 @@ func TestLoad(t *testing.T) {
 	}{
 		{
 			name: "full file",
-			body: "v 1\ntask GH-26\nurl https://x/26\nroot /r\ncapture prior\nplan done\nship blocked\nleaf judge\nfinal pr\nnote stop: why\nnext do this\nask 1. which? [a | b]\nupdated " + stamp + "\n",
+			body: "v 1\ntask GH-26\nurl https://x/26\nroot /r\ncapture prior\nplan done\nship blocked\nleaf judge\nfinal pr\npipeline implement → review (local) → judge → pr\nnote stop: why\nnext do this\nask 1. which? [a | b]\nupdated " + stamp + "\n",
 			want: Run{
 				Task: "GH-26", URL: "https://x/26", Root: "/r",
 				Capture: "prior", Plan: "done", Ship: "blocked",
-				Leaf: "judge", Final: "pr", Note: "stop: why", Next: "do this", Ask: "1. which? [a | b]",
+				Leaf: "judge", Final: "pr", Pipeline: []string{"implement", "review (local)", "judge", "pr"},
+				Note: "stop: why", Next: "do this", Ask: "1. which? [a | b]",
 				Updated: time.Unix(now.Unix(), 0),
 			},
 		},
@@ -72,7 +74,7 @@ func TestLoad(t *testing.T) {
 			}
 
 			tc.want.Session = strings.TrimSuffix(filepath.Base(path), fileExt)
-			if *got != tc.want {
+			if !reflect.DeepEqual(*got, tc.want) {
 				t.Errorf("Load mismatch\n got %+v\nwant %+v", *got, tc.want)
 			}
 		})
@@ -149,6 +151,45 @@ func TestPhaseText(t *testing.T) {
 	r := &Run{Capture: "running", Ship: "pending", Leaf: "implement"}
 	if got := r.PhaseText("capture"); got != "running" {
 		t.Errorf("PhaseText(capture) = %q, want running", got)
+	}
+}
+
+// A declared pipeline survives a save and load, sets the final step, and a
+// new run forgets it.
+func TestPipelineRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	r := Fresh("pipe")
+
+	if err := r.SetPipeline([]string{"implement", "review (local)", "judge → pr"}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"implement", "review (local)", "judge", "pr"}
+	if !reflect.DeepEqual(r.Pipeline, want) || r.Final != "pr" {
+		t.Fatalf("pipeline %q final %q, want %q final pr", r.Pipeline, r.Final, want)
+	}
+
+	if err := r.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(Path(dir, "pipe"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(got.Pipeline, want) {
+		t.Errorf("loaded pipeline %q, want %q", got.Pipeline, want)
+	}
+
+	got.Seed("ship", "GH-9", "")
+
+	if got.Pipeline != nil || got.Final != "" {
+		t.Errorf("Seed kept pipeline %q final %q", got.Pipeline, got.Final)
+	}
+
+	if err := r.SetPipeline(nil); err == nil {
+		t.Error("an empty pipeline was accepted")
 	}
 }
 

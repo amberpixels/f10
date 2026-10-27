@@ -20,6 +20,7 @@
 #   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
 #   f10-state.sh ask <text>             the question a driven run stopped on, options included
 #   f10-state.sh final <step>           declare the ship pipeline's last step
+#   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
 #   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
 #   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
@@ -253,7 +254,7 @@ cmd_doctor() {
 [ "${0##*/}" = "statusline" ] && set -- render "$@"
 
 case "${1:-}" in
-  set | task | note | ask | final | show | clear | prune) forward "$@" ;;
+  set | task | note | ask | final | pipeline | show | clear | prune) forward "$@" ;;
   render)
     shift
     render "${1:-}"
@@ -268,6 +269,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   note <reason> [<next>]   why a run stopped, and what unblocks it
   ask <text>               the question a driven run stopped on, options included
   final <step>             declare the ship pipeline's last step
+  pipeline <step>...       declare the ship pipeline's steps, the last one final
   show                     the current run, human-readable
   clear | prune            drop this session's state | drop long-dead sessions
   render [<session id>]    the status-line segment; status-line JSON on stdin

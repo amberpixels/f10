@@ -42,6 +42,10 @@ var (
 	// Outcomes are a judge's four verdicts, spelled as its verdict files spell them.
 	Outcomes = []string{"proceed", "proceed with changes", "rethink", "stop"}
 	Gates    = []string{"judge", "review", "human"}
+	// Sources are where a finding came from: a local review or the host's.
+	Sources = []string{"local", "remote"}
+	// Judged is what a verdict judged: the plan, or the change itself.
+	Judged = []string{"plan", "change"}
 )
 
 // Agent is who did the work when it was not the human alone.
@@ -110,10 +114,12 @@ type Entry struct {
 	Severity   string `json:"severity,omitempty"   yaml:"severity,omitempty"`
 	Status     string `json:"status,omitempty"     yaml:"status,omitempty"`
 	Resolution string `json:"resolution,omitempty" yaml:"resolution,omitempty"`
+	Source     string `json:"source,omitempty"     yaml:"source,omitempty"`
 
 	Outcome string `json:"outcome,omitempty" yaml:"outcome,omitempty"`
 	Gate    string `json:"gate,omitempty"    yaml:"gate,omitempty"`
 	Commit  string `json:"commit,omitempty"  yaml:"commit,omitempty"`
+	Judged  string `json:"judged,omitempty"  yaml:"judged,omitempty"`
 
 	Retired bool `json:"retired,omitempty" yaml:"retired,omitempty"`
 

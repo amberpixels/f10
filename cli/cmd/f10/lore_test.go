@@ -106,7 +106,7 @@ func TestLoreVerbs(t *testing.T) {
 		"Per key",
 	)
 	open := must("add", "finding", "--change", "FT-1", "--anchor", "limit.go:3",
-		"--severity", "major", "--status", "open", "-m", "Never pruned")
+		"--severity", "major", "--status", "open", "--source", "remote", "-m", "Never pruned")
 
 	if _, err := runLore(t, "check", "FT-1"); err == nil || !strings.Contains(err.Error(), "no verdict") ||
 		!strings.Contains(err.Error(), "major finding "+open) {
@@ -116,7 +116,7 @@ func TestLoreVerbs(t *testing.T) {
 	must("add", "finding", "--change", "FT-1", "--anchor", "limit.go:3", "--supersedes", open,
 		"--severity", "major", "--status", "fixed", "--resolution", "abcdef1", "-m", "Pruned")
 	must("add", "verdict", "--change", "FT-1", "--outcome", "proceed with changes", "--gate", "judge",
-		"--commit", "abcdef1", "-m", "Fine")
+		"--commit", "abcdef1", "--judged", "change", "-m", "Fine")
 	must("add", "lesson", "--change", "FT-1", "--anchor", "limit.go:2", "-m", "Per process")
 
 	if out := must("check", "FT-1"); out != "FT-1 passes" {
@@ -125,7 +125,8 @@ func TestLoreVerbs(t *testing.T) {
 
 	show := must("show", "FT-1")
 	if !strings.HasPrefix(show, "FT-1  5 entries") || !strings.Contains(show, "anchor: api/limit.go:2-3@") ||
-		!strings.Contains(show, "with claude-opus-5-5") || strings.Contains(show, "Never pruned") {
+		!strings.Contains(show, "with claude-opus-5-5") || strings.Contains(show, "Never pruned") ||
+		!strings.Contains(show, "judged: change") {
 		t.Errorf("show:\n%s", show)
 	}
 

@@ -74,16 +74,16 @@ Fields per kind; a kind's field on another kind is an error:
 |---|---|
 | `intent` | none |
 | `decision` | `chosen` (required); `rejected`, a list of `option` and `reason`, both required |
-| `finding` | `severity`: `blocker`, `major`, `minor` or `nit`; `status`: `open`, `fixed`, `wontfix` or `duplicate`; `resolution`, a sha or a reason, required unless the status is `open` |
-| `verdict` | `outcome`: `proceed`, `proceed with changes`, `rethink` or `stop`; `gate`: `judge`, `review` or `human`; `commit`, the sha judged; all required |
+| `finding` | `severity`: `blocker`, `major`, `minor` or `nit`; `status`: `open`, `fixed`, `wontfix` or `duplicate`; `resolution`, a sha or a reason, required unless the status is `open`; `source`, optional: `local` or `remote`, the review it came from |
+| `verdict` | `outcome`: `proceed`, `proceed with changes`, `rethink` or `stop`; `gate`: `judge`, `review` or `human`; `commit`, the sha judged; all required; `judged`, optional: `plan` or `change`, what it judged |
 | `lesson` | at least one anchor; `retired: true` only with `supersedes` |
 
 The `verdict` outcomes are the four a judge's verdict file holds (`cli/internal/verdict`), spelled the same.
 
 ### Relation to review and judge files
 
-Today a review writes `reviews/<task>/<round>.md` and a judge `verdicts/<key>/<n>.md` under the storage root.
-Lore's `finding` and `verdict` kinds borrow their vocabulary and are where those facts move once the skills write into lore; until then both exist, and lore is the one meant to last.
+A review writes `reviews/<task>/<round>.md` and a judge `verdicts/<key>/<n>.md` under the storage root, and each also writes its lore entries: review a `finding` per finding (`source`), resolve a superseding `finding` per verdict, judge a `verdict` (`judged`).
+`f10 status` reads lore first and the files for runs from before lore; lore is the one meant to last.
 
 ## Verbs
 
@@ -99,7 +99,7 @@ f10 lore validate [<change>]
 Every verb takes `--root <dir>`.
 
 - **`add`** validates and writes one entry and prints its id.
-  Kind flags: `--chosen`, `--rejected 'option: reason'` (repeatable) for a decision; `--severity`, `--status`, `--resolution` for a finding; `--outcome`, `--gate`, `--commit` for a verdict; `--retired` for a lesson.
+  Kind flags: `--chosen`, `--rejected 'option: reason'` (repeatable) for a decision; `--severity`, `--status`, `--resolution`, `--source` for a finding; `--outcome`, `--gate`, `--commit`, `--judged` for a verdict; `--retired` for a lesson.
   An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
   `human` is `git config user.email`.
   Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.

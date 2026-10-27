@@ -93,6 +93,11 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
+		// drive records its chain on every branch it opens
+		if strings.HasPrefix(key, "git config branch.") && strings.Contains(key, "."+cfgChain+" ") {
+			return shell.Result{}
+		}
+
 		f.t.Fatalf("unscripted call: %q\nscripted:\n  %s", key, strings.Join(f.keys(), "\n  "))
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -48,8 +49,9 @@ type taskRow struct {
 	Note    string `json:"note,omitempty"`
 	Next    string `json:"next,omitempty"`
 	Ask     string `json:"ask,omitempty"`
-	// a finished task alone: what its last ship run went through
-	History *runHistory `json:"history,omitempty"`
+	Gates   []gate `json:"gates,omitempty"`
+
+	full bool // a finished task alone: every gate on a line of its own
 }
 
 // rowFacts is what a row's stage is decided from: the task's run, live in
@@ -203,19 +205,35 @@ func claimRun(e ledger.Event) *state.Run {
 	p := e.Payload.Val
 
 	return &state.Run{
-		Session: e.Session,
-		Task:    e.Task,
-		Root:    e.Checkout,
-		Capture: payloadString(p, "capture"),
-		Plan:    payloadString(p, "plan"),
-		Ship:    payloadString(p, "ship"),
-		Leaf:    payloadString(p, "leaf"),
-		Final:   payloadString(p, "final"),
-		Note:    payloadString(p, "note"),
-		Next:    payloadString(p, "next"),
-		Ask:     payloadString(p, "ask"),
-		Updated: e.At,
+		Session:  e.Session,
+		Task:     e.Task,
+		Root:     e.Checkout,
+		Capture:  payloadString(p, "capture"),
+		Plan:     payloadString(p, "plan"),
+		Ship:     payloadString(p, "ship"),
+		Leaf:     payloadString(p, "leaf"),
+		Final:    payloadString(p, "final"),
+		Pipeline: payloadStrings(p, "pipeline"),
+		Note:     payloadString(p, "note"),
+		Next:     payloadString(p, "next"),
+		Ask:      payloadString(p, "ask"),
+		Updated:  e.At,
 	}
+}
+
+// payloadStrings is a list the payload holds as JSON, its strings only.
+func payloadStrings(p ledger.Payload, key string) []string {
+	raw, _ := p[key].([]any)
+
+	var out []string
+
+	for _, v := range raw {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+
+	return out
 }
 
 func payloadString(p ledger.Payload, key string) string {
@@ -234,6 +252,8 @@ type rowSource struct {
 	// takes it as written
 	resolve func(token string) string
 	host    *host
+	// gates reads a task's gates; nil reads none
+	gates func(ctx context.Context, id, branch, root string, run *state.Run) []gate
 }
 
 // idOf is token as an id. An empty token, a finish run with no argument
@@ -321,6 +341,10 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts)
 
 	f.merged = row.PRState == "merged"
 
+	if src.gates != nil {
+		row.Gates = src.gates(ctx, k.ID, branch, root, f.run)
+	}
+
 	return row, f
 }
 
@@ -377,16 +401,19 @@ func renderRows(w io.Writer, rows []taskRow, limit int) {
 
 	ids := make([]string, len(rows))
 	prs := make([]string, len(rows))
+	gcs := make([]string, len(rows))
 
-	var idW, stageW, titleW, stepW int
+	var idW, stageW, titleW, stepW, gatesW int
 
 	for i, r := range rows {
 		ids[i] = strings.Repeat("  ", r.Depth) + r.ID
 		prs[i] = prColumn(r)
+		gcs[i] = r.gateColumn()
 		idW = max(idW, lipgloss.Width(ids[i]))
 		stageW = max(stageW, len(r.Stage))
 		titleW = max(titleW, lipgloss.Width(r.Title))
 		stepW = max(stepW, lipgloss.Width(r.Step))
+		gatesW = max(gatesW, lipgloss.Width(gcs[i]))
 	}
 
 	if limit > 0 {
@@ -395,8 +422,13 @@ func renderRows(w io.Writer, rows []taskRow, limit int) {
 			prW = max(prW, lipgloss.Width(p))
 		}
 
-		// two spaces between each of the five columns
-		titleW = max(10, min(titleW, limit-idW-stageW-stepW-prW-8))
+		// two spaces between each of the columns
+		gap := 8
+		if gatesW > 0 {
+			gap += 2
+		}
+
+		titleW = max(10, min(titleW, limit-idW-stageW-stepW-gatesW-prW-gap))
 	}
 
 	faint := lipgloss.NewStyle().Faint(true)
@@ -413,11 +445,16 @@ func renderRows(w io.Writer, rows []taskRow, limit int) {
 			pr = hyperlink(r.PR, pr)
 		}
 
+		step := faint.Render(pad(r.Step, stepW))
+		if gatesW > 0 {
+			step += "  " + pad(gcs[i], gatesW)
+		}
+
 		line := fmt.Sprintf("%s  %s  %s  %s  %s",
 			id,
 			rowStageStyle(r.Stage).Render(pad(r.Stage, stageW)),
 			pad(cutTo(r.Title, titleW), titleW),
-			faint.Render(pad(r.Step, stepW)),
+			step,
 			pr)
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 
@@ -447,8 +484,15 @@ func markdownRows(w io.Writer, rows []taskRow) {
 		return "[" + text + "](" + url + ")"
 	}
 
-	fmt.Fprintln(w, "| task | stage | title | step | PR |")
-	fmt.Fprintln(w, "|---|---|---|---|---|")
+	withGates := slices.ContainsFunc(rows, func(r taskRow) bool { return r.gateColumn() != "" })
+
+	head, rule, blank := "| task | stage | title | step | PR |", "|---|---|---|---|---|", "| |"
+	if withGates {
+		head, rule, blank = "| task | stage | title | step | gates | PR |", "|---|---|---|---|---|---|", "| | |"
+	}
+
+	fmt.Fprintln(w, head)
+	fmt.Fprintln(w, rule)
 
 	for _, r := range rows {
 		pr := prColumn(r)
@@ -457,18 +501,23 @@ func markdownRows(w io.Writer, rows []taskRow) {
 			pr = strings.TrimSpace(link(r.PR, num) + " " + prState)
 		}
 
+		step := cell(r.Step)
+		if withGates {
+			step += " | " + cell(r.gateColumn())
+		}
+
 		fmt.Fprintf(w, "| %s%s | %s | %s | %s | %s |\n",
 			strings.Repeat("\u00a0\u00a0", r.Depth), link(r.URL, r.ID),
-			r.Stage, cell(r.Title), cell(r.Step), pr)
+			r.Stage, cell(r.Title), step, pr)
 
 		for _, sub := range r.subLines() {
-			fmt.Fprintf(w, "| | | %s: %s | | |\n", sub[0], cell(sub[1]))
+			fmt.Fprintf(w, "| | | %s: %s %s |\n", sub[0], cell(sub[1]), blank)
 		}
 	}
 }
 
 // subLines is what prints under a row: the ask, the halt reason and what
-// unblocks it, then a finished task's history.
+// unblocks it, then a finished task's gates.
 func (row *taskRow) subLines() [][2]string {
 	var out [][2]string
 
@@ -478,11 +527,23 @@ func (row *taskRow) subLines() [][2]string {
 		}
 	}
 
-	if row.History != nil {
-		out = append(out, row.History.lines()...)
+	if row.full {
+		for _, l := range gateLines(row.Gates) {
+			out = append(out, [2]string{strings.TrimSpace(l[0]), l[1]})
+		}
 	}
 
 	return out
+}
+
+// gateColumn is the row's compact gates; a finished task alone prints
+// every gate on a line instead.
+func (row *taskRow) gateColumn() string {
+	if row.full || len(row.Gates) == 0 {
+		return ""
+	}
+
+	return compactGates(row.Gates)
 }
 
 // prColumn is `#128`, with the state beside it unless the PR is open.
@@ -556,13 +617,7 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	}
 
 	rows := src.rowsFrom(ctx, []childRow{k})
-
-	shared := ""
-	if t.sharedPlansDir() != "" {
-		shared = t.lay.StorageRoot
-	}
-
-	rows[0].History = claimHistory(src.events, lt.claim, shared)
+	rows[0].full = true
 
 	return &rows[0], nil
 }
@@ -619,6 +674,11 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 
 	if h, err := t.host(); err == nil {
 		src.host = &h
+	}
+
+	gs := newGateSource(t, src.events, src.host)
+	src.gates = func(ctx context.Context, id, branch, root string, run *state.Run) []gate {
+		return gs.gatesOf(ctx, id, branch, root, gs.storageFor(ctx, root, run), run)
 	}
 
 	return src, nil

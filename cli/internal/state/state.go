@@ -42,20 +42,22 @@ var Phases = []string{"capture", "plan", "ship"}
 // the Statuses: pending, running, done, failed, partial, skipped,
 // prior, blocked.
 type Run struct {
-	Session string    `json:"session"`
-	Task    string    `json:"task,omitempty"`
-	URL     string    `json:"url,omitempty"`
-	Root    string    `json:"root,omitempty"`  // checkout root the run is about
-	Skill   string    `json:"skill,omitempty"` // the skill that began the run
-	Capture string    `json:"capture"`
-	Plan    string    `json:"plan"`
-	Ship    string    `json:"ship"`
-	Leaf    string    `json:"leaf,omitempty"`  // the pipeline step running, or stopped on
-	Final   string    `json:"final,omitempty"` // the ship pipeline's declared last step
-	Note    string    `json:"note,omitempty"`  // why the run stopped
-	Next    string    `json:"next,omitempty"`  // what unblocks it
-	Ask     string    `json:"ask,omitempty"`   // the question a driven run stopped on, options included
-	Updated time.Time `json:"updated"`
+	Session string `json:"session"`
+	Task    string `json:"task,omitempty"`
+	URL     string `json:"url,omitempty"`
+	Root    string `json:"root,omitempty"`  // checkout root the run is about
+	Skill   string `json:"skill,omitempty"` // the skill that began the run
+	Capture string `json:"capture"`
+	Plan    string `json:"plan"`
+	Ship    string `json:"ship"`
+	Leaf    string `json:"leaf,omitempty"`  // the pipeline step running, or stopped on
+	Final   string `json:"final,omitempty"` // the ship pipeline's declared last step
+	// the ship pipeline's steps as declared, in order
+	Pipeline []string  `json:"pipeline,omitempty"`
+	Note     string    `json:"note,omitempty"` // why the run stopped
+	Next     string    `json:"next,omitempty"` // what unblocks it
+	Ask      string    `json:"ask,omitempty"`  // the question a driven run stopped on, options included
+	Updated  time.Time `json:"updated"`
 }
 
 // Dir is where state files live: F10_STATE_DIR, else the default.
@@ -144,6 +146,8 @@ func Load(path string) (*Run, error) {
 			r.Leaf = value
 		case "final":
 			r.Final = value
+		case "pipeline":
+			r.Pipeline = SplitPipeline(value)
 		case "note":
 			r.Note = value
 		case "next":
@@ -164,6 +168,23 @@ func Load(path string) (*Run, error) {
 	}
 
 	return r, nil
+}
+
+// PipelineSep joins a recorded pipeline's steps, as `pipelines:` strings
+// spell them: a step name may hold spaces (`review (local)`).
+const PipelineSep = " → "
+
+// SplitPipeline reads a recorded pipeline back into its steps.
+func SplitPipeline(s string) []string {
+	var steps []string
+
+	for step := range strings.SplitSeq(s, strings.TrimSpace(PipelineSep)) {
+		if step = strings.TrimSpace(step); step != "" {
+			steps = append(steps, step)
+		}
+	}
+
+	return steps
 }
 
 // Live reports whether the run was updated within ttl of now.
