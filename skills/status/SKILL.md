@@ -12,13 +12,13 @@ The status-line badge draws the same facts as three glyphs.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- No argument: the answer is below, already run.
-  Print it verbatim in a fenced block and stop.
+- No argument: the answer is below, already run: the current task's (the session's, else the branch's), as `f10 status <task-id>` prints it, or the session's run when no task is named.
+  Print it as point 1 does, then follow points 2-4 with the task the output names.
 - A task id: another run, the one the task's agent reports from the checkout that has its branch, usually a worktree `f10 start` opened.
   The hook lets this form through, because the answer may need you.
   Follow the numbered points below.
 
-!`command -v f10 >/dev/null 2>&1 && f10 status || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
+!`command -v f10 >/dev/null 2>&1 && f10 status --markdown || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
 
 1. Run `f10 status <task-id> --markdown`.
    A table (a parent's rows, a finished task's row) is printed verbatim **outside any fence**, so ids and PRs stay links; anything else is printed verbatim in a fenced block.

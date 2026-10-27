@@ -276,7 +276,9 @@ next      move the retry into the client and re-run /f10:ship GH-26
 updated   4m ago
 ```
 
-From a terminal, `f10 status` lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
+Bare `f10 status` reads the current task the way `f10 status <id>` does, gates included: the task this session's run records, else the one the branch or the worktree's name carries.
+With no task to name, a terminal lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
+A named task makes `--json` take the shape `f10 status <id>` prints: a run list, the fallback object, or task rows.
 Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
 
 `f10 status 1042` reads another run: the one in the worktree that has the task's branch.
@@ -381,7 +383,7 @@ f10 plan read            # the plan saved for that same task
 f10 demo open            # the demo report for it, in the browser
 f10 pr open [n]          # a PR or MR, or with no number their list; gh or glab decided by the remote
 f10 review pick|wait|ack|settle|trigger # the remote review on that PR: read it, await it, mark it handled, then settled, or ask for one
-f10 status               # where the run is: this session's, or this repo's live ones
+f10 status               # where the current task's run is, as `f10 status <id>` reads it; with no task, this session's or this repo's live runs
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
 f10 board                # what changed today (else the last working day): started, updated, reviewed, finished, new tasks
 f10 board --state        # where every task stands: done, in progress with its stage and next action, next

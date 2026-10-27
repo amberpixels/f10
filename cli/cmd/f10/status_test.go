@@ -196,3 +196,132 @@ func sessions(runs []*state.Run) string {
 
 	return strings.Join(names, " ")
 }
+
+// A bare status on a task's branch prints what `status <id>` prints: the
+// task's own run with its gates, not every run in the checkout.
+func TestBareStatusReadsTheBranchTask(t *testing.T) {
+	repo := tracedRepo(t, "DM-5/fix-retry", "")
+	git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
+
+	dir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", dir)
+	t.Chdir(repo)
+
+	for _, r := range []*state.Run{
+		{Session: "own", Task: "DM-5", Root: repo, Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
+		{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "pending"},
+	} {
+		if err := r.Save(dir, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	bare := runStatusJSON(t)
+	byID := runStatusJSON(t, "DM-5")
+
+	if len(bare) != 1 || bare[0].Task != "DM-5" || len(bare[0].Gates) == 0 {
+		t.Errorf("bare status = %+v, want DM-5's run alone, with its gates", bare)
+	}
+
+	if len(bare) != len(byID) || len(bare) > 0 && len(bare[0].Gates) != len(byID[0].Gates) {
+		t.Errorf("bare status = %+v, status DM-5 = %+v; want the same", bare, byID)
+	}
+}
+
+// A guessed task with no branch here leaves the bare answer as it was:
+// the session's own run.
+func TestBareStatusKeepsTheSessionRunForATaskWithNoBranch(t *testing.T) {
+	repo := tracedRepo(t, "main", "")
+	git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
+
+	dir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", dir)
+	t.Setenv("F10_SESSION_ID", "sess-1")
+	t.Chdir(repo)
+
+	r := &state.Run{Session: "sess-1", Task: "DM-9", Root: repo, Capture: "done", Plan: "running", Ship: "pending"}
+	if err := r.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := runStatusJSON(t)
+	if len(got) != 1 || got[0].Session != "sess-1" {
+		t.Errorf("bare status = %+v, want the session's run", got)
+	}
+}
+
+func TestBareTaskID(t *testing.T) {
+	for _, tc := range []struct {
+		name, branch, session, want string
+	}{
+		{"session task wins", "DM-5/fix", "DM-9", "DM-9"},
+		{"branch without a session task", "DM-5/fix", "", "DM-5"},
+		{"nothing names one", "main", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := tracedRepo(t, tc.branch, "")
+
+			dir := t.TempDir()
+			t.Setenv("F10_STATE_DIR", dir)
+			t.Setenv("F10_SESSION_ID", "sess-1")
+
+			r := &state.Run{Session: "sess-1", Task: tc.session, Root: repo}
+			if err := r.Save(dir, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+
+			tg, err := targetAt(t.Context(), repo, false, "status")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got := bareTaskID(t.Context(), tg, "sess-1"); got != tc.want {
+				t.Errorf("bareTaskID = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func runStatusJSON(t *testing.T, args ...string) []runJSON {
+	t.Helper()
+
+	var out bytes.Buffer
+
+	app := newApp()
+	app.Writer, app.ErrWriter = &out, &out
+
+	if err := app.Run(t.Context(), append([]string{"f10", "status", "--json"}, args...)); err != nil {
+		t.Fatalf("status %v: %v\n%s", args, err, out.String())
+	}
+
+	var runs []runJSON
+	if err := json.Unmarshal(out.Bytes(), &runs); err != nil {
+		t.Fatalf("status %v: not a run list: %v\n%s", args, err, out.String())
+	}
+
+	return runs
+}
+
+// A directory name stands in for a branch only in a linked worktree on a
+// detached HEAD; a branch with no id in a directory named with one guesses none.
+func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
+	repo := tracedRepo(t, "work", "")
+	t.Setenv("F10_STATE_DIR", t.TempDir())
+
+	named := filepath.Join(filepath.Dir(repo), "demo.dm-2")
+	git(t, repo, "worktree", "add", "-q", "-b", "side", named)
+
+	detached := filepath.Join(filepath.Dir(repo), "demo.DM-4-fix")
+	git(t, repo, "worktree", "add", "-q", "--detach", detached)
+
+	for dir, want := range map[string]string{repo: "", named: "", detached: "DM-4"} {
+		tg, err := targetAt(t.Context(), dir, false, "status")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := bareTaskID(t.Context(), tg, ""); got != want {
+			t.Errorf("bareTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
+		}
+	}
+}
