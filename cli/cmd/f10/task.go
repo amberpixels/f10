@@ -167,7 +167,7 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 		return "", err
 	}
 
-	return h.issueDoc(ctx, r.ID, r.Number)
+	return h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
 }
 
 // withImages downloads every image doc links into dir and ends doc with

@@ -397,6 +397,7 @@ func TestHostRefusesPullRequests(t *testing.T) {
 		t.Context(),
 		"FT-35",
 		"35",
+		"",
 	); err == nil ||
 		!strings.Contains(err.Error(), "#35 is a pull request") {
 		t.Errorf("issueDoc = %v", err)
@@ -430,16 +431,24 @@ func TestHostIssueDocLabels(t *testing.T) {
 	tests := []struct {
 		host   string
 		number string
+		stale  string
 		want   string
 	}{
-		{"gh", "12", "OPEN · bug, draft · https://github.com/o/r/issues/12\n"},
-		{"gh", "13", "OPEN · https://github.com/o/r/issues/13\n"},
-		{"gh", "14", "OPEN · bug · created 2026-09-21 · https://github.com/o/r/issues/14\n"},
-		{"glab", "7", "opened · bug · created 2026-10-01 · https://gitlab.com/g/p/-/issues/7\n"},
+		{"gh", "12", "", "OPEN · bug, draft · https://github.com/o/r/issues/12\n"},
+		{"gh", "13", "3w", "OPEN · https://github.com/o/r/issues/13\n"},
+		{"gh", "14", "", "OPEN · bug · created 2026-09-21 · https://github.com/o/r/issues/14\n"},
+		{
+			"gh",
+			"14",
+			"3w",
+			"OPEN · bug · created 2026-09-21 (stale: older than 3w) · https://github.com/o/r/issues/14\n",
+		},
+		{"glab", "7", "", "opened · bug · created 2026-10-01 · https://gitlab.com/g/p/-/issues/7\n"},
+		{"glab", "7", "520w", "opened · bug · created 2026-10-01 · https://gitlab.com/g/p/-/issues/7\n"},
 	}
 
 	for _, tt := range tests {
-		doc, err := newHost(tt.host, "/code/repo").issueDoc(t.Context(), "FT-"+tt.number, tt.number)
+		doc, err := newHost(tt.host, "/code/repo").issueDoc(t.Context(), "FT-"+tt.number, tt.number, tt.stale)
 		if err != nil || !strings.Contains(doc, tt.want) {
 			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
 		}
