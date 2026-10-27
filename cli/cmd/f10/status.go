@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -71,10 +72,10 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// a bare call reads the current task the way `status <id>` does; a
-	// target that cannot be built only loses the guess, since status only reads
+	// guess that cannot be read only loses the guess, since status only reads
 	if t, err := targetFor(ctx, cmd); err == nil && !all && !t.scoped {
 		if id := bareTaskID(ctx, t, sid); id != "" {
-			if done, err := taskStatus(ctx, cmd, t, id, true); done || err != nil {
+			if done, err := taskStatus(ctx, cmd, t, id, true); done {
 				return err
 			}
 		}
@@ -134,8 +135,9 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 }
 
 // bareTaskID is the task a bare `status` stands for: the session run's,
-// else the one the branch names, else the one the worktree's directory
-// names (a detached HEAD), or "" when nothing names one.
+// else the one the branch names, else the one a linked worktree's directory
+// names on a detached HEAD, or "" when nothing names one. Session first is
+// the reverse of ref.Lookup's cascade: the run is what `status` reports.
 func bareTaskID(ctx context.Context, t *target, sid string) string {
 	if sid != "" {
 		if r, err := state.Load(state.Path(state.Dir(), sid)); err == nil && r.Task != "" {
@@ -147,11 +149,17 @@ func bareTaskID(ctx context.Context, t *target, sid string) string {
 		return r.Label()
 	}
 
+	linked := t.lay.MainRoot != "" && canonPath(t.lay.MainRoot) != canonPath(t.lay.CheckoutRoot)
+	if !linked || gitx.Out(ctx, t.dir, "rev-parse", "--abbrev-ref", "HEAD") != "HEAD" {
+		return ""
+	}
+
 	return ref.Match(t.eff.IDPrefix, filepath.Base(t.lay.CheckoutRoot))
 }
 
-// taskStatus prints what `status <token>` prints. A guessed token whose
-// task has no run to read is not handled, so the bare output stands.
+// taskStatus prints what `status <token>` prints, reporting whether it
+// printed. A guessed token whose task has no checkout here asks the host
+// nothing and prints nothing, so the bare output stands.
 func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, guessed bool) (bool, error) {
 	id, suffix := ref.SplitSuffix(token)
 
@@ -160,21 +168,20 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 		return false, err
 	}
 
-	// a guess that comes to nothing warns about nothing
-	warn := cmd.ErrWriter
-	if guessed {
-		warn = io.Discard
-	}
-
-	in, rows, err := routeTask(warn, taskRoute{
+	route := taskRoute{
 		status:   func() (taskStatusInput, error) { return taskStatusFor(ctx, t, r, suffix) },
 		children: func() ([]taskRow, error) { return parentRows(ctx, t, r) },
 		finished: func() (*taskRow, error) { return finishedRow(ctx, t, r.Head()) },
-	})
+	}
+
+	if guessed {
+		route.children = func() ([]taskRow, error) { return nil, nil }
+		route.finished = func() (*taskRow, error) { return nil, nil }
+	}
+
+	in, rows, err := routeTask(cmd.ErrWriter, route)
 
 	switch {
-	case guessed && errors.Is(err, errNoRunToRead):
-		return false, nil
 	case err != nil:
 		return false, err
 	case in == nil:

@@ -278,6 +278,7 @@ updated   4m ago
 
 Bare `f10 status` reads the current task the way `f10 status <id>` does, gates included: the task this session's run records, else the one the branch or the worktree's name carries.
 With no task to name, a terminal lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
+A named task makes `--json` take the shape `f10 status <id>` prints: a run list, the fallback object, or task rows.
 Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
 
 `f10 status 1042` reads another run: the one in the worktree that has the task's branch.

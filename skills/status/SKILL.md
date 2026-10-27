@@ -13,7 +13,7 @@ The status-line badge draws the same facts as three glyphs.
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - No argument: the answer is below, already run: the current task's (the session's, else the branch's), as `f10 status <task-id>` prints it, or the session's run when no task is named.
-  Print it as point 1 does and stop.
+  Print it as point 1 does, then follow points 2-4 with the task the output names.
 - A task id: another run, the one the task's agent reports from the checkout that has its branch, usually a worktree `f10 start` opened.
   The hook lets this form through, because the answer may need you.
   Follow the numbered points below.

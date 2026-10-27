@@ -301,3 +301,27 @@ func runStatusJSON(t *testing.T, args ...string) []runJSON {
 
 	return runs
 }
+
+// A directory name stands in for a branch only in a linked worktree on a
+// detached HEAD; a branch with no id in a directory named with one guesses none.
+func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
+	repo := tracedRepo(t, "work", "")
+	t.Setenv("F10_STATE_DIR", t.TempDir())
+
+	named := filepath.Join(filepath.Dir(repo), "demo.dm-2")
+	git(t, repo, "worktree", "add", "-q", "-b", "side", named)
+
+	detached := filepath.Join(filepath.Dir(repo), "demo.DM-4-fix")
+	git(t, repo, "worktree", "add", "-q", "--detach", detached)
+
+	for dir, want := range map[string]string{repo: "", named: "", detached: "DM-4"} {
+		tg, err := targetAt(t.Context(), dir, false, "status")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := bareTaskID(t.Context(), tg, ""); got != want {
+			t.Errorf("bareTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
+		}
+	}
+}
