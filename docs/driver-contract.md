@@ -41,7 +41,8 @@ Three are **write verbs**:
 | `comment` | task number; the comment as markdown on stdin | the comment's url alone on a line, or nothing |
 | `update` | task number; the properties to set as flags | ignored |
 
-A `read` doc that shows the task's created date, in any form a reader takes in, lets `stale_after` judge an old task before it is planned; f10 parses nothing from it, and a doc without one is never judged for its age.
+A `read` doc that shows the task's created date, in any form a reader takes in, lets `stale_after` judge an old task before it is planned; f10 parses nothing from it (the agent compares the date itself), and a doc without one is never judged for its age.
+For the host's own issues, `f10 task read` prints the date and marks it `(stale: older than <stale_after>)` itself.
 
 The argument for `read`, `url`, `branch`, `children`, `comment` and `update` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 `index` and `list` take no argument: `index` is the page `f10 task open` with no id opens, `list` the rows `f10 task open --print` writes, in `search`'s row shape.

@@ -611,6 +611,25 @@ func TestGatesTaskJudge(t *testing.T) {
 		t.Errorf("a task judge with nothing behind it: %v", texts(none))
 	}
 
+	// ship stopped at its own judge carries the same leaf; plan is done, so
+	// it is no task judge
+	atShip := taskGates(context.Background(), gateInput{
+		task:     "FT-1",
+		pipeline: gatePipeline,
+		now:      time.Now(),
+		run: &state.Run{
+			Session:  "s1",
+			Task:     "FT-1",
+			Plan:     "done",
+			Ship:     "blocked",
+			Leaf:     "judge",
+			Pipeline: gatePipeline,
+		},
+	})
+	if _, ok := texts(atShip)["judge task"]; ok {
+		t.Errorf("ship's judge read as the task's: %v", texts(atShip))
+	}
+
 	for _, tc := range []struct {
 		name string
 		in   gateInput
@@ -667,5 +686,25 @@ func TestOutcomesTaskJudge(t *testing.T) {
 	o = readOutcomes(&lore.Store{Root: root}, "", "FT-2")
 	if o.taskJudge == nil || o.taskJudge.Verdict != "proceed" || o.changeJudge != nil {
 		t.Errorf("lore = %+v", o)
+	}
+
+	// a lore verdict newer than the file answers; an older one does not
+	for _, tc := range []struct {
+		at   time.Time
+		want string
+	}{
+		{time.Now().Add(time.Hour), "proceed"},
+		{time.Now().Add(-time.Hour), "stop"},
+	} {
+		both := t.TempDir()
+		writeLore(t, both, lore.Entry{
+			Kind: lore.KindVerdict, Change: "FT-1", Human: "h@x", At: tc.at.UTC().Truncate(time.Second),
+			Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "task", Body: "still real",
+		})
+
+		if o := readOutcomes(&lore.Store{Root: both}, storage, "FT-1"); o.taskJudge == nil ||
+			o.taskJudge.Verdict != tc.want {
+			t.Errorf("lore at %v over the file = %+v, want %s", tc.at, o.taskJudge, tc.want)
+		}
 	}
 }

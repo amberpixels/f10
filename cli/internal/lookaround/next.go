@@ -110,17 +110,14 @@ func (r *row) next() {
 }
 
 func stoppedText(r *row) string {
-	phase, status := "ship", r.run.Ship
+	phase := "ship"
 	for _, p := range []string{"capture", "plan"} {
 		if st := r.run.Status(p); st == "failed" || st == "partial" || st == "blocked" {
-			phase, status = p, st
+			phase = p
 		}
 	}
 
-	out := phase + " " + status
-	if r.run.Leaf != "" && phase == "ship" {
-		out += " at " + r.run.Leaf
-	}
+	out := phase + " " + r.run.PhaseText(phase)
 
 	if r.run.Note != "" {
 		out += ": " + r.run.Note
