@@ -7,7 +7,7 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, for a judge entry after `pr`, push its changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
+Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and for a CI half in the flow its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`, for a judge entry after `pr`, push its changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -38,7 +38,7 @@ Deploy has its own confirmation (the **deploy** step).
 
 **Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
 `f10 flow` lists them and what selects each.
-An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` names the half, `cleanup:<targets>` the cleanup targets, `deploy:<env>` the environment).
+An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` names the half, `review:local+ci` runs both into one round and one resolve, `cleanup:<targets>` the cleanup targets, `deploy:<env>` the environment).
 The run starts at the entry after a leading `plan`, which runs only for a task with no plan file.
 `resolve` is never named: a `review` entry runs it.
 A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, routed as the **judge** step says before and after `pr`.
