@@ -329,8 +329,16 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 	var unassign []string
 
 	if p.assignee != "" && !h.GLab() {
+		// gh reads @me as the signed-in login, which must stay on
+		keep := p.assignee
+		if keep == "@me" {
+			if keep, err = h.Login(ctx); err != nil {
+				return err
+			}
+		}
+
 		for _, a := range iss.Assignees {
-			if a.Login != "" && !strings.EqualFold(a.Login, p.assignee) {
+			if a.Login != "" && !strings.EqualFold(a.Login, keep) {
 				unassign = append(unassign, a.Login)
 			}
 		}

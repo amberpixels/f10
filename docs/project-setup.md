@@ -229,12 +229,13 @@ A spike is the exception: its run ends after implement, whatever the pipeline, w
 
 ```yaml
 pipeline_by_area:
-  framework work: engine
-  docs: direct
+  framework work: judged
 ```
 
 A pipeline the user names still wins; a task whose areas map to nothing ships through `default`.
 Each value must name a declared pipeline.
+Never map an area to a pipeline with `push`: `push` runs only in a pipeline the user picked.
+`f10 drive` sends `/f10:ship` without a pipeline, so ship applies the map there too; drive's own planless check reads `default` alone, so a task routed to a planless pipeline still gets drive's `plan`.
 
 ## Drive chain
 
@@ -278,7 +279,7 @@ Where the tracker is the host's issues and the shipment is a PR carrying the tas
 ```yaml
 tracker:
   status:
-    started: In progress   # f10 start, once the worktree exists
+    started: In progress   # f10 start or f10 drive, once the worktree exists
     shipped: Done          # a ship run, after its last step
 ```
 
@@ -286,6 +287,7 @@ Nothing declared, f10 changes no status.
 On host issues a status is `open` or `closed`, the only two an issue has.
 `shipped: closed` there closes the issue when the run ends, before any merge, so declare it only for pipelines that end past the merge (a `deploy`, a `push`); a pipeline ending at `pr` leaves the closing to the PR's closing keyword.
 `report_back: off` stops the comment and the shipped status.
+A pipeline ending in `implement` or `commit` reports nothing back, since nothing left the machine; a spike still posts its answer.
 A tracker whose driver declines `comment` (`docs/driver-contract.md`) gets the shipment in the final report alone.
 
 ## Review

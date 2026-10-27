@@ -190,6 +190,15 @@ func TestHostUpdate(t *testing.T) {
 		t.Errorf("glab update: %v", err)
 	}
 
+	// @me keeps the signed-in login and drops the others
+	f.script("gh api user", `{"login":"Ann"}`)
+	f.script("gh issue edit 7 --add-assignee @me --remove-assignee bob", "")
+
+	if err := newHost("gh", "").update(t.Context(), "7", props{assignee: "@me"}, priorities); err != nil ||
+		!f.called("gh issue edit 7 --add-assignee @me --remove-assignee bob") {
+		t.Errorf("gh update @me: %v", err)
+	}
+
 	for _, p := range []props{
 		{status: "In progress"},
 		{set: []string{"Sprint=7"}},

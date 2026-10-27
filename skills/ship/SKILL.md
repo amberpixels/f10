@@ -16,7 +16,7 @@ Deploy has its own confirmation (the **deploy** step).
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - A pipeline name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`), or named in the user's own words: run that pipeline.
-  Otherwise the pipeline the frontmatter's `pipeline_by_area` maps the task's area to (the fetch brief's areas, or the plan's `Roles` line), else `default`.
+  Otherwise the pipeline the frontmatter's `pipeline_by_area` maps the task's area to (the fetch brief's areas, else the plan's `Areas` line), else `default`.
   Two areas mapping to different pipelines: the deliverable's area wins, as for Roles, and the brief names the other.
   The area map is the project's choice, not yours: never self-select another pipeline, though for tiny work you may suggest one.
   Name the pipeline an area chose, and the area, in one line before the first step.
@@ -73,7 +73,8 @@ After `pr`, the changes folded into the plan are built by the judge step's own r
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
-**Report back**, after the last step (a spike's: implement), when the run has a task id and the frontmatter's `report_back` is not `off`:
+**Report back**, after the last step (a spike's: implement), when the run has a task id, the frontmatter's `report_back` is not `off`, and the shipment left the machine: a pipeline ending in `implement` or `commit` promises it does not, and reports back nothing.
+A spike's answer is the exception: it carries no code, so it is posted.
 
 1. Compose one comment from the shipment rows (each url, the PR/MR, commits by sha) and two or three lines on what changed.
    It leaves the machine: no f10, plan or findings mention under stealth (`conventions/context.md`), and other tasks named by title.
