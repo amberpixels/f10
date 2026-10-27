@@ -177,7 +177,7 @@ var vocab = map[string][]string{
 	"layering":      {layout.LayeringExtends, layout.LayeringReplaces},
 	"tracker.kind":  {"github", "gitlab", "notion", "jira"},
 	"merge_method":  {"squash", "merge", "rebase"},
-	"catchup":       {"rebase", "merge"},
+	"catchup":       {"rebase", "merge", "off"},
 	"traces":        {"on", "off"},
 	"lore":          {"local", "committed"},
 	"review_traces": {"on", "off"},

@@ -185,8 +185,9 @@ The bundle's base is the one `After:` its members name outside it; a line naming
 Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
-Before the first pipeline step, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
+Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
 A conflict there stops ship and hands off to `/f10:catchup`, which settles it with both sides kept.
+Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
 The pr step opens the PR or MR against the base branch, so it is stacked and the host retargets it when the base merges; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
 
@@ -243,7 +244,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A branch another task started with `--after` on this one has `branch.<name>.f10-after` and `.f10-after-branch` in local config.
    Both are cleared, since the base is in the default branch now and the dependent's pr targets it from here.
    The dependent branched before that code existed, so it is marked `branch.<name>.f10-landed` with the base task's id.
-   Its next ship, or `/f10:catchup`, brings the default branch in before anything else runs and clears the mark.
+   `/f10:catchup`, or its next ship unless `catchup: off`, brings the default branch in before anything else runs and clears the mark.
    A note names each dependent.
 7. **The plan is archived**: with in-repo storage `<worktree>/.f10/plans/<ID>.md` moves to main's `.f10/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken, older archived versions first); with out-of-tree storage it moves within the shared root.
    With the branch checked out in main, the plan moves within main's `.f10/plans/`, after main's existing archive.

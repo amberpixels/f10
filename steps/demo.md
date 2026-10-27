@@ -15,6 +15,12 @@ Everything before execution is the same, and a static report carries the script 
 2. **Say what changed, in the user's words**: the report's headline.
    What the app did before, what it does now, what a user will notice; two or three sentences, derived from the diff, no handler names, component names or file paths.
    If nothing is visible from outside, say so.
+
+   **In a ship flow**, a change with nothing to show ends the step here: one line, `demo: skipped - <why>`, a normal end.
+   Nothing to show means none of a UI change, a change in what the CLI prints or accepts, an API response, or a file the app writes for its user; a change to tests, prose, CI or internals only is the usual case, and a `Kind: refactor` plan always skips.
+   It comes before point 4, so a skipped demo asks for no overlay and creates no state, evidence or report.
+   In doubt, demo runs.
+   Standalone `/f10:demo` never skips.
 3. **Derive the demo script**: entry point, needed state, ordered steps, what to look for at each.
    The task's **claims** say which effects matter, the diff says which exist; where they disagree, follow the diff and report the difference.
 4. **Pick the executor** from the `demo` overlay: how to launch the app, seed baseline state, the base url, test credentials.

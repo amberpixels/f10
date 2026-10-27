@@ -412,7 +412,7 @@ func TestFinishReleasesDependents(t *testing.T) {
 	if !strings.Contains(
 		out,
 		"GH-8/slug depended on GH-1: the dependency is cleared and its pr targets main now; "+
-			"its next ship or /f10:catchup brings main in first",
+			"/f10:catchup, or its next ship unless catchup is off, brings main in first",
 	) {
 		t.Errorf("the release note is missing:\n%s", out)
 	}

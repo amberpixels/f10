@@ -25,9 +25,10 @@ Every f10 run starts by loading it.
 - **findings** - `<storage root>/reviews/<TASK-ID>/<round>.md` (`steps/review.md`).
 - **verdict file** - `<storage root>/verdicts/<key>/<n>.md`, one per judge run, `<key>` the task id or, for an idea, a kebab slug of it (`steps/judge.md` point 8).
 - **spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's answer (`steps/implement.md`).
-- **shipment** - what the ship pipeline leaves, named by its **last step**: verified code (`implement`, reported in prose), local commits (`commit`: a sha), pushed commits (`push`: the branch and a sha), an open PR/MR (`pr`: its url), a running environment (`deploy`: its url), or a project-defined step's output.
+- **shipment** - what the ship flow leaves, named by its **last delivering entry**, one of `implement`, `commit`, `push`, `pr`, `deploy` or a project-defined step with a `Shipment:` line: verified code (`implement`, reported in prose), local commits (`commit`: a sha), pushed commits (`push`: the branch and a sha), an open PR/MR (`pr`: its url), a running environment (`deploy`: its url), or a project-defined step's output.
   A project-defined step declares its own in its overlay, on a `Shipment:` line naming each row, its label and what it holds (`Shipment: report - the published report's url`).
   It carries no explicit-selection rule like `push`'s: the project naming it in a flow it declares is the selection.
+  A `judge` or `demo` after it adds rows (a demo's report path or url), never replaces them: a flow ending `pr judge demo` ships the PR.
   A spike's shipment is its spike report, whatever the flow.
 
 **Step headers.**

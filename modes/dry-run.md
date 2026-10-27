@@ -23,6 +23,7 @@ Routing
 Step: <name>
   adapter         <skill to invoke | CLI command, quoted - NOT run>
   overlay         <APPLIED .f10/instructions/<name>.md | none>
+  guard           <catchup <method> onto <base> | catchup skipped (catchup: off | default branch | no recorded base)>   (ship only: before implement, pr and a change judge)
   would produce   <output path / action, e.g. write <storage root>/plans/ABC-1042.md>
   (one block per step on the path; for ship, per flow entry in order)
 

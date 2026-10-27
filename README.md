@@ -46,12 +46,12 @@ flowchart LR
     demo -.->|"screenshots · a scenario to click"| evidence(["what it does"])
     pr -.-> expl[explain]
     expl -.->|"what it was · what it is"| told(["what changed"])
-    implement -.->|"base moved"| catch[catchup]
+    implement -.->|"base moved: before implement, pr and judge"| catch[catchup]
     catch -.->|"merge or rebase · conflicts settled"| uptodate(["on its base"])
 ```
 
 Solid arrows are the default flow.
-Dashed ones are optional: `brainstorm`, `judge`, `demo`, `explain` and `catchup` when you ask, the rest where a project declares them.
+Dashed ones are optional: `brainstorm`, `judge`, `demo`, `explain` and `catchup` when you ask, the rest where a project declares them; ship also catches up on its own when the base moved.
 Each skill is an **entry point** into the chain:
 
 | Skill | Runs | Stops at |
@@ -153,7 +153,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 - **Explain** - *what is this*, for a reader who knows the codebase.
   A change becomes two to five **pairs**, what it was and what it is now; a concept, file, package or function gets three or four sentences from the code.
   Cheaper than a demo, so run it first.
-- **Catchup** - brings a branch up to its base (the branch `f10 start --after` recorded, else the default branch), by merge or rebase (`catchup: merge | rebase` under Hosting & PR; rebase by default), keeping both sides' intent: lock files regenerated, only truly ambiguous files put to you in one questionnaire.
+- **Catchup** - brings a branch up to its base (the branch `f10 start --after` recorded, else the default branch), by merge or rebase (the `catchup: merge | rebase | off` frontmatter key; rebase by default), keeping both sides' intent: lock files regenerated, only truly ambiguous files put to you in one questionnaire.
   Red verify after a clean integration is a semantic conflict, settled the same way.
   Nothing to settle is a correct run.
   Ship hands off here on a conflict.

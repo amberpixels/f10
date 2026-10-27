@@ -59,7 +59,7 @@ Go service for invoices.
 | `layering` | `extends` or `replaces`, in a linked worktree only | `extends` |
 | `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, an optional `priority` map from the four levels to the host labels that carry them, and an optional `status` map from `started` and `shipped` to the tracker's own words ([Reporting back](#reporting-back)) | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority; no status moved |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
-| `catchup` | `rebase` or `merge`: how a branch is brought up to date with its base | `rebase` |
+| `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and `f10 drive` running | `rebase` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |

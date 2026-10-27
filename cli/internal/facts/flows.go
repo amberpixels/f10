@@ -187,6 +187,9 @@ func checkFlow(name string, flow []string) []string {
 		case step == "review" && !anyHalf(arg):
 			bad = append(bad, fmt.Sprintf("flows.%s: %q names no review half; write review:local, review:ci "+
 				"or review:local+ci", name, e))
+		case step == "catchup":
+			bad = append(bad, fmt.Sprintf("flows.%s: catchup is never an entry: ship catches up before implement, "+
+				"pr and a change judge; the catchup key picks merge, rebase or off", name))
 		case step == "plan" && i > 0:
 			bad = append(bad, fmt.Sprintf("flows.%s: plan comes first, since ship runs only the entries after it; "+
 				"stale_after judges a task before planning it", name))
