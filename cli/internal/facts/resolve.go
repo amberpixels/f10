@@ -440,7 +440,8 @@ func proseTrackerKind(lower string) string {
 	words := map[string]bool{}
 
 	for _, w := range strings.FieldsFunc(mdline.Prose(lower), isWordBreak) {
-		words[strings.TrimSuffix(strings.TrimRight(w, "."), "'s")] = true
+		w = strings.Trim(w, "_'‘’.")
+		words[strings.TrimSuffix(strings.TrimSuffix(w, "'s"), "’s")] = true
 	}
 
 	for _, k := range []struct{ needle, kind string }{

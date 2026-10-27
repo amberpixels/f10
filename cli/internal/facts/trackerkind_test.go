@@ -20,6 +20,9 @@ func TestProseTrackerKind(t *testing.T) {
 		{name: "bold", lower: "**jira**. ids look like abc-1234.", want: "Jira"},
 		{name: "link text", lower: "the [notion](https://notion.so/x) board", want: "Notion"},
 		{name: "possessive", lower: "notion's database", want: "Notion"},
+		{name: "typographic possessive", lower: "notion’s database", want: "Notion"},
+		{name: "single quotes", lower: "the 'jira' board", want: "Jira"},
+		{name: "underscore emphasis", lower: "_jira_. ids look like abc-1234.", want: "Jira"},
 		{
 			name:  "prose beside a span",
 			lower: "notion database; create with the `create-github-task` skill",

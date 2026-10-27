@@ -76,21 +76,23 @@ func Unmark(s string) string {
 // name quoted in code. A backtick with no closing one on its line stays.
 func Prose(s string) string {
 	lines := strings.Split(s, "\n")
-	fenced := false
+	fence := "" // the open fence's character run, closed only by the same one
 
 	for i, line := range lines {
 		t := strings.TrimSpace(line)
-		fence := strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~")
 
 		switch {
-		case fence || fenced:
+		case fence != "":
+			if strings.HasPrefix(t, fence) {
+				fence = ""
+			}
+
+			lines[i] = " "
+		case strings.HasPrefix(t, "```"), strings.HasPrefix(t, "~~~"):
+			fence = t[:3]
 			lines[i] = " "
 		default:
 			lines[i] = codeSpanRe.ReplaceAllString(line, " ")
-		}
-
-		if fence {
-			fenced = !fenced
 		}
 	}
 

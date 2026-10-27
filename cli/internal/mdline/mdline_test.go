@@ -78,6 +78,7 @@ func TestProse(t *testing.T) {
 		{in: "invoke the `create-notion-task` skill", want: "invoke the   skill"},
 		{in: "before\n```sh\ngh issue view\n```\nafter", want: "before\n \n \n \nafter"},
 		{in: "a lone ` backtick", want: "a lone ` backtick"},
+		{in: "~~~\n```\nnotion\n~~~\nafter", want: " \n \n \n \nafter"},
 	}
 
 	for _, c := range cases {
