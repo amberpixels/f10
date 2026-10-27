@@ -253,7 +253,7 @@ func withImages(ctx context.Context, doc, dir string, d images.Downloader) strin
 // In-repo storage under stealth keeps .f10/ in info/exclude first, since
 // a read may be the first thing to create it.
 func (t *target) imagesDir(ctx context.Context, id string) string {
-	if t.sharedPlansDir() == "" && t.eff.Visibility == "stealth" {
+	if !t.outOfTree() && t.eff.Visibility == "stealth" {
 		_, _ = excludeF10(ctx, t.lay.CheckoutRoot)
 	}
 

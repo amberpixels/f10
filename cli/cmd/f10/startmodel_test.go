@@ -66,3 +66,33 @@ func TestResolveModel(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentArgs(t *testing.T) {
+	cases := []struct {
+		name, model, plansDir, worktree string
+		want                            string
+	}{
+		{
+			name: "worktree beside main", plansDir: "/code/repo/.f10/plans", worktree: "/code/repo.GH-1",
+			want: "--add-dir /code/repo/.f10",
+		},
+		{
+			name: "with a model", model: "opus", plansDir: "/code/repo/.f10/plans", worktree: "/code/repo.GH-1",
+			want: "--model opus --add-dir /code/repo/.f10",
+		},
+		{
+			name: "out of tree", plansDir: "/home/me/.f10/repo/plans", worktree: "/code/repo.GH-1",
+			want: "--add-dir /home/me/.f10/repo",
+		},
+		{name: "main itself", plansDir: "/code/repo/.f10/plans", worktree: "/code/repo"},
+		{name: "worktree keeping its own .f10", worktree: "/code/repo.GH-1"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := strings.Join(agentArgs(c.model, c.plansDir, c.worktree), " "); got != c.want {
+				t.Errorf("agentArgs = %q, want %q", got, c.want)
+			}
+		})
+	}
+}

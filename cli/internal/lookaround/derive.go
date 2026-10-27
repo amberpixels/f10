@@ -526,11 +526,14 @@ func (r *row) stage(withLocal bool, since time.Time) {
 
 	switch {
 	case r.pr != nil && r.pr.Status == forge.Merged && !r.pr.MergedAt.Before(since):
+		// only a worktree left on disk still holds work; a branch left
+		// behind is a note on a done row
+		r.Where.BranchLeft = !r.finished && r.worktree == nil &&
+			((withLocal && r.branch != nil) || (r.pr.HeadExists != nil && *r.pr.HeadExists))
+
 		switch {
-		case withLocal && (r.worktree != nil || r.branch != nil) && !r.finished:
+		case withLocal && r.worktree != nil && !r.finished:
 			set(StageMergedUnfinished, FromLocal)
-		case r.pr.HeadExists != nil && *r.pr.HeadExists && !r.finished:
-			set(StageMergedUnfinished, FromGuessed)
 		case withLocal:
 			set(StageDone, FromLocal)
 		default:

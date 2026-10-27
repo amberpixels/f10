@@ -133,6 +133,27 @@ func TestParity(t *testing.T) {
 			},
 		},
 		{
+			name: "worktree holding plans from before shared storage keeps its own",
+			setup: func(t *testing.T, _ string) string {
+				t.Helper()
+				repo := mkRepo(t)
+				writeInstr(t, repo, map[string]string{"project.md": "- **Project** - main\n"})
+				wt := addWorktree(t, repo)
+				mkdir(t, filepath.Join(wt, ".f10", "plans"))
+				return wt
+			},
+		},
+		{
+			name: "worktree holding reviews from before shared storage keeps its own",
+			setup: func(t *testing.T, _ string) string {
+				t.Helper()
+				repo := mkRepo(t)
+				wt := addWorktree(t, repo)
+				mkdir(t, filepath.Join(wt, ".f10", "reviews"))
+				return wt
+			},
+		},
+		{
 			name: "nested instructions below the root are ignored",
 			setup: func(t *testing.T, _ string) string {
 				t.Helper()

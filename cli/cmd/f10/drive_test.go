@@ -582,6 +582,9 @@ func TestDriveTakesASavedPlanAsPlanned(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "first"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	// the shared storage root sits outside the worktree, so the agent may write there
+	addDir := " -- --add-dir " + filepath.Dir(fx.in.plansDir)
+	fx.f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:1"+addDir, "{}")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 

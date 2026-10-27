@@ -176,7 +176,7 @@ type finishInput struct {
 	yes       bool
 	merge     bool   // merge the PR even when someone else opened it
 	local     bool   // leave the PR open and clean up only what is here
-	plansDir  string // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	plansDir  string // the plans dir every checkout shares, or "" from a worktree keeping its own .f10
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
 	// close is a bundle's riders the PR delivers, closed with the lead; nil
@@ -814,21 +814,20 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 	return notes, nil
 }
 
-// archivePlan moves the task's plan out of the worktree before the worktree
-// goes: into main's plans/archive/ for in-repo storage, into the shared
-// root's archive/ for out-of-tree. Prior versions already archived beside it
-// move along. A missing plan is a note, since a task shipped without one
-// still needs cleaning up; a plan that cannot be moved is an error, since
-// removing the worktree would delete it.
+// archivePlan moves the task's plan into the shared plans dir's archive/,
+// main's when that dir is "". A worktree keeping its own .f10 holds the plan
+// and its prior versions, which move out with it. A missing plan is a note,
+// since a task shipped without one still needs cleaning up; a plan that
+// cannot be moved is an error, since removing the worktree would delete it.
 func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
-	src := taskPlansDir(worktree, plansDir)
+	plan := taskPlan(worktree, plansDir, id)
+	src, own := filepath.Dir(plan), filepath.Join(worktree, ".f10", "plans")
 	dst := filepath.Join(main, ".f10", "plans", "archive")
 
 	if plansDir != "" {
 		dst = filepath.Join(plansDir, "archive")
 	}
 
-	plan := filepath.Join(src, id+".md")
 	if !exists(plan) {
 		return "", fmt.Sprintf("no plan at %s, nothing archived", plan), nil
 	}
@@ -837,10 +836,10 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
 	}
 
-	// in-repo: older versions the worktree archived go first, so the
-	// current plan ends up with the highest number; main's own archive is
-	// already in place
-	if plansDir == "" && !samePath(worktree, main) {
+	// a worktree's own: older versions it archived go first, so the current
+	// plan ends up with the highest number; the shared archive is already
+	// in place
+	if samePath(src, own) && !samePath(worktree, main) {
 		older, _ := filepath.Glob(filepath.Join(src, "archive", id+".*.md"))
 		for _, o := range older {
 			if err := os.Rename(o, freeArchiveName(dst, id)); err != nil {
@@ -858,7 +857,7 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 }
 
 // removeImages drops the images `task read` downloaded for the task into
-// the shared root, or into main's .f10/ for a read made from main; a
+// the shared root (main's .f10/ from a worktree keeping its own); a
 // worktree's own go with the worktree. A failure is a note: the task is
 // finished either way.
 func removeImages(main, plansDir, id string) string {
@@ -874,10 +873,22 @@ func removeImages(main, plansDir, id string) string {
 	return ""
 }
 
-// taskPlansDir is where a task's plan sits: the shared plans dir with
-// out-of-tree storage, else the .f10/plans of the checkout working on it.
+// taskPlansDir is where a task's plan sits: the shared plans dir, else the
+// .f10/plans of a worktree keeping its own .f10.
 func taskPlansDir(checkout, plansDir string) string {
 	return cmp.Or(plansDir, filepath.Join(checkout, ".f10", "plans"))
+}
+
+// taskPlan is the task's plan file: in the shared plans dir, unless only
+// the checkout's own .f10/plans holds it, as a worktree from before storage
+// moved to main's does.
+func taskPlan(checkout, plansDir, id string) string {
+	plan := filepath.Join(taskPlansDir(checkout, plansDir), id+".md")
+	if own := filepath.Join(checkout, ".f10", "plans", id+".md"); !exists(plan) && exists(own) {
+		return own
+	}
+
+	return plan
 }
 
 // freeArchiveName is `<id>.md` under dir when free, else `<id>.<N>.md` with

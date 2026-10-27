@@ -63,8 +63,8 @@ func fileOutcomes(storageRoot, task string) outcomes {
 }
 
 // finishedStorage is where a finished task's findings and verdicts still
-// are: the shared root with out-of-tree storage, else the .f10 of the
-// checkout its last run was in, while that is on disk.
+// are: the shared root, else the .f10 of the checkout its last run was in,
+// while that is on disk.
 func finishedStorage(shared, checkout string) string {
 	if shared != "" {
 		return shared

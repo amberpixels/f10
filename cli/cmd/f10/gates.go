@@ -927,7 +927,7 @@ type gateSource struct {
 	review facts.Review
 	store  *lore.Store
 	host   *host
-	shared string // the out-of-tree storage root, "" in-repo
+	shared string // the storage root every checkout shares
 }
 
 // storageFor is where a task's findings and verdicts are: its checkout's

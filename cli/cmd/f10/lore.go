@@ -162,12 +162,11 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 	}, nil
 }
 
-// localLoreRoot is the lore root every checkout of the project shares: an
-// in-repo storage root is per checkout, and a task's worktree is removed
-// when the task finishes, so a worktree writes into main's storage root.
+// localLoreRoot is the lore root every checkout of the project shares: the
+// storage root's, or main's for a worktree that keeps its own .f10 from
+// before storage moved there.
 func localLoreRoot(lay *layout.Layout) string {
-	inRepo := lay.StorageRoot == filepath.Join(lay.CheckoutRoot, ".f10")
-	if inRepo && lay.MainRoot != "" {
+	if lay.LegacyStorage && lay.MainRoot != "" {
 		return filepath.Join(lay.MainRoot, ".f10", "lore")
 	}
 

@@ -169,11 +169,17 @@ func (t *target) host() (host, error) {
 }
 
 // driverPaths are where a driver may sit, in lookup order: this checkout's
-// storage root, then beside each instruction layer, the last first. A
-// worktree finds main's driver where it finds main's instructions, and one
-// that replaces main's instructions keeps main's driver out too.
+// own .f10 (or the out-of-tree root), then beside each instruction layer,
+// the last first. A worktree finds main's driver where it finds main's
+// instructions, and one that replaces main's instructions keeps main's
+// driver out too, so the shared storage root is not the first stop.
 func (t *target) driverPaths() []string {
-	paths := []string{filepath.Join(t.lay.StorageRoot, "driver")}
+	own := filepath.Join(t.lay.CheckoutRoot, ".f10")
+	if t.outOfTree() {
+		own = t.lay.StorageRoot
+	}
+
+	paths := []string{filepath.Join(own, "driver")}
 
 	for _, layer := range slices.Backward(t.lay.Layers) {
 		if p := filepath.Join(filepath.Dir(layer.Dir), "driver"); !slices.Contains(paths, p) {
@@ -249,15 +255,30 @@ func (t *target) trackerDeclared() bool {
 	return false
 }
 
-// sharedPlansDir is the plans dir every worktree shares with out-of-tree
-// storage, or "" with in-repo storage, where each worktree keeps its own
-// plans under its .f10/plans.
+// sharedPlansDir is the plans dir every checkout shares: main's .f10/plans
+// with in-repo storage, the out-of-tree root's otherwise. It is "" only in
+// a worktree that keeps its own .f10 from before storage moved to main's.
 func (t *target) sharedPlansDir() string {
-	if t.lay.StorageRoot == filepath.Join(t.lay.CheckoutRoot, ".f10") {
+	if t.lay.LegacyStorage {
 		return ""
 	}
 
 	return t.pb.PlansDir
+}
+
+// sharedRoot is the storage root every checkout shares: this layout's,
+// or main's .f10 from a worktree keeping its own.
+func (t *target) sharedRoot() string {
+	if t.lay.LegacyStorage && t.lay.MainRoot != "" {
+		return filepath.Join(t.lay.MainRoot, ".f10")
+	}
+
+	return t.lay.StorageRoot
+}
+
+// outOfTree says the storage root is ~/.f10/<project>, outside every checkout.
+func (t *target) outOfTree() bool {
+	return len(t.lay.Layers) == 1 && t.lay.Layers[0].Label == "out-of-tree"
 }
 
 // follow performs the side effect a url deserves, or prints it when the

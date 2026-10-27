@@ -21,7 +21,8 @@ import (
 type view struct {
 	CheckoutRoot    string              `json:"checkoutRoot"`
 	StorageRoot     string              `json:"storageRoot"`
-	Instructions    string              `json:"instructions"` // source description, f10-load-project.sh wording
+	LegacyStorage   bool                `json:"legacyStorage,omitempty"` // a worktree keeping its own .f10
+	Instructions    string              `json:"instructions"`            // source description, f10-load-project.sh wording
 	NestedIgnored   string              `json:"nestedIgnored,omitempty"`
 	Remote          string              `json:"remote,omitempty"`
 	PlansDir        string              `json:"plansDir"`
@@ -77,6 +78,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	v := &view{
 		CheckoutRoot:    lay.CheckoutRoot,
 		StorageRoot:     lay.StorageRoot,
+		LegacyStorage:   lay.LegacyStorage,
 		Instructions:    lay.Source,
 		NestedIgnored:   lay.NestedIgnored,
 		Remote:          pb.RemoteURL,
@@ -141,6 +143,12 @@ func renderHuman(w io.Writer, v *view) {
 
 	headerRow(w, "checkout root", v.CheckoutRoot, limit, plain)
 	headerRow(w, "storage root", v.StorageRoot, limit, plain)
+
+	if v.LegacyStorage {
+		note := "this worktree's own .f10: it holds task files from before storage moved to main's"
+		headerRow(w, "note", note, limit, faint)
+	}
+
 	headerRow(w, "instructions", v.Instructions, limit, plain)
 
 	if v.NestedIgnored != "" {

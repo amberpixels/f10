@@ -61,7 +61,7 @@ With no map, or none claiming it, `person` is that identity as its source spelle
 | `task` | the tracker's row: `id`, `title`, `url`, `status`, `priority` (`urgent`, `high`, `medium`, `low`), `assignee` (the first, where the tracker gives one), `after` (the base its body names), `created` (when the tracker created it, where it says); absent for a request naming no task |
 | `stage`, `stage_from` | below |
 | `who` | `agent` and `agent_status` (the Herdr agent in the task's worktree: `idle`, `working`, `done`), `model` (the one `f10 start --model` recorded on the branch), `author` (the request's), `assignees` (the tracker's first, then the request's), `reviewers` (requested and not yet heard from), `committers` (the distinct author emails on the row's commits, where they were read), `person` (below) |
-| `where` | `pr` (`number`, `title`, `url`, `state` `open`, `merged` or `closed`, `draft`, `head`, `base`, `mergeable` `clean`, `conflicts` or `blocked`, `checks` `green`, `red` or `pending`), `branch`, `worktree`, `workspace` |
+| `where` | `pr` (`number`, `title`, `url`, `state` `open`, `merged` or `closed`, `draft`, `head`, `base`, `mergeable` `clean`, `conflicts` or `blocked`, `checks` `green`, `red` or `pending`), `branch`, `worktree`, `workspace`, `branch_left` (a merged row whose branch outlived its worktree) |
 | `review` | `step` (the step the state block names), `round`, `open` (findings awaiting a verdict), `asks` (questions waiting on a person), `approvals`, `changes_requested`, `remote_open` (the declared remote reviewer left one unhandled); absent with nothing to say |
 | `blocked_by` | the base task holding the row, when `stage` is `blocked` for that reason |
 | `last_activity` | the latest the sources saw: the request's update or merge, a run's report, a findings file's write |
@@ -80,7 +80,7 @@ Rows are listed in this order:
 | `pr-open` | an open request nobody has reviewed |
 | `implementing` | code being written: a live run before `pr`, or a draft request |
 | `planned` | a plan saved, no code yet |
-| `merged-unfinished` | merged in the window, its worktree, local branch or host branch still there; releases its dependents like `done` |
+| `merged-unfinished` | merged in the window, its worktree still on disk; releases its dependents like `done` |
 | `next` | open on the tracker, not started |
 | `done` | merged in the window, nothing left behind |
 
@@ -100,7 +100,8 @@ One row at a time, in this order; the first rule that matches decides the stage,
 A request is the row's **current** one: its open request, else the one merged latest in the window.
 A request merged before the window, or closed unmerged, is no request.
 
-1. **Merged** in the window: `merged-unfinished` when a worktree or local branch is still here (`local`), or the head branch still exists on the host (`guessed`), unless the ledger holds the task finished; else `done` (`local` when the local collector ran, `guessed` otherwise).
+1. **Merged** in the window: `merged-unfinished` when its worktree is still here (`local`), unless the ledger holds the task finished; else `done` (`local` when the local collector ran, `guessed` otherwise).
+   A done row whose local branch or host head branch is still there carries `where.branch_left`, drawn as a faint `branch left` on the row: a note, not a stage, and no next action.
 2. **Asks**: a live run holding an ask (`local`); the state block's `asks` above zero (`trace`).
 3. **Stopped**: a live run failed or blocked (`local`); the latest verdict file says rethink or stop, no run is live, and the task is still open or has a request (`local`).
 4. **Ready**: an open request, not a draft, mergeable, checks not red, and the state block says a review round ran with nothing open (`trace`), or, with no block, the host's review decision is approved (`guessed`).

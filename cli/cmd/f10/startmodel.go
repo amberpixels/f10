@@ -84,3 +84,21 @@ func modelArgs(m string) []string {
 
 	return []string{"--model", m}
 }
+
+// agentArgs is the agent's command line: the model, and the storage root
+// when it sits outside the worktree, so writing plans and findings there
+// asks no permission. plansDir is the shared plans dir, "" for a worktree
+// keeping its own .f10.
+func agentArgs(m, plansDir, worktree string) []string {
+	args := modelArgs(m)
+	if plansDir == "" {
+		return args
+	}
+
+	storage := filepath.Dir(plansDir)
+	if rel, err := filepath.Rel(worktree, storage); err == nil && !strings.HasPrefix(rel, "..") {
+		return args
+	}
+
+	return append(args, "--add-dir", storage)
+}

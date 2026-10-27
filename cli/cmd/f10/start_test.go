@@ -1210,6 +1210,8 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 	}
 
 	f := afterFixture(t, "/code/repo.GH-7-base", "ccc")
+	addDir := " -- --add-dir " + filepath.Dir(plans)
+	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7"+addDir, "{}")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
 

@@ -15,7 +15,7 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
      Otherwise compare the created date the fetch adapter's output or a driver's doc shows against `date -u +%F`.
      No created date in what was read: not judged, one line in the brief; never call the adapter again to find one.
      Fresh: nothing to do.
-   - **Already judged**: a verdict file with `subject: task <id>` reading `proceed`, written within `stale_after` (its mtime), skips the judge, one line naming it; look under this run's `<storage root>/verdicts/<id>/` and, from a linked worktree with in-repo storage, the main checkout's.
+   - **Already judged**: a verdict file with `subject: task <id>` reading `proceed`, written within `stale_after` (its mtime), skips the judge, one line naming it; look under this run's `<storage root>/verdicts/<id>/`.
      Any other verdict, or an older proceed, is judged again.
    - **Anyway**: the steering word `anyway` (`/f10:plan <id> anyway`, `/f10:ship <id> anyway`, or `f10 drive --answer <id> anyway` to a blocked driven run) is the user's override.
      Write it as a verdict file like any other (`subject: task <id>`, `verdict: proceed`, `reason: planned anyway by the user`, `run: before plan`, `decision: overridden`), so later runs skip the judge by the rule above, and say so in one line in the brief.

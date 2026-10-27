@@ -32,7 +32,7 @@
   "rows": [
     {
       "key": "FT-1",
-      "stage": "merged-unfinished",
+      "stage": "done",
       "stage_from": "guessed",
       "who": {
         "author": "ann",
@@ -47,12 +47,11 @@
           "head": "FT-1/slug",
           "base": "main"
         },
-        "branch": "FT-1/slug"
+        "branch": "FT-1/slug",
+        "branch_left": true
       },
       "last_activity": "2026-10-20T10:00:00Z",
-      "next": {
-        "command": "f10 finish FT-1"
-      }
+      "next": {}
     }
   ]
 }

@@ -70,7 +70,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 	gh := &probe.Probes{CLI: probe.Signal{Value: "gh"}}
 
 	notion := &target{
-		lay: &layout.Layout{StorageRoot: root},
+		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: root},
 		pb:  gh,
 		eff: &facts.Effective{
 			TrackerKind: "Notion",
@@ -85,7 +85,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 	}
 
 	github := &target{
-		lay: &layout.Layout{StorageRoot: root},
+		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: root},
 		pb:  gh,
 		eff: &facts.Effective{
 			TrackerKind: "GitHub Issues",

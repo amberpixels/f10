@@ -250,6 +250,7 @@ function model(board) {
       pr: pr ? pr.number : 0,
       pr_url: pr ? (pr.url || "") : "",
       who: who(r),
+      branch_left: !!(r.where && r.where.branch_left),
       next: (r.next && (r.next.command || r.next.text)) || "",
       next_command: !!(r.next && r.next.command)
     };
@@ -312,6 +313,7 @@ function render(board, m) {
       tail.push(prs.join(" + "));
     }
     if (r.who) tail.push('<span class="who">' + esc(r.who) + "</span>");
+    if (r.branch_left) tail.push('<span class="next">branch left</span>');
     if (r.next) tail.push(r.next_command ? "<code>" + esc(r.next) + "</code>" : '<span class="next">' + esc(r.next) + "</span>");
     out += '<li class="row">' + link(r.url, r.key, "key") +
       '<span class="stage" data-stage="' + esc(r.stage) + '">' + esc(r.stage) + "</span>" +

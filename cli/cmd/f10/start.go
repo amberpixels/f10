@@ -376,7 +376,7 @@ type startInput struct {
 	flowKept bool                                  // drive records the flow itself, keeping one the branch has
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	base     string                                // branch whose ref is the base, or ""
-	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	plansDir string                                // the plans dir every checkout shares, or "" from a worktree keeping its own .f10
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
 	model    string                                // the agent's --model, resolved, or "" for claude's default
@@ -757,13 +757,20 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	}
 
 	if launch {
+		// --add-dir on a missing dir may be refused; main's .f10 normally exists
+		if in.plansDir != "" {
+			if err := os.MkdirAll(filepath.Dir(in.plansDir), 0o750); err != nil {
+				return openedTask{}, fmt.Errorf("creating the storage root: %w", err)
+			}
+		}
+
 		if err := herdr.StartAgent(
 			ctx,
 			path,
 			agent,
 			agentKind,
 			ws.RootPane,
-			modelArgs(in.model),
+			agentArgs(in.model, in.plansDir, path),
 			shellWait(in.progress, ws.RootPane),
 		); err != nil {
 			if a.moved != "" {
@@ -1006,23 +1013,31 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 	return fmt.Sprintf("%s %s is at the same commit as the default branch %s", base.flag, base.ref, def)
 }
 
-// locatePlan finds the base task's plan. In-repo storage keeps a plan beside
-// its branch, so it is reachable only through that branch's worktree;
-// out-of-tree storage shares one dir. The notes name what was not found, so
-// a prompt that cannot cite the plan is explained beneath the report.
+// locatePlan finds the base task's plan: in the plans dir every checkout
+// shares, else in the base's worktree when that keeps its own .f10 from
+// before storage moved to main's. The notes name what was not found, so a
+// prompt that cannot cite the plan is explained beneath the report.
 func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string {
-	if plansDir == "" {
-		wt := worktreeOf(wts, dep.branch)
-		if wt == "" {
-			return []string{
-				dep.task + " has no checkout here, so its plan is out of reach: the prompt names the task alone",
-			}
-		}
-
-		plansDir = filepath.Join(wt, ".f10", "plans")
+	var candidates []string
+	if plansDir != "" {
+		candidates = append(candidates, filepath.Join(plansDir, dep.task+".md"))
 	}
 
-	dep.plan = filepath.Join(plansDir, dep.task+".md")
+	if wt := worktreeOf(wts, dep.branch); wt != "" {
+		candidates = append(candidates, filepath.Join(wt, ".f10", "plans", dep.task+".md"))
+	}
+
+	if len(candidates) == 0 {
+		return []string{
+			dep.task + " has no checkout here, so its plan is out of reach: the prompt names the task alone",
+		}
+	}
+
+	// the first that exists, else the first, which the note below names
+	dep.plan = candidates[0]
+	if i := slices.IndexFunc(candidates, exists); i >= 0 {
+		dep.plan = candidates[i]
+	}
 
 	if _, err := os.Stat(dep.plan); err != nil {
 		return []string{fmt.Sprintf("%s has no plan yet at %s", dep.task, dep.plan)}
@@ -1042,12 +1057,16 @@ type adoption struct {
 	note  string
 }
 
-// adoptPlan settles which plan of the task the worktree reads, moving the
-// one main saved into the worktree: moved, not copied, so a later ship in
-// main finds none. Out-of-tree storage shares one dir, so nothing moves.
-// A worktree that holds its own plan keeps it, and main's stays in place.
+// adoptPlan settles which plan of the task the worktree reads: in place
+// from shared storage, unless the worktree keeps its own .f10 with a plan.
+// With plansDir "" main's plan moves into the worktree, not copied, so a
+// later ship in main finds none.
 func adoptPlan(main, worktree, plansDir, id string) (adoption, error) {
 	if plansDir != "" {
+		if own := planIf(filepath.Join(worktree, ".f10", "plans", id+".md")); own != "" {
+			return adoption{plan: own}, nil
+		}
+
 		return adoption{plan: planIf(filepath.Join(plansDir, id+".md"))}, nil
 	}
 
@@ -1075,7 +1094,7 @@ func adoptPlan(main, worktree, plansDir, id string) (adoption, error) {
 }
 
 // mainPlan is the plan main saved for the task where it could move into the
-// worktree, else "": out-of-tree storage and the task checked out in main
+// worktree, else "": shared storage and the task checked out in main
 // itself have nothing to move.
 func mainPlan(main, worktree, plansDir, id string) string {
 	src := filepath.Join(main, ".f10", "plans", id+".md")
