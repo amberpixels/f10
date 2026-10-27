@@ -110,6 +110,42 @@ func TestRunFailureKeepsStderr(t *testing.T) {
 	}
 }
 
+// A write verb reads the task from stdin and takes its properties as
+// flags; a warning on stderr comes back beside the answer.
+func TestRunInputCreate(t *testing.T) {
+	root := storageWith(t, "ok-driver")
+
+	out, warn, err := Find(
+		root,
+		root,
+	).RunInput(t.Context(), "# Add the index\n\nbody\n", VerbCreate, "--label", "draft")
+	if err != nil {
+		t.Fatalf("RunInput(create): %v", err)
+	}
+
+	if out != "1043" {
+		t.Errorf("RunInput(create) = %q, want 1043", out)
+	}
+
+	if want := "created # Add the index with --label draft"; warn != want {
+		t.Errorf("RunInput(create) stderr = %q, want %q", warn, want)
+	}
+}
+
+// The reserved code and a hard failure classify for a write verb exactly as
+// for a read.
+func TestRunInputFailures(t *testing.T) {
+	_, _, err := Find(storageWith(t, "ok-driver"), t.TempDir()).RunInput(t.Context(), "# x\n", VerbSearch)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Errorf("RunInput(declined) = %v, want ErrUnsupported", err)
+	}
+
+	_, _, err = Find(storageWith(t, "failing-driver"), t.TempDir()).RunInput(t.Context(), "# x\n", VerbCreate)
+	if err == nil || errors.Is(err, ErrUnsupported) || !strings.Contains(err.Error(), "notion token missing") {
+		t.Errorf("RunInput(failing) = %v, want the driver's stderr", err)
+	}
+}
+
 // The vocabulary is ordered and case-insensitive; a word outside it has no
 // rank, so a caller can drop it with a warning rather than guess.
 func TestPriorityRank(t *testing.T) {

@@ -27,7 +27,7 @@ import (
 func taskCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "task",
-		Usage: "read, open or search the project's tasks",
+		Usage: "read, open, search or create the project's tasks",
 		Commands: []*cli.Command{
 			{
 				Name:      "read",
@@ -58,6 +58,18 @@ func taskCommand() *cli.Command {
 				ArgsUsage: "[task-id]",
 				Flags:     []cli.Flag{&cli.BoolFlag{Name: "json", Usage: "emit the rows as JSON"}},
 				Action:    runTaskChildren,
+			},
+			{
+				Name: "create",
+				Usage: "create a task through the driver from markdown on stdin, `# <title>` first, and print its id " +
+					"(exit 3: no driver creates tasks here)",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "status", Usage: "the status, in the tracker's own word"},
+					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
+					&cli.StringSliceFlag{Name: "label", Usage: "a label; repeat for several"},
+					&cli.StringFlag{Name: "parent", Usage: "the task id to link it under as a subtask"},
+				},
+				Action: runTaskCreate,
 			},
 		},
 	}
@@ -490,4 +502,129 @@ func hyperlink(url, text string) string {
 	}
 
 	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// exitNoCreate is `task create`'s "no driver creates tasks here": a normal
+// answer the capture step reads as "use the project's Create adapter".
+const exitNoCreate = 3
+
+// mayExist follows every failed create: the driver may have made the task
+// before failing, so running create again could make it twice.
+const mayExist = "the task may exist already: check the tracker before running create again"
+
+// runTaskCreate sends the task on stdin to the driver's create. f10 never
+// retries it, since a failed write is an unknown outcome.
+func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	// no driver answers before stdin or any check, so capture falls back on exit 3
+	d := t.driver()
+	if d == nil {
+		return cli.Exit("f10: no driver creates tasks here (looked for "+strings.Join(t.driverPaths(), ", ")+
+			"); create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+	}
+
+	in, err := io.ReadAll(cmd.Reader)
+	if err != nil {
+		return fmt.Errorf("reading the task from stdin: %w", err)
+	}
+
+	// the contract puts the title on the first line, so leading blanks go
+	doc := strings.TrimLeft(string(in), " \t\r\n")
+	if taskTitle(doc) == "" {
+		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
+	}
+
+	args, err := createArgs(ctx, t, cmd, doc)
+	if err != nil {
+		return err
+	}
+
+	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
+	if errors.Is(err, driver.ErrUnsupported) {
+		return cli.Exit("f10: the driver at "+d.Path+" declines `create`; "+
+			"create the task through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+	}
+
+	if err != nil {
+		return fmt.Errorf("%w\n%s", err, mayExist)
+	}
+
+	if warn != "" {
+		fmt.Fprintln(cmd.ErrWriter, warn)
+	}
+
+	// the driver may print the number or the prefixed id; f10 prints the id
+	line := strings.TrimSpace(out)
+	if line == "" || strings.ContainsAny(line, " \t\n"+ref.Separator) {
+		return fmt.Errorf("driver create printed %q, not one task id\n%s", out, mayExist)
+	}
+
+	r, err := t.reference(ctx, line)
+	if err != nil {
+		return fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, r.ID)
+
+	return err
+}
+
+// taskTitle is the title on doc's first line, `# <title>`, or "".
+func taskTitle(doc string) string {
+	line, _, _ := strings.Cut(doc, "\n")
+
+	title, ok := strings.CutPrefix(strings.TrimSpace(line), "# ")
+	if !ok {
+		return ""
+	}
+
+	return strings.TrimSpace(title)
+}
+
+// createArgs are create's flags for the driver: only the properties the
+// caller set, priority in its canonical form, and the parent and the body's
+// After: base as numbers, as every verb's argument is.
+func createArgs(ctx context.Context, t *target, cmd *cli.Command, doc string) ([]string, error) {
+	var args []string
+
+	if s := strings.TrimSpace(cmd.String("status")); s != "" {
+		args = append(args, "--status", s)
+	}
+
+	if p := cmd.String("priority"); p != "" {
+		rank, ok := driver.PriorityRank(p)
+		if !ok {
+			return nil, fmt.Errorf("priority %q is not one of %s", p, strings.Join(driver.Priorities, ", "))
+		}
+
+		args = append(args, "--priority", driver.Priorities[rank])
+	}
+
+	for _, l := range cmd.StringSlice("label") {
+		if l = strings.TrimSpace(l); l != "" {
+			args = append(args, "--label", l)
+		}
+	}
+
+	for _, link := range []struct{ flag, id string }{
+		{"--parent", cmd.String("parent")},
+		{"--after", afterIn(doc)},
+	} {
+		if strings.TrimSpace(link.id) == "" {
+			continue
+		}
+
+		r, err := t.reference(ctx, link.id)
+		if err != nil {
+			return nil, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
+		}
+
+		args = append(args, link.flag, r.Number)
+	}
+
+	return args, nil
 }

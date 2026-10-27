@@ -1,10 +1,16 @@
 #!/bin/sh
-# A driver satisfying the contract for read and url, and declining search
-# with the reserved exit code - the shape a real driver takes while it is
-# still growing verbs.
+# A driver satisfying the contract for read, url, branch and create, and
+# declining search with the reserved exit code - the shape a real driver
+# takes while it is still growing verbs.
 case "$1" in
   read) echo "# read $2" ;;
   url) echo "https://example.test/$2" ;;
   branch) echo "ABC-$2/short-slug" ;;
+  create)
+    shift
+    read -r title
+    echo "created $title with $*" >&2
+    echo "1043"
+    ;;
   *) exit 3 ;;
 esac

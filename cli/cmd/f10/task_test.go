@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/images"
@@ -335,5 +339,203 @@ func TestPullRows(t *testing.T) {
 		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != pullOpen || rows[0].URL != tc.url {
 			t.Errorf("%s rows = %+v, %v", tc.cli, rows, err)
 		}
+	}
+}
+
+// createRepo is a checkout declaring FT-### ids, with the driver script at
+// its storage root when one is given. The driver records its arguments and
+// stdin beside itself, so a test reads what create handed over.
+func createRepo(t *testing.T, script string) string {
+	t.Helper()
+
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+
+	dir := filepath.Join(repo, ".f10", "instructions")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	md := "---\ntracker:\n  kind: notion\n  id: FT-###\n---\n# demo\n"
+	if err := os.WriteFile(filepath.Join(dir, "project.md"), []byte(md), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if script != "" {
+		body := "#!/bin/sh\nhere=$(dirname \"$0\")\necho \"$@\" > \"$here/args\"\ncat > \"$here/stdin\"\n" + script
+		if err := os.WriteFile(filepath.Join(repo, ".f10", "driver"), []byte(body), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return repo
+}
+
+func runCreate(t *testing.T, repo, doc string, args ...string) (string, string, error) {
+	t.Helper()
+
+	var out, errOut bytes.Buffer
+
+	app := newApp()
+	app.Reader = strings.NewReader(doc)
+	app.Writer, app.ErrWriter = &out, &errOut
+	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
+
+	err := app.Run(t.Context(), append([]string{"f10", "-C", repo, "task", "create"}, args...))
+
+	return out.String(), errOut.String(), err
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(data)
+}
+
+// The task goes to the driver on stdin with only the properties set, the
+// parent and the body's After: base as numbers; the driver's number comes
+// back as the project's id, and its warning reaches stderr.
+func TestTaskCreateThroughTheDriver(t *testing.T) {
+	repo := createRepo(t, "echo 'no labels on this tracker' >&2\necho 1043\n")
+	doc := "# Add the index\n\nbody\n\nAfter: FT-1041\n"
+
+	out, warn, err := runCreate(t, repo, doc, "--priority", "High", "--label", "draft", "--parent", "FT-1040")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if out != "FT-1043\n" {
+		t.Errorf("stdout = %q, want the id in the project's format", out)
+	}
+
+	if !strings.Contains(warn, "no labels on this tracker") {
+		t.Errorf("stderr = %q, want the driver's warning", warn)
+	}
+
+	storage := filepath.Join(repo, ".f10")
+
+	if got, want := readFile(
+		t,
+		filepath.Join(storage, "args"),
+	), "create --priority high --label draft --parent 1040 --after 1041\n"; got != want {
+		t.Errorf("driver args = %q, want %q", got, want)
+	}
+
+	if got := readFile(t, filepath.Join(storage, "stdin")); got != doc {
+		t.Errorf("driver stdin = %q, want the task as given", got)
+	}
+}
+
+// Blank lines before the title are dropped, so the driver reads the title
+// on the first line as the contract promises.
+func TestTaskCreateTitleOnTheFirstLine(t *testing.T) {
+	repo := createRepo(t, "echo 1\n")
+
+	if _, _, err := runCreate(t, repo, "\n\n# A\n\nbody\n"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if got := readFile(t, filepath.Join(repo, ".f10", "stdin")); got != "# A\n\nbody\n" {
+		t.Errorf("driver stdin = %q, want the title first", got)
+	}
+}
+
+// A prefixed id from the driver passes as it is.
+func TestTaskCreatePrefixedID(t *testing.T) {
+	out, _, err := runCreate(t, createRepo(t, "echo FT-1043\n"), "# A\n")
+	if err != nil || out != "FT-1043\n" {
+		t.Errorf("create = %q, %v; want FT-1043", out, err)
+	}
+}
+
+// No driver, or one declining create, is exit 3: capture's cue to use the
+// project's Create adapter. With no driver it comes before any check, so an
+// input the driver would refuse still reaches the adapter.
+func TestTaskCreateDeclined(t *testing.T) {
+	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
+		_, _, err := runCreate(t, createRepo(t, script), "# A\n")
+		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
+			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
+		}
+	}
+
+	for name, args := range map[string][]string{"no title": nil, "bad parent": {"--parent", "not an id"}} {
+		doc := "# A\n"
+		if args == nil {
+			doc = "no title\n"
+		}
+
+		_, _, err := runCreate(t, createRepo(t, ""), doc, args...)
+		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
+			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
+		}
+	}
+}
+
+// A bad title or priority fails before the driver runs.
+func TestTaskCreateRefusesBadInput(t *testing.T) {
+	for _, tc := range []struct {
+		doc  string
+		args []string
+		want string
+	}{
+		{"no title\n", nil, "`# <title>`"},
+		{"#\n", nil, "`# <title>`"},
+		{"# A\n", []string{"--priority", "p1"}, `priority "p1"`},
+	} {
+		repo := createRepo(t, "echo 1\n")
+
+		_, _, err := runCreate(t, repo, tc.doc, tc.args...)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%q %v: err = %v, want %q", tc.doc, tc.args, err, tc.want)
+		}
+
+		if _, statErr := os.Stat(filepath.Join(repo, ".f10", "args")); statErr == nil {
+			t.Errorf("%q %v: the driver ran", tc.doc, tc.args)
+		}
+	}
+}
+
+// A failed create, or one that prints no id, carries the driver's stderr and
+// the warning that the task may exist.
+func TestTaskCreateFailureMayExist(t *testing.T) {
+	for script, want := range map[string]string{
+		"echo 'notion: 504 gateway timeout' >&2\nexit 1\n": "notion: 504 gateway timeout",
+		"echo created it\n": "not one task id",
+	} {
+		_, _, err := runCreate(t, createRepo(t, script), "# A\n")
+		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), mayExist) {
+			t.Errorf("%q: err = %v, want %q and the may-exist warning", script, err, want)
+		}
+	}
+}
+
+// failingReader fails a test that reads it.
+type failingReader struct{ t *testing.T }
+
+func (r failingReader) Read([]byte) (int, error) {
+	r.t.Error("stdin was read")
+
+	return 0, io.EOF
+}
+
+// With no driver, create exits 3 without reading stdin, so a run with
+// nothing piped in never waits on a terminal.
+func TestTaskCreateNoDriverLeavesStdin(t *testing.T) {
+	app := newApp()
+	app.Reader = failingReader{t}
+	app.Writer, app.ErrWriter = &bytes.Buffer{}, &bytes.Buffer{}
+	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
+
+	err := app.Run(t.Context(), []string{"f10", "-C", createRepo(t, ""), "task", "create"})
+	if exitCode(err) != exitNoCreate {
+		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
 	}
 }
