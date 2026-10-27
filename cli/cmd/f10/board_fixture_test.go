@@ -327,7 +327,7 @@ func TestBoardUntracedIsGuessed(t *testing.T) {
 	got := runBoardFixture(t, readBoardFixture(t, "testdata/board/untraced.json"))
 
 	for _, r := range got.Rows {
-		if r.Stage != lookaround.StageNext && r.StageFrom != lookaround.FromGuessed {
+		if r.Stage != lookaround.StageNext && r.Stage != lookaround.StageDone && r.StageFrom != lookaround.FromGuessed {
 			t.Errorf("%s: %s from %s, want guessed", r.Key, r.Stage, r.StageFrom)
 		}
 	}

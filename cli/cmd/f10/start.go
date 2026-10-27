@@ -376,7 +376,7 @@ type startInput struct {
 	flowKept bool                                  // drive records the flow itself, keeping one the branch has
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	base     string                                // branch whose ref is the base, or ""
-	plansDir string                                // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	plansDir string                                // the plans dir every checkout shares
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
 	model    string                                // the agent's --model, resolved, or "" for claude's default
@@ -736,43 +736,23 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		return openedTask{}, err
 	}
 
-	// the plan moves only into a worktree whose agent this call prompts, and
-	// before that agent starts, so a failed move leaves no agent waiting
-	var a adoption
+	if launch {
+		// the agent reads the plan in place: only a prompted agent is told of it
+		o.plan = planIf(taskPlan(path, in.plansDir, in.task.ID))
 
-	switch {
-	case launch:
-		if a, err = adoptPlan(in.main, path, in.plansDir, in.task.ID); err != nil {
+		if err := makeStorageDirs(in.plansDir); err != nil {
 			return openedTask{}, err
 		}
 
-		o.plan = a.plan
-		if a.note != "" {
-			notes = append(notes, a.note)
-		}
-	default:
-		if src := mainPlan(in.main, path, in.plansDir, in.task.ID); src != "" {
-			notes = append(notes, "main's plan "+src+" left in place: the workspace's agent was not prompted")
-		}
-	}
-
-	if launch {
 		if err := herdr.StartAgent(
 			ctx,
 			path,
 			agent,
 			agentKind,
 			ws.RootPane,
-			modelArgs(in.model),
+			agentArgs(in.model, in.plansDir, path),
 			shellWait(in.progress, ws.RootPane),
 		); err != nil {
-			if a.moved != "" {
-				return openedTask{}, fmt.Errorf(
-					"%w; the plan was moved from %s to %s: rerun to ship it",
-					err, a.moved, a.plan,
-				)
-			}
-
 			return openedTask{}, err
 		}
 
@@ -1006,23 +986,31 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 	return fmt.Sprintf("%s %s is at the same commit as the default branch %s", base.flag, base.ref, def)
 }
 
-// locatePlan finds the base task's plan. In-repo storage keeps a plan beside
-// its branch, so it is reachable only through that branch's worktree;
-// out-of-tree storage shares one dir. The notes name what was not found, so
-// a prompt that cannot cite the plan is explained beneath the report.
+// locatePlan finds the base task's plan: in the plans dir every checkout
+// shares, else in the base's worktree when that keeps its own .f10 from
+// before storage moved to main's. The notes name what was not found, so a
+// prompt that cannot cite the plan is explained beneath the report.
 func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string {
-	if plansDir == "" {
-		wt := worktreeOf(wts, dep.branch)
-		if wt == "" {
-			return []string{
-				dep.task + " has no checkout here, so its plan is out of reach: the prompt names the task alone",
-			}
-		}
-
-		plansDir = filepath.Join(wt, ".f10", "plans")
+	var candidates []string
+	if plansDir != "" {
+		candidates = append(candidates, filepath.Join(plansDir, dep.task+".md"))
 	}
 
-	dep.plan = filepath.Join(plansDir, dep.task+".md")
+	if wt := worktreeOf(wts, dep.branch); wt != "" {
+		candidates = append(candidates, filepath.Join(wt, ".f10", "plans", dep.task+".md"))
+	}
+
+	if len(candidates) == 0 {
+		return []string{
+			dep.task + " has no checkout here, so its plan is out of reach: the prompt names the task alone",
+		}
+	}
+
+	// the first that exists, else the first, which the note below names
+	dep.plan = candidates[0]
+	if i := slices.IndexFunc(candidates, exists); i >= 0 {
+		dep.plan = candidates[i]
+	}
 
 	if _, err := os.Stat(dep.plan); err != nil {
 		return []string{fmt.Sprintf("%s has no plan yet at %s", dep.task, dep.plan)}
@@ -1031,59 +1019,6 @@ func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string 
 	dep.planned = true
 
 	return nil
-}
-
-// An adoption is the plan of the task the worktree reads, or "" when it has
-// none, the path in main it was moved from when this call moved it, and the
-// note saying what happened.
-type adoption struct {
-	plan  string
-	moved string
-	note  string
-}
-
-// adoptPlan settles which plan of the task the worktree reads, moving the
-// one main saved into the worktree: moved, not copied, so a later ship in
-// main finds none. Out-of-tree storage shares one dir, so nothing moves.
-// A worktree that holds its own plan keeps it, and main's stays in place.
-func adoptPlan(main, worktree, plansDir, id string) (adoption, error) {
-	if plansDir != "" {
-		return adoption{plan: planIf(filepath.Join(plansDir, id+".md"))}, nil
-	}
-
-	dst := filepath.Join(worktree, ".f10", "plans", id+".md")
-	src := mainPlan(main, worktree, plansDir, id)
-
-	switch {
-	case exists(dst) && src != "":
-		note := fmt.Sprintf("kept the worktree's plan at %s; main's %s was left in place", dst, src)
-
-		return adoption{plan: dst, note: note}, nil
-	case src == "":
-		return adoption{plan: planIf(dst)}, nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return adoption{}, fmt.Errorf("moving the plan %s to %s: %w", src, dst, err)
-	}
-
-	if err := os.Rename(src, dst); err != nil {
-		return adoption{}, fmt.Errorf("moving the plan %s to %s: %w", src, dst, err)
-	}
-
-	return adoption{plan: dst, moved: src, note: "moved the plan from " + src}, nil
-}
-
-// mainPlan is the plan main saved for the task where it could move into the
-// worktree, else "": out-of-tree storage and the task checked out in main
-// itself have nothing to move.
-func mainPlan(main, worktree, plansDir, id string) string {
-	src := filepath.Join(main, ".f10", "plans", id+".md")
-	if plansDir != "" || src == filepath.Join(worktree, ".f10", "plans", id+".md") {
-		return ""
-	}
-
-	return planIf(src)
 }
 
 // planIf is path when a plan is there, else "".

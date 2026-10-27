@@ -404,10 +404,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			LedgerPath: ledger.Path(),
 			ProjectID:  place.Project,
 			Herdr:      herdr.Available() == nil,
-		}
-
-		if dir := t.sharedPlansDir(); dir != "" {
-			in.Local.SharedRoot = t.lay.StorageRoot
+			SharedRoot: t.sharedRoot(),
 		}
 	}
 
@@ -492,6 +489,7 @@ type boardLine struct {
 	PRURL       string    `json:"pr_url,omitempty"`
 	Parts       []boardPR `json:"parts,omitempty"` // a feed row's task's other requests overlapping PR
 	Who         string    `json:"who,omitempty"`
+	BranchLeft  bool      `json:"branch_left,omitempty"` // a merged row's branch outlived its worktree
 	Next        string    `json:"next,omitempty"`
 	NextCommand bool      `json:"next_command,omitempty"`
 }
@@ -547,12 +545,13 @@ func boardLines(b lookaround.Board) boardModel {
 // lineOf is one row reduced to its line.
 func lineOf(r lookaround.Row) boardLine {
 	line := boardLine{
-		Group:     boardGroup(r.Stage),
-		Key:       r.Key,
-		URL:       rowURL(r),
-		Stage:     r.Stage,
-		StageFrom: r.StageFrom,
-		Who:       boardWho(r),
+		Group:      boardGroup(r.Stage),
+		Key:        r.Key,
+		URL:        rowURL(r),
+		Stage:      r.Stage,
+		StageFrom:  r.StageFrom,
+		Who:        boardWho(r),
+		BranchLeft: r.Where.BranchLeft,
 	}
 
 	if r.Task != nil {
@@ -1032,6 +1031,10 @@ func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 
 	if r.Who != "" {
 		tail = append(tail, r.Who)
+	}
+
+	if r.BranchLeft {
+		tail = append(tail, "branch left")
 	}
 
 	if r.Next != "" {

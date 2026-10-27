@@ -45,7 +45,7 @@ If it is ever unavailable, the points below say what to do by hand:
 
 1. **`storage root:`** is absolute, anchored to the checkout root (`git rev-parse --show-toplevel`), never the cwd.
    Use it verbatim, never re-derive it.
-   The project facts file is `<storage root>/instructions/project.md`.
+   The project facts file is the first layer's `project.md` (point 2).
 2. **Layers.**
    The main checkout (first `git worktree list` path) and a linked worktree can each hold `.f10/instructions/`; **main's prints first, the worktree's on top**.
    A worktree with none gets main's; `layering: replaces` in a worktree's frontmatter drops main's.
@@ -92,7 +92,10 @@ Every **adapter** is a binding: missing, erroring or ambiguous fails that step (
 
 **Visibility** is frontmatter `visibility: stealth | public`, **stealth** when absent (below).
 **Storage** is frontmatter `storage:`.
-**in-repo** (default): storage root `<checkout root>/.f10/`, per checkout, untracked per Visibility.
+**in-repo** (default): storage root the main checkout's `.f10/`, shared by every worktree and untracked per Visibility.
+Plans, findings, verdicts, spike reports and lore are keyed by task id, so parallel tasks never share a file and removing a worktree, by any means, loses none of them.
+A worktree's own `.f10/` holds only its optional `instructions/` layer.
+A worktree whose `.f10/` already holds `plans/`, `reviews/`, `verdicts/` or `spikes/` predates this and keeps its own storage root until it finishes; the loader prints a note saying so.
 **out-of-tree**: storage root `~/.f10/<project>/`, shared by every worktree, nothing f10-related inside the project directory; it declares itself by location (point 2 above).
 Two projects with the same basename collide there: rename one dir, or keep one in-repo.
 Roots report as physical paths (symlinks resolved).

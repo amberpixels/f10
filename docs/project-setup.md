@@ -370,7 +370,7 @@ In stealth mode every trace reads as your own.
 
 `stealth` keeps `.f10/` untracked and every trace of f10 out of commits, PRs and tickets.
 It is the default.
-`in-repo` storage keeps `.f10/` beside each checkout, so plans sit next to the branch they were written for.
+`in-repo` storage keeps the task files (plans, findings, verdicts, spike reports, lore) in the main checkout's `.f10/`, shared by every worktree and keyed by task id, so removing a worktree by any means loses none of them; a worktree's own `.f10/` holds only its optional instructions layer.
 The storage root also holds `images/<ID>/`, the images `f10 task read` downloaded for a task, until `f10 finish` removes them.
 `out-of-tree` moves instructions and plans to `~/.f10/<project>/`, shared by every worktree, for when even an untracked directory is too visible.
 Out-of-tree declares itself by location: create the directory and f10 finds it.

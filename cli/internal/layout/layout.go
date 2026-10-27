@@ -39,13 +39,27 @@ type Layout struct {
 	CheckoutRoot     string  // root of the checkout the run started in
 	MainRoot         string  // root of the main checkout; empty when git cannot name one
 	Project          string  // basename of the main checkout, or of the cwd outside git
-	StorageRoot      string  // where plans (and in-repo instructions) live
+	StorageRoot      string  // where plans, reviews, verdicts and lore live: main's .f10 for every checkout, or the out-of-tree root
+	LegacyStorage    bool    // a linked worktree keeps its own .f10, which held task files before storage moved to main's
 	Layering         string  // LayeringExtends or LayeringReplaces
 	LayeringDeclared bool    // a worktree project.md declares Layering
 	LayeringFrom     string  // "frontmatter" or "prose", when declared
 	Layers           []Layer // precedence order: later wins
 	Source           string  // human description; wording matches f10-load-project.sh
 	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
+}
+
+// HoldsTaskFiles says a worktree's own .f10 holds the task files it kept
+// before in-repo storage moved to main's: any one of these dirs keeps that
+// worktree's root.
+func HoldsTaskFiles(dotF10 string) bool {
+	for _, d := range []string{"plans", "reviews", "verdicts", "spikes"} {
+		if existingDir(filepath.Join(dotF10, d)) != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Locate finds the configuration layout for cwd. It never fails -
@@ -71,7 +85,15 @@ func Locate(ctx context.Context, cwd string) *Layout {
 	}
 
 	lay.Project = filepath.Base(baseRoot)
-	lay.StorageRoot = filepath.Join(here, ".f10")
+	lay.StorageRoot = filepath.Join(baseRoot, ".f10")
+
+	// in-repo storage is main's .f10 for every checkout, so removing a
+	// worktree loses nothing; a worktree whose own .f10 already holds task
+	// files predates that and keeps them until it finishes
+	if here != baseRoot && HoldsTaskFiles(filepath.Join(here, ".f10")) {
+		lay.LegacyStorage = true
+		lay.StorageRoot = filepath.Join(here, ".f10")
+	}
 
 	baseInstr := existingDir(filepath.Join(baseRoot, ".f10", "instructions"))
 
@@ -123,6 +145,7 @@ func Locate(ctx context.Context, cwd string) *Layout {
 				lay.Layers = []Layer{{Label: "out-of-tree", Dir: oot}}
 				lay.Source = "out-of-tree (~/.f10/" + lay.Project + ")"
 				lay.StorageRoot = filepath.Join(home, ".f10", lay.Project)
+				lay.LegacyStorage = false
 			}
 		}
 	}

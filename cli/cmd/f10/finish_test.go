@@ -1678,3 +1678,52 @@ func TestFinishKeepsTheRefusalWhenNeverPushedIsNotProven(t *testing.T) {
 		t.Error("a branch not proven unpushed was merged")
 	}
 }
+
+// In-repo storage every checkout shares: the plan in main's plans dir is
+// archived beside it, and the worktree holds nothing to move.
+func TestFinishArchivesMainsSharedPlan(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+
+	shared := filepath.Join(fx.main, ".f10", "plans")
+	fx.in.plansDir = shared
+
+	if err := os.MkdirAll(shared, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(shared, "GH-1.md"), []byte("plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if body, err := os.ReadFile(filepath.Join(shared, "archive", "GH-1.md")); err != nil || string(body) != "plan" {
+		t.Errorf("archived plan = %q, %v", body, err)
+	}
+}
+
+// A worktree from before storage moved to main's still holds its plan and
+// the versions it archived: they move into the shared archive.
+func TestFinishArchivesALegacyWorktreesPlan(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.plan(t, "GH-1.md", "current")
+	fx.plan(t, filepath.Join("archive", "GH-1.1.md"), "older")
+
+	shared := filepath.Join(fx.main, ".f10", "plans")
+	fx.in.plansDir = shared
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, body := range map[string]string{"GH-1.md": "older", "GH-1.1.md": "current"} {
+		got, err := os.ReadFile(filepath.Join(shared, "archive", name))
+		if err != nil || string(got) != body {
+			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
+		}
+	}
+}

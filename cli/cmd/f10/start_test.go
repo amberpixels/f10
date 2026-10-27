@@ -826,111 +826,6 @@ func writePlan(t *testing.T, path string) {
 	}
 }
 
-func TestAdoptPlan(t *testing.T) {
-	planIn := func(dir string) string { return filepath.Join(dir, ".f10", "plans", "GH-1.md") }
-
-	cases := []struct {
-		name               string
-		inMain, inWorktree bool
-		wantPlan           bool   // a plan is returned, at the worktree's path
-		wantNote           string // a note containing this, or none when ""
-		mainKept           bool   // main's plan is still there afterwards
-	}{
-		{name: "moved", inMain: true, wantPlan: true, wantNote: "moved the plan from "},
-		{
-			name: "worktree's kept", inMain: true, inWorktree: true, wantPlan: true,
-			wantNote: "kept the worktree's plan", mainKept: true,
-		},
-		{name: "worktree's alone", inWorktree: true, wantPlan: true},
-		{name: "none"},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			main, wt := t.TempDir(), t.TempDir()
-			if c.inMain {
-				writePlan(t, planIn(main))
-			}
-
-			if c.inWorktree {
-				writePlan(t, planIn(wt))
-			}
-
-			a, err := adoptPlan(main, wt, "", "GH-1")
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if want := map[bool]string{true: planIn(wt)}[c.wantPlan]; a.plan != want {
-				t.Errorf("plan = %q, want %q", a.plan, want)
-			}
-
-			if (c.wantNote == "") != (a.note == "") || !strings.Contains(a.note, c.wantNote) {
-				t.Errorf("note = %q, want one containing %q", a.note, c.wantNote)
-			}
-
-			if _, err := os.Stat(planIn(main)); (err == nil) != c.mainKept {
-				t.Errorf("main's plan present = %v, want %v", err == nil, c.mainKept)
-			}
-
-			if c.wantPlan {
-				if _, err := os.Stat(planIn(wt)); err != nil {
-					t.Errorf("the worktree holds no plan: %v", err)
-				}
-			}
-		})
-	}
-
-	t.Run("same checkout", func(t *testing.T) {
-		dir := t.TempDir()
-		writePlan(t, planIn(dir))
-
-		a, err := adoptPlan(dir, dir, "", "GH-1")
-		if err != nil || a != (adoption{plan: planIn(dir)}) {
-			t.Errorf("adoptPlan = %+v, %v; want the plan in place and no note", a, err)
-		}
-	})
-
-	t.Run("out of tree", func(t *testing.T) {
-		main, wt, plans := t.TempDir(), t.TempDir(), t.TempDir()
-		writePlan(t, planIn(main))
-
-		if a, err := adoptPlan(main, wt, plans, "GH-1"); err != nil || a != (adoption{}) {
-			t.Errorf("adoptPlan with no shared plan = %+v, %v; want none", a, err)
-		}
-
-		writePlan(t, filepath.Join(plans, "GH-1.md"))
-
-		a, err := adoptPlan(main, wt, plans, "GH-1")
-		if err != nil || a != (adoption{plan: filepath.Join(plans, "GH-1.md")}) {
-			t.Errorf("adoptPlan = %+v, %v; want the shared plan and no note", a, err)
-		}
-
-		if _, err := os.Stat(planIn(main)); err != nil {
-			t.Errorf("a plan moved under out-of-tree storage: %v", err)
-		}
-	})
-
-	t.Run("move fails", func(t *testing.T) {
-		main, wt := t.TempDir(), t.TempDir()
-		writePlan(t, planIn(main))
-
-		// a file where the plans dir should be
-		if err := os.WriteFile(filepath.Join(wt, ".f10"), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-
-		_, err := adoptPlan(main, wt, "", "GH-1")
-		if err == nil || !strings.Contains(err.Error(), "moving the plan") {
-			t.Errorf("adoptPlan error = %v, want the move named", err)
-		}
-
-		if _, err := os.Stat(planIn(main)); err != nil {
-			t.Errorf("main's plan is gone after a failed move: %v", err)
-		}
-	})
-}
-
 func TestSiblingPathAndAgentName(t *testing.T) {
 	if got, want := siblingPath("/code/repo", "GH-1/slug"), "/code/repo.GH-1-slug"; got != want {
 		t.Errorf("siblingPath = %q, want %q", got, want)
@@ -1143,8 +1038,8 @@ func afterFixture(t *testing.T, dir, shaBase string) *fakes {
 	return f
 }
 
-// With in-repo storage the base task's plan sits in its own worktree, and
-// the prompt cites that path as the contract to design against.
+// A base task's plan found only in its own worktree, from before storage
+// moved to main's, is the contract the prompt cites.
 func TestStartAfterCitesThePlan(t *testing.T) {
 	dir := t.TempDir()
 	plan := filepath.Join(dir, ".f10", "plans", "GH-7.md")
@@ -1210,6 +1105,8 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 	}
 
 	f := afterFixture(t, "/code/repo.GH-7-base", "ccc")
+	addDir := " -- " + strings.Join(agentArgs("", plans, "/code/repo.GH-1"), " ")
+	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7"+addDir, "{}")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
 
@@ -1678,12 +1575,13 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 	}
 }
 
-// A plan main saved moves into the worktree before the agent starts, the
-// agent ships it, and the report names it with where it came from.
-func TestStartAdoptsMainsPlan(t *testing.T) {
+// A plan main saved stays in main: the agent ships it in place, and is
+// started with main's task-file dirs added, since they lie outside its
+// worktree.
+func TestStartReadsMainsPlanInPlace(t *testing.T) {
 	main, wt := t.TempDir(), t.TempDir()
-	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
-	dst := filepath.Join(wt, ".f10", "plans", "GH-1.md")
+	plans := filepath.Join(main, ".f10", "plans")
+	src := filepath.Join(plans, "GH-1.md")
 	writePlan(t, src)
 
 	agent := herdr.AgentName("GH-1", "", wt)
@@ -1693,12 +1591,13 @@ func TestStartAdoptsMainsPlan(t *testing.T) {
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", wt))
 	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
-	f.script("herdr agent start "+agent+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, dst, nil, ""), "{}")
+	f.script("herdr agent start "+agent+" --kind claude --pane pane:7 -- "+
+		strings.Join(agentArgs("", plans, wt), " "), "{}")
+	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, src, nil, ""), "{}")
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: main, task: gh1}); err != nil {
+	if err := start(t.Context(), &out, startInput{main: main, task: gh1, plansDir: plans}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1706,75 +1605,16 @@ func TestStartAdoptsMainsPlan(t *testing.T) {
 		t.Errorf("the agent was not prompted to ship: %v", f.calls)
 	}
 
-	if _, err := os.Stat(src); err == nil {
-		t.Error("main still holds the plan")
-	}
-
-	for _, want := range []string{"plan:", dst, "moved the plan from " + src} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("report missing %q:\n%s", want, out.String())
-		}
-	}
-}
-
-// A workspace whose agent is already running gets no prompt, so main's plan
-// stays where it is and the report names no plan.
-func TestStartLeavesMainsPlanForARunningAgent(t *testing.T) {
-	main, wt := t.TempDir(), t.TempDir()
-	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
-	writePlan(t, src)
-
-	f := newFakes(t)
-	f.has["wt"] = true
-	f.script(refsLocal, heads("GH-1"))
-	f.script(worktrees, porcelain("GH-1", wt))
-	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", reopened)
-	f.script("herdr agent get pane:7", agentFound)
-
-	var out bytes.Buffer
-
-	if err := start(t.Context(), &out, startInput{main: main, task: gh1}); err != nil {
-		t.Fatal(err)
-	}
-
-	if f.called("herdr agent prompt") {
-		t.Error("an agent already running was prompted")
-	}
-
 	if _, err := os.Stat(src); err != nil {
-		t.Errorf("main's plan moved although no agent was prompted: %v", err)
+		t.Errorf("main's plan moved: %v", err)
 	}
 
-	if strings.Contains(out.String(), "plan:") {
-		t.Errorf("the report names a plan no agent was told about:\n%s", out.String())
+	if _, err := os.Stat(filepath.Join(wt, ".f10")); err == nil {
+		t.Error("the worktree got a .f10 of its own")
 	}
 
-	if want := "main's plan " + src + " left in place"; !strings.Contains(out.String(), want) {
-		t.Errorf("report missing %q:\n%s", want, out.String())
-	}
-}
-
-// An agent that fails to start after the move names where the plan went,
-// since main no longer holds it.
-func TestStartNamesTheMovedPlanWhenTheAgentFails(t *testing.T) {
-	main, wt := t.TempDir(), t.TempDir()
-	src := filepath.Join(main, ".f10", "plans", "GH-1.md")
-	writePlan(t, src)
-
-	agent := herdr.AgentName("GH-1", "", wt)
-
-	f := newFakes(t)
-	f.has["wt"] = true
-	f.script(refsLocal, heads("GH-1"))
-	f.script(worktrees, porcelain("GH-1", wt))
-	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
-	f.fail("herdr agent start "+agent+" --kind claude --pane pane:7", shell.Result{Code: 1, Stderr: "no pane"})
-
-	err := start(t.Context(), &bytes.Buffer{}, startInput{main: main, task: gh1})
-
-	dst := filepath.Join(wt, ".f10", "plans", "GH-1.md")
-	if err == nil || !strings.Contains(err.Error(), "the plan was moved from "+src+" to "+dst) {
-		t.Errorf("start error = %v, want the moved plan named", err)
+	if !strings.Contains(out.String(), src) {
+		t.Errorf("report does not name the plan %s:\n%s", src, out.String())
 	}
 }
 

@@ -98,6 +98,14 @@ if [ -n "${main:-}" ]; then main="$(canon "$main")"; fi
 proj="$(basename "${main:-$here}")"
 storage="$here/.f10"
 
+# in-repo storage is main's .f10 for every checkout, so removing a worktree loses nothing; a
+# worktree whose own .f10 already holds task files predates that and keeps them until it finishes
+legacy=""
+if [ -n "${main:-}" ] && [ "$here" != "$main" ]; then
+  for d in plans reviews verdicts spikes; do [ -d "$here/.f10/$d" ] && legacy=1; done
+  [ -n "$legacy" ] || storage="$main/.f10"
+fi
+
 # the base layer is main's, or simply this checkout's where git cannot name a main worktree
 base_label="main"
 base_root="${main:-$here}"
@@ -229,6 +237,9 @@ if [ -n "$l1_dir" ]; then
   echo "instructions files: $files"
 fi
 echo "storage root: $storage  (plans -> $storage/plans/)"
+if [ -n "$legacy" ] && [ "$storage" = "$here/.f10" ]; then
+  echo "note: storage is this worktree's own .f10 - it holds task files from before storage moved to main's"
+fi
 # a config below the root is not a per-directory config - say so rather than pass it over silently
 if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
   echo "note: ignoring nested $cwd/.f10/instructions - loading is anchored to the checkout root"

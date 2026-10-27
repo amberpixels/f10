@@ -209,7 +209,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   A declared human reviewer answers asks on a remote review; a local round's asks come to you.
 - **Visibility** - `stealth` (default) or `public`.
   Stealth work reads as if f10 never existed: no mentions in commits, PRs, tickets or code comments, `.f10/` untracked via `.git/info/exclude`.
-- **Storage** - `in-repo` (default: one `.f10/` per checkout, beside its branch) or `out-of-tree` (`~/.f10/<project>/` holds instructions *and* plans for every worktree, nothing inside the project dir), found when the repo has no `.f10/instructions/`.
+- **Storage** - `in-repo` (default: the main checkout's `.f10/`, shared by every worktree) or `out-of-tree` (`~/.f10/<project>/` holds instructions *and* plans for every worktree, nothing inside the project dir), found when the repo has no `.f10/instructions/`.
 
 ## Generic vs. project-specific
 

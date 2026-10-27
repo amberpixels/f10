@@ -121,17 +121,15 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`); a note goes only with `--discuss` or a PR pickup, and any other mode refuses one, since a driven run takes its instructions from the task.
   The three are exclusive, and `--flow` or `--local` with `--plan` or `--discuss` is refused, since both stop before ship
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 drive`; with `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, since ship picks the flow from the task's area
-- a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) is moved, not copied, into the new worktree's `.f10/plans/`, so one plan exists and a later `/f10:ship <id>` in main finds none.
-  The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` still plans, and the plan step archives the moved one; `--discuss` names the plan's path.
-  The report gains a `plan` row and a note beneath saying it was moved from main.
-  A worktree that already holds its own plan (start rerun on an existing worktree) keeps it and ships it, and main's is left in place with a note.
-  Out-of-tree storage shares one plans dir, so nothing moves and only the prompt changes.
-  The plan moves only when start starts the agent: a workspace whose agent is already running gets no prompt, so main's plan stays in place with a note.
-  A move that fails stops start before the agent is started, and an agent that fails to start after the move names where the plan went.
-  `f10 drive` adopts main's plan the same way, when it starts the task's agent.
+- a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.
+  The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` still plans, and the plan step archives the saved one; `--discuss` names the plan's path.
+  The report gains a `plan` row.
+  A worktree from before storage moved to main's ships its own plan when main has none for the task (start rerun on it).
+  `f10 drive` reads main's plan the same way, when it starts the task's agent.
+- the agent is started with an `--add-dir` for each task-file dir of the storage root (`plans`, `reviews`, `verdicts`, `spikes`, `lore`, `images`, created if missing) whenever that root lies outside the worktree, so its writes there ask no permission; `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
-  With in-repo storage that path lies in the base task's worktree, and a note beneath the report says when no checkout reaches it or the plan is not written yet.
+  The path is in the shared storage root (in a base worktree from before storage moved to main's, that worktree's own), and a note beneath the report says when no checkout reaches it or the plan is not written yet.
   A base still at the default branch's commit is noted as a task with no code yet.
   It fails before creating anything when the task has no branch
 - with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its line, the last of the body by convention) is read as `--after <id>` when that task has a branch, and noted beneath the report.
@@ -249,10 +247,10 @@ There finish merges as usual, brings the default branch up to the merge, switche
    The dependent branched before that code existed, so it is marked `branch.<name>.f10-landed` with the base task's id.
    `/f10:catchup`, or its next ship unless `catchup: off`, brings the default branch in before anything else runs and clears the mark.
    A note names each dependent.
-7. **The plan is archived**: with in-repo storage `<worktree>/.f10/plans/<ID>.md` moves to main's `.f10/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken, older archived versions first); with out-of-tree storage it moves within the shared root.
-   With the branch checked out in main, the plan moves within main's `.f10/plans/`, after main's existing archive.
+7. **The plan is archived**: `<storage root>/plans/<ID>.md` moves to `<storage root>/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken), within main's `.f10/` or the out-of-tree root.
+   A worktree from before storage moved to main's still holds its own `.f10/plans/<ID>.md`: it moves to main's archive, its older archived versions first.
    No plan is a note.
-   A plan that cannot be moved is an error and nothing is removed, since with in-repo storage the worktree holds the only copy.
+   A plan that cannot be moved is an error and nothing is removed, since such a worktree holds the only copy.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
@@ -385,7 +383,7 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, since each agent is its own session.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
-   A plan the main checkout saved for the task moves into the worktree under start's rules (a worktree's own plan wins, out-of-tree storage moves nothing, a failed move stops before the agent starts).
+   A plan the main checkout saved for the task is read in place under start's rules (a worktree's own plan, from before storage moved to main's, wins).
    A checkout Herdr already shows, as an earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle shell.
    Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
@@ -722,7 +720,7 @@ Checkouts of one repository are read once, from the first given; a repository na
 
 A feed row says what happened (`opened`, `3 commits, merged main`, `approved by bob`, `merged`, `abandoned`), who owes the next move where a review left one, and where the group came from: `host` for a merge, a close or an opening, `trace` for a commit's `Step:` trailer (`docs/traces.md`), `tracker` for a new task, `guessed` for the rest of the host's facts.
 A task with several requests is one row, led by the latest opened, its summary naming how the others relate (`opened, follow-up to #80`, `merged (replaced #175)`, `merged in 2 PRs`) and its request column listing the parts (`#176 + #180`).
-A state row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished`, `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host, `tracker` for a `next` row, `guessed` for the host's own facts alone.
+A state row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished` (merged, its worktree still on disk), `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host, `tracker` for a `next` row, `guessed` for the host's own facts alone.
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
 The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
 Inside a session, `/f10:board` runs the command with the same flags and prints its output; with `--state` it offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.

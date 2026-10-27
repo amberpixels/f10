@@ -155,6 +155,8 @@ type Where struct {
 	Branch    string `json:"branch,omitempty"`
 	Worktree  string `json:"worktree,omitempty"`
 	Workspace string `json:"workspace,omitempty"`
+	// BranchLeft marks a merged row whose branch outlived its worktree
+	BranchLeft bool `json:"branch_left,omitempty"`
 }
 
 // A PRRef is the request a row hangs on.

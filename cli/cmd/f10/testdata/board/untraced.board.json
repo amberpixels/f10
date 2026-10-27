@@ -95,8 +95,8 @@
     },
     {
       "key": "FT-4",
-      "stage": "merged-unfinished",
-      "stage_from": "guessed",
+      "stage": "done",
+      "stage_from": "local",
       "who": {
         "author": "ann",
         "person": "ann"
@@ -110,12 +110,11 @@
           "head": "FT-4/login",
           "base": "main"
         },
-        "branch": "FT-4/login"
+        "branch": "FT-4/login",
+        "branch_left": true
       },
       "last_activity": "2026-10-20T10:00:00Z",
-      "next": {
-        "command": "f10 finish FT-4"
-      }
+      "next": {}
     }
   ]
 }

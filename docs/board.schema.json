@@ -307,6 +307,10 @@
         },
         "workspace": {
           "type": "string"
+        },
+        "branch_left": {
+          "type": "boolean",
+          "description": "A merged row whose branch outlived its worktree."
         }
       },
       "additionalProperties": false

@@ -316,7 +316,7 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 		id:     r.ID,
 		branch: name,
 		root:   path,
-		plan:   filepath.Join(taskPlansDir(path, t.sharedPlansDir()), r.ID+".md"),
+		plan:   taskPlan(path, t.sharedPlansDir(), r.ID),
 	}
 
 	if h, err := t.host(); err == nil {
@@ -515,9 +515,7 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 		host:   h,
 	}
 
-	if t.sharedPlansDir() != "" {
-		src.shared = t.lay.StorageRoot
-	}
+	src.shared = t.sharedRoot()
 
 	return src
 }

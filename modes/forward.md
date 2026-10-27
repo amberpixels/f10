@@ -1,7 +1,7 @@
 # Mode · forward - a task another worktree holds
 
-A task started with `f10 start` has its own worktree, workspace and agent, and its plan sits in that worktree's storage root.
-Running a task-id command for it here would use the wrong branch and no plan, so `/f10:plan` and `/f10:ship` hand it over first.
+A task started with `f10 start` has its own worktree, workspace and agent.
+Running a task-id command for it here would use the wrong branch, so `/f10:plan` and `/f10:ship` hand it over first.
 
 **Activation:** the argument is a task id, or a `+` bundle of them (`f10 forward` takes it whole and finds the lead's checkout).
 Before loading anything, one call, with the skill that was invoked:

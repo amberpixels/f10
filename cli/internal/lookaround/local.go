@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -25,7 +26,7 @@ type LocalInputs struct {
 	Main       string // the main checkout
 	StateDir   string // run state files
 	TTL        time.Duration
-	SharedRoot string // the one storage root out-of-tree; "" reads each checkout's .f10
+	SharedRoot string // the storage root every checkout shares; "" reads each checkout's .f10
 	LedgerPath string // "" reads no ledger
 	ProjectID  string // the ledger's project id
 	Herdr      bool   // Herdr is reachable: read its workspaces
@@ -140,15 +141,7 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 		}
 	}
 
-	roots := []string{in.SharedRoot}
-	if in.SharedRoot == "" {
-		roots = roots[:0]
-		for _, wt := range wts {
-			roots = append(roots, filepath.Join(wt.Path, ".f10"))
-		}
-	}
-
-	for _, root := range roots {
+	for _, root := range storageRoots(in.SharedRoot, wts) {
 		notes = append(notes, readRoot(root, l)...)
 	}
 
@@ -335,6 +328,25 @@ func dirEntries(dir string) []fs.DirEntry {
 	}
 
 	return entries
+}
+
+// storageRoots are the .f10 dirs holding task files: the shared root, plus
+// a worktree's own where it holds task files from before storage moved to
+// main's; with no shared root, every checkout's.
+func storageRoots(shared string, wts []gitx.Worktree) []string {
+	var roots []string
+	if shared != "" {
+		roots = append(roots, shared)
+	}
+
+	for _, wt := range wts {
+		root := filepath.Join(wt.Path, ".f10")
+		if shared == "" || (canon(root) != canon(shared) && layout.HoldsTaskFiles(root)) {
+			roots = append(roots, root)
+		}
+	}
+
+	return roots
 }
 
 func canon(p string) string {

@@ -66,3 +66,46 @@ func TestResolveModel(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentArgs(t *testing.T) {
+	dirs := func(root string) string {
+		var out []string
+		for _, d := range taskFileDirs {
+			out = append(out, "--add-dir "+root+"/"+d)
+		}
+
+		return strings.Join(out, " ")
+	}
+
+	cases := []struct {
+		name, model, plansDir, worktree string
+		want                            string
+	}{
+		{
+			name: "worktree beside main", plansDir: "/code/repo/.f10/plans", worktree: "/code/repo.GH-1",
+			want: dirs("/code/repo/.f10"),
+		},
+		{
+			name: "with a model", model: "opus", plansDir: "/code/repo/.f10/plans", worktree: "/code/repo.GH-1",
+			want: "--model opus " + dirs("/code/repo/.f10"),
+		},
+		{
+			name: "out of tree", plansDir: "/home/me/.f10/repo/plans", worktree: "/code/repo.GH-1",
+			want: dirs("/home/me/.f10/repo"),
+		},
+		{name: "main itself", plansDir: "/code/repo/.f10/plans", worktree: "/code/repo"},
+		{name: "no shared plans dir", worktree: "/code/repo.GH-1"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := strings.Join(agentArgs(c.model, c.plansDir, c.worktree), " "); got != c.want {
+				t.Errorf("agentArgs = %q, want %q", got, c.want)
+			}
+
+			if strings.Contains(strings.Join(agentArgs(c.model, c.plansDir, c.worktree), " "), "instructions") {
+				t.Error("the instructions dir was added")
+			}
+		})
+	}
+}

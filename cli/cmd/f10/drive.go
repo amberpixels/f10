@@ -348,7 +348,7 @@ type driveInput struct {
 	chain    []string
 	flow     shipFlow                            // the flow typed, or default; a task's branch may record another
 	resolve  func(name string) (shipFlow, error) // a declared flow by name
-	plansDir string                              // the shared plans dir, or "" for in-repo storage
+	plansDir string                              // the plans dir every checkout shares
 	settings string                              // claude's settings file, which names the model a bad --model falls back to
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error                                  // nil when tracker.status declares no started word
