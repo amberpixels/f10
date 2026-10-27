@@ -17,7 +17,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    Only an open PR counts (`OPEN`, `opened` on GitLab): one merged or closed, or none, means open a new one (points 4 and 5); an open one means refresh it (point 6).
    In a ship flow the catchup guard (`steps/catchup.md` → **As a guard**) integrates the base before this step, unless `catchup: off`; this step never integrates it.
 4. **A recorded dependency sets the base.**
-   Where `f10 start --after` recorded one on the branch (`git config --get branch."$(git branch --show-current)".f10-after-branch`), the PR targets that branch (`gh pr create --base <branch>` / `glab mr create --target-branch <branch>`), so it is stacked and the host retargets it when the base merges.
+   Where `f10 start --after` recorded one on the branch (`git config --get branch."$(git branch --show-current)".f10-after-branch`), the PR targets that branch (`gh pr create --base <branch>` / `glab mr create --target-branch <branch>`), so it is stacked and the base's `f10 finish` retargets it to the default branch.
    The base must already be on origin; when it is not, stop and report (`conventions/failure.md`) with the branch named and `next: push the base task's branch`.
    One exception: a base that exists neither locally nor on origin was finished and deleted, so its code is in the default branch: `git config --unset` both keys and open against the default branch.
 5. **Open it** via the project's PR adapter: a skill, or plain `gh pr create` / `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).

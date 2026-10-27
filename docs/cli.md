@@ -188,7 +188,7 @@ A recorded dependency is read back by the ship, pr and catchup steps, not by thi
 Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
 A conflict there stops ship and hands off to `/f10:catchup`, which settles it with both sides kept.
 Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
-The pr step opens the PR or MR against the base branch, so it is stacked and the host retargets it when the base merges; a base not yet on origin stops that step rather than pushing another task's branch.
+The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
 
 It runs inside a Herdr session only.
@@ -215,7 +215,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Open: merged through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI, a required review, conflicts) its reason is the error and nothing has changed.
    Already merged: confirmed.
    Closed without a merge: a refusal.
-   A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and the host retargets this PR.
+   A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and its finish retargets this PR.
    **Someone else's PR.**
    An open PR whose author is not the signed-in host user (`gh api user`) is not merged unasked: with neither flag finish exits **3** having changed nothing, and `/f10:finish` asks whether to merge it or clean up locally.
    `--merge` merges it as above.
@@ -235,8 +235,9 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Absent, the repo's settings decide: on GitHub the one method allowed, else squash with a note beneath the report saying the default was taken and how to declare one; on GitLab the project's squash option, since GitLab fixes the strategy per project.
 4. **The remote branch is deleted** when origin still has it, through the host's API (glab's `--remove-source-branch` usually did it already).
    Its local copy, `refs/remotes/origin/<branch>`, goes too: left behind, it reads as a branch, and drive or start would reopen the finished task.
-   On GitHub, deleting the branch is what retargets a PR stacked on it to main.
-   GitLab retargets when the base's MR is merged, so the same stacked flow works there by a different trigger; deleting the branch alone would not.
+   Before the delete, every open PR or MR based on the branch is retargeted to the merged one's base (`gh pr edit <n> --base` / `glab mr update <iid> --target-branch`), a note each: a branch deleted through the API closes the PRs still based on it.
+   A failed retarget stops finish with the branch left on origin, so the stacked PR stays open; a rerun finds the request merged and retries.
+   A branch the merge already removed (glab's `--remove-source-branch`, GitHub's automatic delete) leaves nothing to retarget: the host did it.
 5. **Main is pulled** with `--ff-only` when the main checkout is on the default branch, else the default branch is fetched into without touching the checkout, and a note says so.
    A main checkout on the task's branch has the default branch fetched into without a note, and stays on the task's branch until after the report, so a failure before then leaves a rerun the same checkout to find.
    Either way the merge commit must be in the local default branch, or the run stops here with nothing removed.
@@ -547,7 +548,7 @@ A host CLI that fails (not logged in, no network) fails the command; it never fa
 - A PR's task id comes from its head branch, then its title; a commit's from its branch, then its subject, read with the project's id format.
   No id puts the PR or commit in `other`.
 - A PR whose base is another of your PRs' head chains under it, listed root first.
-  The base `f10 start --after` recorded wins over the host's, which the host retargets to the default branch once the base merges.
+  The base `f10 start --after` recorded wins over the host's, which the base's finish retargets to the default branch.
   A chain crossing tasks gives the dependent task `after`.
 - Your own PR is reported when you opened or merged it in the period, or it carries a commit of yours from it.
 - Other people's PRs go to `reviewed` when you reviewed them or merged them in the period.
