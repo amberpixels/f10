@@ -31,7 +31,7 @@ flowchart LR
     capSt -->|task id| fetch[fetch]
     fetch -->|investigation brief| plan[plan]
     plan -->|".f10/plans/&lt;TASK-ID&gt;.md"| implement
-    subgraph shippipe ["ship pipeline - declared per project (default: implement → pr)"]
+    subgraph shippipe ["flow - declared per project (default: plan implement pr)"]
         implement[implement] --> pr[pr]
         implement -.-> clean["cleanup (comments · prose · code)"] -.-> revL
         implement -.-> revL["review (local, both halves)"] -.-> pr
@@ -50,7 +50,7 @@ flowchart LR
     catch -.->|"merge or rebase · conflicts settled"| uptodate(["on its base"])
 ```
 
-Solid arrows are the default pipeline.
+Solid arrows are the default flow.
 Dashed ones are optional: `brainstorm`, `judge`, `demo`, `explain` and `catchup` when you ask, the rest where a project declares them.
 Each skill is an **entry point** into the chain:
 
@@ -60,7 +60,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:judge <idea \| id \| PR \| commit> [--blind]` | judge | a verdict: proceed, proceed with changes, rethink, or stop |
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan <id \| desc>` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
-| `/f10:ship <id \| plan.md \| desc>` | whatever's missing, then the ship pipeline | end of the declared pipeline (an open PR by default); or handed to the task's own agent |
+| `/f10:ship <id \| plan.md \| desc>` | whatever's missing, then the flow | end of the declared flow (an open PR by default); or handed to the task's own agent |
 | `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose to plain rules, leftovers out of the code; each diff proven in scope, verify green, nothing committed |
 | `/f10:review <id \| PR \| this branch> [ci]` | review | a findings file from a reviewer that never saw your session, or read in from the CI review |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, fixes verified, asks in one questionnaire |
@@ -102,7 +102,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 # → investigates the code, writes .f10/plans/ABC-1042.md, stops before any code
 
 /f10:ship ABC-1042
-# → reuses the saved plan (asks first), then runs the ship pipeline
+# → reuses the saved plan, then runs the flow's entries after plan
 
 /f10:ship fix the flaky retry test
 # → or skip the ceremony: capture-plan-ship a small chore in one go
@@ -160,10 +160,13 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   Nothing is pushed.
 - **Step** - the unit of work in `steps/*.md`.
   Skills are thin routers over steps.
-- **Ship pipeline** - what `/f10:ship` runs after planning, declared in `project.md` (default `implement → pr`).
+- **Flow** - every step a task runs through, declared under `flows:` in `project.md` (default `plan implement pr`); `f10 flow` lists them.
+  `plan` leads and runs only for a task with no plan file; `/f10:ship` runs the entries after it.
+  An entry takes an argument after a colon: `review:local`, `review:ci`, `cleanup:comments,prose`, `deploy:staging`.
+  `judge` before `implement` judges the plan, after it the change.
   A name with no generic step (e.g. `e2e`) is project-defined: `.f10/instructions/<name>.md` *is* the step.
-  Of several **named pipelines**, only the user picks a non-default one.
-  A *(planless)* one skips the plan file, and for free text the ticket too.
+  `f10 start` and `f10 drive` run `default`, `--local` runs `local`, `--flow <name>` any other.
+  A flow with no leading `plan` skips the plan file, and for free text the ticket too.
 - **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, the project.md core, stealth, task references), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how it talks).
   A hook tells the model to load them when a skill starts and again after compaction; the project's instructions reload every run.
 - **Mode** - a run in `modes/` that changes execution: `help.md` (`--help`), `dry-run.md` (`--dry-run`), `driven.md` (`--driven`, a run prompted from another session) and `forward.md` (a task id another worktree holds).
@@ -252,7 +255,7 @@ It is a drawing, not a screenshot: that private-use codepoint shows as an empty 
 | `◎` | running |
 | `●` | done |
 | `◉` | prior - done before this run (`/f10:ship ABC-1` reusing a saved plan) |
-| `◌` | skipped - will not happen this run (a planless pipeline never plans) |
+| `◌` | skipped - will not happen this run (a planless flow never plans) |
 | `󰅚` (U+F015A) | partial - stopped, but work survived (committed but push failed, PR open but CI red) |
 | `✗` | failed - the run stopped here with nothing usable |
 | `󰜺` (U+F073A) | blocked - a judge verdict ended the run; nothing broke, the user decided |
@@ -414,7 +417,8 @@ For Notion, [f10-drivers](https://github.com/amberpixels/f10-drivers) is a ready
 ```bash
 f10 start 1042                # branch, worktree, Herdr workspace, claude prompted with plan + ship (ship alone when main saved a plan)
 f10 start 1042 --plan         # prompt the plan only
-f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
+f10 start 1042 --local        # ship through the project's `local` flow: commits, nothing pushed
+f10 start 1042 --flow direct  # ship through any declared flow (`f10 flow` lists them)
 f10 start 1042 --discuss      # fetch the task and wait: talk it through in the new pane before any plan
 f10 start 1042 --discuss "/f10:judge it first"   # fetch, run the note, then wait
 f10 start 1042 --after 1040   # base the branch on that task's branch, record the dependency, stack the PR
@@ -451,14 +455,14 @@ Judge, demo and explain are never forwarded; they read another worktree's branch
 `f10 drive` moves a list of tasks, from the main session:
 
 ```bash
-f10 drive 1042 1043                  # each task through project.md's Drive chain, bases first
-f10 drive 1042 -- 1047 judge ship    # every id from 1042 to 1047, through judge and ship only
+f10 drive 1042 1043                  # each task through the default flow, bases first
+f10 drive 1042 -- 1047 --local       # every id from 1042 to 1047, through the local flow
 f10 drive 1042 1043 --answer "1. proceed"   # the same command, answering the question it stopped on
 ```
 
 A task opens once its base's branch has a commit of its own, and its `finish` waits until the base finished; every task released that way runs at once, opened as `f10 start` does, its agent prompted one skill at a time (Herdr says when a turn ends, run state says how).
 `finish` runs in the driver.
-The chain is `plan → judge → ship → review → resolve → finish` unless `project.md` declares a **Drive chain** or the command names one.
+Each task gets `/f10:plan` when the flow leads with `plan` and it has no plan file, then `/f10:ship`, which runs the rest of the flow, then `finish` when `drive_finish: on`.
 An agent's question exits 4, and `/f10:drive` asks you and reruns with one answer per asking task.
 A judge stop or failure halts that task and its dependents, the rest run on, and the exit is 5.
 A started task whose base just finished is caught up by `/f10:catchup` first.
@@ -515,7 +519,7 @@ Next: the `/f10:init` skill over `f10 init` (the `Project` line and guardrails r
 
 ## Docs
 
-- [Setting up a project](docs/project-setup.md): `f10 init`, `project.md`, overlays, pipelines, storage, worktrees.
+- [Setting up a project](docs/project-setup.md): `f10 init`, `project.md`, overlays, flows, storage, worktrees.
 - [The status line](docs/statusline.md): wiring the badge and reading it.
 - [The `f10` binary](docs/cli.md): every command, references, output.
 - [The driver contract](docs/driver-contract.md): a tracker without a CLI.

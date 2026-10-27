@@ -131,7 +131,7 @@ The entry's trace on the PR (`traces: on`) is made the same way, by its last res
 
 ## The remote review
 
-**`review (CI)` in a pipeline, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
+**`review:ci` in a flow, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
 The four `review:` facts in the frontmatter, and an optional fifth, are the protocol, applied by `f10 review pick|wait|ack|settle|trigger` over `gh` or `glab`, each with a fixed vocabulary:
 
 - **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
@@ -148,7 +148,7 @@ The four `review:` facts in the frontmatter, and an optional fifth, are the prot
 For a value outside the vocabulary `f10 review` refuses, naming the fact.
 Without them this half **fails**: there is nothing to wait for.
 
-1. **Pick**, in a ship pipeline's `review (CI)`.
+1. **Pick**, in a flow's `review:ci`.
    `f10 review pick` prints the latest unhandled review by the declared reviewer (`--json` for a struct); a settled one is never picked.
    None done yet, with an **automatic** trigger: `f10 review wait --budget 8m`, once more if it expires, then fail.
    Keep the Bash timeout above the budget.

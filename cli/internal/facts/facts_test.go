@@ -153,12 +153,10 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 	eff := Build(lay, pb)
 
 	for name, want := range map[string]struct{ origin, value string }{
-		"Project":          {origin: OriginDetected, value: "Go (go.mod)"},
-		"Tracker":          {origin: OriginDetected, value: "GitHub Issues (via gh)"},
-		"Ship pipeline(s)": {origin: OriginDefault, value: "implement → pr"},
-		"Drive chain":      {origin: OriginDefault, value: DefaultDriveChain},
-		"Visibility":       {origin: OriginDefault, value: "stealth"},
-		"Roles":            {origin: OriginAbsent, value: ""},
+		"Project":    {origin: OriginDetected, value: "Go (go.mod)"},
+		"Tracker":    {origin: OriginDetected, value: "GitHub Issues (via gh)"},
+		"Visibility": {origin: OriginDefault, value: "stealth"},
+		"Roles":      {origin: OriginAbsent, value: ""},
 	} {
 		f := fieldByName(t, eff, name)
 		if f.Origin != want.origin || f.Value != want.value {

@@ -42,11 +42,10 @@ type view struct {
 	Catchup         string              `json:"catchup"`
 	Traces          bool                `json:"traces"`
 	Lore            string              `json:"lore"`
-	Pipelines       map[string][]string `json:"pipelines"`
-	Planless        []string            `json:"planless,omitempty"`
-	ByArea          map[string]string   `json:"pipelineByArea,omitempty"`
+	Flows           map[string][]string `json:"flows"`
+	FlowByArea      map[string]string   `json:"flowByArea,omitempty"`
+	DriveFinish     bool                `json:"driveFinish"`
 	ReportBack      bool                `json:"reportBack"`
-	DriveChain      []string            `json:"driveChain"`
 	Facts           []facts.Fact        `json:"facts"` // every typed value with its origin
 	Problems        []facts.Problem     `json:"problems,omitempty"`
 	Roots           []string            `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
@@ -97,11 +96,10 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Catchup:         eff.Catchup,
 		Traces:          eff.Traces,
 		Lore:            eff.Lore,
-		Pipelines:       eff.Pipelines,
-		Planless:        eff.Planless,
-		ByArea:          eff.ByArea,
+		Flows:           eff.Flows,
+		FlowByArea:      eff.FlowByArea,
+		DriveFinish:     eff.DriveFinish,
 		ReportBack:      eff.ReportBack,
-		DriveChain:      eff.DriveChain,
 		Facts:           eff.Facts,
 		Problems:        eff.Problems,
 		Roots:           projects.Roots(),

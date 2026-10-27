@@ -2,7 +2,7 @@
 
 A lookaround, and the commands that start, reach, drive and finish a task.
 The lookaround verbs explain the loaded configuration and read the things it points at, changing nothing.
-Five verbs act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already has, `drive` runs a list of tasks through a chain of skills that way, and `finish` merges the task's PR (or a branch never pushed, locally) and removes what start created.
+Five verbs act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already has, `drive` runs a list of tasks through a flow that way, and `finish` merges the task's PR (or a branch never pushed, locally) and removes what start created.
 
 The plugin requires the binary and ships it as `bin/f10`, a shim that runs the build matching `plugin.json`'s version.
 The skills and the binary are one contract: the skill text describes the flags the binary takes.
@@ -33,8 +33,10 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 
 ```bash
 f10 init                 # register this checkout: write project.md from detection
-f10 init --migrate       # move the facts an older project.md declares in prose into its frontmatter
+f10 init --migrate       # move the facts an older project.md declares in prose into its frontmatter, and old keys into flows
 f10 config [--json]      # the effective configuration, with the origin of every value
+f10 flow [--json]        # the declared flows, each with what selects it, and drive_finish
+f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
@@ -59,9 +61,9 @@ f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 
-f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
-f10 drive <id | id+id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base has a commit
+f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a flow, each task once its base has a commit
 f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
@@ -113,11 +115,12 @@ A scoped problem (`herdr`, `statusline`) is printed but affects only what it nam
 It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else the bare id with a note when the host returns no title), creates the worktree beside the main checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling path - opens it as a Herdr workspace, starts a claude agent in its root pane and prompts it.
 The command returns as soon as the prompt is submitted; the work happens in the new workspace.
 
-- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--local` ships through the project's `local` pipeline, so nothing is pushed; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
+- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--flow <name>` ships through that declared flow, `/f10:ship <name>: <id>`, and `--local` is `--flow local`, so nothing is pushed; a flow with no leading `plan` sends ship alone; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
   Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`); a note goes only with `--discuss` or a PR pickup, and any other mode refuses one, since a driven run takes its instructions from the task.
-  The three are exclusive
+  The three are exclusive, and `--flow` or `--local` with `--plan` or `--discuss` is refused, since both stop before ship
+- the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 drive`
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) is moved, not copied, into the new worktree's `.f10/plans/`, so one plan exists and a later `/f10:ship <id>` in main finds none.
-  The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship local: <id>` with `--local`; `--plan` still plans, and the plan step archives the moved one; `--discuss` names the plan's path.
+  The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` still plans, and the plan step archives the moved one; `--discuss` names the plan's path.
   The report gains a `plan` row and a note beneath saying it was moved from main.
   A worktree that already holds its own plan (start rerun on an existing worktree) keeps it and ships it, and main's is left in place with a note.
   Out-of-tree storage shares one plans dir, so nothing moves and only the prompt changes.
@@ -168,7 +171,7 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   Where several workspaces show the checkout, the one with an agent is adopted, else the first, and each other one is named in a note with the command that closes it; none is closed.
   One with no agent in its root pane (a start that failed earlier) gets one started and prompted when that pane is an idle shell; a pane running anything else is left alone
 - a fresh pane whose shell is still running its rc files refuses the agent as busy; start retries every 200ms for up to 5s before failing with Herdr's error, and prints a line to stderr at least every second while it waits
-- `--local` refuses before creating anything when `project.md` declares no `local` pipeline, since ship never picks a pipeline unasked
+- `--flow` and `--local` refuse before creating anything when `project.md` declares no such flow, printing the list `f10 flow` prints, since ship never picks a flow unasked
 
 **Bundles.**
 `f10 start ABC-1+ABC-2` ships several tasks as one branch, one worktree, one agent and one PR.
@@ -315,7 +318,7 @@ Color is off when stdout is not a terminal or `NO_COLOR` is set.
 `f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the one `done` row of a task with no branch left prints them as lines under it:
 
 ```
-ship            running: review (local)
+ship            running: review:local
   implement     done
   cleanup       done
   pr            done
@@ -324,11 +327,11 @@ ship            running: review (local)
   pr            pending
 ```
 
-- **The flow** is ship's pipeline as `f10 state pipeline` recorded it (else the project's `default` pipeline), inside the chain `f10 drive` recorded on the branch (`branch.<name>.f10-chain`): a chain `judge` before `ship` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
+- **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`, else `default`), inside the chain `f10 drive` recorded on the branch (`branch.<name>.f10-chain`), which adds `finish`: a `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
 - **A plain step** is `done` before the step ship is on, that step takes the run's status (`running`, `blocked`, ...), the rest are `pending`; once ship is done, a step it never entered is `skipped`.
 - **Review** has a local and a remote half, each `pending`, `running` (its round, and `in ship`, `driven` or `manual`; `resolve running` while a resolve settles it), `open` (`N open of M found`, or `open (not handled)` on the host), `settled` (`3 found (2 fixed, 1 skipped)`, `clean`), or `unknown`.
   A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote half's, and inside ship the half reads `resolve running` once a round lands after ship entered the review.
-  The remote half is in the flow when a pipeline entry names a remote review, or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
+  The remote half is in the flow when an entry names a remote review (`review:ci`), or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
 - **Judge** reads `pending`, `running`, or its outcome and reason; a judge or review half the flow does not declare shows once one ran, and otherwise the row reads `not in this flow`.
 - **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), the remote half's when its `reviewer:` is not `local`; the newest `verdicts/<id>/<n>.md`, the plan judge's when its `subject:` is a plan.
 
@@ -342,16 +345,16 @@ A task whose checkout has its branch is read from there first, so only a task wi
 
 ## Drive
 
-`f10 drive 42 43 judge ship` runs tasks through a chain of skills from the main session.
+`f10 drive 42 43` runs tasks through a flow from the main session.
 Each task waits for its one base to have a commit, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
 The driver is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
-   Then, optionally, the chain: any of `plan`, `judge`, `ship`, `review`, `resolve`, `finish`, each once, `finish` last; arrows and commas between them are ignored.
-   No chain named: `project.md → Drive chain`, else `plan → judge → ship → review → resolve → finish`.
-   When the `default` pipeline is planless, `plan` drops out of that chain; a chain named here runs as typed.
-   `--model`, `--answer` and `--every` go anywhere.
+   The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
+   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the frontmatter's `drive_finish` is on.
+   A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
+   `--flow`, `--local`, `--model`, `--answer` and `--every` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--model` starts every agent on that model, read as start reads it; `<id>:<model>` starts one task's agent on its own, which wins (`42:sonnet 43 --model opus`).
    Only a colon with no slash after it is read this way, so a url keeps its own.
@@ -383,10 +386,11 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
    Nothing is prompted at open.
    The chain runs from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
-   A plan the worktree reads when the driver starts its agent counts as plan done, so the default chain resumes at `judge` rather than planning again.
+   A plan the worktree reads when the driver starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
+   A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
-   Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, and review gets `ci` where `project.md` declares a remote review.
+   Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, and ship names its flow unless it is `default`.
 5. **Catchup when the base moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
    The catchup merges the local base branch, whatever `catchup:` says, so no push is needed.

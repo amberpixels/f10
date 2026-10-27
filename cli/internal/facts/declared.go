@@ -32,13 +32,18 @@ type Declared struct {
 	Traces       string            `yaml:"traces,omitempty"`
 	Lore         string            `yaml:"lore,omitempty"`
 	ReviewTraces string            `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
-	Pipelines    map[string]Steps  `yaml:"pipelines,omitempty"`
-	Planless     []string          `yaml:"planless,omitempty"`
-	ByArea       map[string]string `yaml:"pipeline_by_area,omitempty"` // an area, in Roles' plain words, to the pipeline its tasks ship through
+	Flows        map[string]Flow   `yaml:"flows,omitempty"`
+	FlowByArea   map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
+	DriveFinish  string            `yaml:"drive_finish,omitempty"`
 	ReportBack   string            `yaml:"report_back,omitempty"`
-	DriveChain   Steps             `yaml:"drive_chain,omitempty"`
-	Review       ReviewDecl        `yaml:"review,omitempty"`
-	Standup      StandupDecl       `yaml:"standup,omitempty"`
+
+	// The keys flows replaces, read and converted with a warning.
+	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
+	Planless   []string          `yaml:"planless,omitempty"`
+	ByArea     map[string]string `yaml:"pipeline_by_area,omitempty"`
+	DriveChain Steps             `yaml:"drive_chain,omitempty"`
+	Review     ReviewDecl        `yaml:"review,omitempty"`
+	Standup    StandupDecl       `yaml:"standup,omitempty"`
 }
 
 // TrackerDecl is the tracker's kind, its task id format (`FT-###`), the
@@ -177,6 +182,7 @@ var vocab = map[string][]string{
 	"lore":          {"local", "committed"},
 	"review_traces": {"on", "off"},
 	"report_back":   {"on", "off"},
+	"drive_finish":  {"on", "off"},
 }
 
 // trackerKinds maps the declared kind to the name the rest of f10 shows.
@@ -187,8 +193,8 @@ var trackerKinds = map[string]string{
 	"jira":   "Jira",
 }
 
-// check reports every value outside its vocabulary, and a planless name
-// that names no pipeline.
+// check reports every value outside its vocabulary, a malformed flow, and
+// a planless name that names no pipeline.
 func (d Declared) check() []string {
 	var bad []string
 
@@ -203,6 +209,7 @@ func (d Declared) check() []string {
 		"lore":          d.Lore,
 		"review_traces": d.ReviewTraces,
 		"report_back":   d.ReportBack,
+		"drive_finish":  d.DriveFinish,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
 			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
@@ -223,6 +230,10 @@ func (d Declared) check() []string {
 		if _, ok := d.Pipelines[name]; !ok {
 			bad = append(bad, fmt.Sprintf("planless: %q names no pipeline", name))
 		}
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(d.Flows)) {
+		bad = append(bad, checkFlow(name, d.Flows[name])...)
 	}
 
 	for _, moment := range slices.Sorted(maps.Keys(d.Tracker.Status)) {
@@ -332,6 +343,9 @@ func (l *layered) merge(d Declared, label string) {
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
 	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
 	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
+	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
+	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
+	set("drive_finish", d.DriveFinish != "", func() { l.DriveFinish = d.DriveFinish })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("pipeline_by_area", d.ByArea != nil, func() { l.ByArea = d.ByArea })

@@ -10,7 +10,7 @@ Badge: none; inside a ship pipeline the leaf is `cleanup`.
 `comments` (source comments cut to the why), `prose` (markdown: skills, prompts, steps, docs), `code` (development leftovers in source).
 Named ones run in that order: `code`, `comments`, `prose`, since `code` may delete a comment `comments` would have rewritten.
 None named: `code` and `comments` when the scope holds source files, `prose` when it holds markdown.
-A pipeline entry names targets in parentheses, `cleanup (comments, prose)`; bare `cleanup` takes the default.
+A flow entry names targets after a colon, `cleanup:comments,prose`; bare `cleanup` takes the default.
 Bug hunting is not a target: it stays with review.
 
 **Scope.**

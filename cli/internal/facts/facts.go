@@ -74,13 +74,12 @@ type Effective struct {
 	// declared: finish asks the repo.
 	MergeMethod string              `json:"mergeMethod,omitempty"`
 	Catchup     string              `json:"catchup"`
-	Traces      bool                `json:"traces"` // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
-	Lore        string              `json:"lore"`   // local: lore under the storage root; committed: .lore/ at the checkout root
-	Pipelines   map[string][]string `json:"pipelines"`
-	Planless    []string            `json:"planless,omitempty"`
-	ByArea      map[string]string   `json:"pipelineByArea,omitempty"` // pipeline_by_area: an area to the pipeline its tasks ship through
-	ReportBack  bool                `json:"reportBack"`               // report_back: a ship run posts its shipment on the task; on unless declared off
-	DriveChain  []string            `json:"driveChain"`
+	Traces      bool                `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
+	Lore        string              `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
+	Flows       map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
+	FlowByArea  map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
+	DriveFinish bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
+	ReportBack  bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
 	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
 	// Facts is every typed value with its origin; Problems what is wrong
@@ -92,18 +91,13 @@ type Effective struct {
 	twice     [][2]string // file, key: a fact both places declare alike
 }
 
-// DefaultDriveChain is the chain `f10 drive` runs each task through when
-// project.md declares none: review after ship reviews the shipment, and
-// resolve settles it before finish merges.
-const DefaultDriveChain = "plan → judge → ship → review → resolve → finish"
-
 // contractFields is the project.md contract. The order is presentation
 // order, not the contract's listing order: the short identity facts
 // (Project, Visibility, Storage, Layering) lead, the prose fields follow.
 func contractFields() []string {
 	return []string{
 		"Project", "Visibility", "Storage", "Layering", "Roles", "Tracker",
-		"Hosting & PR", "Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails",
+		"Hosting & PR", "Verify", "Review", "Guardrails",
 	}
 }
 
@@ -362,10 +356,6 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 			Origin: OriginDetected,
 			Source: pb.CLI.Evidence,
 		}
-	case "Ship pipeline(s)":
-		return Field{Name: name, Value: "implement → pr", Origin: OriginDefault}
-	case "Drive chain":
-		return Field{Name: name, Value: DefaultDriveChain, Origin: OriginDefault}
 	case "Verify":
 		return detectedList(name, pb.Verify)
 	case "Visibility":

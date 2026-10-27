@@ -32,11 +32,13 @@ import (
 // polling are deterministic, and a session polling an agent pays a round
 // trip and a slice of context per check.
 //
-// The chain is skills, not pipeline steps: start and finish create and
-// destroy the worktree and are this binary's own, so drive runs them in
-// process; plan, judge, ship, review and resolve go to the task's agent
-// as prompts. After each prompt it polls Herdr's agent status for the
-// turn's start and end, and the task's run state for the outcome.
+// The chain is derived from the flow, never declared: plan when the flow
+// has a plan entry, ship, which runs every other entry, and finish when
+// drive_finish is on. start and finish create and destroy the worktree and
+// are this binary's own, so drive runs them in process; plan and ship go to
+// the task's agent as prompts. After each prompt it polls Herdr's agent
+// status for the turn's start and end, and the task's run state for the
+// outcome.
 //
 // Rerunning the same command is the resume. A finished task is skipped, a
 // started one reads its position from its branch, and an ask is answered
@@ -44,11 +46,12 @@ import (
 func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
-		Usage: "run a list of tasks through a chain of skills, each once its base has a commit, stopping when an agent asks",
-		ArgsUsage: "<id>[:model]... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
+		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping when an agent asks",
+		ArgsUsage: "<id>[:model]... | <id> -- <id>  [--flow NAME | --local] " +
 			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]",
-		Description: "The chain defaults to project.md's Drive chain, else " +
-			"plan → judge → ship → review → resolve → finish; plan drops out of it when the default pipeline is planless.\n" +
+		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
+			"plan when the flow has a plan entry and the task no plan file, then ship, " +
+			"then finish when drive_finish is on. A rerun keeps the flow a task's branch records.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
 			"every task whose base branch has a commit runs at once, its finish waits for the base's, " +
 			"and a halt stops only its dependents.\n" +
@@ -58,6 +61,7 @@ func driveCommand() *cli.Command {
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
 		SkipFlagParsing: true,
 		Action:          runDrive,
+		ShellComplete:   completeFlow,
 	}
 }
 
@@ -84,9 +88,24 @@ const (
 	cfgChain = "f10-chain"
 )
 
-// chainSkills is the chain's vocabulary. start is implicit: a task needs a
-// worktree before anything else runs.
-var chainSkills = []string{"plan", "judge", "ship", "review", "resolve", "finish"}
+// oldChainSkills are the words a typed chain used, refused with a pointer
+// at what replaced it.
+var oldChainSkills = []string{"plan", "judge", "ship", "review", "resolve", "finish"}
+
+// driveChain is what drive runs a task through on a flow.
+func driveChain(fl shipFlow, finish bool) []string {
+	var chain []string
+	if !fl.planless {
+		chain = append(chain, "plan")
+	}
+
+	chain = append(chain, "ship")
+	if finish {
+		chain = append(chain, "finish")
+	}
+
+	return chain
+}
 
 func runDrive(ctx context.Context, cmd *cli.Command) error {
 	argv := cmd.Args().Slice()
@@ -108,28 +127,19 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	chain := a.chain
-	if len(chain) == 0 {
-		if chain, err = parseChain(t.eff.DriveChain); err != nil {
-			return fmt.Errorf("project.md Drive chain: %w", err)
-		}
-
-		var dropped bool
-		if chain, dropped = planlessChain(chain, t.eff.Planless); dropped {
-			fmt.Fprintln(cmd.Writer, "plan skipped: the default pipeline is planless")
-		}
-
-		if len(chain) == 0 {
-			return errors.New("project.md Drive chain: only plan, and the default pipeline is planless")
-		}
+	fl, err := resolveShipFlow(t.eff, a.flow)
+	if err != nil {
+		return err
 	}
+
+	chain := driveChain(fl, t.eff.DriveFinish)
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 	drv := t.driver()
 	h, hostErr := t.host()
 
 	if slices.Contains(chain, "finish") && hostErr != nil {
-		return fmt.Errorf("the chain ends in finish, which merges through the host: %w", hostErr)
+		return fmt.Errorf("drive_finish is on, and finish merges through the host: %w", hostErr)
 	}
 
 	return drive(ctx, cmd.Writer, &driveInput{
@@ -139,7 +149,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		args:     a,
 		argv:     argv,
 		chain:    chain,
-		remote:   t.eff.Review.Remote(),
+		flow:     fl,
+		resolve:  func(name string) (shipFlow, error) { return resolveShipFlow(t.eff, name) },
 		plansDir: t.sharedPlansDir(),
 		settings: claudeSettingsPath(),
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
@@ -182,15 +193,14 @@ type driveArgs struct {
 	models  []string // each task's :model as typed, indexed like tasks, "" for none
 	model   string   // --model as typed: every task's model unless its own names one
 	span    bool
-	chain   []string
+	flow    string   // --flow, or local for --local; "" for default
 	answers []string // each --answer as typed: `GH-1=text` for one task, or bare text
 	every   time.Duration
 }
 
-// parseDriveArgs reads tasks, then skills, with --model, --answer and
-// --every anywhere. A token in the chain vocabulary is a skill; every other one is
-// a task, and a task after a skill is refused, since a list and a chain
-// interleaved is a typo more often than a plan.
+// parseDriveArgs reads tasks, with --model, --answer, --every, --flow and
+// --local anywhere. A chain skill typed after the ids is refused: the flow
+// says what runs.
 func parseDriveArgs(args []string) (driveArgs, error) {
 	a := driveArgs{every: defaultEvery}
 
@@ -198,7 +208,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		tok := strings.TrimSpace(args[i])
 
 		name, value, inline := strings.Cut(tok, "=")
-		if name == "--model" || name == "--answer" || name == "--every" {
+		if name == "--model" || name == "--answer" || name == "--every" || name == "--flow" {
 			if !inline {
 				if i+1 >= len(args) {
 					return driveArgs{}, fmt.Errorf("%s needs a value", name)
@@ -220,20 +230,28 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		switch {
 		case tok == "":
 			continue
+		case tok == "--local":
+			if a.flow != "" && a.flow != "local" {
+				return driveArgs{}, fmt.Errorf("--local and --flow %s name two flows", a.flow)
+			}
+
+			a.flow = "local"
 		case tok == "--":
-			if a.span || len(a.tasks) != 1 || len(a.chain) > 0 {
+			if a.span || len(a.tasks) != 1 {
 				return driveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")
 			}
 
 			a.span = true
 		case isArrow(tok):
 			continue
-		case slices.Contains(chainSkills, skill):
-			a.chain = append(a.chain, skill)
+		case slices.Contains(oldChainSkills, skill):
+			return driveArgs{}, fmt.Errorf("%s: drive takes no chain; it runs the project's flow "+
+				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
-			return driveArgs{}, fmt.Errorf("unknown flag %s: drive takes --model, --answer and --every", tok)
-		case len(a.chain) > 0:
-			return driveArgs{}, fmt.Errorf("%s follows the chain: the tasks come first, then the skills", tok)
+			return driveArgs{}, fmt.Errorf(
+				"unknown flag %s: drive takes --flow, --local, --model, --answer and --every",
+				tok,
+			)
 		default:
 			task, m, err := splitModel(tok)
 			if err != nil {
@@ -251,10 +269,6 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		return driveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")
 	case a.span && slices.ContainsFunc(a.models, func(m string) bool { return m != "" }):
 		return driveArgs{}, errors.New("a range takes the run-wide --model, not one on its ends")
-	}
-
-	if err := checkChain(a.chain); err != nil {
-		return driveArgs{}, err
 	}
 
 	return a, nil
@@ -276,6 +290,19 @@ func (a *driveArgs) set(name, value string) error {
 		if value = strings.TrimSpace(value); value != "" {
 			a.answers = append(a.answers, value)
 		}
+
+		return nil
+	case "--flow":
+		value = strings.ToLower(strings.TrimSpace(value))
+
+		switch {
+		case value == "":
+			return errors.New("--flow needs a flow name")
+		case a.flow != "" && a.flow != value:
+			return fmt.Errorf("--flow %s: the run already names the %s flow", value, a.flow)
+		}
+
+		a.flow = value
 
 		return nil
 	}
@@ -310,52 +337,6 @@ func isArrow(tok string) bool {
 	return tok == "→" || tok == "->" || tok == ","
 }
 
-// parseChain checks a declared chain: the skills in order, in any case.
-func parseChain(declared []string) ([]string, error) {
-	chain := make([]string, 0, len(declared))
-	for _, s := range declared {
-		chain = append(chain, strings.ToLower(s))
-	}
-
-	if len(chain) == 0 {
-		return nil, errors.New("no skills in it")
-	}
-
-	return chain, checkChain(chain)
-}
-
-// planlessChain drops plan from a declared chain when the default pipeline,
-// the one a driven ship runs, is planless: its ship writes no plan file.
-func planlessChain(chain, planless []string) ([]string, bool) {
-	if !slices.Contains(planless, "default") || !slices.Contains(chain, "plan") {
-		return chain, false
-	}
-
-	return slices.DeleteFunc(slices.Clone(chain), func(s string) bool { return s == "plan" }), true
-}
-
-// checkChain refuses a skill outside the vocabulary, and one named twice:
-// a task's position is the last skill it finished, which a repeat makes
-// ambiguous.
-func checkChain(chain []string) error {
-	for i, s := range chain {
-		if !slices.Contains(chainSkills, s) {
-			return fmt.Errorf("%s is not a chain skill: the chain takes %s (start is implicit)",
-				s, strings.Join(chainSkills, ", "))
-		}
-
-		if slices.Contains(chain[:i], s) {
-			return fmt.Errorf("%s appears twice in the chain", s)
-		}
-	}
-
-	if i := slices.Index(chain, "finish"); i >= 0 && i != len(chain)-1 {
-		return errors.New("finish removes the worktree, so it ends the chain")
-	}
-
-	return nil
-}
-
 // driveInput is everything drive needs once the target is settled, so the
 // flow can be tested without a checkout, a clock or a wait.
 type driveInput struct {
@@ -365,9 +346,10 @@ type driveInput struct {
 	args     driveArgs
 	argv     []string // the command line as given, for the resume command
 	chain    []string
-	remote   bool   // project.md declares a remote review: review reads it rather than reviewing locally
-	plansDir string // the shared plans dir, or "" for in-repo storage
-	settings string // claude's settings file, which names the model a bad --model falls back to
+	flow     shipFlow                            // the flow typed, or default; a task's branch may record another
+	resolve  func(name string) (shipFlow, error) // a declared flow by name
+	plansDir string                              // the shared plans dir, or "" for in-repo storage
+	settings string                              // claude's settings file, which names the model a bad --model falls back to
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error                                  // nil when tracker.status declares no started word
 	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error // pr: "", or the answer merge or local
@@ -416,8 +398,9 @@ type driveRun struct {
 	base      *driveRun // the listed base, or nil for none or one outside the list
 	o         openedTask
 	opened    bool
-	pos       int    // the chain element in flight, or the next one
-	skill     string // what is in flight: a chain skill, or catchup
+	flow      shipFlow // the flow this task ships through: its branch's record, else the run's
+	pos       int      // the chain element in flight, or the next one
+	skill     string   // what is in flight: a chain skill, or catchup
 	sentAt    time.Time
 	begun     bool
 	idleSince time.Time
@@ -1047,6 +1030,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		title:    title,
 		model:    task.model,
 		progress: w,
+		flowKept: true,
 	})
 	if err != nil {
 		return err
@@ -1058,7 +1042,16 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
 	}
 
-	// status reads the chain to list the gates drive runs outside ship
+	fl, flowNote, err := in.keepFlow(ctx, o.branch)
+	if err != nil {
+		return err
+	}
+
+	if flowNote != "" {
+		o.notes = append(o.notes, flowNote)
+	}
+
+	// status reads finish off the chain
 	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(in.chain, " ")); err != nil {
 		return fmt.Errorf("recording the chain: %w", err)
 	}
@@ -1067,12 +1060,12 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		fmt.Fprintf(w, "  %s\n", n)
 	}
 
-	pos, err := in.position(ctx, o)
+	pos, err := in.position(ctx, o, fl)
 	if err != nil {
 		return err
 	}
 
-	r.o, r.opened, r.pos = o, true, pos
+	r.o, r.opened, r.pos, r.flow = o, true, pos, fl
 	if o.fresh {
 		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
 	}
@@ -1080,11 +1073,48 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	return nil
 }
 
+// keepFlow is the flow a task runs: one its branch already records wins
+// over the run's, since switching mid-run would rerun or skip entries ship
+// already declared; a branch with none records the run's. A recorded flow
+// project.md no longer declares gives way to the run's, with a note.
+func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, string, error) {
+	key := "branch." + branch + "." + cfgFlow
+
+	recorded := gitx.Out(ctx, in.main, "config", "--get", key)
+	if recorded == in.flow.recorded() {
+		return in.flow, "", nil
+	}
+
+	if recorded != "" && in.resolve != nil {
+		name := recorded
+		if name == "default" {
+			name = ""
+		}
+
+		if fl, err := in.resolve(name); err == nil {
+			return fl, fmt.Sprintf("kept the %s flow its branch records; the run's %s does not apply to it",
+				recorded, in.flow.recorded()), nil
+		}
+	}
+
+	if err := gitx.SetConfig(ctx, in.main, key, in.flow.recorded()); err != nil {
+		return shipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
+	}
+
+	if recorded != "" {
+		return in.flow, fmt.Sprintf("its branch recorded the %s flow, which project.md no longer declares; running %s",
+			recorded, in.flow.recorded()), nil
+	}
+
+	return in.flow, "", nil
+}
+
 // position is how many chain skills the task is past: the last one drive
 // recorded on the branch, else what its run state proves - plan and ship
 // are the phases the badge tracks - and a plan the worktree reads counts as
-// plan done, so driven ship takes it rather than planning again.
-func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
+// plan done, so driven ship takes it rather than planning again; so does a
+// flow with no plan entry, kept from the branch on a run whose flow has one.
+func (in *driveInput) position(ctx context.Context, o openedTask, fl shipFlow) (int, error) {
 	if last := gitx.Out(ctx, in.main, "config", "--get", "branch."+o.branch+"."+cfgDrive); last != "" {
 		if i := slices.Index(in.chain, last); i >= 0 {
 			return i + 1, nil
@@ -1093,7 +1123,7 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 
 	pos := 0
 
-	if i := slices.Index(in.chain, "plan"); i >= 0 && o.plan != "" {
+	if i := slices.Index(in.chain, "plan"); i >= 0 && (o.plan != "" || fl.planless) {
 		pos = i + 1
 	}
 
@@ -1396,7 +1426,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.o.path,
 			id,
 			r.task.suffix,
-			skillPrompt(skill, r.task.ref.Label(), r.o.dep, in.remote),
+			skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow),
 		); err != nil {
 			return err
 		}
@@ -1731,12 +1761,13 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 }
 
 // skillPrompt is what the agent is told for one skill, marked driven. Driven
-// mode takes every gap on its default and reuses a saved plan, so plan and
-// ship are the bare skill; both name the dependency when the task has a
-// base. catchup is not a chain skill: drive sends it to a branch its finished
-// base marked landed. id is a bundle's label, `ABC-1+ABC-2`: plan and ship
-// take it whole, every other skill its lead, from which it finds the branch.
-func skillPrompt(skill, id string, dep *dependency, remote bool) string {
+// mode takes every gap on its default and reuses a saved plan, so plan is
+// the bare skill and ship names only its flow, unless default; both name
+// the dependency when the task has a base. catchup is not a chain skill:
+// drive sends it to a branch its finished base marked landed. id is a
+// bundle's label, `ABC-1+ABC-2`: plan and ship take it whole, every other
+// skill its lead, from which it finds the branch.
+func skillPrompt(skill, id string, dep *dependency, fl shipFlow) string {
 	var p string
 
 	if skill != "plan" && skill != "ship" {
@@ -1744,11 +1775,8 @@ func skillPrompt(skill, id string, dep *dependency, remote bool) string {
 	}
 
 	switch skill {
-	case "review":
-		p = "/f10:review " + id
-		if remote {
-			p += " ci"
-		}
+	case "ship":
+		p = "/f10:ship " + fl.word() + id
 	case "catchup":
 		p = "/f10:catchup" // it catches up the branch its session stands on, and takes no id
 	default:

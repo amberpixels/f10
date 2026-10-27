@@ -17,14 +17,14 @@ f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
 
 Routing
   arg "<stripped>"  → <interpretation, e.g. matches ABC-#### → ABC-1042 | free-text | plan file>
-  path              <steps in order>   (<what's skipped and why, e.g. a saved plan's `Kind: spike` ends it at implement, or plan skipped: the pipeline is planless; the area that chose the pipeline, when `pipeline_by_area` did>)
+  path              <steps in order>   (<what's skipped and why, e.g. a saved plan's `Kind: spike` ends it at implement, or plan skipped: the flow is planless, or the task has a plan file; the area that chose the flow, when `flow_by_area` did>)
   stops at          <the task, plan, shipment or verdict this run would end on>
 
 Step: <name>
   adapter         <skill to invoke | CLI command, quoted - NOT run>
   overlay         <APPLIED .f10/instructions/<name>.md | none>
   would produce   <output path / action, e.g. write <storage root>/plans/ABC-1042.md>
-  (one block per step on the path; for ship, per pipeline step in order)
+  (one block per step on the path; for ship, per flow entry in order)
 
 Not executed: <the first real side effect this run would have performed>
 ```

@@ -19,9 +19,10 @@ import (
 )
 
 // A task's gates are every step its flow declares, with the state each is
-// in: ship's recorded pipeline, merged with the chain drive runs it
-// through, progress read from the ledger, outcomes from lore or the
-// findings and verdict files, and the remote review from the host.
+// in: ship's recorded entries, else the flow its branch records, merged
+// with the chain drive runs it through, progress read from the ledger,
+// outcomes from lore or the findings and verdict files, and the remote
+// review from the host.
 
 // Gate states. A plain step also takes a run's stop status (failed,
 // blocked, partial) on the step it stopped at.
@@ -83,7 +84,7 @@ type gateInput struct {
 	events   []ledger.Event
 	chain    []string // drive's chain recorded on the branch
 	driven   string   // the last chain skill drive saw finish
-	pipeline []string // the project's default pipeline, when the run recorded none
+	pipeline []string // ship's entries of the branch's flow, when the run recorded none
 	// remoteFlow is a remote reviewer declared: it reviews every PR
 	remoteFlow bool
 
@@ -109,7 +110,7 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	)
 
 	for i, e := range entries {
-		base, qual := splitEntry(e)
+		base, qual := facts.SplitEntry(e)
 
 		switch base {
 		case "review":
@@ -124,10 +125,9 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 				gates = append(gates, gate{Step: "review"})
 			}
 		case "judge":
-			judged := "change"
-			if i < firstShip {
-				judged = "plan"
-			}
+			// before implement it judges the plan, a judge the drive chain ran
+			// before ship included
+			judged := facts.JudgeKind(entries, i)
 
 			if _, ok := judges[judged]; !ok {
 				judges[judged] = len(gates)
@@ -219,15 +219,6 @@ func (in gateInput) flow() ([]string, int, int) {
 	}
 
 	return entries, firstShip, shipLen
-}
-
-// splitEntry is a pipeline entry's step and its qualifier: `review (CI)` is
-// review and CI.
-func splitEntry(e string) (string, string) {
-	base, rest, _ := strings.Cut(e, " ")
-	qual := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(rest), "("), ")")
-
-	return base, qual
 }
 
 // stepStates is each entry's state as a plain step. Ship's entries follow
@@ -339,7 +330,7 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 
 	// ship on a review entry of this half
 	for i, e := range entries {
-		base, qual := splitEntry(e)
+		base, qual := facts.SplitEntry(e)
 		isRemote := qual != "" && !strings.EqualFold(qual, "local")
 
 		if base != "review" || isRemote != remote {
@@ -409,7 +400,7 @@ func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
 	}
 
 	for i, e := range entries {
-		if base, _ := splitEntry(e); base != "judge" {
+		if base, _ := facts.SplitEntry(e); base != "judge" {
 			continue
 		}
 
@@ -877,13 +868,13 @@ func (h *reviewHalf) compact() string {
 // gateSource binds what every task's gates read alike: the ledger, the
 // project's facts, the lore store and the host.
 type gateSource struct {
-	events   []ledger.Event
-	main     string // where the branch config lives
-	pipeline []string
-	review   facts.Review
-	store    *lore.Store
-	host     *host
-	shared   string // the out-of-tree storage root, "" in-repo
+	events []ledger.Event
+	main   string // where the branch config lives
+	flows  map[string][]string
+	review facts.Review
+	store  *lore.Store
+	host   *host
+	shared string // the out-of-tree storage root, "" in-repo
 }
 
 // storageFor is where a task's findings and verdicts are: its checkout's
@@ -909,15 +900,26 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		checkout:   root,
 		run:        run,
 		events:     src.events,
-		pipeline:   src.pipeline,
 		remoteFlow: src.review.Remote(),
 		outcomes:   readOutcomes(src.store, storage, id),
 		now:        time.Now(),
 	}
 
+	flow := "default"
+
 	if branch != "" && src.main != "" {
 		in.chain = strings.Fields(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgChain))
 		in.driven = gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgDrive)
+
+		if recorded := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgFlow); recorded != "" {
+			flow = recorded
+		}
+	}
+
+	if entries, ok := src.flows[flow]; ok {
+		in.pipeline = facts.ShipEntries(entries)
+	} else {
+		in.pipeline = facts.ShipEntries(src.flows["default"])
 	}
 
 	if src.host != nil && branch != "" && src.review.Remote() {

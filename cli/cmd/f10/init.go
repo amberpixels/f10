@@ -237,7 +237,7 @@ func runMigrate(w io.Writer, path string) error {
 
 	next := "delete that prose, then `f10 config` should show no warning"
 	if len(m.Superseded) == 0 {
-		next = "run `f10 config`: the traces fact should show as declared"
+		next = "run `f10 config`: the moved facts should show as declared, with no warning"
 	}
 
 	headerRow(w, "next", next, limit, lipgloss.NewStyle())

@@ -29,7 +29,7 @@ func TestScaffoldSections(t *testing.T) {
 				Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
 			},
 			wantSection: []string{"Project", "Tracker", "Hosting & PR", "Verify"},
-			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Drive chain", "Review", "Guardrails"},
+			wantOmitted: []string{"Roles", "Review", "Guardrails"},
 			wantIn: []string{
 				"# demo · f10 project instructions",
 				"visibility: stealth",
@@ -57,7 +57,7 @@ func TestScaffoldSections(t *testing.T) {
 				},
 			},
 			wantSection: []string{"Tracker", "Hosting & PR"},
-			wantOmitted: []string{"Project", "Roles", "Ship pipeline(s)", "Drive chain", "Verify", "Guardrails"},
+			wantOmitted: []string{"Project", "Roles", "Verify", "Guardrails"},
 			wantIn: []string{
 				"review:",
 				"reviewer: bot `claude[bot]`",
@@ -92,7 +92,7 @@ func TestScaffoldSections(t *testing.T) {
 				Stack: []probe.Signal{{Value: "Ruby", Evidence: "Gemfile"}},
 			},
 			wantSection: []string{"Project", "Tracker", "Hosting & PR"},
-			wantOmitted: []string{"Roles", "Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails"},
+			wantOmitted: []string{"Roles", "Verify", "Review", "Guardrails"},
 			wantIn: []string{
 				"kind: gitlab",
 				"id: DEM-###",
@@ -109,7 +109,7 @@ func TestScaffoldSections(t *testing.T) {
 			wantIn:      []string{"visibility: stealth", "storage: in-repo"},
 			wantOmitted: []string{
 				"Project", "Roles", "Tracker", "Hosting & PR",
-				"Ship pipeline(s)", "Drive chain", "Verify", "Review", "Guardrails",
+				"Verify", "Review", "Guardrails",
 			},
 			wantNotIn: []string{"## Project", "## Tracker", "## Hosting & PR", "## Verify"},
 		},
