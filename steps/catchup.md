@@ -32,6 +32,7 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 3. **Integrate.**
    Strategy: `catchup: merge` or `catchup: rebase` in the frontmatter (or, from an older file, under Hosting & PR); absent, **rebase**.
+   `catchup: off` turns off only the guard ship runs (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, rebases.
    A base found through `f10-after-branch` (another task's branch) is always merged: rebasing onto a branch that later rebases or squash-merges replays its old commits.
    - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; clear the marks as point 5 does, report and stop;
    - merge: `git merge --no-edit <base>`; rebase: `git rebase <base>`.
@@ -62,6 +63,21 @@ No conflict, or nothing to bring in, is a **correct run**.
 6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows.
    Then: commits brought in, each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
    If the strategy was the default, name the `catchup: merge | rebase` frontmatter key as the way to declare it.
+
+**As a guard**: `/f10:ship` runs this before implement, each `pr` entry and a change judge (the ship skill says when), so the PR carries the moved base and a verdict is on code that merges.
+It differs from the run above:
+
+- **Nothing to do** under `catchup: off`, on the default branch itself, or when the base is already an ancestor after `git fetch origin`; that says nothing.
+- **Base**: point 2's order, the default branch when nothing is recorded.
+  Before `pr` and a change judge, an `f10-after-branch` base is `origin/<branch>`, what the PR targets, so the base task's unpushed commits never ride into this PR; before implement, point 2's local-first order stays.
+- **Method**: point 3's, except that a branch already on origin (`origin/<branch>` after the fetch) is merged whatever `catchup:` says, so the push after it never forces.
+- **Clean tree**: the ship skill commits the tree first where it has to; the guard never stashes.
+- **A conflict fails the run**: `git merge --abort` / `git rebase --abort`, so the branch is as it was, any mark kept, and `/f10:catchup` in the `next` row.
+  No conflict is settled and nothing is asked.
+- **Verify**, when commits came in, except before implement, whose own verify follows.
+  Red is a semantic conflict the guard leaves to `/f10:catchup`: `git reset --hard` to the sha read before integrating (the tree was clean), then fail as a conflict does.
+- **Marks**: `f10-landed` and `f10-base-moved` are unset once the integration is clean and verify, where it ran, is green.
+- **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 
 **Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, or when the branch conflicts with the default branch at finish): on entry, note the ship status (`f10-state.sh show`).
 The ambiguity question is the run's one ask: `f10-state.sh ask "<the questions>"; f10-state.sh set ship blocked catchup`.

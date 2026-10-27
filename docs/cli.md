@@ -187,6 +187,7 @@ Drive's finish asks no riders question, since a resume carries only the latest a
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
 Before the first pipeline step, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
 A conflict there stops ship and hands off to `/f10:catchup`, which settles it with both sides kept.
+Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
 The pr step opens the PR or MR against the base branch, so it is stacked and the host retargets it when the base merges; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
 

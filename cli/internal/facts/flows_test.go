@@ -51,6 +51,7 @@ func TestCheckFlow(t *testing.T) {
 		"bad step":          {flow: Flow{"plan", "Implement"}, want: "not a step name"},
 		"planless judge":    {flow: Flow{"judge", "implement", "pr"}, want: "lead with plan"},
 		"review typo":       {flow: Flow{"plan", "implement", "pr", "review:loacl"}, want: "names no review half"},
+		"catchup entry":     {flow: Flow{"plan", "implement", "catchup", "pr"}, want: "never an entry"},
 	} {
 		bad := Declared{Flows: map[string]Flow{"default": tc.flow}}.check()
 		if !slices.ContainsFunc(bad, func(b string) bool { return strings.Contains(b, tc.want) }) {

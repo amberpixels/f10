@@ -394,7 +394,7 @@ func (e *Effective) resolveReview(
 // fact. They go when the prose fallback does.
 var (
 	mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|merge|rebase)\b`)
-	catchupRe     = regexp.MustCompile(`(?i)\bcatchup\s*:\s*(merge|rebase)\b`)
+	catchupRe     = regexp.MustCompile(`(?i)\bcatchup\s*:\s*(merge|rebase|off)\b`)
 )
 
 func firstMatch(re *regexp.Regexp, text string) string {

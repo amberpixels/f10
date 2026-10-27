@@ -7,7 +7,7 @@ argument-hint: "<task-id | plan.md | description>"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and for a CI half in the flow its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`, for a judge entry after `pr`, push its changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
+Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and for a CI half in the flow its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`, for a judge entry after `pr`, push the catchup guard's integration and its own changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -34,7 +34,7 @@ Deploy has its own confirmation (the **deploy** step).
    The flow is declared in the `project.md` it prints; a planless one loads `plan` but never runs it.
 2. Follow those steps in the order the Arguments item gives.
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
-   A `review` entry loads `review resolve`; a change judge after a `pr` entry loads `judge implement commit`, for the yellow route; with a recorded base (below), implement's load is `catchup implement`.
+   A `review` entry loads `review resolve`; a change judge after a `pr` entry loads `judge implement commit`, for the yellow route; the catchup guard (below) adds `catchup` to the load of each entry it guards.
 
 **Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
 `f10 flow` lists them and what selects each.
@@ -48,7 +48,8 @@ The old keys (`pipelines`, `planless`, `drive_chain`) still read, converted to f
 Free-text input also skips capture and fetch, so the run has no task id.
 A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
 Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.
-The last step is the **shipment**: its rows are the ones that step declares (`conventions/context.md` → shipment), a project-defined step's on its overlay's `Shipment:` line.
+The **shipment** is the last delivering entry's (`conventions/context.md` → shipment): its rows are the ones that step declares, a project-defined step's on its overlay's `Shipment:` line; a `judge` or `demo` after it adds rows, never replaces them.
+A `demo` entry with nothing to show skips in one line (the **demo** step), a normal end that adds no rows.
 
 **A spike ends after implement**, whatever the flow: a `Kind: spike` plan answers a question, and its code never leaves the machine.
 No step after implement runs (no cleanup, commit, push, pr, review, judge or deploy); the shipment is the spike report.
@@ -58,14 +59,20 @@ In the main checkout, or with out-of-tree storage, the report already outlives t
 Its report back (below) carries the question, the answer and the recommendation; it names the spike report's path only under `visibility: public`, since stealth keeps `.f10/` paths off the tracker.
 The kind is known from the plan, or a planless run's inline plan, before the flow starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
 
-**Catch up with the base** just before implement, only where `f10 start --after` or `f10 finish` recorded one on the branch (`f10-after-branch` or `f10-landed`; nothing recorded, nothing to do).
-Run the **catchup** step's points 2 and 3, with three differences:
+**The catchup guard** brings the base in before three kinds of entry, as the **catchup** step's **As a guard** says; under `catchup: off` it never runs, and its load leaves `catchup` out.
+Catchup is never a flow entry.
 
-- **A base with no code yet** (its branch still at the default branch's commit): before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
+- **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`).
+  A base with no code yet (its branch still at the default branch's commit): before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
-- **A conflict fails the run**: abort so the tree is unchanged, keep any mark, and name `/f10:catchup` in the `next` row.
-- **`f10-landed`** and **`f10-base-moved`** are unset once the integration is clean; implement's verify covers them.
+- **Before every `pr` entry**, the first and each refresh: fetch and check ancestry first; only when the base moved, commit what the tree holds as the pr step would (`steps/commit.md` point 2, `--step implement`) and integrate, so the push carries it.
+  An unmoved base leaves the commit to pr and its adapter.
+- **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree, skip it in one line, since the next `pr` guard covers it.
+  After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.
+
+The guard runs under the entry it guards, in that entry's load (`catchup pr`) and badge.
+A failure is `set ship failed <entry>`, or `partial` once a PR is open (`conventions/failure.md` rule 7), its `note` naming catchup and `/f10:catchup`.
 
 Run the flow's entries **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
@@ -76,7 +83,7 @@ After `pr`, the changes folded into the plan are built by the judge step's own r
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
-**Report back**, after the last step (a spike's: implement), when the run has a task id, the frontmatter's `report_back` is not `off`, and the shipment left the machine: a flow ending in `implement` or `commit` promises it does not, and reports back nothing.
+**Report back**, after the last step (a spike's: implement), when the run has a task id, the frontmatter's `report_back` is not `off`, and the shipment left the machine: a flow whose last delivering entry is `implement` or `commit` promises it does not, and reports back nothing.
 A spike's answer is the exception: it carries no code, so it is posted.
 
 1. Compose one comment from the shipment rows (each url, the PR/MR, commits by sha) and two or three lines on what changed.
@@ -92,4 +99,4 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last step declares (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.
+- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a demo's when it ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.

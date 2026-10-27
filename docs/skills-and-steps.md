@@ -48,7 +48,7 @@ A step never names the skill that runs it, except where its behavior differs by 
 - **Authorization is granted once, in the skill.**
   The step says the action is outward-facing; `ship/SKILL.md` grants the push and the PR, `resolve/SKILL.md` asks before a `+reply`, and before landing fixes on an open PR unless driven.
 - **Logic two skills share goes in a mode** (`modes/forward.md`), not copied into both.
-- **A skill that needs part of another step's work** runs those points of that step and names where it differs (ship runs `steps/catchup.md` points 2 and 3, failing on a conflict).
+- **A skill that needs part of another step's work** runs those points of that step and names where it differs (ship runs `steps/catchup.md` as a guard before implement, `pr` and a change judge, failing on a conflict).
 
 ## Where a line belongs
 

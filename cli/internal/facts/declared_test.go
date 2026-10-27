@@ -453,3 +453,20 @@ func TestBuildReportBackFacts(t *testing.T) {
 		}
 	}
 }
+
+// catchup: off turns ship's guard off, declared in the frontmatter or in
+// the legacy Hosting & PR prose; an unknown method is still an error.
+func TestCatchupOff(t *testing.T) {
+	for _, md := range []string{
+		"---\ncatchup: off\n---\n",
+		"# demo\n\n## Hosting & PR\n\ngithub.com. catchup: off\n",
+	} {
+		if eff := buildWith(t, md, ""); eff.Catchup != "off" || eff.Errors() != "" {
+			t.Errorf("%q: catchup %q, errors %q", md, eff.Catchup, eff.Errors())
+		}
+	}
+
+	if eff := buildWith(t, "---\ncatchup: squash\n---\n", ""); !strings.Contains(eff.Errors(), "catchup") {
+		t.Errorf("an unknown method is not an error: %q", eff.Errors())
+	}
+}
