@@ -77,6 +77,48 @@ func writeFile(t *testing.T, path, text string) {
 	}
 }
 
+// A round both halves wrote counts once for each half, by its blocks'
+// source.
+func TestReviewRoundsSplitBothHalves(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, filepath.Join(root, "reviews", "FT-1", "1.md"), `task: FT-1
+round: 1
+reviewer: local, claude[bot]
+verdict: findings
+
+## Findings
+
+### 1.1 Off by one
+category: correctness
+source: local
+verdict: fix
+
+### 1.2 Missing test
+category: tests
+source: remote
+verdict: skip +reply
+
+### 1.3 Which default?
+category: design
+source: remote
+verdict: ask
+`)
+
+	o := fileOutcomes(root, "FT-1")
+	if want := []reviewRound{{Round: "1", Found: 1, Fixed: 1}}; !slices.Equal(o.local, want) {
+		t.Errorf("local = %+v, want %+v", o.local, want)
+	}
+
+	if want := []reviewRound{{Round: "1", Found: 2, Skipped: 1, Ask: 1}}; !slices.Equal(o.remote, want) {
+		t.Errorf("remote = %+v, want %+v", o.remote, want)
+	}
+
+	if o.localRaised != 1 || o.remoteRaised != 2 {
+		t.Errorf("raised local %d, remote %d", o.localRaised, o.remoteRaised)
+	}
+}
+
 func TestReviewAndJudgeFromFiles(t *testing.T) {
 	root := t.TempDir()
 	reviews := filepath.Join(root, "reviews", "FT-1")

@@ -50,6 +50,7 @@ func TestCheckFlow(t *testing.T) {
 		"colon without arg": {flow: Flow{"plan", "review:"}, want: "no argument"},
 		"bad step":          {flow: Flow{"plan", "Implement"}, want: "not a step name"},
 		"planless judge":    {flow: Flow{"judge", "implement", "pr"}, want: "lead with plan"},
+		"review typo":       {flow: Flow{"plan", "implement", "pr", "review:loacl"}, want: "names no review half"},
 	} {
 		bad := Declared{Flows: map[string]Flow{"default": tc.flow}}.check()
 		if !slices.ContainsFunc(bad, func(b string) bool { return strings.Contains(b, tc.want) }) {
@@ -60,6 +61,7 @@ func TestCheckFlow(t *testing.T) {
 	ok := Declared{Flows: map[string]Flow{
 		"default": {"plan", "judge", "implement", "judge", "pr"},
 		"direct":  {"implement", "judge", "push"},
+		"both":    {"plan", "implement", "pr", "review:local+ci", "review", "review:ci", "review (CI)"},
 	}, DriveFinish: "on"}.check()
 	if len(ok) > 0 {
 		t.Errorf("valid flows fail: %v", ok)
@@ -91,6 +93,59 @@ func TestFlowHelpers(t *testing.T) {
 
 	if step, arg := SplitEntry("cleanup:comments,prose"); step != "cleanup" || arg != "comments,prose" {
 		t.Errorf("colon entry = %s, %s", step, arg)
+	}
+}
+
+func TestReviewHalves(t *testing.T) {
+	for arg, want := range map[string][2]bool{
+		"":         {true, false},
+		"local":    {true, false},
+		"ci":       {false, true},
+		"CI":       {false, true},
+		"local+ci": {true, true},
+		"ci+local": {true, true},
+		"loacl":    {false, false},
+	} {
+		if local, remote := ReviewHalves(arg); local != want[0] || remote != want[1] {
+			t.Errorf("ReviewHalves(%q) = %v, %v, want %v", arg, local, remote, want)
+		}
+	}
+}
+
+// A CI half that cannot run warns: no remote reviewer, or nothing published
+// before it. Neither is an error.
+func TestRemoteHalfWarnings(t *testing.T) {
+	const review = "review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n" +
+		"  done: posted, reaction `eyes`\n"
+
+	for name, tc := range map[string]struct {
+		block, want string
+	}{
+		"no reviewer":   {block: "flows: {default: plan implement pr review:local+ci}\n", want: "no remote reviewer"},
+		"before pr":     {block: "flows: {default: plan implement review:ci pr}\n" + review, want: "no pr or push"},
+		"runs as given": {block: "flows: {default: plan implement pr review:local+ci}\n" + review},
+	} {
+		eff := buildWith(t, "---\n"+tc.block+"---\n", "")
+		if got := strings.Join(eff.Flows["default"], " "); !strings.Contains(got, "review:") {
+			t.Errorf("%s: flow = %q", name, got)
+		}
+
+		var msgs []string
+
+		for _, p := range eff.Problems {
+			if p.Error {
+				t.Errorf("%s: an error: %s", name, p.Message)
+			}
+
+			msgs = append(msgs, p.Message)
+		}
+
+		switch joined := strings.Join(msgs, "; "); {
+		case tc.want == "" && joined != "":
+			t.Errorf("%s: problems %q", name, joined)
+		case tc.want != "" && !strings.Contains(joined, tc.want):
+			t.Errorf("%s: problems %q, want %q", name, joined, tc.want)
+		}
 	}
 }
 

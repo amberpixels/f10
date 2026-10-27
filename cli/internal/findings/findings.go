@@ -19,7 +19,7 @@ type File struct {
 	Task       string
 	Round      string
 	Reviewed   string // the sha, plus ` dirty` when the tree differed
-	Reviewer   string
+	Reviewer   string // `local`, a remote identity, or both: `local, claude[bot]`
 	Verdict    string // clean or findings
 	Categories map[string]int
 	Findings   []Finding
@@ -33,6 +33,7 @@ type Finding struct {
 	Category string
 	Prior    bool
 	Status   string // prior round only: fixed, still open, ...
+	Source   string // local or remote, in a file both halves wrote; empty: the header's reviewer
 	Verdict  string // as written, attachments included: `skip +reply`
 	Reason   string
 }
@@ -127,6 +128,8 @@ func Parse(text string) (*File, error) {
 			switch key {
 			case "category":
 				cur.Category = value
+			case "source":
+				cur.Source = strings.ToLower(value)
 			case "verdict":
 				cur.Verdict = value
 			case "reason":
@@ -144,6 +147,37 @@ func Parse(text string) (*File, error) {
 	}
 
 	return f, nil
+}
+
+// Halves is which reviewers the header names: `local`, a remote identity,
+// or both, comma-separated.
+func (f *File) Halves() (bool, bool) {
+	var local, remote bool
+
+	for name := range strings.SplitSeq(f.Reviewer, ",") {
+		switch name = strings.TrimSpace(name); name {
+		case "":
+		case "local":
+			local = true
+		default:
+			remote = true
+		}
+	}
+
+	return local, remote
+}
+
+// Remote reports whether the remote half raised a finding: its own
+// `source:` line, else the header, a file naming both halves reading an
+// untagged block as local.
+func (f *File) Remote(fd Finding) bool {
+	if fd.Source != "" {
+		return fd.Source == "remote"
+	}
+
+	local, remote := f.Halves()
+
+	return remote && !local
 }
 
 // Reopens reports whether a prior finding's status awaits a verdict.

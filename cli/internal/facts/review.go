@@ -32,6 +32,7 @@ type Review struct {
 	Arrives      string `json:"arrives,omitempty"`      // issue comment | inline review | check run
 	Trigger      string `json:"trigger,omitempty"`      // automatic | manual | automatic, manual
 	TriggerHow   string `json:"triggerHow,omitempty"`   // the rest of the line: how a human fires it
+	ManualHow    string `json:"manualHow,omitempty"`    // the manual part alone, when the line names both
 	Done         string `json:"done,omitempty"`         // posted | marker | submitted | concluded
 	DoneText     string `json:"doneText,omitempty"`     // the marker's text
 	Handled      string `json:"handled,omitempty"`      // reaction | marker | checkbox | thread resolved
@@ -98,6 +99,7 @@ const (
 
 var (
 	codeSpanRE = regexp.MustCompile("`([^`]+)`")
+	manualRE   = regexp.MustCompile(`(?i)` + TriggerManual)
 	quotedRE   = regexp.MustCompile(`"([^"]+)"`)
 )
 
@@ -127,6 +129,7 @@ func parseReview(body string) Review {
 			r.Arrives = parseArrives(value)
 		case key == "trigger":
 			r.Trigger, r.TriggerHow = parseTrigger(value)
+			r.ManualHow = manualPart(value)
 		case strings.HasPrefix(key, "done"):
 			done, handled := splitDoneHandled(value)
 			r.Done, r.DoneText = parseDone(done)
@@ -190,16 +193,18 @@ const (
 // posting the first code span (`comment `@claude review“), or a review
 // requested from the span's login. Both need the code span: a request to a
 // word guessed from prose would reach a real account. false when the
-// trigger is not manual or the how reads as neither.
+// trigger is not manual or the how reads as neither. Reading it is what
+// lets a flow run post it.
 func (r Review) ManualAction() (string, string, bool) {
 	if !strings.Contains(r.Trigger, TriggerManual) {
 		return "", "", false
 	}
 
-	lower := strings.ToLower(r.TriggerHow)
+	how := r.Manual()
+	lower := strings.ToLower(how)
 	span := ""
 
-	if m := codeSpanRE.FindStringSubmatch(r.TriggerHow); m != nil {
+	if m := codeSpanRE.FindStringSubmatch(how); m != nil {
 		span = strings.TrimSpace(m[1])
 	}
 
@@ -211,6 +216,36 @@ func (r Review) ManualAction() (string, string, bool) {
 	}
 
 	return "", "", false
+}
+
+// Manual is how the manual trigger fires: the manual part of a line naming
+// both, else the whole how, so a code span describing the automatic half
+// is never posted.
+func (r Review) Manual() string {
+	if r.ManualHow != "" {
+		return r.ManualHow
+	}
+
+	return r.TriggerHow
+}
+
+// manualPart is what follows the word manual, up to the next `;`, when the
+// line names both kinds: `automatic, on push; manual, comment `@claude“`.
+func manualPart(value string) string {
+	lower := strings.ToLower(value)
+	if !strings.Contains(lower, TriggerAutomatic) {
+		return ""
+	}
+
+	// matched on value itself: lowercasing can change a rune's byte length
+	loc := manualRE.FindStringIndex(value)
+	if loc == nil {
+		return ""
+	}
+
+	rest, _, _ := strings.Cut(value[loc[1]:], ";")
+
+	return strings.Trim(rest, " ,:-")
 }
 
 // parseTrigger reads `automatic, on open and on push` or `manual, comment

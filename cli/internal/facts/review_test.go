@@ -48,7 +48,7 @@ func TestParseReview(t *testing.T) {
 				"- **Done, handled** - concluded, checkbox",
 			want: Review{
 				Reviewer: "Claude Review", ReviewerKind: ReviewerCheck, Arrives: ArrivesCheck,
-				Trigger: "automatic, manual", TriggerHow: "comment `@claude`",
+				Trigger: "automatic, manual", TriggerHow: "comment `@claude`", ManualHow: "comment `@claude`",
 				Done: DoneConcluded, Handled: HandledCheckbox,
 			},
 		},
@@ -167,6 +167,49 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 
 	if f := fieldByName(t, none, "Review"); f.Origin != OriginAbsent {
 		t.Errorf("Review without a workflow = %+v, want absent", f)
+	}
+}
+
+// A line naming both kinds keeps the manual part apart, so a code span in
+// the automatic half is never what a flow posts.
+func TestManualHow(t *testing.T) {
+	for line, want := range map[string]string{
+		"automatic, on open and on push; manual, comment `@claude` on the PR for a re-review": "comment `@claude` on the PR for a re-review",
+		"manual, comment `@claude review` on the PR":                                          "",
+		"automatic, on a push to `main`":                                                      "",
+		"automatic, on a push to `main`; manual, ask in Slack":                                "ask in Slack",
+		"automatic, on a push to `main`; manual, comment `@claude` on the PR":                 "comment `@claude` on the PR",
+		"automatic ȺȺȺȺȺȺȺȺ Manual, comment `@claude`":                                        "comment `@claude`",
+	} {
+		trigger, how := parseTrigger(line)
+
+		r := Review{Trigger: trigger, TriggerHow: how, ManualHow: manualPart(line)}
+		if r.ManualHow != want {
+			t.Errorf("manualPart(%q) = %q, want %q", line, r.ManualHow, want)
+		}
+
+		// the code span in the automatic half is never the action
+		if _, text, ok := r.ManualAction(); ok && text == "main" {
+			t.Errorf("%q: the automatic half's span read as the manual trigger", line)
+		}
+	}
+
+	// the manual half's comment is posted, never the automatic half's span
+	for _, line := range []string{
+		"automatic, on a push to `main`; manual, comment `@claude` on the PR",
+		"automatic, on open and on push; manual, comment `@claude` on the PR for a re-review",
+	} {
+		trigger, how := parseTrigger(line)
+
+		kind, text, ok := Review{Trigger: trigger, TriggerHow: how, ManualHow: manualPart(line)}.ManualAction()
+		if kind != ManualComment || text != "@claude" || !ok {
+			t.Errorf("%q: ManualAction = %q, %q, %v; want a comment posting @claude", line, kind, text, ok)
+		}
+	}
+
+	frontmatter := reviewFrom(ReviewDecl{Trigger: "automatic, on push; manual, comment `@claude` again"})
+	if frontmatter.ManualHow != "comment `@claude` again" {
+		t.Errorf("frontmatter manual how = %q", frontmatter.ManualHow)
 	}
 }
 

@@ -8,11 +8,13 @@ Context: `project.md → Verify`; `project.md → Review` for who answers an `as
 Badge: none; inside a ship pipeline the leaf stays `review`.
 
 Settle every file the same way, whoever wrote it: what the block says is wrong, where, and its fix.
+A block's **source** is its `source:` line, else the header's one `reviewer:` (`local`, or remote); a file both halves wrote (`review:local+ci`) is settled in one pass, its remote rules applying to the remote blocks only.
 
 ## CI review
 
 With `ci`, resolve reads the latest remote review in before point 1 and marks it settled after point 10.
 It never waits for one: `/f10:review ci` does.
+Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone runs, on the review that entry acked: points 1 to 4 are the entry's.
 
 1. **Latest.**
    `f10 review pick --latest --json`.
@@ -21,7 +23,7 @@ It never waits for one: `/f10:review ci` does.
 2. **Settled** (`settled: true`): "nothing to resolve", a normal end; nothing changes.
 3. **Stale**: a picked sha other than HEAD prints one warning line naming the sha and the commits since (`git rev-list --count <sha>..HEAD`), then the run goes on; point 3 already reads its lines as advisory.
 4. **Held?**
-   A findings file holds the review when its `reviewer:` is not `local`, its `review:` is the picked url and its `revision:` the picked revision; a file with no `revision:` line holds none, since a rewritten sticky comment keeps its sha.
+   A findings file holds the review when its `reviewer:` names a remote identity (alone, or beside `local`), its `review:` is the picked url and its `revision:` the picked revision; a file with no `revision:` line holds none, since a rewritten sticky comment keeps its sha.
    One that does is the file point 1 takes.
    None does: run the review step's **remote review** points 3 and 4 (shape the file, write its lore entries, ack with the picked id), under its **Rounds** rules, whose declines are normal ends here; the new file is the one point 1 takes.
 5. **Settle**, after point 10: `f10 review settle --id <id> --revision <revision>`, both from point 1's pick.
@@ -49,18 +51,18 @@ It never waits for one: `/f10:review ci` does.
    Attachments on the verdict line (`verdict: skip +reply`, `verdict: fix +note`):
    - **`+note`** - a code comment at the finding's spot ("someone could say X here, we do Y because"), giving the domain reason, never that a reviewer asked (stealth mode, `conventions/context.md`).
    - **`+reply`** - sends `reason:` to the reviewer.
-     With `reviewer: local` it stays in the file.
+     On a local block it stays in the file.
      A remote reply posts on the PR or MR (`gh pr comment` / `glab mr note`): on the `review:` url's thread for an inline review, else a comment quoting the finding's title.
      It is outward-facing, under the run's authorization.
      It reads as the user's own: no f10, no round, no findings file.
      Another task it names is a link with its title (`conventions/context.md` → Task references).
-     **A remote bot's skip replies by default** (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread and re-raises a silent skip.
+     **A remote bot's skip replies by default** (its blocks only) (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread and re-raises a silent skip.
      A human reviewer gets `+reply` only where the verdict names it.
 5. **Round two's prior section**: `fixed` and `explanation accepted` need nothing; `still open`, `fix introduced a problem` and `explanation disputed` take a verdict, and are an `ask` unless the code plainly settles them (there is no third reviewer).
 6. **Verify once after the fixes** (`project.md → Verify`, with implement's skip for an unmoved tree).
    Red fails the step: keep the `fix` verdict with the red output on `reason:`, and stop.
 7. **The questionnaire.**
-   If the file's `reviewer:` is not `local` and `project.md → Review` names who answers there, the `ask` goes to them on the review and the finding waits: a normal end, badge `partial` on `review` (`conventions/failure.md` rule 7), a `note` naming the finding and `/f10:resolve`.
+   If the block is remote and `project.md → Review` names who answers there, the `ask` goes to them on the review and the finding waits: a normal end, badge `partial` on `review` (`conventions/failure.md` rule 7), a `note` naming the finding and `/f10:resolve`.
    No later pipeline step runs until a later `/f10:resolve` rewrites the parked verdict with the answer; the review step never reads a reply.
    Otherwise every `ask` goes to the user in **one `AskUserQuestion`**, a question per finding, the reviewer's fix first unless the task contradicts it (then skip first, citing the ask).
    It fires at the end of the entry's **last** resolve: standalone, this one; in a pipeline, a resolve that opens round two (`steps/review.md` → Rounds) holds its asks for it, and round two asks for both rounds.
@@ -78,8 +80,9 @@ It never waits for one: `/f10:review ci` does.
    Outward-facing, under the run's authorization.
    With `traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.
    With no open PR or MR, the fixes stay in the working tree for the pipeline's next step (`pr`, `push`, `commit`) or the user.
-10. **Leave the trace** when the frontmatter says `traces: on`, the branch has an open PR or MR, the file's `reviewer:` is `local`, and this is the entry's last resolve (point 7's rule: a pipeline resolve that opens round two holds its trace for it, which covers both rounds).
+10. **Leave the trace** when the frontmatter says `traces: on`, the branch has an open PR or MR, the file holds local blocks (its `reviewer:` is or lists `local`), and this is the entry's last resolve (point 7's rule: a pipeline resolve that opens round two holds its trace for it, which covers both rounds).
     The trace follows point 9's choice: fixes not pushed, nothing posted.
+    In a file both halves wrote, the status's counts and the comment cover the local blocks; the remote ones are answered on their own thread by `+reply` and the settled mark.
     In round two the counts and the comment cover both files, each finding at its last verdict, round one's skip reasons included.
     - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean and is the PR's head (`gh pr view --json headRefOid` / `glab mr view`); any other sha gets no status, and the report says why: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='review (local)' -f description='<counts>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='review (local)' -f description='<counts>'`.
       Failure while a finding's last verdict is `ask` (parked per point 7, or a driven ask pending), else success.

@@ -87,6 +87,37 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// A file both halves wrote tags each block with its source; an untagged
+// block in it is the local reviewer's.
+func TestParseBothHalves(t *testing.T) {
+	f, err := Parse("task: GH-13\nround: 1\nreviewer: local, claude[bot]\nreview: https://x/1\nverdict: findings\n\n" +
+		"## Findings\n\n### 1.1 Local one\nwhere: a.go:1\ncategory: tests and docs\nsource: local\n\n" +
+		"### 1.2 Remote one\nwhere: b.go:2\ncategory: tests and docs\nsource: Remote\n\n" +
+		"### 1.3 Untagged\nwhere: c.go:3\ncategory: tests and docs\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if local, remote := f.Halves(); !local || !remote {
+		t.Errorf("halves = %v, %v", local, remote)
+	}
+
+	for i, want := range []bool{false, true, false} {
+		if got := f.Remote(f.Findings[i]); got != want {
+			t.Errorf("%s remote = %v, want %v", f.Findings[i].ID, got, want)
+		}
+	}
+
+	remoteOnly := &File{Reviewer: "claude[bot]"}
+	if !remoteOnly.Remote(Finding{}) {
+		t.Error("an untagged block in a remote reviewer's file is remote")
+	}
+
+	if local, remote := (&File{}).Halves(); local || remote {
+		t.Error("no reviewer names no half")
+	}
+}
+
 func TestParseWithoutHeader(t *testing.T) {
 	if _, err := Parse("# findings\n"); !errors.Is(err, ErrNoHeader) {
 		t.Errorf("err = %v", err)

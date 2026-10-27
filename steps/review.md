@@ -60,11 +60,12 @@ verdict: fix
 reason: the Rounds section now declines on an unsettled round one
 ```
 
-- **Header**, in this order: `task:` (id, or the branch name), `round:` `1` or `2`, `reviewed:` HEAD's sha plus `dirty` when the tree differed (in `implement → review → pr` the review precedes any commit), `base:` branch and sha, `reviewer:` `local` or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`), `review:` remote rounds only, the url where a `+reply` posts, `revision:` remote rounds only, pick's revision of the review's text, `verdict:` `clean` when every category found nothing, else `findings`.
+- **Header**, in this order: `task:` (id, or the branch name), `round:` `1` or `2`, `reviewed:` HEAD's sha plus `dirty` when the tree differed (in `implement → review → pr` the review precedes any commit), `base:` branch and sha, `reviewer:` `local` or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`), or both comma-separated (`local, claude[bot]`) in a round **both halves** wrote, `review:` remote rounds only, the url where a `+reply` posts, `revision:` remote rounds only, pick's revision of the review's text, `verdict:` `clean` when every category found nothing, else `findings`.
 - **`## Prior round`**, round two only, first: one block per round-one id, its title, ` - ` and one of `fixed`, `still open`, `fix introduced a problem`, `explanation accepted`, `explanation disputed`; a line of evidence; `where:` (required for `fix introduced a problem`).
   A finding's **last verdict** is under the latest block naming its id.
 - **`## Categories`**: core first, then the project's, each `none found` or a count.
 - **`## Findings`**: heading `<round>.<n>` (`1.3`, `2.1`) and title; `summary:` one line; `where:` `path/to/file.go:123`; `category:`; `lore:` once the lore entry exists; then what is wrong, why it matters, and a concrete fix.
+- **`source:`** `local` or `remote`, on every block of a file both halves wrote, a prior block carrying its round-one block's; absent, the block is the header's one reviewer's.
 - Resolve appends `verdict:` (with `+reply` / `+note` attachments) and `reason:`, **one** `verdict:` per block, rewritten when an `ask` is answered.
 - Malformed (no header; a finding without id, `where:` or `category:`; a round-two file missing a round-one id): the step fails.
 
@@ -87,7 +88,7 @@ The count is the findings awaiting a verdict: this round's, plus a prior block w
 Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 The remote half writes the same block once its file is on disk (point 4 below).
 
-**Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source remote` when `reviewer:` is not `local`).
+**Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source` the block's `source:`, else `remote` only when `reviewer:` names a remote identity and not `local`).
 The severity is the reviewer's call per finding, `blocker`, `major`, `minor` or `nit`, `minor` when it cannot tell.
 Each call prints the entry's id: add it to the finding's block as a `lore: <id>` line, which resolve supersedes.
 Round two reopens in lore what it reopens in the file: a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`) gets `f10 lore add finding --change <task> --supersedes <the round-one block's lore id> --status open -m <the evidence line>`, and its new id as the prior block's `lore:` line; a round-one block with no `lore:` line writes nothing.
@@ -124,20 +125,38 @@ With `2.md` present, decline the same way, naming the findings whose last verdic
 Both declines are a normal end.
 Never delete or rewrite a round.
 
-**Inside a ship pipeline** a `review` entry runs this step, then `steps/resolve.md`.
+**Inside a ship pipeline** a `review` entry runs this step, then `steps/resolve.md`: `review` and `review:local` the blind reviewer, `review:ci` the remote review, `review:local+ci` **both halves** (below), each settled by one resolve.
 When round two applies (above) and that resolve recorded a `fix` of its own (before any questionnaire), round two runs both again; otherwise the first round ends the entry, and a fix chosen in the final questionnaire never opens one.
 Both rounds' `ask` verdicts go to the user in resolve's one questionnaire before the next pipeline step.
 The entry's trace on the PR (`traces: on`) is made the same way, by its last resolve, a clean entry's included.
 
+## Both halves
+
+**`review:local+ci`** runs both halves into one round file, and one resolve settles it: one commit, one report.
+The CI review is fired or awaited first, so it runs while the local reviewer reads.
+
+1. **Facts first**: `f10 review pick --json`; remote facts missing or refused fail the entry before any reviewer is spawned.
+2. **Fire now** when the remote review's **Pick** says to fire, keeping the time `f10 review trigger` prints.
+3. **The blind reviewer** writes the round file, as above, every block it raises tagged `source: local`.
+   In round two it writes the whole `## Prior round`: a status for every round-one id, of either source, each prior block keeping its round-one block's `source:`.
+   Then the local blocks' **Lore** entries; the state block waits for point 5.
+4. **The CI review**: the remote review's **Pick**, **Already written?** and **Shape** (points 1 to 3 below), shaped into **the same file**.
+   Fired at point 2, Pick never fires again: it waits with `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fails.
+   Its blocks are appended under `## Findings`, numbered on from the local ones and tagged `source: remote`; its counts are added to `## Categories`; `verdict:` becomes `findings` when either half raised one; the header's `reviewer:` lists both, and `review:` and `revision:` are the CI review's.
+   A stop in **Pick** or **Already written?** (a manual trigger nobody can fire, a refused trigger, a review already written) ends the CI half only: the header keeps `reviewer: local`, point 5 and the resolve run on the local blocks, and the report says the CI half was skipped and why.
+   It adds no prior blocks: the **Shape** point's "no longer raises" rule is for a round with the CI half alone.
+5. **Lore and ack**: the remote blocks' lore entries `--source remote`, then the remote review's **Ack** (point 4 below); then the entry's one state block, with both halves' open count.
+
 ## The remote review
 
-**`review:ci` in a flow, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
+**`review:ci` in a flow, the CI half of `review:local+ci`, `/f10:review ci` standalone**: placed after `pr`, it reads the review that arrived on the PR or MR.
 The four `review:` facts in the frontmatter, and an optional fifth, are the protocol, applied by `f10 review pick|wait|ack|settle|trigger` over `gh` or `glab`, each with a fixed vocabulary:
 
 - **reviewer** - who posts it: `bot <login>`, `human <login>` or `check <name>` (`bot \`claude[bot]\``).
 - **arrives** - where it lands: `issue comment`, `inline review` or `check run`.
-- **trigger** - what fires it: `automatic` (on open, on push), `manual` followed by how (`manual, comment \`@claude\` on the PR`), or both.
-  `f10 review trigger` performs a manual how that reads as a comment (`comment \`<text>\``) or a review request (`request a review from \`<login>\``), the text or login in a code span; any other how is a human's step.
+- **trigger** - what fires it: `automatic` (on open, on push), `manual` followed by how (`manual, comment \`@claude\` on the PR`), or both (`automatic, on open and on push; manual, comment \`@claude\` on the PR for a re-review`, the manual how after the word `manual`).
+  `f10 review trigger` performs a manual how that reads as a comment (`comment \`<text>\``) or a review request (`request a review from \`<login>\``), the text or login in a code span: declaring one is what lets a flow run post it (`triggerable: true` in pick's JSON).
+  Any other how is a human's step.
 - **done** - done, then handled.
   Done is `posted`, `marker "<text>"`, `submitted` (an inline review) or `concluded` (a check run); handled is `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` (inline only).
   A check run has no remote handled marker; a new push starts a new run.
@@ -148,12 +167,18 @@ The four `review:` facts in the frontmatter, and an optional fifth, are the prot
 For a value outside the vocabulary `f10 review` refuses, naming the fact.
 Without them this half **fails**: there is nothing to wait for.
 
-1. **Pick**, in a flow's `review:ci`.
+1. **Pick**, in a flow's CI half.
    `f10 review pick` prints the latest unhandled review by the declared reviewer (`--json` for a struct); a settled one is never picked.
-   None done yet, with an **automatic** trigger: `f10 review wait --budget 8m`, once more if it expires, then fail.
+   A done one is the review, even when `stale: true`: print one line naming its sha and the commits since (`git rev-list --count <sha>..HEAD`) and go on, since a CI that reviews only on open never reviews a later push.
+   None done, the Trigger fact decides:
+   - **automatic**: `f10 review wait --budget 8m`, once more if it expires, then fail.
+   - **automatic, manual**: wait one budget; on expiry, trigger and wait.
+   - **manual**, triggerable: trigger and wait now.
+   - **manual**, not triggerable (pick names `f10 never performs it`): say what the user does, in the declared words, and stop; in a non-driven ship run, ask once (AskUserQuestion) whether they triggered it and wait only on yes; driven, that is the one ask (`modes/driven.md`).
+
+   **Trigger and wait** is the standalone one below.
+   Round two of an entry reaches the CI the same way: an automatic trigger fires on resolve's push, and a manual one is posted (the re-review comment).
    Keep the Bash timeout above the budget.
-   **A manual trigger** (pick says `the trigger is manual (<how>)`): never perform it.
-   Say what the user does, in the declared words, and stop; in a non-driven ship run, ask once (AskUserQuestion) whether they triggered it and wait only on yes.
 
    **Standalone `/f10:review ci`** chooses from the latest review instead: `f10 review pick --latest --json`.
    - **No review by the reviewer.**
@@ -179,7 +204,7 @@ Without them this half **fails**: there is nothing to wait for.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it, else `still open`.
    If the body is not in the findings shape, say once that this file's brief can be pasted into the workflow; do not print it.
 4. **Ack.**
-   With the file on disk and its **Lore** entries written (above, `--source remote`), `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: `/f10:resolve ci` leaves the settled mark), so a run dying in resolve never re-picks it.
+   With the file on disk and its **Lore** entries written (above, `--source remote`), `f10 review ack --id <id>` (pick's id) marks the review handled (consumed, not settled: resolve's **CI review** point 5 leaves the settled mark), so a run dying in resolve never re-picks it.
    Ack and trigger are outward-facing, under the run's authorization; in stealth mode they read as the user's own.
    Then the state block, as the blind reviewer's half writes it.
 

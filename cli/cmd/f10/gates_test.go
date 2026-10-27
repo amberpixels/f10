@@ -103,6 +103,70 @@ func TestGatesDuringShip(t *testing.T) {
 	checkTexts(t, gates, map[string]string{"review": "local: resolve running (in ship)"})
 }
 
+// One review:local+ci entry is the one review gate with both halves, each
+// moving from review to resolve once its own findings land.
+func TestGatesBothHalvesInOneEntry(t *testing.T) {
+	t0 := time.Unix(1_800_000_000, 0)
+	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
+
+	pipeline := []string{"implement", "pr", "review:local+ci", "pr"}
+	events := []ledger.Event{
+		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship", "args": "FT-1"}),
+		shipClaim(at(1), "s1", "implement"),
+		shipClaim(at(2), "s1", "pr"),
+		shipClaim(at(3), "s1", "review:local+ci"),
+	}
+	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local+ci", Pipeline: pipeline}
+
+	pending := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: pipeline, events: events[:3], now: at(3),
+	})
+	checkTexts(t, pending, map[string]string{"review": "local: pending · remote: pending"})
+
+	if n := len(pending); n != 5 {
+		t.Errorf("%d gates, want implement, pr, review, pr, judge off: %v", n, texts(pending))
+	}
+
+	running := taskGates(context.Background(), gateInput{task: "FT-1", run: run, events: events, now: at(4)})
+	checkTexts(t, running, map[string]string{
+		"review": "local: round 1 running (in ship) · remote: round 1 running (in ship)",
+	})
+
+	// the local reviewer wrote its findings; the CI review has not landed, so
+	// nothing is resolving yet
+	local := taskGates(context.Background(), gateInput{
+		task: "FT-1", run: run, events: events, now: at(5),
+		outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4)},
+	})
+	checkTexts(t, local, map[string]string{
+		"review": "local: round 1 in, waiting for the other half (in ship) · remote: round 1 running (in ship)",
+	})
+
+	// both halves landed: the one resolve settles them
+	both := taskGates(context.Background(), gateInput{
+		task: "FT-1", run: run, events: events, now: at(6),
+		outcomes: outcomes{
+			local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4),
+			remote: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, remoteAt: at(5),
+		},
+	})
+	checkTexts(t, both, map[string]string{
+		"review": "local: resolve running (in ship) · remote: resolve running (in ship)",
+	})
+
+	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Pipeline: pipeline}
+	settled := taskGates(context.Background(), gateInput{
+		task: "FT-1", run: done, events: events, now: at(9),
+		outcomes: outcomes{
+			local: []reviewRound{{Round: "1", Found: 1, Fixed: 1}}, localAt: at(6),
+			remote: []reviewRound{{Round: "1", Found: 2, Skipped: 2}}, remoteAt: at(6),
+		},
+	})
+	checkTexts(t, settled, map[string]string{
+		"review": "local: 1 found (1 fixed) · remote: 2 found (2 skipped)",
+	})
+}
+
 func TestGatesStartedOutsideShip(t *testing.T) {
 	t0 := time.Unix(1_800_000_000, 0)
 	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
