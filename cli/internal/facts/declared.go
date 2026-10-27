@@ -36,14 +36,14 @@ type Declared struct {
 	FlowByArea   map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
 	DriveFinish  string            `yaml:"drive_finish,omitempty"`
 	ReportBack   string            `yaml:"report_back,omitempty"`
+	Review       ReviewDecl        `yaml:"review,omitempty"`
+	Standup      StandupDecl       `yaml:"standup,omitempty"`
 
 	// The keys flows replaces, read and converted with a warning.
 	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
 	Planless   []string          `yaml:"planless,omitempty"`
 	ByArea     map[string]string `yaml:"pipeline_by_area,omitempty"`
 	DriveChain Steps             `yaml:"drive_chain,omitempty"`
-	Review     ReviewDecl        `yaml:"review,omitempty"`
-	Standup    StandupDecl       `yaml:"standup,omitempty"`
 }
 
 // TrackerDecl is the tracker's kind, its task id format (`FT-###`), the

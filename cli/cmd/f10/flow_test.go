@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
 // runIn runs f10 with -C dir and returns what it printed.
@@ -122,5 +125,55 @@ func TestCompletingFlow(t *testing.T) {
 		if got := completingFlow(strings.Fields(args)); got != want {
 			t.Errorf("%q = %v, want %v", args, got, want)
 		}
+	}
+}
+
+// A task that keeps a flow from its branch runs that flow's chain: a
+// planless run still plans a task whose recorded flow leads with plan.
+func TestChainForAKeptFlow(t *testing.T) {
+	direct := shipFlow{name: "direct", planless: true}
+	in := &driveInput{flow: direct, chain: driveChain(direct, true)}
+
+	if got := strings.Join(in.chainFor(direct), " "); got != "ship finish" {
+		t.Errorf("the run's own flow = %q", got)
+	}
+
+	if got := strings.Join(in.chainFor(shipFlow{}), " "); got != "plan ship finish" {
+		t.Errorf("a kept default flow = %q, want plan first and finish kept", got)
+	}
+}
+
+// With flow_by_area declared and no flow named, ship picks the flow from
+// the task's area: start and drive send ship alone, and record nothing.
+func TestFlowByArea(t *testing.T) {
+	eff := &facts.Effective{
+		Flows:      map[string][]string{"default": {"plan", "implement", "pr"}, "direct": {"implement", "push"}},
+		FlowByArea: map[string]string{"ui": "direct"},
+	}
+
+	fl, err := resolveShipFlow(eff, "")
+	if err != nil || !fl.byArea || fl.plans() || fl.recorded() != "" {
+		t.Fatalf("no flow named = %+v, %v", fl, err)
+	}
+
+	if named, _ := resolveShipFlow(eff, "default"); named.byArea || !named.plans() {
+		t.Errorf("a named flow wins over the area map: %+v", named)
+	}
+
+	if got := prompt(modeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
+		t.Errorf("prompt = %q, want ship alone", got)
+	}
+
+	if got := strings.Join(driveChain(fl, false), " "); got != "ship" {
+		t.Errorf("drive chain = %q, want ship plans as the area's flow says", got)
+	}
+
+	f := newFakes(t)
+	f.script("git config --get branch.GH-1."+cfgFlow, "")
+
+	in := &driveInput{main: "/code/repo", flow: fl}
+	if kept, note, err := in.keepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
+		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "git config branch.") }) {
+		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
 	}
 }

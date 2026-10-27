@@ -277,7 +277,10 @@ func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 		paren = paren || old
 	}
 
-	legacy := d.Pipelines != nil || d.Planless != nil || d.ByArea != nil || d.DriveChain != nil
+	// prose sections count too: config warns about them under a block, and
+	// this is the command its warning names
+	prose := d.Flows == nil && (prosePipes != nil || len(proseChainSteps) > 0)
+	legacy := d.Pipelines != nil || d.Planless != nil || d.ByArea != nil || d.DriveChain != nil || prose
 	if !legacy && !paren {
 		return nil, ErrHasFrontmatter
 	}

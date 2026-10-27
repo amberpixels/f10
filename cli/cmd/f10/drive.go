@@ -95,7 +95,7 @@ var oldChainSkills = []string{"plan", "judge", "ship", "review", "resolve", "fin
 // driveChain is what drive runs a task through on a flow.
 func driveChain(fl shipFlow, finish bool) []string {
 	var chain []string
-	if !fl.planless {
+	if fl.plans() {
 		chain = append(chain, "plan")
 	}
 
@@ -399,6 +399,7 @@ type driveRun struct {
 	o         openedTask
 	opened    bool
 	flow      shipFlow // the flow this task ships through: its branch's record, else the run's
+	chain     []string // what the task runs through on that flow
 	pos       int      // the chain element in flight, or the next one
 	skill     string   // what is in flight: a chain skill, or catchup
 	sentAt    time.Time
@@ -1051,8 +1052,10 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		o.notes = append(o.notes, flowNote)
 	}
 
+	chain := in.chainFor(fl)
+
 	// status reads finish off the chain
-	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(in.chain, " ")); err != nil {
+	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(chain, " ")); err != nil {
 		return fmt.Errorf("recording the chain: %w", err)
 	}
 
@@ -1060,12 +1063,12 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		fmt.Fprintf(w, "  %s\n", n)
 	}
 
-	pos, err := in.position(ctx, o, fl)
+	pos, err := in.position(ctx, o, chain)
 	if err != nil {
 		return err
 	}
 
-	r.o, r.opened, r.pos, r.flow = o, true, pos, fl
+	r.o, r.opened, r.pos, r.flow, r.chain = o, true, pos, fl, chain
 	if o.fresh {
 		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
 	}
@@ -1085,45 +1088,59 @@ func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, st
 		return in.flow, "", nil
 	}
 
-	if recorded != "" && in.resolve != nil {
-		name := recorded
-		if name == "default" {
-			name = ""
-		}
+	// an area picks the flow in ship, so a branch with none stays without
+	if recorded == "" && in.flow.byArea {
+		return in.flow, "", nil
+	}
 
-		if fl, err := in.resolve(name); err == nil {
+	// a recorded name is looked up as written: `default` is the default
+	// flow, never the area's pick
+	if recorded != "" && in.resolve != nil {
+		if fl, err := in.resolve(recorded); err == nil {
 			return fl, fmt.Sprintf("kept the %s flow its branch records; the run's %s does not apply to it",
-				recorded, in.flow.recorded()), nil
+				recorded, in.flow.label()), nil
 		}
 	}
 
-	if err := gitx.SetConfig(ctx, in.main, key, in.flow.recorded()); err != nil {
-		return shipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
+	if !in.flow.byArea {
+		if err := gitx.SetConfig(ctx, in.main, key, in.flow.recorded()); err != nil {
+			return shipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
+		}
 	}
 
 	if recorded != "" {
 		return in.flow, fmt.Sprintf("its branch recorded the %s flow, which project.md no longer declares; running %s",
-			recorded, in.flow.recorded()), nil
+			recorded, in.flow.label()), nil
 	}
 
 	return in.flow, "", nil
 }
 
+// chainFor is the chain a task runs on the flow it keeps: the run's own,
+// or one derived from a flow its branch recorded, which may lead with plan
+// where the run's does not, or the other way round.
+func (in *driveInput) chainFor(fl shipFlow) []string {
+	if fl == in.flow {
+		return in.chain
+	}
+
+	return driveChain(fl, slices.Contains(in.chain, "finish"))
+}
+
 // position is how many chain skills the task is past: the last one drive
 // recorded on the branch, else what its run state proves - plan and ship
 // are the phases the badge tracks - and a plan the worktree reads counts as
-// plan done, so driven ship takes it rather than planning again; so does a
-// flow with no plan entry, kept from the branch on a run whose flow has one.
-func (in *driveInput) position(ctx context.Context, o openedTask, fl shipFlow) (int, error) {
+// plan done, so driven ship takes it rather than planning again.
+func (in *driveInput) position(ctx context.Context, o openedTask, chain []string) (int, error) {
 	if last := gitx.Out(ctx, in.main, "config", "--get", "branch."+o.branch+"."+cfgDrive); last != "" {
-		if i := slices.Index(in.chain, last); i >= 0 {
+		if i := slices.Index(chain, last); i >= 0 {
 			return i + 1, nil
 		}
 	}
 
 	pos := 0
 
-	if i := slices.Index(in.chain, "plan"); i >= 0 && (o.plan != "" || fl.planless) {
+	if i := slices.Index(chain, "plan"); i >= 0 && o.plan != "" {
 		pos = i + 1
 	}
 
@@ -1137,7 +1154,7 @@ func (in *driveInput) position(ctx context.Context, o openedTask, fl shipFlow) (
 			continue
 		}
 
-		if i := slices.Index(in.chain, phase); i >= 0 {
+		if i := slices.Index(chain, phase); i >= 0 {
 			pos = max(pos, i+1)
 		}
 	}
@@ -1154,13 +1171,13 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	wasWaiting := r.waiting
 	r.waiting = false
 
-	if r.pos >= len(in.chain) {
-		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(in.chain, " ")})
+	if r.pos >= len(r.chain) {
+		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(r.chain, " ")})
 
 		return nil
 	}
 
-	skill := in.chain[r.pos]
+	skill := r.chain[r.pos]
 
 	if b := r.base; b != nil && b.end != nil && b.end.code == exitHalted {
 		in.end(ctx, w, r, baseHalted(r, skill))

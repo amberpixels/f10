@@ -133,10 +133,14 @@ func sortedKeys(m map[string]string) []string {
 }
 
 // A shipFlow is the flow a started task ships through: its name, "" for
-// default, and whether it writes a plan file.
+// default, and whether it writes a plan file. byArea is no flow named on a
+// project that declares flow_by_area: ship picks the flow from the task's
+// area, so it is told none, plans as that flow says, and nothing is
+// recorded on the branch.
 type shipFlow struct {
 	name     string
 	planless bool
+	byArea   bool
 }
 
 // word is how /f10:ship is told the flow: `local: ` before the id, nothing
@@ -149,14 +153,29 @@ func (f shipFlow) word() string {
 	return f.name + ": "
 }
 
-// recorded is the name written on the branch.
+// recorded is the name written on the branch, "" for none.
 func (f shipFlow) recorded() string {
-	if f.name == "" {
+	switch {
+	case f.byArea:
+		return ""
+	case f.name == "":
 		return "default"
+	default:
+		return f.name
+	}
+}
+
+// label names the flow in a note.
+func (f shipFlow) label() string {
+	if f.byArea {
+		return "flow the task's area picks"
 	}
 
-	return f.name
+	return f.recorded()
 }
+
+// plans reports whether start and drive send /f10:plan before ship.
+func (f shipFlow) plans() bool { return !f.planless && !f.byArea }
 
 // flowFlags reads --flow and --local into one name, "" for default:
 // --local is --flow local.
@@ -177,6 +196,10 @@ func flowFlags(cmd *cli.Command) (string, error) {
 // resolveShipFlow is the named flow as declared; a name project.md does
 // not declare fails with the list f10 flow prints.
 func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
+	if name == "" && len(eff.FlowByArea) > 0 {
+		return shipFlow{byArea: true}, nil
+	}
+
 	lookup := strings.ToLower(name)
 	if lookup == "" {
 		lookup = "default"
