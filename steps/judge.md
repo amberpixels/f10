@@ -79,7 +79,7 @@ Name a bug only where it changes the verdict.
    - `task:` the task id; empty for an idea.
    - `subject:` the kind and the reference: `idea <one line>`, `task <id>`, `plan <id>`, `pr <number or url>`, `branch <name>`, `range <a>..<b>`, `commit <sha>`.
    - `verdict:` exactly one of `proceed`, `proceed with changes`, `rethink`, `stop`, lowercase; anything else is recorded as a parse error.
-   - `run:` `standalone`, `ship before pr` or `ship after pr`.
+   - `run:` `standalone`, `before plan`, `ship before pr` or `ship after pr`.
    - `blind:` `yes` on a `--blind` run; omitted otherwise.
    - `decision:` ship runs only, what the run did with the verdict (the routes below name it); omitted standalone.
 
@@ -87,12 +87,17 @@ Name a bug only where it changes the verdict.
    Write it once the verdict is final for this run: standalone, after the reply; in a ship run, once the route is chosen.
    A verdict that changes later in the same discussion rewrites the same file.
    The file stays under the storage root: never name it or its path in a commit, PR comment, status or tracker text.
-   Then, with a task id, the lore entry beside it: `f10 lore add verdict --change <task> --outcome <verdict> --gate judge --commit <HEAD's sha> --judged <plan|change> -m <reason>`, `plan` when the subject is `plan <id>`; an idea writes none, and a failing `lore add` is one line in the report, never a failed step.
+   Then, with a task id, the lore entry beside it: `f10 lore add verdict --change <task> --outcome <verdict> --gate judge --commit <HEAD's sha> --judged <task|plan|change> -m <reason>`, `task` when the subject is `task <id>`, `plan` when it is `plan <id>`; an idea writes none, and a failing `lore add` is one line in the report, never a failed step.
 
 **Blind** (`--blind`): for work this session produced.
 Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`), follow this step except point 8, write no file, and return the verdict and its argument.
 Relay its verdict unchanged; you may dispute it in one line.
 The agent writes nothing: you write the verdict file with `blind: yes`, your dispute, if any, under `## Argument`.
+
+**Before planning**: the fetch step runs this on a task older than the frontmatter's `stale_after`, with the subject `task <id>`.
+The question is whether the task is still worth doing as written against today's code: already solved, overtaken by another task, or its premise gone.
+Only **proceed** lets the run go on; every other verdict stops it blocked, since there is no plan yet to fold changes into and the task's scope is the user's call (`steps/fetch.md` point 1 routes it).
+The file says `run: before plan` and `decision: continue` or `block`.
 
 **In a ship flow** the verdict routes the run; none is a failure.
 A `judge` entry before `implement` is the **plan judge**: its subject is `plan <id>`, it routes as before `pr` below, and a yellow verdict's changes fold into the plan file in place, with no code written.

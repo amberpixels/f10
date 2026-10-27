@@ -55,7 +55,7 @@ type gate struct {
 	Step    string        `json:"step"`
 	State   string        `json:"state,omitempty"`  // plain steps and judges
 	Via     string        `json:"via,omitempty"`    // a running gate: in ship, driven or manual
-	Judged  string        `json:"judged,omitempty"` // a judge: plan or change
+	Judged  string        `json:"judged,omitempty"` // a judge: task, plan or change
 	Outcome *judgeOutcome `json:"outcome,omitempty"`
 	Local   *reviewHalf   `json:"local,omitempty"`
 	Remote  *reviewHalf   `json:"remote,omitempty"`
@@ -158,6 +158,11 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 
 	for judged, i := range judges {
 		in.judge(&gates[i], judged, entries, steps)
+	}
+
+	// the stale task's judge is in no flow: it leads once it ran or the run is on it
+	if g, ok := in.taskJudge(); ok {
+		gates = append([]gate{g}, gates...)
 	}
 
 	// a judge the flow does not declare shows once something ran it
@@ -438,6 +443,24 @@ func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
 	}
 }
 
+// taskJudge is the judge fetch runs on a task older than stale_after:
+// running or stopped while the plan phase is on it, else its newest
+// verdict, and not shown at all before either.
+func (in gateInput) taskJudge() (gate, bool) {
+	g := gate{Step: "judge", Judged: "task"}
+
+	switch r := in.run; {
+	case r != nil && r.Leaf == "judge" && (r.Plan == gateRunning || state.Stopped(r.Plan)):
+		g.State = r.Plan
+	case in.outcomes.taskJudge != nil:
+		g.State, g.Outcome = gateDone, in.outcomes.taskJudge
+	default:
+		return gate{}, false
+	}
+
+	return g, true
+}
+
 // claimedAt is when the session last claimed ship running step.
 func (in gateInput) claimedAt(session, step string) time.Time {
 	var at time.Time
@@ -537,10 +560,10 @@ func (in gateInput) onTask(e ledger.Event) bool {
 // outcomes is what the reviews and judges of a task left, with the time
 // of the newest of each, so a later call reads as running.
 type outcomes struct {
-	local, remote          []reviewRound
-	planJudge, changeJudge *judgeOutcome
+	local, remote                     []reviewRound
+	taskJudge, planJudge, changeJudge *judgeOutcome
 
-	localAt, remoteAt, planAt, changeAt time.Time
+	localAt, remoteAt, taskAt, planAt, changeAt time.Time
 
 	// every finding the files raised, each counted in its first round only
 	localRaised, remoteRaised int
@@ -576,6 +599,10 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 
 	o.localAt, o.remoteAt = latest(o.localAt, l.localAt), latest(o.remoteAt, l.remoteAt)
 
+	if l.taskJudge != nil && !l.taskAt.Add(time.Second).Before(o.taskAt) {
+		o.taskJudge = l.taskJudge
+	}
+
 	if l.planJudge != nil && !l.planAt.Add(time.Second).Before(o.planAt) {
 		o.planJudge = l.planJudge
 	}
@@ -584,6 +611,7 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 		o.changeJudge = l.changeJudge
 	}
 
+	o.taskAt = latest(o.taskAt, l.taskAt)
 	o.planAt, o.changeAt = latest(o.planAt, l.planAt), latest(o.changeAt, l.changeAt)
 
 	return o
@@ -629,9 +657,9 @@ func roundsFromLore(counts, files []reviewRound) []reviewRound {
 // newest verdict of each kind.
 func loreOutcomes(entries []lore.Entry) outcomes {
 	var (
-		o              outcomes
-		local, remote  *reviewRound
-		planAt, change time.Time
+		o                      outcomes
+		local, remote          *reviewRound
+		taskAt, planAt, change time.Time
 	)
 
 	for _, e := range entries {
@@ -663,11 +691,16 @@ func loreOutcomes(entries []lore.Entry) outcomes {
 		case lore.KindVerdict:
 			j := &judgeOutcome{Verdict: e.Outcome, Reason: firstLine(strings.TrimSpace(e.Body))}
 
-			if e.Judged == "plan" {
+			switch {
+			case e.Judged == "task":
+				if !e.At.Before(taskAt) {
+					o.taskJudge, taskAt = j, e.At
+				}
+			case e.Judged == "plan":
 				if !e.At.Before(planAt) {
 					o.planJudge, planAt = j, e.At
 				}
-			} else if !e.At.Before(change) {
+			case !e.At.Before(change):
 				o.changeJudge, change = j, e.At
 			}
 		case lore.KindIntent, lore.KindDecision, lore.KindLesson:
@@ -682,7 +715,7 @@ func loreOutcomes(entries []lore.Entry) outcomes {
 		o.remote = []reviewRound{*remote}
 	}
 
-	o.planAt, o.changeAt = planAt, change
+	o.taskAt, o.planAt, o.changeAt = taskAt, planAt, change
 
 	return o
 }
@@ -811,7 +844,8 @@ func (h *reviewHalf) text() string {
 }
 
 // compactGates is the parent rows' gate column: `L 3/4 · R open · J
-// proceed`, `-` for a gate not in the flow, `…` running, `?` unknown.
+// proceed`, `-` for a gate not in the flow, `…` running, `?` unknown; a
+// stale task's judge is `TJ`.
 func compactGates(gates []gate) string {
 	var parts []string
 
@@ -823,7 +857,10 @@ func compactGates(gates []gate) string {
 			parts = append(parts, "L "+g.Local.compact(), "R "+g.Remote.compact())
 		case g.Step == "judge":
 			j := "J "
-			if g.Judged == "plan" {
+			switch g.Judged {
+			case "task":
+				j = "TJ "
+			case "plan":
 				j = "PJ "
 			}
 

@@ -44,8 +44,8 @@ var (
 	Gates    = []string{"judge", "review", "human"}
 	// Sources are where a finding came from: a local review or the host's.
 	Sources = []string{"local", "remote"}
-	// Judged is what a verdict judged: the plan, or the change itself.
-	Judged = []string{"plan", "change"}
+	// Judged is what a verdict judged: the task itself, its plan, or the change.
+	Judged = []string{"task", "plan", "change"}
 )
 
 // Agent is who did the work when it was not the human alone.

@@ -247,12 +247,13 @@ func Stopped(status string) bool {
 
 // PhaseText is the status with its step attached where one is known and
 // belongs to that status: `running: implement`, `blocked at judge`. The
-// leaf is a pipeline step, so only ship ever carries one.
+// leaf is a pipeline step, so only ship carries one, but for the judge
+// fetch runs on a stale task before plan.
 func (r *Run) PhaseText(phase string) string {
 	status := r.Status(phase)
 
 	switch {
-	case r.Leaf == "" || phase != "ship":
+	case r.Leaf == "" || (phase != "ship" && (phase != "plan" || r.Leaf != "judge")):
 		return status
 	case status == "running":
 		return status + ": " + r.Leaf

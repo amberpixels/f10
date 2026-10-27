@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -468,5 +469,32 @@ func TestCatchupOff(t *testing.T) {
 
 	if eff := buildWith(t, "---\ncatchup: squash\n---\n", ""); !strings.Contains(eff.Errors(), "catchup") {
 		t.Errorf("an unknown method is not an error: %q", eff.Errors())
+	}
+}
+
+func TestStaleAfter(t *testing.T) {
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "stale_after"); none.StaleAfter != "" || f.Origin != OriginDefault || f.Value != "off" {
+		t.Errorf("undeclared = %q, %+v", none.StaleAfter, f)
+	}
+
+	for _, v := range []string{"10d", "3w"} {
+		if eff := buildWith(t, "---\nstale_after: "+v+"\n---\n", ""); eff.StaleAfter != v || eff.Errors() != "" {
+			t.Errorf("%s: stale_after %q, errors %q", v, eff.StaleAfter, eff.Errors())
+		}
+	}
+
+	for _, v := range []string{"0d", "3m", "3", "w", "-1w", "1.5w", "99999999999999999999d"} {
+		if eff := buildWith(t, "---\nstale_after: "+v+"\n---\n", ""); !strings.Contains(eff.Errors(), "stale_after") {
+			t.Errorf("%s is not an error: %q", v, eff.Errors())
+		}
+	}
+
+	if eff := buildWith(t, "---\nstale_after: 3w\n---\n", "---\nstale_after: 10d\n---\n"); eff.StaleAfter != "10d" {
+		t.Errorf("stale_after = %q, want the worktree's 10d", eff.StaleAfter)
+	}
+
+	if d, err := ParseStaleAfter("3w"); err != nil || d != 21*24*time.Hour {
+		t.Errorf("3w = %v, %v", d, err)
 	}
 }

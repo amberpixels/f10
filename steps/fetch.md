@@ -2,13 +2,28 @@
 
 Role: a **senior engineer** doing due diligence before touching any code.
 Input: a task identifier (in the project's id format).
-Context: `project.md → Tracker` (the **fetch adapter**).
+Context: `project.md → Tracker` (the **fetch adapter**), and the frontmatter's `stale_after`.
 Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` once fetched.
 
 1. **Fetch the task**: `f10 task read <id>`; when it cannot read this tracker it says so, and the project's fetch adapter reads the task instead (a skill to invoke, or a CLI command such as `gh issue view <n> --comments`).
    A **bundle** (`ABC-1+ABC-2`, the lead first) is the argument, else the branch's task plus the riders `git config --get branch."$(git branch --show-current)".f10-tasks` lists; `f10 task read <lead>+<riders>` reads every member.
    One kind settles the whole bundle (a `bug` member makes it a bug), and its areas are every member's.
    A base task, named by the steering (`f10 start --after`) or a body line `After: <id>`, goes into the brief: the plan step records it as the plan's **Depends on** line and designs against the base task's plan (its task, where the plan is not written yet), never this checkout, with no fallback for its absence.
+   **A stale task** is judged before anything else, when the frontmatter declares `stale_after` (`10d`, `3w`) and this run will write a plan: the **plan** step follows, or a planless flow's brief becomes its inline plan.
+   A ship run that reuses a saved plan skips it: look for the plan file first.
+   - **Age**: `f10 task read` decides it for GitHub and GitLab issues, `created <date> (stale: older than <stale_after>)` in its meta line; a `created` date without the mark is fresh.
+     Otherwise compare the created date the fetch adapter's output or a driver's doc shows against `date -u +%F`.
+     No created date in what was read: not judged, one line in the brief; never call the adapter again to find one.
+     Fresh: nothing to do.
+   - **Already judged**: a verdict file with `subject: task <id>` reading `proceed`, written within `stale_after` (its mtime), skips the judge, one line naming it; look under this run's `<storage root>/verdicts/<id>/` and, from a linked worktree with in-repo storage, the main checkout's.
+     Any other verdict, or an older proceed, is judged again.
+   - **Anyway**: the steering word `anyway` (`/f10:plan <id> anyway`, `/f10:ship <id> anyway`, or `f10 drive --answer <id> anyway` to a blocked driven run) is the user's override.
+     Write it as a verdict file like any other (`subject: task <id>`, `verdict: proceed`, `reason: planned anyway by the user`, `run: before plan`, `decision: overridden`), so later runs skip the judge by the rule above, and say so in one line in the brief.
+   - **Judge**: `f10-state.sh set plan running judge; f10-load-project.sh judge`, then run the **judge** step on the subject `task <id>` (its **Before planning** section).
+   - **Proceed**: `f10-state.sh set plan running` and go on to point 2; the brief carries the verdict in one line (`stale (created 2026-09-20, older than 3w): proceed - <reason>`), and the run's final report repeats it.
+   - **Any other verdict**, yellow included: `f10-state.sh set plan blocked judge; f10-state.sh note "stale task: <verdict> - <reason>" "<verdict file path>; <the anyway command> to go on, or close the task"`, the command `/f10:ship <id> anyway` for a planless flow (a plan file would take the task off it), else `/f10:plan <id> anyway`.
+     Print the banner and a facts block (`task`, `title`, `url`, `verdict` with the file's path), and stop: no plan is written and a chained skill does not run.
+     A driven run stops the same way, with no ask.
 2. **Settle the kind**: `feature`, `bug`, `refactor` or `spike`.
    The steering's word wins (`/f10:plan FT-12 as a bug`), then a tracker label or type that names one (`bug`, `defect`, `regression` are a bug; `refactor`, `tech-debt` a refactor; `spike`, `research`, `investigation` a spike; other labels, `question` among them, say nothing), then the description (an error, a stack trace, "used to work" read as a bug; "no behavior change", "restructure" as a refactor), else `feature`.
    A kind read from the description alone is named as such in the brief, so a reader can overrule it.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 )
 
@@ -126,8 +127,9 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 }
 
 // issueDoc is the issue as the markdown document `task read` prints.
-func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
-	iss, err := h.issue(ctx, number, "number,title,state,labels,url,body,comments")
+// staleAfter is the project's stale_after, "" for none.
+func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (string, error) {
+	iss, err := h.issue(ctx, number, "number,title,state,labels,createdAt,url,body,comments")
 	if err != nil {
 		return "", err
 	}
@@ -140,9 +142,20 @@ func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
 
 	fmt.Fprintf(&b, "# %s: %s\n\n", id, iss.Title)
 
-	// labels sit up top: fetch reads a task's kind from them
+	// labels sit up top: fetch reads a task's kind from them, and its age
+	// from the created date when stale_after is declared
+	var created string
+	if at := cmp.Or(iss.CreatedAt, iss.CreatedAtGL); !at.IsZero() {
+		created = "created " + at.UTC().Format(time.DateOnly)
+
+		// the comparison is made here so fetch reads it, never works it out
+		if d, err := facts.ParseStaleAfter(staleAfter); err == nil && time.Since(at) > d {
+			created += " (stale: older than " + staleAfter + ")"
+		}
+	}
+
 	meta := slices.DeleteFunc(
-		[]string{iss.State, strings.Join(iss.Labels, ", "), iss.url()},
+		[]string{iss.State, strings.Join(iss.Labels, ", "), created, iss.url()},
 		func(s string) bool { return s == "" },
 	)
 	if len(meta) > 0 {
