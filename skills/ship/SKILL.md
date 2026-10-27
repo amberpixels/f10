@@ -59,7 +59,7 @@ In the main checkout, or with out-of-tree storage, the report already outlives t
 Its report back (below) carries the question, the answer and the recommendation; it names the spike report's path only under `visibility: public`, since stealth keeps `.f10/` paths off the tracker.
 The kind is known from the plan, or a planless run's inline plan, before the flow starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
 
-**The catchup guard** brings the base in before three kinds of entry, as the **catchup** step's **As a guard** says; under `catchup: off` it never runs, and its load leaves `catchup` out.
+**The catchup guard** brings the base in before three kinds of entry, as the **catchup** step's **As a guard** says; under `catchup: off` it never integrates and its load leaves `catchup` out, but the question below for a base with no code still runs.
 Catchup is never a flow entry.
 
 - **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`).

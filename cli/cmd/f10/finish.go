@@ -770,7 +770,7 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 		}
 
 		notes = append(notes, fmt.Sprintf("%s depended on %s: the dependency is cleared and its pr targets %s now; "+
-			"its next ship or /f10:catchup brings %s in first", dependent, branch, def, def))
+			"/f10:catchup, or its next ship unless catchup is off, brings %s in first", dependent, branch, def, def))
 	}
 
 	return notes, nil

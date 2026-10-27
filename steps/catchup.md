@@ -69,7 +69,7 @@ It differs from the run above:
 
 - **Nothing to do** under `catchup: off`, on the default branch itself, or when the base is already an ancestor after `git fetch origin`; that says nothing, and the ancestor case still clears the marks as point 3 does.
 - **Base**: point 2's order, the default branch when nothing is recorded.
-  Before `pr` and a change judge, an `f10-after-branch` base is `origin/<branch>`, what the PR targets, so the base task's unpushed commits never ride into this PR; before implement, point 2's local-first order stays.
+  Before `pr` and a change judge, every base is read from origin (`origin/<branch>` for an `f10-after-branch` base, `origin/<default>` otherwise), what the PR targets, so unpushed commits of another task never ride into this PR; before implement, point 2's local-first order stays.
 - **Method**: point 3's, except that this branch, once on origin (`origin/$(git branch --show-current)` after the fetch), is merged whatever `catchup:` says, so the push after it never forces.
 - **Clean tree**: the ship skill commits the tree first where it has to; the guard never stashes.
 - **A conflict fails the run**: `git merge --abort` / `git rebase --abort`, so the branch is as it was, any mark kept, and `/f10:catchup` in the `next` row.
