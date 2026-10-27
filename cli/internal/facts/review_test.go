@@ -178,6 +178,7 @@ func TestManualHow(t *testing.T) {
 		"manual, comment `@claude review` on the PR":                                          "",
 		"automatic, on a push to `main`":                                                      "",
 		"automatic, on a push to `main`; manual, ask in Slack":                                "ask in Slack",
+		"automatic, on a push to `main`; manual, comment `@claude` on the PR":                 "comment `@claude` on the PR",
 	} {
 		trigger, how := parseTrigger(line)
 
@@ -189,6 +190,19 @@ func TestManualHow(t *testing.T) {
 		// the code span in the automatic half is never the action
 		if _, text, ok := r.ManualAction(); ok && text == "main" {
 			t.Errorf("%q: the automatic half's span read as the manual trigger", line)
+		}
+	}
+
+	// the manual half's comment is posted, never the automatic half's span
+	for _, line := range []string{
+		"automatic, on a push to `main`; manual, comment `@claude` on the PR",
+		"automatic, on open and on push; manual, comment `@claude` on the PR for a re-review",
+	} {
+		trigger, how := parseTrigger(line)
+
+		kind, text, ok := Review{Trigger: trigger, TriggerHow: how, ManualHow: manualPart(line)}.ManualAction()
+		if kind != ManualComment || text != "@claude" || !ok {
+			t.Errorf("%q: ManualAction = %q, %q, %v; want a comment posting @claude", line, kind, text, ok)
 		}
 	}
 
