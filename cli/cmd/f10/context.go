@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
@@ -33,6 +34,9 @@ type target struct {
 	pb     *probe.Probes
 	eff    *facts.Effective
 	scoped bool // -C named another project, which collapses the ref cascade
+
+	project     string // the ledger's project id, read once by refProject
+	projectOnce sync.Once
 }
 
 func targetFor(ctx context.Context, cmd *cli.Command) (*target, error) {

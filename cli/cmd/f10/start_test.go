@@ -51,7 +51,10 @@ func newFakes(t *testing.T) *fakes {
 	// no branch is linked to a task, and origin has no task branch, until a test says so
 	f.absent = []string{linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/"}
 
-	prevExec, prevCapture, prevHas := gitx.Exec, shell.Capture, shell.Has
+	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, projectOf
+
+	// task refs need the project from git, which these fakes do not script
+	projectOf = func(context.Context, string) string { return "" }
 
 	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
 		res := f.answer("git " + strings.Join(args, " "))
@@ -68,7 +71,7 @@ func newFakes(t *testing.T) *fakes {
 
 	shell.Has = func(name string) bool { return f.has[name] }
 
-	t.Cleanup(func() { gitx.Exec, shell.Capture, shell.Has = prevExec, prevCapture, prevHas })
+	t.Cleanup(func() { gitx.Exec, shell.Capture, shell.Has, projectOf = prevExec, prevCapture, prevHas, prevProject })
 	t.Setenv("HERDR_ENV", "1")
 
 	return f
@@ -393,7 +396,7 @@ func TestHostRefusesPullRequests(t *testing.T) {
 
 	gh := newHost("gh", "/code/repo")
 
-	if _, err := gh.issueDoc(
+	if _, _, err := gh.issueDoc(
 		t.Context(),
 		"FT-35",
 		"35",
@@ -448,7 +451,7 @@ func TestHostIssueDocLabels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		doc, err := newHost(tt.host, "/code/repo").issueDoc(t.Context(), "FT-"+tt.number, tt.number, tt.stale)
+		doc, _, err := newHost(tt.host, "/code/repo").issueDoc(t.Context(), "FT-"+tt.number, tt.number, tt.stale)
 		if err != nil || !strings.Contains(doc, tt.want) {
 			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
 		}

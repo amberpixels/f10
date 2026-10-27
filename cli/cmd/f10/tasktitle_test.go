@@ -36,7 +36,7 @@ func TestHostReadsStripTheTitle(t *testing.T) {
 
 	h := titledHost()
 
-	doc, err := h.issueDoc(t.Context(), "FT-12", "12", "")
+	doc, _, err := h.issueDoc(t.Context(), "FT-12", "12", "")
 	if err != nil || !strings.HasPrefix(doc, "# FT-12: Drive halts\n") {
 		t.Errorf("issueDoc = %q, %v", doc, err)
 	}

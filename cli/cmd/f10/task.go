@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/images"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
@@ -39,6 +40,17 @@ func taskCommand() *cli.Command {
 					Usage: "into a pipe too, leave the task's images as links (a title lookup)",
 				}},
 				Action: runTaskRead,
+			},
+			{
+				Name: "ref",
+				Usage: "print each task as `<id> (<title>)`, or a markdown link with --md, from the titles f10 " +
+					"already read; an unknown id prints bare",
+				ArgsUsage: "<task-id>...",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "md", Usage: "print `[<id>: <title>](<url>)`"},
+					&cli.BoolFlag{Name: "fresh", Usage: "ask the tracker even for a task f10 already read"},
+				},
+				Action: runTaskRef,
 			},
 			{
 				Name:      "open",
@@ -161,12 +173,16 @@ func fetchFallback(err error) error {
 }
 
 // readDoc is the task as markdown: the driver's `read`, else the host's
-// issue with its comments.
+// issue with its comments. The title it read, and the url where the host
+// gave one, go to the ledger's task refs.
 func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
-			return oneIDHeading(doc, r, t.eff.TitleTemplate), nil
+			doc = oneIDHeading(doc, r, t.eff.TitleTemplate)
+			t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: t.driverTitle(r, doc)})
+
+			return doc, nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
@@ -179,7 +195,15 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 		return "", err
 	}
 
-	return h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
+	doc, iss, err := h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
+	if err == nil {
+		t.rememberRefs(
+			ctx,
+			ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, h.title(iss.Title, r.Number)), URL: iss.url()},
+		)
+	}
+
+	return doc, err
 }
 
 // oneIDHeading collapses a driver document's `# <id>: <id>: <title>`
@@ -370,7 +394,10 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver list rows: %w", err)
 			}
 
-			return stripTitles(rows, t.eff.TitleTemplate), nil
+			rows = stripTitles(rows, t.eff.TitleTemplate)
+			t.rememberRefs(ctx, rowRefs(rows)...)
+
+			return rows, nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
@@ -383,7 +410,10 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels, limit)
+	rows, err := h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels, limit)
+	t.rememberRefs(ctx, rowRefs(rows)...)
+
+	return rows, err
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -483,7 +513,10 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver search rows: %w", err)
 			}
 
-			return stripTitles(rows, t.eff.TitleTemplate), nil
+			rows = stripTitles(rows, t.eff.TitleTemplate)
+			t.rememberRefs(ctx, rowRefs(rows)...)
+
+			return rows, nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
@@ -496,7 +529,10 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
+	rows, err := h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
+	t.rememberRefs(ctx, rowRefs(rows)...)
+
+	return rows, err
 }
 
 // stripTitles takes the prefix tracker.title wrote off each driver row's
@@ -611,6 +647,8 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
 	}
 
+	doc = t.linkBodyAfter(ctx, doc, cmd.ErrWriter)
+
 	args, err := createArgs(ctx, t, cmd, doc)
 	if err != nil {
 		return err
@@ -643,6 +681,14 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 	// the number exists only now, so the template goes on in a second write
 	retitleAfter(ctx, cmd.ErrWriter, t, r, "created")
+
+	// the url too, best effort, so naming the new task costs no tracker call
+	created := ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)}
+	if url, err := d.Run(ctx, driver.VerbURL, r.Number); err == nil {
+		created.URL = strings.TrimSpace(url)
+	}
+
+	t.rememberRefs(ctx, created)
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 

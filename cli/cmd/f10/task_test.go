@@ -364,7 +364,9 @@ func createRepo(t *testing.T, script string) string {
 	}
 
 	if script != "" {
-		body := "#!/bin/sh\nhere=$(dirname \"$0\")\necho \"$@\" > \"$here/args\"\ncat > \"$here/stdin\"\n" + script
+		// the read verbs leave args and stdin to the write a test checks
+		body := "#!/bin/sh\nhere=$(dirname \"$0\")\ncase \"$1\" in read|url) ;; *) echo \"$@\" > \"$here/args\"; " +
+			"cat > \"$here/stdin\" ;; esac\n" + script
 		if err := os.WriteFile(filepath.Join(repo, ".f10", "driver"), []byte(body), 0o700); err != nil {
 			t.Fatal(err)
 		}

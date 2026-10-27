@@ -92,6 +92,7 @@ The task's properties arrive as flags, and only the ones the caller set:
 - `--label` repeats, once per label.
 - `--parent` is the task to link the new one under as a subtask, and `--after` the task it waits for, read from the body's `After:` line, which stays in the body.
   Both are numbers, as every other verb's argument is.
+  f10 rewrites that line into a link to the base task before the body reaches you (`After: [FT-12: <title>](<url>)`), using your `read` and `url` for a base it has not read yet; a driver that reads the line itself takes the id from the link text.
 
 A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
 Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
