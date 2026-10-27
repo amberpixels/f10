@@ -23,13 +23,21 @@ import (
 // git leave the task refs alone.
 var projectOf = func(ctx context.Context, dir string) string { return ledger.Where(ctx, dir).Project }
 
+// refProject is the ledger's project id for this target, read once: status
+// and drive write refs for every task they show.
+func (t *target) refProject(ctx context.Context) string {
+	t.projectOnce.Do(func() { t.project = projectOf(ctx, t.dir) })
+
+	return t.project
+}
+
 // rememberRefs records refs as this project's; it never fails its caller.
 func (t *target) rememberRefs(ctx context.Context, refs ...ledger.TaskRef) {
 	if len(refs) == 0 {
 		return
 	}
 
-	ledger.RememberRefs(ctx, projectOf(ctx, t.dir), refs...)
+	ledger.RememberRefs(ctx, t.refProject(ctx), refs...)
 }
 
 func rowRefs(rows []row) []ledger.TaskRef {
@@ -143,7 +151,7 @@ func (t *target) taskRefs(
 	md, fresh bool,
 	warn io.Writer,
 ) map[string]ledger.TaskRef {
-	project := projectOf(ctx, t.dir)
+	project := t.refProject(ctx)
 
 	var ids []string
 
