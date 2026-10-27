@@ -21,26 +21,60 @@ import (
 // per-branch copy once the branch exists.
 
 // afterIn is the id the body's After: line names, or "". The line starts
-// at column 0 and names one id; emphasis or code marks around either part
-// (`**After:** GH-12`) do not change it.
+// at column 0 and names one id, bare or as a link to the task
+// (`After: [GH-12: Add the index](https://...)`); emphasis or code marks
+// around either part (`**After:** GH-12`) do not change it.
 func afterIn(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
-		line = strings.TrimRight(line, "\r")
-		if line == "" || line[0] == ' ' || line[0] == '\t' {
-			continue
-		}
-
-		key, value, ok := mdline.Cut(line, ":")
-		if !ok || !strings.EqualFold(key, "after") {
-			continue
-		}
-
-		if id := mdline.Bare(value); id != "" && !strings.ContainsAny(id, " \t") {
+		if id := afterID(line); id != "" {
 			return id
 		}
 	}
 
 	return ""
+}
+
+// afterID is the id one line names as an After: line, or "".
+func afterID(line string) string {
+	line = strings.TrimRight(line, "\r")
+	if line == "" || line[0] == ' ' || line[0] == '\t' {
+		return ""
+	}
+
+	key, value, ok := mdline.Cut(line, ":")
+	if !ok || !strings.EqualFold(key, "after") {
+		return ""
+	}
+
+	id := mdline.Bare(value)
+
+	// a link's id is its text up to the title: the url is never read, so a
+	// moved task still names its base
+	if text, ok := strings.CutPrefix(id, "["); ok && strings.Contains(text, "](") {
+		text, _, _ = strings.Cut(text, "](")
+		text, _, _ = strings.Cut(text, ":")
+		id = strings.TrimSpace(text)
+	}
+
+	if id == "" || strings.ContainsAny(id, " \t[]") {
+		return ""
+	}
+
+	return id
+}
+
+// linkAfter puts link in place of the value on body's first After: line.
+func linkAfter(body, link string) string {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if afterID(line) != "" {
+			lines[i] = "After: " + link
+
+			break
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // A taskInfo is what the tracker says about a task beyond its branch.
@@ -116,7 +150,10 @@ func (t *target) tracker() tracker {
 				return nil, err
 			}
 
-			return shapeChildren(ctx, tr, main, raw, keepClosed)
+			rows, err := shapeChildren(ctx, tr, main, raw, keepClosed)
+			t.rememberRefs(ctx, childRefs(rows)...)
+
+			return rows, err
 		}
 	}
 

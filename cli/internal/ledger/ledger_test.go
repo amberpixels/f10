@@ -317,3 +317,52 @@ func TestOpenWithoutReplayLeavesTheSpool(t *testing.T) {
 		t.Errorf("replayed %d", len(got))
 	}
 }
+
+func TestRefsRememberAndOverwrite(t *testing.T) {
+	tempPath(t)
+	ctx := context.Background()
+
+	RememberRefs(ctx, "github.com/a/b",
+		TaskRef{ID: "FT-1", Title: "One", URL: "https://x/1"},
+		TaskRef{ID: "FT-2", Title: "Two"},
+		TaskRef{ID: "FT-3"}, // no title: not stored
+	)
+	RememberRefs(ctx, "github.com/a/b", TaskRef{ID: "FT-1", Title: "One renamed"}) // a title-only read keeps the url
+	RememberRefs(ctx, "github.com/c/d", TaskRef{ID: "FT-1", Title: "Other project"})
+
+	got := LookupRefs(ctx, "github.com/a/b", []string{"FT-1", "FT-2", "FT-3", "FT-9"})
+	if len(got) != 2 {
+		t.Fatalf("rows = %v, want FT-1 and FT-2", got)
+	}
+
+	if r := got["FT-1"]; r.Title != "One renamed" || r.URL != "https://x/1" || r.SeenAt.IsZero() {
+		t.Errorf("FT-1 = %+v", r)
+	}
+
+	if r := got["FT-2"]; r.Title != "Two" || r.URL != "" {
+		t.Errorf("FT-2 = %+v", r)
+	}
+
+	if r := LookupRefs(ctx, "github.com/c/d", []string{"FT-1"})["FT-1"]; r.Title != "Other project" {
+		t.Errorf("the other project's FT-1 = %+v", r)
+	}
+}
+
+func TestLookupRefsKnowsNoneWithoutTheTable(t *testing.T) {
+	path := tempPath(t)
+	ctx := context.Background()
+
+	if got := LookupRefs(ctx, "p", []string{"FT-1"}); len(got) != 0 {
+		t.Errorf("missing database: %v", got)
+	}
+
+	// a database from before the table existed
+	l := openT(t, path)
+	if _, err := l.db.ExecContext(ctx, "DROP TABLE task_refs"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := LookupRefs(ctx, "p", []string{"FT-1"}); len(got) != 0 {
+		t.Errorf("missing table: %v", got)
+	}
+}

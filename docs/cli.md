@@ -40,6 +40,7 @@ f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
+f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json]   # the task's open subtasks, in After: order
@@ -783,9 +784,20 @@ Exit 3 means the tracker has no parent link: a driver that declines the verb on 
 
 `f10 task create` creates a task through the driver's `create` verb ([driver contract](driver-contract.md#creating-a-task)).
 It reads the task as markdown on stdin, `# <title>` on the first line, and prints the new id in the project's id format.
+The body's `After: <id>` line reaches the driver as a link to the base task, `After: [<id>: <title>](<url>)`, titled as `f10 task ref` would; a base it cannot title stays bare.
 `--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable) and `--parent` go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
 It exits **3** when no driver creates tasks here (none, or one declining `create`): the capture step then uses the project's Create adapter.
 A failed create is never retried, and its error says the task may exist already.
+
+## Ref
+
+`f10 task ref FT-109 FT-132` prints one line per task, `FT-109 (<title>)`; with `--md`, `[FT-109: <title>](<url>)`, brackets in the title escaped.
+This is the form text that leaves the machine uses to name another task.
+Titles and urls come from the ledger (`~/.f10/f10.db`), which `task read`, `task create`, `task search`, `task open --print`, `task children`, `board` and `status` fill as they read the tracker.
+A task not there costs one tracker call (the host's issue, or the driver's `read` and `url`), whose answer is kept.
+`--fresh` asks the tracker for every task and rewrites what is kept.
+A title renamed on the tracker stays stale until f10 reads that task again.
+An id the tracker does not know, or a tracker that fails, prints bare with a note on stderr, and the exit is 0.
 
 ## Comment and update
 

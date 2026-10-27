@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/images"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -38,6 +39,17 @@ func taskCommand() *cli.Command {
 					Usage: "into a pipe too, leave the task's images as links (a title lookup)",
 				}},
 				Action: runTaskRead,
+			},
+			{
+				Name: "ref",
+				Usage: "print each task as `<id> (<title>)`, or a markdown link with --md, from the titles f10 " +
+					"already read; an unknown id prints bare",
+				ArgsUsage: "<task-id>...",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "md", Usage: "print `[<id>: <title>](<url>)`"},
+					&cli.BoolFlag{Name: "fresh", Usage: "ask the tracker even for a task f10 already read"},
+				},
+				Action: runTaskRef,
 			},
 			{
 				Name:      "open",
@@ -149,11 +161,14 @@ func fetchFallback(err error) error {
 }
 
 // readDoc is the task as markdown: the driver's `read`, else the host's
-// issue with its comments.
+// issue with its comments. The title it read, and the url where the host
+// gave one, go to the ledger's task refs.
 func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
 		if err == nil {
+			t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)})
+
 			return doc, nil
 		}
 
@@ -167,7 +182,12 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 		return "", err
 	}
 
-	return h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
+	doc, iss, err := h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
+	if err == nil {
+		t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, iss.Title), URL: iss.url()})
+	}
+
+	return doc, err
 }
 
 // withImages downloads every image doc links into dir and ends doc with
@@ -335,6 +355,8 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver list rows: %w", err)
 			}
 
+			t.rememberRefs(ctx, rowRefs(rows)...)
+
 			return rows, nil
 		}
 
@@ -348,7 +370,10 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels, limit)
+	rows, err := h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels, limit)
+	t.rememberRefs(ctx, rowRefs(rows)...)
+
+	return rows, err
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -448,6 +473,8 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver search rows: %w", err)
 			}
 
+			t.rememberRefs(ctx, rowRefs(rows)...)
+
 			return rows, nil
 		}
 
@@ -461,7 +488,10 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 		return nil, err
 	}
 
-	return h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
+	rows, err := h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
+	t.rememberRefs(ctx, rowRefs(rows)...)
+
+	return rows, err
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a
@@ -565,6 +595,8 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
 	}
 
+	doc = t.linkBodyAfter(ctx, doc, cmd.ErrWriter)
+
 	args, err := createArgs(ctx, t, cmd, doc)
 	if err != nil {
 		return err
@@ -594,6 +626,8 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
 	}
+
+	t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: taskTitle(doc)})
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 

@@ -126,16 +126,17 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 	return iss, err
 }
 
-// issueDoc is the issue as the markdown document `task read` prints.
-// staleAfter is the project's stale_after, "" for none.
-func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (string, error) {
+// issueDoc is the issue as the markdown document `task read` prints, and
+// the issue it was read from. staleAfter is the project's stale_after, ""
+// for none.
+func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (string, issue, error) {
 	iss, err := h.issue(ctx, number, "number,title,state,labels,createdAt,url,body,comments")
 	if err != nil {
-		return "", err
+		return "", issue{}, err
 	}
 
 	if err := iss.notPull(number); err != nil {
-		return "", err
+		return "", issue{}, err
 	}
 
 	var b strings.Builder
@@ -169,7 +170,7 @@ func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (stri
 		fmt.Fprintf(&b, "\n---\n\n**%s**\n\n%s\n", cmp.Or(c.Author.Login, "comment"), strings.TrimSpace(c.Body))
 	}
 
-	return b.String(), nil
+	return b.String(), iss, nil
 }
 
 func (h host) issueURL(ctx context.Context, number string) (string, error) {
