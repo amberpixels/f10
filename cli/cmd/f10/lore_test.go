@@ -306,7 +306,7 @@ func TestLoreStepCommands(t *testing.T) {
 		"--status", "open", "--anchor", "a.go:1", "-m", "Name drift")
 
 	// resolve: the settle carries the status, resolution and reason alone
-	must("add", "finding", "--change", "FT-1", "--supersedes", local, "--status", "fixed",
+	settled := must("add", "finding", "--change", "FT-1", "--supersedes", local, "--status", "fixed",
 		"--resolution", "working tree", "-m", "Bounded the loop")
 	must("add", "finding", "--change", "FT-1", "--supersedes", remote, "--status", "wontfix",
 		"--resolution", "house style", "-m", "house style")
@@ -331,9 +331,18 @@ func TestLoreStepCommands(t *testing.T) {
 		}
 	}
 
-	o := readOutcomes(&lore.Store{Root: filepath.Join(dir, ".lore")}, "", "FT-1")
+	store := &lore.Store{Root: filepath.Join(dir, ".lore")}
+
+	o := readOutcomes(store, "", "FT-1")
 	if len(o.local) != 1 || o.local[0].Fixed != 1 || len(o.remote) != 1 || o.remote[0].Skipped != 1 ||
 		o.changeJudge == nil {
 		t.Errorf("status reads %+v", o)
+	}
+
+	// round two reopens the fixed finding from the settle's id, the chain's head
+	must("add", "finding", "--change", "FT-1", "--supersedes", settled, "--status", "open", "-m", "Still off by one")
+
+	if o := readOutcomes(store, "", "FT-1"); len(o.local) != 1 || o.local[0].Ask != 1 || o.local[0].Fixed != 0 {
+		t.Errorf("a reopened finding reads %+v, want it open", o.local)
 	}
 }

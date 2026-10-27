@@ -40,8 +40,10 @@ func fileOutcomes(storageRoot, task string) outcomes {
 	for _, rf := range reviewRounds(storageRoot, task) {
 		if rf.remote {
 			o.remote, o.remoteAt = append(o.remote, rf.round), rf.at
+			o.remoteRaised += rf.raised
 		} else {
 			o.local, o.localAt = append(o.local, rf.round), rf.at
+			o.localRaised += rf.raised
 		}
 	}
 
@@ -124,6 +126,7 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 // wrote it, and when it was last written.
 type roundFile struct {
 	round  reviewRound
+	raised int // findings new in this round, a prior one reopened not counted
 	remote bool
 	at     time.Time
 }
@@ -144,7 +147,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 			continue
 		}
 
-		r := reviewRound{Round: f.Round}
+		r, raised := reviewRound{Round: f.Round}, 0
 
 		for _, fd := range f.Findings {
 			if fd.Prior && !findings.Reopens(fd.Status) {
@@ -152,6 +155,10 @@ func reviewRounds(storageRoot, task string) []roundFile {
 			}
 
 			r.Found++
+
+			if !fd.Prior {
+				raised++
+			}
 
 			switch v, _, _ := strings.Cut(strings.ToLower(fd.Verdict), " "); v {
 			case "fix":
@@ -165,6 +172,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 
 		rounds = append(rounds, roundFile{
 			round:  r,
+			raised: raised,
 			remote: f.Reviewer != "" && f.Reviewer != "local",
 			at:     modTime(path),
 		})

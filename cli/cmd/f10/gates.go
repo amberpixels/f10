@@ -539,6 +539,9 @@ type outcomes struct {
 	planJudge, changeJudge *judgeOutcome
 
 	localAt, remoteAt, planAt, changeAt time.Time
+
+	// every finding the files raised, each counted in its first round only
+	localRaised, remoteRaised int
 }
 
 // readOutcomes reads lore first and the findings and verdict files for
@@ -561,11 +564,11 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 
 	l := loreOutcomes(entries)
 
-	if current(l.local, o.local, l.localAt, o.localAt) {
+	if current(l.local, o.localRaised, l.localAt, o.localAt) {
 		o.local = roundsFromLore(l.local, o.local)
 	}
 
-	if current(l.remote, o.remote, l.remoteAt, o.remoteAt) {
+	if current(l.remote, o.remoteRaised, l.remoteAt, o.remoteAt) {
 		o.remote = roundsFromLore(l.remote, o.remote)
 	}
 
@@ -584,19 +587,19 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 	return o
 }
 
-// current is lore's counts for a half answering for it: as new as the
-// newest findings file (lore keeps whole seconds) and holding at least that
-// round's findings, so a lore write that failed leaves the files the
-// answer.
-func current(fromLore, files []reviewRound, loreAt, fileAt time.Time) bool {
+// current is lore's counts answering for a half: as new as the newest
+// findings file (lore keeps whole seconds) and holding every finding the
+// files raised, so a lore write that failed leaves the files the answer.
+// No file at all leaves lore alone.
+func current(fromLore []reviewRound, raised int, loreAt, fileAt time.Time) bool {
 	switch {
 	case fromLore == nil:
 		return false
-	case len(files) == 0:
+	case fileAt.IsZero():
 		return true
 	}
 
-	return !loreAt.Add(time.Second).Before(fileAt) && fromLore[0].Found >= files[len(files)-1].Found
+	return !loreAt.Add(time.Second).Before(fileAt) && fromLore[0].Found >= raised
 }
 
 func latest(a, b time.Time) time.Time {

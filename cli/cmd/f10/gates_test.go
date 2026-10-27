@@ -362,6 +362,50 @@ func TestOutcomesPreferLore(t *testing.T) {
 	}
 }
 
+// Lore answers round two only when it holds every finding both rounds
+// raised; a reopened prior finding is not a new one.
+func TestOutcomesRoundTwo(t *testing.T) {
+	storage := t.TempDir()
+	reviews := filepath.Join(storage, "reviews", "FT-1")
+	writeFile(t, filepath.Join(reviews, "1.md"), "task: FT-1\nround: 1\nreviewer: local\nverdict: findings\n\n"+
+		"## Findings\n\n### 1.1 A\ncategory: x\nverdict: fix\n\n### 1.2 B\ncategory: x\nverdict: fix\n")
+	writeFile(t, filepath.Join(reviews, "2.md"), "task: FT-1\nround: 2\nreviewer: local\nverdict: findings\n\n"+
+		"## Prior round\n\n### 1.1 A - fixed\n\n### 1.2 B - still open\n\n## Findings\n\n### 2.1 C\ncategory: x\n")
+
+	if o := fileOutcomes(storage, "FT-1"); o.localRaised != 3 {
+		t.Fatalf("raised = %d, want 3: 1.1, 1.2 and 2.1, the reopened 1.2 once", o.localRaised)
+	}
+
+	when := time.Now().UTC().Truncate(time.Second).Add(time.Second)
+	entry := func(status string) lore.Entry {
+		e := lore.Entry{
+			Kind: lore.KindFinding, Change: "FT-1", Human: "h@x", At: when,
+			Severity: "minor", Status: status, Source: "local", Body: "f",
+		}
+		if status != "open" {
+			e.Resolution = "abcdef1"
+		}
+
+		return e
+	}
+
+	// round two's new finding never reached lore: the files answer
+	short := t.TempDir()
+	writeLore(t, short, entry("fixed"), entry("open"))
+
+	if o := readOutcomes(&lore.Store{Root: short}, storage, "FT-1"); len(o.local) != 2 {
+		t.Errorf("lore missing a finding answered: %+v", o.local)
+	}
+
+	whole := t.TempDir()
+	writeLore(t, whole, entry("fixed"), entry("open"), entry("open"))
+
+	o := readOutcomes(&lore.Store{Root: whole}, storage, "FT-1")
+	if want := (reviewRound{Round: "2", Found: 3, Fixed: 1, Ask: 2}); len(o.local) != 1 || o.local[0] != want {
+		t.Errorf("lore with every finding = %+v, want %+v", o.local, want)
+	}
+}
+
 func TestStorageFor(t *testing.T) {
 	shared := t.TempDir()
 	checkout := t.TempDir()

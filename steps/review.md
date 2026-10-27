@@ -90,6 +90,7 @@ The remote half writes the same block once its file is on disk (point 4 below).
 **Lore** (`docs/lore.md`), with the file on disk and a task id known, for either half (the remote one before its ack, point 4 below): one `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>` per finding this round adds (`--source remote` when `reviewer:` is not `local`).
 The severity is the reviewer's call per finding, `blocker`, `major`, `minor` or `nit`, `minor` when it cannot tell.
 Each call prints the entry's id: add it to the finding's block as a `lore: <id>` line, which resolve supersedes.
+Round two reopens in lore what it reopens in the file: a prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`) gets `f10 lore add finding --change <task> --supersedes <the round-one block's lore id> --status open -m <the evidence line>`, and its new id as the prior block's `lore:` line; a round-one block with no `lore:` line writes nothing.
 A failing `lore add` is one line in the report, never a failed step: the findings file stays the record `f10 status` falls back to.
 
 **The brief:**
