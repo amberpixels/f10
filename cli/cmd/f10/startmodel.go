@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,20 +86,50 @@ func modelArgs(m string) []string {
 	return []string{"--model", m}
 }
 
-// agentArgs is the agent's command line: the model, and the storage root
-// when it sits outside the worktree, so writing plans and findings there
-// asks no permission. plansDir is the shared plans dir, "" for a worktree
-// keeping its own .f10.
+// taskFileDirs are the storage root's dirs an agent writes task files to.
+// Instructions and the driver stay out: a worktree's agent never edits
+// what every checkout's next run loads.
+var taskFileDirs = []string{"plans", "reviews", "verdicts", "spikes", "lore", "images"}
+
+// agentArgs is the agent's command line: the model, and each task-file dir
+// of the storage root when that root sits outside the worktree, so writing
+// plans and findings there asks no permission.
 func agentArgs(m, plansDir, worktree string) []string {
 	args := modelArgs(m)
+	if !outsideWorktree(plansDir, worktree) {
+		return args
+	}
+
+	for _, d := range taskFileDirs {
+		args = append(args, "--add-dir", filepath.Join(filepath.Dir(plansDir), d))
+	}
+
+	return args
+}
+
+// makeStorageDirs creates the task-file dirs agentArgs names, since claude
+// may refuse --add-dir on a missing one.
+func makeStorageDirs(plansDir string) error {
 	if plansDir == "" {
-		return args
+		return nil
 	}
 
-	storage := filepath.Dir(plansDir)
-	if rel, err := filepath.Rel(worktree, storage); err == nil && !strings.HasPrefix(rel, "..") {
-		return args
+	for _, d := range taskFileDirs {
+		if err := os.MkdirAll(filepath.Join(filepath.Dir(plansDir), d), 0o750); err != nil {
+			return fmt.Errorf("creating the storage dirs: %w", err)
+		}
 	}
 
-	return append(args, "--add-dir", storage)
+	return nil
+}
+
+// outsideWorktree says the storage root of plansDir lies outside worktree.
+func outsideWorktree(plansDir, worktree string) bool {
+	if plansDir == "" {
+		return false
+	}
+
+	rel, err := filepath.Rel(worktree, filepath.Dir(plansDir))
+
+	return err != nil || strings.HasPrefix(rel, "..")
 }

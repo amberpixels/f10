@@ -256,14 +256,10 @@ func (t *target) trackerDeclared() bool {
 }
 
 // sharedPlansDir is the plans dir every checkout shares: main's .f10/plans
-// with in-repo storage, the out-of-tree root's otherwise. It is "" only in
-// a worktree that keeps its own .f10 from before storage moved to main's.
+// with in-repo storage, the out-of-tree root's otherwise, whichever
+// checkout runs the command.
 func (t *target) sharedPlansDir() string {
-	if t.lay.LegacyStorage {
-		return ""
-	}
-
-	return t.pb.PlansDir
+	return filepath.Join(t.sharedRoot(), "plans")
 }
 
 // sharedRoot is the storage root every checkout shares: this layout's,

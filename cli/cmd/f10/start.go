@@ -376,7 +376,7 @@ type startInput struct {
 	flowKept bool                                  // drive records the flow itself, keeping one the branch has
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	base     string                                // branch whose ref is the base, or ""
-	plansDir string                                // the plans dir every checkout shares, or "" from a worktree keeping its own .f10
+	plansDir string                                // the plans dir every checkout shares
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
 	model    string                                // the agent's --model, resolved, or "" for claude's default
@@ -736,32 +736,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		return openedTask{}, err
 	}
 
-	// the plan moves only into a worktree whose agent this call prompts, and
-	// before that agent starts, so a failed move leaves no agent waiting
-	var a adoption
-
-	switch {
-	case launch:
-		if a, err = adoptPlan(in.main, path, in.plansDir, in.task.ID); err != nil {
-			return openedTask{}, err
-		}
-
-		o.plan = a.plan
-		if a.note != "" {
-			notes = append(notes, a.note)
-		}
-	default:
-		if src := mainPlan(in.main, path, in.plansDir, in.task.ID); src != "" {
-			notes = append(notes, "main's plan "+src+" left in place: the workspace's agent was not prompted")
-		}
-	}
-
 	if launch {
-		// --add-dir on a missing dir may be refused; main's .f10 normally exists
-		if in.plansDir != "" {
-			if err := os.MkdirAll(filepath.Dir(in.plansDir), 0o750); err != nil {
-				return openedTask{}, fmt.Errorf("creating the storage root: %w", err)
-			}
+		// the agent reads the plan in place: only a prompted agent is told of it
+		o.plan = planIf(taskPlan(path, in.plansDir, in.task.ID))
+
+		if err := makeStorageDirs(in.plansDir); err != nil {
+			return openedTask{}, err
 		}
 
 		if err := herdr.StartAgent(
@@ -773,13 +753,6 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 			agentArgs(in.model, in.plansDir, path),
 			shellWait(in.progress, ws.RootPane),
 		); err != nil {
-			if a.moved != "" {
-				return openedTask{}, fmt.Errorf(
-					"%w; the plan was moved from %s to %s: rerun to ship it",
-					err, a.moved, a.plan,
-				)
-			}
-
 			return openedTask{}, err
 		}
 
@@ -1046,63 +1019,6 @@ func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string 
 	dep.planned = true
 
 	return nil
-}
-
-// An adoption is the plan of the task the worktree reads, or "" when it has
-// none, the path in main it was moved from when this call moved it, and the
-// note saying what happened.
-type adoption struct {
-	plan  string
-	moved string
-	note  string
-}
-
-// adoptPlan settles which plan of the task the worktree reads: in place
-// from shared storage, unless the worktree keeps its own .f10 with a plan.
-// With plansDir "" main's plan moves into the worktree, not copied, so a
-// later ship in main finds none.
-func adoptPlan(main, worktree, plansDir, id string) (adoption, error) {
-	if plansDir != "" {
-		if own := planIf(filepath.Join(worktree, ".f10", "plans", id+".md")); own != "" {
-			return adoption{plan: own}, nil
-		}
-
-		return adoption{plan: planIf(filepath.Join(plansDir, id+".md"))}, nil
-	}
-
-	dst := filepath.Join(worktree, ".f10", "plans", id+".md")
-	src := mainPlan(main, worktree, plansDir, id)
-
-	switch {
-	case exists(dst) && src != "":
-		note := fmt.Sprintf("kept the worktree's plan at %s; main's %s was left in place", dst, src)
-
-		return adoption{plan: dst, note: note}, nil
-	case src == "":
-		return adoption{plan: planIf(dst)}, nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return adoption{}, fmt.Errorf("moving the plan %s to %s: %w", src, dst, err)
-	}
-
-	if err := os.Rename(src, dst); err != nil {
-		return adoption{}, fmt.Errorf("moving the plan %s to %s: %w", src, dst, err)
-	}
-
-	return adoption{plan: dst, moved: src, note: "moved the plan from " + src}, nil
-}
-
-// mainPlan is the plan main saved for the task where it could move into the
-// worktree, else "": shared storage and the task checked out in main
-// itself have nothing to move.
-func mainPlan(main, worktree, plansDir, id string) string {
-	src := filepath.Join(main, ".f10", "plans", id+".md")
-	if plansDir != "" || src == filepath.Join(worktree, ".f10", "plans", id+".md") {
-		return ""
-	}
-
-	return planIf(src)
 }
 
 // planIf is path when a plan is there, else "".

@@ -21,8 +21,8 @@ import (
 
 // The finish verb is start's inverse across the host CLI, git and Herdr.
 // By hand, the skipped steps (the worktree, the pull) leave sibling
-// directories and a main behind its own merge; with in-repo storage, a
-// worktree removed by hand takes the only copy of the plan with it.
+// directories and a main behind its own merge; a worktree from before
+// storage moved to main's, removed by hand, takes the only copy of its plan.
 //
 // Everything after the merge is gated on the merge having landed: the
 // merge commit must be in the local default branch before anything local
@@ -176,7 +176,7 @@ type finishInput struct {
 	yes       bool
 	merge     bool   // merge the PR even when someone else opened it
 	local     bool   // leave the PR open and clean up only what is here
-	plansDir  string // the plans dir every checkout shares, or "" from a worktree keeping its own .f10
+	plansDir  string // the plans dir every checkout shares
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
 	// close is a bundle's riders the PR delivers, closed with the lead; nil
@@ -873,8 +873,8 @@ func removeImages(main, plansDir, id string) string {
 	return ""
 }
 
-// taskPlansDir is where a task's plan sits: the shared plans dir, else the
-// .f10/plans of a worktree keeping its own .f10.
+// taskPlansDir is where a task's plan sits: the shared plans dir, else
+// (none given) the checkout's own .f10/plans.
 func taskPlansDir(checkout, plansDir string) string {
 	return cmp.Or(plansDir, filepath.Join(checkout, ".f10", "plans"))
 }
