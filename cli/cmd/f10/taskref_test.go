@@ -57,6 +57,7 @@ func TestAfterInReadsALink(t *testing.T) {
 		"**After:** [FT-109: a: b \\[c\\] d](https://github.com/o/r/issues/109)\n": "FT-109",
 		"After: " + mdLink("FT-109", "Fix [x]: y", "https://u") + "\n":             "FT-109",
 		"After: FT-109 and more\n":                                                 "",
+		"After: [FT-109: t](https://u) and more\n":                                 "",
 		"After: [FT-109 x](https://u)":                                             "",
 		"After: [FT-109: no link]":                                                 "",
 	} {
@@ -158,7 +159,39 @@ esac
 
 	// the new task answers from the ledger without the tracker
 	k := ledger.LookupRefs(t.Context(), projectOf(t.Context(), repo), []string{"FT-1043", "FT-1041"})
-	if k["FT-1043"].Title != "Add the index" || k["FT-1041"].URL != "https://tracker.example/1041" {
+	if k["FT-1043"].Title != "Add the index" || k["FT-1043"].URL != "https://tracker.example/1041" ||
+		k["FT-1041"].URL != "https://tracker.example/1041" {
 		t.Errorf("ledger refs = %+v", k)
+	}
+}
+
+// The command prints a line per argument, in order: a known task linked, an
+// unknown one bare with a note and exit 0, a bundle as typed.
+func TestTaskRefCommand(t *testing.T) {
+	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
+
+	repo := createRepo(t, `case "$1 $2" in
+"read 109") echo "# FT-109: Base" ;;
+"url 109") echo https://tracker.example/109 ;;
+*) echo "no task $2" >&2; exit 1 ;;
+esac
+`)
+
+	out, warn, err := runWrite(t, repo, "", "ref", "--md", "FT-7", "109", "FT-1+FT-2")
+	if err != nil {
+		t.Fatalf("ref: %v", err)
+	}
+
+	if want := "FT-7\n[FT-109: Base](https://tracker.example/109)\nFT-1+FT-2\n"; out != want {
+		t.Errorf("stdout = %q, want %q", out, want)
+	}
+
+	if !strings.Contains(warn, "FT-7") || strings.Contains(warn, "FT-109") {
+		t.Errorf("stderr = %q, want a note for FT-7 alone", warn)
+	}
+
+	out, _, err = runWrite(t, repo, "", "ref", "FT-109")
+	if err != nil || out != "FT-109 (Base)\n" {
+		t.Errorf("plain ref = %q, %v", out, err)
 	}
 }

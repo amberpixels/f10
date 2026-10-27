@@ -25,7 +25,8 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
      - **No effort estimates.**
    - **A dependency is a fixed last line.**
      When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything after the id, so the word and the shape are fixed.
-     For a reader on the tracker the id becomes a link: `f10 task create` rewrites the line itself, and a task the create adapter takes gets `After: <the line f10 task ref <id> --md prints>`, which stays bare when ref prints it bare.
+     For a reader on the tracker the id becomes a link: `f10 task create` rewrites the line itself, and a task the create adapter takes on a GFM renderer (GitHub, GitLab) gets `After: <the line f10 task ref <id> --md prints>`, which stays bare when ref prints it bare.
+     Any other renderer keeps the bare id: the binary reads the markdown link and the bare id only, never a native link.
      No known order, no line.
      Tasks meant to run in sequence are created in that order, so each `After:` names an id that already exists.
    - **Other tasks named in the body** (a base task in prose, a parent, a subtask) carry their title, in the renderer's form, from one `f10 task ref` call (`conventions/context.md` → Task references).

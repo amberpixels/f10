@@ -49,9 +49,14 @@ func afterID(line string) string {
 	id := mdline.Bare(value)
 
 	// a link's id is its text up to the title: the url is never read, so a
-	// moved task still names its base
+	// moved task still names its base. Nothing may follow the link, as
+	// nothing may follow a bare id.
 	if text, ok := strings.CutPrefix(id, "["); ok && strings.Contains(text, "](") {
-		text, _, _ = strings.Cut(text, "](")
+		text, url, _ := strings.Cut(text, "](")
+		if !strings.HasSuffix(url, ")") || strings.ContainsAny(url, " \t") {
+			return ""
+		}
+
 		text, _, _ = strings.Cut(text, ":")
 		id = strings.TrimSpace(text)
 	}

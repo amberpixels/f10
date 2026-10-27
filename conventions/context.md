@@ -117,7 +117,7 @@ Text that leaves the machine (PR/MR text and replies, commit messages, tracker t
 - **First mention in each text**: every body, reply, comment and commit message is read on its own, so each names the task in full once; later mentions in the same text may use the bare id.
 - **Title and url** come from one `f10 task ref <id>... --md` for every task a text names (`<ID> (<title>)` lines without `--md`), answered from what f10 already read and asking the tracker only on a miss; `--fresh` only where `steps/pr.md` says.
 - **An id the tracker does not know**, or a read that fails, stays bare, with no invented title; `f10 task ref` prints it bare, and it does not fail the step.
-- **Fixed-shape lines keep their shape**: `After:` holds one id, bare or as the link `[<ID>: <title>](<url>)` that `f10 task ref <id> --md` prints; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything else after the id.
+- **Fixed-shape lines keep their shape**: `After:` holds one id, bare or as the markdown link `[<ID>: <title>](<url>)` that `f10 task ref <id> --md` prints, never a tracker's native link; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything else after the id or the link.
 - The task the work belongs to keeps the form its host needs (a closing keyword such as `Closes #83`).
 
 A tracker link is not an f10 trace: stealth mode allows it.

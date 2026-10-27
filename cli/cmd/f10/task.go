@@ -627,7 +627,13 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
 	}
 
-	t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: taskTitle(doc)})
+	// the url too, best effort, so naming the new task costs no tracker call
+	created := ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)}
+	if url, err := d.Run(ctx, driver.VerbURL, r.Number); err == nil {
+		created.URL = strings.TrimSpace(url)
+	}
+
+	t.rememberRefs(ctx, created)
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
