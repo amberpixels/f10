@@ -68,11 +68,11 @@ Catchup is never a flow entry.
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
 - **Before every `pr` entry**, the first and each refresh: fetch and check ancestry first; only when the base moved, commit what the tree holds as the pr step would (`steps/commit.md` point 2, `--step implement`) and integrate, so the push carries it.
   An unmoved base leaves the commit to pr and its adapter.
-- **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree, skip it in one line, since the next `pr` guard covers it.
+- **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree (implement leaves its work uncommitted, so `implement judge pr` always has some), skip it in one line: that judge sees the branch on its old base, and a later `pr` entry's guard, when the flow has one, brings the base in before the code leaves.
   After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.
 
 The guard runs under the entry it guards, in that entry's load (`catchup pr`) and badge.
-A failure is `set ship failed <entry>`, or `partial` once a PR is open (`conventions/failure.md` rule 7), its `note` naming catchup and `/f10:catchup`.
+A failure is `set ship failed <entry>`, or `partial` once the run left something durable, the guard's own commit or an open PR (`conventions/failure.md` rule 7), its `state` row naming that commit and its `note` naming catchup and `/f10:catchup`.
 
 Run the flow's entries **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
@@ -99,4 +99,4 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a demo's when it ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.
+- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's or demo's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its manual close, what changed, and a one-line reminder of gaps left on their defaults.
