@@ -108,6 +108,11 @@ func TestValidate(t *testing.T) {
 			"",
 		},
 		{
+			"task verdict",
+			with(verdictEntry("FT-1", "2026-10-20T09:00:00Z", "stop"), func(e *Entry) { e.Judged = "task" }),
+			"",
+		},
+		{
 			"bad judged",
 			with(verdictEntry("FT-1", "2026-10-20T09:00:00Z", "proceed"), func(e *Entry) { e.Judged = "pr" }),
 			"judged \"pr\"",

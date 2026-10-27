@@ -602,3 +602,70 @@ func TestGatesSameAfterMigration(t *testing.T) {
 		t.Errorf("gates drifted across the migration:\nbefore %s\nafter  %s", order(before), order(after))
 	}
 }
+
+// The judge fetch runs on a stale task leads the gates once it ran or the
+// plan phase is on it, and shows nowhere before that.
+func TestGatesTaskJudge(t *testing.T) {
+	none := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: gatePipeline, now: time.Now()})
+	if _, ok := texts(none)["judge task"]; ok {
+		t.Errorf("a task judge with nothing behind it: %v", texts(none))
+	}
+
+	for _, tc := range []struct {
+		name string
+		in   gateInput
+		want string
+	}{
+		{
+			"verdict",
+			gateInput{outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
+			"task: stop - done in FT-9",
+		},
+		{"running", gateInput{run: &state.Run{Plan: "running", Ship: "pending", Leaf: "judge"}}, "task: running"},
+		{"blocked", gateInput{
+			run:      &state.Run{Plan: "blocked", Ship: "pending", Leaf: "judge"},
+			outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "rethink"}},
+		}, "task: blocked"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.in.task, tc.in.pipeline, tc.in.now = "FT-1", gatePipeline, time.Now()
+
+			gates := taskGates(context.Background(), tc.in)
+			if len(gates) == 0 || gates[0].Judged != "task" || gates[0].text() != tc.want {
+				t.Errorf("first gate = %+v, want the task judge reading %q (all: %v)", gates, tc.want, texts(gates))
+			}
+		})
+	}
+
+	gates := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: gatePipeline, now: time.Now(),
+		outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "proceed"}},
+	})
+	if got := compactGates(gates); got != "TJ proceed · L pending · R - · J pending" {
+		t.Errorf("compact = %q", got)
+	}
+}
+
+// A verdict file on the task itself, or a lore entry judged task, is the
+// task judge's, never the change judge's.
+func TestOutcomesTaskJudge(t *testing.T) {
+	storage := t.TempDir()
+	writeFile(t, filepath.Join(storage, "verdicts", "FT-1", "1.md"),
+		"task: FT-1\nsubject: task FT-1\nverdict: stop\nreason: solved\nrun: before plan\n")
+
+	o := readOutcomes(nil, storage, "FT-1")
+	if o.taskJudge == nil || o.taskJudge.Verdict != "stop" || o.changeJudge != nil {
+		t.Errorf("file = %+v", o)
+	}
+
+	root := t.TempDir()
+	writeLore(t, root, lore.Entry{
+		Kind: lore.KindVerdict, Change: "FT-2", Human: "h@x", At: time.Now().UTC().Truncate(time.Second),
+		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "task", Body: "still real",
+	})
+
+	o = readOutcomes(&lore.Store{Root: root}, "", "FT-2")
+	if o.taskJudge == nil || o.taskJudge.Verdict != "proceed" || o.changeJudge != nil {
+		t.Errorf("lore = %+v", o)
+	}
+}

@@ -33,8 +33,8 @@ type judgeOutcome struct {
 
 // fileOutcomes reads the task's findings and verdict files: a round is the
 // remote half's when its reviewer is not local (a file both halves wrote
-// counts once for each), a verdict the plan judge's when its subject is a
-// plan.
+// counts once for each), a verdict the task judge's when its subject is the
+// task, the plan judge's when it is a plan.
 func fileOutcomes(storageRoot, task string) outcomes {
 	var o outcomes
 
@@ -49,9 +49,12 @@ func fileOutcomes(storageRoot, task string) outcomes {
 	}
 
 	for _, v := range judgeFiles(storageRoot, task) {
-		if v.plan {
+		switch v.judged {
+		case "task":
+			o.taskJudge, o.taskAt = &v.outcome, v.at
+		case "plan":
 			o.planJudge, o.planAt = &v.outcome, v.at
-		} else {
+		default:
 			o.changeJudge, o.changeAt = &v.outcome, v.at
 		}
 	}
@@ -211,7 +214,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 // verdictFile is one verdict file that judges the task, not an idea.
 type verdictFile struct {
 	outcome judgeOutcome
-	plan    bool // its subject is the task's plan
+	judged  string // task or plan when its subject is one, else change
 	at      time.Time
 }
 
@@ -230,10 +233,14 @@ func judgeFiles(storageRoot, task string) []verdictFile {
 			continue
 		}
 
-		kind, _, _ := strings.Cut(v.Subject, " ")
+		judged, _, _ := strings.Cut(v.Subject, " ")
+		if judged != "task" && judged != "plan" {
+			judged = "change"
+		}
+
 		out = append(out, verdictFile{
 			outcome: judgeOutcome{Verdict: v.Verdict, Reason: v.Reason},
-			plan:    kind == "plan",
+			judged:  judged,
 			at:      modTime(path),
 		})
 	}

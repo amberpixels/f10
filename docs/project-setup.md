@@ -61,6 +61,7 @@ Go service for invoices.
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
 | `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and `f10 drive` running | `rebase` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
+| `stale_after` | a number of days or weeks (`10d`, `3w`): fetch judges a task created longer ago than this before it is planned, from the created date the tracker shows; anything but proceed stops the run blocked | off |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |
 | `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
@@ -82,7 +83,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for flows, the area map and reporting back, the review step for the remote review, the catchup step for `catchup`, the commit, resolve, judge and catchup steps for `traces`).
+The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for flows, the area map and reporting back, the review step for the remote review, the catchup step for `catchup`, the fetch step for `stale_after`, the commit, resolve, judge and catchup steps for `traces`).
 
 ## Overlays
 

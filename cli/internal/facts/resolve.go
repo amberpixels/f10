@@ -355,6 +355,10 @@ func (e *Effective) resolveHosting(
 		Fact{Key: "lore", Value: "local", Origin: OriginDefault})
 
 	e.Lore = cmp.Or(fm.Lore, "local")
+
+	e.settle("stale_after", fmSource("stale_after", fm.StaleAfter), source{},
+		Fact{Key: "stale_after", Value: "off", Origin: OriginDefault})
+	e.StaleAfter = fm.StaleAfter
 }
 
 func (e *Effective) resolveReview(

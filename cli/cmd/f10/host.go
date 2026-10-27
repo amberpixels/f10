@@ -127,7 +127,7 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 
 // issueDoc is the issue as the markdown document `task read` prints.
 func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
-	iss, err := h.issue(ctx, number, "number,title,state,labels,url,body,comments")
+	iss, err := h.issue(ctx, number, "number,title,state,labels,createdAt,url,body,comments")
 	if err != nil {
 		return "", err
 	}
@@ -140,9 +140,15 @@ func (h host) issueDoc(ctx context.Context, id, number string) (string, error) {
 
 	fmt.Fprintf(&b, "# %s: %s\n\n", id, iss.Title)
 
-	// labels sit up top: fetch reads a task's kind from them
+	// labels sit up top: fetch reads a task's kind from them, and its age
+	// from the created date when stale_after is declared
+	var created string
+	if at := cmp.Or(iss.CreatedAt, iss.CreatedAtGL); !at.IsZero() {
+		created = "created " + at.UTC().Format(time.DateOnly)
+	}
+
 	meta := slices.DeleteFunc(
-		[]string{iss.State, strings.Join(iss.Labels, ", "), iss.url()},
+		[]string{iss.State, strings.Join(iss.Labels, ", "), created, iss.url()},
 		func(s string) bool { return s == "" },
 	)
 	if len(meta) > 0 {
