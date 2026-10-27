@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // The task noun goes through the project's driver when it has one, and
@@ -77,6 +78,17 @@ func taskCommand() *cli.Command {
 					"(exit 3: this tracker takes no comments here)",
 				ArgsUsage: "[task-id]",
 				Action:    runTaskComment,
+			},
+			{
+				Name: "retitle",
+				Usage: "write tracker.title onto the task's title on the host's issues, or onto every issue's " +
+					"with --all (exit 3: the tracker is not the host's)",
+				ArgsUsage: "[task-id]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "all", Usage: "every issue, open and closed"},
+					&cli.BoolFlag{Name: "dry-run", Usage: "print the changes and write nothing"},
+				},
+				Action: runTaskRetitle,
 			},
 			{
 				Name: "update",
@@ -335,7 +347,7 @@ func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver list rows: %w", err)
 			}
 
-			return rows, nil
+			return stripTitles(rows, t.eff.TitleTemplate), nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
@@ -448,7 +460,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 				return nil, fmt.Errorf("parsing driver search rows: %w", err)
 			}
 
-			return rows, nil
+			return stripTitles(rows, t.eff.TitleTemplate), nil
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
@@ -462,6 +474,17 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 	}
 
 	return h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
+}
+
+// stripTitles takes the prefix tracker.title wrote off each driver row's
+// title; the host's rows come stripped from listIssues.
+func stripTitles(rows []row, titles tasktitle.Template) []row {
+	for i, r := range rows {
+		n := strings.TrimPrefix(r.ID[strings.LastIndexByte(r.ID, '-')+1:], "#")
+		rows[i].Title = titles.Strip(r.Title, r.ID, n)
+	}
+
+	return rows
 }
 
 // writeRows applies the same rule reading a task does: a terminal gets a
@@ -595,9 +618,31 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
 	}
 
+	// the number exists only now, so the template goes on in a second write
+	if t.eff.TitleTemplate != "" && t.hostIssues() {
+		if err := retitleCreated(ctx, t, r.Number); err != nil {
+			fmt.Fprintf(cmd.ErrWriter, "f10: %s was created, but its title was not written through tracker.title: %v; "+
+				"run `f10 task retitle %s`\n", r.ID, err, r.ID)
+		}
+	}
+
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
 	return err
+}
+
+func retitleCreated(ctx context.Context, t *target, number string) error {
+	h, err := t.host()
+	if err != nil {
+		return err
+	}
+
+	changes, err := h.titleChanges(ctx, number)
+	if err != nil || len(changes) == 0 {
+		return err
+	}
+
+	return h.setTitle(ctx, number, changes[0].to)
 }
 
 // taskTitle is the title on doc's first line, `# <title>`, or "".

@@ -37,6 +37,7 @@ type view struct {
 	IDPrefixDerived bool                `json:"idPrefixDerived,omitempty"`
 	PriorityLabels  map[string]string   `json:"priorityLabels,omitempty"` // host label to priority level, from tracker.priority
 	TrackerStatus   map[string]string   `json:"trackerStatus,omitempty"`  // started and shipped to the tracker's words, from tracker.status
+	TitleTemplate   string              `json:"titleTemplate,omitempty"`  // tracker.title, the template task titles are written through
 	Review          facts.Review        `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
 	MergeMethod     string              `json:"mergeMethod,omitempty"`
 	Catchup         string              `json:"catchup"`
@@ -92,6 +93,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		IDPrefixDerived: eff.IDPrefixDerived,
 		PriorityLabels:  eff.PriorityLabels,
 		TrackerStatus:   eff.TrackerStatus,
+		TitleTemplate:   string(eff.TitleTemplate),
 		Review:          eff.Review,
 		MergeMethod:     eff.MergeMethod,
 		Catchup:         eff.Catchup,

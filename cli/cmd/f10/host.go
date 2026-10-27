@@ -13,17 +13,41 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // A host is the forge binding with the nouns only this command acts on:
 // issues here, requests in merge.go, reviews in reviewhost.go. The reads
 // standup and the board share live on forge.Host itself.
-type host struct{ forge.Host }
+type host struct {
+	forge.Host
 
-func newHost(name, dir string) host { return host{forge.Host{Name: name, Dir: dir}} }
+	titles tasktitle.Template // tracker.title; zero leaves titles as the host holds them
+	prefix string             // the task id prefix titles are rendered and stripped with
+}
+
+func newHost(name, dir string) host { return host{Name: name, Dir: dir} }
 
 // at is the same host answering from another checkout of the repo.
-func (h host) at(dir string) host { return host{h.At(dir)} }
+func (h host) at(dir string) host {
+	h.Host = h.At(dir)
+
+	return h
+}
+
+// taskID is the issue's task id in the project's format.
+func (h host) taskID(number string) string {
+	if h.prefix == "" {
+		return number
+	}
+
+	return h.prefix + "-" + number
+}
+
+// title is the issue's title with the prefix tracker.title wrote taken off.
+func (h host) title(raw, number string) string {
+	return h.titles.Strip(raw, h.taskID(number), number)
+}
 
 // The host-issues fallback: what `task` does in a project with no driver,
 // so a repo tracking its work as issues on its own host needs no .f10/ at
@@ -140,7 +164,7 @@ func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (stri
 
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "# %s: %s\n\n", id, iss.Title)
+	fmt.Fprintf(&b, "# %s: %s\n\n", id, h.titles.Strip(iss.Title, id, number))
 
 	// labels sit up top: fetch reads a task's kind from them, and its age
 	// from the created date when stale_after is declared
@@ -250,7 +274,7 @@ func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 		return "", fmt.Errorf("%s returned no title for issue %s", h.Name, number)
 	}
 
-	return iss.Title, nil
+	return h.title(iss.Title, number), nil
 }
 
 // issuePage is the first page `task open --print` and `task search` show.
@@ -296,7 +320,7 @@ func (h host) listIssues(
 
 		r := row{
 			ID:       id,
-			Title:    iss.Title,
+			Title:    h.titles.Strip(iss.Title, id, iss.ident()),
 			Status:   iss.State,
 			URL:      iss.url(),
 			Priority: priorityOf(iss.Labels, priorities),

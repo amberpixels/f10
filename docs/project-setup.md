@@ -272,6 +272,25 @@ A level outside the four, or a label listed under two levels, is an error like a
 `f10 config` shows the map as `tracker.priority` with its origin; `f10 init` never writes one, since no probe can tell which labels a project uses.
 With nothing declared, host issues have no priority and the list is in the host's order.
 
+## Title template
+
+On GitHub and GitLab the task id is small grey text under a bare title.
+`tracker.title` writes it into the title itself:
+
+```yaml
+tracker:
+  kind: github
+  id: FT-###
+  title: "{id}: {title}"
+```
+
+The placeholders are `{id}` (`FT-132`), `{n}` (`132`) and `{title}`, which must appear once.
+`f10 task create` and the capture step's Create adapter write the title through it once the issue has a number, and `f10 task update` puts the prefix back on a title renamed by hand.
+Every read (`task read`, `search`, `children`, the board, status, a default branch name) takes a leading id and the punctuation after it back off, so f10 shows the id once.
+Only a template that opens with `{id}`, `{n}` or `#{n}` is stripped; one like `x--{id}--{title}` is written but read as is.
+`f10 task retitle --all` backfills the existing issues (`--dry-run` lists them first); a second run changes nothing.
+With nothing declared, titles stay bare.
+
 ## Reporting back
 
 A ship run with a task id ends by posting its shipment on the task as one comment: the report link, the deploy url, the PR or MR, the commits.

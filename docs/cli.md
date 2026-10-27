@@ -46,6 +46,7 @@ f10 task children [id] [--json]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] < task.md   # through the driver; prints the new id
 f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--set k=v]...   # absolute values
+f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
 f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path)
 f10 demo open [id]       # the demo report, in the browser (--link writes the path)
@@ -786,6 +787,7 @@ It reads the task as markdown on stdin, `# <title>` on the first line, and print
 `--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable) and `--parent` go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
 It exits **3** when no driver creates tasks here (none, or one declining `create`): the capture step then uses the project's Create adapter.
 A failed create is never retried, and its error says the task may exist already.
+With `tracker.title` declared on the host's issues, the new issue's title is then written through it; a failure there is a warning naming `f10 task retitle`, since the task exists.
 
 ## Comment and update
 
@@ -793,6 +795,15 @@ A failed create is never retried, and its error says the task may exist already.
 `f10 task update` sets the task's `--status`, `--priority`, `--label` (repeatable, adds), `--assignee` (replaces) and `--set key=value` (a property the driver knows), through the driver's `update` verb, else the host's issues, where a status is `open` or `closed`, a priority is the label `tracker.priority` maps it to, and `--set` is refused ([driver contract](driver-contract.md#commenting-on-and-updating-a-task)).
 Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
 A failed comment is never retried, and its error says it may have posted.
+On the host's issues with `tracker.title` declared, an update also puts the prefix back on a title renamed by hand.
+
+## Retitle
+
+`f10 task retitle [id]` writes `tracker.title` ([title template](project-setup.md#title-template)) onto the task's title; `--all` does it for every issue, open and closed, printing one line per change, `<id>  <old>  ->  <new>`.
+A title already written through the template is left alone, so a second run changes nothing; `--dry-run` prints the changes and writes nothing.
+With no template declared it says so and writes nothing; it exits **3** on a tracker that is not the host's, since a driver has no title verb.
+`--all` stops at the first failed edit, naming how many it changed before.
+Reads strip the prefix back off: `task read`, `search`, `children`, the board, status and a default branch name show the title once.
 
 ## Trackers
 

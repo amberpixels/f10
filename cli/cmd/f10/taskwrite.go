@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -281,7 +282,8 @@ func (h host) comment(ctx context.Context, number, body string) (string, error) 
 // properties, so `--status` takes open or closed only and `--set` is refused.
 // A priority is the label tracker.priority maps the level to, and the labels
 // of every other level come off, so the issue carries one level. An
-// assignee replaces the ones the issue has, as glab's flag does.
+// assignee replaces the ones the issue has, as glab's flag does. With
+// tracker.title declared, a title renamed by hand gets its prefix back.
 func (h host) update(ctx context.Context, number string, p props, priorities map[string]string) error {
 	if len(p.set) > 0 {
 		return fmt.Errorf("%s issues have no custom properties for --set %s", h.Name, strings.Join(p.set, ", "))
@@ -299,7 +301,12 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 		return fmt.Errorf("status %q: %s issues are open or closed", p.status, h.Name)
 	}
 
-	iss, err := h.issue(ctx, number, "labels,assignees")
+	fields := "labels,assignees"
+	if h.titles != "" {
+		fields += ",title"
+	}
+
+	iss, err := h.issue(ctx, number, fields)
 	if err != nil {
 		return err
 	}
@@ -307,6 +314,8 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 	if err := iss.notPull(number); err != nil {
 		return err
 	}
+
+	title := h.retitled(iss.Title, number)
 
 	add, remove := slices.Clone(p.labels), []string(nil)
 
@@ -344,8 +353,8 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 		}
 	}
 
-	if len(add) > 0 || len(remove) > 0 || p.assignee != "" {
-		if _, err := h.Run(ctx, h.editArgs(number, add, remove, p.assignee, unassign)...); err != nil {
+	if len(add) > 0 || len(remove) > 0 || p.assignee != "" || title != "" {
+		if _, err := h.Run(ctx, h.editArgs(number, title, add, remove, p.assignee, unassign)...); err != nil {
 			return err
 		}
 	}
@@ -359,9 +368,14 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 	return nil
 }
 
-func (h host) editArgs(number string, add, remove []string, assignee string, unassign []string) []string {
+// editArgs are the issue edit's arguments; an empty title leaves it as is.
+func (h host) editArgs(number, title string, add, remove []string, assignee string, unassign []string) []string {
 	if h.GLab() {
 		args := []string{"issue", "update", number}
+		if title != "" {
+			args = append(args, "--title", title)
+		}
+
 		if len(add) > 0 {
 			args = append(args, "--label", strings.Join(add, ","))
 		}
@@ -378,6 +392,10 @@ func (h host) editArgs(number string, add, remove []string, assignee string, una
 	}
 
 	args := []string{"issue", "edit", number}
+	if title != "" {
+		args = append(args, "--title", title)
+	}
+
 	for _, l := range add {
 		args = append(args, "--add-label", l)
 	}
@@ -427,4 +445,160 @@ func (h host) mustBeIssue(ctx context.Context, number string) error {
 	}
 
 	return iss.notPull(number)
+}
+
+// retitled is raw written through tracker.title, or "" when it already is,
+// there is no template, or there is no title to write.
+func (h host) retitled(raw, number string) string {
+	id := h.taskID(number)
+	if raw == "" || h.titles.Applied(raw, id, number) {
+		return ""
+	}
+
+	return h.titles.Render(id, number, h.titles.Strip(raw, id, number))
+}
+
+// A titleChange is one issue whose title retitle rewrites.
+type titleChange struct{ id, number, from, to string }
+
+// titleChanges are the issues whose titles are not yet written through
+// tracker.title: number alone, or every issue, open and closed, for "".
+func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, error) {
+	var found []issue
+
+	if number != "" {
+		iss, err := h.issue(ctx, number, "number,title")
+		if err != nil {
+			return nil, err
+		}
+
+		if err := iss.notPull(number); err != nil {
+			return nil, err
+		}
+
+		found = []issue{iss}
+	} else {
+		all, err := h.allIssues(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		found = all
+	}
+
+	var changes []titleChange
+
+	for _, iss := range found {
+		n := iss.ident()
+		if to := h.retitled(iss.Title, n); to != "" {
+			changes = append(changes, titleChange{id: h.taskID(n), number: n, from: iss.Title, to: to})
+		}
+	}
+
+	return changes, nil
+}
+
+// retitlePage is how many issues glab lists a page; gh takes one limit.
+const retitlePage = 100
+
+// allIssues lists every issue, open and closed; gh issue list never
+// includes pull requests, nor glab's merge requests.
+func (h host) allIssues(ctx context.Context) ([]issue, error) {
+	if !h.GLab() {
+		var all []issue
+
+		err := h.Decode(ctx, &all, "issue", "list", "--state", "all", "--json", "number,title", "--limit", "100000")
+
+		return all, err
+	}
+
+	var all []issue
+
+	for page := 1; ; page++ {
+		var found []issue
+		if err := h.Decode(ctx, &found, "issue", "list", "--all", "--output", "json",
+			"--per-page", strconv.Itoa(retitlePage), "--page", strconv.Itoa(page)); err != nil {
+			return nil, err
+		}
+
+		all = append(all, found...)
+
+		if len(found) < retitlePage {
+			return all, nil
+		}
+	}
+}
+
+// setTitle writes one issue's title.
+func (h host) setTitle(ctx context.Context, number, title string) error {
+	_, err := h.Run(ctx, h.editArgs(number, title, nil, nil, "", nil)...)
+
+	return err
+}
+
+// runTaskRetitle writes tracker.title onto the task's title, or with --all
+// onto every issue's, printing each change. A title already written
+// through it is left alone, so a second run changes nothing.
+func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	if t.eff.TitleTemplate == "" {
+		fmt.Fprintln(cmd.ErrWriter, "f10: project.md declares no tracker.title; nothing to retitle")
+
+		return nil
+	}
+
+	if !t.hostIssues() {
+		return cli.Exit(fmt.Sprintf("f10: retitle writes the host's issue titles, and a %s tracker is not the host's; "+
+			"nothing was written", t.eff.TrackerKind), exitNoWrite)
+	}
+
+	all := cmd.Bool("all")
+	if all && cmd.Args().Present() {
+		return errors.New("retitle takes a task id or --all, not both")
+	}
+
+	h, err := t.host()
+	if err != nil {
+		return err
+	}
+
+	number := ""
+	if !all {
+		r, err := t.reference(ctx, cmd.Args().First())
+		if err != nil {
+			return err
+		}
+
+		number = r.Number
+	}
+
+	changes, err := h.titleChanges(ctx, number)
+	if err != nil {
+		return err
+	}
+
+	dry := cmd.Bool("dry-run")
+
+	for i, c := range changes {
+		if !dry {
+			if err := h.setTitle(ctx, c.number, c.to); err != nil {
+				return fmt.Errorf("retitling %s: %w (%d retitled before it)", c.id, err, i)
+			}
+		}
+
+		fmt.Fprintf(cmd.Writer, "%s  %s  ->  %s\n", c.id, c.from, c.to)
+	}
+
+	verb := "retitled"
+	if dry {
+		verb = "would retitle"
+	}
+
+	fmt.Fprintf(cmd.ErrWriter, "f10: %s %d issue(s)\n", verb, len(changes))
+
+	return nil
 }

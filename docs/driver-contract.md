@@ -95,6 +95,7 @@ The task's properties arrive as flags, and only the ones the caller set:
 
 A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
 Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
+With `tracker.title` declared, f10 takes a leading id off the titles in your `list`, `search` and `children` rows; your `read` document is printed as you wrote it.
 
 ## Commenting on and updating a task
 
