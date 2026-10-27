@@ -744,6 +744,9 @@ A subtask that is itself a parent is listed, not expanded.
 | `finished` | no branch, and its plan archived, as drive decides it |
 | `depth` | 0 directly under the parent, one more per `After:` step |
 
+A task with no subtasks prints `[]`.
+Exit 3 means the tracker has no parent link: a driver that declines the verb on a tracker no host reaches, or a host without sub-issues or work items.
+
 ## Create
 
 `f10 task create` creates a task through the driver's `create` verb ([driver contract](driver-contract.md#creating-a-task)).
@@ -751,9 +754,6 @@ It reads the task as markdown on stdin, `# <title>` on the first line, and print
 `--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable) and `--parent` go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
 It exits **3** when no driver creates tasks here (none, or one declining `create`): the capture step then uses the project's Create adapter.
 A failed create is never retried, and its error says the task may exist already.
-
-A task with no subtasks prints `[]`.
-Exit 3 means the tracker has no parent link: a driver that declines the verb on a tracker no host reaches, or a host without sub-issues or work items.
 
 ## Trackers
 

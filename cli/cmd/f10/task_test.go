@@ -432,6 +432,20 @@ func TestTaskCreateThroughTheDriver(t *testing.T) {
 	}
 }
 
+// Blank lines before the title are dropped, so the driver reads the title
+// on the first line as the contract promises.
+func TestTaskCreateTitleOnTheFirstLine(t *testing.T) {
+	repo := createRepo(t, "echo 1\n")
+
+	if _, _, err := runCreate(t, repo, "\n\n# A\n\nbody\n"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if got := readFile(t, filepath.Join(repo, ".f10", "stdin")); got != "# A\n\nbody\n" {
+		t.Errorf("driver stdin = %q, want the title first", got)
+	}
+}
+
 // A prefixed id from the driver passes as it is.
 func TestTaskCreatePrefixedID(t *testing.T) {
 	out, _, err := runCreate(t, createRepo(t, "echo FT-1043\n"), "# A\n")
@@ -441,11 +455,23 @@ func TestTaskCreatePrefixedID(t *testing.T) {
 }
 
 // No driver, or one declining create, is exit 3: capture's cue to use the
-// project's Create adapter.
+// project's Create adapter. With no driver it comes before any check, so an
+// input the driver would refuse still reaches the adapter.
 func TestTaskCreateDeclined(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
 		_, _, err := runCreate(t, createRepo(t, script), "# A\n")
+		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
+			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
+		}
+	}
 
+	for name, args := range map[string][]string{"no title": nil, "bad parent": {"--parent", "not an id"}} {
+		doc := "# A\n"
+		if args == nil {
+			doc = "no title\n"
+		}
+
+		_, _, err := runCreate(t, createRepo(t, ""), doc, args...)
 		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
 			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
 		}

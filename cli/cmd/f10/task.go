@@ -520,25 +520,27 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("reading the task from stdin: %w", err)
 	}
 
-	doc := string(in)
-	if taskTitle(doc) == "" {
-		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
-	}
-
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	args, err := createArgs(ctx, t, cmd, doc)
-	if err != nil {
-		return err
-	}
-
+	// no driver answers before any check, so capture falls back on exit 3
 	d := t.driver()
 	if d == nil {
 		return cli.Exit("f10: no driver creates tasks here (looked for "+strings.Join(t.driverPaths(), ", ")+
 			"); create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+	}
+
+	// the contract puts the title on the first line, so leading blanks go
+	doc := strings.TrimLeft(string(in), " \t\r\n")
+	if taskTitle(doc) == "" {
+		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
+	}
+
+	args, err := createArgs(ctx, t, cmd, doc)
+	if err != nil {
+		return err
 	}
 
 	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
@@ -571,23 +573,16 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// taskTitle is the title on doc's first non-empty line, `# <title>`, or "".
+// taskTitle is the title on doc's first line, `# <title>`, or "".
 func taskTitle(doc string) string {
-	for line := range strings.SplitSeq(doc, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+	line, _, _ := strings.Cut(doc, "\n")
 
-		title, ok := strings.CutPrefix(line, "# ")
-		if !ok {
-			return ""
-		}
-
-		return strings.TrimSpace(title)
+	title, ok := strings.CutPrefix(strings.TrimSpace(line), "# ")
+	if !ok {
+		return ""
 	}
 
-	return ""
+	return strings.TrimSpace(title)
 }
 
 // createArgs are create's flags for the driver: only the properties the
