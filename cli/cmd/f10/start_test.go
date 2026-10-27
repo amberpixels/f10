@@ -662,7 +662,7 @@ func TestPrompt(t *testing.T) {
 	}
 
 	for mode, want := range cases {
-		if got := prompt(mode, "GH-1", nil, "", nil); got != want {
+		if got := prompt(mode, "GH-1", nil, "", nil, ""); got != want {
 			t.Errorf("prompt(%q) = %q, want %q", mode, got, want)
 		}
 	}
@@ -676,7 +676,7 @@ func TestPrompt(t *testing.T) {
 	want := "/f10:plan GH-1 && GH-1 depends on GH-7, whose plan is at " +
 		"/code/repo.GH-7-base/.f10/plans/GH-7.md --driven"
 
-	if got := prompt(modePlan, "GH-1", dep, "", nil); got != want {
+	if got := prompt(modePlan, "GH-1", dep, "", nil, ""); got != want {
 		t.Errorf("prompt with a dependency = %q, want %q", got, want)
 	}
 
@@ -689,7 +689,7 @@ func TestPrompt(t *testing.T) {
 	}
 
 	for mode, want := range planned {
-		if got := prompt(mode, "GH-1", nil, plan, nil); got != want {
+		if got := prompt(mode, "GH-1", nil, plan, nil, ""); got != want {
 			t.Errorf("prompt(%q) with a plan = %q, want %q", mode, got, want)
 		}
 	}
@@ -697,7 +697,7 @@ func TestPrompt(t *testing.T) {
 	want = "/f10:ship GH-1 && GH-1 depends on GH-7, whose plan is at " +
 		"/code/repo.GH-7-base/.f10/plans/GH-7.md --driven"
 
-	if got := prompt(modeDefault, "GH-1", dep, plan, nil); got != want {
+	if got := prompt(modeDefault, "GH-1", dep, plan, nil, ""); got != want {
 		t.Errorf("prompt with a plan and a dependency = %q, want %q", got, want)
 	}
 }
@@ -705,7 +705,7 @@ func TestPrompt(t *testing.T) {
 // The discuss prompt is plain text the user follows up on in the agent's
 // pane, so it never carries the driven marker.
 func TestDiscussPrompt(t *testing.T) {
-	got := prompt(modeDiscuss, "GH-1", nil, "", nil)
+	got := prompt(modeDiscuss, "GH-1", nil, "", nil, "")
 	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines. Then stop and wait."
 
 	if got != want {
@@ -714,7 +714,7 @@ func TestDiscussPrompt(t *testing.T) {
 
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/plans/GH-7.md", planned: true}
 
-	got = prompt(modeDiscuss, "GH-1", dep, "", nil)
+	got = prompt(modeDiscuss, "GH-1", dep, "", nil, "")
 	if !strings.Contains(got, "For context: GH-1 depends on GH-7, whose plan is at /plans/GH-7.md.") {
 		t.Errorf("prompt(discuss) with a dependency = %q, want the dependency named", got)
 	}
@@ -723,13 +723,59 @@ func TestDiscussPrompt(t *testing.T) {
 		t.Errorf("prompt(discuss) = %q, want no driven marker", got)
 	}
 
-	got = prompt(modeDiscuss, "GH-1", nil, "/plans/GH-1.md", nil)
+	got = prompt(modeDiscuss, "GH-1", nil, "/plans/GH-1.md", nil, "")
 	if !strings.Contains(got, "A plan for it is saved at /plans/GH-1.md; read it too.") {
 		t.Errorf("prompt(discuss) with a plan = %q, want the plan named", got)
 	}
 
 	if strings.Contains(got, drivenMarker) {
 		t.Errorf("prompt(discuss) with a plan = %q, want no driven marker", got)
+	}
+}
+
+func TestPromptNote(t *testing.T) {
+	got := prompt(modeDiscuss, "GH-1", nil, "", nil, "/f10:judge it first.")
+	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines. " +
+		"Then, as the user asks: /f10:judge it first. Then stop and wait."
+
+	if got != want {
+		t.Errorf("prompt(discuss) with a note = %q, want %q", got, want)
+	}
+
+	pick := &pickup{url: "https://github.com/o/r/pull/9", view: "gh pr view 9", diff: "gh pr diff 9"}
+	if got := prompt(modeDefault, "GH-1", nil, "", pick, "check the tests"); !strings.HasSuffix(got,
+		" Then, as the user asks: check the tests. Then stop and wait.") {
+		t.Errorf("prompt for a PR with a note = %q, want the note before the wait", got)
+	}
+}
+
+func TestRefuseNote(t *testing.T) {
+	pick := &pickup{url: "https://github.com/o/r/pull/9"}
+
+	for _, tc := range []struct {
+		mode   string
+		pick   *pickup
+		note   string
+		refuse bool
+	}{
+		{modeDefault, nil, "", false},
+		{modeDiscuss, nil, "judge it first", false},
+		{modeDefault, pick, "judge it first", false},
+		{modeDefault, nil, "judge it first", true},
+		{modePlan, nil, "judge it first", true},
+		{modeLocal, nil, "judge it first", true},
+		{modePlan, pick, "judge it first", true},
+	} {
+		if err := refuseNote(tc.mode, tc.pick, tc.note); (err != nil) != tc.refuse {
+			t.Errorf(
+				"refuseNote(%q, pick %v, %q) = %v, want refused %v",
+				tc.mode,
+				tc.pick != nil,
+				tc.note,
+				err,
+				tc.refuse,
+			)
+		}
 	}
 }
 
@@ -906,7 +952,7 @@ func TestStartWithWorktrunk(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -953,7 +999,7 @@ func TestStartWithGitAlone(t *testing.T) {
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
 	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeLocal, "GH-1", dep, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeLocal, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1025,7 +1071,7 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 
 	f := afterFixture(t, dir, "ccc")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1051,7 +1097,7 @@ func TestStartAfterWithoutAPlanYet(t *testing.T) {
 
 	f := afterFixture(t, dir, "ccc")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1077,7 +1123,7 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 
 	f := afterFixture(t, "/code/repo.GH-7-base", "ccc")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil, ""), "{}")
 
 	err := start(
 		t.Context(),
@@ -1094,7 +1140,7 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 func TestStartAfterEqualsDefault(t *testing.T) {
 	f := afterFixture(t, "/code/repo.GH-7-base", "bbb")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/code/repo.GH-7-base/.f10/plans/GH-7.md"}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1138,7 +1184,7 @@ func TestStartWithBase(t *testing.T) {
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 release/1.2", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1169,7 +1215,7 @@ func TestStartBaseEqualsDefault(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create --base main GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1199,7 +1245,7 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1325,7 +1371,7 @@ func TestStartRecoversAWorkspaceWithNoAgent(t *testing.T) {
 	f.script("herdr pane process-info --pane pane:7",
 		`{"result":{"process_info":{"foreground_process_group_id":42,"pane_id":"pane:7","shell_pid":42}}}`)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1393,7 +1439,7 @@ func TestStartWaitsForTheShell(t *testing.T) {
 		},
 		{Stdout: "{}"},
 	}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var progress bytes.Buffer
 
@@ -1446,6 +1492,7 @@ func TestStartSlugsTheBranch(t *testing.T) {
 			nil,
 			"",
 			nil,
+			"",
 		),
 		"{}",
 	)
@@ -1478,7 +1525,7 @@ func TestStartWithoutATitle(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1531,7 +1578,7 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""), "{}")
 
 	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1}); err != nil {
 		t.Fatal(err)
@@ -1558,7 +1605,7 @@ func TestStartAdoptsMainsPlan(t *testing.T) {
 	f.script(worktrees, porcelain("GH-1", wt))
 	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
 	f.script("herdr agent start "+agent+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, "GH-1", nil, dst, nil), "{}")
+	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, "GH-1", nil, dst, nil, ""), "{}")
 
 	var out bytes.Buffer
 
@@ -1655,7 +1702,7 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	)
 	f.script(
 		"herdr agent prompt "+herdr.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
-			prompt(modeDefault, "GH-1", nil, "", nil),
+			prompt(modeDefault, "GH-1", nil, "", nil, ""),
 		"{}",
 	)
 

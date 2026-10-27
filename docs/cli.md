@@ -57,7 +57,7 @@ f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 
-f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
 f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
@@ -112,6 +112,7 @@ It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with 
 The command returns as soon as the prompt is submitted; the work happens in the new workspace.
 
 - the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--local` ships through the project's `local` pipeline, so nothing is pushed; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
+  Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`); a note goes only with `--discuss` or a PR pickup, and any other mode refuses one, since a driven run takes its instructions from the task.
   The three are exclusive
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) is moved, not copied, into the new worktree's `.f10/plans/`, so one plan exists and a later `/f10:ship <id>` in main finds none.
   The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship local: <id>` with `--local`; `--plan` still plans, and the plan step archives the moved one; `--discuss` names the plan's path.

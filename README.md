@@ -410,6 +410,7 @@ f10 start 1042                # branch, worktree, Herdr workspace, claude prompt
 f10 start 1042 --plan         # prompt the plan only
 f10 start 1042 --local        # ship through the project's `local` pipeline: commits, nothing pushed
 f10 start 1042 --discuss      # fetch the task and wait: talk it through in the new pane before any plan
+f10 start 1042 --discuss "/f10:judge it first"   # fetch, run the note, then wait
 f10 start 1042 --after 1040   # base the branch on that task's branch, record the dependency, stack the PR
                               # (no flag: the task body's `After:` line, when it has one)
 f10 start 1042 --base rel/2   # base the branch on a git ref: the local branch, else origin's

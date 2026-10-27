@@ -139,7 +139,7 @@ func TestPickupOf(t *testing.T) {
 // planned from its diff with --plan; never shipped.
 func TestPromptForAPickup(t *testing.T) {
 	for _, mode := range []string{modeDefault, modeDiscuss} {
-		got := prompt(mode, "GH-1", nil, "", pickGH)
+		got := prompt(mode, "GH-1", nil, "", pickGH, "")
 		for _, want := range []string{"f10 task read GH-1", "gh pr view 30 --comments", "gh pr diff 30", "stop and wait"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("prompt(%q) for a PR = %q, missing %q", mode, got, want)
@@ -152,11 +152,11 @@ func TestPromptForAPickup(t *testing.T) {
 	}
 
 	want := "/f10:plan GH-1 continue PR " + pickGH.url + ": its diff is the starting point " + drivenMarker
-	if got := prompt(modePlan, "GH-1", nil, "", pickGH); got != want {
+	if got := prompt(modePlan, "GH-1", nil, "", pickGH, ""); got != want {
 		t.Errorf("prompt(plan) for a PR = %q, want %q", got, want)
 	}
 
-	if got := prompt(modeDefault, "GH-1", nil, "/p/GH-1.md", pickGH); !strings.Contains(got, "/p/GH-1.md") {
+	if got := prompt(modeDefault, "GH-1", nil, "/p/GH-1.md", pickGH, ""); !strings.Contains(got, "/p/GH-1.md") {
 		t.Errorf("prompt for a PR with a plan = %q, want the plan named", got)
 	}
 }
@@ -187,7 +187,7 @@ func TestStartPicksUpAPR(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label alice/fix-login", opened)
 	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
-		"herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", pickGH),
+		"herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", pickGH, ""),
 		"{}",
 	)
 
@@ -230,7 +230,10 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 	f.script("git worktree add "+wt+" GH-1/slug", "")
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/slug", opened)
 	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", nil), "{}")
+	f.script(
+		"herdr agent prompt "+herdr.AgentName("GH-1", "", wt)+" "+prompt(modeDefault, "GH-1", nil, "", nil, ""),
+		"{}",
+	)
 
 	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1}); err != nil {
 		t.Fatal(err)

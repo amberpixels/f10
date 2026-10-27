@@ -32,7 +32,7 @@ func startCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "start",
 		Usage:     "start a task: a worktree, a Herdr workspace and a prompted agent",
-		ArgsUsage: "<task-id>[-suffix] | <PR url | #n>",
+		ArgsUsage: "<task-id>[-suffix] | <PR url | #n>  [note...]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "plan", Usage: "prompt only the plan"},
 			&cli.BoolFlag{
@@ -126,6 +126,11 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	note := strings.TrimSpace(strings.Join(cmd.Args().Tail(), " "))
+	if err := refuseNote(mode, pick, note); err != nil {
+		return err
+	}
+
 	task := strings.TrimSpace(cmd.String("task"))
 
 	var (
@@ -179,6 +184,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		plansDir: t.sharedPlansDir(),
 		title:    titleLookup(t, r.Number),
 		pick:     pick,
+		note:     note,
 	}
 
 	if checksParent(mode, pick) {
@@ -275,6 +281,18 @@ func pickedTask(prefix string, hostIssues bool, pick *pickup, pr pull, task stri
 	return task, nil
 }
 
+// refuseNote stops a note no prompt can carry: only the prompts that stop
+// and wait are plain text, and a driven chain's arguments belong to its
+// skills.
+func refuseNote(mode string, pick *pickup, note string) error {
+	if note == "" || mode == modeDiscuss || (pick != nil && mode != modePlan) {
+		return nil
+	}
+
+	return fmt.Errorf("%q: a note goes to an agent that stops and waits, with --discuss or a PR picked up; "+
+		"a driven run takes its instructions from the task", note)
+}
+
 // refusePickupFlags stops the flags a picked-up PR has no use for: its
 // branch and base are the PR's, and nobody ships someone else's PR unread.
 func refusePickupFlags(mode, after, base string) error {
@@ -350,6 +368,7 @@ type startInput struct {
 	model    string                                // the agent's --model, resolved, or "" for claude's default
 	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
 	pick     *pickup                               // the PR picked up, or nil for a task started by its id
+	note     string                                // the user's words after the id, for the agent before it waits, or ""
 	// children is the task's subtasks, read to refuse a parent; nil skips the
 	// check (see checksParent)
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
@@ -402,7 +421,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 			ctx,
 			o.path,
 			herdr.AgentName(in.task.ID, in.suffix, o.path),
-			prompt(in.mode, o.task.Label(), o.dep, o.plan, in.pick),
+			prompt(in.mode, o.task.Label(), o.dep, o.plan, in.pick, in.note),
 		); err != nil {
 			return err
 		}
@@ -1050,15 +1069,15 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 // one. Driven mode takes every gap on its default and the fetch step carries
 // the dependency's contract, so the prompt states neither. A picked-up PR is
 // summarised and discussed, or planned from its diff with --plan: never
-// shipped unread.
-func prompt(mode, id string, dep *dependency, plan string, pick *pickup) string {
+// shipped unread. A note goes only to the prompts that stop and wait.
+func prompt(mode, id string, dep *dependency, plan string, pick *pickup, note string) string {
 	switch {
 	case pick != nil && mode == modePlan:
 		return driven(fmt.Sprintf("/f10:plan %s continue PR %s: its diff is the starting point", id, pick.url))
 	case pick != nil:
-		return pickupPrompt(id, plan, pick)
+		return pickupPrompt(id, plan, pick, note)
 	case mode == modeDiscuss:
-		return discussPrompt(id, dep, plan)
+		return discussPrompt(id, dep, plan, note)
 	}
 
 	var p string
@@ -1088,8 +1107,9 @@ func prompt(mode, id string, dep *dependency, plan string, pick *pickup) string 
 // discussPrompt fetches the task and stops. It is plain text with no driven
 // marker: the user talks to this agent in its own pane, and its questions
 // belong there. Comments and images come with `f10 task read`'s output and the
-// fetch-adapter fallback with its error, so the prompt names neither.
-func discussPrompt(id string, dep *dependency, plan string) string {
+// fetch-adapter fallback with its error, so the prompt names neither. The
+// user's note runs after the summary and before the wait.
+func discussPrompt(id string, dep *dependency, plan, note string) string {
 	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines.", id)
 
 	if plan != "" {
@@ -1100,12 +1120,12 @@ func discussPrompt(id string, dep *dependency, plan string) string {
 		p += " For context: " + dependencyClause(id, dep) + "."
 	}
 
-	return p + " Then stop and wait."
+	return p + noteClause(note) + " Then stop and wait."
 }
 
 // pickupPrompt is discussPrompt for a picked-up PR: the task, the PR's
 // state and its diff summarised, then the agent waits in its own pane.
-func pickupPrompt(id, plan string, pick *pickup) string {
+func pickupPrompt(id, plan string, pick *pickup, note string) string {
 	p := fmt.Sprintf("Run `f10 task read %s`, `%s` and `%s`, and summarise in a few lines what the task asks, "+
 		"the PR's state (reviews, checks, open threads) and what its diff does, opening any image the PR links.",
 		id, pick.view, pick.diff)
@@ -1114,7 +1134,16 @@ func pickupPrompt(id, plan string, pick *pickup) string {
 		p += " A plan for it is saved at " + plan + "; read it too."
 	}
 
-	return p + " Then stop and wait."
+	return p + noteClause(note) + " Then stop and wait."
+}
+
+// noteClause is the user's note as a sentence of the prompt, or "".
+func noteClause(note string) string {
+	if note == "" {
+		return ""
+	}
+
+	return " Then, as the user asks: " + strings.TrimRight(note, ".") + "."
 }
 
 // dependencyClause names the base task and where its plan is. What to do
