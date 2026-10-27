@@ -192,6 +192,10 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		in.children = t.tracker().children
 	}
 
+	if pick == nil {
+		in.started = startedMove(t)
+	}
+
 	// before the body's After: line, whose own refusal would hide this one
 	if err := refuseStartParent(ctx, in); err != nil {
 		return err
@@ -373,6 +377,9 @@ type startInput struct {
 	// children is the task's subtasks, read to refuse a parent; nil skips the
 	// check (see checksParent)
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
+	// started moves a task to tracker.status's started word; nil when none
+	// is declared, or for a PR picked up, whose task someone else started
+	started func(ctx context.Context, task ref.Ref) error
 }
 
 // titleLookup asks the host for the task's title, needed only when no driver
@@ -426,6 +433,8 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		); err != nil {
 			return err
 		}
+
+		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
 	}
 
 	rows := []fact{{label: "task", value: o.task.Label()}}
@@ -447,6 +456,38 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
 		o.notes,
 	)
+}
+
+// startedMove moves a task to tracker.status's started word, or is nil when
+// none is declared.
+func startedMove(t *target) func(context.Context, ref.Ref) error {
+	word := t.eff.TrackerStatus["started"]
+	if word == "" {
+		return nil
+	}
+
+	return func(ctx context.Context, task ref.Ref) error {
+		return updateTask(ctx, io.Discard, t, t.driver(), task, props{status: word})
+	}
+}
+
+// markStarted moves every member of a freshly started task to its started
+// status. The worktree is the result, so a failure is a note, never a
+// refusal.
+func markStarted(ctx context.Context, started func(context.Context, ref.Ref) error, task ref.Ref) []string {
+	if started == nil {
+		return nil
+	}
+
+	var notes []string
+
+	for _, m := range task.MemberRefs() {
+		if err := started(ctx, m); err != nil {
+			notes = append(notes, fmt.Sprintf("%s was not moved to its started status: %v", m.ID, err))
+		}
+	}
+
+	return notes
 }
 
 // checksParent reports whether start refuses a parent: a PR pickup is

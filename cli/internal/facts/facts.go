@@ -62,6 +62,10 @@ type Effective struct {
 	// to the level it carries; nil when none is declared.
 	PriorityLabels map[string]string `json:"priorityLabels,omitempty"`
 
+	// TrackerStatus is tracker.status: `started` and `shipped` to the
+	// tracker's own word; nil when none is declared, and f10 moves no status.
+	TrackerStatus map[string]string `json:"trackerStatus,omitempty"`
+
 	// The remote review's four facts (review.go); zero when Review declares
 	// no remote reviewer.
 	Review Review `json:"review"`
@@ -74,6 +78,8 @@ type Effective struct {
 	Lore        string              `json:"lore"`   // local: lore under the storage root; committed: .lore/ at the checkout root
 	Pipelines   map[string][]string `json:"pipelines"`
 	Planless    []string            `json:"planless,omitempty"`
+	ByArea      map[string]string   `json:"pipelineByArea,omitempty"` // pipeline_by_area: an area to the pipeline its tasks ship through
+	ReportBack  bool                `json:"reportBack"`               // report_back: a ship run posts its shipment on the task; on unless declared off
 	DriveChain  []string            `json:"driveChain"`
 	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 

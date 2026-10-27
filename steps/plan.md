@@ -10,6 +10,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    First line: **Roles**, the roles it was written under, for `/f10:ship` to inherit.
    Where Roles replaces a base role or scopes a role to steps, the line names the roles per step group, each with its source (`Roles: all steps: senior marketing analyst (replaces base, report work) + senior Python developer (framework work)`); otherwise one flat list.
    A **Kind** line follows for a `bug`, `refactor` or `spike` (`Kind: bug`); a plan without one is a feature.
+   Where the frontmatter declares `pipeline_by_area`, an **Areas** line follows: the areas the fetch brief settled, in the map's words, for `/f10:ship` to pick the pipeline from when it runs on the plan alone.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
    A bundle adds a **Bundle** line (`Bundle: ABC-1+ABC-2`) and a `## Riders` section listing each rider's acceptance criteria under its id; the stages cover every member.
    The kind opens the plan, before the stages:

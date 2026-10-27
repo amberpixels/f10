@@ -42,6 +42,8 @@ f10 task open [id]       # in the browser, no id the task list (--link writes th
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] < task.md   # through the driver; prints the new id
+f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
+f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--set k=v]...   # absolute values
 f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path)
 f10 demo open [id]       # the demo report, in the browser (--link writes the path)
@@ -778,6 +780,13 @@ It reads the task as markdown on stdin, `# <title>` on the first line, and print
 `--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable) and `--parent` go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
 It exits **3** when no driver creates tasks here (none, or one declining `create`): the capture step then uses the project's Create adapter.
 A failed create is never retried, and its error says the task may exist already.
+
+## Comment and update
+
+`f10 task comment` posts markdown on stdin as a comment on the task, through the driver's `comment` verb, else the host's issues (`gh issue comment`, `glab issue note`), and prints the comment's url when one comes back.
+`f10 task update` sets the task's `--status`, `--priority`, `--label` (repeatable, adds), `--assignee` (replaces) and `--set key=value` (a property the driver knows), through the driver's `update` verb, else the host's issues, where a status is `open` or `closed`, a priority is the label `tracker.priority` maps it to, and `--set` is refused ([driver contract](driver-contract.md#commenting-on-and-updating-a-task)).
+Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
+A failed comment is never retried, and its error says it may have posted.
 
 ## Trackers
 

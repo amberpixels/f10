@@ -257,6 +257,25 @@ func (e *Effective) resolveTracker(
 			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
 		})
 	}
+
+	if fm.Tracker.Status != nil {
+		e.TrackerStatus = fm.Tracker.Status
+		e.Facts = append(e.Facts, Fact{
+			Key:    "tracker.status",
+			Value:  mapShown(fm.Tracker.Status),
+			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+		})
+	}
+}
+
+// mapShown is a string map as `key: value` pairs in key order.
+func mapShown(m map[string]string) string {
+	pairs := make([]string, 0, len(m))
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		pairs = append(pairs, k+": "+m[k])
+	}
+
+	return strings.Join(pairs, ", ")
 }
 
 // priorityIndex inverts the declared map: each label, lower-cased, to its
@@ -360,6 +379,32 @@ func (e *Effective) resolvePipelines(
 		e.Pipelines, e.Planless = prosePipes, prosePlanless
 	default:
 		e.Pipelines = map[string][]string{"default": {"implement", "pr"}}
+	}
+
+	// frontmatter only: neither has a prose form. The area map is checked
+	// against the merged pipelines, since a layer may map onto another's.
+	if e.ByArea = fm.ByArea; e.ByArea != nil {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "pipeline_by_area",
+			Value:  mapShown(e.ByArea),
+			Origin: "declared (" + fm.origin["pipeline_by_area"] + ", frontmatter)",
+		})
+
+		for _, area := range slices.Sorted(maps.Keys(e.ByArea)) {
+			if _, ok := e.Pipelines[e.ByArea[area]]; !ok {
+				e.problem(true, "project.md frontmatter: pipeline_by_area: %q maps to %q, which names no pipeline",
+					area, e.ByArea[area])
+			}
+		}
+	}
+
+	e.ReportBack = fm.ReportBack != "off"
+	if fm.ReportBack != "" {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "report_back",
+			Value:  fm.ReportBack,
+			Origin: "declared (" + fm.origin["report_back"] + ", frontmatter)",
+		})
 	}
 
 	if len(fm.Planless) > 0 {

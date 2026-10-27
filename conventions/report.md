@@ -28,6 +28,7 @@ plan:    .f10/plans/GH-2.md
    What changed, how far the pipeline got and what the user does next are sentences under the block.
 3. **Only rows the run produced.**
    No placeholders, no `n/a`, no empty values.
+   A ship run's shipment rows are the ones its last step declares (`conventions/context.md` → shipment): a pipeline ending in a project-defined `publish` prints its `report` url, not branch, PR or sha rows.
 4. **Most-identifying first**: the task, its title, its url, then this step's artifacts.
 5. **The marker means "an openable url"**, never a path, a sha or a branch.
    It is `↗` (U+2197), not `🔗`, which is double-width.

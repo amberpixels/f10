@@ -19,6 +19,7 @@ Context: `project.md` guardrails and Verify.
      An existing assertion the plan did not name stays as it is.
    - **spike** - run the experiments with the least code that produces their evidence: no polish, and tests only where an experiment needs one.
      Write the **spike report** to `<storage root>/spikes/<TASK-ID>.md`: the question, the answer, the evidence (commands run, numbers, files by path), the recommendation, and follow-up tasks worth capturing, a title each.
+     The answer and recommendation read on their own: ship posts them on the task as a comment.
      The experiment code stays uncommitted in the worktree; the report names it by path.
      Verify still runs, and its result goes in the report, but red verify on throwaway code does not fail the step.
 2. **Verify locally.**

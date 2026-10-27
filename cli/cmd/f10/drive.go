@@ -143,6 +143,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		plansDir: t.sharedPlansDir(),
 		settings: claudeSettingsPath(),
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		started:  startedMove(t),
 		record:   recordAt,
 		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error {
 			cwd, err := os.Getwd()
@@ -368,6 +369,7 @@ type driveInput struct {
 	plansDir string // the shared plans dir, or "" for in-repo storage
 	settings string // claude's settings file, which names the model a bad --model falls back to
 	title    func(ref.Ref) func(context.Context) (string, error)
+	started  func(context.Context, ref.Ref) error                                  // nil when tracker.status declares no started word
 	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error // pr: "", or the answer merge or local
 	stateDir string
 	ttl      time.Duration
@@ -1051,6 +1053,10 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s\n", task.ref.ID, o.branch, o.path, o.ws.ID)
+
+	if o.fresh {
+		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
+	}
 
 	// status reads the chain to list the gates drive runs outside ship
 	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(in.chain, " ")); err != nil {

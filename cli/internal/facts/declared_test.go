@@ -396,3 +396,53 @@ func TestMigrateRenamesReviewTraces(t *testing.T) {
 		t.Errorf("nothing left = %v", err)
 	}
 }
+
+// The report-back facts: the status map, the area map onto declared
+// pipelines, and report_back on unless declared off; a worktree's area map
+// replaces main's whole and may name main's pipelines.
+func TestBuildReportBackFacts(t *testing.T) {
+	eff := buildWith(t, "---\n"+
+		"tracker: {kind: notion, id: MR-###, status: {started: In progress, shipped: Published}}\n"+
+		"pipelines: {default: implement → publish, engine: implement → cleanup → pr}\n"+
+		"pipeline_by_area: {report work: default, framework work: engine}\n"+
+		"---\n", "")
+
+	if len(eff.Problems) > 0 {
+		t.Fatalf("problems: %+v", eff.Problems)
+	}
+
+	if eff.TrackerStatus["shipped"] != "Published" || eff.ByArea["framework work"] != "engine" || !eff.ReportBack {
+		t.Errorf("status %v, by area %v, report back %v", eff.TrackerStatus, eff.ByArea, eff.ReportBack)
+	}
+
+	layered := buildWith(
+		t,
+		"---\npipelines: {default: [implement, pr], engine: [implement, pr]}\npipeline_by_area: {a: engine, b: engine}\n---\n",
+		"---\npipeline_by_area: {c: engine}\nreport_back: off\n---\n",
+	)
+
+	if len(layered.Problems) > 0 || len(layered.ByArea) != 1 || layered.ReportBack {
+		t.Errorf(
+			"layered: by area %v, report back %v, problems %+v",
+			layered.ByArea,
+			layered.ReportBack,
+			layered.Problems,
+		)
+	}
+
+	// one layer, no pipelines of its own: the map is checked against the default
+	unknown := buildWith(t, "---\npipeline_by_area: {report work: publish}\n---\n", "")
+	if !strings.Contains(unknown.Errors(), `pipeline_by_area: "report work" maps to "publish"`) {
+		t.Errorf("an area mapped to no pipeline passed: %+v", unknown.Problems)
+	}
+
+	bad := Declared{
+		ReportBack: "yes",
+		Tracker:    TrackerDecl{Status: map[string]string{"done": "Done", "shipped": " "}},
+	}.check()
+	for _, want := range []string{"report_back", `tracker.status: "done"`, "tracker.status: shipped"} {
+		if !slices.ContainsFunc(bad, func(b string) bool { return strings.HasPrefix(b, want) }) {
+			t.Errorf("check misses %s: %v", want, bad)
+		}
+	}
+}

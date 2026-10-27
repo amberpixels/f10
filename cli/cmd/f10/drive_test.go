@@ -253,6 +253,32 @@ func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 	}
 }
 
+// A task drive opens fresh moves to its started status, as start's does.
+func TestDriveMarksStarted(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge")
+	fx.task("GH-1", taskInfo{body: "first"}, "")
+	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+	var moved []string
+
+	fx.in.started = func(_ context.Context, task ref.Ref) error {
+		moved = append(moved, task.ID)
+
+		return nil
+	}
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if len(moved) != 1 || moved[0] != "GH-1" {
+		t.Errorf("moved %v, want GH-1", moved)
+	}
+}
+
 // Each agent starts on its task's own model, else the run-wide one; a
 // name that is no model starts claude's default, said once at the top.
 func TestDriveStartsAgentsOnTheirModels(t *testing.T) {

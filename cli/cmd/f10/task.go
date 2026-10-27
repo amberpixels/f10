@@ -27,7 +27,7 @@ import (
 func taskCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "task",
-		Usage: "read, open, search or create the project's tasks",
+		Usage: "read, open, search, create, comment on or update the project's tasks",
 		Commands: []*cli.Command{
 			{
 				Name:      "read",
@@ -70,6 +70,33 @@ func taskCommand() *cli.Command {
 					&cli.StringFlag{Name: "parent", Usage: "the task id to link it under as a subtask"},
 				},
 				Action: runTaskCreate,
+			},
+			{
+				Name: "comment",
+				Usage: "add markdown on stdin to the task as a comment, and print its url when the tracker gives one " +
+					"(exit 3: this tracker takes no comments here)",
+				ArgsUsage: "[task-id]",
+				Action:    runTaskComment,
+			},
+			{
+				Name: "update",
+				Usage: "set the task's status, priority, labels, assignee or a named property " +
+					"(exit 3: this tracker takes no updates here)",
+				ArgsUsage: "[task-id]",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "status",
+						Usage: "the status, in the tracker's own word (host issues: open or closed)",
+					},
+					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
+					&cli.StringSliceFlag{Name: "label", Usage: "a label to add; repeat for several"},
+					&cli.StringFlag{Name: "assignee", Usage: "who holds the task, in the tracker's own name for them"},
+					&cli.StringSliceFlag{
+						Name:  "set",
+						Usage: "`key=value` for a property the driver knows; repeat for several",
+					},
+				},
+				Action: runTaskUpdate,
 			},
 		},
 	}
@@ -589,26 +616,12 @@ func taskTitle(doc string) string {
 // caller set, priority in its canonical form, and the parent and the body's
 // After: base as numbers, as every verb's argument is.
 func createArgs(ctx context.Context, t *target, cmd *cli.Command, doc string) ([]string, error) {
-	var args []string
-
-	if s := strings.TrimSpace(cmd.String("status")); s != "" {
-		args = append(args, "--status", s)
+	props, err := readProps(cmd)
+	if err != nil {
+		return nil, err
 	}
 
-	if p := cmd.String("priority"); p != "" {
-		rank, ok := driver.PriorityRank(p)
-		if !ok {
-			return nil, fmt.Errorf("priority %q is not one of %s", p, strings.Join(driver.Priorities, ", "))
-		}
-
-		args = append(args, "--priority", driver.Priorities[rank])
-	}
-
-	for _, l := range cmd.StringSlice("label") {
-		if l = strings.TrimSpace(l); l != "" {
-			args = append(args, "--label", l)
-		}
-	}
+	args := props.args()
 
 	for _, link := range []struct{ flag, id string }{
 		{"--parent", cmd.String("parent")},

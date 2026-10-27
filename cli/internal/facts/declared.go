@@ -23,32 +23,42 @@ import (
 
 // Declared is one layer's frontmatter.
 type Declared struct {
-	Visibility   string           `yaml:"visibility,omitempty"`
-	Storage      string           `yaml:"storage,omitempty"`
-	Layering     string           `yaml:"layering,omitempty"`
-	Tracker      TrackerDecl      `yaml:"tracker,omitempty"`
-	MergeMethod  string           `yaml:"merge_method,omitempty"`
-	Catchup      string           `yaml:"catchup,omitempty"`
-	Traces       string           `yaml:"traces,omitempty"`
-	Lore         string           `yaml:"lore,omitempty"`
-	ReviewTraces string           `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
-	Pipelines    map[string]Steps `yaml:"pipelines,omitempty"`
-	Planless     []string         `yaml:"planless,omitempty"`
-	DriveChain   Steps            `yaml:"drive_chain,omitempty"`
-	Review       ReviewDecl       `yaml:"review,omitempty"`
-	Standup      StandupDecl      `yaml:"standup,omitempty"`
+	Visibility   string            `yaml:"visibility,omitempty"`
+	Storage      string            `yaml:"storage,omitempty"`
+	Layering     string            `yaml:"layering,omitempty"`
+	Tracker      TrackerDecl       `yaml:"tracker,omitempty"`
+	MergeMethod  string            `yaml:"merge_method,omitempty"`
+	Catchup      string            `yaml:"catchup,omitempty"`
+	Traces       string            `yaml:"traces,omitempty"`
+	Lore         string            `yaml:"lore,omitempty"`
+	ReviewTraces string            `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
+	Pipelines    map[string]Steps  `yaml:"pipelines,omitempty"`
+	Planless     []string          `yaml:"planless,omitempty"`
+	ByArea       map[string]string `yaml:"pipeline_by_area,omitempty"` // an area, in Roles' plain words, to the pipeline its tasks ship through
+	ReportBack   string            `yaml:"report_back,omitempty"`
+	DriveChain   Steps             `yaml:"drive_chain,omitempty"`
+	Review       ReviewDecl        `yaml:"review,omitempty"`
+	Standup      StandupDecl       `yaml:"standup,omitempty"`
 }
 
-// TrackerDecl is the tracker's kind, its task id format (`FT-###`) and the
-// priority map for host issues, which have no priority field of their own:
-// a level of the driver contract's vocabulary to the labels that carry it.
+// TrackerDecl is the tracker's kind, its task id format (`FT-###`), the
+// priority map for host issues, which have no priority field of their own
+// (a level of the driver contract's vocabulary to the labels that carry
+// it), and the status map: a moment f10 reports, `started` or `shipped`, to
+// the tracker's own word for it.
 type TrackerDecl struct {
 	Kind     string            `yaml:"kind,omitempty"`
 	ID       string            `yaml:"id,omitempty"`
 	Priority map[string]Labels `yaml:"priority,omitempty"`
+	Status   map[string]string `yaml:"status,omitempty"`
 }
 
-func (t TrackerDecl) empty() bool { return t.Kind == "" && t.ID == "" && t.Priority == nil }
+func (t TrackerDecl) empty() bool {
+	return t.Kind == "" && t.ID == "" && t.Priority == nil && t.Status == nil
+}
+
+// StatusMoments are the moments tracker.status may name.
+var StatusMoments = []string{"started", "shipped"}
 
 // Labels is a list of label names, written as a YAML list or as one string.
 type Labels []string
@@ -166,6 +176,7 @@ var vocab = map[string][]string{
 	"traces":        {"on", "off"},
 	"lore":          {"local", "committed"},
 	"review_traces": {"on", "off"},
+	"report_back":   {"on", "off"},
 }
 
 // trackerKinds maps the declared kind to the name the rest of f10 shows.
@@ -191,6 +202,7 @@ func (d Declared) check() []string {
 		"traces":        d.Traces,
 		"lore":          d.Lore,
 		"review_traces": d.ReviewTraces,
+		"report_back":   d.ReportBack,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
 			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
@@ -210,6 +222,18 @@ func (d Declared) check() []string {
 	for _, name := range d.Planless {
 		if _, ok := d.Pipelines[name]; !ok {
 			bad = append(bad, fmt.Sprintf("planless: %q names no pipeline", name))
+		}
+	}
+
+	for _, moment := range slices.Sorted(maps.Keys(d.Tracker.Status)) {
+		switch {
+		case !slices.Contains(StatusMoments, moment):
+			bad = append(
+				bad,
+				fmt.Sprintf("tracker.status: %q is not one of %s", moment, strings.Join(StatusMoments, ", ")),
+			)
+		case strings.TrimSpace(d.Tracker.Status[moment]) == "":
+			bad = append(bad, fmt.Sprintf("tracker.status: %s has no status word", moment))
 		}
 	}
 
@@ -310,6 +334,8 @@ func (l *layered) merge(d Declared, label string) {
 	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
+	set("pipeline_by_area", d.ByArea != nil, func() { l.ByArea = d.ByArea })
+	set("report_back", d.ReportBack != "", func() { l.ReportBack = d.ReportBack })
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
