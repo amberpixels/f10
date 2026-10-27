@@ -73,10 +73,12 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 
 	// a bare call reads the current task the way `status <id>` does; a
 	// guess that cannot be read only loses the guess, since status only reads
-	if t, err := targetFor(ctx, cmd); err == nil && !all && !t.scoped {
-		if id := bareTaskID(ctx, t, sid); id != "" {
-			if done, err := taskStatus(ctx, cmd, t, id, true); done {
-				return err
+	if !all {
+		if t, err := targetFor(ctx, cmd); err == nil && !t.scoped {
+			if id := bareTaskID(ctx, t, sid); id != "" {
+				if done, err := taskStatus(ctx, cmd, t, id, true); done {
+					return err
+				}
 			}
 		}
 	}
