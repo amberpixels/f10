@@ -2,7 +2,7 @@
 
 A lookaround, and the commands that start, reach, drive and finish a task.
 The lookaround verbs explain the loaded configuration and read the things it points at, changing nothing.
-Five verbs act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already has, `drive` runs a list of tasks through a chain of skills that way, and `finish` merges the task's PR and removes what start created.
+Five verbs act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task is worked on in and opens them in Herdr, `forward` hands a command to the agent a task already has, `drive` runs a list of tasks through a chain of skills that way, and `finish` merges the task's PR (or a branch never pushed, locally) and removes what start created.
 
 The plugin requires the binary and ships it as `bin/f10`, a shim that runs the build matching `plugin.json`'s version.
 The skills and the binary are one contract: the skill text describes the flags the binary takes.
@@ -59,8 +59,8 @@ f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... 
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
-f10 drive <id | id+id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base is finished
-f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR, pull main, archive the plan, close the workspace, remove the worktree
+f10 drive <id | id+id>[:model]... | <id> -- <id> [skill...] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a chain of skills, each task once its base has a commit
+f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
 f10 lore show <change> [--json]     # the change's effective entries, the intent first
@@ -180,7 +180,7 @@ The bundle's base is the one `After:` its members name outside it; a line naming
 Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
-Before the first pipeline step, ship brings the branch up to date with the base when it moved - a rebase, or a merge where `project.md` declares `catchup: merge` - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
+Before the first pipeline step, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
 A conflict there stops ship and hands off to `/f10:catchup`, which settles it with both sides kept.
 The pr step opens the PR or MR against the base branch, so it is stacked and the host retargets it when the base merges; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
@@ -216,6 +216,15 @@ There finish merges as usual, brings the default branch up to the merge, switche
    `--local` cleans up here and leaves the PR open, for a review handed back: no merge, no remote branch deleted, no pull, no dependents released; the plan is archived and the worktree, local branch and workspace go as in step 8.
    It refuses first when the local branch has commits `origin/<branch>` lacks, since deleting the branch would lose them.
    A closed PR is cleaned up only with `--local`.
+   **A branch never pushed.**
+   No PR, no `origin/<branch>` and no upstream recorded for the branch: the branch merges into the local default branch instead, by the merge method below, built in memory (`git merge-tree`, `git commit-tree`) so no checkout is touched.
+   The merge is built on the local default branch, or on `origin/<default>` when the local one only lags it, so origin's commits never fold into the merge; the two diverged is a refusal.
+   A squash's subject is the task and its title, its body the branch's commit subjects and, with traces on, the `Task:` trailers; a merge writes a two-parent commit; a rebase lands only a fast-forward.
+   The default branch then moves: `git merge --ff-only` when the main checkout is on it, else `git update-ref`.
+   A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
+   Nothing is pushed, pulled or deleted on origin, and the task stays open on the tracker, since no PR closes it: the notes say so.
+   A pushed branch with no PR is a refusal: open one, or delete origin's copy to merge here.
+   So is a branch with an upstream origin lacks (a request the host merged may no longer be listed by branch), and `--local`, which merges nothing.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).
    Absent, the repo's settings decide: on GitHub the one method allowed, else squash with a note beneath the report saying the default was taken and how to declare one; on GitLab the project's squash option, since GitLab fixes the strategy per project.
 4. **The remote branch is deleted** when origin still has it, through the host's API (glab's `--remove-source-branch` usually did it already).
@@ -241,7 +250,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
 
 Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already archived, there is no workspace to close, and only what is left is removed.
 
-Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), local merges, a task whose PR was never opened, and worktrees f10 did not start.
+Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), a pushed branch whose PR was never opened, a checkout with no origin, and worktrees f10 did not start.
 
 ## Forward
 
@@ -324,7 +333,7 @@ A task whose checkout has its branch is read from there first, so only a task wi
 ## Drive
 
 `f10 drive 42 43 judge ship` runs tasks through a chain of skills from the main session.
-Each task waits for its one base, every task whose base is finished runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
+Each task waits for its one base to have a commit, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
 The driver is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
 
 1. **The arguments.**
@@ -352,7 +361,10 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    A base outside the list that is not finished is refused, and so are tasks that wait on each other in a circle, both before anything is created.
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
-   A task starts once its base is through: finished, or its whole chain run, where the chain has no `finish`.
+   A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or its whole chain run).
+   Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), so a lagging local default branch or a squash-merged grandparent never releases it early.
+   Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
+   A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, since each agent is its own session.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
    A plan the main checkout saved for the task moves into the worktree under start's rules (a worktree's own plan wins, out-of-tree storage moves nothing, a failed move stops before the agent starts).
@@ -365,10 +377,12 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, and review gets `ci` where `project.md` declares a remote review.
-5. **Catchup after finish, and before it.**
+5. **Catchup when the base moves, after finish, and before it.**
+   On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
+   The catchup merges the local base branch, whatever `catchup:` says, so no push is needed.
    `finish` marks each branch that depended on the finished task `f10-landed`.
-   Before a marked task's next skill, the driver sends it `/f10:catchup --driven`.
-   Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will.
+   Before a marked task's next skill, the driver sends it `/f10:catchup --driven`; the driver never interrupts a turn.
+   Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
    Once it ends clean, the driver pushes the caught-up branch (`--force-with-lease` against the sha it read, when the catchup rebased) and then merges.
    A branch that still conflicts after one catchup halts the task.
@@ -382,14 +396,14 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    - **blocked with an ask** - the question is printed with its options.
      At the end of that poll the driver prints every task's ask and the command that answers them all, and exits **4**.
      The other agents keep working in their own panes;
-   - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it.
+   - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
      Every other task runs on, and the driver exits **5** once nothing can move;
    - **still running** under plan or ship, a minute after the agent went idle - the agent stopped without reporting, usually a permission dialog in its pane; the task halts naming the workspace.
      Found at prompt time on an agent the driver did not start, the same halt also says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `not reached`.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `not reached`.
    Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
 
 Rerunning the same command is the resume: each task's position is read from its own branch and run state.

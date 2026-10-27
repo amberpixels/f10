@@ -203,6 +203,41 @@ func MergesCleanly(ctx context.Context, dir, base, head string) bool {
 	return err == nil
 }
 
+// MergeTree is the tree of head merged into base, built in memory as
+// MergesCleanly tries it; a conflict is an error.
+func MergeTree(ctx context.Context, dir, base, head string) (string, error) {
+	out, err := Exec(ctx, dir, "merge-tree", "--write-tree", base, head)
+	if err != nil {
+		return "", err
+	}
+
+	tree, _, _ := strings.Cut(out, "\n")
+
+	return tree, nil
+}
+
+// CommitTree writes a commit of tree on parents with a message of one
+// paragraph per part, and returns its sha. No ref moves.
+func CommitTree(ctx context.Context, dir, tree string, parents []string, message ...string) (string, error) {
+	args := []string{"commit-tree", tree}
+	for _, p := range parents {
+		args = append(args, "-p", p)
+	}
+
+	for _, m := range message {
+		args = append(args, "-m", m)
+	}
+
+	return Exec(ctx, dir, args...)
+}
+
+// UpdateRef moves ref to sha while it still points at old.
+func UpdateRef(ctx context.Context, dir, ref, sha, old string) error {
+	_, err := Exec(ctx, dir, "update-ref", ref, sha, old)
+
+	return err
+}
+
 // Push sends HEAD to origin's branch. A lease (the sha origin's branch had
 // when the caller read it) forces the push only while origin still has that
 // sha, which a rebased branch needs; "" pushes a fast-forward and nothing

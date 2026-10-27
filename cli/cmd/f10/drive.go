@@ -44,13 +44,14 @@ import (
 func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
-		Usage: "run a list of tasks through a chain of skills, each once its base is finished, stopping when an agent asks",
+		Usage: "run a list of tasks through a chain of skills, each once its base has a commit, stopping when an agent asks",
 		ArgsUsage: "<id>[:model]... | <id> -- <id>  [plan|judge|ship|review|resolve|finish ...]  " +
 			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]",
 		Description: "The chain defaults to project.md's Drive chain, else " +
 			"plan → judge → ship → review → resolve → finish; plan drops out of it when the default pipeline is planless.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
-			"every task whose base is finished runs at once, and a halt stops only its dependents.\n" +
+			"every task whose base branch has a commit runs at once, its finish waits for the base's, " +
+			"and a halt stops only its dependents.\n" +
 			"--model starts every agent on MODEL; <id>:<model> starts one task's agent on its own, which wins.\n" +
 			"Exit 0: every task went through its chain. 4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
@@ -158,6 +159,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				merge:     pr == finishMerge,
 				local:     pr == finishLocal,
 				plansDir:  t.sharedPlansDir(),
+				title:     titleLookup(t, task.Number),
 				// a driven finish asks no second question, since a resume
 				// carries only the latest answer: a bundle's riders stay
 				// open, the reversible choice, and the report names them
@@ -403,10 +405,11 @@ type driveResult struct {
 }
 
 // A driveRun is one task on its way through the drive: pending until its
-// base is through, then active with one chain element in flight, then
-// ended with its row.
+// base has a commit, then active with one chain element in flight or
+// waiting at finish for its base, then ended with its row.
 type driveRun struct {
 	task      driveTask
+	base      *driveRun // the listed base, or nil for none or one outside the list
 	o         openedTask
 	opened    bool
 	pos       int    // the chain element in flight, or the next one
@@ -421,6 +424,9 @@ type driveRun struct {
 	// mergeCatchup is set once this drive sent a catchup because the pull
 	// request conflicted at finish: a second conflict halts rather than loops
 	mergeCatchup bool
+	// waiting is set while finish waits for the base to be through: no turn
+	// is in flight, so the poll only asks next again
+	waiting bool
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -440,8 +446,8 @@ func (r *driveRun) current(run *state.Run) *state.Run {
 func (r *driveRun) through() bool { return r.end != nil && r.end.code == 0 }
 
 // drive runs the flow: resolve every task, read the graph, start every
-// task whose base is through, then poll them all until each is through, or
-// one asks, or nothing can move. Nothing is created or prompted before the
+// task whose base has a commit, then poll them all until each is through,
+// or one asks, or nothing can move. Nothing is created or prompted before the
 // graph passed validation.
 func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	in.resolveModels(w)
@@ -480,7 +486,12 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 	}
 
-	if err := in.startRunnable(ctx, w, runs, byID); err != nil {
+	// a base outside the list was refused unless finished
+	for _, r := range runs {
+		r.base = byID[r.task.base]
+	}
+
+	if err := in.startRunnable(ctx, w, runs); err != nil {
 		return err
 	}
 
@@ -504,7 +515,11 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 			}
 		}
 
-		if err := in.startRunnable(ctx, w, runs, byID); err != nil {
+		if err := in.markMoved(ctx, w, runs, wss); err != nil {
+			return err
+		}
+
+		if err := in.startRunnable(ctx, w, runs); err != nil {
 			return err
 		}
 	}
@@ -557,22 +572,16 @@ func stopping(runs []*driveRun) bool {
 	return !active
 }
 
-// startRunnable opens every pending task whose base is through and sends
-// its first element. Runs are in graph order, so a base finished earlier in
-// the same pass releases its dependents in it.
-func (in *driveInput) startRunnable(
-	ctx context.Context,
-	w io.Writer,
-	runs []*driveRun,
-	byID map[string]*driveRun,
-) error {
+// startRunnable opens every pending task whose base released it and sends
+// its first element. Runs are in graph order, so a base released earlier
+// in the same pass releases its dependents in it.
+func (in *driveInput) startRunnable(ctx context.Context, w io.Writer, runs []*driveRun) error {
 	for _, r := range runs {
 		if r.opened || r.end != nil {
 			continue
 		}
 
-		// a base outside the list was refused unless finished
-		if b := byID[r.task.base]; b != nil && !b.through() {
+		if r.base != nil && !in.released(ctx, r.base) {
 			continue
 		}
 
@@ -583,6 +592,95 @@ func (in *driveInput) startRunnable(
 		if err := in.next(ctx, w, r); err != nil {
 			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 		}
+	}
+
+	return nil
+}
+
+// released reports whether a base lets its dependents start: through, or
+// open with a commit of its own. Implement never commits, so a commit means
+// a commit or pr step ran with verify green. Its own commits are what its
+// branch has beyond the default branch, origin's copy of it, its own base's
+// branch, and the commit it was created at, which keeps out a squashed
+// grandparent's commits. Read from local refs, so a branch never pushed counts.
+func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
+	if b.through() {
+		return true
+	}
+
+	if !b.opened || b.end != nil {
+		return false
+	}
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return false
+	}
+
+	args := []string{"rev-list", "--count", "refs/heads/" + b.o.branch, "--not", "refs/heads/" + def}
+
+	fork := gitx.Out(ctx, in.main, "config", "--get", "branch."+b.o.branch+"."+cfgAfterBranch)
+	for _, r := range []string{"refs/remotes/origin/" + def, "refs/heads/" + fork} {
+		if !strings.HasSuffix(r, "/") && gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", r) != "" {
+			args = append(args, r)
+		}
+	}
+
+	if created := createdAt(ctx, in.main, b.o.branch); created != "" {
+		args = append(args, created)
+	}
+
+	n := gitx.Out(ctx, in.main, args...)
+
+	return n != "" && n != "0"
+}
+
+// createdAt is the commit branch was created at, from its oldest reflog
+// entry, or "" once the reflog no longer reaches back to the creation.
+func createdAt(ctx context.Context, dir, branch string) string {
+	lines := strings.Split(gitx.Out(ctx, dir, "reflog", "show", "--format=%H %gs", "refs/heads/"+branch), "\n")
+
+	sha, subject, _ := strings.Cut(lines[len(lines)-1], " ")
+	if !strings.HasPrefix(subject, "branch: Created from") {
+		return ""
+	}
+
+	return sha
+}
+
+// markMoved marks each running dependent whose base branch has a head its
+// own branch lacks, read while the base agent is not mid-turn, so its next
+// boundary sends a catchup. A catchup in flight is left alone: it clears
+// the mark when it ends, and the next poll marks again if the base moved
+// meanwhile. A finished base's branch is gone, and f10-landed takes over.
+func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveRun, wss []herdr.Listed) error {
+	for _, r := range runs {
+		b := r.base
+		if !r.active() || r.skill == "catchup" || b == nil || !b.opened {
+			continue
+		}
+
+		if b.end == nil {
+			if ws := workspaceByID(wss, b.o.ws.ID); ws == nil || ws.Agent == "working" {
+				continue
+			}
+		}
+
+		head := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/heads/"+b.o.branch)
+		if head == "" || gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.branch) {
+			continue
+		}
+
+		key := "branch." + r.o.branch + "." + cfgMoved
+		if gitx.Out(ctx, in.main, "config", "--get", key) == head {
+			continue
+		}
+
+		if err := gitx.SetConfig(ctx, in.main, key, head); err != nil {
+			return fmt.Errorf("%s: marking %s moved: %w", r.task.ref.ID, b.o.branch, err)
+		}
+
+		fmt.Fprintf(w, "%s: base %s moved, catching up before the next skill\n", r.task.ref.ID, b.o.branch)
 	}
 
 	return nil
@@ -641,6 +739,8 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 
 			halted[id] = r.end.code == exitHalted
 			code = max(code, r.end.code)
+		case r.active() && r.waiting:
+			rows = append(rows, fact{label: id, value: "waiting for " + r.base.task.ref.ID})
 		case r.active():
 			rows = append(rows, fact{label: id, value: "running " + r.skill})
 		case halted[r.task.base]:
@@ -1002,12 +1102,15 @@ func (in *driveInput) position(ctx context.Context, o openedTask) (int, error) {
 	return pos, nil
 }
 
-// next sends the task its next element: none left ends it, and a branch
-// marked landed is caught up with the default branch before any skill,
-// finish included, runs on it. finish runs in this process once the pull
-// request merges cleanly; one that conflicts is marked landed and caught up
-// first.
+// next sends the task its next element: none left ends it, a base that
+// halted halts it, and a branch marked landed or moved is caught up before
+// any skill, finish included, runs on it. finish waits for the base to be
+// through, then runs in this process once the branch merges cleanly; one
+// that conflicts is marked landed and caught up first.
 func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
+	wasWaiting := r.waiting
+	r.waiting = false
+
 	if r.pos >= len(in.chain) {
 		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(in.chain, " ")})
 
@@ -1016,7 +1119,23 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	skill := in.chain[r.pos]
 
-	if skill == "finish" && !in.landed(ctx, r) {
+	if b := r.base; b != nil && b.end != nil && b.end.code == exitHalted {
+		in.end(ctx, w, r, baseHalted(r, skill))
+
+		return nil
+	}
+
+	if skill == "finish" && r.base != nil && !r.base.through() {
+		if !wasWaiting {
+			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", r.task.ref.ID, r.base.task.ref.ID)
+		}
+
+		r.waiting = true
+
+		return nil
+	}
+
+	if skill == "finish" && !in.marked(ctx, r) {
 		if res := in.readyToMerge(ctx, w, r); res != nil {
 			in.end(ctx, w, r, *res)
 
@@ -1025,7 +1144,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	switch {
-	case in.landed(ctx, r):
+	case in.marked(ctx, r):
 		skill = "catchup"
 	case skill == "finish":
 		in.end(ctx, w, r, in.runFinish(ctx, w, r.task))
@@ -1036,12 +1155,28 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	return in.send(ctx, w, r, skill)
 }
 
-// readyToMerge brings the pushed branch to where the host can merge it, or
-// says why it cannot. The host merges origin's copy of the branch, so that
-// is what is tried against origin's default branch: clean is ready; a local
-// branch already caught up is pushed; anything else is marked landed, which
-// sends it a catchup, once per drive. A branch origin does not have is left
-// to finish, whose refusal names it.
+// baseHalted ends a dependent whose base halted after releasing it, at the
+// boundary before skill: its work stays on its branch.
+func baseHalted(r *driveRun, skill string) driveResult {
+	id, base := r.task.ref.ID, r.base.task.ref.ID
+	reason := fmt.Sprintf("base %s halted, its work stays on %s", base, r.o.branch)
+
+	return driveResult{
+		row:    "halted: base " + base + " halted",
+		code:   exitHalted,
+		lines:  []string{fmt.Sprintf("%s halted before %s: %s", id, skill, reason)},
+		skill:  skill,
+		reason: reason,
+	}
+}
+
+// readyToMerge brings the branch to where it merges cleanly, or says why
+// it cannot. A pushed branch is merged by the host from origin's copy, so
+// that is tried against origin's default branch: clean is ready; a local
+// branch already caught up is pushed. A branch origin does not have is
+// merged locally by finish, so it is tried against the local default
+// branch. Anything else is marked landed, which sends it a catchup, once
+// per drive.
 func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
 	id, branch := r.task.ref.ID, r.o.branch
 
@@ -1059,11 +1194,23 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	}
 
 	base, pushed := "origin/"+def, gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "origin/"+branch)
-	if pushed == "" || gitx.MergesCleanly(ctx, r.o.path, base, pushed) {
+	head := pushed
+
+	if pushed == "" {
+		if base, err = landingBase(ctx, in.main, def); err != nil {
+			res := halted(id, "finish", err.Error())
+
+			return &res
+		}
+
+		head = "refs/heads/" + branch
+	}
+
+	if gitx.MergesCleanly(ctx, r.o.path, base, head) {
 		return nil
 	}
 
-	if gitx.IsAncestor(ctx, r.o.path, base, "HEAD") {
+	if pushed != "" && gitx.IsAncestor(ctx, r.o.path, base, "HEAD") {
 		lease, how := "", "pushed"
 		if !gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD") {
 			lease, how = pushed, "pushed with --force-with-lease (the catchup rewrote it)"
@@ -1270,6 +1417,10 @@ func (in *driveInput) takeAnswer(id string) string {
 func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []herdr.Listed, live []*state.Run) error {
 	id, skill := r.task.ref.ID, r.skill
 
+	if r.waiting {
+		return in.next(ctx, w, r)
+	}
+
 	ws := workspaceByID(wss, r.o.ws.ID)
 	if ws == nil {
 		return workspaceGone(r)
@@ -1364,20 +1515,34 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 	return in.next(ctx, w, r)
 }
 
-// landed reports whether finish marked the task's branch: its base's code
-// is in the default branch and not yet in this one.
-func (in *driveInput) landed(ctx context.Context, r *driveRun) bool {
-	return gitx.Out(ctx, in.main, "config", "--get", "branch."+r.o.branch+"."+cfgLanded) != ""
+// marked reports whether the task's branch is marked for a catchup.
+func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
+	return in.mark(ctx, r) != ""
+}
+
+// mark is the key the branch is marked with, or "": f10-landed when its
+// base's code is in the default branch and not yet in this one, else
+// f10-base-moved when its base branch moved past it.
+func (in *driveInput) mark(ctx context.Context, r *driveRun) string {
+	for _, key := range []string{cfgLanded, cfgMoved} {
+		if gitx.Out(ctx, in.main, "config", "--get", "branch."+r.o.branch+"."+key) != "" {
+			return key
+		}
+	}
+
+	return ""
 }
 
 // unsettled says why a catchup that ended without a stop did not bring the
 // branch up to date, or "" when it did. Catchup owns no phase, so its
-// success is read from git: the landed mark gone, which catchup clears only
-// once verify is green, no merge or rebase left open, and a clean tree.
+// success is read from git: the mark gone, which catchup clears only once
+// verify is green, no merge or rebase left open, and a clean tree.
 func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
+	if key := in.mark(ctx, r); key != "" {
+		return "the branch is still marked " + key
+	}
+
 	switch {
-	case in.landed(ctx, r):
-		return "the branch is still marked " + cfgLanded
 	case gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "MERGE_HEAD") != "":
 		return "a merge is still in progress in " + r.o.path
 	case gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "REBASE_HEAD") != "":

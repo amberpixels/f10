@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1329,5 +1330,211 @@ func TestFinishClosedPRNamesLocal(t *testing.T) {
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "--local") {
 		t.Fatalf("err = %v, want the closed PR refused, naming --local", err)
+	}
+}
+
+// noPull scripts a branch never pushed: the host has no request for it and
+// origin no copy, and main is two commits behind nothing, so the merge is
+// built in memory on main's head.
+func (fx *finishFixture) noPull() {
+	fx.f.fail(ghView, shell.Result{Code: 1, Stderr: `no pull requests found for branch "GH-1"`})
+	fx.f.script(lsRem, "")
+	fx.f.script("git config --get branch.GH-1.merge", "")
+	fx.f.script("git rev-parse -q --verify refs/heads/main", "m0")
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m0")
+	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "t1")
+	fx.f.script("git merge-tree --write-tree m0 refs/heads/GH-1", "tr33\n")
+	fx.f.script("git rev-parse m0^{tree}", "old7ree")
+	fx.f.script("git log --reverse --format=%s m0..refs/heads/GH-1", "first\nsecond")
+}
+
+// A branch never pushed, with no PR, is squashed into the local default
+// branch by the declared method: the commit is built on main's head, main
+// fast-forwards to it, dependents are released, and nothing is pushed,
+// pulled or deleted on origin.
+func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
+	for _, onDefault := range []bool{true, false} {
+		t.Run(fmt.Sprintf("onDefault=%v", onDefault), func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.noPull()
+			fx.in.method = "squash"
+			fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+			fx.f.script("git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second", "s9")
+			fx.f.script("git merge --ff-only s9", "")
+			fx.f.script("git update-ref refs/heads/main s9 m0", "")
+
+			advance := "git merge --ff-only s9"
+			if !onDefault {
+				fx.f.script(curBr, "elsewhere")
+				advance = "git update-ref refs/heads/main s9 m0"
+			}
+
+			out, err := fx.run(t)
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			for _, want := range []string{"merge:", "s9", "merged into main here, nothing pushed", "no PR closes GH-1"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("report lacks %q:\n%s", want, out)
+				}
+			}
+
+			if strings.Contains(out, "pr:") {
+				t.Errorf("the report names a PR:\n%s", out)
+			}
+
+			if !fx.f.called(advance) {
+				t.Errorf("%q did not run: %q", advance, fx.f.calls)
+			}
+
+			for _, never := range []string{"git push", "git pull", "gh pr merge", ghDel, dropRemoteRef, "git fetch"} {
+				if fx.f.called(never) {
+					t.Errorf("%q ran on a local finish", never)
+				}
+			}
+
+			for _, step := range []string{cfgDeps, "git worktree remove " + fx.wt, "git branch -D GH-1"} {
+				if !fx.f.called(step) {
+					t.Errorf("%q did not run", step)
+				}
+			}
+		})
+	}
+}
+
+// The merge and rebase methods land a branch never pushed too: a merge
+// commit with both parents, a fast-forward to the branch's own head.
+func TestFinishLandsANeverPushedBranchByMethod(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.in.method = "merge"
+	fx.f.script("git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1'", "mm")
+	fx.f.script("git merge --ff-only mm", "")
+
+	if out, err := fx.run(t); err != nil || !strings.Contains(out, "mm") {
+		t.Fatalf("merge: %v\n%s", err, out)
+	}
+
+	fx = newFinishFixture(t)
+	fx.noPull()
+	fx.in.method = "rebase"
+	fx.f.script("git merge-base --is-ancestor m0 refs/heads/GH-1", "")
+	fx.f.script("git merge --ff-only t1", "")
+
+	if out, err := fx.run(t); err != nil || !strings.Contains(out, "t1") {
+		t.Fatalf("rebase: %v\n%s", err, out)
+	}
+
+	if fx.f.called("git commit-tree") {
+		t.Error("a fast-forward wrote a commit")
+	}
+}
+
+// A branch never pushed that conflicts with the default branch, or is
+// behind it under the rebase method, is refused with nothing changed and
+// the catchup named; one already in the default branch lands nothing.
+func TestFinishRefusesANeverPushedBranchItCannotLand(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.f.fail("git merge-tree --write-tree m0 refs/heads/GH-1", shell.Result{Code: 1})
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "conflicts with main: run /f10:catchup") {
+		t.Fatalf("conflict: err = %v", err)
+	}
+
+	fx = newFinishFixture(t)
+	fx.noPull()
+	fx.in.method = "rebase"
+	fx.f.fail("git merge-base --is-ancestor m0 refs/heads/GH-1", shell.Result{Code: 1})
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "lands only a fast-forward") {
+		t.Fatalf("behind: err = %v", err)
+	}
+
+	for _, never := range []string{"git commit-tree", "git update-ref refs/heads/main", "git merge --ff-only", "git worktree remove"} {
+		if fx.f.called(never) {
+			t.Errorf("%q ran on a refusal", never)
+		}
+	}
+
+	fx = newFinishFixture(t)
+	fx.noPull()
+	fx.f.script("git rev-parse m0^{tree}", "tr33")
+
+	out, err := fx.run(t)
+	if err != nil || !strings.Contains(out, "GH-1 was already in main") || fx.f.called("git commit-tree") {
+		t.Fatalf("rerun: %v\n%s", err, out)
+	}
+}
+
+// A pushed branch with no PR stays a refusal, naming both ways out.
+func TestFinishRefusesAPushedBranchWithoutAPR(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.fail(ghView, shell.Result{Code: 1, Stderr: `no pull requests found for branch "GH-1"`})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "origin has GH-1 with no PR: open one, or delete origin's copy") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// A local default branch that only lags origin's is not the merge's parent:
+// the squash is built on origin's head, so origin's commits stay out of it,
+// and main fast-forwards past them. Diverged is refused.
+func TestFinishLandsANeverPushedBranchOnOriginsHead(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.in.method = "squash"
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o1")
+	fx.f.fail("git merge-base --is-ancestor o1 m0", shell.Result{Code: 1})
+	fx.f.script("git merge-base --is-ancestor m0 o1", "")
+	fx.f.script("git merge-tree --write-tree o1 refs/heads/GH-1", "tr33")
+	fx.f.script("git rev-parse o1^{tree}", "o7ree")
+	fx.f.script("git log --reverse --format=%s o1..refs/heads/GH-1", "only")
+	fx.f.script("git commit-tree tr33 -p o1 -m only", "s9")
+	fx.f.script("git merge --ff-only s9", "")
+
+	if out, err := fx.run(t); err != nil || !strings.Contains(out, "s9") {
+		t.Fatalf("behind: %v\n%s", err, out)
+	}
+
+	fx = newFinishFixture(t)
+	fx.noPull()
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o1")
+	fx.f.fail("git merge-base --is-ancestor o1 m0", shell.Result{Code: 1})
+	fx.f.fail("git merge-base --is-ancestor m0 o1", shell.Result{Code: 1})
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "main and origin/main have diverged") {
+		t.Fatalf("diverged: err = %v", err)
+	}
+
+	if fx.f.called("git commit-tree") || fx.f.called("git worktree remove") {
+		t.Error("a diverged main was merged into")
+	}
+}
+
+// --local merges nothing, so a branch with no PR stays the old refusal, and
+// so does one tracking an upstream origin lacks, which may be a request the
+// host merged and no longer lists by branch.
+func TestFinishKeepsTheRefusalWhenNeverPushedIsNotProven(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.in.local = true
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "no pull requests found") {
+		t.Fatalf("--local: err = %v", err)
+	}
+
+	fx = newFinishFixture(t)
+	fx.noPull()
+	fx.f.script("git config --get branch.GH-1.merge", "refs/heads/GH-1")
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "tracks a branch origin no longer has") {
+		t.Fatalf("upstream: err = %v", err)
+	}
+
+	if fx.f.called("git commit-tree") || fx.f.called("git merge-tree") {
+		t.Error("a branch not proven unpushed was merged")
 	}
 }

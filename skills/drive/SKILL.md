@@ -1,13 +1,13 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each in its own worktree and agent, dependents after their base, pausing only when an agent asks; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [skills...] [--model <model>]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through a chain of skills from this session, each in its own worktree and agent, dependents once their base has a commit, pausing only when an agent asks; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [skills...] [--model <model>]\", or asks to run several tasks through plan, judge, ship, review, resolve and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "<id>... [plan|judge|ship|review|resolve|finish ...]"
 ---
 
 # f10 · drive
 
-Run tasks through a chain from here: `f10 drive` opens each task as `f10 start` does, dependents after their base, and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
+Run tasks through a chain from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
 `--model` picks every agent's model, `<id>:<model>` one task's, which wins.
 A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
 This skill expands parents, runs the command, relays its questions and prints its report; it runs no step.
