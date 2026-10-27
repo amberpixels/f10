@@ -41,6 +41,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		onTick: map[int]func(){},
 	}
 	fx.f.has["wt"] = true
+	// no base branch has a commit or a head until a test says so
+	fx.f.absent = append(fx.f.absent, "git rev-list --count ", "git rev-parse -q --verify refs/heads/")
 
 	a, err := parseDriveArgs(args)
 	if err != nil {
@@ -103,7 +105,7 @@ func (fx *driveFixture) task(id string, info taskInfo, branches string) {
 	fx.f.script(refsKey("refs/heads/", id), branches)
 	fx.f.script(refsKey("refs/remotes/origin/", id), "")
 
-	for _, key := range []string{cfgDrive, cfgAfter, cfgLanded} {
+	for _, key := range []string{cfgDrive, cfgAfter, cfgAfterBranch, cfgLanded, cfgMoved} {
 		fx.f.script("git config --get branch."+id+"."+key, "")
 	}
 }
@@ -403,6 +405,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge")
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
+	fx.f.script(headRef, "origin/main") // GH-1 has no commit, so GH-2 waits
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, false), "{}")
@@ -1636,5 +1639,261 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 
 	if want := []string{"", finishLocal, ""}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("finish was passed %q, want %q", got, want)
+	}
+}
+
+// chained is the fixture for GH-2 after GH-1, GH-2's branch already
+// recording it, with GH-1's branch one commit past main so GH-2 opens as
+// soon as GH-1 has.
+func chained(t *testing.T, args ...string) *driveFixture {
+	t.Helper()
+
+	fx := newDriveFixture(t, args...)
+	fx.task("GH-1", taskInfo{body: "base"}, "")
+	fx.task("GH-2", taskInfo{body: "dependent"}, heads("GH-2"))
+	fx.f.script("git config --get branch.GH-2."+cfgAfter, "GH-1")
+	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
+	fx.f.script(headRef, "origin/main")
+	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "1")
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.opens("GH-2", "ws:GH-2", "pane:2")
+
+	return fx
+}
+
+// A dependent opens once its base's branch has a commit, while the base is
+// still in judge, and its finish waits until the base finished.
+func TestDriveStartsADependentAtItsBasesFirstCommit(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "judge", "finish")
+	fx.expects("GH-1", "judge")
+	fx.expects("GH-2", "judge")
+	fx.mergeable("GH-1", "GH-2")
+
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
+
+		return nil
+	}
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"), // GH-1's open and the look before its judge
+		unopened, all("idle", "GH-1", "GH-2"), // GH-2's, in the same pass
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // GH-2's judge ends first
+		all("idle", "GH-1", "GH-2"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	fx.assertOrder(t, []string{
+		agentOf("GH-1") + " /f10:judge",
+		agentOf("GH-2") + " /f10:judge",
+		"finish GH-1",
+		"finish GH-2",
+	}, "herdr agent prompt", "finish")
+
+	out := fx.out.String()
+	for _, want := range []string{"GH-2 finish: waiting for GH-1 to finish", "GH-1:    finished", "GH-2:    finished"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// A base whose branch has no commit holds its dependent, and a base that
+// halts before one leaves it unopened.
+func TestDriveHoldsADependentUntilItsBaseCommits(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "judge")
+	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, unopened, all("idle", "GH-1"), all("working", "GH-1"), all("idle", "GH-1"))
+	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
+
+	if err := fx.drive(t); exitCode(err) != exitHalted {
+		t.Fatalf("err = %v\n%s", err, fx.out.String())
+	}
+
+	if fx.f.called("herdr agent prompt " + agentOf("GH-2")) {
+		t.Errorf("GH-2 was prompted before GH-1 had a commit: %q", fx.f.calls)
+	}
+
+	if !strings.Contains(fx.out.String(), "GH-2:    halted: base GH-1 halted") {
+		t.Errorf("GH-2's row is wrong:\n%s", fx.out.String())
+	}
+}
+
+// A base that halts after its dependent started halts the dependent at its
+// next boundary, and the dependent's next skill is never sent.
+func TestDriveHaltsADependentWhenItsBaseHaltsAfterRelease(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "judge", "ship")
+	fx.expects("GH-1", "judge")
+	fx.expects("GH-2", "judge")
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"),
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "idle", "GH-2", "working"), // GH-1 stops on its judge
+		all("idle", "GH-1", "GH-2"))
+	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
+
+	if err := fx.drive(t); exitCode(err) != exitHalted {
+		t.Fatalf("err = %v\n%s", err, fx.out.String())
+	}
+
+	out := fx.out.String()
+	for _, want := range []string{
+		"GH-1:    halted at judge",
+		"GH-2:    halted: base GH-1 halted",
+		"GH-2 halted before ship: base GH-1 halted, its work stays on GH-2",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+
+	if fx.f.called("herdr agent prompt " + agentOf("GH-2") + " /f10:ship") {
+		t.Error("GH-2's ship was sent after its base halted")
+	}
+}
+
+// A base branch that moves while the base agent is idle marks the
+// dependent, which catches up before its next skill; once its branch holds
+// the base's head nothing is marked again.
+func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "judge", "ship")
+
+	for _, id := range []string{"GH-1", "GH-2"} {
+		fx.expects(id, "judge")
+		fx.expects(id, "ship")
+	}
+
+	moved := "git config --get branch.GH-2." + cfgMoved
+	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "b2")
+	fx.f.answers["git merge-base --is-ancestor b2 refs/heads/GH-2"] = []shell.Result{{Code: 1}, {}}
+	fx.f.script("git config branch.GH-2."+cfgMoved+" b2", "")
+	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" /f10:catchup --driven", "{}")
+	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
+	fx.f.script("git status --porcelain", "")
+	fx.onTick[3] = func() { fx.f.script(moved, "b2") } // what the drive set
+	fx.onTick[4] = func() { fx.f.script(moved, "") }   // the catchup cleared it
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"),
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "idle", "GH-2", "working"), // GH-1's judge ends: it is idle, and its branch moved
+		listing("GH-1", "idle", "GH-2", "working"), // the look before GH-1's ship
+		listing("GH-1", "working", "GH-2", "idle"), // GH-2's judge ends
+		listing("GH-1", "working", "GH-2", "idle"), // the look before its catchup
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // the catchup ends
+		listing("GH-1", "working", "GH-2", "idle"), // the look before GH-2's ship
+		listing("GH-1", "idle", "GH-2", "working"),
+		all("idle", "GH-1", "GH-2"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	fx.assertOrder(t, []string{
+		"herdr agent prompt " + agentOf("GH-2") + " /f10:judge",
+		"git config branch.GH-2." + cfgMoved + " b2",
+		"herdr agent prompt " + agentOf("GH-2") + " /f10:catchup --driven",
+		"herdr agent prompt " + agentOf("GH-2") + " /f10:ship",
+	}, "herdr agent prompt "+agentOf("GH-2"), "git config branch.GH-2."+cfgMoved)
+
+	if n := strings.Count(strings.Join(fx.f.calls, "\n"), "git config branch.GH-2."+cfgMoved+" "); n != 1 {
+		t.Errorf("marked %d times, want once", n)
+	}
+
+	if !strings.Contains(fx.out.String(), "GH-2:    done: judge ship") {
+		t.Errorf("GH-2 did not finish its chain:\n%s", fx.out.String())
+	}
+}
+
+// A stacked base counts its commits from its own base's branch, and from
+// the default branch once that one is gone.
+func TestDriveReleasedCountsFromTheBasesForkPoint(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	fx.f.script(headRef, "origin/main")
+	b := &driveRun{opened: true, o: openedTask{branch: "GH-2"}}
+
+	fx.f.script("git config --get branch.GH-2."+cfgAfterBranch, "GH-1")
+	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1")
+	fx.f.script("git rev-list --count refs/heads/GH-1..refs/heads/GH-2", "0")
+	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-2", "3")
+
+	if fx.in.released(t.Context(), b) {
+		t.Error("released with no commit past its own base's branch")
+	}
+
+	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "")
+
+	if !fx.in.released(t.Context(), b) {
+		t.Error("not released once its base's branch is gone and main is behind it")
+	}
+
+	b.end = &driveResult{code: exitHalted}
+
+	if fx.in.released(t.Context(), b) {
+		t.Error("a halted base released its dependent")
+	}
+}
+
+// A branch origin does not have is tried against the local default branch
+// before finish, which merges it here: clean goes straight to finish, a
+// conflict is marked landed and caught up first.
+func TestDriveFinishesABranchNeverPushed(t *testing.T) {
+	for _, clean := range []bool{true, false} {
+		t.Run(fmt.Sprintf("clean=%v", clean), func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "finish")
+			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
+			fx.opens("GH-1", "ws:GH-1", "pane:1")
+			fx.f.script(headRef, "origin/main")
+			fx.f.script("git fetch origin", "")
+			fx.f.script("git rev-parse -q --verify origin/GH-1", "")
+			fx.f.script(wsList, unopened, listing("GH-1", "idle"))
+
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
+
+				return nil
+			}
+
+			if !clean {
+				fx.f.fail("git merge-tree --write-tree refs/heads/main refs/heads/GH-1", shell.Result{Code: 1})
+				fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
+				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main")
+				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
+				fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+				fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
+				fx.f.script("git status --porcelain", "")
+				fx.f.script(wsList,
+					unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+			} else {
+				fx.f.script("git merge-tree --write-tree refs/heads/main refs/heads/GH-1", "tree")
+			}
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if clean {
+				if err != nil || !fx.f.called("finish GH-1") || fx.f.called("git push") {
+					t.Fatalf("err = %v, calls %q\n%s", err, fx.f.calls, out)
+				}
+
+				return
+			}
+
+			// the catchup left the mark, so the task halts rather than merging
+			if exitCode(err) != exitHalted || fx.f.called("finish GH-1") ||
+				!strings.Contains(out, "conflicts with refs/heads/main, catching up first") {
+				t.Fatalf("err = %v\n%s", err, out)
+			}
+		})
 	}
 }

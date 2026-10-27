@@ -59,7 +59,7 @@ Run the **catchup** step's points 2 and 3, with three differences:
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
 - **A conflict fails the run**: abort so the tree is unchanged, keep any mark, and name `/f10:catchup` in the `next` row.
-- **`f10-landed`** is unset once the integration is clean; implement's verify covers it.
+- **`f10-landed`** and **`f10-base-moved`** are unset once the integration is clean; implement's verify covers them.
 
 Run the pipeline's steps **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.

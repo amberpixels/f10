@@ -36,7 +36,7 @@ import (
 func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "finish",
-		Usage:     "finish a task: merge its PR, archive the plan, remove the worktree, close the workspace, pull main",
+		Usage:     "finish a task: merge its PR (or a branch never pushed, here), archive the plan, remove the worktree, close the workspace, pull main",
 		ArgsUsage: "<task-id>[-suffix] | <any id of a bundle>",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -134,6 +134,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		merge:     cmd.Bool("merge"),
 		local:     cmd.Bool("local"),
 		plansDir:  t.sharedPlansDir(),
+		title:     titleLookup(t, r.Number),
 		close:     closing,
 	})
 
@@ -176,6 +177,8 @@ type finishInput struct {
 	merge     bool   // merge the PR even when someone else opened it
 	local     bool   // leave the PR open and clean up only what is here
 	plansDir  string // the plans dir every worktree shares, or "" when each keeps its own under .f10/plans
+	// title reads the task's title for a squash merged here, nil for none
+	title func(context.Context) (string, error)
 	// close is a bundle's riders the PR delivers, closed with the lead; nil
 	// until --close answers, which a bundle's merge refuses to go without
 	close []string
@@ -183,6 +186,8 @@ type finishInput struct {
 
 // finish runs the flow: branch, worktree, the refusals, the merge, the
 // pull, the dependents, the plan, the report, the removal, the workspace.
+// A branch never pushed, with no request, is merged into the default branch
+// here instead, and nothing is pulled or pushed.
 // The report is printed before anything local goes, and the workspace
 // closes last: on the self-close path the close ends this process, so
 // everything that must happen has happened by then. With the branch checked
@@ -223,13 +228,18 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	p, err := in.host.pull(ctx, name)
+
+	local, err := neverPushed(ctx, in.main, name, err)
 	if err != nil {
 		return err
 	}
 
-	leave, err := in.leaveOpen(ctx, p)
-	if err != nil {
-		return err
+	var leave bool
+
+	if !local {
+		if leave, err = in.leaveOpen(ctx, p); err != nil {
+			return err
+		}
 	}
 
 	var (
@@ -237,6 +247,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		notes []string
 		ended = p.url() + " merged"
 	)
+
+	if local {
+		ended = name + " merged into " + def
+	}
 
 	if leave {
 		if err := refuseUnpushed(ctx, in.main, name); err != nil {
@@ -255,27 +269,41 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 				return ridersError{task: in.task}
 			}
 
-			if riderNotes, err = settleRiders(ctx, in, name, p.status() == pullMerged); err != nil {
-				return err
+			if !local {
+				if riderNotes, err = settleRiders(ctx, in, name, p.status() == pullMerged); err != nil {
+					return err
+				}
 			}
 		}
 
-		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
-			return err
-		}
+		var sha string
 
-		notes = append(notes, riderNotes...)
+		if local {
+			if sha, notes, err = landLocal(ctx, in, name, def); err != nil {
+				return err
+			}
 
-		// on main, the default branch is checked out nowhere, so pullMain fetches
-		// into it and main stays on the task's branch until the end: a failure
-		// before then leaves a rerun the same shape to find
-		note, err := pullMain(ctx, in.main, def, p.sha())
-		if err != nil {
-			return err
-		}
+			notes = append(notes, unclosedNote(in))
+		} else {
+			if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
+				return err
+			}
 
-		if !onMain {
-			notes = appendNote(notes, note)
+			notes = append(notes, riderNotes...)
+
+			// on main, the default branch is checked out nowhere, so pullMain fetches
+			// into it and main stays on the task's branch until the end: a failure
+			// before then leaves a rerun the same shape to find
+			note, err := pullMain(ctx, in.main, def, p.sha())
+			if err != nil {
+				return err
+			}
+
+			if !onMain {
+				notes = appendNote(notes, note)
+			}
+
+			sha = p.sha()
 		}
 
 		released, err := releaseDependents(ctx, in.main, name, def)
@@ -285,14 +313,15 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		notes = append(notes, released...)
 
-		rows = []fact{
-			{label: "task", value: in.task.Label()},
-			{label: "pr", value: p.url(), url: true},
-			{label: "merge", value: p.sha()},
+		rows = []fact{{label: "task", value: in.task.Label()}}
+		if !local {
+			rows = append(rows, fact{label: "pr", value: p.url(), url: true})
 		}
 
+		rows = append(rows, fact{label: "merge", value: sha})
+
 		// a tracker that is not the host closes nothing on merge
-		if len(in.close) > 0 && in.driver == nil {
+		if len(in.close) > 0 && in.driver == nil && !local {
 			rows = append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
 		}
 	}

@@ -84,6 +84,7 @@ const (
 	cfgAfter       = ref.AfterKey
 	cfgAfterBranch = ref.AfterBranchKey
 	cfgLanded      = ref.LandedKey
+	cfgMoved       = ref.MovedKey
 	cfgModel       = ref.ModelKey
 	// cfgTaskID links a branch whose name need not carry the id to its task
 	cfgTaskID = ref.TaskKey

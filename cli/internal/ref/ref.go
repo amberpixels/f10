@@ -44,11 +44,14 @@ const RidersKey = "f10-tasks"
 // The keys `f10 start --after` writes beside TaskKey: the base task's id
 // and its bare branch name. Once the base merges, finish clears both and
 // sets LandedKey to the base's id, so the next step brings the default
-// branch in first.
+// branch in first. MovedKey is `f10 drive`'s: the base branch's head when
+// it moved past the dependent, so the dependent catches up with it next;
+// catchup clears it, as it clears LandedKey.
 const (
 	AfterKey       = "f10-after"
 	AfterBranchKey = "f10-after-branch"
 	LandedKey      = "f10-landed"
+	MovedKey       = "f10-base-moved"
 )
 
 // ModelKey records the model `f10 start --model` gave the branch's agent,
