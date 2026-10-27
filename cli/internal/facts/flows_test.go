@@ -211,3 +211,20 @@ func TestMigrateLegacyBlock(t *testing.T) {
 		t.Errorf("paren = %+v, %v", paren, err)
 	}
 }
+
+// A block with no old keys but a prose Ship pipeline(s) section, which
+// config warns about, migrates: the block gains flows and the section is
+// named for deletion.
+func TestMigrateProseUnderABlock(t *testing.T) {
+	file := "---\nmerge_method: squash\n---\n# demo\n\n## Ship pipelines\n\n- **default**: `implement → pr`\n"
+
+	m, err := Migrate([]byte(file), "project.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(m.Content, "flows:\n  default: plan judge implement pr review:local\ndrive_finish: on\n") ||
+		strings.Join(m.Superseded, ",") != "flows: the Ship pipeline(s) section" {
+		t.Errorf("migration = %+v", m)
+	}
+}

@@ -24,7 +24,7 @@ Deploy has its own confirmation (the **deploy** step).
 - A **task id** (project id format / id / url), or a **bundle** joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
   Found: reuse it, never asking; a task with a plan file never plans again, and replanning is `/f10:plan <id>` by hand.
-  Missing: run the **plan** step when the flow leads with `plan`; a **planless** flow (below) never runs it, and the fetch brief becomes the inline plan.
+  Missing: run the **plan** step when the flow leads with `plan` (with `flow_by_area`, start and drive leave planning to ship); a **planless** flow (below) never runs it, and the fetch brief becomes the inline plan.
   Then the flow.
 - A **free-text description**: the **capture**, **fetch** and **plan** steps, then the flow.
 - Extra text beside the subject is steering.

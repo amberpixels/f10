@@ -780,7 +780,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 		// the flow is the branch's fact from here on: status lists its gates,
 		// and a rerun of drive keeps it
-		if !in.flowKept {
+		if !in.flowKept && in.flow.recorded() != "" {
 			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgFlow, in.flow.recorded()); err != nil {
 				notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
 			}
@@ -1145,7 +1145,7 @@ func prompt(mode string, fl shipFlow, id string, dep *dependency, plan string, p
 	switch {
 	case mode == modePlan:
 		p = "/f10:plan " + id
-	case plan != "" || fl.planless:
+	case plan != "" || !fl.plans():
 		p = "/f10:ship " + fl.word() + id
 	default:
 		p = fmt.Sprintf("/f10:plan %s && /f10:ship %s%s", id, fl.word(), id)

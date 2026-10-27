@@ -606,22 +606,19 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 		chain    []string
 		plan     string
 		recorded string
-		planless bool
 		want     int
 	}{
 		{name: "plan in the chain", chain: []string{"plan", "judge", "ship"}, plan: "/p/GH-1.md", want: 1},
 		{name: "no plan saved", chain: []string{"plan", "judge", "ship"}, want: 0},
 		{name: "no plan in the chain", chain: []string{"judge", "ship"}, plan: "/p/GH-1.md", want: 0},
 		{name: "recorded skill wins", chain: []string{"plan", "judge", "ship"}, plan: "/p/GH-1.md", recorded: "judge", want: 2},
-		{name: "a planless flow kept from the branch", chain: []string{"plan", "ship"}, planless: true, want: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1")
-			fx.in.chain = tc.chain
 			fx.f.script("git config --get branch.GH-1."+cfgDrive, tc.recorded)
 
 			pos, err := fx.in.position(t.Context(), openedTask{branch: "GH-1", path: "/code/repo.GH-1", plan: tc.plan},
-				shipFlow{planless: tc.planless})
+				tc.chain)
 			if err != nil || pos != tc.want {
 				t.Errorf("position = %d, %v; want %d", pos, err, tc.want)
 			}

@@ -242,7 +242,7 @@ flow_by_area:
 A flow the user names still wins; a task whose areas map to nothing ships through `default`.
 Each value must name a declared flow.
 Never map an area to a flow with `push`: `push` runs only in a flow the user picked.
-`f10 start` and `f10 drive` send `/f10:ship` without a flow for `default`, so ship applies the map there too.
+With the map declared and no flow named, `f10 start` and `f10 drive` send `/f10:ship <id>` alone and record no flow on the branch: ship picks the flow from the task's area and plans as that flow says.
 
 The keys flows replaces still read, converted with a warning: `pipelines` (each becomes a flow led by `plan`), `planless` (those flows drop `plan`), `pipeline_by_area` (read as `flow_by_area`) and `drive_chain` (its `judge` before `ship` goes after `plan` in `default`, its `review` after `ship` is appended to `default` unless that already reviews, and a trailing `finish` turns `drive_finish` on).
 The old entry form `review (local)` reads as `review:local`, with a warning.
