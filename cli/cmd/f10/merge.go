@@ -209,13 +209,16 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 	return h.pull(ctx, branch)
 }
 
-// stackedPulls reads the open requests whose base is branch.
+// stackedPulls reads the open requests whose base is branch, past both
+// CLIs' default page of 30: one left out would be closed by the delete.
 func (h host) stackedPulls(ctx context.Context, branch string) ([]pull, error) {
 	var ps []pull
 
+	gh := []string{"pr", "list", "--base", branch, "--state", "open", "--limit", "1000"}
+
 	err := h.Decode(ctx, &ps, h.Pick(
-		[]string{"pr", "list", "--base", branch, "--state", "open", "--json", "number,url,headRefName"},
-		[]string{"mr", "list", "--target-branch", branch, "-F", "json"},
+		append(gh, "--json", "number,url,headRefName"),
+		[]string{"mr", "list", "--target-branch", branch, "--per-page", "100", "-F", "json"},
 	)...)
 
 	return ps, err

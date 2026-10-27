@@ -31,7 +31,7 @@ const (
 	ghRepo  = "gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
-	ghStack = "gh pr list --base GH-1 --state open --json number,url,headRefName"
+	ghStack = "gh pr list --base GH-1 --state open --limit 1000 --json number,url,headRefName"
 	cfgDeps = `git config --get-regexp ^branch\..*\.f10-after-branch$`
 	lsRem   = "git ls-remote --heads origin GH-1"
 	// finish drops the local copy of origin's branch along with the branch
@@ -595,6 +595,45 @@ func TestFinishKeepsBranchWhenRetargetFails(t *testing.T) {
 	}
 }
 
+// A failed retarget after a successful one names the one already moved,
+// since the error is all the run prints.
+func TestFinishNamesRetargetsBeforeAFailure(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script(ghStack, `[{"number":12,"url":"https://gh/pr/12"},{"number":13,"url":"https://gh/pr/13"}]`)
+	fx.f.script("gh pr edit 12 --base main", "")
+	fx.f.fail("gh pr edit 13 --base main", shell.Result{Code: 1, Stderr: "GraphQL: Resource not accessible"})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "already retargeted: https://gh/pr/12") {
+		t.Fatalf("err = %v, want it to name the PR already moved", err)
+	}
+
+	if fx.f.called(ghDel) {
+		t.Error("the branch was deleted after a failed retarget")
+	}
+}
+
+// A listing the host refuses keeps the branch too: an unlisted stacked PR
+// would be closed by the delete.
+func TestFinishKeepsBranchWhenListingFails(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.fail(ghStack, shell.Result{Code: 1, Stderr: "HTTP 502"})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "listing the requests based on GH-1 failed") ||
+		!strings.Contains(err.Error(), "origin/GH-1 is left in place") {
+		t.Fatalf("err = %v, want the listing failure with the branch kept", err)
+	}
+
+	for _, p := range []string{ghDel, dropRemoteRef, "git worktree remove", "git branch -D"} {
+		if fx.f.called(p) {
+			t.Errorf("%q ran after the listing failed", p)
+		}
+	}
+}
+
 // A rerun on a PR already merged retargets what the branch still holds.
 func TestFinishRetargetsAfterEarlierMerge(t *testing.T) {
 	fx := newFinishFixture(t)
@@ -621,7 +660,7 @@ func TestFinishRetargetsStackedMRsOnGitLab(t *testing.T) {
 		`{"state":"merged","web_url":"https://gl/mr/4","iid":4,"target_branch":"main","squash_commit_sha":"m3rge"}`,
 	)
 	fx.f.script(
-		"glab mr list --target-branch GH-1 -F json",
+		"glab mr list --target-branch GH-1 --per-page 100 -F json",
 		`[{"iid":7,"web_url":"https://gl/mr/7","source_branch":"GH-2/next"}]`,
 	)
 	fx.f.script("glab mr update 7 --target-branch main", "")
