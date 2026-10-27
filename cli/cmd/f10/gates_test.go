@@ -132,13 +132,26 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 		"review": "local: round 1 running (in ship) · remote: round 1 running (in ship)",
 	})
 
-	// the local reviewer wrote its findings; the CI review has not landed
+	// the local reviewer wrote its findings; the CI review has not landed, so
+	// nothing is resolving yet
 	local := taskGates(context.Background(), gateInput{
 		task: "FT-1", run: run, events: events, now: at(5),
 		outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4)},
 	})
 	checkTexts(t, local, map[string]string{
-		"review": "local: resolve running (in ship) · remote: round 1 running (in ship)",
+		"review": "local: round 1 in, waiting for the other half (in ship) · remote: round 1 running (in ship)",
+	})
+
+	// both halves landed: the one resolve settles them
+	both := taskGates(context.Background(), gateInput{
+		task: "FT-1", run: run, events: events, now: at(6),
+		outcomes: outcomes{
+			local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4),
+			remote: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, remoteAt: at(5),
+		},
+	})
+	checkTexts(t, both, map[string]string{
+		"review": "local: resolve running (in ship) · remote: resolve running (in ship)",
 	})
 
 	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Pipeline: pipeline}
