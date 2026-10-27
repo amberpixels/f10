@@ -62,6 +62,7 @@ func TestSchemaMatchesTypes(t *testing.T) {
 		"Who": reflect.TypeFor[Who](), "Where": reflect.TypeFor[Where](), "PRRef": reflect.TypeFor[PRRef](),
 		"ReviewFacts": reflect.TypeFor[ReviewFacts](), "Next": reflect.TypeFor[Next](),
 		"Feed": reflect.TypeFor[Feed](), "FeedRow": reflect.TypeFor[FeedRow](), "Quiet": reflect.TypeFor[Quiet](),
+		"RelatedPR": reflect.TypeFor[RelatedPR](),
 	} {
 		def, ok := s.Defs[name]
 		if !ok {

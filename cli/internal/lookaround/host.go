@@ -112,9 +112,9 @@ func readPull(ctx context.Context, in Inputs, p forge.PR, branches map[string]bo
 }
 
 // collectActivity reads what the repository did since the window's start
-// in one query, then, for the requests opened in it that name a task, the
-// task's other requests in one more: a follow-up is told from a first
-// request by those. Nothing else is read per request.
+// in one query, then, for the requests opened, merged or closed in it
+// that name a task, the task's other requests in one more: how a task's
+// requests relate is told by those. Nothing else is read per request.
 func collectActivity(ctx context.Context, in Inputs) (*forge.Activity, map[string][]forge.PR, []string, error) {
 	a, err := in.Host.Activity(ctx, in.Since)
 	if err != nil {
@@ -124,7 +124,7 @@ func collectActivity(ctx context.Context, in Inputs) (*forge.Activity, map[strin
 	var ids []string
 
 	for _, t := range a.Requests {
-		if t.CreatedAt.Before(in.Since) {
+		if t.CreatedAt.Before(in.Since) && t.MergedAt.Before(in.Since) && t.ClosedAt.Before(in.Since) {
 			continue
 		}
 

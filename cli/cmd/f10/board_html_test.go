@@ -105,7 +105,8 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 	boards["edges"] = edges
 
 	// the feed's shapes the recorded ones lack: a local-only checkout, a
-	// span over several days, a follow-up, an abandoned request, a move owed
+	// span over several days, a task in two parts, an abandoned request, a
+	// move owed
 	feed := empty
 	feed.View = lookaround.ViewFeed
 	feed.Project.LocalOnly = true
@@ -122,11 +123,14 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 		Quiet: lookaround.Quiet{Count: 1},
 		Rows: []lookaround.FeedRow{
 			{
-				Group: lookaround.GroupStarted, Key: "FT-2", From: lookaround.FromHost, FollowUpOf: []int{1},
-				PR:      &lookaround.PRRef{Number: 2, Title: "FT-2: again", URL: "https://x.io/pull/2", State: "open"},
+				Group: lookaround.GroupStarted, Key: "FT-2", From: lookaround.FromHost,
+				PR: &lookaround.PRRef{Number: 2, Title: "FT-2: again", URL: "https://x.io/pull/2", State: "open"},
+				Related: []lookaround.RelatedPR{
+					{Number: 1, URL: "https://x.io/pull/1", State: "open", Relation: lookaround.RelationPart},
+				},
 				Who:     lookaround.Who{Author: "ann"},
 				Owes:    "bob",
-				Summary: "second request on FT-2",
+				Summary: "opened",
 			},
 			{
 				Group: lookaround.GroupFinished, Key: "#3", From: lookaround.FromHost, Abandoned: true,
@@ -366,6 +370,31 @@ func TestBoardHTMLRenderDrawsEveryRow(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A row with parts draws them before its own request, each a link,
+// joined by a plus, in the terminal and on the page.
+func TestBoardDrawsParts(t *testing.T) {
+	want := `<a class="pr" href="https://x.io/pull/1" rel="noopener">#1</a> + ` +
+		`<a class="pr" href="https://x.io/pull/2" rel="noopener">#2</a>`
+	if html := renderUnderNode(t)["feed-edges"].HTML; !strings.Contains(html, want) {
+		t.Errorf("%q is not in the markup:\n%s", want, html)
+	}
+
+	b := htmlBoards(t)["feed-edges"]
+
+	var buf bytes.Buffer
+
+	lines := boardLines(b).Rows
+	lay := newBoardLayout(lines, nil, 0)
+
+	for _, l := range lines {
+		lay.line(&buf, l, "")
+	}
+
+	if !strings.Contains(buf.String(), "#1 + #2") {
+		t.Errorf("the terminal draws no parts:\n%s", buf.String())
 	}
 }
 

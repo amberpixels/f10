@@ -94,7 +94,7 @@
   .stage[data-stage="merged-unfinished"] { color: var(--cyan); }
   .stage[data-stage="next"] { color: var(--faint); font-weight: 400; }
   .stage[data-stage="finished"] { color: var(--green); font-weight: 400; }
-  .stage[data-stage="started"], .stage[data-stage="follow-up"] { color: var(--blue); }
+  .stage[data-stage="started"] { color: var(--blue); }
   .stage[data-stage="updated"] { color: var(--yellow); }
   .stage[data-stage="reviewed"] { color: var(--magenta); }
   .stage[data-stage="abandoned"] { color: var(--red); font-weight: 400; }
@@ -114,7 +114,7 @@
 // The renderer draws the Board JSON above and decides no stage or group.
 // model() reduces the board to lines, render() draws them; the terminal
 // renderer builds the same model, and a test holds the two to each other.
-var KNOWN_VERSION = 2;
+var KNOWN_VERSION = 3;
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -178,7 +178,6 @@ function feedLine(r) {
   var w = r.who || {};
   var stage = r.group;
   if (r.abandoned) stage = "abandoned";
-  else if (r.follow_up_of && r.follow_up_of.length) stage = "follow-up";
   else if (r.group === "new-tasks") stage = "new";
   var title = (r.task && r.task.title) || "";
   var url = (r.task && r.task.url) || "";
@@ -188,7 +187,7 @@ function feedLine(r) {
   }
   var next = r.summary || "";
   if (r.owes) next += ", " + r.owes + " owes the next move";
-  return {
+  var line = {
     group: r.group.replace(/-/g, " "),
     key: r.key,
     url: url,
@@ -201,6 +200,9 @@ function feedLine(r) {
     next: next,
     next_command: false
   };
+  var parts = (r.related || []).filter(function (p) { return p.relation === "part"; });
+  if (parts.length) line.parts = parts.map(function (p) { return { number: p.number, url: p.url || "" }; });
+  return line;
 }
 
 function feedModel(board, m) {
@@ -304,7 +306,11 @@ function render(board, m) {
       last = r.group;
     }
     var tail = [];
-    if (r.pr) tail.push(link(r.pr_url, "#" + r.pr, "pr"));
+    if (r.pr) {
+      var prs = (r.parts || []).map(function (p) { return link(p.url, "#" + p.number, "pr"); });
+      prs.push(link(r.pr_url, "#" + r.pr, "pr"));
+      tail.push(prs.join(" + "));
+    }
     if (r.who) tail.push('<span class="who">' + esc(r.who) + "</span>");
     if (r.next) tail.push(r.next_command ? "<code>" + esc(r.next) + "</code>" : '<span class="next">' + esc(r.next) + "</span>");
     out += '<li class="row">' + link(r.url, r.key, "key") +

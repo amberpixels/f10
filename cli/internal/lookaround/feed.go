@@ -12,11 +12,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
-// DeriveFeed turns facts into the feed over the window: one row per
-// request with activity there, in the one group its activity reads as by
-// the rules docs/board.md lists, one per task created there, and the open
-// requests with none counted in the quiet line. Like Derive it reads no
-// clock and does no I/O.
+// DeriveFeed turns facts into the feed over the window: one row per task
+// whose requests had activity there, one per such request naming no task,
+// each in the one group its activity reads as by the rules docs/board.md
+// lists, one per task created there, and the open requests with none
+// counted in the quiet line. Like Derive it reads no clock and does no I/O.
 func DeriveFeed(f Facts, now time.Time, w Window) Board {
 	b := Board{
 		Version:     Version,
@@ -41,9 +41,24 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 	if a := f.Activity; a != nil {
 		b.Feed.Quiet = Quiet{Count: a.QuietCount, Oldest: a.QuietOldest}
 
+		byTask := map[string][]requestRow{}
+
+		var order []string
+
 		for _, t := range a.Requests {
 			if r, ok := feedRow(f, t, w, tasks); ok {
-				b.Feed.Rows = append(b.Feed.Rows, r)
+				if len(membersOf(f.Prefix, feedPR(t))) == 0 {
+					b.Feed.Rows = append(b.Feed.Rows, r)
+
+					continue
+				}
+
+				id := strings.ToUpper(r.Key)
+				if _, seen := byTask[id]; !seen {
+					order = append(order, id)
+				}
+
+				byTask[id] = append(byTask[id], requestRow{r, t})
 
 				continue
 			}
@@ -58,6 +73,10 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 					b.Feed.Quiet.Oldest = t.CreatedAt
 				}
 			}
+		}
+
+		for _, id := range order {
+			b.Feed.Rows = append(b.Feed.Rows, taskRow(f, byTask[id]))
 		}
 	}
 
@@ -248,13 +267,6 @@ func feedRow(f Facts, t forge.Touched, w Window, tasks map[string]*Task) (FeedRo
 		default:
 			r.Summary = "opened"
 		}
-
-		if len(members) > 0 {
-			r.FollowUpOf = earlierOf(f, t, key)
-			if n := len(r.FollowUpOf); n > 0 {
-				r.Summary = ordinal(n+1) + " request on " + key
-			}
-		}
 	case verdict != nil || reviewStepped:
 		r.Group, r.From = GroupReviewed, FromGuessed
 		if reviewStepped {
@@ -332,22 +344,131 @@ func updateSummary(commits, merges, pushes int, base string, steps []string) str
 	return s
 }
 
-// earlierOf is the numbers of the task's other requests opened before
-// this one: in the window, or found by the earlier search, each matched
-// against the id by its branch or title.
-func earlierOf(f Facts, t forge.Touched, id string) []int {
-	var out []int
+// A requestRow is one request with its row, before its task's rows fold.
+type requestRow struct {
+	row FeedRow
+	t   forge.Touched
+}
 
-	// a request closed unmerged was never the task's: only an open or
-	// merged one makes this a follow-up
+// taskRow folds a task's request rows into one: the latest-opened
+// request leads, giving the row its group, request and summary, and every
+// other request of the task opened before it is listed by how it relates
+// (relationOf), the summary saying so and naming a part merged in the
+// window. A closed lead with a request opened after it or still open is
+// not abandoned.
+//
+//nolint:lostfield // a fold of the request rows, not a conversion
+func taskRow(f Facts, reqs []requestRow) FeedRow {
+	lead := slices.MaxFunc(reqs, func(a, c requestRow) int {
+		return cmp.Or(a.t.CreatedAt.Compare(c.t.CreatedAt), cmp.Compare(a.t.Number, c.t.Number))
+	})
+
+	r := lead.row
+	for _, q := range reqs {
+		if q.row.At.After(r.At) {
+			r.At = q.row.At
+		}
+	}
+
+	var (
+		parts, followUps, replaced []string
+		earlier, later             []PR
+	)
+
+	for _, p := range taskRequests(f, r.Key) {
+		switch {
+		case p.Number == lead.t.Number:
+		case p.CreatedAt.IsZero() || p.CreatedAt.Before(lead.t.CreatedAt):
+			earlier = append(earlier, p)
+
+			if p.Status == forge.Open {
+				later = append(later, p)
+			}
+		default:
+			later = append(later, p)
+		}
+	}
+
+	allMerged := r.Group == GroupFinished && lead.t.Status == forge.Merged
+
+	for _, p := range earlier {
+		rel := relationOf(p, lead.t)
+		r.Related = append(r.Related, RelatedPR{Number: p.Number, URL: p.URL, State: p.Status, Relation: rel})
+
+		n := fmt.Sprintf("#%d", p.Number)
+
+		switch rel {
+		case RelationPart:
+			parts = append(parts, n)
+			allMerged = allMerged && p.Status == forge.Merged
+		case RelationFollowUp:
+			followUps = append(followUps, n)
+		case RelationReplaced:
+			replaced = append(replaced, n)
+		}
+	}
+
+	mergedInParts := len(parts) > 0 && allMerged
+
+	switch {
+	case mergedInParts:
+		r.Summary = fmt.Sprintf("merged in %d PRs", len(parts)+1)
+		if lead.t.MergedBy != "" && lead.t.MergedBy != lead.t.Author {
+			r.Summary += " by " + lead.t.MergedBy
+		}
+	case r.Abandoned && len(later) > 0:
+		r.Abandoned, r.Summary = false, "closed"
+		if l := later[len(later)-1]; l.CreatedAt.After(lead.t.CreatedAt) {
+			r.Summary += fmt.Sprintf(", replaced by #%d", l.Number)
+		}
+	}
+
+	for _, q := range reqs {
+		n := fmt.Sprintf("#%d", q.t.Number)
+		if !mergedInParts && slices.Contains(parts, n) && q.row.Group == GroupFinished && !q.row.Abandoned {
+			r.Summary += ", " + n + " merged"
+		}
+	}
+
+	if len(replaced) > 0 {
+		r.Summary += " (replaced " + strings.Join(replaced, ", ") + ")"
+	}
+
+	if len(followUps) > 0 {
+		r.Summary += ", follow-up to " + followUps[len(followUps)-1]
+	}
+
+	return r
+}
+
+// relationOf is how an earlier request relates to a later one of its
+// task: replaced when it closed unmerged, a follow-up's base when it
+// merged before the later one opened (or at an unknown time), else a
+// part, the two overlapping.
+func relationOf(earlier PR, later forge.Touched) string {
+	switch {
+	case earlier.Status == forge.Closed:
+		return RelationReplaced
+	case earlier.Status == forge.Merged && !earlier.MergedAt.After(later.CreatedAt):
+		return RelationFollowUp
+	default:
+		return RelationPart
+	}
+}
+
+// taskRequests is every request of the task, in the window or found by
+// the earlier search, each matched against the id by its branch or title,
+// in the order they opened.
+func taskRequests(f Facts, id string) []PR {
+	var out []PR
+
 	consider := func(p PR) {
-		if p.Number == t.Number || p.Status == forge.Closed ||
-			!p.CreatedAt.IsZero() && !p.CreatedAt.Before(t.CreatedAt) || slices.Contains(out, p.Number) {
+		if slices.ContainsFunc(out, func(o PR) bool { return o.Number == p.Number }) {
 			return
 		}
 
 		if slices.ContainsFunc(membersOf(f.Prefix, p), func(m string) bool { return strings.EqualFold(m, id) }) {
-			out = append(out, p.Number)
+			out = append(out, p)
 		}
 	}
 
@@ -361,18 +482,11 @@ func earlierOf(f Facts, t forge.Touched, id string) []int {
 		consider(PR{PR: p})
 	}
 
-	slices.Sort(out)
+	slices.SortFunc(out, func(a, c PR) int {
+		return cmp.Or(a.CreatedAt.Compare(c.CreatedAt), cmp.Compare(a.Number, c.Number))
+	})
 
 	return out
-}
-
-// ordinal names the nth request in words, the caller adding " request".
-func ordinal(n int) string {
-	if words := []string{"second", "third", "fourth", "fifth"}; n >= 2 && n-2 < len(words) {
-		return words[n-2]
-	}
-
-	return fmt.Sprintf("%dth", n)
 }
 
 // Plural is n and word, the word in its plural past one: "-sh" takes

@@ -1,4 +1,4 @@
-# The board, version 2
+# The board, version 3
 
 What changed in a project over a calendar window (**the feed**, `view: feed`, the default), or where every task of it stands: done lately, in progress at which stage and who owes the next move, and what comes next (**the state**, `view: state`, `f10 board --state`).
 `f10 board` prints it; `--json` prints the **Board JSON** this file specifies, `docs/board.schema.json` is its JSON Schema, and `cli/internal/lookaround` the one implementation.
@@ -10,7 +10,7 @@ The state view:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "generated_at": "2026-10-23T12:00:00Z",
   "view": "state",
   "project": { "id": "github.com/acme/widgets", "name": "widgets", "host": "gh", "checkout": "/code/widgets", "remote": false },
@@ -39,7 +39,7 @@ The state view:
 
 | field | meaning |
 |---|---|
-| `version` | `2`, this version of the spec |
+| `version` | `3`, this version of the spec |
 | `generated_at` | when the board was derived |
 | `view` | `feed` or `state` |
 | `project` | `id` is the normalised remote (`github.com/org/repo`); `name` the main checkout's basename; `host` `gh` or `glab`; `checkout` the main checkout, absent with `--remote`; `remote` true when the local collector was skipped; `local_only` true for a checkout with no origin remote |
@@ -140,7 +140,8 @@ A row with no task id gets a sentence where a command would need one.
       "group": "started", "key": "FT-71", "task": { "id": "FT-71", "title": "Rate limit the public API" },
       "pr": { "number": 84, "url": "https://…/pull/84", "state": "open", "head": "FT-71/again", "base": "main" },
       "from": "host", "who": { "author": "ann", "person": "ann" }, "owes": "bob",
-      "follow_up_of": [80], "summary": "second request on FT-71", "at": "2026-10-26T09:00:00Z"
+      "related": [{ "number": 80, "url": "https://…/pull/80", "state": "merged", "relation": "follow-up" }],
+      "summary": "opened, follow-up to #80", "at": "2026-10-26T09:00:00Z"
     }
   ],
   "quiet": { "count": 12, "oldest": "2026-06-01T00:00:00Z" }
@@ -151,12 +152,12 @@ A row with no task id gets a sentence where a command would need one.
 |---|---|
 | `group` | `started`, `updated`, `reviewed`, `finished` or `new-tasks`; rows list in that order, the latest first within a group |
 | `key` | the task id the request names, as a state row's; `#<number>` for a request naming none; a branch name for a local-only checkout's row naming none |
-| `task`, `pr` | the tracker's row where the tracker lists the task; the request, as `where.pr` |
+| `task`, `pr` | the tracker's row where the tracker lists the task; the request the row leads with, as `where.pr` |
 | `from` | where the group came from: `host` (a merge, a close, an opening), `trace` (a `Step:` trailer on a commit in the window), `tracker` (a new task), `local` (a local-only checkout's branch), `guessed` (the host's other facts) |
 | `who` | `author`, `assignees`, `person` as a state row's |
 | `owes` | who the next move waits on: the author after a review's verdict, a reviewer requested in the window and not heard from since |
-| `abandoned` | closed without merging |
-| `follow_up_of` | the task's other requests, opened before this one |
+| `abandoned` | closed without merging, and the task has no request after it |
+| `related` | the task's other requests opened before `pr`, in the order they opened: `number`, `url`, `state`, and `relation`, `part`, `follow-up` or `replaced` (below) |
 | `summary` | what happened, one sentence |
 | `at` | the latest event in the window |
 | `quiet` | `count`, the open requests with no row in the window (no commits, reviews or status changes there; a comment, a label or a commit dated before the window may still have touched them), and `oldest`, the earliest creation among them |
@@ -164,14 +165,22 @@ A row with no task id gets a sentence where a command would need one.
 **The window.** The default is `today`, or the last working day while nothing happened today; every span is cut by [years](https://github.com/amberpixels/years), never by date code of f10's own.
 Over a scope every project shares the span.
 
-**The groups.** One request is one row, in the first group whose rule matches, its events read only where they fall in the window:
+**The groups.** One task is one row, and a request naming no task is a row of its own; each request is read for the first group whose rule matches, its events read only where they fall in the window:
 
 1. **Finished**: merged in the window (`merged`, `merged by <login>` when another merged it), or closed unmerged there (`abandoned`); `host`.
 2. **Started**: opened in the window, or out of draft there; `host`.
-   A request naming a task that already has another request, opened before it, open or merged, is a follow-up: `second request on <task>`; a request closed unmerged does not count.
 3. **Reviewed**: a review approving or requesting changes submitted in the window, naming the reviewer, the author owing the next move (`guessed`); or a commit there whose `Step:` trailer names `review`, `resolve` or `judge` (`trace`).
 4. **Updated**: commits, merges from the base (a commit with more than one parent) or force pushes in the window, counted, or a review requested there; `trace` when a commit's `Step:` trailer names the step, else `guessed`.
 5. Nothing in the window (a comment, a label, activity outside it): no row; an open request counts in `quiet`.
+
+**A task's requests.** A task whose requests had activity in the window gets one row: the latest-opened of them leads, giving the row its group, `pr`, `who`, `owes` and summary, and `at` is the latest across them.
+Every other request of the task opened before it, touched in the window or found by the earlier search, goes in `related` by one rule, whether it ended before the later one opened:
+
+- **replaced** - it closed unmerged: `merged (replaced #175)`. The closed request has no `abandoned` row.
+- **follow-up** - it merged before the later one opened: `merged, follow-up to #80`, naming the latest such request.
+- **part** - the two overlapped (it is open, or merged after the later one opened): `merged in 2 PRs` when the lead merged in the window and every part merged, else the lead's own summary with each part merged in the window named, `2 commits, #176 merged`; the PR column lists the parts, `#176 + #180`.
+
+Only a request closed unmerged with no request of its task opened after it or still open keeps `abandoned`; one with such a request reads `closed`, `closed, replaced by #176` where the other opened later.
 
 **New tasks** are the tracker's open tasks whose `created` falls in the window: the host's issues' creation time, or a driver row's optional `created` (`docs/driver-contract.md`).
 `merged-unfinished` never appears in the feed: its author sees it in `--state` and `f10 status`.
@@ -180,8 +189,8 @@ Over a scope every project shares the span.
 
 Each collector fetches and interprets nothing, and fails on its own: a failed source carries its error and every other row still renders.
 In the state view, the host collector reads every open request and every one merged since the window, the commits of a request nothing else names a task for (for the trailers' task), every branch the host has once a request merged in the window (for whether each merged head is still there), and the declared remote reviewer's unhandled review.
-In the feed, on GitHub, it reads the requests updated since the window's start with their newest 100 timeline events since then in one paged query, the count of open requests nobody touched, and, for the tasks a request started there, their other requests by title and head branch in one more; nothing per request.
-On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time; the version whose head is among the request's commits while the previous one's is not is a force push, so only the latest rewrite counts.
+In the feed, on GitHub, it reads the requests updated since the window's start with their newest 100 timeline events since then in one paged query, the count of open requests nobody touched, and, for the tasks a request was opened, merged or closed for there, their other requests by title and head branch in one more; nothing per request.
+On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time, and lists each task's other requests, one call per task opened, merged or closed there; the version whose head is among the request's commits while the previous one's is not is a force push, so only the latest rewrite counts.
 Its search for a task's earlier requests reads titles only.
 GitLab's notes give no ready-for-review or review-requested event, so there a request out of draft is not `started` by that alone and `owes` never names a requested reviewer; its commits are dated by their author date.
 On GitHub a commit counts by its committer date, since GitHub records no push time for a plain push: commits made before the window and pushed inside it do not count, and their request is quiet unless something else happened to it.

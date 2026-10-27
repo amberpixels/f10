@@ -11,7 +11,7 @@ import "time"
 
 // Version is the Board JSON's version; a change to a stage rule or a
 // field's meaning bumps it with the spec.
-const Version = 2
+const Version = 3
 
 // The two views a board is: what changed in the window, and where every
 // task stands.
@@ -200,8 +200,9 @@ const (
 // Groups is every feed group in listing order.
 var Groups = []string{GroupStarted, GroupUpdated, GroupReviewed, GroupFinished, GroupNewTasks}
 
-// A Feed is what changed in the window: one row per request touched or
-// task created there, and the open requests nobody touched, counted.
+// A Feed is what changed in the window: one row per task whose requests
+// were touched there, per touched request naming no task, and per task
+// created there, and the open requests nobody touched, counted.
 type Feed struct {
 	Rows  []FeedRow `json:"rows"`
 	Quiet Quiet     `json:"quiet"`
@@ -214,8 +215,8 @@ type Quiet struct {
 	Oldest time.Time `json:"oldest,omitzero"` // the oldest one's creation time
 }
 
-// A FeedRow is one request touched in the window, or one task created
-// there.
+// A FeedRow is one task whose requests were touched in the window, one
+// request naming no task, or one task created there.
 type FeedRow struct {
 	Group string `json:"group"`
 	Key   string `json:"key"` // the task id, else `#<number>`, else the branch
@@ -225,9 +226,24 @@ type FeedRow struct {
 	Who   Who    `json:"who"`
 	// Owes is who the next move waits on: the author after a review, a
 	// requested reviewer before one.
-	Owes       string    `json:"owes,omitempty"`
-	Abandoned  bool      `json:"abandoned,omitempty"`    // closed without merging
-	FollowUpOf []int     `json:"follow_up_of,omitempty"` // the task's earlier requests
-	Summary    string    `json:"summary,omitempty"`      // what happened, one sentence
-	At         time.Time `json:"at"`                     // the latest event in the window
+	Owes      string      `json:"owes,omitempty"`
+	Abandoned bool        `json:"abandoned,omitempty"` // closed without merging, nothing later
+	Related   []RelatedPR `json:"related,omitempty"`   // the task's requests opened before PR
+	Summary   string      `json:"summary,omitempty"`   // what happened, one sentence
+	At        time.Time   `json:"at"`                  // the latest event in the window
+}
+
+// How a task's earlier request relates to the one its feed row leads with.
+const (
+	RelationPart     = "part"      // the two overlapped
+	RelationFollowUp = "follow-up" // it merged before the later one opened
+	RelationReplaced = "replaced"  // it closed unmerged
+)
+
+// A RelatedPR is one of a task's earlier requests, beside the row's own.
+type RelatedPR struct {
+	Number   int    `json:"number"`
+	URL      string `json:"url,omitempty"`
+	State    string `json:"state"` // open, merged or closed
+	Relation string `json:"relation"`
 }
