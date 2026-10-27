@@ -449,7 +449,7 @@ f10 drive 1042 -- 1047 judge ship    # every id from 1042 to 1047, through judge
 f10 drive 1042 1043 --answer "1. proceed"   # the same command, answering the question it stopped on
 ```
 
-Every task whose base is finished runs at once, opened as `f10 start` does, its agent prompted one skill at a time (Herdr says when a turn ends, run state says how).
+A task opens once its base's branch has a commit of its own, and its `finish` waits until the base finished; every task released that way runs at once, opened as `f10 start` does, its agent prompted one skill at a time (Herdr says when a turn ends, run state says how).
 `finish` runs in the driver.
 The chain is `plan → judge → ship → review → resolve → finish` unless `project.md` declares a **Drive chain** or the command names one.
 An agent's question exits 4, and `/f10:drive` asks you and reruns with one answer per asking task.

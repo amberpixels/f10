@@ -42,7 +42,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	}
 	fx.f.has["wt"] = true
 	// no base branch has a commit or a head until a test says so
-	fx.f.absent = append(fx.f.absent, "git rev-list --count ", "git rev-parse -q --verify refs/heads/")
+	fx.f.absent = append(fx.f.absent, "git rev-list --count ", "git rev-parse -q --verify refs/heads/",
+		"git rev-parse -q --verify refs/remotes/origin/", "git reflog show ")
 
 	a, err := parseDriveArgs(args)
 	if err != nil {
@@ -1654,7 +1655,7 @@ func chained(t *testing.T, args ...string) *driveFixture {
 	fx.f.script("git config --get branch.GH-2."+cfgAfter, "GH-1")
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 	fx.f.script(headRef, "origin/main")
-	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "1")
+	fx.f.script("git rev-list --count refs/heads/GH-1 --not refs/heads/main", "1")
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.opens("GH-2", "ws:GH-2", "pane:2")
 
@@ -1705,7 +1706,7 @@ func TestDriveStartsADependentAtItsBasesFirstCommit(t *testing.T) {
 // halts before one leaves it unopened.
 func TestDriveHoldsADependentUntilItsBaseCommits(t *testing.T) {
 	fx := chained(t, "GH-1", "GH-2", "judge")
-	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
+	fx.f.script("git rev-list --count refs/heads/GH-1 --not refs/heads/main", "0")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, all("idle", "GH-1"), all("working", "GH-1"), all("idle", "GH-1"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
@@ -1814,26 +1815,36 @@ func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
 	}
 }
 
-// A stacked base counts its commits from its own base's branch, and from
-// the default branch once that one is gone.
-func TestDriveReleasedCountsFromTheBasesForkPoint(t *testing.T) {
+// A base's own commits are what its branch has beyond main, origin/main
+// (which local main may lag), its own base's branch and the commit it was
+// created at, so a squash-merged grandparent's commits never release it.
+func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	fx.f.script(headRef, "origin/main")
 	b := &driveRun{opened: true, o: openedTask{branch: "GH-2"}}
 
 	fx.f.script("git config --get branch.GH-2."+cfgAfterBranch, "GH-1")
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o1")
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1")
-	fx.f.script("git rev-list --count refs/heads/GH-1..refs/heads/GH-2", "0")
-	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-2", "3")
+	fx.f.script("git reflog show --format=%H %gs refs/heads/GH-2",
+		"c3 commit: second\nc2 commit: first\nc1 branch: Created from GH-1")
+	fx.f.script("git rev-list --count refs/heads/GH-2 --not refs/heads/main refs/remotes/origin/main "+
+		"refs/heads/GH-1 c1", "0")
 
 	if fx.in.released(t.Context(), b) {
-		t.Error("released with no commit past its own base's branch")
+		t.Error("released with no commit of its own")
 	}
 
+	// GH-1 squash-merged and gone: the creation point still keeps its commits out
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "")
+	fx.f.script("git rev-list --count refs/heads/GH-2 --not refs/heads/main refs/remotes/origin/main c1", "0", "1")
+
+	if fx.in.released(t.Context(), b) {
+		t.Error("released by its squashed base's commits")
+	}
 
 	if !fx.in.released(t.Context(), b) {
-		t.Error("not released once its base's branch is gone and main is behind it")
+		t.Error("not released once it has a commit of its own")
 	}
 
 	b.end = &driveResult{code: exitHalted}
@@ -1856,6 +1867,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 			fx.f.script(headRef, "origin/main")
 			fx.f.script("git fetch origin", "")
 			fx.f.script("git rev-parse -q --verify origin/GH-1", "")
+			fx.f.script("git rev-parse -q --verify refs/heads/main", "m0")
 			fx.f.script(wsList, unopened, listing("GH-1", "idle"))
 
 			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
@@ -1865,7 +1877,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 			}
 
 			if !clean {
-				fx.f.fail("git merge-tree --write-tree refs/heads/main refs/heads/GH-1", shell.Result{Code: 1})
+				fx.f.fail("git merge-tree --write-tree m0 refs/heads/GH-1", shell.Result{Code: 1})
 				fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
 				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main")
 				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
@@ -1875,7 +1887,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 				fx.f.script(wsList,
 					unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 			} else {
-				fx.f.script("git merge-tree --write-tree refs/heads/main refs/heads/GH-1", "tree")
+				fx.f.script("git merge-tree --write-tree m0 refs/heads/GH-1", "tree")
 			}
 
 			err := fx.drive(t)
@@ -1891,7 +1903,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 
 			// the catchup left the mark, so the task halts rather than merging
 			if exitCode(err) != exitHalted || fx.f.called("finish GH-1") ||
-				!strings.Contains(out, "conflicts with refs/heads/main, catching up first") {
+				!strings.Contains(out, "conflicts with m0, catching up first") {
 				t.Fatalf("err = %v\n%s", err, out)
 			}
 		})

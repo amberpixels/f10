@@ -598,10 +598,11 @@ func (in *driveInput) startRunnable(ctx context.Context, w io.Writer, runs []*dr
 }
 
 // released reports whether a base lets its dependents start: through, or
-// open with a commit its branch adds to the one it forked from (its own
-// base's branch, else the default branch). Implement never commits, so a
-// commit means a commit or pr step ran with verify green. Read from local
-// refs, so a branch never pushed counts.
+// open with a commit of its own. Implement never commits, so a commit means
+// a commit or pr step ran with verify green. Its own commits are what its
+// branch has beyond the default branch, origin's copy of it, its own base's
+// branch, and the commit it was created at, which keeps out a squashed
+// grandparent's commits. Read from local refs, so a branch never pushed counts.
 func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 	if b.through() {
 		return true
@@ -611,19 +612,40 @@ func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 		return false
 	}
 
-	fork := gitx.Out(ctx, in.main, "config", "--get", "branch."+b.o.branch+"."+cfgAfterBranch)
-	if fork == "" || gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/heads/"+fork) == "" {
-		def, err := localDefault(ctx, in.main)
-		if err != nil {
-			return false
-		}
-
-		fork = def
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return false
 	}
 
-	n := gitx.Out(ctx, in.main, "rev-list", "--count", "refs/heads/"+fork+"..refs/heads/"+b.o.branch)
+	args := []string{"rev-list", "--count", "refs/heads/" + b.o.branch, "--not", "refs/heads/" + def}
+
+	fork := gitx.Out(ctx, in.main, "config", "--get", "branch."+b.o.branch+"."+cfgAfterBranch)
+	for _, r := range []string{"refs/remotes/origin/" + def, "refs/heads/" + fork} {
+		if !strings.HasSuffix(r, "/") && gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", r) != "" {
+			args = append(args, r)
+		}
+	}
+
+	if created := createdAt(ctx, in.main, b.o.branch); created != "" {
+		args = append(args, created)
+	}
+
+	n := gitx.Out(ctx, in.main, args...)
 
 	return n != "" && n != "0"
+}
+
+// createdAt is the commit branch was created at, from its oldest reflog
+// entry, or "" once the reflog no longer reaches back to the creation.
+func createdAt(ctx context.Context, dir, branch string) string {
+	lines := strings.Split(gitx.Out(ctx, dir, "reflog", "show", "--format=%H %gs", "refs/heads/"+branch), "\n")
+
+	sha, subject, _ := strings.Cut(lines[len(lines)-1], " ")
+	if !strings.HasPrefix(subject, "branch: Created from") {
+		return ""
+	}
+
+	return sha
 }
 
 // markMoved marks each running dependent whose base branch has a head its
@@ -1175,7 +1197,13 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	head := pushed
 
 	if pushed == "" {
-		base, head = "refs/heads/"+def, "refs/heads/"+branch
+		if base, err = landingBase(ctx, in.main, def); err != nil {
+			res := halted(id, "finish", err.Error())
+
+			return &res
+		}
+
+		head = "refs/heads/" + branch
 	}
 
 	if gitx.MergesCleanly(ctx, r.o.path, base, head) {

@@ -216,12 +216,14 @@ There finish merges as usual, brings the default branch up to the merge, switche
    It refuses first when the local branch has commits `origin/<branch>` lacks, since deleting the branch would lose them.
    A closed PR is cleaned up only with `--local`.
    **A branch never pushed.**
-   No PR and no `origin/<branch>`: the branch merges into the local default branch instead, by the merge method below, built in memory (`git merge-tree`, `git commit-tree`) so no checkout is touched.
+   No PR, no `origin/<branch>` and no upstream recorded for the branch: the branch merges into the local default branch instead, by the merge method below, built in memory (`git merge-tree`, `git commit-tree`) so no checkout is touched.
+   The merge is built on the local default branch, or on `origin/<default>` when the local one only lags it, so origin's commits never fold into the merge; the two diverged is a refusal.
    A squash's subject is the task and its title, its body the branch's commit subjects and, with traces on, the `Task:` trailers; a merge writes a two-parent commit; a rebase lands only a fast-forward.
    The default branch then moves: `git merge --ff-only` when the main checkout is on it, else `git update-ref`.
    A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
    Nothing is pushed, pulled or deleted on origin, and the task stays open on the tracker, since no PR closes it: the notes say so.
    A pushed branch with no PR is a refusal: open one, or delete origin's copy to merge here.
+   So is a branch with an upstream origin lacks (a request the host merged may no longer be listed by branch), and `--local`, which merges nothing.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).
    Absent, the repo's settings decide: on GitHub the one method allowed, else squash with a note beneath the report saying the default was taken and how to declare one; on GitLab the project's squash option, since GitLab fixes the strategy per project.
 4. **The remote branch is deleted** when origin still has it, through the host's API (glab's `--remove-source-branch` usually did it already).
@@ -358,7 +360,8 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    A base outside the list that is not finished is refused, and so are tasks that wait on each other in a circle, both before anything is created.
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
-   A task starts once its base releases it: the base's branch has a commit it lacks from the point it forked from (the base's own base branch, else the default branch), or the base is through (finished, or its whole chain run).
+   A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or its whole chain run).
+   Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), so a lagging local default branch or a squash-merged grandparent never releases it early.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, since each agent is its own session.

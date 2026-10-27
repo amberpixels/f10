@@ -9,20 +9,22 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// neverPushed reads the host's answer for the branch's request: no request
-// and no copy on origin is a branch never pushed, which finish merges here.
-// A host that failed to answer stays an error, and so does a pushed branch
-// with no request, whose merge belongs on the host.
-func neverPushed(ctx context.Context, main, branch string, pullErr error) (bool, error) {
+// neverPushed reads the host's answer for the branch's request: no request,
+// no copy on origin and no upstream is a branch never pushed, which finish
+// merges here. A host that failed to answer stays an error, and so does
+// --local, which merges nothing. A pushed branch with no request belongs on
+// the host, and an upstream origin lacks may be a request merged there that
+// the host no longer lists by branch (glab lists open ones only).
+func neverPushed(ctx context.Context, in finishInput, branch string, pullErr error) (bool, error) {
 	if pullErr == nil {
 		return false, nil
 	}
 
-	if !noSuchPull(pullErr) {
+	if !noSuchPull(pullErr) || in.local {
 		return false, pullErr
 	}
 
-	pushed, err := gitx.RemoteBranchExists(ctx, main, branch)
+	pushed, err := gitx.RemoteBranchExists(ctx, in.main, branch)
 
 	switch {
 	case err != nil:
@@ -30,24 +32,51 @@ func neverPushed(ctx context.Context, main, branch string, pullErr error) (bool,
 	case pushed:
 		return false, fmt.Errorf("%w: origin has %s with no PR: open one, or delete origin's copy to merge it here",
 			pullErr, branch)
+	case gitx.Out(ctx, in.main, "config", "--get", "branch."+branch+".merge") != "":
+		return false, fmt.Errorf("%w: %s tracks a branch origin no longer has; if its request merged on the host, "+
+			"finish it by hand", pullErr, branch)
 	}
 
 	return true, nil
 }
 
-// landLocal merges a branch never pushed into the local default branch by
-// the project's merge method, built in memory so no checkout is touched,
-// then moves the default branch: a fast-forward in the main checkout when
-// it is on it, else the ref alone. A conflict, or a rebase that is not a
-// fast-forward, is left to a catchup. A branch already in the default
-// branch, as a rerun finds it, lands nothing.
-func landLocal(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
-	base, head := "refs/heads/"+def, "refs/heads/"+branch
-	old := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", base)
-	tip := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", head)
+// landingBase is the commit a branch never pushed lands on: the local
+// default branch, or origin's copy when the local one is only behind it,
+// so origin's commits are never folded into the merge. Diverged is refused.
+func landingBase(ctx context.Context, dir, def string) (string, error) {
+	local := gitx.Out(ctx, dir, "rev-parse", "-q", "--verify", "refs/heads/"+def)
+	remote := gitx.Out(ctx, dir, "rev-parse", "-q", "--verify", "refs/remotes/origin/"+def)
 
-	if old == "" || tip == "" {
-		return "", nil, fmt.Errorf("cannot read %s or %s here", def, branch)
+	switch {
+	case local == "":
+		return "", fmt.Errorf("cannot read %s here", def)
+	case remote == "" || remote == local || gitx.IsAncestor(ctx, dir, remote, local):
+		return local, nil
+	case gitx.IsAncestor(ctx, dir, local, remote):
+		return remote, nil
+	}
+
+	return "", fmt.Errorf("%s and origin/%s have diverged: bring %s up to date with origin first", def, def, def)
+}
+
+// landLocal merges a branch never pushed into the local default branch by
+// the project's merge method, built in memory on landingBase so no checkout
+// is touched, then moves the default branch: a fast-forward in the main
+// checkout when it is on it, else the ref alone. A conflict, or a rebase
+// that is not a fast-forward, is left to a catchup. A branch already in
+// the default branch, as a rerun finds it, lands nothing.
+func landLocal(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
+	defRef, head := "refs/heads/"+def, "refs/heads/"+branch
+	old := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", defRef)
+
+	base, err := landingBase(ctx, in.main, def)
+	if err != nil {
+		return "", nil, err
+	}
+
+	tip := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", head)
+	if tip == "" {
+		return "", nil, fmt.Errorf("cannot read %s here", branch)
 	}
 
 	tree, err := gitx.MergeTree(ctx, in.main, base, head)
@@ -58,8 +87,8 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 
 	notes := []string{fmt.Sprintf("%s was never pushed: merged into %s here, nothing pushed", branch, def)}
 
-	if tree == gitx.Out(ctx, in.main, "rev-parse", old+"^{tree}") {
-		return old, append(notes, branch+" was already in "+def), nil
+	if tree == gitx.Out(ctx, in.main, "rev-parse", base+"^{tree}") {
+		return base, append(notes, branch+" was already in "+def), nil
 	}
 
 	method, note, err := in.host.mergeMethod(ctx, in.method)
@@ -80,9 +109,9 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 
 		sha = tip
 	case "--squash":
-		sha, err = gitx.CommitTree(ctx, in.main, tree, []string{old}, squashMessage(ctx, in, base, head)...)
+		sha, err = gitx.CommitTree(ctx, in.main, tree, []string{base}, squashMessage(ctx, in, base, head)...)
 	default: // --merge, or glab's plain merge
-		sha, err = gitx.CommitTree(ctx, in.main, tree, []string{old, tip},
+		sha, err = gitx.CommitTree(ctx, in.main, tree, []string{base, tip},
 			paragraphs("Merge branch '"+branch+"'", mergeBody(in, "", method))...)
 	}
 
@@ -93,7 +122,7 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 	if gitx.CurrentBranch(ctx, in.main) == def {
 		_, err = gitx.Exec(ctx, in.main, "merge", "--ff-only", sha)
 	} else {
-		err = gitx.UpdateRef(ctx, in.main, base, sha, old)
+		err = gitx.UpdateRef(ctx, in.main, defRef, sha, old)
 	}
 
 	if err != nil {

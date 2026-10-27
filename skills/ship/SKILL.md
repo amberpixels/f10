@@ -46,7 +46,7 @@ The last step is the **shipment**.
 
 **A spike ends after implement**, whatever the pipeline: a `Kind: spike` plan answers a question, and its code never leaves the machine.
 No step after implement runs (no cleanup, commit, push, pr, review, judge or deploy); the shipment is the spike report.
-`f10 finish` cannot close it (it needs a PR and a clean worktree, and archives only the plan), so the final report ends with the manual close.
+`f10 finish` cannot close it (it would merge the experiment code, and needs a clean worktree), so the final report ends with the manual close.
 In a linked worktree with in-repo storage: copy the spike report and the plan, when there is one, into the main checkout's storage root (`spikes/`, `plans/archive/`), then, from the main checkout, `git worktree remove --force <path>`, `git branch -D <branch>`, and close its Herdr workspace.
 In the main checkout, or with out-of-tree storage, the report already outlives the code: discard the experiment code by the paths the report names.
 It also offers, in one line, to post the report's answer and recommendation as a comment on the task, outward-facing and free of f10 traces; a driven run lists the offer and posts nothing.

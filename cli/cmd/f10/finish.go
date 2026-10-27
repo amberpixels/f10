@@ -229,7 +229,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	p, err := in.host.pull(ctx, name)
 
-	local, err := neverPushed(ctx, in.main, name, err)
+	local, err := neverPushed(ctx, in, name, err)
 	if err != nil {
 		return err
 	}
