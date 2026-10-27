@@ -178,9 +178,9 @@ Every other request of the task opened before it, touched in the window or found
 
 - **replaced** - it closed unmerged: `merged (replaced #175)`. The closed request has no `abandoned` row.
 - **follow-up** - it merged before the later one opened: `merged, follow-up to #80`, naming the latest such request.
-- **part** - the two overlapped (it is open, or merged after the later one opened): `merged in 2 PRs` when the lead merged in the window and every part merged, else the lead's own summary; the PR column lists the parts, `#176 + #180`.
+- **part** - the two overlapped (it is open, or merged after the later one opened): `merged in 2 PRs` when the lead merged in the window and every part merged, else the lead's own summary with each part merged in the window named, `2 commits, #176 merged`; the PR column lists the parts, `#176 + #180`.
 
-Only a request closed unmerged with nothing after it keeps `abandoned`.
+Only a request closed unmerged with no request of its task opened after it or still open keeps `abandoned`; one with such a request reads `closed`, `closed, replaced by #176` where the other opened later.
 
 **New tasks** are the tracker's open tasks whose `created` falls in the window: the host's issues' creation time, or a driver row's optional `created` (`docs/driver-contract.md`).
 `merged-unfinished` never appears in the feed: its author sees it in `--state` and `f10 status`.
@@ -190,7 +190,7 @@ Only a request closed unmerged with nothing after it keeps `abandoned`.
 Each collector fetches and interprets nothing, and fails on its own: a failed source carries its error and every other row still renders.
 In the state view, the host collector reads every open request and every one merged since the window, the commits of a request nothing else names a task for (for the trailers' task), every branch the host has once a request merged in the window (for whether each merged head is still there), and the declared remote reviewer's unhandled review.
 In the feed, on GitHub, it reads the requests updated since the window's start with their newest 100 timeline events since then in one paged query, the count of open requests nobody touched, and, for the tasks a request was opened, merged or closed for there, their other requests by title and head branch in one more; nothing per request.
-On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time; the version whose head is among the request's commits while the previous one's is not is a force push, so only the latest rewrite counts.
+On GitLab, it lists the merge requests updated since the window's start and the open ones nobody touched, then reads each touched one's commits, notes and versions, eight at a time, and lists each task's other requests, one call per task opened, merged or closed there; the version whose head is among the request's commits while the previous one's is not is a force push, so only the latest rewrite counts.
 Its search for a task's earlier requests reads titles only.
 GitLab's notes give no ready-for-review or review-requested event, so there a request out of draft is not `started` by that alone and `owes` never names a requested reviewer; its commits are dated by their author date.
 On GitHub a commit counts by its committer date, since GitHub records no push time for a plain push: commits made before the window and pushed inside it do not count, and their request is quiet unless something else happened to it.

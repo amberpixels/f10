@@ -353,7 +353,9 @@ type requestRow struct {
 // taskRow folds a task's request rows into one: the latest-opened
 // request leads, giving the row its group, request and summary, and every
 // other request of the task opened before it is listed by how it relates
-// (relationOf), the summary saying so.
+// (relationOf), the summary saying so and naming a part merged in the
+// window. A closed lead with a request opened after it or still open is
+// not abandoned.
 //
 //nolint:lostfield // a fold of the request rows, not a conversion
 func taskRow(f Facts, reqs []requestRow) FeedRow {
@@ -368,11 +370,28 @@ func taskRow(f Facts, reqs []requestRow) FeedRow {
 		}
 	}
 
-	var parts, followUps, replaced []string
+	var (
+		parts, followUps, replaced []string
+		earlier, later             []PR
+	)
+
+	for _, p := range taskRequests(f, r.Key) {
+		switch {
+		case p.Number == lead.t.Number:
+		case p.CreatedAt.IsZero() || p.CreatedAt.Before(lead.t.CreatedAt):
+			earlier = append(earlier, p)
+
+			if p.Status == forge.Open {
+				later = append(later, p)
+			}
+		default:
+			later = append(later, p)
+		}
+	}
 
 	allMerged := r.Group == GroupFinished && lead.t.Status == forge.Merged
 
-	for _, p := range otherRequests(f, lead.t, r.Key) {
+	for _, p := range earlier {
 		rel := relationOf(p, lead.t)
 		r.Related = append(r.Related, RelatedPR{Number: p.Number, URL: p.URL, State: p.Status, Relation: rel})
 
@@ -389,10 +408,25 @@ func taskRow(f Facts, reqs []requestRow) FeedRow {
 		}
 	}
 
-	if len(parts) > 0 && allMerged {
+	mergedInParts := len(parts) > 0 && allMerged
+
+	switch {
+	case mergedInParts:
 		r.Summary = fmt.Sprintf("merged in %d PRs", len(parts)+1)
 		if lead.t.MergedBy != "" && lead.t.MergedBy != lead.t.Author {
 			r.Summary += " by " + lead.t.MergedBy
+		}
+	case r.Abandoned && len(later) > 0:
+		r.Abandoned, r.Summary = false, "closed"
+		if l := later[len(later)-1]; l.CreatedAt.After(lead.t.CreatedAt) {
+			r.Summary += fmt.Sprintf(", replaced by #%d", l.Number)
+		}
+	}
+
+	for _, q := range reqs {
+		n := fmt.Sprintf("#%d", q.t.Number)
+		if !mergedInParts && slices.Contains(parts, n) && q.row.Group == GroupFinished && !q.row.Abandoned {
+			r.Summary += ", " + n + " merged"
 		}
 	}
 
@@ -422,16 +456,14 @@ func relationOf(earlier PR, later forge.Touched) string {
 	}
 }
 
-// otherRequests is the task's requests opened before the lead, in the
-// window or found by the earlier search, each matched against the id by
-// its branch or title, in the order they opened. One with no creation
-// time counts as earlier.
-func otherRequests(f Facts, lead forge.Touched, id string) []PR {
+// taskRequests is every request of the task, in the window or found by
+// the earlier search, each matched against the id by its branch or title,
+// in the order they opened.
+func taskRequests(f Facts, id string) []PR {
 	var out []PR
 
 	consider := func(p PR) {
-		if p.Number == lead.Number || !p.CreatedAt.IsZero() && !p.CreatedAt.Before(lead.CreatedAt) ||
-			slices.ContainsFunc(out, func(o PR) bool { return o.Number == p.Number }) {
+		if slices.ContainsFunc(out, func(o PR) bool { return o.Number == p.Number }) {
 			return
 		}
 

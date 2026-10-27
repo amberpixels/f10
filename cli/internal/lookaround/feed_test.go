@@ -259,8 +259,9 @@ func TestDeriveFeedRelated(t *testing.T) {
 
 // A task's requests make one row however they relate: two overlapping
 // and both merged, one replacing another closed in the window, one
-// following up a request merged long ago. Only a request closed with
-// nothing after it keeps abandoned.
+// following up a request merged long ago, a part merged beside a later
+// one still open. Only a request closed with nothing after it or open
+// keeps abandoned.
 func TestDeriveFeedOneRowPerTask(t *testing.T) {
 	merged := func(n int, head string, created, at time.Time) forge.Touched {
 		r := touched(n, "FT-0: part", head, forge.Merged, created, forge.Event{Kind: forge.EventMerged, At: at})
@@ -269,22 +270,46 @@ func TestDeriveFeedOneRowPerTask(t *testing.T) {
 		return r
 	}
 
-	closed := touched(50, "FT-50: first", "FT-50/a", forge.Closed, longAgo,
-		forge.Event{Kind: forge.EventClosed, At: hourToday(9)})
-	closed.ClosedAt = hourToday(9)
+	closed := func(n int, head string) forge.Touched {
+		r := touched(n, "FT-0: closed", head, forge.Closed, longAgo,
+			forge.Event{Kind: forge.EventClosed, At: hourToday(9)})
+		r.ClosedAt = hourToday(9)
+
+		return r
+	}
+
+	mergedByBob := merged(91, "FT-90/b", hourToday(2), hourToday(11))
+	mergedByBob.MergedBy = "bob"
 
 	f := Facts{
 		Prefix: "FT",
 		Activity: &forge.Activity{Requests: []forge.Touched{
 			merged(40, "FT-40/a", hourToday(1), hourToday(10)),
 			merged(41, "FT-40/b", hourToday(2), hourToday(11)),
-			closed,
+			closed(50, "FT-50/a"),
 			merged(51, "FT-50/b", hourToday(9), hourToday(12)),
 			merged(61, "FT-60/b", longAgo.Add(48*time.Hour), hourToday(10)),
+			closed(70, "FT-70/a"),
+			merged(80, "FT-80/a", longAgo, hourToday(10)),
+			touched(81, "FT-80: next part", "FT-80/b", forge.Open, longAgo.Add(24*time.Hour),
+				commitEvent(hourToday(11), "more")),
+			merged(90, "FT-90/a", hourToday(1), hourToday(10)),
+			mergedByBob,
+			merged(96, "FT-95/b", hourToday(3), hourToday(12)),
 		}},
-		Earlier: map[string][]forge.PR{"FT-60": {
-			{Number: 60, Head: "FT-60/a", Status: forge.Merged, CreatedAt: longAgo, MergedAt: longAgo.Add(time.Hour)},
-		}},
+		Earlier: map[string][]forge.PR{
+			"FT-60": {
+				{
+					Number:    60,
+					Head:      "FT-60/a",
+					Status:    forge.Merged,
+					CreatedAt: longAgo,
+					MergedAt:  longAgo.Add(time.Hour),
+				},
+			},
+			"FT-70": {{Number: 71, Head: "FT-70/b", Status: forge.Open, CreatedAt: longAgo.Add(24 * time.Hour)}},
+			"FT-95": {{Number: 95, Head: "FT-95/a", Status: forge.Open, CreatedAt: longAgo}},
+		},
 	}
 
 	got := map[string]FeedRow{}
@@ -297,21 +322,24 @@ func TestDeriveFeedOneRowPerTask(t *testing.T) {
 	}
 
 	for key, want := range map[string]struct {
-		pr      int
-		summary string
+		pr             int
+		group, summary string
 	}{
-		"FT-40": {41, "merged in 2 PRs"},
-		"FT-50": {51, "merged (replaced #50)"},
-		"FT-60": {61, "merged, follow-up to #60"},
+		"FT-40": {41, GroupFinished, "merged in 2 PRs"},
+		"FT-50": {51, GroupFinished, "merged (replaced #50)"},
+		"FT-60": {61, GroupFinished, "merged, follow-up to #60"},
+		"FT-70": {70, GroupFinished, "closed, replaced by #71"},
+		"FT-80": {81, GroupUpdated, "1 commit, #80 merged"},
+		"FT-90": {91, GroupFinished, "merged in 2 PRs by bob"},
+		"FT-95": {96, GroupFinished, "merged"},
 	} {
 		r := got[key]
-		if r.PR == nil || r.PR.Number != want.pr || r.Summary != want.summary || r.Abandoned ||
-			r.Group != GroupFinished {
-			t.Errorf("%s = %+v, want #%d %q", key, r, want.pr, want.summary)
+		if r.PR == nil || r.PR.Number != want.pr || r.Summary != want.summary || r.Abandoned || r.Group != want.group {
+			t.Errorf("%s = %+v, want #%d %s %q", key, r, want.pr, want.group, want.summary)
 		}
 	}
 
-	if len(got) != 3 {
+	if len(got) != 7 {
 		t.Errorf("rows = %v, want one per task", got)
 	}
 }
