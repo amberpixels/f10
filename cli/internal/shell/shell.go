@@ -10,6 +10,7 @@ package shell
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -27,8 +28,19 @@ type Result struct {
 // meaning, so classifying codes belongs to the caller. Only a command that
 // could not start at all is an error here.
 var Capture = func(ctx context.Context, dir, name string, args ...string) (Result, error) {
+	return run(ctx, dir, nil, name, args...)
+}
+
+// CaptureInput is Capture with input on the command's stdin: a driver's
+// write verb reads the task it creates from there.
+var CaptureInput = func(ctx context.Context, dir, input, name string, args ...string) (Result, error) {
+	return run(ctx, dir, strings.NewReader(input), name, args...)
+}
+
+func run(ctx context.Context, dir string, stdin io.Reader, name string, args ...string) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	cmd.Stdin = stdin
 
 	var stdout, stderr strings.Builder
 

@@ -7,9 +7,10 @@
 // fixes is the shape of the conversation: a verb, an argument, data on
 // stdout, and a reserved exit code for a verb the driver does not offer.
 //
-// Drivers return data and never act. f10 performs every side effect, which
-// is what lets `open` mean the same thing for a task as for a pull request,
-// where no driver is involved at all.
+// Read verbs return data and change nothing; write verbs change the
+// tracker and only the tracker. Neither acts on the local machine: f10 opens
+// every url and creates every branch, which is what lets `open` mean the
+// same thing for a task as for a pull request, where no driver is involved.
 package driver
 
 import (
@@ -24,7 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// Verbs a driver may implement.
+// Verbs a driver may implement. All but create are read verbs.
 const (
 	VerbRead     = "read"     // stdout: the task as markdown
 	VerbURL      = "url"      // stdout: one url
@@ -33,6 +34,10 @@ const (
 	VerbChildren = "children" // stdout: JSON rows, one subtask each
 	VerbIndex    = "index"    // stdout: one url, the task list; no argument
 	VerbList     = "list"     // stdout: JSON rows, the first page of open tasks; no argument
+
+	// VerbCreate is the first write verb: stdin is the task as markdown,
+	// `# <title>` first; stdout is the new task's id.
+	VerbCreate = "create"
 )
 
 // Priorities is the contract's ordered priority vocabulary, most urgent
@@ -88,17 +93,44 @@ func (d *Driver) Run(ctx context.Context, verb string, args ...string) (string, 
 		return "", fmt.Errorf("running %s %s: %w", d.Path, verb, err)
 	}
 
+	if err := d.classify(verb, res); err != nil {
+		return "", err
+	}
+
+	return res.Stdout, nil
+}
+
+// RunInput invokes a write verb with input on its stdin and returns its
+// stdout and, on success, its stderr: a warning about a property the
+// tracker has no field for. It is never retried, because a failed write
+// may still have changed the tracker.
+func (d *Driver) RunInput(ctx context.Context, input, verb string, args ...string) (string, string, error) {
+	res, err := shell.CaptureInput(ctx, d.Dir, input, d.Path, append([]string{verb}, args...)...)
+	if err != nil {
+		return "", "", fmt.Errorf("running %s %s: %w", d.Path, verb, err)
+	}
+
+	if err := d.classify(verb, res); err != nil {
+		return "", "", err
+	}
+
+	return res.Stdout, res.Stderr, nil
+}
+
+// classify reads an exit code per the contract: nil for 0, ErrUnsupported
+// for the reserved code, the driver's stderr for anything else.
+func (d *Driver) classify(verb string, res shell.Result) error {
 	switch res.Code {
 	case 0:
-		return res.Stdout, nil
+		return nil
 	case ExitUnsupported:
-		return "", fmt.Errorf("%s: %w", verb, ErrUnsupported)
+		return fmt.Errorf("%s: %w", verb, ErrUnsupported)
 	default:
 		detail := res.Stderr
 		if detail == "" {
 			detail = fmt.Sprintf("exit %d, no stderr", res.Code)
 		}
 
-		return "", fmt.Errorf("%s %s: %s", filepath.Base(d.Path), verb, detail)
+		return fmt.Errorf("%s %s: %s", filepath.Base(d.Path), verb, detail)
 	}
 }

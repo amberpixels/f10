@@ -2,7 +2,7 @@
 
 Role: a **senior engineer** capturing a well-scoped task.
 Input: a free-text feature/bug description (may be terse).
-Context: `project.md → Tracker` (the **create adapter** and **id format**).
+Context: `project.md → Tracker` (the **create adapter**, used where no driver creates tasks, and **id format**).
 
 1. **Scope check.**
    Ask the user only if the description is too thin to scope; otherwise infer the scope yourself.
@@ -29,16 +29,19 @@ Context: `project.md → Tracker` (the **create adapter** and **id format**).
      Tasks meant to run in sequence are created in that order, so each `After:` names an id that already exists.
    - **Other tasks named in the body** (a base task in prose, a parent, a subtask) carry their title, in the renderer's form (`conventions/context.md` → Task references); the `After:` line stays bare.
    - **Markup follows the tracker's renderer; markdown is not a safe default.**
-     The create adapter says which renderer this is:
+     A driver's `create` takes markdown (step 3); otherwise the create adapter says which renderer this is:
      - **GitHub / GitLab** - GFM, but **one line per paragraph, never hard-wrapped**: a single newline renders as `<br>`.
-     - **Notion** - blocks, not a markdown string; the adapter takes structured content.
+     - **Notion** through an adapter that takes structured content - blocks, not a markdown string.
      - **Jira Cloud** - not markdown at all.
      - **Unknown** - plain paragraphs, and no markup that reads as noise unrendered.
-3. **Create it** via the project's create adapter: a skill to invoke, or a CLI command such as `gh issue create` / `glab issue create`.
+3. **Create it** through `f10 task create` first: the drafted task on stdin, `# <title>` on the first line and the body after it, and its properties as flags (`--status`, `--priority`, `--label` once per label, `--parent <id>` for a subtask).
+   It prints the new id; `f10 task open <id> --link` prints the url for the report.
+   **Exit 3** means no driver creates tasks here: create it via the project's create adapter instead, a skill to invoke or a CLI command such as `gh issue create` / `glab issue create`.
+   **Never re-run a failed `f10 task create`**, whatever `conventions/failure.md` rule 3 allows: the task may exist already, so report the failure and let the user check the tracker.
    Apply the project's declared default status/labels.
    A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later.
    A spike gets its label only when the user calls the task one, since the label alone makes ship skip the PR.
-   A split creates the parent first, then links each subtask to it with the tracker's native parent link: the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
+   A split creates the parent first, then links each subtask to it: through the driver, `--parent` is the link; through the adapter, the tracker's native parent link, the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
 4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; several tasks report as the convention's tree.
    Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, the parent's id for a split.

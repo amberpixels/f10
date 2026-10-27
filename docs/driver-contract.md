@@ -1,6 +1,6 @@
 # The f10 driver contract
 
-`f10 task` and `f10 start` need to reach your tracker.
+`f10 task` and `f10 start` need to reach your tracker, and the capture step needs to create tasks in it.
 Where that tracker is the host's own issues, it already can: the git remote says GitHub or GitLab and `gh` / `glab` do the rest, with nothing to declare.
 Where it is Notion, Jira, a wiki or a spreadsheet, there is no CLI to route to, and that is what a driver is for.
 
@@ -20,7 +20,8 @@ A file that is missing, is a directory, or has no execute bit is simply "no driv
 <driver> <verb> [argument]
 ```
 
-Seven verbs, each writing its answer to stdout:
+Eight verbs, each writing its answer to stdout.
+Seven are **read verbs**:
 
 | verb | argument | stdout |
 |---|---|---|
@@ -31,6 +32,12 @@ Seven verbs, each writing its answer to stdout:
 | `children` | task number | a JSON array of the task's subtasks |
 | `index` | none | one url, the task list, alone on a line |
 | `list` | none | a JSON array of task rows, the first page of open tasks |
+
+One is a **write verb**:
+
+| verb | input | stdout |
+|---|---|---|
+| `create` | the task as markdown on stdin, its properties as flags | the new task's id, alone on a line |
 
 The argument for `read`, `url`, `branch` and `children` is the **number**, not the prefixed id: f10 has already parsed `ABC-1042` down to `1042`, so a driver never has to know the id format.
 `index` and `list` take no argument: `index` is the page `f10 task open` with no id opens, `list` the rows `f10 task open --print` writes, in `search`'s row shape.
@@ -65,6 +72,25 @@ f10 drops rows whose `state` is `closed`, resolves `id` and `after` to the proje
 `[]` means the task has no subtasks.
 Exit `3` declines the verb as for any other: f10 falls back to the host's issues, and where the tracker is not the host's, reads it as no parent link, so `/f10:drive` drives the id as given.
 
+## Creating a task
+
+`f10 task create` runs `create` with the task on stdin: `# <title>` on the first line, the body after it, in markdown.
+A tracker whose API takes a markdown string (Notion's `POST /v1/pages` with `markdown`) gets it whole.
+The task's properties arrive as flags, and only the ones the caller set:
+
+```
+<driver> create [--status <s>] [--priority <p>] [--label <l>]... [--parent <n>] [--after <n>]
+```
+
+- `--status` is the tracker's own word for a status, passed as given.
+- `--priority` is one of the contract's `urgent`, `high`, `medium`, `low`; f10 has already rejected any other value, so a driver maps it onto its tracker's own.
+- `--label` repeats, once per label.
+- `--parent` is the task to link the new one under as a subtask, and `--after` the task it waits for, read from the body's `After:` line, which stays in the body.
+  Both are numbers, as every other verb's argument is.
+
+A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
+Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
+
 ## Exit codes
 
 | code | meaning |
@@ -77,14 +103,23 @@ Code `3` is a normal answer, not an error.
 A driver may implement `read` without `search`, and f10 falls back to the host's issues rather than failing; a driver without `branch` gets the default `<ID>/<slug>` branch name.
 On a tracker that is not the host's issues (Notion, Jira), a declined `read`, `url`, `index`, `list` or `search` has no fallback: f10 fails, naming your driver, the verb and the command that needs it.
 A declined `branch` there names the branch by the bare id, and a declined `children` reads as no parent link.
+A declined `create`, on any tracker, makes `f10 task create` exit 3 too, and the capture step creates the task through the Create adapter in `project.md`, as it does for a project with no driver.
 Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 
-## Two rules worth knowing
+## Rules worth knowing
 
-**Return data, never act.**
+**Read verbs change nothing; write verbs change only the tracker.**
+Neither kind acts on the local machine.
 A driver prints a url; f10 opens it.
 A driver prints a branch name; f10 creates the branch.
 That separation is what lets `open` mean the same thing for a task as it does for a pull request, where no driver is involved at all - and it keeps `f10 task open --link` pipeable.
+Creating a task is a side effect only the tracker can perform, so it belongs to the driver; opening and branching are the machine's, so they stay with f10.
+
+**Write verbs are not safe to retry blindly.**
+A read can be retried after a 5xx; a `create` retried after a 5xx or a timeout can make the task twice.
+Retry only a failure the tracker reports as rejected before acting, such as a 429.
+Treat any other failure as an unknown outcome and say so on stderr, so the user checks the tracker before running it again.
+f10 never retries a write verb, and its own error after a failed `create` says the task may exist.
 
 **Print the whole task.**
 `read` includes the task's comments after its body, as the host path does: an agent reads the task through this verb alone, and a decision made in a comment is part of what it asks.
@@ -110,8 +145,9 @@ case "${1:-}" in
   url)    exec bash "$here/scripts/notion-url.sh" "${2:-}" ;;
   search) exec bash "$here/scripts/notion-search.sh" "${2:-}" ;;
   branch) echo "ABC-${2:-}/$(bash "$here/scripts/notion-slug.sh" "${2:-}")" ;;
+  create) shift; exec bash "$here/scripts/notion-create.sh" "$@" ;;  # stdin passes through
   *)      exit 3 ;;
 esac
 ```
 
-The `*)` arm is the contract's whole growth story: every verb you have not written yet declines correctly, so a driver is useful from its first line.
+The `*)` arm is the contract's whole growth story: every verb you have not written yet, read or write, declines correctly, so a driver is useful from its first line.
