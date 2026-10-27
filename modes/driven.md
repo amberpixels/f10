@@ -23,6 +23,7 @@ Every question the steps call for (**wait or proceed** on a base with no code, a
    The driving session reads the ask through `f10 status <task-id>` and knows its own way back.
 
 A gap never becomes an ask: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`).
+Neither does a stale task's verdict (`steps/fetch.md` point 1): the run ends blocked with the verdict file named, and the user decides by planning it `anyway` or closing the task.
 
 ## The answer
 

@@ -60,7 +60,7 @@ func loreCommand() *cli.Command {
 					},
 					&cli.StringFlag{Name: "gate", Usage: "a verdict: judge, review or human"},
 					&cli.StringFlag{Name: "commit", Usage: "a verdict: the `SHA` judged"},
-					&cli.StringFlag{Name: "judged", Usage: "a verdict: plan or change, what it judged"},
+					&cli.StringFlag{Name: "judged", Usage: "a verdict: task, plan or change, what it judged"},
 					&cli.BoolFlag{Name: "retired", Usage: "a lesson superseding another: retire it"},
 					&cli.StringFlag{Name: "message", Aliases: []string{"m"}, Usage: "the body `TEXT`"},
 					&cli.StringFlag{Name: "file", Aliases: []string{"F"}, Usage: "read the body from `FILE`"},

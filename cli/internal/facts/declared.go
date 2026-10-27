@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -31,6 +34,7 @@ type Declared struct {
 	Catchup      string            `yaml:"catchup,omitempty"`
 	Traces       string            `yaml:"traces,omitempty"`
 	Lore         string            `yaml:"lore,omitempty"`
+	StaleAfter   string            `yaml:"stale_after,omitempty"`   // a task older than this is judged before it is planned
 	ReviewTraces string            `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
 	Flows        map[string]Flow   `yaml:"flows,omitempty"`
 	FlowByArea   map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
@@ -185,6 +189,32 @@ var vocab = map[string][]string{
 	"drive_finish":  {"on", "off"},
 }
 
+// staleAfterRE is a stale_after value: whole days or weeks. Hours mean
+// nothing against a tracker's created date, and a month has no fixed length.
+var staleAfterRE = regexp.MustCompile(`^([1-9]\d*)([dw])$`)
+
+// ParseStaleAfter reads a stale_after value, `10d` or `3w`.
+func ParseStaleAfter(value string) (time.Duration, error) {
+	m := staleAfterRE.FindStringSubmatch(value)
+
+	var n int
+	if m != nil {
+		n, _ = strconv.Atoi(m[1])
+	}
+
+	// a count past 3650 is a typo, and a large one would overflow the Duration
+	if n == 0 || n > 3650 {
+		return 0, fmt.Errorf("%q is not a number of days or weeks, like 10d or 3w", value)
+	}
+
+	unit := 24 * time.Hour
+	if m[2] == "w" {
+		unit *= 7
+	}
+
+	return time.Duration(n) * unit, nil
+}
+
 // trackerKinds maps the declared kind to the name the rest of f10 shows.
 var trackerKinds = map[string]string{
 	"github": "GitHub Issues",
@@ -213,6 +243,12 @@ func (d Declared) check() []string {
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
 			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
+		}
+	}
+
+	if d.StaleAfter != "" {
+		if _, err := ParseStaleAfter(d.StaleAfter); err != nil {
+			bad = append(bad, "stale_after: "+err.Error())
 		}
 	}
 
@@ -343,6 +379,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
 	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
 	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
+	set("stale_after", d.StaleAfter != "", func() { l.StaleAfter = d.StaleAfter })
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
 	set("drive_finish", d.DriveFinish != "", func() { l.DriveFinish = d.DriveFinish })

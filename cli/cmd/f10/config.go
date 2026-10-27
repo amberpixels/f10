@@ -42,6 +42,7 @@ type view struct {
 	Catchup         string              `json:"catchup"`
 	Traces          bool                `json:"traces"`
 	Lore            string              `json:"lore"`
+	StaleAfter      string              `json:"staleAfter,omitempty"`
 	Flows           map[string][]string `json:"flows"`
 	FlowByArea      map[string]string   `json:"flowByArea,omitempty"`
 	DriveFinish     bool                `json:"driveFinish"`
@@ -96,6 +97,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Catchup:         eff.Catchup,
 		Traces:          eff.Traces,
 		Lore:            eff.Lore,
+		StaleAfter:      eff.StaleAfter,
 		Flows:           eff.Flows,
 		FlowByArea:      eff.FlowByArea,
 		DriveFinish:     eff.DriveFinish,

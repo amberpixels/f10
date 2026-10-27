@@ -152,6 +152,12 @@ func TestPhaseText(t *testing.T) {
 	if got := r.PhaseText("capture"); got != "running" {
 		t.Errorf("PhaseText(capture) = %q, want running", got)
 	}
+
+	// but plan carries the judge a stale task stops at
+	r = &Run{Plan: "blocked", Ship: "pending", Leaf: "judge"}
+	if got := r.PhaseText("plan"); got != "blocked at judge" {
+		t.Errorf("PhaseText(plan) = %q, want blocked at judge", got)
+	}
 }
 
 // A declared pipeline survives a save and load, sets the final step, and a

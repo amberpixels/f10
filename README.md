@@ -138,6 +138,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 - **Judge** - a verdict on an idea, task, plan, PR or commit range: real problem or stated one, symptom or cause, what already exists, a longer-lived shape.
   `--blind` runs it in a fresh agent that never saw the conversation.
   In a ship pipeline, proceed continues, stop ends the run blocked, and the other two open a discussion ending in your call.
+  With `stale_after: 3w` in the frontmatter, a task older than that is judged before it is planned, and only proceed lets the plan go on.
   Creates nothing.
 - **Review** - the bug hunt, in two halves.
   `review` gives the full diff to a **blind** reviewer (the default, with nothing declared): four core categories (correctness and logic, architecture and guidelines, security and performance, tests and docs), at most three findings each, style skipped unless it affects correctness, written to a **findings file**.

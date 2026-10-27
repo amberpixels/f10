@@ -76,6 +76,7 @@ type Effective struct {
 	Catchup     string              `json:"catchup"`
 	Traces      bool                `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
 	Lore        string              `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
+	StaleAfter  string              `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
 	Flows       map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
 	FlowByArea  map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
 	DriveFinish bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish

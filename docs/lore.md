@@ -76,7 +76,7 @@ Fields per kind; a kind's field on another kind is an error:
 | `intent` | none |
 | `decision` | `chosen` (required); `rejected`, a list of `option` and `reason`, both required |
 | `finding` | `severity`: `blocker`, `major`, `minor` or `nit`; `status`: `open`, `fixed`, `wontfix` or `duplicate`; `resolution`, a sha or a reason, required unless the status is `open`; `source`, optional: `local` or `remote`, the review it came from |
-| `verdict` | `outcome`: `proceed`, `proceed with changes`, `rethink` or `stop`; `gate`: `judge`, `review` or `human`; `commit`, the sha judged; all required; `judged`, optional: `plan` or `change`, what it judged |
+| `verdict` | `outcome`: `proceed`, `proceed with changes`, `rethink` or `stop`; `gate`: `judge`, `review` or `human`; `commit`, the sha judged; all required; `judged`, optional: `task`, `plan` or `change`, what it judged |
 | `lesson` | at least one anchor; `retired: true` only with `supersedes` |
 
 The `verdict` outcomes are the four a judge's verdict file holds (`cli/internal/verdict`), spelled the same.
