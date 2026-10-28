@@ -420,6 +420,38 @@ func (h Host) PullsSince(ctx context.Context, since time.Time) ([]PR, error) {
 	return append(open, merged...), nil
 }
 
+// HeadFields are what the janitor reads of a branch's requests.
+const HeadFields = "number,state,headRefName,headRefOid,baseRefName,url,author,createdAt,mergedAt,closedAt"
+
+// PullsByHead is every request whose head is branch, in any state, newest
+// first. A branch can carry several: one closed, then another opened.
+func (h Host) PullsByHead(ctx context.Context, branch string) ([]PR, error) {
+	var out []PR
+
+	if h.GLab() {
+		var err error
+		if out, err = h.listMRs(ctx, url.Values{
+			"source_branch": {branch}, "state": {"all"}, "per_page": {"100"},
+		}); err != nil {
+			return nil, err
+		}
+	} else {
+		var found []pull
+		if err := h.Decode(ctx, &found, "pr", "list", "--head", branch, "--state", "all",
+			"--json", HeadFields, "--limit", "100"); err != nil {
+			return nil, err
+		}
+
+		for _, p := range found {
+			out = append(out, p.pr())
+		}
+	}
+
+	slices.SortStableFunc(out, func(a, b PR) int { return b.CreatedAt.Compare(a.CreatedAt) })
+
+	return out, nil
+}
+
 // DefaultBranchName is the repo's default branch as the host has it.
 func (h Host) DefaultBranchName(ctx context.Context) (string, error) {
 	var repo struct {

@@ -244,7 +244,14 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	in.progress = cmd.ErrWriter
 
-	return start(ctx, cmd.Writer, in)
+	if err := start(ctx, cmd.Writer, in); err != nil {
+		return err
+	}
+
+	sweepAfterStart(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+
+	return nil
 }
 
 // pickupFor is the PR the start argument names, or nil when it names a

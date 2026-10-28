@@ -68,6 +68,7 @@ f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --dis
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a flow, each task once its base has a commit
 f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
+f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start runs it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
 f10 lore show <change> [--json]     # the change's effective entries, the intent first
@@ -195,6 +196,8 @@ The pr step opens the PR or MR against the base branch, so it is stacked and the
 It runs inside a Herdr session only.
 Outside one it stops before touching anything and points at https://herdr.dev.
 
+After its report, start runs the [janitor](#janitor) when its last run is 6 hours old or more; its lines follow on stderr, prefixed `janitor:`, and a janitor failure is one warning line that never fails the start.
+
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
@@ -263,6 +266,33 @@ The size goes to the ledger once the merge landed; a branch with nothing to meas
 Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already archived, there is no workspace to close, and only what is left is removed.
 
 Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), a pushed branch whose PR was never opened, a checkout with no origin, and worktrees f10 did not start.
+
+## Janitor
+
+`f10 janitor` clears the task branches that outlived their task: a PR merged in the host's UI or by `gh pr merge`, a worktree removed by `wt remove`.
+`f10 finish` cleans up after itself; the janitor catches everything that went around it, without relying on a host setting such as GitHub's automatic head-branch deletion.
+`f10 start` runs it after its report at most once every 6 hours, `f10 janitor` runs it by hand, and `f10 janitor --dry-run` prints what it would remove and changes nothing.
+
+It considers local branches and origin's (one `git ls-remote --heads origin`) tied to a task id by the rule finish reads a branch with: the `f10-task` link, else the bundle the name spells, else the id it carries.
+Other branches and the default branch are never touched, and neither is a branch any checkout holds, main's included; those are dropped before the host is asked anything.
+For each remaining branch the host lists its requests (`gh pr list --head` / the GitLab MR API by source branch), and the branch goes only when all of these hold:
+
+- no request for it is open, and the newest one is merged, or closed without a merge, an abandoned task;
+- its tip, locally and on origin, is the request's head sha, so no commit the request lacks is lost;
+- no open request is based on it (`gh pr list --base` / `glab mr list --target-branch`), since deleting a stacked PR's base closes it on the host;
+- for a closed request, no local branch was started `--after` it.
+
+A branch with no request, or any branch when the checkout has no host CLI, goes only as finish would merge it as never pushed: no copy on origin, no upstream recorded, and its changes already in the local default branch.
+A host that fails to answer for a branch keeps it, with a line.
+
+Removal, per branch: a merged request's dependents are released as finish releases them; origin's copy is deleted through the host's API with its local tracking ref, but only for a request the signed-in user opened (someone else's keeps its origin branch, with a line, and one only on origin is not touched); then the local branch (`git branch -D`).
+Once every branch of a task is gone, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering, and its images are dropped; a task with another branch left, such as a second attempt still in a worktree, keeps both, with a line.
+A step failing keeps that branch, with a line, and the run goes on to the next.
+
+The output is one line per removal and per branch kept for a reason worth knowing; a branch whose request is still open is kept without one.
+`nothing to clear` when nothing was.
+The last run is the mtime of `janitor.stamp` in the shared storage root (main's `.f10/`, or the out-of-tree root).
+The stamp moves before the run, so `f10 drive` starting several tasks at once runs it once; `--dry-run` leaves it alone.
 
 ## Forward
 

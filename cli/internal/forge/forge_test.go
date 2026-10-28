@@ -229,3 +229,25 @@ func TestPullCommitsKeepTheEmail(t *testing.T) {
 		}
 	}
 }
+
+// Both hosts list a branch's requests in any state, newest first, with the
+// head sha the janitor compares the branch's tip to.
+func TestPullsByHead(t *testing.T) {
+	script(t, map[string]string{
+		"gh pr list --head GH-1 --state all --json " + HeadFields + " --limit 100": `[
+		  {"number":3,"state":"CLOSED","headRefName":"GH-1","headRefOid":"old","createdAt":"2026-10-01T00:00:00Z"},
+		  {"number":5,"state":"MERGED","headRefName":"GH-1","headRefOid":"abc","createdAt":"2026-10-05T00:00:00Z"}]`,
+		"glab api --paginate projects/:fullpath/merge_requests?per_page=100&source_branch=GH-1&state=all": `[
+		  {"iid":7,"state":"merged","source_branch":"GH-1","sha":"def","created_at":"2026-10-05T00:00:00Z"}]`,
+	})
+
+	got, err := Host{Name: "gh"}.PullsByHead(t.Context(), "GH-1")
+	if err != nil || len(got) != 2 || got[0].Number != 5 || got[0].Status != Merged || got[0].HeadSHA != "abc" {
+		t.Errorf("gh = %+v, %v", got, err)
+	}
+
+	got, err = Host{Name: "glab"}.PullsByHead(t.Context(), "GH-1")
+	if err != nil || len(got) != 1 || got[0].HeadSHA != "def" || got[0].Status != Merged {
+		t.Errorf("glab = %+v, %v", got, err)
+	}
+}
