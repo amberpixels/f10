@@ -59,6 +59,16 @@ func taskCommand() *cli.Command {
 				Action: runTaskRef,
 			},
 			{
+				Name: "report",
+				Usage: "print a report's facts block for the tasks: one task's task, title and url rows, else a row " +
+					"per task, its subtasks under it with --children; from the titles f10 already read",
+				ArgsUsage: "<task-id>...",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "children", Usage: "the one task's subtasks too, in After: order under it"},
+				},
+				Action: runTaskReport,
+			},
+			{
 				Name:      "open",
 				Usage:     "open the task in the browser; with no task id, the task list",
 				ArgsUsage: "[task-id]",
@@ -75,8 +85,15 @@ func taskCommand() *cli.Command {
 				Name:      "children",
 				Usage:     "list the task's open subtasks in After: order (exit 3: the tracker has no parent link)",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{&cli.BoolFlag{Name: "json", Usage: "emit the rows as JSON"}},
-				Action:    runTaskChildren,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "json", Usage: "emit the rows as JSON"},
+					&cli.BoolFlag{Name: "open", Usage: "leave out finished rows too (merged, or the plan archived)"},
+					&cli.BoolFlag{
+						Name:  "plain",
+						Usage: "print the tree, each task's url beneath it, even into a pipe (for a skill to relay)",
+					},
+				},
+				Action: runTaskChildren,
 			},
 			{
 				Name: "create",

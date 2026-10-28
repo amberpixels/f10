@@ -42,9 +42,10 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
+f10 task report <id>... [--children]   # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
-f10 task children [id] [--json]   # the task's open subtasks, in After: order
+f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] < task.md   # through the driver; prints the new id
 f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--set k=v]...   # absolute values
@@ -59,7 +60,7 @@ f10 review ack [n] [--id <id>]                        # leave the declared handl
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json | --markdown]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape), else this session's, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape), else this session's, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
@@ -191,7 +192,7 @@ Drive's finish asks no riders question, since a resume carries only the latest a
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
 Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
-A conflict there stops ship and hands off to `/f10:catchup`, which settles it with both sides kept.
+A conflict there stops ship, marks the branch for the base that conflicted (`f10-landed`, or `f10-base-moved` for a recorded base), and hands off to `/f10:catchup`, which settles it with both sides kept.
 Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
 The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
@@ -345,20 +346,29 @@ Out of scope: more than one task or more than one command per call, tailing the 
 
 ## Status
 
-`f10 status 116` on a parent prints one row per child, closed ones included, in `f10 task children` order and indented the same way:
+`f10 status 116` on a parent prints a tree: a heading with a count per stage, then a row per child, closed ones included, in `f10 task children` order, on box-drawing lines down each `After:` chain:
 
 ```
-FT-117    done       trailers + traces switch  finish        #128 merged
-FT-118    reviewing  PR state block            review        #129
-  FT-120  waiting    look-around + f10 board   after FT-118
-FT-121    halted     sidebar icons             ship
-          halt: agent gh-121-1a2b3c in workspace w3 is idle while its run says ship running: implement
+FT-116  2 done · 1 halted · 1 reviewing
+├─ ✓ FT-117     done       finish  #128 merged
+│            trailers + traces switch
+├─ · FT-118     reviewing  review  #129
+│  │         PR state block
+│  └─ ✓ FT-120  done       finish  #131 merged
+│               look-around + f10 board
+└─ ✗ FT-121     halted     ship
+             sidebar icons
+       halt  agent gh-121-1a2b3c in workspace w3 is idle while its run says ship running: implement
 ```
 
-The columns are the id, the stage, the title cut to fit the terminal, the current or last step, and the PR with its state when it is not open.
+A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking, `·` anything else), the id, the stage, the current or last step, and the PR with its state when it is not open.
+The title goes on the line beneath, cut to fit; the ask, the halt reason and what unblocks it (`next`) follow as labelled lines.
+A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
 On a terminal the id and the PR are links (OSC 8).
-`--markdown` writes the same rows as a markdown table, ids and PRs linked, for a skill to print in chat where a fenced block shows no links; it applies only to rows, and a run's block prints as without it.
+`--plain` prints the same tree with no color, its gates as a `gates` line and its url (the PR's, else the task's) as a `url` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask or a url is never cut.
+A skill relays it in a fenced block: relayed text shows an OSC 8 link's escape bytes, and a markdown table is reflowed at pane width.
+It applies only to the tree; a run's block prints as without it.
 
 | stage | when | color |
 |---|---|---|
@@ -400,7 +410,7 @@ ship            running: review:local
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
 - **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), each block for the half its `source:` names, else the header's: remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each half; the newest `verdicts/<id>/<n>.md`, the task or plan judge's when its `subject:` is the task or a plan.
 
-A parent's rows carry the same gates as one column after the step, `L 3/4 · R open · J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` not in the flow, `…` running, `?` unknown; `--markdown` adds it as a `gates` column.
+A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `L 3/4 · R open · J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` not in the flow, `…` running, `?` unknown.
 `--json` holds them in a `gates` array, on a run and on a row.
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 
@@ -490,6 +500,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
    Once it ends clean, the driver pushes the caught-up branch (`--force-with-lease` against the sha it read, when the catchup rebased) and then merges.
    A branch that still conflicts after one catchup halts the task.
+   A ship stopped by its catchup guard, which marks the branch, gets the same catchup once per task per drive, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict in that drive halts it.
    The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A conflict the catchup cannot settle is an ask; anything else halts the task.
 6. **Waiting.**
@@ -523,7 +534,7 @@ An answer sent closes the task's ask in the inbox. An answer the inbox already h
 A drive whose task was answered after it last looked, while it still held its lease, resumes itself once it has stopped: `f10 asks resume` waits for its process to end, then has the daemon run `--resume <n>`.
 `f10 drive cancel <n>` closes the drive's open asks.
 An agent found mid-turn is attached to rather than prompted again.
-A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped.
+A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
 `/f10:drive` runs the command in the background, answers an exit 4 through `/f10:asks` (the questions in one questionnaire, the answers written to the inbox, the drive resumed), and prints the final report.
@@ -901,7 +912,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
-`children` prints a tree to a terminal and JSON to a pipe or with `--json`.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, each task's url on a `url` line beneath it, and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
 
 ## Children
 
@@ -942,6 +953,22 @@ A task not there costs one tracker call (the host's issue, or the driver's `read
 `--fresh` asks the tracker for every task and rewrites what is kept.
 A title renamed on the tracker stays stale until f10 reads that task again.
 An id the tracker does not know, or a tracker that fails, prints bare with a note on stderr, and the exit is 0.
+
+## Report
+
+`f10 task report` prints the facts block a skill's report opens with (`conventions/report.md`), from the same titles and urls as `task ref`.
+One id prints its `task`, `title` and `url` rows.
+Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
+`--children` takes one parent and hangs the subtasks `f10 task children` lists (closed ones left out) under it, in that order, on box-drawing lines:
+
+```
+FT-71:        ↗ https://github.com/amberpixels/f10/issues/71
+├─ FT-72:     ↗ https://github.com/amberpixels/f10/issues/72
+│  └─ FT-73:  ↗ https://github.com/amberpixels/f10/issues/73
+└─ FT-74:     ↗ https://github.com/amberpixels/f10/issues/74
+```
+
+A task with no url known prints bare, a tracker with no parent link prints the parent alone with a note on stderr, and the exit is 0 either way.
 
 ## Comment and update
 
