@@ -354,10 +354,10 @@ func TestIssueCreatedNamesTheCapturedTask(t *testing.T) {
 func TestBareStatusIsAnsweredWithoutAModelTurn(t *testing.T) {
 	env := testEnv(t)
 	asked := ""
-	env.StatusText = func(_ context.Context, session string) string {
+	env.StatusText = func(_ context.Context, session string) (string, bool) {
 		asked = session
 
-		return "task     FT-12\nship     ◎ running: implement\n"
+		return "task     FT-12\nship     ◎ running: implement\n", false
 	}
 
 	out := Dispatch(context.Background(), payload(t, "ue-status-bare"), env)
@@ -402,11 +402,22 @@ func TestBareStatusIsAnsweredWithoutAModelTurn(t *testing.T) {
 
 func TestStatusWithNothingToSay(t *testing.T) {
 	env := testEnv(t)
-	env.StatusText = func(context.Context, string) string { return "" }
+	env.StatusText = func(context.Context, string) (string, bool) { return "", false }
 
 	out := Dispatch(context.Background(), payload(t, "ue-status-bare"), env)
 	if !strings.Contains(string(out), "no f10 run in this session") {
 		t.Errorf("verdict: %s", out)
+	}
+}
+
+// A bare status holding a question to relay goes to the model, as one with
+// a task id does.
+func TestBareStatusWithAnAskTakesAModelTurn(t *testing.T) {
+	env := testEnv(t)
+	env.StatusText = func(context.Context, string) (string, bool) { return "launched here  1 asking", true }
+
+	if out := Dispatch(context.Background(), payload(t, "ue-status-bare"), env); out != nil {
+		t.Errorf("a status with an ask was answered: %s", out)
 	}
 }
 

@@ -77,6 +77,7 @@ type childRow struct {
 	Depth    int      `json:"depth"`
 
 	number int
+	suffix string // a launched start's worktree suffix: the checkout read is that one
 }
 
 // A rawChild is a subtask as its source returns it, before f10 reads its
