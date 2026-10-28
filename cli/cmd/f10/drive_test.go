@@ -51,7 +51,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	fx.f.script(headRef, "origin/main")
 	fx.f.script("git rev-parse -q --verify refs/heads/main", "main0")
 	fx.f.script("git rev-parse -q --verify HEAD", "head0")
-	fx.f.script("git merge-tree --write-tree --name-only --no-messages main0 HEAD", "tree")
+	fx.f.script("git merge-tree --write-tree --no-messages main0 HEAD", "tree")
 
 	// a test names the chain after the ids, as drive once took it, to run
 	// its machinery on any skill; drive itself derives the chain
@@ -476,6 +476,14 @@ func TestDriveResumesWithTheAnswer(t *testing.T) {
 	}
 }
 
+// merge-tree's conflicted stages as the drive reads them: a.go conflicting
+// one way, a.go with the target's side changed, and b.go.
+const (
+	aOneWay  = "t\n100644 a1 1\ta.go\n100644 a2 2\ta.go\n100644 a3 3\ta.go\n"
+	aChanged = "t\n100644 a1 1\ta.go\n100644 a2x 2\ta.go\n100644 a3 3\ta.go\n"
+	bOneWay  = "t\n100644 b1 1\tb.go\n100644 b2 2\tb.go\n100644 b3 3\tb.go\n"
+)
+
 // catchupNext is the next line the catchup guard leaves on a driven ship.
 const catchupNext = "run /f10:catchup --driven in the worktree, then rerun the drive"
 
@@ -615,7 +623,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	landed := "git config --get branch.GH-1." + cfgLanded
 	catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
 	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
-	conflicts := "git merge-tree --write-tree --name-only --no-messages "
+	conflicts := "git merge-tree --write-tree --no-messages "
 
 	// conflictsAgain is what a resumed ship whose guard conflicted once more
 	// leaves: the stop, the mark, and git's view of main and the branch
@@ -676,7 +684,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 		},
 		"conflicts again, main did not move": {
 			after: restored,
-			again: conflictsAgain("main0", "t\na.go\n"),
+			again: conflictsAgain("main0", aOneWay),
 			code:  exitHalted,
 			want: []string{
 				"GH-1 halted at ship: GH-1 still conflicts with main after a catchup: " +
@@ -685,19 +693,29 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			},
 			catchups: 1,
 		},
-		"conflicts again on the same files": {
+		"conflicts again on the same files the same way": {
 			after: restored,
-			again: conflictsAgain("main1", "t\na.go\n"),
+			again: conflictsAgain("main1", aOneWay),
 			code:  exitHalted,
 			want: []string{
 				"GH-1 halted at ship: GH-1 still conflicts with main after a catchup: " +
-					"the same files conflict with main again: a.go",
+					"the same files conflict with main the same way again: a.go",
 			},
 			catchups: 1,
 		},
+		"conflicts again on the same file, main changed it": {
+			after: restored,
+			again: conflictsAgain("main1", aChanged),
+			later: []func(fx *driveFixture, t *testing.T){
+				restored,
+				func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
+			},
+			want:     []string{"the branch is settled: resume at pr", "GH-1:    done: ship"},
+			catchups: 2,
+		},
 		"conflicts again, main moved": {
 			after: restored,
-			again: conflictsAgain("main1", "t\nb.go\n"),
+			again: conflictsAgain("main1", bOneWay),
 			later: []func(fx *driveFixture, t *testing.T){
 				restored,
 				func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
@@ -714,8 +732,8 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			fx.f.script(catchup, "{}")
 			fx.f.script(resume, "{}")
 			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
-			// the first catchup is recorded against main0, a.go conflicting
-			fx.f.fail(conflicts+"main0 HEAD", shell.Result{Code: 1, Stdout: "t\na.go\n"})
+			// the first catchup is recorded against main0, a.go conflicting one way
+			fx.f.fail(conflicts+"main0 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
 
 			// the ship's turn, then the catchup's, then the resumed ship's,
 			// then a second catchup's and a second resume's
@@ -1652,27 +1670,29 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 // unchanged, main did not move, or the same files conflict again, halt
 // naming them.
 func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
-	conflicts := "git merge-tree --write-tree --name-only --no-messages "
+	conflicts := "git merge-tree --write-tree --no-messages "
 	cases := map[string]struct {
-		// after the catchup: HEAD, origin/main, and the files HEAD conflicts on
+		// after the catchup: HEAD, origin/main, and what HEAD conflicts on
+		// (aOneWay, aChanged and bOneWay are merge-tree's conflicted stages)
 		head, main, files string
 		again             bool
 		halt              string
 	}{
 		"settled": {head: "new", main: "m1"},
 		"unchanged": {
-			head: "head0", main: "m2", files: "t\nb.go\n",
+			head: "head0", main: "m2", files: bOneWay,
 			halt: "the catchup left the branch unchanged; conflicting: b.go",
 		},
 		"main did not move": {
-			head: "new", main: "m1", files: "t\na.go\n",
+			head: "new", main: "m1", files: aOneWay,
 			halt: "origin/main has not moved since the catchup; conflicting: a.go",
 		},
-		"same files": {
-			head: "new", main: "m2", files: "t\na.go\n",
-			halt: "the same files conflict with origin/main again: a.go",
+		"same files the same way": {
+			head: "new", main: "m2", files: aOneWay,
+			halt: "the same files conflict with origin/main the same way again: a.go",
 		},
-		"main moved": {head: "new", main: "m2", files: "t\nb.go\n", again: true},
+		"same file, main changed it": {head: "new", main: "m2", files: aChanged, again: true},
+		"main moved, other files":    {head: "new", main: "m2", files: bOneWay, again: true},
 	}
 
 	for name, tc := range cases {
@@ -1701,11 +1721,13 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor old HEAD", shell.Result{Code: 1})
 			fx.f.script("git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1", "")
-			// the record when the catchup goes out: main at m1, HEAD at head0, a.go conflicting
-			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m1")
-			fx.f.script("git rev-parse -q --verify origin/main", tc.main)
+			// the record when the catchup goes out: origin/main at m1, ahead of
+			// the local main, HEAD at head0, a.go conflicting one way
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m1", tc.main)
+			fx.f.fail("git merge-base --is-ancestor m1 main0", shell.Result{Code: 1})
+			fx.f.fail("git merge-base --is-ancestor "+tc.main+" main0", shell.Result{Code: 1})
 			fx.f.script("git rev-parse -q --verify HEAD", "head0", tc.head)
-			fx.f.fail(conflicts+"m1 HEAD", shell.Result{Code: 1, Stdout: "t\na.go\n"})
+			fx.f.fail(conflicts+"m1 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
 			fx.f.fail(conflicts+tc.main+" HEAD", shell.Result{Code: 1, Stdout: tc.files})
 
 			// origin's copy after the push: clean once settled, else still conflicting
@@ -2441,7 +2463,7 @@ func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "b2")
 	fx.f.answers["git merge-base --is-ancestor b2 refs/heads/GH-2"] = []shell.Result{{Code: 1}, {}}
 	fx.f.script("git config branch.GH-2."+cfgMoved+" b2", "")
-	fx.f.script("git merge-tree --write-tree --name-only --no-messages b2 HEAD", "tree")
+	fx.f.script("git merge-tree --write-tree --no-messages b2 HEAD", "tree")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" /f10:catchup --driven", "{}")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
@@ -2526,8 +2548,13 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 // before finish, which merges it here: clean goes straight to finish, a
 // conflict is marked landed and caught up first.
 func TestDriveFinishesABranchNeverPushed(t *testing.T) {
-	for _, clean := range []bool{true, false} {
-		t.Run(fmt.Sprintf("clean=%v", clean), func(t *testing.T) {
+	// clean merges at once; unsettled gets a catchup that leaves the mark;
+	// again gets a catchup that ends clean, then conflicts with the same
+	// local main, which origin's copy is behind, so the record and the check
+	// resolve the same commit and the halt names it unmoved
+	for _, mode := range []string{"clean", "unsettled", "again"} {
+		t.Run(mode, func(t *testing.T) {
+			clean := mode == "clean"
 			fx := newDriveFixture(t, "GH-1", "finish")
 			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
@@ -2546,11 +2573,19 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 
 			if !clean {
 				fx.f.fail("git merge-tree --write-tree m0 refs/heads/GH-1", shell.Result{Code: 1})
-				fx.f.fail("git merge-tree --write-tree --name-only --no-messages m0 HEAD",
-					shell.Result{Code: 1, Stdout: "t\na.go\n"})
+				fx.f.fail("git merge-tree --write-tree --no-messages m0 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
 				fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
 				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main")
 				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
+
+				if mode == "again" {
+					// the catchup cleared the mark; origin's main is behind the local one
+					fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main", "")
+					fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o0")
+					fx.f.script("git merge-base --is-ancestor o0 m0", "")
+					fx.f.script("git rev-parse -q --verify HEAD", "head0", "head1") // the catchup moved the branch
+				}
+
 				fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 				fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 				fx.f.script("git status --porcelain", "")
@@ -2571,9 +2606,16 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 				return
 			}
 
-			// the catchup left the mark, so the task halts rather than merging
+			// the catchup left the mark, or the branch conflicts with the same
+			// main again: the task halts rather than merging
+			want := "the catchup did not end clean"
+			if mode == "again" {
+				want = "GH-1 still conflicts with main after a catchup: " +
+					"main has not moved since the catchup; conflicting: a.go"
+			}
+
 			if exitCode(err) != exitHalted || fx.f.called("finish GH-1") ||
-				!strings.Contains(out, "conflicts with m0, catching up first") {
+				!strings.Contains(out, "conflicts with m0, catching up first") || !strings.Contains(out, want) {
 				t.Fatalf("err = %v\n%s", err, out)
 			}
 		})

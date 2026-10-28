@@ -8,9 +8,11 @@
   ],
   "checks": [
     "plan",
+    "intent",
     "verify",
     "accept",
-    "commit"
+    "commit",
+    "lore"
   ],
   "accept": [
     {

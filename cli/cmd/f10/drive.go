@@ -24,6 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -240,6 +241,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				progress:  progress,
 				plansDir:  t.sharedPlansDir(),
 				title:     titleLookup(t, task.Number),
+				lore:      func() string { return loreNote(&lore.Store{Root: loreRootFor(t)}, task.ID) },
 				// a driven finish asks no second question, since a resume
 				// carries only the latest answer: a bundle's riders stay
 				// open, the reversible choice, and the report names them
@@ -587,18 +589,19 @@ type driveRun struct {
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
 
 // catchupSent is what the branch looked like when a catchup went out: the
-// sha it was being caught up to, its head, and the files that conflicted
-// (joined, "" when none were read). A field left "" compares to nothing.
-// base names the target in prose.
+// sha it was being caught up to, its head, and the conflicts then, each path
+// with the blobs on both sides (conflictWay), "" when none were read. A
+// field left "" compares to nothing. base names the target in prose.
 type catchupSent struct {
-	target, head, files, base string
+	target, head, way, base string
 }
 
 // halts says why a conflict after this catchup halts the task instead of
-// sending another, or "" when the target moved and another catchup can make
-// progress: the catchup left the branch where it was, the target is where
-// it was, or the same files conflict again. base names the target in prose.
-func (c *catchupSent) halts(target, head, files, base string) string {
+// sending another, or "" when another catchup can make progress: the catchup
+// left the branch where it was, the target is where it was, or the same
+// files conflict the same way, every blob on both sides as before, which a
+// target that moved elsewhere does not change. base names the target in prose.
+func (c *catchupSent) halts(target, head string, conflicts []gitx.Conflict, base string) string {
 	switch {
 	case c == nil:
 		return ""
@@ -606,11 +609,33 @@ func (c *catchupSent) halts(target, head, files, base string) string {
 		return "the catchup left the branch unchanged"
 	case target != "" && target == c.target:
 		return base + " has not moved since the catchup"
-	case files != "" && files == c.files:
-		return "the same files conflict with " + base + " again: " + files
+	case len(conflicts) > 0 && conflictWay(conflicts) == c.way:
+		return "the same files conflict with " + base + " the same way again: " + conflictPaths(conflicts)
 	}
 
 	return ""
+}
+
+// conflictWay is the identity of a set of conflicts: every path with the
+// blobs each side brought, so a path that conflicts again with another
+// blob on either side is a new conflict.
+func conflictWay(conflicts []gitx.Conflict) string {
+	keys := make([]string, 0, len(conflicts))
+	for _, c := range conflicts {
+		keys = append(keys, c.Key())
+	}
+
+	return strings.Join(keys, ", ")
+}
+
+// conflictPaths names the conflicting paths for prose.
+func conflictPaths(conflicts []gitx.Conflict) string {
+	paths := make([]string, 0, len(conflicts))
+	for _, c := range conflicts {
+		paths = append(paths, c.Path)
+	}
+
+	return strings.Join(paths, ", ")
 }
 
 // current is run unless its agent is gone, as for a run a cancelled start
@@ -1718,20 +1743,22 @@ func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string
 		return fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
 	}
 
-	files, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
+	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
 	if err != nil {
 		return fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
 	}
 
-	r.lastCatchup = &catchupSent{target: target, head: head, files: strings.Join(files, ", "), base: base}
+	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts), base: base}
 
 	return nil
 }
 
 // catchupTarget is the sha the catchup step will bring in for a mark, and
 // its name for prose, resolved as that step's point 2 resolves the base:
-// f10-landed is origin's default branch, else the local one; f10-base-moved
-// holds the base branch's head itself.
+// f10-landed is the local default branch when it holds origin's, else
+// origin's, else the local one; f10-base-moved holds the base branch's head
+// itself. The progress check reads the target through this too, so the
+// record and the comparison never name different commits.
 func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string) (string, string, error) {
 	if key == cfgMoved {
 		target, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+key)
@@ -1747,27 +1774,50 @@ func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string
 		return "", "", err
 	}
 
-	for _, ref := range []string{"refs/remotes/origin/" + def, "refs/heads/" + def} {
-		target, err := gitx.Ref(ctx, in.main, ref)
-		if err != nil {
-			return "", "", fmt.Errorf("reading %s: %w", ref, err)
-		}
-
-		if target != "" {
-			return target, strings.TrimPrefix(strings.TrimPrefix(ref, "refs/remotes/"), "refs/heads/"), nil
-		}
+	local, err := gitx.Ref(ctx, in.main, "refs/heads/"+def)
+	if err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", def, err)
 	}
 
-	return "", "", fmt.Errorf("cannot read %s here", def)
+	remote, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
+	if err != nil {
+		return "", "", fmt.Errorf("reading origin/%s: %w", def, err)
+	}
+
+	switch {
+	case local == "" && remote == "":
+		return "", "", fmt.Errorf("cannot read %s here", def)
+	case remote == "":
+		return local, def, nil
+	case local == "":
+		return remote, "origin/" + def, nil
+	}
+
+	holds, err := gitx.IsAncestor(ctx, in.main, remote, local)
+
+	switch {
+	case err != nil:
+		return "", "", err
+	case holds:
+		return local, def, nil
+	}
+
+	return remote, "origin/" + def, nil
 }
 
-// conflictAgain says why a conflict with target, after the catchup this
-// drive sent, halts the task rather than sending another catchup, or "" to
-// catch up again; the files that conflict now are named either way. The
-// reads halt on a git that cannot answer, as every read before a push does.
-func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, target, base string) (string, error) {
+// conflictAgain says why a conflict with the mark's target, after the
+// catchup this drive sent, halts the task rather than sending another
+// catchup, or "" to catch up again; the files that conflict now are named
+// either way. The reads halt on a git that cannot answer, as every read
+// before a push does.
+func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string) (string, error) {
 	if r.lastCatchup == nil {
 		return "", nil
+	}
+
+	target, base, err := in.catchupTarget(ctx, r, key)
+	if err != nil {
+		return "", err
 	}
 
 	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
@@ -1775,16 +1825,18 @@ func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, target, ba
 		return "", fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
 	}
 
-	paths, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
+	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
 	}
 
-	files := strings.Join(paths, ", ")
+	reason := r.lastCatchup.halts(target, head, conflicts, base)
+	if reason != "" && len(conflicts) > 0 && !strings.HasSuffix(reason, conflictPaths(conflicts)) {
+		reason += "; conflicting: " + conflictPaths(conflicts)
+	}
 
-	reason := r.lastCatchup.halts(target, head, files, base)
-	if reason != "" && files != "" && !strings.Contains(reason, files) {
-		reason += "; conflicting: " + files
+	if reason != "" {
+		reason = r.o.branch + " still conflicts with " + base + " after a catchup: " + reason
 	}
 
 	return reason, nil
@@ -1792,9 +1844,8 @@ func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, target, ba
 
 // catchupHalt is the halt a conflict the drive will not catch up again
 // leaves: the reason, and how to settle it by hand.
-func catchupHalt(r *driveRun, skill, base, reason string) driveResult {
-	res := halted(r.task.ref.ID, skill, fmt.Sprintf("%s still conflicts with %s after a catchup: %s",
-		r.o.branch, base, reason))
+func catchupHalt(r *driveRun, skill, reason string) driveResult {
+	res := halted(r.task.ref.ID, skill, reason)
 	res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
 
 	return res
@@ -1929,26 +1980,17 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return nil
 	}
 
-	if r.lastCatchup != nil {
-		target, err := gitx.Ref(ctx, r.o.path, base)
-		if err != nil {
-			res := halted(id, "finish", err.Error())
+	reason, err := in.conflictAgain(ctx, r, cfgLanded)
 
-			return &res
-		}
+	switch {
+	case err != nil:
+		res := halted(id, "finish", err.Error())
 
-		reason, err := in.conflictAgain(ctx, r, target, base)
+		return &res
+	case reason != "":
+		res := catchupHalt(r, "finish", reason)
 
-		switch {
-		case err != nil:
-			res := halted(id, "finish", err.Error())
-
-			return &res
-		case reason != "":
-			res := catchupHalt(r, "finish", base, reason)
-
-			return &res
-		}
+		return &res
 	}
 
 	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+cfgLanded, def); err != nil {
@@ -2525,14 +2567,7 @@ func (in *driveInput) guardAgain(ctx context.Context, r *driveRun) *driveResult 
 		return nil
 	}
 
-	target, base, err := in.catchupTarget(ctx, r, key)
-	if err != nil {
-		res := halted(r.task.ref.ID, "ship", err.Error())
-
-		return &res
-	}
-
-	reason, err := in.conflictAgain(ctx, r, target, base)
+	reason, err := in.conflictAgain(ctx, r, key)
 
 	switch {
 	case err != nil:
@@ -2540,7 +2575,7 @@ func (in *driveInput) guardAgain(ctx context.Context, r *driveRun) *driveResult 
 
 		return &res
 	case reason != "":
-		res := catchupHalt(r, "ship", base, reason)
+		res := catchupHalt(r, "ship", reason)
 
 		return &res
 	}

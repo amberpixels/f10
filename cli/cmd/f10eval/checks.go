@@ -26,6 +26,7 @@ type Check struct {
 // fixture's repo after the run.
 var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"plan":     checkPlan,
+	"intent":   checkIntent,
 	"accept":   checkAccept,
 	"verify":   checkVerify,
 	"commit":   checkCommit,
@@ -171,6 +172,17 @@ func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 	}
 
 	return result("verdict", problems)
+}
+
+// checkIntent: plan wrote the change's intent, the lore entry show and why
+// print first. Presence is the check; the schema is checkLore's.
+func checkIntent(_ context.Context, dir string, s Scenario) Check {
+	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "lore", s.Task, "*-intent.md"))
+	if len(files) == 0 {
+		return result("intent", []string{"no intent entry"})
+	}
+
+	return result("intent", nil)
 }
 
 // checkLore: the change's lore entries pass f10's own schema lint.
