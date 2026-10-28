@@ -98,14 +98,20 @@ A failing `lore add` is one line in the step's report, never a failed step.
 | `lesson` | the ship skill, after its flow's last entry, from the findings, their outcomes and the run; most changes leave none | a later change that proves one wrong supersedes or retires it inside the change that wrote it |
 
 Decisions and lessons come from a ship run: a change that reaches `f10 finish` another way (a PR picked up, a branch shipped by hand, a ship run that died before its end) has none, and finish's report says so in one line counting the change's intent, decisions and lessons.
-`f10 status` reads lore first and the review and verdict files for runs from before lore; lore is the one meant to last.
+
+### Who reads what
+
+- The **implement** step reads `lessons` once per file before its first edit and follows them, or records an override as a `decision`.
+- The **review** step reads `lessons` over every file in the diff and `why` at the base for a line it doubts; a hunk that breaks a lesson is a finding naming the lesson's id.
+- `f10 finish` runs `check` right before a merge, under `project.md`'s `lore_gate`: `warn` notes the reasons, `block` refuses.
+- `f10 status` reads lore first and the review and verdict files for runs from before lore; lore is the one meant to last.
 
 ## Verbs
 
 ```bash
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]
 f10 lore show <change> [--json]
-f10 lore why <path:line> [--json]
+f10 lore why <path:line[@rev]> [--json]
 f10 lore lessons <path> [--json]
 f10 lore check <change>
 f10 lore validate [<change>]
@@ -125,10 +131,12 @@ Every verb takes `--root <dir>`.
   `why` and `lessons` skip a file that does not parse; `validate` reports it.
   Nothing found: `no record`, exit 0.
   A line not yet committed is `no record` too; a path git does not know is an error.
+  `path:line@<rev>` reads the line as that revision has it, the base sha for a reviewer asking about a line a diff rewrote, so the answer is the earlier change; a path absent at the revision is `no record`.
 - **`lessons`** prints the effective, non-retired lessons anchored to the path, across every change.
   An agent reads it before editing a file.
 - **`check`** exits 1, naming each reason, when the intent is missing, no verdict exists, the latest verdict is `rethink` or `stop`, or a `blocker` or `major` finding is still effectively `open`.
   It exits 0 otherwise.
+  `f10 finish` runs it right before a merge, under `project.md`'s `lore_gate` (`docs/project-setup.md`): `warn`, the default, notes the reasons and merges; `block` refuses, which suits a flow with a `judge` entry, the one writer of verdicts.
 - **`validate`** lints every entry of the change, or of every change: parse errors, missing or misplaced fields, bad anchors, a filename or directory that disagrees with the frontmatter, dangling `supersedes`, cross-kind `supersedes` and forks.
   It exits 1 when it finds any.
 

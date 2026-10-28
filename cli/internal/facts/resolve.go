@@ -385,6 +385,11 @@ func (e *Effective) resolveHosting(
 
 	e.Lore = cmp.Or(fm.Lore, "local")
 
+	e.settle("lore_gate", fmSource("lore_gate", fm.LoreGate), source{},
+		Fact{Key: "lore_gate", Value: "warn", Origin: OriginDefault})
+
+	e.LoreGate = cmp.Or(fm.LoreGate, "warn")
+
 	e.settle("stale_after", fmSource("stale_after", fm.StaleAfter), source{},
 		Fact{Key: "stale_after", Value: "off", Origin: OriginDefault})
 	e.StaleAfter = fm.StaleAfter

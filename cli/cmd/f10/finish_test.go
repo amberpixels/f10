@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -2083,4 +2084,137 @@ func TestFinishMergedOnly(t *testing.T) {
 	if !fx.f.called("git worktree remove") {
 		t.Errorf("a merged PR was not finished: %v", fx.f.calls)
 	}
+}
+
+// lore check runs right before the merge lands: under warn its reasons are
+// a note and the PR merges, under block they are the error and nothing
+// changed. Nothing about to merge runs no check, and a passing check is
+// silent.
+func TestFinishLoreGate(t *testing.T) {
+	storeIn := func(fx *finishFixture) *lore.Store {
+		return &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}
+	}
+
+	t.Run("warn", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.openPR()
+		fx.in.loreStore, fx.in.gate = storeIn(fx), "warn"
+
+		out, err := fx.run(t)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !fx.f.called("gh pr merge") ||
+			!strings.Contains(out, "lore check GH-1: no entries for GH-1 (lore_gate: warn): merged anyway") {
+			t.Errorf("warn did not merge with a note:\n%s", out)
+		}
+	})
+
+	t.Run("block", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.openPR()
+		plan := fx.plan(t, "GH-1.md", "# plan")
+		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
+
+		_, err := fx.run(t)
+		if err == nil || !strings.Contains(err.Error(), "lore check GH-1: no entries for GH-1 (lore_gate: block)") {
+			t.Fatalf("err = %v", err)
+		}
+
+		if fx.f.called("gh pr merge") || fx.f.called("git worktree remove") {
+			t.Errorf("block changed something: %v", fx.f.calls)
+		}
+
+		if _, err := os.Stat(plan); err != nil {
+			t.Error("the plan moved")
+		}
+	})
+
+	t.Run("already merged", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.f.script(ghView, prMerged)
+		fx.f.script(lsRem, "")
+		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
+
+		if out, err := fx.run(t); err != nil || strings.Contains(out, "lore check") {
+			t.Errorf("a merged PR was checked: %v\n%s", err, out)
+		}
+	})
+
+	t.Run("local", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.f.script(ghView, prOpenBy("alice"))
+		fx.f.script(unpushed, "")
+		fx.in.local = true
+		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
+
+		if out, err := fx.run(t); err != nil || strings.Contains(out, "lore check") {
+			t.Errorf("--local was checked: %v\n%s", err, out)
+		}
+	})
+
+	// a branch never pushed lands here, and is gated the same way
+	neverPushed := func(t *testing.T, gate string) (*finishFixture, string, error) {
+		t.Helper()
+
+		fx := newFinishFixture(t)
+		fx.noPull()
+		fx.in.method = "squash"
+		fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+		fx.f.script("git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second", "s9")
+		fx.f.script("git merge --ff-only s9", "")
+		fx.in.loreStore, fx.in.gate = storeIn(fx), gate
+
+		out, err := fx.run(t)
+
+		return fx, out, err
+	}
+
+	t.Run("never pushed, warn", func(t *testing.T) {
+		fx, out, err := neverPushed(t, "warn")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !fx.f.called("git merge --ff-only s9") ||
+			!strings.Contains(out, "lore check GH-1: no entries for GH-1 (lore_gate: warn): merged anyway") {
+			t.Errorf("warn did not land the branch with a note:\n%s", out)
+		}
+	})
+
+	t.Run("never pushed, block", func(t *testing.T) {
+		fx, _, err := neverPushed(t, "block")
+		if err == nil || !strings.Contains(err.Error(), "(lore_gate: block)") {
+			t.Fatalf("err = %v", err)
+		}
+
+		if fx.f.called("git commit-tree") || fx.f.called("git merge --ff-only") || fx.f.called("git worktree remove") {
+			t.Errorf("block landed or removed something: %v", fx.f.calls)
+		}
+	})
+
+	t.Run("passes", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.openPR()
+		store := storeIn(fx)
+		fx.in.loreStore, fx.in.gate = store, "block"
+
+		for _, e := range []lore.Entry{
+			{Kind: lore.KindIntent, Change: "GH-1", Human: "dev@example.com", Body: "Why"},
+			{
+				Kind: lore.KindVerdict, Change: "GH-1", Human: "dev@example.com",
+				Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Body: "Fine",
+			},
+		} {
+			if _, err := store.Add(t.Context(), e); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		out, err := fx.run(t)
+		if err != nil || !fx.f.called("gh pr merge") || strings.Contains(out, "lore check") {
+			t.Errorf("a passing check left a trace: %v\n%s", err, out)
+		}
+	})
 }
