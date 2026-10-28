@@ -31,6 +31,8 @@ func recordArgs(argv []string) []string {
 		switch {
 		case tok == "":
 			continue
+		case tok == "--foreground":
+			continue
 		case name == "--answer" || name == "--every" || name == "--resume":
 			if !inline {
 				i++
@@ -270,6 +272,15 @@ func (in *driveInput) releaseAll() {
 	}
 
 	in.own.Release()
+}
+
+// number is the drive's record number, 0 with no record.
+func (in *driveInput) number() int {
+	if in.rec == nil {
+		return 0
+	}
+
+	return in.rec.Number
 }
 
 // resumeLine is how the report says to answer the drive.

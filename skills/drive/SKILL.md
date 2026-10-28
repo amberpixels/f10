@@ -45,6 +45,8 @@ A task id whose task has subtasks is never driven itself: the user picks which s
    Nothing left to drive: say so in one line and stop.
 
 Run it **in the background** (`run_in_background`): a list can take hours, and the command's exit wakes this session.
+The drive itself runs in the per-user f10 daemon, so closing or clearing this session leaves it running; the command only prints its progress and exits with its code.
+Rerunning the same arguments follows the drive already running, and from another session `f10 daemon status` lists running drives and `f10 daemon logs <n> -f` follows one.
 
 ```
 f10 drive <arguments>
