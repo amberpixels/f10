@@ -452,7 +452,7 @@ A cancelled record is never picked up again: the same command line starts a new 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
-   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the frontmatter's `drive_finish` is on.
+   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the frontmatter's `drive_finish` is off.
    A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
    `--flow`, `--local`, `--model`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
@@ -500,10 +500,11 @@ A cancelled record is never picked up again: the same command line starts a new 
    Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
    Once it ends clean, the driver pushes the caught-up branch (`--force-with-lease` against the sha it read, when the catchup rebased) and then merges.
-   A branch that still conflicts after one catchup halts the task.
-   A ship stopped by its catchup guard, which marks the branch, gets the same catchup once per task per drive, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict in that drive halts it.
+   A branch that conflicts again after a catchup is judged by progress, not counted: the default branch moved since the catchup and other files conflict, it is caught up again; the catchup left the branch unchanged, the default branch has not moved, or the same files conflict twice in a row, the task halts naming the files.
+   After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
+   A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.
    The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
-   A conflict the catchup cannot settle is an ask; anything else halts the task.
+   A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails halts the task.
 6. **Waiting.**
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
    A turn has begun once Herdr shows the agent working, the run reports after the prompt, or the agent's session left a prompt mark after it: the `UserPromptSubmit` hook writes `<session>.prompted` beside the run file, naming the checkout and the time, so a turn that began and ended between two looks still counts as taken once the mark is five seconds old.

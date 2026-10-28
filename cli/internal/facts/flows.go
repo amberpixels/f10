@@ -343,6 +343,9 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 		}
 	}
 
+	// a drive merges what it ships unless the project says its merges are a
+	// human's; a legacy chain says it by ending in finish or not
+	e.DriveFinish = true
 	finishOrigin := OriginDefault
 
 	switch {
@@ -407,9 +410,7 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 		var finish bool
 
 		e.Flows, finish = legacyFlows(pipes, planless, lowered(chain), e.Review.Remote())
-		if finish {
-			e.DriveFinish, finishOrigin = true, "converted from the drive chain"
-		}
+		e.DriveFinish, finishOrigin = finish, "converted from the drive chain"
 
 		from := strings.Join(append(legacy, prose...), ", ")
 		e.problem(false, "%s converted to flows; f10 init --migrate rewrites them", from)

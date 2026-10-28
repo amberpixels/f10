@@ -67,7 +67,7 @@ Go service for invoices.
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |
 | `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
-| `drive_finish` | `on` or `off`: `f10 drive` ends each task with `finish`, merging its PR; a spike is closed after ship either way, since its close merges nothing | `off` |
+| `drive_finish` | `on` or `off`: `f10 drive` ends each task with `finish`, merging its PR; a spike is closed after ship either way, since its close merges nothing | `on` |
 | `drive_env` | a list of environment variable names a drive passes to its commands, beyond the built-in allowlist (`PATH`, `HOME`, `SSH_AUTH_SOCK`, `GH_*`, `GLAB_*`, `HERDR_*`, `F10_*`, `CLAUDE_*` and the like): the drive runs in the per-user daemon, which sees only these ([docs/cli.md](cli.md#daemon)) | none |
 | `watch` | `report`, `finish` or `off`: what the per-user daemon does for this project's tasks no drive owns. `report` tells when a PR merged or closed, an agent sits idle under a running phase, or a run stops; `finish` also finishes a task whose PR merged, with a clean worktree and an idle agent, and runs the janitor from each pass; `off` watches nothing. A project whose merges are a human's opts down to `report` or `off`; `finish` acts only on a PR already merged whose tip is the branch's, with an idle agent, so nothing unmerged is lost ([docs/cli.md](cli.md#watch)) | `finish` |
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
@@ -234,10 +234,10 @@ A project-defined last step declares its own shipment on a `Shipment:` line in i
 Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.
 A spike is the exception: its run ends after implement, whatever the flow, with a spike report.
 
-`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when `drive_finish: on`.
+`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` unless `drive_finish: off`.
 A spike is closed after ship whatever `drive_finish` says: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
 A rerun keeps the flow a task's branch recorded when it started.
-A project whose only merges are a human's leaves `drive_finish` off.
+A project whose only merges are a human's sets `drive_finish: off`; a legacy drive chain without `finish` migrates to that.
 
 `flow_by_area` routes a task to a flow by its area, in the plain words Roles uses:
 

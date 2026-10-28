@@ -577,18 +577,66 @@ type driveRun struct {
 	// freshAt is when this drive started the task's agent: run state last
 	// updated before it was written by an agent that is gone, and is not read
 	freshAt time.Time
-	// mergeCatchup is set once this drive sent a catchup because the pull
-	// request conflicted at finish: a second conflict halts rather than loops
-	mergeCatchup bool
-	// guardCatchup is set once this drive sent a catchup because ship's
-	// catchup guard conflicted: a second conflict halts rather than loops
-	guardCatchup bool
+	// lastCatchup is the catchup this drive last sent for the task, so a
+	// conflict after it is judged by progress, not counted: the drive
+	// catches up again while the target moves, and halts once it stops
+	lastCatchup *catchupSent
 	// waiting is set while finish waits for the base to be through: no turn
 	// is in flight, so the poll only asks next again
 	waiting bool
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
+
+// catchupSent is what the branch looked like when a catchup went out: the
+// sha it was being caught up to, its head, and the conflicts then, each path
+// with the blobs on both sides (conflictWay), "" when none were read. A
+// field left "" compares to nothing.
+type catchupSent struct {
+	target, head, way string
+}
+
+// halts says why a conflict after this catchup halts the task instead of
+// sending another, or "" when another catchup can make progress: the catchup
+// left the branch where it was, the target is where it was, or the same
+// files conflict the same way, every blob on both sides as before, which a
+// target that moved elsewhere does not change. base names the target in prose.
+func (c *catchupSent) halts(target, head string, conflicts []gitx.Conflict, base string) string {
+	switch {
+	case c == nil:
+		return ""
+	case head != "" && head == c.head:
+		return "the catchup left the branch unchanged"
+	case target != "" && target == c.target:
+		return base + " has not moved since the catchup"
+	case len(conflicts) > 0 && conflictWay(conflicts) == c.way:
+		return "the same files conflict with " + base + " the same way again: " + conflictPaths(conflicts)
+	}
+
+	return ""
+}
+
+// conflictWay is the identity of a set of conflicts: every path with the
+// blobs each side brought, so a path that conflicts again with another
+// blob on either side is a new conflict.
+func conflictWay(conflicts []gitx.Conflict) string {
+	keys := make([]string, 0, len(conflicts))
+	for _, c := range conflicts {
+		keys = append(keys, c.Key())
+	}
+
+	return strings.Join(keys, ", ")
+}
+
+// conflictPaths names the conflicting paths for prose.
+func conflictPaths(conflicts []gitx.Conflict) string {
+	paths := make([]string, 0, len(conflicts))
+	for _, c := range conflicts {
+		paths = append(paths, c.Path)
+	}
+
+	return strings.Join(paths, ", ")
+}
 
 // current is run unless its agent is gone, as for a run a cancelled start
 // left behind in a checkout this drive gave a new agent.
@@ -1534,6 +1582,12 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	switch {
 	case key != "":
 		skill = "catchup"
+
+		if err := in.recordCatchup(ctx, r, key); err != nil {
+			in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
+
+			return nil
+		}
 	case skill == "finish":
 		in.end(ctx, w, r, in.runFinish(ctx, w, r))
 
@@ -1541,6 +1595,128 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	return in.send(ctx, w, r, skill)
+}
+
+// recordCatchup notes what the catchup about to go out starts from, for the
+// progress check a later conflict runs. A read git cannot answer halts: a
+// record made up would halt a healthy task, or loop on a doomed one.
+func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string) error {
+	target, _, err := in.catchupTarget(ctx, r, key)
+	if err != nil {
+		return err
+	}
+
+	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
+	if err != nil {
+		return fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
+	}
+
+	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
+	if err != nil {
+		return fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
+	}
+
+	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts)}
+
+	return nil
+}
+
+// catchupTarget is the sha the catchup step will bring in for a mark, and
+// its name for prose, resolved as that step's point 2 resolves the base:
+// f10-landed is the local default branch when it holds origin's, else
+// origin's, else the local one; f10-base-moved holds the base branch's head
+// itself. The progress check reads the target through this too, so the
+// record and the comparison never name different commits.
+func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string) (string, string, error) {
+	if key == cfgMoved {
+		target, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+key)
+		if err != nil {
+			return "", "", fmt.Errorf("reading the %s mark on %s: %w", key, r.o.branch, err)
+		}
+
+		return target, "its base", nil
+	}
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return "", "", err
+	}
+
+	local, err := gitx.Ref(ctx, in.main, "refs/heads/"+def)
+	if err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", def, err)
+	}
+
+	remote, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
+	if err != nil {
+		return "", "", fmt.Errorf("reading origin/%s: %w", def, err)
+	}
+
+	switch {
+	case local == "" && remote == "":
+		return "", "", fmt.Errorf("cannot read %s here", def)
+	case remote == "":
+		return local, def, nil
+	case local == "":
+		return remote, "origin/" + def, nil
+	}
+
+	holds, err := gitx.IsAncestor(ctx, in.main, remote, local)
+
+	switch {
+	case err != nil:
+		return "", "", err
+	case holds:
+		return local, def, nil
+	}
+
+	return remote, "origin/" + def, nil
+}
+
+// conflictAgain says why a conflict with the mark's target, after the
+// catchup this drive sent, halts the task rather than sending another
+// catchup, or "" to catch up again; the files that conflict now are named
+// either way. The reads halt on a git that cannot answer, as every read
+// before a push does.
+func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string) (string, error) {
+	if r.lastCatchup == nil {
+		return "", nil
+	}
+
+	target, base, err := in.catchupTarget(ctx, r, key)
+	if err != nil {
+		return "", err
+	}
+
+	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
+	}
+
+	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
+	}
+
+	reason := r.lastCatchup.halts(target, head, conflicts, base)
+	if reason != "" && len(conflicts) > 0 && !strings.HasSuffix(reason, conflictPaths(conflicts)) {
+		reason += "; conflicting: " + conflictPaths(conflicts)
+	}
+
+	if reason != "" {
+		reason = r.o.branch + " still conflicts with " + base + " after a catchup: " + reason
+	}
+
+	return reason, nil
+}
+
+// catchupHalt is the halt a conflict the drive will not catch up again
+// leaves: the reason, and how to settle it by hand.
+func catchupHalt(r *driveRun, skill, reason string) driveResult {
+	res := halted(r.task.ref.ID, skill, reason)
+	res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
+
+	return res
 }
 
 // spikeDone reports whether the task's ship ended as a spike that finish
@@ -1593,8 +1769,8 @@ func baseHalted(r *driveRun, skill string) driveResult {
 // that is tried against origin's default branch: clean is ready; a local
 // branch already caught up is pushed. A branch origin does not have is
 // merged locally by finish, so it is tried against the local default
-// branch. Anything else is marked landed, which sends it a catchup, once
-// per drive.
+// branch. Anything else is marked landed, which sends it a catchup; after
+// one, HEAD is what is tried, and a conflict that made no progress halts.
 func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
 	id, branch := r.task.ref.ID, r.o.branch
 
@@ -1652,6 +1828,16 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		}
 	}
 
+	// after a catchup, origin's copy is the tree before it: HEAD is what the
+	// catchup left and what the push would send, so HEAD is what is tried
+	if !caughtUp && pushed != "" && r.lastCatchup != nil {
+		if caughtUp, err = gitx.MergesCleanly(ctx, r.o.path, base, "HEAD"); err != nil {
+			res := halted(id, "finish", err.Error())
+
+			return &res
+		}
+	}
+
 	if caughtUp {
 		fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
 		if err != nil {
@@ -1676,9 +1862,15 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return nil
 	}
 
-	if r.mergeCatchup {
-		res := halted(id, "finish", fmt.Sprintf("%s still conflicts with %s after a catchup: %s moved again, "+
-			"rerun the drive to catch up once more", branch, base, def))
+	reason, err := in.conflictAgain(ctx, r, cfgLanded)
+
+	switch {
+	case err != nil:
+		res := halted(id, "finish", err.Error())
+
+		return &res
+	case reason != "":
+		res := catchupHalt(r, "finish", reason)
 
 		return &res
 	}
@@ -1688,8 +1880,6 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 
 		return &res
 	}
-
-	r.mergeCatchup = true
 
 	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
 	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
@@ -2100,8 +2290,12 @@ func (in *driveInput) poll(
 		case skill == "catchup" && guardStop(run):
 			// a catchup that stopped and then ended clean restores the stop it
 			// found, so git says how it ended
-		case skill == "ship" && guardStop(run) && !r.guardCatchup && in.marked(ctx, r):
-			r.guardCatchup = true
+		case skill == "ship" && guardStop(run) && in.marked(ctx, r):
+			if res := in.guardAgain(ctx, r); res != nil {
+				in.end(ctx, w, r, *res)
+
+				return nil
+			}
 
 			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", id)
 
@@ -2153,6 +2347,36 @@ func (in *driveInput) poll(
 	r.pos++
 
 	return in.next(ctx, w, r)
+}
+
+// guardAgain is the halt a ship whose catchup guard conflicted again gets
+// when the catchup this drive already sent made no progress, or nil to
+// catch up again (a first conflict, or a target that moved). A mark git
+// cannot read is left to next, which halts on it.
+func (in *driveInput) guardAgain(ctx context.Context, r *driveRun) *driveResult {
+	if r.lastCatchup == nil {
+		return nil
+	}
+
+	key, err := in.mark(ctx, r)
+	if err != nil || key == "" {
+		return nil
+	}
+
+	reason, err := in.conflictAgain(ctx, r, key)
+
+	switch {
+	case err != nil:
+		res := halted(r.task.ref.ID, "ship", err.Error())
+
+		return &res
+	case reason != "":
+		res := catchupHalt(r, "ship", reason)
+
+		return &res
+	}
+
+	return nil
 }
 
 // marked reports whether the task's branch is marked for a catchup.

@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -34,7 +36,12 @@ var Exec = func(ctx context.Context, dir string, args ...string) (string, error)
 	out, err := cmd.Output()
 	if err != nil {
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok && ctx.Err() == nil {
-			return "", &ExitError{Args: args, Code: exit.ExitCode(), Stderr: strings.TrimSpace(stderr.String())}
+			return "", &ExitError{
+				Args:   args,
+				Code:   exit.ExitCode(),
+				Stdout: strings.TrimSpace(string(out)),
+				Stderr: strings.TrimSpace(stderr.String()),
+			}
 		}
 
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
@@ -47,10 +54,13 @@ var Exec = func(ctx context.Context, dir string, args ...string) (string, error)
 	return strings.TrimSpace(string(out)), nil
 }
 
-// An ExitError is git having run and exited non-zero.
+// An ExitError is git having run and exited non-zero. Stdout is what git
+// printed before exiting, for the reads whose exit 1 carries an answer
+// (merge-tree names the conflicting files that way).
 type ExitError struct {
 	Args   []string
 	Code   int
+	Stdout string
 	Stderr string
 }
 
@@ -292,6 +302,72 @@ func MergesCleanly(ctx context.Context, dir, base, head string) (bool, error) {
 	default:
 		return false, err
 	}
+}
+
+// A Conflict is one path a merge would conflict on, with the blob each
+// stage brought: 1 the merge base, 2 base's side, 3 head's side, "" where
+// a side lacks the path. Two conflicts on a path are the same conflict only
+// when their blobs are.
+type Conflict struct {
+	Path   string
+	Stages [4]string
+}
+
+// Key tells this conflict from another on the same path.
+func (c Conflict) Key() string {
+	return c.Path + "@" + strings.Join(c.Stages[1:], "/")
+}
+
+// Conflicts is what head conflicts on in base, sorted by path, tried in
+// memory as MergesCleanly does: nil is a clean merge. git exits 1 with the
+// tree and a `<mode> <oid> <stage>\t<path>` line per conflicted stage on
+// stdout, and with its reason on stderr for a ref it cannot merge, which is
+// an error.
+func Conflicts(ctx context.Context, dir, base, head string) ([]Conflict, error) {
+	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--no-messages", base, head)
+
+	switch {
+	case err == nil:
+		return nil, nil
+	case absent(err) && quiet(err):
+	default:
+		return nil, err
+	}
+
+	exit, _ := errors.AsType[*ExitError](err)
+	_, rest, _ := strings.Cut(exit.Stdout, "\n")
+	byPath := map[string]*Conflict{}
+
+	for line := range strings.SplitSeq(rest, "\n") {
+		info, path, ok := strings.Cut(line, "\t")
+		fields := strings.Fields(info)
+
+		if !ok || len(fields) != 3 {
+			continue
+		}
+
+		stage, err := strconv.Atoi(fields[2])
+		if err != nil || stage < 1 || stage > 3 {
+			continue
+		}
+
+		c := byPath[path]
+		if c == nil {
+			c = &Conflict{Path: path}
+			byPath[path] = c
+		}
+
+		c.Stages[stage] = fields[1]
+	}
+
+	conflicts := make([]Conflict, 0, len(byPath))
+	for _, c := range byPath {
+		conflicts = append(conflicts, *c)
+	}
+
+	slices.SortFunc(conflicts, func(a, b Conflict) int { return strings.Compare(a.Path, b.Path) })
+
+	return conflicts, nil
 }
 
 // MergeTree is the tree of head merged into base, built in memory as

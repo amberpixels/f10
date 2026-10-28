@@ -103,9 +103,7 @@ func Migrate(data []byte, path string) (*Migration, error) {
 		flows, finish := convertLegacy(pipes, planless, chain, d.Review.Reviewer != "")
 
 		d.Flows = flows
-		if finish {
-			d.DriveFinish = "on"
-		}
+		d.DriveFinish = onOff(finish)
 
 		for _, name := range []string{"Ship pipeline(s)", "Drive chain"} {
 			if strings.TrimSpace(body(name)) != "" {
@@ -479,8 +477,9 @@ func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 	m := &Migration{}
 
 	flows, finish := d.Flows, false
+	converted := flows == nil
 
-	if flows == nil {
+	if converted {
 		pipes, planless := map[string][]string(nil), d.Planless
 		if d.Pipelines != nil {
 			pipes = map[string][]string{}
@@ -536,8 +535,10 @@ func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 
 		put("flows", flowsNode, at)
 
-		if finish && d.DriveFinish == "" {
-			put("drive_finish", &yaml.Node{Kind: yaml.ScalarNode, Value: "on"}, nil)
+		// the chain said whether a drive finishes; written either way, since
+		// the default is on and a chain without finish meant off
+		if converted && d.DriveFinish == "" {
+			put("drive_finish", &yaml.Node{Kind: yaml.ScalarNode, Value: onOff(finish)}, nil)
 			m.Moved = append(m.Moved, "drive_finish")
 		}
 	}

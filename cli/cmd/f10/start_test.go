@@ -64,7 +64,9 @@ func newFakes(t *testing.T) *fakes {
 	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
 		res := f.answer("git " + strings.Join(args, " "))
 		if res.Code != 0 {
-			return "", &gitx.ExitError{Args: args, Code: res.Code, Stderr: res.Stderr}
+			return "", &gitx.ExitError{
+				Args: args, Code: res.Code, Stdout: strings.TrimSpace(res.Stdout), Stderr: res.Stderr,
+			}
 		}
 
 		return strings.TrimSpace(res.Stdout), nil
