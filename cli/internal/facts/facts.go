@@ -91,6 +91,7 @@ type Effective struct {
 	DriveFinish    bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
 	DriveEnv       []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
 	Watch          string              `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
+	WatchCatchup   bool                `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
 	ReportBack     bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
 	UpkeepPaths    []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 

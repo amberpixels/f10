@@ -73,7 +73,7 @@ func buildWith(t *testing.T, main, worktree string) *Effective {
 func TestBuildFrontmatter(t *testing.T) {
 	eff := buildWith(t, "---\n"+
 		"visibility: public\ntracker: {kind: gitlab, id: AB-###}\nmerge_method: rebase\ncatchup: merge\ncatchup_stacked: rebase\n"+
-		"flows: {default: plan implement pr, local: [implement, commit]}\ndrive_finish: on\n"+
+		"flows: {default: plan implement pr, local: [implement, commit]}\ndrive_finish: on\nwatch_catchup: on\n"+
 		"review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n"+
 		"---\n# demo\n\n## Verify\n\n`just test`\n", "")
 
@@ -83,7 +83,7 @@ func TestBuildFrontmatter(t *testing.T) {
 
 	if eff.Visibility != "public" || eff.TrackerKind != "GitLab work items" || eff.IDPrefix != "AB" ||
 		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || eff.CatchupStacked != "rebase" || len(eff.Flows) != 2 ||
-		!eff.DriveFinish || eff.Review.Reviewer != "claude[bot]" {
+		!eff.DriveFinish || !eff.WatchCatchup || eff.Review.Reviewer != "claude[bot]" {
 		t.Errorf("typed facts = %+v", eff)
 	}
 
@@ -689,6 +689,24 @@ func TestWatch(t *testing.T) {
 
 	if eff := buildWith(t, "---\nwatch: always\n---\n", ""); !strings.Contains(eff.Errors(), "watch") {
 		t.Errorf("a bad value passed: %q", eff.Errors())
+	}
+}
+
+// watch_catchup is off unless declared, and takes only on or off.
+func TestWatchCatchup(t *testing.T) {
+	none := buildWith(t, "", "")
+	if f := factFor(t, none, "watch_catchup"); none.WatchCatchup || f.Origin != OriginDefault {
+		t.Errorf("undeclared = %v, %+v", none.WatchCatchup, f)
+	}
+
+	on := buildWith(t, "---\nwatch_catchup: on\n---\n", "")
+	if f := factFor(t, on, "watch_catchup"); !on.WatchCatchup || on.Errors() != "" ||
+		f.Origin != "declared (main, frontmatter)" {
+		t.Errorf("declared on = %v, errors %q, %+v", on.WatchCatchup, on.Errors(), f)
+	}
+
+	if bad := buildWith(t, "---\nwatch_catchup: yes\n---\n", ""); !strings.Contains(bad.Errors(), "watch_catchup") {
+		t.Errorf("errors = %q", bad.Errors())
 	}
 }
 
