@@ -528,3 +528,70 @@ func TestTrackerTitle(t *testing.T) {
 		t.Errorf("no key gave template %q", none.TitleTemplate)
 	}
 }
+
+// Under a block, --migrate adds each prose fact the block lacks, keeping
+// its order and comments, and leaves a fact both declare alone.
+func TestMigrateLiftsProseUnderABlock(t *testing.T) {
+	file := "---\n# kept\nvisibility: stealth\n---\n# demo\n\n## Hosting & PR\n\nOpen PRs with gh. merge method: squash.\n"
+
+	m, err := Migrate([]byte(file), "project.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.HasPrefix(m.Content, "---\n# kept\nvisibility: stealth\nmerge_method: squash\n---\n") ||
+		strings.Join(m.Moved, ",") != "merge_method" ||
+		strings.Join(m.Superseded, ",") != "merge_method: `merge method:` in the Hosting & PR section" {
+		t.Errorf("migration = %+v", m)
+	}
+
+	if eff := buildWith(t, m.Content, ""); slices.ContainsFunc(eff.Problems, func(p Problem) bool {
+		return strings.Contains(p.Message, "read from the prose")
+	}) {
+		t.Errorf("still read from prose: %+v", eff.Problems)
+	}
+
+	if _, err := Migrate([]byte(m.Content), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
+		t.Errorf("a second migration = %v", err)
+	}
+
+	both := "---\nmerge_method: squash\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n"
+	if _, err := Migrate([]byte(both), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
+		t.Errorf("a fact both declare = %v", err)
+	}
+
+	tracker := "---\ntracker: {kind: github}\n---\n# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n"
+
+	m, err = Migrate([]byte(tracker), "project.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := decodeDeclared([]byte(strings.Split(m.Content, "---\n")[1]))
+	if err != nil || d.Tracker.Kind != "github" || d.Tracker.ID != "DM-###" ||
+		strings.Join(m.Moved, ",") != "tracker.id" {
+		t.Errorf("tracker id not lifted into the mapping: %v %+v\n%s", err, m, m.Content)
+	}
+	// an empty or comment-only block, and a null tracker, still take the facts
+	for _, file := range []string{
+		"---\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n",
+		"---\n# only a comment\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n",
+		"---\ntracker:\n---\n# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n",
+	} {
+		m, err := Migrate([]byte(file), "project.md")
+		if err != nil {
+			t.Errorf("%q: %v", file, err)
+
+			continue
+		}
+
+		eff := buildWith(t, m.Content, "")
+		proseRead := slices.ContainsFunc(eff.Problems, func(p Problem) bool {
+			return strings.Contains(p.Message, "read from the prose")
+		})
+		if eff.Errors() != "" || proseRead ||
+			strings.Contains(file, "comment") && !strings.Contains(m.Content, "---\n# only a comment\n") {
+			t.Errorf("%q migrated to\n%s\nproblems %+v", file, m.Content, eff.Problems)
+		}
+	}
+}
