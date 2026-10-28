@@ -228,6 +228,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Open: merged through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI, a required review, conflicts) its reason is the error and nothing has changed.
    Already merged: confirmed.
    Closed without a merge: a refusal.
+   Right before an open request merges, or a branch never pushed lands (below), `f10 lore check <id>` runs on the task: under `lore_gate: warn`, the default, its reasons are a note under the report and the merge goes on; under `block` they are the error, with nothing changed.
+   A request already merged, `--local` and a spike's close merge nothing and are not checked; a lore root this clone lacks reads as `no entries`, which `block` refuses too.
    A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and its finish retargets this PR.
    **Someone else's PR.**
    An open PR whose author is not the signed-in host user (`gh api user`) is not merged unasked: with neither flag finish exits **3** having changed nothing, and `/f10:finish` asks whether to merge it or clean up locally.

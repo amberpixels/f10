@@ -173,6 +173,8 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		host:      h.at(main),
 		method:    t.eff.MergeMethod,
 		traces:    t.eff.Traces,
+		loreStore: &lore.Store{Root: loreRootFor(t)},
+		gate:      t.eff.LoreGate,
 		cwd:       cwd,
 		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 		yes:       cmd.Bool("yes"),
@@ -230,14 +232,18 @@ func (e foreignPullError) Error() string {
 // finishInput is everything finish needs once the target is settled, so
 // the flow can be tested without a checkout.
 type finishInput struct {
-	main      string         // the main checkout: host and git commands run here
-	driver    *driver.Driver // nil without one
-	task      ref.Ref
-	suffix    string
-	branch    string // a bare call's own branch, "" to look it up by task and suffix
-	host      host
-	method    string // the merge method project.md declares, "" for none
-	traces    bool   // traces: on; the squash or merge commit's body ends in the task's trailers
+	main   string         // the main checkout: host and git commands run here
+	driver *driver.Driver // nil without one
+	task   ref.Ref
+	suffix string
+	branch string // a bare call's own branch, "" to look it up by task and suffix
+	host   host
+	method string // the merge method project.md declares, "" for none
+	traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
+	// loreStore is the change's lore, checked right before its merge lands;
+	// nil checks nothing. gate is lore_gate: warn notes the reasons, block refuses
+	loreStore *lore.Store
+	gate      string
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
 	yes       bool
@@ -400,6 +406,13 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		notes = append(notes, fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
 			p.url(), p.status()))
 	default:
+		// before anything leaves the machine: a block refuses with nothing changed
+		var loreNote string
+
+		if loreNote, err = checkLore(in, local || p.status() == pullOpen); err != nil {
+			return err
+		}
+
 		var riderNotes []string
 
 		if len(in.task.Riders()) > 0 {
@@ -454,6 +467,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 			sha = p.sha()
 		}
+
+		notes = appendNote(notes, loreNote)
 
 		if sized {
 			recordSize(ctx, in.main, name, in.task.ID, size)
@@ -590,6 +605,39 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	return nil
+}
+
+// checkLore runs the change's lore check right before its merge lands, and
+// only then: a merged request, a --local cleanup and a spike's close merge
+// nothing. Under warn the reasons are a note and the merge goes on; under
+// block they are the error, before anything changed. An unreadable store is a reason.
+func checkLore(in finishInput, merging bool) (string, error) {
+	if in.loreStore == nil || !merging {
+		return "", nil
+	}
+
+	in.step("checking lore")
+
+	var reasons string
+
+	switch res, err := in.loreStore.Check(in.task.ID); {
+	case err != nil:
+		reasons = err.Error()
+	case res.Pass():
+		return "", nil
+	default:
+		reasons = strings.Join(res.Reasons, "; ")
+	}
+
+	if in.gate == "block" {
+		return "", fmt.Errorf(
+			"lore check %s: %s (lore_gate: block): add the entries, or declare lore_gate: warn to merge anyway",
+			in.task.ID,
+			reasons,
+		)
+	}
+
+	return fmt.Sprintf("lore check %s: %s (lore_gate: warn): merged anyway", in.task.ID, reasons), nil
 }
 
 func (in finishInput) step(action string) {

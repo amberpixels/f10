@@ -234,6 +234,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				task:      task,
 				host:      h.at(main),
 				method:    t.eff.MergeMethod,
+				loreStore: &lore.Store{Root: loreRootFor(t)},
+				gate:      t.eff.LoreGate,
 				cwd:       cwd,
 				workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 				merge:     pr == finishMerge,

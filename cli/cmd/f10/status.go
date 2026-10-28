@@ -534,17 +534,12 @@ func runGates(ctx context.Context, t *target, in taskStatusInput, runs []*state.
 
 // newGateSource binds the gate reads to this target.
 func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
-	root := localLoreRoot(t.lay)
-	if t.eff.Lore == "committed" {
-		root = filepath.Join(t.lay.CheckoutRoot, ".lore")
-	}
-
 	src := gateSource{
 		events: events,
 		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
 		flows:  t.eff.Flows,
 		review: t.eff.Review,
-		store:  &lore.Store{Root: root},
+		store:  &lore.Store{Root: loreRootFor(t)},
 		host:   h,
 	}
 

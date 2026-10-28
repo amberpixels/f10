@@ -89,7 +89,7 @@ func loreCommand() *cli.Command {
 			{
 				Name:      "why",
 				Usage:     "why a line is the way it is: its change's intent, latest verdict, and the entries on the line",
-				ArgsUsage: "<path:line>",
+				ArgsUsage: "<path:line[@rev]>",
 				Flags:     []cli.Flag{jsonFlag()},
 				Action:    runLoreWhy,
 			},
@@ -414,16 +414,19 @@ func runLoreShow(ctx context.Context, cmd *cli.Command) error {
 }
 
 func runLoreWhy(ctx context.Context, cmd *cli.Command) error {
-	arg, err := oneArg(cmd, "lore why", "<path:line>")
+	arg, err := oneArg(cmd, "lore why", "<path:line[@rev]>")
 	if err != nil {
 		return err
 	}
 
+	// the anchor's own spelling: @rev asks about the line as that revision
+	// has it, the base of a diff for a reviewer
 	file, n, ok := strings.Cut(arg, ":")
+	n, rev, hasRev := strings.Cut(n, "@")
 	line, convErr := strconv.Atoi(n)
 
-	if !ok || convErr != nil || line < 1 {
-		return fmt.Errorf("lore why takes path:line (got %q)", arg)
+	if !ok || convErr != nil || line < 1 || (hasRev && rev == "") {
+		return fmt.Errorf("lore why takes path:line[@rev] (got %q)", arg)
 	}
 
 	l, err := loreFor(ctx, cmd)
@@ -436,12 +439,12 @@ func runLoreWhy(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	res, err := l.store.Why(ctx, path, line)
+	res, err := l.store.Why(ctx, path, line, rev)
 
 	switch {
 	case errors.Is(err, lore.ErrNoRecord):
 		if cmd.Bool("json") {
-			return encodeJSON(cmd.Writer, lore.WhyResult{Path: path, Line: line, Records: []lore.Record{}})
+			return encodeJSON(cmd.Writer, lore.WhyResult{Path: path, Line: line, Rev: rev, Records: []lore.Record{}})
 		}
 
 		_, err = fmt.Fprintln(cmd.Writer, "no record")

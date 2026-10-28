@@ -673,3 +673,21 @@ func TestWatch(t *testing.T) {
 		t.Errorf("a bad value passed: %q", eff.Errors())
 	}
 }
+
+// lore_gate warns unless declared and takes only warn or block.
+func TestLoreGate(t *testing.T) {
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "lore_gate"); none.LoreGate != "warn" || f.Origin != OriginDefault {
+		t.Errorf("undeclared = %q, %+v", none.LoreGate, f)
+	}
+
+	block := buildWith(t, "---\nlore_gate: block\n---\n# demo\n", "")
+	if f := factFor(t, block, "lore_gate"); block.LoreGate != "block" || f.Origin != "declared (main, frontmatter)" {
+		t.Errorf("declared block = %q, %+v", block.LoreGate, f)
+	}
+
+	bad := buildWith(t, "---\nlore_gate: off\n---\n", "")
+	if !strings.Contains(bad.Errors(), "lore_gate") {
+		t.Errorf("errors = %q", bad.Errors())
+	}
+}
