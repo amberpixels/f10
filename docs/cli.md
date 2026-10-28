@@ -191,7 +191,7 @@ The bundle's base is the one `After:` its members name outside it; a line naming
 Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
-Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
+Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - a merge unless `catchup_stacked: rebase`, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
 A conflict there stops ship, marks the branch for the base that conflicted (`f10-landed`, or `f10-base-moved` for a recorded base), and hands off to `/f10:catchup`, which settles it with both sides kept.
 Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
 The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.
@@ -495,14 +495,19 @@ A cancelled record is never picked up again: the same command line starts a new 
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); the driver clears it on any other end, an interrupt included.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` in the chain ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
-5. **Catchup when the base moves, after finish, and before it.**
+5. **Catchup when the base or the target moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
-   The catchup merges the local base branch, whatever `catchup:` says, so no push is needed.
+   Before a task's next skill, when its branch is on origin, the driver fetches once and marks the branch if its pull request's target moved past it, so an open PR never sits behind.
+   The mark is `f10-landed` with the default branch's name when the PR targets it, `f10-base-moved` with the base's head for a base branch no task in the drive owns.
+   A branch already marked, one its target is already in, or one never pushed is left alone, and a fetch that fails skips the poll.
+   The catchup follows `catchup:`, or `catchup_stacked:` for a base branch.
+   Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against the sha it read after a rebase, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
+   A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
    `finish` marks each branch that depended on the finished task `f10-landed`.
    Before a marked task's next skill, the driver sends it `/f10:catchup --driven`; the driver never interrupts a turn.
    Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
-   Once it ends clean, the driver pushes the caught-up branch (`--force-with-lease` against the sha it read, when the catchup rebased) and then merges.
+   Once it ends clean, the push above reaches origin and then finish merges.
    A branch that conflicts again after a catchup is judged by progress, not counted: the default branch moved since the catchup and other files conflict, it is caught up again; the catchup left the branch unchanged, the default branch has not moved, or the same files conflict twice in a row, the task halts naming the files.
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.

@@ -1663,11 +1663,12 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 // A pull request that conflicts with the default branch at finish, as a
 // sibling that merged first leaves it, is caught up before the merge: the
 // branch is marked landed, the agent gets /f10:catchup, and the caught-up
-// branch is pushed (with a lease, since the catchup rebased it) before
-// finish merges it. A branch still conflicting after that catchup is judged
-// by progress: main moved and other files conflict, catch up again; the
-// catchup left the branch unchanged, main did not move, or the same files
-// conflict again, halt naming them.
+// branch is pushed once the catchup ends clean (with a lease, since the
+// catchup rebased it), before finish tries it again. A branch still
+// conflicting after that catchup is judged by progress: main moved and
+// other files conflict, catch up again; the catchup left the branch
+// unchanged, main did not move, or the same files conflict again, halt
+// naming them.
 func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 	conflicts := "git merge-tree --write-tree --no-messages "
 	cases := map[string]struct {
@@ -1701,11 +1702,14 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
 			fx.f.script("git fetch origin", "")
-			fx.f.script("git rev-parse -q --verify origin/GH-1", "old")
+			// origin's copy of the branch before the catchup, then what the push left
+			fx.f.script("git rev-parse -q --verify origin/GH-1", "old", tc.head)
+			// read before and after the push's fetch, then what the push left
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "old", "old", tc.head)
 			fx.f.fail("git merge-tree --write-tree origin/main old", shell.Result{Code: 1})
 			fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
 			// before the catchup, the switch that sends it, after it, before
-			// finish's push; a second conflict marks and reads it once more
+			// finish; a second conflict marks and reads it once more
 			landed := []string{"", "main", "", "", ""}
 			if tc.again {
 				landed = []string{"", "main", "", "", "main", "", ""}
@@ -1718,6 +1722,8 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor old HEAD", shell.Result{Code: 1})
 			fx.f.script("git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1", "")
+			// origin holds the target, so the caught-up branch may be pushed
+			fx.f.script("git merge-base --is-ancestor m1 refs/remotes/origin/main", "")
 			// the record when the catchup goes out: origin/main at m1, ahead of
 			// the local main, HEAD at head0, a.go conflicting one way
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m1", tc.main)
@@ -1727,19 +1733,19 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.fail(conflicts+"m1 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
 			fx.f.fail(conflicts+tc.main+" HEAD", shell.Result{Code: 1, Stdout: tc.files})
 
+			// origin's copy after the push: clean once settled, else still conflicting
 			settled := tc.halt == "" && !tc.again
-			after := shell.Result{Code: 1}
 			if settled {
-				after = shell.Result{}
+				fx.f.script("git merge-tree --write-tree origin/main "+tc.head, "")
+			} else {
+				fx.f.fail("git merge-tree --write-tree origin/main "+tc.head, shell.Result{Code: 1})
 			}
 
-			// before the catchup, after it, and after a second one
-			ancestor := []shell.Result{{Code: 1}, after}
 			if tc.again {
-				ancestor = []shell.Result{{Code: 1}, {Code: 1}, {}}
+				fx.f.answers["git merge-tree --write-tree origin/main new"] = []shell.Result{{Code: 1}, {}}
 			}
 
-			fx.f.answers["git merge-base --is-ancestor origin/main HEAD"] = ancestor
+			fx.f.fail("git merge-base --is-ancestor origin/main HEAD", shell.Result{Code: 1})
 			fx.f.fail("git merge-tree --write-tree origin/main HEAD", shell.Result{Code: 1})
 
 			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
@@ -1756,6 +1762,12 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			err := fx.drive(t)
 			out := fx.out.String()
 			catchups := countCalls(fx.f.calls, "herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven")
+			push := "git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1"
+
+			// the catchup's clean end reaches origin before finish tries the branch again
+			if n := countCalls(fx.f.calls, push); n != 1 {
+				t.Errorf("pushed %d times after the catchup, want once: %q", n, fx.f.calls)
+			}
 
 			if tc.halt != "" {
 				if exitCode(err) != exitHalted ||
@@ -1764,8 +1776,8 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 					t.Fatalf("err = %v\n%s", err, out)
 				}
 
-				if fx.f.called("finish GH-1") || fx.f.called("git push") || catchups != 1 {
-					t.Errorf("a branch still conflicting was pushed, merged or caught up again: %q", fx.f.calls)
+				if fx.f.called("finish GH-1") || catchups != 1 {
+					t.Errorf("a branch still conflicting was merged or caught up again: %q", fx.f.calls)
 				}
 
 				return
@@ -1781,22 +1793,266 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 
 			mark := "git config branch.GH-1." + cfgLanded + " main"
 			catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
-			push := "git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1"
 			order := []string{mark, catchup, push, "finish GH-1"}
 
 			if tc.again {
-				order = []string{mark, catchup, mark, catchup, push, "finish GH-1"}
+				order = []string{mark, catchup, push, mark, catchup, "finish GH-1"}
 			}
 
 			fx.assertOrder(t, order,
 				"git config branch.GH-1."+cfgLanded+" ", "herdr agent prompt", "git push", "finish")
 
-			for _, want := range []string{"conflicts with origin/main, catching up first", "--force-with-lease", "GH-1:    finished"} {
+			for _, want := range []string{
+				"conflicts with origin/main, catching up first",
+				"GH-1 catchup: GH-1 caught up with origin/main, pushed with --force-with-lease",
+				"GH-1:    finished",
+			} {
 				if !strings.Contains(out, want) {
 					t.Errorf("output lacks %q:\n%s", want, out)
 				}
 			}
 		})
+	}
+}
+
+// A task whose branch is on origin is kept up to date with what its pull
+// request targets: at the boundary before each skill the drive fetches once
+// and marks the branch if the target moved past it (f10-landed for the
+// default branch, f10-base-moved for a base branch no task in the drive
+// owns), the catchup goes out there, never mid-turn, and the caught-up branch
+// is pushed before the next skill runs, unless origin does not hold what the
+// catchup brought in. A branch never pushed, one the target is already in
+// and one already marked are left alone; a fetch that fails skips the check.
+func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
+	landed := "git config branch.GH-1." + cfgLanded + " main"
+	moved := "git config branch.GH-1." + cfgMoved + " b2"
+	ship := "herdr agent prompt " + agentOf("GH-1") + " " + skillPrompt("ship", "GH-1", nil, shipFlow{}, true)
+	catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
+	push := "git push --force-with-lease=refs/heads/GH-1:p1 origin HEAD:refs/heads/GH-1"
+
+	cases := map[string]struct {
+		pushed   string // origin's copy of the branch, "" for one never pushed
+		after    string // a base branch recorded on the branch, outside the drive
+		unpushed bool   // that base's head is not on origin yet
+		ancestor bool   // the target is in the branch already
+		marked   bool   // the branch is marked already
+		fetch    shell.Result
+		pushFail bool
+		mark     string // the mark the boundary sets
+		fetches  int    // git fetch origin calls: the boundary before ship, once more after a catchup, the push, finish
+		halt     string
+	}{
+		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 4},
+		"never pushed":           {fetches: 1},
+		"already an ancestor":    {pushed: "p1", ancestor: true, fetches: 2},
+		"already marked":         {pushed: "p1", marked: true, fetches: 4},
+		"fetch fails":            {pushed: "p1", fetch: shell.Result{Code: 128, Stderr: "no route"}, fetches: 2},
+		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved, fetches: 4},
+		"an unlisted base moved, not on origin": {
+			pushed: "p1", after: "GH-9", unpushed: true, mark: moved, fetches: 4,
+		},
+		"push rejected": {
+			pushed: "p1", mark: landed, pushFail: true, fetches: 2,
+			halt: "GH-1 halted at catchup: pushing GH-1, caught up with origin/main: ",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship", "finish")
+			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
+			fx.opens("GH-1", "ws:GH-1", "pane:1")
+			fx.expects("GH-1", "ship")
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", tc.pushed)
+			fx.f.answers["git fetch origin"] = []shell.Result{tc.fetch, {}}
+
+			originMain := "m2"
+			if tc.pushed == "" {
+				originMain = "" // finish merges a branch never pushed into the local default branch
+				fx.f.script("git merge-tree --write-tree main0 refs/heads/GH-1", "")
+			}
+
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", originMain)
+			target := "m2"
+
+			if tc.after != "" {
+				target = "b2"
+				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, tc.after)
+				fx.f.script("git rev-parse -q --verify refs/heads/"+tc.after, "b2")
+
+				if !tc.unpushed {
+					fx.f.script("git rev-parse -q --verify refs/remotes/origin/"+tc.after, "b2")
+				}
+			}
+
+			// behind at the boundary, caught up once the catchup ran
+			ancestor := []shell.Result{{Code: 1}, {}}
+			if tc.ancestor || tc.marked {
+				ancestor = []shell.Result{{}}
+			}
+
+			fx.f.answers["git merge-base --is-ancestor "+target+" refs/heads/GH-1"] = ancestor
+			// local main does not hold origin's, so origin/main is the target
+			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
+			// origin holds the target, unless the base was never pushed
+			fx.f.script("git merge-base --is-ancestor m2 refs/remotes/origin/main", "")
+			onOrigin := shell.Result{}
+			if tc.unpushed {
+				onOrigin = shell.Result{Code: 1}
+			}
+
+			fx.f.fail("git merge-base --is-ancestor b2 refs/remotes/origin/"+tc.after, onOrigin)
+			fx.f.script(landed, "")
+			fx.f.script(moved, "")
+
+			// the mark read by the boundary's check, then by the boundary as it
+			// sends the catchup (which reads a moved mark once more for its
+			// target), then after the catchup and before finish
+			switch {
+			case tc.marked:
+				fx.f.script("git config --get branch.GH-1."+cfgLanded, "main", "main", "")
+			case tc.mark == landed:
+				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main", "")
+			case tc.mark == moved:
+				fx.f.script("git config --get branch.GH-1."+cfgMoved, "", "b2", "b2", "")
+			}
+
+			fx.f.script(catchup, "{}")
+			fx.f.script("git merge-tree --write-tree --no-messages "+target+" HEAD", "tree")
+			fx.f.script("git rev-parse -q --verify HEAD", "head0", "head1")
+			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
+			fx.f.script("git status --porcelain", "")
+			fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
+			fx.f.script("git rev-parse -q --verify origin/GH-1", tc.pushed)
+			fx.f.script("git merge-tree --write-tree origin/main p1", "")
+
+			if tc.pushFail {
+				fx.f.fail(push, shell.Result{Code: 1, Stderr: "rejected: stale info"})
+			} else {
+				fx.f.script(push, "")
+			}
+
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
+
+				return nil
+			}
+
+			// the open, whose boundary marks and sends the catchup; the
+			// catchup's turn and its end, which sends ship; ship's turn and
+			// its end, where finish runs
+			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
+			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if n := countCalls(fx.f.calls, "git fetch origin"); n != tc.fetches {
+				t.Errorf("fetched %d times, want %d: %q", n, tc.fetches, fx.f.calls)
+			}
+
+			if tc.halt != "" {
+				if exitCode(err) != exitHalted || !strings.Contains(out, tc.halt) ||
+					!strings.Contains(out, "next: rerun the drive") || fx.f.called("finish GH-1") {
+					t.Fatalf("err = %v\n%s", err, out)
+				}
+
+				return
+			}
+
+			if err != nil || !strings.Contains(out, "GH-1:    finished") {
+				t.Fatalf("err = %v\n%s", err, out)
+			}
+
+			for _, m := range []string{landed, moved} {
+				if n, want := countCalls(fx.f.calls, m), map[bool]int{false: 0, true: 1}[m == tc.mark]; n != want {
+					t.Errorf("%q set %d times, want %d: %q", m, n, want, fx.f.calls)
+				}
+			}
+
+			caught := tc.mark != "" || tc.marked
+			if n, want := countCalls(fx.f.calls, catchup), map[bool]int{false: 0, true: 1}[caught]; n != want {
+				t.Errorf("catchup prompted %d times, want %d: %q", n, want, fx.f.calls)
+			}
+
+			pushes := map[bool]int{false: 0, true: 1}[caught && !tc.unpushed]
+			if n := countCalls(fx.f.calls, push); n != pushes {
+				t.Errorf("pushed %d times, want %d: %q", n, pushes, fx.f.calls)
+			}
+
+			if tc.unpushed &&
+				!strings.Contains(out, "caught up with its base, not pushed: its base is not on origin yet") {
+				t.Errorf("a base origin lacks was pushed, or the skip went unsaid:\n%s", out)
+			}
+
+			if !caught {
+				if !tc.ancestor && tc.pushed != "" && tc.fetch.Code == 0 {
+					t.Errorf("no catchup although origin/main moved past the branch:\n%s", out)
+				}
+
+				if tc.fetch.Code != 0 && !strings.Contains(out, "skipped the target check, fetching origin: ") {
+					t.Errorf("a failed fetch was not reported:\n%s", out)
+				}
+
+				return
+			}
+
+			// the mark is set at the boundary before ship and acted on there,
+			// so ship runs on the caught-up branch
+			order := []string{catchup, push, ship, "git config branch.GH-1." + cfgDrive + " ship", "finish GH-1"}
+			if tc.unpushed {
+				order = slices.DeleteFunc(order, func(c string) bool { return c == push })
+			}
+
+			if tc.mark != "" {
+				order = slices.Insert(order, 0, tc.mark)
+			}
+
+			fx.assertOrder(t, order, "herdr agent prompt", "git config branch.GH-1."+cfgDrive+" ", landed, moved,
+				"git push", "finish")
+
+			want := "origin/main moved past GH-1, catching up before the next skill"
+			if tc.after != "" {
+				want = tc.after + " moved past GH-1, catching up before the next skill"
+			}
+
+			if tc.marked {
+				want = "GH-1 catchup: GH-1 caught up with origin/main, pushed with --force-with-lease (the catchup rewrote it)"
+			}
+
+			if !strings.Contains(out, want) {
+				t.Errorf("output lacks %q:\n%s", want, out)
+			}
+		})
+	}
+}
+
+// A ship that failed at a guarded entry for its own reason, while the look
+// marked its branch behind the default branch, is not the guard's stop: no
+// catchup goes out, since ship could not resume from it, and the stop halts.
+func TestDriveHaltsAShipThatFailedUnderAWatcherMark(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+	ship := skillPrompt("ship", "GH-1", nil, shipFlow{}, false)
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+ship, "{}")
+	fx.onTick[2] = func() {
+		fx.writeShipStop(t, "failed", "implement", 2, "fix the two red tests, then rerun")
+		fx.f.script("git config --get branch.GH-1."+cfgLanded, "main")
+	}
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != exitHalted || !strings.Contains(out, "GH-1 halted at ship: conflict with main") {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+
+	if fx.f.called("herdr agent prompt " + agentOf("GH-1") + " /f10:catchup") {
+		t.Errorf("a catchup went out for a stop ship cannot resume from: %q", fx.f.calls)
 	}
 }
 

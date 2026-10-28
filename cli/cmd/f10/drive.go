@@ -592,9 +592,11 @@ func (r *driveRun) active() bool { return r.opened && r.end == nil }
 // catchupSent is what the branch looked like when a catchup went out: the
 // sha it was being caught up to, its head, and the conflicts then, each path
 // with the blobs on both sides (conflictWay), "" when none were read. A
-// field left "" compares to nothing.
+// field left "" compares to nothing. base names the target in prose, and
+// origin is the remote-tracking ref of the target's branch, what the PR can
+// see, "" when the base is recorded nowhere.
 type catchupSent struct {
-	target, head, way string
+	target, head, way, base, origin string
 }
 
 // halts says why a conflict after this catchup halts the task instead of
@@ -999,6 +1001,113 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 	}
 
 	return nil
+}
+
+// markBehind marks a task whose branch is on origin and whose pull request's
+// target moved past it, at the boundary before its next skill, so the catchup
+// goes out now and the open PR never sits behind (a listed base still in
+// flight is markMoved's, and finish has readyToMerge). One fetch per boundary,
+// only for a pushed branch; a fetch or read git cannot answer skips the check,
+// and the next boundary reads again.
+func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) error {
+	id, branch := r.task.ref.ID, r.o.branch
+
+	if r.base != nil && !r.base.through() {
+		return nil
+	}
+
+	skip := func(what string, err error) error {
+		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", id, what, err)
+
+		return nil
+	}
+
+	pushed, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return skip("reading origin/"+branch, err)
+	}
+
+	if pushed == "" {
+		return nil
+	}
+
+	if _, err := gitx.Exec(ctx, in.main, "fetch", "origin"); err != nil {
+		return skip("fetching origin", err)
+	}
+
+	target, err := in.prTarget(ctx, r)
+	if err != nil {
+		return skip("reading what "+branch+" targets", err)
+	}
+
+	// a base gone from everywhere is nobody's target until finish releases the dependent
+	if target.sha == "" {
+		return nil
+	}
+
+	key, err := in.mark(ctx, r)
+	if err != nil {
+		return skip("reading the marks on "+branch, err)
+	}
+
+	if key != "" {
+		return nil
+	}
+
+	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+branch)
+	if err != nil {
+		return skip("reading "+branch, err)
+	}
+
+	if has {
+		return nil
+	}
+
+	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+target.key, target.value); err != nil {
+		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
+	}
+
+	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", id, target.name, branch)
+
+	return nil
+}
+
+// prTarget is what a task's pull request targets and the mark that sends
+// a catchup for it: origin's copy of the branch f10-after-branch records,
+// which the stacked PR targets, else its local copy, else the default
+// branch as catchupTarget resolves it. sha is "" for a base found nowhere.
+type prTarget struct {
+	sha, name, key, value string
+}
+
+func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (prTarget, error) {
+	after, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+cfgAfterBranch)
+	if err != nil {
+		return prTarget{}, err
+	}
+
+	if after != "" {
+		sha := ""
+
+		for _, ref := range []string{"refs/remotes/origin/" + after, "refs/heads/" + after} {
+			if sha, err = gitx.Ref(ctx, in.main, ref); err != nil || sha != "" {
+				break
+			}
+		}
+
+		return prTarget{sha: sha, name: after, key: cfgMoved, value: sha}, err
+	}
+
+	// the default branch resolves as the catchup will read it, so the mark
+	// and the catchup never name different commits
+	sha, name, err := in.catchupTarget(ctx, r, cfgLanded)
+	if err != nil {
+		return prTarget{}, err
+	}
+
+	def, err := localDefault(ctx, in.main)
+
+	return prTarget{sha: sha, name: name, key: cfgLanded, value: def}, err
 }
 
 // takeAnswers sorts the --answer values: `ID=text` naming a listed task is
@@ -1563,6 +1672,16 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
+	// finish tries the merge itself and catches up only a conflict, under
+	// the progress rule, so a clean PR merges as it stands
+	if skill != "finish" {
+		if err := in.markBehind(ctx, w, r); err != nil {
+			in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
+
+			return nil
+		}
+	}
+
 	key, err := in.mark(ctx, r)
 	if err == nil && skill == "finish" && key == "" {
 		if res := in.readyToMerge(ctx, w, r); res != nil {
@@ -1602,7 +1721,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 // progress check a later conflict runs. A read git cannot answer halts: a
 // record made up would halt a healthy task, or loop on a doomed one.
 func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string) error {
-	target, _, err := in.catchupTarget(ctx, r, key)
+	target, base, err := in.catchupTarget(ctx, r, key)
 	if err != nil {
 		return err
 	}
@@ -1617,9 +1736,35 @@ func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string
 		return fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
 	}
 
-	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts)}
+	origin, err := in.targetOrigin(ctx, r, key)
+	if err != nil {
+		return err
+	}
+
+	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts), base: base, origin: origin}
 
 	return nil
+}
+
+// targetOrigin is the remote-tracking ref of the branch a mark's catchup
+// brings in: origin's copy of the recorded base for f10-base-moved, of the
+// default branch for f10-landed. A base recorded nowhere gives "".
+func (in *driveInput) targetOrigin(ctx context.Context, r *driveRun, key string) (string, error) {
+	if key == cfgMoved {
+		after, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+cfgAfterBranch)
+		if err != nil || after == "" {
+			return "", err
+		}
+
+		return "refs/remotes/origin/" + after, nil
+	}
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return "", err
+	}
+
+	return "refs/remotes/origin/" + def, nil
 }
 
 // catchupTarget is the sha the catchup step will bring in for a mark, and
@@ -1840,25 +1985,11 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	}
 
 	if caughtUp {
-		fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
-		if err != nil {
+		if err := in.pushCaughtUp(ctx, w, r, "finish", pushed, base); err != nil {
 			res := halted(id, "finish", err.Error())
 
 			return &res
 		}
-
-		lease, how := "", "pushed"
-		if !fastForward {
-			lease, how = pushed, "pushed with --force-with-lease (the catchup rewrote it)"
-		}
-
-		if err := gitx.Push(ctx, r.o.path, branch, lease); err != nil {
-			res := halted(id, "finish", fmt.Sprintf("pushing %s, caught up with %s: %v", branch, base, err))
-
-			return &res
-		}
-
-		fmt.Fprintf(w, "%s finish: %s caught up with %s, %s\n", id, branch, base, how)
 
 		return nil
 	}
@@ -1884,6 +2015,101 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 
 	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
 	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
+
+	return nil
+}
+
+// pushCaughtUp pushes a caught-up branch over origin's copy at pushed:
+// plain when the catchup merged, so origin's copy is an ancestor, with a
+// lease against that sha when it rebased. skill names the step for the
+// line it prints and the error it returns.
+func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun, skill, pushed, base string) error {
+	id, branch := r.task.ref.ID, r.o.branch
+
+	fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
+	if err != nil {
+		return err
+	}
+
+	lease, how := "", "pushed"
+	if !fastForward {
+		lease, how = pushed, "pushed with --force-with-lease (the catchup rewrote it)"
+	}
+
+	if err := gitx.Push(ctx, r.o.path, branch, lease); err != nil {
+		return fmt.Errorf("pushing %s, caught up with %s: %w", branch, base, err)
+	}
+
+	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", id, skill, branch, base, how)
+
+	return nil
+}
+
+// pushCatchup pushes a branch origin has once a catchup ended clean, so its
+// pull request carries the integration before the next skill; a branch never
+// pushed is left to ship's pr step or to finish, and so is one whose catchup
+// brought in commits origin does not hold yet (a base read from its local
+// branch), since another task's unpushed work never rides into this PR.
+// Origin is fetched first: the lease must be origin's current sha, never a
+// stale tracking ref.
+func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
+	id, branch := r.task.ref.ID, r.o.branch
+
+	halt := func(err error) *driveResult {
+		res := halted(id, "catchup", err.Error())
+		res.lines = append(res.lines, "next: rerun the drive")
+
+		return &res
+	}
+
+	pushed, err := gitx.Ref(ctx, r.o.path, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return halt(err)
+	}
+
+	if pushed == "" {
+		return nil
+	}
+
+	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+		return halt(err)
+	}
+
+	if pushed, err = gitx.Ref(ctx, r.o.path, "refs/remotes/origin/"+branch); err != nil {
+		return halt(err)
+	}
+
+	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
+	if err != nil {
+		return halt(err)
+	}
+
+	if head == pushed {
+		return nil
+	}
+
+	base := "its base"
+	if r.lastCatchup != nil {
+		base = r.lastCatchup.base
+	}
+
+	if c := r.lastCatchup; c != nil && c.origin != "" && c.target != "" {
+		seen, err := gitx.IsAncestor(ctx, r.o.path, c.target, c.origin)
+		if err != nil {
+			return halt(err)
+		}
+
+		if !seen {
+			fmt.Fprintf(w, "%s catchup: %s caught up with %s, not pushed: %s is not on origin yet\n",
+				id, branch, base, base)
+
+			return nil
+		}
+	}
+
+	if err := in.pushCaughtUp(ctx, w, r, "catchup", pushed, base); err != nil {
+		return halt(err)
+	}
 
 	return nil
 }
@@ -2291,7 +2517,9 @@ func (in *driveInput) poll(
 		case skill == "catchup" && guardStop(run):
 			// a catchup that stopped and then ended clean restores the stop it
 			// found, so git says how it ended
-		case skill == "ship" && guardStop(run) && in.marked(ctx, r):
+		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
+			// the stop the guard leaves names the catchup ship resumes from; a
+			// mark on a ship that failed elsewhere is the watcher's, not the guard's
 			if res := in.guardAgain(ctx, r); res != nil {
 				in.end(ctx, w, r, *res)
 
@@ -2334,6 +2562,12 @@ func (in *driveInput) poll(
 			res := halted(id, skill, "the catchup did not end clean: "+reason)
 			res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
 			in.end(ctx, w, r, res)
+
+			return nil
+		}
+
+		if res := in.pushCatchup(ctx, w, r); res != nil {
+			in.end(ctx, w, r, *res)
 
 			return nil
 		}

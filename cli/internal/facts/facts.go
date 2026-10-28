@@ -78,20 +78,21 @@ type Effective struct {
 
 	// The rest of the typed facts (resolve.go). MergeMethod "" means none
 	// declared: finish asks the repo.
-	MergeMethod   string              `json:"mergeMethod,omitempty"`
-	Catchup       string              `json:"catchup"`
-	Traces        bool                `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
-	Lore          string              `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
-	LoreGate      string              `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
-	StaleAfter    string              `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
-	DriverTimeout time.Duration       `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
-	Flows         map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
-	FlowByArea    map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
-	DriveFinish   bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
-	DriveEnv      []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
-	Watch         string              `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
-	ReportBack    bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
-	UpkeepPaths   []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	MergeMethod    string              `json:"mergeMethod,omitempty"`
+	Catchup        string              `json:"catchup"`
+	CatchupStacked string              `json:"catchupStacked"`        // catchup_stacked: the method for a base that is another task's branch
+	Traces         bool                `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
+	Lore           string              `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
+	LoreGate       string              `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
+	StaleAfter     string              `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
+	DriverTimeout  time.Duration       `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
+	Flows          map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
+	FlowByArea     map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
+	DriveFinish    bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
+	DriveEnv       []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
+	Watch          string              `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
+	ReportBack     bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
+	UpkeepPaths    []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
