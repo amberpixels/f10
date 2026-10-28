@@ -190,7 +190,7 @@ Drive's finish asks no riders question, since a resume carries only the latest a
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
 Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - always a merge, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
-A conflict there stops ship and hands off to `/f10:catchup`, which settles it with both sides kept.
+A conflict there stops ship, marks the branch for the base that conflicted (`f10-landed`, or `f10-base-moved` for a recorded base), and hands off to `/f10:catchup`, which settles it with both sides kept.
 Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
 The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
@@ -489,6 +489,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
    Once it ends clean, the driver pushes the caught-up branch (`--force-with-lease` against the sha it read, when the catchup rebased) and then merges.
    A branch that still conflicts after one catchup halts the task.
+   A ship stopped by its catchup guard, which marks the branch, gets the same catchup once per task per drive, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict in that drive halts it.
    The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A conflict the catchup cannot settle is an ask; anything else halts the task.
 6. **Waiting.**
@@ -519,7 +520,7 @@ Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the reco
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
 An agent found mid-turn is attached to rather than prompted again.
-A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped.
+A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
 `/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, runs the `answer with:` line (`f10 drive --resume <n> --answer …`) with the answers, and prints the final report.
