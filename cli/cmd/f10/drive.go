@@ -156,7 +156,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		started:  startedMove(t),
 		record:   recordAt,
-		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error {
+		pid:      os.Getpid(),
+		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return fmt.Errorf("getwd: %w", err)
@@ -172,6 +173,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 				merge:     pr == finishMerge,
 				local:     pr == finishLocal,
+				progress:  progress,
 				plansDir:  t.sharedPlansDir(),
 				title:     titleLookup(t, task.Number),
 				// a driven finish asks no second question, since a resume
@@ -351,8 +353,10 @@ type driveInput struct {
 	plansDir string                              // the plans dir every checkout shares
 	settings string                              // claude's settings file, which names the model a bad --model falls back to
 	title    func(ref.Ref) func(context.Context) (string, error)
-	started  func(context.Context, ref.Ref) error                                  // nil when tracker.status declares no started word
-	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string) error // pr: "", or the answer merge or local
+	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
+	// pr: "", or the answer merge or local; progress names each action finish takes
+	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error
+	pid      int // this process, for the finish record status reads
 	stateDir string
 	ttl      time.Duration
 	now      func() time.Time
@@ -482,6 +486,15 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	if err := in.startRunnable(ctx, w, runs); err != nil {
 		return err
 	}
+
+	// an interrupted drive leaves no finish record claiming it still runs
+	defer func() {
+		for _, r := range runs {
+			if r.active() {
+				in.clearFinish(context.WithoutCancel(ctx), r)
+			}
+		}
+	}()
 
 	for !stopping(runs) {
 		if err := in.sleep(ctx, in.args.every); err != nil {
@@ -1059,6 +1072,10 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		return fmt.Errorf("recording the chain: %w", err)
 	}
 
+	if slices.Contains(chain, "finish") {
+		in.finishStep(ctx, w, o.branch, ref.FinishQueued, "")
+	}
+
 	for _, n := range appendNote(o.notes, note) {
 		fmt.Fprintf(w, "  %s\n", n)
 	}
@@ -1195,6 +1212,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
 			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", r.task.ref.ID, r.base.task.ref.ID)
+			in.finishStep(ctx, w, r.o.branch, ref.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
 		r.waiting = true
@@ -1204,7 +1222,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	// a spike merges nothing, so it needs no catchup and no clean merge
 	if skill == "finish" && spike {
-		in.end(ctx, w, r, in.runFinish(ctx, w, r.task))
+		in.end(ctx, w, r, in.runFinish(ctx, w, r))
 
 		return nil
 	}
@@ -1221,7 +1239,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	case in.marked(ctx, r):
 		skill = "catchup"
 	case skill == "finish":
-		in.end(ctx, w, r, in.runFinish(ctx, w, r.task))
+		in.end(ctx, w, r, in.runFinish(ctx, w, r))
 
 		return nil
 	}
@@ -1342,6 +1360,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	r.mergeCatchup = true
 
 	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
+	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
 
 	return nil
 }
@@ -1356,8 +1375,8 @@ const (
 // runFinish runs finish in this process. Its refusals halt the task with
 // the reason, except a PR someone else opened, which asks; its report is
 // indented under the progress lines.
-func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask) driveResult {
-	id := task.ref.ID
+func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) driveResult {
+	task, id := r.task, r.task.ref.ID
 
 	pr, err := in.finishAnswer(id)
 	if err != nil {
@@ -1368,7 +1387,11 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 
 	var buf bytes.Buffer
 
-	err = in.finish(ctx, &buf, task.ref, pr)
+	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
+
+	err = in.finish(ctx, &buf, task.ref, pr, func(action string) {
+		in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
+	})
 
 	sc := bufio.NewScanner(&buf)
 	for sc.Scan() {
@@ -1400,6 +1423,30 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, task driveTask
 	}
 
 	return driveResult{row: "finished"}
+}
+
+// finishStep records on the branch where drive's finish of it stands and
+// what it is doing, for status to read. A failed write is a line, never a
+// halt: the record is only a view.
+func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, action string) {
+	if branch == "" {
+		return
+	}
+
+	rec := ref.DriveFinish{PID: in.pid, State: st, Action: action}
+	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+ref.FinishKey, rec.Format()); err != nil {
+		fmt.Fprintf(w, "  recording finish's progress on %s: %v\n", branch, err)
+	}
+}
+
+// clearFinish drops the finish record of a task this drive opened with
+// finish in its chain.
+func (in *driveInput) clearFinish(ctx context.Context, r *driveRun) {
+	if !r.opened || !slices.Contains(r.chain, "finish") {
+		return
+	}
+
+	_ = gitx.UnsetConfig(ctx, in.main, "branch."+r.o.branch+"."+ref.FinishKey) // absent is fine
 }
 
 // finishAnswer is the answer to finish's question this drive was resumed
@@ -1482,7 +1529,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.o.path,
 			id,
 			r.task.suffix,
-			skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow),
+			skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, slices.Contains(r.chain, "finish")),
 		); err != nil {
 			return err
 		}
@@ -1699,6 +1746,11 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
 	r.end = &res
 
+	// a finished task's branch took the record with it
+	if res.row != "finished" {
+		in.clearFinish(ctx, r)
+	}
+
 	if res.code == exitHalted && !res.fromRun {
 		in.recordHalt(ctx, r, res)
 	}
@@ -1822,8 +1874,10 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 // the dependency when the task has a base. catchup is not a chain skill:
 // drive sends it to a branch its finished base marked landed. id is a
 // bundle's label, `ABC-1+ABC-2`: plan and ship take it whole, every other
-// skill its lead, from which it finds the branch.
-func skillPrompt(skill, id string, dep *dependency, fl shipFlow) string {
+// skill its lead, from which it finds the branch. finish says drive
+// finishes the task after ship, which ship's report names so nobody waits
+// in its pane.
+func skillPrompt(skill, id string, dep *dependency, fl shipFlow, finish bool) string {
 	var p string
 
 	if skill != "plan" && skill != "ship" {
@@ -1843,8 +1897,15 @@ func skillPrompt(skill, id string, dep *dependency, fl shipFlow) string {
 		p += " && " + dependencyClause(id, dep)
 	}
 
+	if finish && skill == "ship" {
+		p += " && " + finishClause
+	}
+
 	return driven(p)
 }
+
+// finishClause tells a driven ship that drive finishes the task after it.
+const finishClause = "drive finishes it after ship and removes this worktree"
 
 // resumeCommand is the command line as given, minus any --answer, quoted
 // where a token needs it.

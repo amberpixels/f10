@@ -262,7 +262,7 @@ func TestSkillPromptForABundle(t *testing.T) {
 		"review": "/f10:review GH-1 --driven",
 		"finish": "/f10:finish GH-1 --driven",
 	} {
-		if got := skillPrompt(skill, "GH-1+GH-2", nil, shipFlow{}); got != want {
+		if got := skillPrompt(skill, "GH-1+GH-2", nil, shipFlow{}, false); got != want {
 			t.Errorf("skillPrompt(%s) = %q, want %q", skill, got, want)
 		}
 	}

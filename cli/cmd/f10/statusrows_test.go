@@ -311,3 +311,22 @@ func TestRouteTask(t *testing.T) {
 		})
 	}
 }
+
+// A shipped task whose finish drive holds names it in the step column.
+func TestRowStepNamesDriveFinish(t *testing.T) {
+	f := rowFacts{run: &state.Run{Plan: "done", Ship: "done"}}
+
+	row := taskRow{Gates: []gate{{Step: "finish", State: gateRunning, Via: viaDrive, Action: "merging #204"}}}
+	row.finish(f)
+
+	if row.Stage != stageShipped || row.Step != "finish: running (drive): merging #204" {
+		t.Errorf("row = %s / %q, want shipped / the finish action", row.Stage, row.Step)
+	}
+
+	plain := taskRow{Gates: []gate{{Step: "finish", State: gatePending}}}
+	plain.finish(f)
+
+	if plain.Step != "ship" {
+		t.Errorf("a pending finish changed the step to %q", plain.Step)
+	}
+}

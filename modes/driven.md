@@ -34,4 +34,9 @@ An answer with no ask recorded is steering.
 A **Claude Code permission dialog** cannot travel this way: the driving session sees an idle agent.
 Stay inside the session's existing permissions; an unavoidable dialog is answered in this pane.
 
+## When drive finishes the task
+
+A ship prompt that says drive finishes it after ship (`f10 drive` with `drive_finish` on) ends its report with one line naming that, the PR by number where there is one, and that nothing is owed in this pane: `Next: f10 drive merges #204 and removes this worktree; nothing to do here.` (a spike: `Next: f10 drive closes the spike and removes this worktree; nothing to do here.`).
+A driven run whose prompt does not say so adds no such line.
+
 `--dry-run` with `--driven` is a dry run that also lists which questions would become asks.

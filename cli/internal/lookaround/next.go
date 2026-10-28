@@ -41,6 +41,16 @@ func (r *row) next() {
 
 	text := func(s string) Next { return Next{Text: s} }
 
+	// drive merges and removes it in its own process: nothing is owed
+	if r.driveFinishes() {
+		r.Next = text("drive finishes it")
+		if a := r.branch.Finish.Action; a != "" {
+			r.Next = text("drive: " + a)
+		}
+
+		return
+	}
+
 	switch r.Stage {
 	case StageDone:
 		r.Next = Next{}
@@ -113,6 +123,21 @@ func (r *row) next() {
 			StageNext:             "not started",
 		}[r.Stage])
 	}
+}
+
+// driveFinishes reports a row whose finish a running drive holds, read
+// as `f10 status` reads it: ship done, with a PR open or merged.
+func (r *row) driveFinishes() bool {
+	if r.branch == nil || r.branch.Finish == nil || r.run == nil || r.run.Ship != "done" {
+		return false
+	}
+
+	switch r.Stage {
+	case StageReady, StagePROpen, StageMergedUnfinished:
+		return true
+	}
+
+	return false
 }
 
 func stoppedText(r *row) string {
