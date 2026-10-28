@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -515,8 +516,38 @@ func (r *row) block() (counts, bool) {
 	return counts{Step: b.Step, Round: b.Round, Open: b.Open, Asks: b.Asks}, true
 }
 
-func reviewStep(step string) bool {
+// reviewStep reads an entry as the flow names it: `review:local` and
+// `review (local)` are review.
+func reviewStep(entry string) bool {
+	step, _ := facts.SplitEntry(entry)
+
 	return step == "review" || step == "resolve" || step == "judge"
+}
+
+// planJudge is a ship run at a judge its pipeline puts before implement:
+// the plan is written and being checked, no code yet. The leaf's place
+// tells the two judges of one pipeline apart, else its first entry counts.
+func planJudge(run *state.Run) bool {
+	if run.Ship != "running" {
+		return false
+	}
+
+	if step, _ := facts.SplitEntry(run.Leaf); step != "judge" {
+		return false
+	}
+
+	at := run.At - 1
+	if at < 0 || at >= len(run.Pipeline) || run.Pipeline[at] != run.Leaf {
+		at = slices.Index(run.Pipeline, run.Leaf)
+	}
+
+	implement := slices.IndexFunc(run.Pipeline, func(e string) bool {
+		step, _ := facts.SplitEntry(e)
+
+		return step == "implement"
+	})
+
+	return at >= 0 && implement > at
 }
 
 // stage applies the rules in order; withLocal says the local collector
@@ -559,7 +590,9 @@ func (r *row) stage(withLocal bool, since time.Time) {
 		r.pr.Checks != forge.Red && r.pr.Decision == forge.Approved && r.pr.Block == nil:
 		set(StageReady, FromGuessed)
 
-	case r.running() && reviewStep(r.run.Leaf):
+	case r.running() && planJudge(r.run):
+		set(StagePlanned, FromLocal)
+	case r.running() && r.run.Ship == "running" && reviewStep(r.run.Leaf):
 		set(StageInReview, FromLocal)
 	case withLocal && r.findings != nil && r.findings.Open > 0 && r.open():
 		set(StageInReview, FromLocal)
@@ -584,8 +617,10 @@ func (r *row) stage(withLocal bool, since time.Time) {
 	// closed long ago is not work in flight
 	case r.tracked() && r.worktree != nil && r.worktree.Ahead > 0:
 		set(StageImplementing, FromLocal)
-	// a worktree with nothing ahead is a started task still planning
-	case r.tracked() && (r.plan || r.worktree != nil), r.running() && r.run.Plan == "running":
+	case r.live() && r.run.Plan == "running":
+		set(StagePlanning, FromLocal)
+	// a worktree with nothing ahead is a started task with no code yet
+	case r.tracked() && (r.plan || r.worktree != nil):
 		set(StagePlanned, FromLocal)
 
 	case r.Task != nil && !closed(r.Task.Status):
