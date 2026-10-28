@@ -643,7 +643,12 @@ func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
 // refuseUnpushed stops a cleanup that leaves the PR open while the branch
 // has commits origin's copy lacks: deleting the branch would lose them.
 func refuseUnpushed(ctx context.Context, main, branch string) error {
-	if gitx.IsAncestor(ctx, main, "refs/heads/"+branch, "refs/remotes/origin/"+branch) {
+	pushed, err := gitx.IsAncestor(ctx, main, "refs/heads/"+branch, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return fmt.Errorf("could not tell whether origin/%s has every commit of %s: %w", branch, branch, err)
+	}
+
+	if pushed {
 		return nil
 	}
 
@@ -949,7 +954,12 @@ func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 			def, main)
 	}
 
-	if !gitx.IsAncestor(ctx, main, sha, def) {
+	merged, err := gitx.IsAncestor(ctx, main, sha, def)
+	if err != nil {
+		return "", fmt.Errorf("could not tell whether merge commit %s is in %s: %w: nothing removed", sha, def, err)
+	}
+
+	if !merged {
 		return "", fmt.Errorf("merge commit %s is not in %s after pulling: nothing removed", sha, def)
 	}
 
@@ -962,16 +972,25 @@ func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 // before the base's code existed, so its next ship or catchup brings the
 // default branch in first.
 func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, error) {
+	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
+	if err != nil {
+		return nil, fmt.Errorf("reading which branches depend on %s: %w", branch, err)
+	}
+
 	var notes []string
 
-	for _, e := range gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`) {
+	for _, e := range entries {
 		if e.Value != branch {
 			continue
 		}
 
 		dependent := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgAfterBranch)
 		section := "branch." + dependent + "."
-		base := gitx.Out(ctx, dir, "config", "--get", section+cfgAfter)
+
+		base, err := gitx.Config(ctx, dir, section+cfgAfter)
+		if err != nil {
+			return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
+		}
 
 		for _, key := range []string{cfgAfter, cfgAfterBranch} {
 			if err := gitx.UnsetConfig(ctx, dir, section+key); err != nil {

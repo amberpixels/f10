@@ -36,7 +36,11 @@ func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []st
 		// the branch's copy wins: it is what start recorded, and what ship
 		// and pr act on; finish clears it, and the body then names a base
 		// that is finished, which is the same answer
-		recorded := gitx.Out(ctx, in.main, "config", "--get", "branch."+t.branch+"."+cfgAfter)
+		recorded, err := gitx.Config(ctx, in.main, "branch."+t.branch+"."+cfgAfter)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: reading its recorded base: %w", t.ref.ID, err)
+		}
+
 		if recorded == "" {
 			continue
 		}

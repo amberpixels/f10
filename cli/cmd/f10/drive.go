@@ -837,9 +837,24 @@ func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 
 	args := []string{"rev-list", "--count", "refs/heads/" + b.o.branch, "--not", "refs/heads/" + def}
 
-	fork := gitx.Out(ctx, in.main, "config", "--get", "branch."+b.o.branch+"."+cfgAfterBranch)
+	// a ref git cannot read would drop out of the --not list and count the
+	// base's own base as its commits, so it releases nobody this poll
+	fork, err := gitx.Config(ctx, in.main, "branch."+b.o.branch+"."+cfgAfterBranch)
+	if err != nil {
+		return false
+	}
+
 	for _, r := range []string{"refs/remotes/origin/" + def, "refs/heads/" + fork} {
-		if !strings.HasSuffix(r, "/") && gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", r) != "" {
+		if strings.HasSuffix(r, "/") {
+			continue
+		}
+
+		sha, err := gitx.Ref(ctx, in.main, r)
+		if err != nil {
+			return false
+		}
+
+		if sha != "" {
 			args = append(args, r)
 		}
 	}
@@ -884,13 +899,37 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 			}
 		}
 
-		head := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/heads/"+b.o.branch)
-		if head == "" || gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.branch) {
+		// a read git cannot answer skips the task for this poll: the next
+		// poll reads again, and a wrong "moved" would send a catchup
+		head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
+		if err != nil {
+			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", r.task.ref.ID, b.o.branch, err)
+
+			continue
+		}
+
+		if head == "" {
+			continue
+		}
+
+		if has, err := gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.branch); has || err != nil {
+			if err != nil {
+				fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", r.task.ref.ID, r.o.branch, err)
+			}
+
 			continue
 		}
 
 		key := "branch." + r.o.branch + "." + cfgMoved
-		if gitx.Out(ctx, in.main, "config", "--get", key) == head {
+
+		marked, err := gitx.Config(ctx, in.main, key)
+		if err != nil {
+			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", r.task.ref.ID, key, err)
+
+			continue
+		}
+
+		if marked == head {
 			continue
 		}
 
@@ -1085,7 +1124,9 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		if branched {
 			var local []string
 			if suffix == "" {
-				local = linkedBranches(ctx, in.main, r.ID)
+				if local, err = linkedBranches(ctx, in.main, r.ID); err != nil {
+					return err
+				}
 			}
 
 			if len(local) == 0 {
@@ -1322,7 +1363,11 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, string, error) {
 	key := "branch." + branch + "." + cfgFlow
 
-	recorded := gitx.Out(ctx, in.main, "config", "--get", key)
+	recorded, err := gitx.Config(ctx, in.main, key)
+	if err != nil {
+		return shipFlow{}, "", fmt.Errorf("reading the recorded flow: %w", err)
+	}
+
 	if recorded == in.flow.recorded() {
 		return in.flow, "", nil
 	}
@@ -1371,7 +1416,12 @@ func (in *driveInput) chainFor(fl shipFlow) []string {
 // are the phases the badge tracks - and a plan the worktree reads counts as
 // plan done, so driven ship takes it rather than planning again.
 func (in *driveInput) position(ctx context.Context, o openedTask, chain []string) (int, error) {
-	if last := gitx.Out(ctx, in.main, "config", "--get", "branch."+o.branch+"."+cfgDrive); last != "" {
+	last, err := gitx.Config(ctx, in.main, "branch."+o.branch+"."+cfgDrive)
+	if err != nil {
+		return 0, fmt.Errorf("reading where the drive left %s: %w", o.branch, err)
+	}
+
+	if last != "" {
 		if i := slices.Index(chain, last); i >= 0 {
 			return i + 1, nil
 		}
@@ -1410,7 +1460,13 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	wasWaiting := r.waiting
 	r.waiting = false
 
-	spike := in.spikeDone(ctx, r)
+	spike, err := in.spikeDone(ctx, r)
+	if err != nil {
+		in.end(ctx, w, r, halted(r.task.ref.ID, "finish", err.Error()))
+
+		return nil
+	}
+
 	if spike && r.pos >= len(r.chain) {
 		if err := in.closeAfterShip(ctx, r); err != nil {
 			return err
@@ -1449,16 +1505,25 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
-	if skill == "finish" && !in.marked(ctx, r) {
+	key, err := in.mark(ctx, r)
+	if err == nil && skill == "finish" && key == "" {
 		if res := in.readyToMerge(ctx, w, r); res != nil {
 			in.end(ctx, w, r, *res)
 
 			return nil
 		}
+
+		key, err = in.mark(ctx, r)
+	}
+
+	if err != nil {
+		in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
+
+		return nil
 	}
 
 	switch {
-	case in.marked(ctx, r):
+	case key != "":
 		skill = "catchup"
 	case skill == "finish":
 		in.end(ctx, w, r, in.runFinish(ctx, w, r))
@@ -1472,13 +1537,18 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 // spikeDone reports whether the task's ship ended as a spike that finish
 // closes without a merge: past ship in its chain, a spike report written,
 // and the branch never pushed, since a pushed one finishes through its PR.
-func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) bool {
+func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) {
 	i := slices.Index(r.chain, "ship")
 	if i < 0 || r.pos <= i || taskSpike(r.o.path, in.plansDir, r.task.ref.ID) == "" {
-		return false
+		return false, nil
 	}
 
-	return gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/remotes/origin/"+r.o.branch) == ""
+	pushed, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+r.o.branch)
+	if err != nil {
+		return false, fmt.Errorf("reading whether %s was pushed: %w", r.o.branch, err)
+	}
+
+	return pushed == "", nil
 }
 
 // closeAfterShip adds finish to a spike's chain that lacks it: a spike close
@@ -1532,8 +1602,14 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return &res
 	}
 
-	base, pushed := "origin/"+def, gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "origin/"+branch)
-	head := pushed
+	pushed, err := gitx.Ref(ctx, r.o.path, "origin/"+branch)
+	if err != nil {
+		res := halted(id, "finish", err.Error())
+
+		return &res
+	}
+
+	base, head := "origin/"+def, pushed
 
 	if pushed == "" {
 		if base, err = landingBase(ctx, in.main, def); err != nil {
@@ -1545,13 +1621,38 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		head = "refs/heads/" + branch
 	}
 
-	if gitx.MergesCleanly(ctx, r.o.path, base, head) {
+	// every read before a push halts on a git that cannot answer: a wrong
+	// "not an ancestor" would pick the lease and rewrite origin's branch
+	clean, err := gitx.MergesCleanly(ctx, r.o.path, base, head)
+	if err != nil {
+		res := halted(id, "finish", err.Error())
+
+		return &res
+	}
+
+	if clean {
 		return nil
 	}
 
-	if pushed != "" && gitx.IsAncestor(ctx, r.o.path, base, "HEAD") {
+	caughtUp := false
+	if pushed != "" {
+		if caughtUp, err = gitx.IsAncestor(ctx, r.o.path, base, "HEAD"); err != nil {
+			res := halted(id, "finish", err.Error())
+
+			return &res
+		}
+	}
+
+	if caughtUp {
+		fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
+		if err != nil {
+			res := halted(id, "finish", err.Error())
+
+			return &res
+		}
+
 		lease, how := "", "pushed"
-		if !gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD") {
+		if !fastForward {
 			lease, how = pushed, "pushed with --force-with-lease (the catchup rewrote it)"
 		}
 
@@ -2035,21 +2136,30 @@ func (in *driveInput) poll(
 }
 
 // marked reports whether the task's branch is marked for a catchup.
+// A mark git cannot read counts as marked: the catchup it sends ends in
+// unsettled, which names the read and halts.
 func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
-	return in.mark(ctx, r) != ""
+	key, err := in.mark(ctx, r)
+
+	return key != "" || err != nil
 }
 
 // mark is the key the branch is marked with, or "": f10-landed when its
 // base's code is in the default branch and not yet in this one, else
 // f10-base-moved when its base branch moved past it.
-func (in *driveInput) mark(ctx context.Context, r *driveRun) string {
+func (in *driveInput) mark(ctx context.Context, r *driveRun) (string, error) {
 	for _, key := range []string{cfgLanded, cfgMoved} {
-		if gitx.Out(ctx, in.main, "config", "--get", "branch."+r.o.branch+"."+key) != "" {
-			return key
+		v, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+key)
+		if err != nil {
+			return "", fmt.Errorf("reading the %s mark on %s: %w", key, r.o.branch, err)
+		}
+
+		if v != "" {
+			return key, nil
 		}
 	}
 
-	return ""
+	return "", nil
 }
 
 // unsettled says why a catchup that ended without a stop did not bring the
@@ -2057,15 +2167,24 @@ func (in *driveInput) mark(ctx context.Context, r *driveRun) string {
 // success is read from git: the mark gone, which catchup clears only once
 // verify is green, no merge or rebase left open, and a clean tree.
 func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
-	if key := in.mark(ctx, r); key != "" {
+	key, err := in.mark(ctx, r)
+
+	switch {
+	case err != nil:
+		return err.Error()
+	case key != "":
 		return "the branch is still marked " + key
 	}
 
-	switch {
-	case gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "MERGE_HEAD") != "":
-		return "a merge is still in progress in " + r.o.path
-	case gitx.Out(ctx, r.o.path, "rev-parse", "-q", "--verify", "REBASE_HEAD") != "":
-		return "a rebase is still in progress in " + r.o.path
+	for _, head := range []struct{ ref, what string }{{"MERGE_HEAD", "merge"}, {"REBASE_HEAD", "rebase"}} {
+		sha, err := gitx.Ref(ctx, r.o.path, head.ref)
+
+		switch {
+		case err != nil:
+			return fmt.Sprintf("could not tell whether a %s is in progress in %s: %v", head.what, r.o.path, err)
+		case sha != "":
+			return fmt.Sprintf("a %s is still in progress in %s", head.what, r.o.path)
+		}
 	}
 
 	dirty, err := gitx.Status(ctx, r.o.path)

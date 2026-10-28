@@ -568,7 +568,10 @@ func settleBundle(ctx context.Context, main string, task ref.Ref, existing strin
 	}
 
 	for _, rider := range task.Riders() {
-		branches := linkedBranches(ctx, main, rider)
+		branches, err := linkedBranches(ctx, main, rider)
+		if err != nil {
+			return ref.Ref{}, err
+		}
 
 		for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
 			refs, err := gitx.Refs(ctx, main, append(taskRefs(root, rider), riderRefs(root, rider)...)...)

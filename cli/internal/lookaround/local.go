@@ -102,7 +102,12 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 		"|",
 	) + `)$`
 
-	for _, e := range gitx.ConfigEntries(ctx, in.Main, pattern) {
+	entries, err := gitx.ConfigEntries(ctx, in.Main, pattern)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, e := range entries {
 		rest := strings.TrimPrefix(e.Key, "branch.")
 
 		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.FinishKey} {

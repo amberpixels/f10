@@ -157,7 +157,12 @@ func (r Lookup) Find(ctx context.Context, explicit string) (Ref, error) {
 		return r.bundled(ctx, explicit, OriginExplicit, nil)
 	}
 
-	if id, members := r.fromBranch(ctx); id != "" {
+	id, members, err := r.fromBranch(ctx)
+	if err != nil {
+		return Ref{}, err
+	}
+
+	if id != "" {
 		return r.bundled(ctx, id, OriginBranch, members)
 	}
 
@@ -204,12 +209,21 @@ func (r Lookup) parseBundle(token string) (Ref, error) {
 
 // bundleOf is the bundle local config records id in, lead first, or nil:
 // a branch whose riders list it, or whose linked lead it is.
-func (r Lookup) bundleOf(ctx context.Context, id string) []string {
-	for _, e := range gitx.ConfigEntries(ctx, r.Dir, `^branch\..*\.`+RidersKey+`$`) {
+func (r Lookup) bundleOf(ctx context.Context, id string) ([]string, error) {
+	entries, err := gitx.ConfigEntries(ctx, r.Dir, `^branch\..*\.`+RidersKey+`$`)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, e := range entries {
 		branch := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+RidersKey)
 		riders := strings.Fields(e.Value)
 
-		lead := gitx.Out(ctx, r.Dir, "config", "--get", "branch."+branch+"."+TaskKey)
+		lead, err := gitx.Config(ctx, r.Dir, "branch."+branch+"."+TaskKey)
+		if err != nil {
+			return nil, err
+		}
+
 		if lead == "" {
 			lead = Match(r.Prefix, branch)
 		}
@@ -220,11 +234,11 @@ func (r Lookup) bundleOf(ctx context.Context, id string) []string {
 
 		same := func(s string) bool { return strings.EqualFold(s, id) }
 		if same(lead) || slices.ContainsFunc(riders, same) {
-			return append([]string{lead}, riders...)
+			return append([]string{lead}, riders...), nil
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 // exhausted explains which tier came up empty and why. The session tier is
@@ -325,7 +339,9 @@ func (r Lookup) bundled(ctx context.Context, token, origin string, members []str
 	}
 
 	if members == nil {
-		members = r.bundleOf(ctx, got.ID)
+		if members, err = r.bundleOf(ctx, got.ID); err != nil {
+			return got, err
+		}
 	}
 
 	got.Bundle = members
@@ -340,33 +356,46 @@ func (r Lookup) bundled(ctx context.Context, token, origin string, members []str
 // of the string. A branch picked up from a PR may carry no id at all, so
 // the task its local config links it to (`branch.<name>.f10-task`) is read
 // first, and the riders recorded beside it.
-func (r Lookup) fromBranch(ctx context.Context) (string, []string) {
+//
+// An unreadable link is an error, not a fall back to the name: a bundle's
+// branch read without its link would answer for the lead alone.
+func (r Lookup) fromBranch(ctx context.Context) (string, []string, error) {
 	branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if branch == "" {
-		return "", nil
+		return "", nil, nil
 	}
 
 	section := "branch." + branch + "."
 
-	if id := gitx.Out(ctx, r.Dir, "config", "--get", section+TaskKey); id != "" {
-		var members []string
-		if riders := strings.Fields(gitx.Out(ctx, r.Dir, "config", "--get", section+RidersKey)); len(riders) > 0 {
-			members = append([]string{id}, riders...)
+	id, err := gitx.Config(ctx, r.Dir, section+TaskKey)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if id != "" {
+		riders, err := gitx.Config(ctx, r.Dir, section+RidersKey)
+		if err != nil {
+			return "", nil, err
 		}
 
-		return id, members
+		var members []string
+		if fields := strings.Fields(riders); len(fields) > 0 {
+			members = append([]string{id}, fields...)
+		}
+
+		return id, members, nil
 	}
 
 	if r.Prefix == "" {
-		return "", nil
+		return "", nil, nil
 	}
 
 	members := Members(r.Prefix, branch)
 	if members == nil {
-		return Match(r.Prefix, branch), nil
+		return Match(r.Prefix, branch), nil, nil
 	}
 
-	return members[0], members
+	return members[0], members, nil
 }
 
 // Members is the bundle a branch name spells in its first segment,

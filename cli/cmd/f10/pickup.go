@@ -135,10 +135,20 @@ func (h host) pickupOf(number string, p pull) *pickup {
 func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
 	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
 
+	upToDate, err := gitx.IsAncestor(ctx, main, remote, local)
+	if err != nil {
+		return "", err
+	}
+
+	behind, err := gitx.IsAncestor(ctx, main, local, remote)
+	if err != nil {
+		return "", err
+	}
+
 	switch {
-	case gitx.IsAncestor(ctx, main, remote, local):
+	case upToDate:
 		return "", nil
-	case !gitx.IsAncestor(ctx, main, local, remote):
+	case !behind:
 		return fmt.Sprintf("%s has diverged from origin/%s: the worktree holds the local commits", branch, branch), nil
 	case checkedOut:
 		return fmt.Sprintf("%s is behind origin/%s: pull in its worktree", branch, branch), nil

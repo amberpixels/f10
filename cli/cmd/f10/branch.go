@@ -200,9 +200,14 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 		return nil, err
 	}
 
+	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
+	if err != nil {
+		return nil, err
+	}
+
 	linked := map[string]string{}
 
-	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
+	for _, e := range entries {
 		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
 			linked[strings.TrimPrefix(b, "branch.")] = e.Value
 		}
@@ -224,7 +229,12 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 // failure before anything is created; several matching is one too, since
 // guessing would base the work on the wrong attempt.
 func taskBranch(ctx context.Context, dir, id string) (string, error) {
-	switch linked := linkedBranches(ctx, dir, id); len(linked) {
+	linked, err := linkedBranches(ctx, dir, id)
+	if err != nil {
+		return "", err
+	}
+
+	switch len(linked) {
 	case 0:
 	case 1:
 		return linked[0], nil
@@ -259,10 +269,15 @@ const cfgTaskKeys = `^branch\..*\.(` + cfgTaskID + `|` + cfgRiders + `)$`
 // linkedBranches are the local branches whose f10-task names id, or whose
 // f10-tasks lists it: a branch picked up from a PR, whose name need not
 // carry the id at all, and a bundle's branch, found by any member.
-func linkedBranches(ctx context.Context, dir, id string) []string {
+func linkedBranches(ctx context.Context, dir, id string) ([]string, error) {
+	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
+	if err != nil {
+		return nil, err
+	}
+
 	var names []string
 
-	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
+	for _, e := range entries {
 		branch, key := e.Key, ""
 		for _, k := range []string{cfgTaskID, cfgRiders} {
 			if b, ok := strings.CutSuffix(e.Key, "."+k); ok {
@@ -281,7 +296,7 @@ func linkedBranches(ctx context.Context, dir, id string) []string {
 		}
 	}
 
-	return names
+	return names, nil
 }
 
 // namedRef is the ref --base names, with the commit it points at: the local
@@ -319,7 +334,12 @@ type foundBranch struct {
 // attempt by its branch name.
 func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBranch, error) {
 	if suffix == "" {
-		switch linked := linkedBranches(ctx, dir, id); len(linked) {
+		linked, err := linkedBranches(ctx, dir, id)
+		if err != nil {
+			return foundBranch{}, err
+		}
+
+		switch len(linked) {
 		case 0:
 		case 1:
 			return foundBranch{name: linked[0]}, nil

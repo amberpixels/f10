@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -112,7 +113,7 @@ func TestRecordStandupFixture(t *testing.T) {
 
 		res := fixtureCall{Stdout: out}
 		if err != nil {
-			res = fixtureCall{Code: 1, Stderr: err.Error()}
+			res = fixtureCall{Code: gitExitCode(err), Stderr: err.Error()}
 		}
 
 		fx.Calls["git "+strings.Join(args, " ")] = res
@@ -187,4 +188,14 @@ func classes(t *testing.T, fx standupFixture, dir string) map[string]string {
 	commits(r.Other.Commits)
 
 	return out
+}
+
+// gitExitCode is the code git exited with, 1 for a failure that never ran it,
+// so a replayed absence reads as one.
+func gitExitCode(err error) int {
+	if exit, ok := errors.AsType[*gitx.ExitError](err); ok {
+		return exit.Code
+	}
+
+	return 1
 }
