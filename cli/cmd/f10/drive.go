@@ -1575,7 +1575,7 @@ func (in *driveInput) poll(
 
 	ws := workspaceByID(wss, r.o.ws.ID)
 	if ws == nil {
-		return workspaceGone(r)
+		return in.workspaceGone(r)
 	}
 
 	var run *state.Run
@@ -1823,7 +1823,7 @@ func (in *driveInput) look(ctx context.Context, r *driveRun) (*agentctl.Workspac
 
 	ws := workspaceByID(wss, r.o.ws.ID)
 	if ws == nil {
-		return nil, nil, workspaceGone(r)
+		return nil, nil, in.workspaceGone(r)
 	}
 
 	run, err := in.run(r.o.path)
@@ -1831,8 +1831,8 @@ func (in *driveInput) look(ctx context.Context, r *driveRun) (*agentctl.Workspac
 	return ws, run, err
 }
 
-func workspaceGone(r *driveRun) error {
-	return fmt.Errorf("herdr no longer shows workspace %s, which showed %s", r.o.ws.ID, r.o.path)
+func (in *driveInput) workspaceGone(r *driveRun) error {
+	return fmt.Errorf("%s no longer shows workspace %s, which showed %s", agents(in.main).Name(), r.o.ws.ID, r.o.path)
 }
 
 // workspaceName is a workspace as a halt names it: its label and its id.

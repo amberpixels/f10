@@ -57,15 +57,13 @@ const (
 )
 
 // A Backend hosts task agents. Every method answers from the directory the
-// backend is bound to; At binds another.
+// backend was made for.
 type Backend interface {
 	// Name names the backend in messages.
 	Name() string
 	// Available is nil when this process can reach the backend, else the
 	// refusal to print.
 	Available() error
-	// At is the same backend answering from dir.
-	At(dir string) Backend
 	// Workspaces lists every workspace the backend shows.
 	Workspaces(ctx context.Context) ([]Workspace, error)
 	// Open opens a workspace labelled label on the checkout at path, or

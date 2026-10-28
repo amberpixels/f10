@@ -490,7 +490,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	case ws != nil:
 		rows = append(rows, fact{label: "workspace", value: ws.ID})
 	default:
-		notes = append(notes, "no Herdr workspace shows the worktree, so nothing to close")
+		notes = append(notes, "no "+agents(in.main).Name()+" workspace shows the worktree, so nothing to close")
 	}
 
 	rows = append(rows, fact{label: "path", value: path})
@@ -655,7 +655,7 @@ func finishTarget(ctx context.Context, in finishInput) (string, string, bool, er
 		return "", "", false, fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name)
 	}
 
-	return name, path, samePath(path, in.main), nil
+	return name, path, gitx.SamePath(path, in.main), nil
 }
 
 // refuseDirty stops on anything git would list in the worktree, named file
@@ -684,7 +684,7 @@ func refuseDirty(ctx context.Context, path string) error {
 // workspaceAt is the workspace showing the checkout at path, or nil.
 func workspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
 	for i := range wss {
-		if wss[i].Path != "" && samePath(wss[i].Path, path) {
+		if wss[i].Path != "" && gitx.SamePath(wss[i].Path, path) {
 			return &wss[i]
 		}
 	}
@@ -709,39 +709,6 @@ func workspaceLabel(ws *agentctl.Workspace) string {
 	}
 
 	return ws.Label
-}
-
-// samePath compares two paths with symlinks resolved where they exist.
-func samePath(a, b string) bool {
-	return resolved(a) == resolved(b)
-}
-
-// inside reports whether dir is path or lies below it.
-func inside(dir, path string) bool {
-	rel, err := filepath.Rel(resolved(path), resolved(dir))
-	if err != nil {
-		return false
-	}
-
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
-}
-
-// resolved is the path with symlinks resolved. A component that does not
-// exist - a removed or never-created path - keeps its name below the
-// longest prefix that does, so two spellings of one place still compare.
-func resolved(p string) string {
-	p = filepath.Clean(p)
-
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-
-	parent := filepath.Dir(p)
-	if parent == p {
-		return p
-	}
-
-	return filepath.Join(resolved(parent), filepath.Base(p))
 }
 
 // landPull makes sure the branch's request is merged: merges it when open,
@@ -1017,7 +984,7 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	// a worktree's own: older versions it archived go first, so the current
 	// plan ends up with the highest number; the shared archive is already
 	// in place
-	if samePath(src, own) && !samePath(worktree, main) {
+	if gitx.SamePath(src, own) && !gitx.SamePath(worktree, main) {
 		older, _ := filepath.Glob(filepath.Join(src, "archive", id+".*.md"))
 		for _, o := range older {
 			if err := os.Rename(o, freeArchiveName(dst, id)); err != nil {
@@ -1090,4 +1057,14 @@ func exists(path string) bool {
 	_, err := os.Stat(path)
 
 	return err == nil
+}
+
+// inside reports whether dir is path or lies below it.
+func inside(dir, path string) bool {
+	rel, err := filepath.Rel(gitx.Resolved(path), gitx.Resolved(dir))
+	if err != nil {
+		return false
+	}
+
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }

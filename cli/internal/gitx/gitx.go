@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -375,4 +376,27 @@ func UnsetConfig(ctx context.Context, dir, key string) error {
 	_, err := Exec(ctx, dir, "config", "--unset", key)
 
 	return err
+}
+
+// SamePath compares two worktree paths with symlinks resolved where they exist.
+func SamePath(a, b string) bool {
+	return Resolved(a) == Resolved(b)
+}
+
+// Resolved is the path with symlinks resolved. A component that does not
+// exist - a removed or never-created path - keeps its name below the
+// longest prefix that does, so two spellings of one place still compare.
+func Resolved(p string) string {
+	p = filepath.Clean(p)
+
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+
+	parent := filepath.Dir(p)
+	if parent == p {
+		return p
+	}
+
+	return filepath.Join(Resolved(parent), filepath.Base(p))
 }

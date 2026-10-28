@@ -4,11 +4,11 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // Backend is Herdr as an agentctl.Backend: a workspace's agent slot is its
@@ -25,8 +25,6 @@ func New(dir string) Backend { return Backend{Dir: dir} }
 func (Backend) Name() string { return "Herdr" }
 
 func (Backend) Available() error { return Available() }
-
-func (b Backend) At(dir string) agentctl.Backend { return New(dir) }
 
 func (b Backend) Workspaces(ctx context.Context) ([]agentctl.Workspace, error) {
 	listed, err := Workspaces(ctx, b.Dir)
@@ -63,7 +61,7 @@ func (b Backend) Open(ctx context.Context, path, label string) (agentctl.Opened,
 	var shown []Listed
 
 	for _, l := range listed {
-		if l.Path != "" && samePath(l.Path, path) {
+		if l.Path != "" && gitx.SamePath(l.Path, path) {
 			shown = append(shown, l)
 		}
 	}
@@ -159,26 +157,4 @@ func (b Backend) Focus(ctx context.Context, id string) error {
 
 func (b Backend) Close(ctx context.Context, id string) error {
 	return CloseWorkspace(ctx, b.Dir, id)
-}
-
-// samePath compares two paths with symlinks resolved where they exist:
-// Herdr may report a checkout through a symlink.
-func samePath(a, b string) bool {
-	return resolved(a) == resolved(b)
-}
-
-// resolved is p with symlinks resolved, up to the deepest part that exists.
-func resolved(p string) string {
-	p = filepath.Clean(p)
-
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-
-	parent := filepath.Dir(p)
-	if parent == p {
-		return p
-	}
-
-	return filepath.Join(resolved(parent), filepath.Base(p))
 }

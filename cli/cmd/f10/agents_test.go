@@ -22,7 +22,6 @@ type memAgents struct {
 
 func (m *memAgents) Name() string                        { return "memory" }
 func (m *memAgents) Available() error                    { return nil }
-func (m *memAgents) At(string) agentctl.Backend          { return m }
 func (m *memAgents) Focus(context.Context, string) error { return nil }
 func (m *memAgents) Close(context.Context, string) error { return nil }
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -130,7 +131,8 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 
 	ws := workspaceAt(wss, path)
 	if ws == nil {
-		return fmt.Errorf("no Herdr workspace shows %s (branch %s): open it with f10 start %s", path, name, in.task.ID)
+		return fmt.Errorf("no %s workspace shows %s (branch %s): open it with f10 start %s",
+			agents(in.main).Name(), path, name, in.task.ID)
 	}
 
 	if err := refuseStalled(in, ws, agentctl.AgentName(in.task.ID, in.suffix, path), path); err != nil {
@@ -158,7 +160,7 @@ func hereReason(in forwardInput, name, path string) string {
 		return in.task.ID + " has no branch here: run it in this session"
 	case path == "":
 		return fmt.Sprintf("branch %s is checked out nowhere: run it in this session", name)
-	case samePath(path, in.here):
+	case gitx.SamePath(path, in.here):
 		return fmt.Sprintf("branch %s is checked out here: run it in this session", name)
 	}
 
