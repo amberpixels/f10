@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"slices"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 )
 
 // A task another drive holds is skipped, naming that drive: nothing is
@@ -17,6 +19,9 @@ func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.in.root = t.TempDir()
 	fx.task("GH-1", taskInfo{body: "x"}, "")
+
+	// bouncing off the lease says nothing about the owner's task
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
 
 	other, err := drives.Acquire(fx.in.root, "GH-1", 7)
 	if err != nil {
@@ -87,6 +92,12 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. proceed", "{}")
 	fx.f.script("git config branch.GH-1."+cfgDrive+" judge", "")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.onTick[1] = func() {
+		// the task runs again: the outcome its last run left is gone
+		if rec, err := drives.Read(root, 1); err != nil || rec.Task("GH-1").Outcome != nil {
+			t.Errorf("record while running = %+v, %v", rec.Task("GH-1"), err)
+		}
+	}
 	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
 
 	if err := fx.drive(t); err != nil {
@@ -112,6 +123,36 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 
 	if all, _ := drives.List(root); len(all) != 1 {
 		t.Errorf("%d records, want the one picked up", len(all))
+	}
+}
+
+// An answer the drive reports unused is dropped from the record, so a
+// resume never sends it to a later question.
+func TestDriveDropsUnusedAnswers(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge", "--answer", "GH-1=1. proceed")
+	fx.in.root = t.TempDir()
+	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if !strings.Contains(fx.out.String(), "--answer for GH-1 went unused") {
+		t.Errorf("output:\n%s", fx.out.String())
+	}
+
+	rec, err := drives.Read(fx.in.root, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rec.Answers) != 0 {
+		t.Errorf("record keeps %v", rec.Answers)
 	}
 }
 
@@ -183,6 +224,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"))
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
 	fx.onTick[1] = func() {
 		var out strings.Builder
 		if err := driveCancel(&out, fx.in.root, 1, fx.clock); err != nil {

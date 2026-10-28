@@ -113,13 +113,19 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 }
 
 // planArchived reports the task's plan in the shared archive, as finish
-// leaves it.
+// leaves it, with no live plan beside it: a re-plan archives the old one
+// too, and keeps the new one in place.
 func planArchived(in finishInput) bool {
-	dir := filepath.Join(in.main, ".f10", "plans", "archive")
+	plans := filepath.Join(in.main, ".f10", "plans")
 	if in.plansDir != "" {
-		dir = filepath.Join(in.plansDir, "archive")
+		plans = in.plansDir
 	}
 
+	if exists(filepath.Join(plans, in.task.ID+".md")) {
+		return false
+	}
+
+	dir := filepath.Join(plans, "archive")
 	if exists(filepath.Join(dir, in.task.ID+".md")) {
 		return true
 	}

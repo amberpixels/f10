@@ -1044,6 +1044,15 @@ func TestFinishAlreadyFinished(t *testing.T) {
 	if err != nil || !strings.Contains(out, "already finished") {
 		t.Errorf("err = %v, out:\n%s", err, out)
 	}
+
+	// a re-plan archives the old plan too, and keeps the new one live
+	if err := os.WriteFile(filepath.Join(fx.in.plansDir, "GH-1.md"), []byte("# plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "nothing to finish") {
+		t.Errorf("a re-planned task with a live plan: err = %v", err)
+	}
 }
 
 // f10 finish refuses a task a drive holds, naming the drive.

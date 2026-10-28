@@ -487,6 +487,9 @@ type driveResult struct {
 	reason string
 	// fromRun is a halt the run itself reported, already in the ledger
 	fromRun bool
+	// drives is an end this drive gave the task, owned elsewhere or
+	// cancelled, which says nothing about the task itself
+	drives bool
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -600,7 +603,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 
 		if why, ok := in.lease(r); !ok {
-			in.end(ctx, w, r, driveResult{row: why, code: exitHalted, skill: "drive", reason: why})
+			in.end(ctx, w, r, driveResult{row: why, code: exitHalted, drives: true})
 		}
 	}
 
@@ -625,7 +628,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		if in.cancelled() {
 			for _, r := range runs {
 				if r.end == nil {
-					in.end(ctx, w, r, driveResult{row: "cancelled", code: exitHalted})
+					in.end(ctx, w, r, driveResult{row: "cancelled", code: exitHalted, drives: true})
 				}
 			}
 
@@ -898,6 +901,11 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 			notes = append(notes, "--answer for "+r.task.ref.ID+" went unused: it was not stopped on a question")
 		}
 	}
+
+	// an answer reported unused is dropped, so a resume never sends it to a
+	// question nobody saw; only one a stopped drive never reached is kept
+	in.answer, in.answers = "", map[string]string{}
+	in.savePending(nil)
 
 	notes = append(notes, lines...)
 
@@ -1631,7 +1639,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	run = r.current(run)
 	r.skill, r.sentAt, r.begun, r.idleSince = skill, in.now(), false, time.Time{}
 
-	in.saveTask(r, func(t *drives.Task) { t.Skill = skill })
+	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
 
 	switch {
 	case ws.Status == agentctl.StatusWorking:
@@ -1921,7 +1929,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	})
 	in.unlease(r, in.runs)
 
-	if res.code == exitHalted && !res.fromRun {
+	if res.code == exitHalted && !res.fromRun && !res.drives {
 		in.recordHalt(ctx, r, res)
 	}
 
