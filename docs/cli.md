@@ -513,6 +513,7 @@ Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the reco
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
 An agent found mid-turn is attached to rather than prompted again.
+A ship the catchup guard stopped (its next naming `/f10:catchup`) is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
 `/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, runs the `answer with:` line (`f10 drive --resume <n> --answer …`) with the answers, and prints the final report.

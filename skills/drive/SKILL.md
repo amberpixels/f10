@@ -66,6 +66,7 @@ On every exit, a line starting `!!!` goes first, verbatim, above everything else
   Print the report block and those lines verbatim, and stop.
   A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 drive list` shows it and `f10 drive cancel <n>` stops it.
   The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
+  A task whose run stopped (a `next:` line under its halt) is prompted again only when that `next:` names `/f10:catchup` and the catchup ended clean; any other needs steering through `--answer`.
 - **anything else** - the command refused; its message names the cause.
   `drive <n> is running` means another session drives the same list: point at `f10 drive list`, and at `f10 drive cancel <n>` if the user wants to take it over.
   Print it verbatim and stop.
