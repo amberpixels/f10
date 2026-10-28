@@ -541,3 +541,26 @@ func TestTaskCreateNoDriverLeavesStdin(t *testing.T) {
 		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
 	}
 }
+
+// task current names the branch's task, and fails when nothing names one.
+func TestTaskCurrent(t *testing.T) {
+	for _, tc := range []struct{ branch, want string }{{"DM-5/fix", "DM-5"}, {"main", ""}} {
+		t.Run(tc.branch, func(t *testing.T) {
+			t.Chdir(tracedRepo(t, tc.branch, ""))
+
+			var out bytes.Buffer
+
+			app := newApp()
+			app.Writer, app.ErrWriter = &out, &out
+
+			err := app.Run(t.Context(), []string{"f10", "task", "current"})
+
+			switch {
+			case tc.want == "" && err == nil:
+				t.Errorf("printed %q, want an error", out.String())
+			case tc.want != "" && (err != nil || strings.TrimSpace(out.String()) != tc.want):
+				t.Errorf("got %q, %v; want %s", out.String(), err, tc.want)
+			}
+		})
+	}
+}

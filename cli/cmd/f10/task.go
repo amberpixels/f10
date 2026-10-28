@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -40,6 +41,12 @@ func taskCommand() *cli.Command {
 					Usage: "into a pipe too, leave the task's images as links (a title lookup)",
 				}},
 				Action: runTaskRead,
+			},
+			{
+				Name: "current",
+				Usage: "print the task this session's run records, else the one the branch names " +
+					"(exit 1: none)",
+				Action: runTaskCurrent,
 			},
 			{
 				Name: "ref",
@@ -163,6 +170,24 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return writeDoc(ctx, cmd.Writer, t.dir, strings.Join(docs, "\n\n---\n\n"))
+}
+
+// runTaskCurrent names the task a bare skill call stands for, by the cascade
+// a bare `status` walks, so no skill parses a branch name itself.
+func runTaskCurrent(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	id := bareTaskID(ctx, t, state.Session())
+	if id == "" {
+		return errors.New("no current task: this session recorded none and the branch names none")
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, id)
+
+	return err
 }
 
 // fetchFallback tells an agent reading a failed read that the project's

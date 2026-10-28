@@ -37,7 +37,7 @@ func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "finish",
 		Usage:     "finish a task: merge its PR (or a branch never pushed, here), archive the plan, remove the worktree, close the workspace, pull main",
-		ArgsUsage: "<task-id>[-suffix] | <any id of a bundle>",
+		ArgsUsage: "[<task-id>[-suffix] | <any id of a bundle>]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "yes",
@@ -58,6 +58,23 @@ func finishCommand() *cli.Command {
 	}
 }
 
+// finishRef is the task a finish token names. An empty one is the current
+// task (the branch's, else the session's), with no suffix to split off;
+// the workspace refusal still stands between a bare call and the merge.
+func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		r, err := t.reference(ctx, "")
+
+		return r, "", err
+	}
+
+	id, suffix := ref.SplitSuffix(token)
+	r, err := t.reference(ctx, id)
+
+	return r, suffix, err
+}
+
 // exitForeign is finish's exit when the PR is someone else's and no flag
 // says what to do with it: the finish skill asks, and reruns with one.
 const exitForeign = 3
@@ -71,11 +88,6 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	token := strings.TrimSpace(cmd.Args().First())
-	if token == "" {
-		return errors.New("finish needs a task id")
-	}
-
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
@@ -86,9 +98,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	id, suffix := ref.SplitSuffix(token)
-
-	r, err := t.reference(ctx, id)
+	r, suffix, err := finishRef(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}

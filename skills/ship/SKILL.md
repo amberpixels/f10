@@ -2,7 +2,7 @@
 name: ship
 description: "f10 ship skill (full run) - take a task through the project's flow: implement, then whatever the project declares (review, commit, PR/MR, deploy). Use when the user says \"/f10:ship <task-id | plan-file.md | description>\". Fetches and plans as needed, then runs the flow end to end."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ScheduleWakeup, ExitPlanMode
-argument-hint: "<task-id | plan.md | description>"
+argument-hint: "[<task-id | plan.md | description>]"
 ---
 
 # f10 · ship
@@ -27,6 +27,9 @@ Deploy has its own confirmation (the **deploy** step).
   Missing: under `stale_after`, fetch judges an old task first and may end the run blocked before any plan or flow entry (`anyway` in the steering skips it); then run the **plan** step when the flow leads with `plan` (with `flow_by_area`, start and drive leave planning to ship); a **planless** flow (below) never runs it, and the fetch brief becomes the inline plan.
   Then the flow.
 - A **free-text description**: the **capture**, **fetch** and **plan** steps, then the flow.
+- **No argument** (an argument that names no task counts as none): a task already in this conversation (a plan just saved, a task fetched), else the id `f10 task current` prints (this session's task, else the branch's).
+  Say in one line which task you took and where from, then run it as a **task id**, forward mode included, so a saved plan is reused.
+  `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
 
 **Run**

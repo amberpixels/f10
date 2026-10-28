@@ -1831,3 +1831,43 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 		})
 	}
 }
+
+// A bare finish is the branch's task; a typed id still splits its suffix,
+// and nothing on the default branch, or under -C, finishes unasked.
+func TestFinishRef(t *testing.T) {
+	repo := tracedRepo(t, "DM-5/fix", "")
+
+	tg, err := targetAt(t.Context(), repo, false, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r, suffix, err := finishRef(t.Context(), tg, ""); err != nil || r.ID != "DM-5" || suffix != "" {
+		t.Errorf("bare = %q %q %v, want DM-5 and no suffix", r.ID, suffix, err)
+	}
+
+	if r, suffix, err := finishRef(t.Context(), tg, "DM-7-b"); err != nil || r.ID != "DM-7" || suffix != "b" {
+		t.Errorf("DM-7-b = %q %q %v, want DM-7 and suffix b", r.ID, suffix, err)
+	}
+
+	scoped, err := targetAt(t.Context(), repo, true, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = finishRef(t.Context(), scoped, "")
+	if err == nil || !strings.Contains(err.Error(), "explicit task id") {
+		t.Errorf("bare under -C: err = %v, want a refusal", err)
+	}
+
+	onMain := tracedRepo(t, "main", "")
+
+	tg, err = targetAt(t.Context(), onMain, false, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r, _, err := finishRef(t.Context(), tg, ""); err == nil {
+		t.Errorf("bare on main = %q, want a refusal", r.ID)
+	}
+}

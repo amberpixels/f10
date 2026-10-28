@@ -18,7 +18,10 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
 - No argument:
   - A subject in this conversation: judge that.
     Say in one line which subject you took, then start.
-  - Nothing open: ask for the subject in one line and wait.
+  - Nothing open: the current branch against its base, when it has commits or uncommitted changes past the base.
+    No change yet: the task `f10 task current` prints, judged as `task <id>`.
+    Say in one line which subject you took, then start.
+  - Neither (no change, and `f10 task current` exits non-zero): ask for the subject in one line and wait.
 
 **Run**
 1. Run `f10-load-project.sh judge` first, on every call of this skill.
