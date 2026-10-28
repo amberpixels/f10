@@ -122,6 +122,9 @@ type janitorInput struct {
 	prefix   string
 	plansDir string
 	dry      bool
+	// localOnly lists no branch on origin: the watcher reads only branches
+	// a checkout here holds, and asks the network nothing before the host
+	localOnly bool
 }
 
 func janitorFor(t *target) janitorInput {
@@ -207,9 +210,11 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 		return nil, nil, err
 	}
 
-	origin, err := gitx.RemoteBranches(ctx, in.main)
-	if err != nil {
-		return nil, nil, err
+	var origin map[string]string
+	if !in.localOnly {
+		if origin, err = gitx.RemoteBranches(ctx, in.main); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	wts, err := gitx.Worktrees(ctx, in.main)

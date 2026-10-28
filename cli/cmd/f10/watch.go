@@ -50,6 +50,8 @@ const (
 	watchStopped  = "stopped"  // its run stopped: done, blocked, failed or partial
 	watchFinished = "finished" // the watcher finished it
 	watchRefused  = "refused"  // the watcher's finish was refused
+	// the host did not answer for a task's request
+	watchUnanswered = "unanswered"
 )
 
 func watchCommand() *cli.Command {
@@ -295,7 +297,7 @@ type watchedTask struct {
 	owner    string          // who holds its lease; "" for nobody
 	off      bool            // f10 watch off
 	pr       *forge.PR       // nil with no request, or no host
-	hostless bool            // the host did not answer for its request this pass
+	hostErr  error           // the host did not answer for its request this pass
 	localSHA string          // the branch's tip
 	run      *state.Run      // the newest run reported from its worktree
 	agent    agentctl.Status // "" with no workspace, or no listing
@@ -357,12 +359,52 @@ func watchPass(ctx context.Context, in watchInput) (bool, error) {
 	}
 
 	in.reconcile(ctx, tasks, store)
+	in.hostTrouble(tasks, store)
 
 	if err := saveWatchStore(in.root, store); err != nil {
 		return false, err
 	}
 
-	return len(tasks) > 0 || branches > 0, nil
+	// a branch with no worktree is the janitor's, which only finish runs
+	return len(tasks) > 0 || (in.mode == "finish" && branches > 0), nil
+}
+
+// watchHostKey is the store's entry for the host not answering: about the
+// project, not one task.
+const watchHostKey = "host"
+
+// hostTrouble says, every pass, that the host did not answer and which
+// tasks it left out, since those tasks go silent; f10 watch shows it
+// until the host answers again.
+func (in watchInput) hostTrouble(tasks []watchedTask, store map[string]watchReport) {
+	var (
+		ids   []string
+		cause error
+	)
+
+	for _, t := range tasks {
+		if t.hostErr != nil {
+			ids, cause = append(ids, t.id), cmp.Or(cause, t.hostErr)
+		}
+	}
+
+	if cause == nil {
+		delete(store, watchHostKey)
+
+		return
+	}
+
+	rep := watchReport{
+		Task: watchHostKey,
+		Kind: watchUnanswered,
+		Text: fmt.Sprintf("%v; %s left out of this pass", cause, strings.Join(ids, ", ")),
+		Next: "check the host CLI's login in the shell that registered the project, then run f10 start or f10 drive there",
+		Key:  watchUnanswered,
+		At:   in.now(),
+	}
+
+	in.out.report(rep)
+	store[watchHostKey] = rep
 }
 
 // reconcile reports what is new about each task, finishing the merged
@@ -403,7 +445,7 @@ func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store m
 	}
 
 	for id, r := range store {
-		if !seen[id] && (r.Kind != watchFinished || now.Sub(r.At) > 24*time.Hour) {
+		if !seen[id] && id != watchHostKey && (r.Kind != watchFinished || now.Sub(r.At) > 24*time.Hour) {
 			delete(store, id)
 		}
 	}
@@ -440,7 +482,7 @@ func (in watchInput) finishReport(ctx context.Context, task watchedTask) *watchR
 func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool) {
 	// a host that did not answer leaves the request unknown: saying
 	// anything else about the task this pass could hide a merge
-	if t.owner != "" || t.off || t.hostless {
+	if t.owner != "" || t.off || t.hostErr != nil {
 		return nil, false
 	}
 
@@ -537,7 +579,10 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		return nil, 0, err
 	}
 
-	branches, held, err := taskBranches(ctx, in.jan, def)
+	local := in.jan
+	local.localOnly = true
+
+	branches, held, err := taskBranches(ctx, local, def)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -590,9 +635,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		}
 
 		if in.jan.host != nil {
-			var err error
-			task.pr, err = j.request(ctx, b)
-			task.hostless = err != nil
+			task.pr, task.hostErr = j.request(ctx, b)
 		}
 
 		if runs := inRoot(live, path); len(runs) > 0 {
@@ -606,16 +649,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		tasks = append(tasks, task)
 	}
 
-	// origin's task branches are anyone's: only this checkout's keep it watched
-	local := 0
-
-	for _, b := range branches {
-		if b.localSHA != "" {
-			local++
-		}
-	}
-
-	return tasks, local, nil
+	return tasks, len(branches), nil
 }
 
 // watcherFinish finishes a merged task under its lease, held as the

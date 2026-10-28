@@ -64,7 +64,7 @@ func TestDecideWatch(t *testing.T) {
 		},
 		{
 			name: "host did not answer",
-			task: watchedTask{hostless: true, run: &state.Run{Ship: "done", Updated: watchNow}},
+			task: watchedTask{hostErr: errors.New("rate limited"), run: &state.Run{Ship: "done", Updated: watchNow}},
 			mode: "report",
 		},
 		{
@@ -287,5 +287,74 @@ func TestCollectWatched(t *testing.T) {
 
 	if !tasks[1].off || fx.f.called(ghHeadOf("GH-2/y")) {
 		t.Errorf("GH-2 handed back: off=%v, its requests read: %v", tasks[1].off, fx.f.called(ghHeadOf("GH-2/y")))
+	}
+}
+
+// failingAgents lists no workspaces: an agent status nobody can read.
+type failingAgents struct{ *memAgents }
+
+func (failingAgents) Workspaces(context.Context) ([]agentctl.Workspace, error) {
+	return nil, errors.New("herdr is not running")
+}
+
+// Under the lease, the watcher finishes only with the branch still at the
+// PR's head and an agent it can see is not working, or no workspace.
+func TestRecheckFinish(t *testing.T) {
+	task := watchedTask{id: "GH-1", branch: "GH-1/x", path: "/code/repo.GH-1", pr: mergedPR()}
+	at := func(st agentctl.Status) *memAgents {
+		return &memAgents{workspaces: []agentctl.Workspace{{ID: "ws:9", Label: "GH-1", Path: task.path, Status: st}}}
+	}
+
+	cases := []struct {
+		name    string
+		tip     string
+		backend agentctl.Backend
+		ok      bool
+	}{
+		{name: "idle at the head", tip: "abc", backend: at(agentctl.StatusIdle), ok: true},
+		{name: "no workspace", tip: "abc", backend: &memAgents{}, ok: true},
+		{name: "working", tip: "abc", backend: at(agentctl.StatusWorking)},
+		{name: "listing failed", tip: "abc", backend: failingAgents{&memAgents{}}},
+		{name: "no backend", tip: "abc"},
+		{name: "a commit the PR lacks", tip: "def", backend: at(agentctl.StatusIdle)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFakes(t)
+			f.script("git rev-parse -q --verify refs/heads/GH-1/x", c.tip)
+
+			err := recheckFinish(t.Context(), c.backend, t.TempDir(), task)
+			if (err == nil) != c.ok {
+				t.Errorf("err = %v, want ok=%v", err, c.ok)
+			}
+		})
+	}
+}
+
+// A host that does not answer is said every pass, names the tasks it left
+// out, and leaves the store once the host answers again.
+func TestHostTrouble(t *testing.T) {
+	var out collected
+
+	in := watchInput{mode: "report", now: func() time.Time { return watchNow }, out: &out}
+	store := map[string]watchReport{}
+	tasks := []watchedTask{{id: "FT-1", hostErr: errors.New("gh: HTTP 401")}, {id: "FT-2"}}
+
+	in.hostTrouble(tasks, store)
+	in.hostTrouble(tasks, store)
+
+	if len(out) != 2 || !strings.Contains(out[0].Text, "HTTP 401") || !strings.Contains(out[0].Text, "FT-1 left out") {
+		t.Errorf("reports = %+v", out)
+	}
+
+	if _, ok := store[watchHostKey]; !ok {
+		t.Error("f10 watch would not show the host trouble")
+	}
+
+	in.hostTrouble(tasks[1:], store)
+
+	if _, ok := store[watchHostKey]; ok {
+		t.Error("the host answered, and its trouble stayed")
 	}
 }
