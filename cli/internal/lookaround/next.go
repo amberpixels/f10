@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -167,5 +167,5 @@ func AgentFor(id, branch, path string) string {
 		suffix = s
 	}
 
-	return herdr.AgentName(id, suffix, path)
+	return agentctl.AgentName(id, suffix, path)
 }

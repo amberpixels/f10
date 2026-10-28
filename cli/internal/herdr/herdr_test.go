@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -422,5 +423,17 @@ func TestStartAgentReportsTheWait(t *testing.T) {
 
 	if len(waits) != 0 {
 		t.Errorf("reported %v for a pane that was never busy", waits)
+	}
+}
+
+func TestAgentNotFoundMatchesTheBackendError(t *testing.T) {
+	err := error(&Error{Op: "herdr agent prompt", Code: CodeAgentNotFound, Message: "no agent named x"})
+	if !errors.Is(err, agentctl.ErrAgentNotFound) {
+		t.Errorf("errors.Is(%v, ErrAgentNotFound) = false", err)
+	}
+
+	busy := error(&Error{Op: "herdr agent start", Code: CodePaneBusy, Message: "busy"})
+	if errors.Is(busy, agentctl.ErrAgentNotFound) {
+		t.Errorf("errors.Is(%v, ErrAgentNotFound) = true", busy)
 	}
 }
