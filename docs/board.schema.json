@@ -9,7 +9,7 @@
       "type": "object",
       "properties": {
         "version": {
-          "const": 3
+          "const": 4
         },
         "generated_at": {
           "type": "string",

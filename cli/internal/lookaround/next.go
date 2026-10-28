@@ -88,9 +88,12 @@ func (r *row) next() {
 			r.Next = text("in progress")
 		}
 	case StagePlanned:
-		if r.worktree != nil {
+		switch {
+		case r.running():
+			r.Next = command(cmdStatus)
+		case r.worktree != nil:
 			r.Next = command(cmdShip)
-		} else {
+		default:
 			r.Next = command(cmdStart)
 		}
 	case StageNext:

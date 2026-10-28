@@ -499,3 +499,37 @@ func TestInject(t *testing.T) {
 		t.Errorf("marker gone after seed and clear: %v", err)
 	}
 }
+
+// A run seeded from a full task id names its task before fetch reports it,
+// so the board attaches the run to the task's row from the first moment.
+func TestSeedRecordsTheTask(t *testing.T) {
+	for _, tc := range []struct {
+		skill, args, want string
+	}{
+		{"plan", "FT-195", "FT-195"},
+		{"ship", "ft-7 extra steering", "FT-7"},
+		{"ship", "local: FT-3", "FT-3"},
+		{"plan", "FT-1+FT-2", "FT-1"},
+		{"ship", "FT-1+FT-2 focus on the retry", "FT-1"},
+		{"plan", "FT-4 && /f10:ship FT-4 --driven", "FT-4"},
+		{"ship", "plans/FT-5.md", "FT-5"},
+		{"plan", "195", ""},
+		{"plan", "https://github.com/acme/widgets/issues/9", ""},
+		{"ship", "add a retry to the client", ""},
+		{"capture", "FT-6 needs a retry", ""},
+	} {
+		t.Run(tc.skill+" "+tc.args, func(t *testing.T) {
+			r := Fresh("s")
+			r.Seed(tc.skill, tc.args, "")
+
+			if r.Task != tc.want {
+				t.Errorf("Task = %q, want %q", r.Task, tc.want)
+			}
+
+			// a reference never opens capture
+			if tc.want != "" && r.Capture == "running" {
+				t.Errorf("Capture = running for a reference")
+			}
+		})
+	}
+}

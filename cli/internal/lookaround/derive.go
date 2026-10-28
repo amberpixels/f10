@@ -52,7 +52,7 @@ func Derive(f Facts, now, since time.Time) Board {
 	}
 
 	slices.SortStableFunc(b.Rows, func(a, c Row) int {
-		if d := slices.Index(Stages, a.Stage) - slices.Index(Stages, c.Stage); d != 0 {
+		if d := StateRank(a) - StateRank(c); d != 0 {
 			return d
 		}
 
@@ -584,7 +584,8 @@ func (r *row) stage(withLocal bool, since time.Time) {
 	// closed long ago is not work in flight
 	case r.tracked() && r.worktree != nil && r.worktree.Ahead > 0:
 		set(StageImplementing, FromLocal)
-	case r.tracked() && r.plan, r.running() && r.run.Plan == "running":
+	// a worktree with nothing ahead is a started task still planning
+	case r.tracked() && (r.plan || r.worktree != nil), r.running() && r.run.Plan == "running":
 		set(StagePlanned, FromLocal)
 
 	case r.Task != nil && !closed(r.Task.Status):

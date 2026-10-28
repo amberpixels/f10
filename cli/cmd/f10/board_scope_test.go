@@ -356,7 +356,8 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 }
 
 // Rows of several projects group under the person each resolves to, the
-// unresolved last, and each line names its project.
+// unresolved last, and each line names its project; a row waiting on its
+// base sorts after the work in progress.
 func TestRenderByPerson(t *testing.T) {
 	at := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	boards := []lookaround.Board{
@@ -364,6 +365,10 @@ func TestRenderByPerson(t *testing.T) {
 			{Key: "FT-1", Stage: lookaround.StageNext, Who: lookaround.Who{Person: "bob"}},
 			{Key: "FT-2", Stage: lookaround.StageInReview, Who: lookaround.Who{Person: "ann"}, LastActivity: at},
 			{Key: "#9", Stage: lookaround.StagePROpen},
+			{
+				Key: "FT-4", Stage: lookaround.StageBlocked, BlockedBy: []string{"FT-2"},
+				Who: lookaround.Who{Person: "ann"},
+			},
 		}},
 		{Project: lookaround.Project{Name: "web"}, Rows: []lookaround.Row{
 			{Key: "WEB-3", Stage: lookaround.StageDone, Who: lookaround.Who{Person: "ann"}, LastActivity: at},
@@ -392,7 +397,7 @@ func TestRenderByPerson(t *testing.T) {
 		t.Errorf("headings = %q, want %q\n%s", got, want, out.String())
 	}
 
-	if got, want := strings.Join(lines, ","), "api FT-2,web WEB-3,api FT-1,api #9"; got != want {
+	if got, want := strings.Join(lines, ","), "api FT-2,api FT-4,web WEB-3,api FT-1,api #9"; got != want {
 		t.Errorf("rows = %q, want %q\n%s", got, want, out.String())
 	}
 }

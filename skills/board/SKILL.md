@@ -38,7 +38,7 @@ f10 board <arguments>
    The next action is a command (`f10 finish FT-71`, `/f10:resolve FT-71`) or a sentence (`waiting on review`, `at implement`).
    Offer a line only for a row whose tail ends in a command starting with `f10 ` or `/f10:`: the command as written, then the row's title.
    A sentence is someone else's move, and no next action is no move.
-   The `next` group is folded: one line, its first row's command, with `and <N> more` when it has more rows, since the board ranks them by priority.
+   The `next` group is folded: one line, the command of its first row that has one, with `and <N> more` when it has more rows, since the board ranks them by priority; a group whose rows all wait on a base offers nothing.
    Run none of them; the call is the user's.
 4. Nothing else: no group, stage or reason the board did not print, no summary of the block.
 
