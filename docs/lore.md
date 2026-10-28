@@ -51,6 +51,8 @@ The package imports nothing else from f10, so it can be copied out as a standalo
 - A dangling `supersedes` (the target is missing) is a `validate` error; reads treat the entry as effective.
 - `retired: true` is allowed only on a superseding `lesson`.
   A retired lesson ends its chain: `lessons` and `why` no longer show it.
+- A change has one effective `intent`, the entry `show` and `why` print first.
+  A second one must supersede it; `f10 lore add` refuses one that does not, naming the standing intent's id.
 
 ## Entry format
 
@@ -82,10 +84,21 @@ Fields per kind; a kind's field on another kind is an error:
 
 The `verdict` outcomes are the four a judge's verdict file holds (`cli/internal/verdict`), spelled the same.
 
-### Relation to review and judge files
+### Who writes what
 
-A review writes `reviews/<task>/<round>.md` and a judge `verdicts/<key>/<n>.md` under the storage root, and each also writes its lore entries: review a `finding` per finding (`source`), resolve a superseding `finding` per verdict, judge a `verdict` (`judged`).
-`f10 status` reads lore first and the files for runs from before lore; lore is the one meant to last.
+Each kind is written by the f10 step that holds the knowledge when it is fresh, with a task id.
+A failing `lore add` is one line in the step's report, never a failed step.
+
+| kind | written by | |
+|---|---|---|
+| `intent` | the plan step, once the plan file is saved; a planless ship from its inline plan | a replan supersedes it; a judge's revision of the plan in place does not |
+| `decision` | the ship skill at its flow's end, from the forks implement's hand-off noted; the catchup step, once a conflict settled by taking one side or by a named reconciliation is concluded | anchored to the committed code, so the lines no longer move |
+| `finding` | the review step, one per finding (`source`); the resolve step, a superseding one per verdict | beside `reviews/<task>/<round>.md` |
+| `verdict` | the judge step (`judged`) | beside `verdicts/<key>/<n>.md` |
+| `lesson` | the ship skill, after its flow's last entry, from the findings, their outcomes and the run; most changes leave none | a later change that proves one wrong supersedes or retires it inside the change that wrote it |
+
+Decisions and lessons come from a ship run: a change that reaches `f10 finish` another way (a PR picked up, a branch shipped by hand, a ship run that died before its end) has none, and finish's report says so in one line counting the change's intent, decisions and lessons.
+`f10 status` reads lore first and the review and verdict files for runs from before lore; lore is the one meant to last.
 
 ## Verbs
 
@@ -102,6 +115,7 @@ Every verb takes `--root <dir>`.
 
 - **`add`** validates and writes one entry and prints its id.
   Kind flags: `--chosen`, `--rejected 'option: reason'` (repeatable) for a decision; `--severity`, `--status`, `--resolution`, `--source` for a finding; `--outcome`, `--gate`, `--commit`, `--judged` for a verdict; `--retired` for a lesson.
+  A repeatable flag takes one value per occurrence, commas included: `--rejected 'fixed window: edge bursts, twice the limit'` is one option, and several anchors are several `--anchor` flags.
   An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
   `human` is `git config user.email`.
   Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.

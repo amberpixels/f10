@@ -30,6 +30,7 @@ func TestChecksOnACannedRun(t *testing.T) {
 		detail string
 	}{
 		"plan":     {pass: true},
+		"intent":   {pass: true},
 		"verify":   {pass: true},
 		"verdict":  {pass: true},
 		"findings": {detail: "main.go:40 does not resolve"},
@@ -46,7 +47,7 @@ func TestChecksFailOnMissingArtifacts(t *testing.T) {
 	dir := canned(t)
 	s := Scenario{Task: "T-2", Verify: []string{"false"}}
 
-	for _, name := range []string{"plan", "verify", "verdict", "findings"} {
+	for _, name := range []string{"plan", "intent", "verify", "verdict", "findings"} {
 		if c := checks[name](t.Context(), dir, s); c.Pass {
 			t.Errorf("%s passed with nothing to check", name)
 		}

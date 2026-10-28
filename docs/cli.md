@@ -210,6 +210,7 @@ For a bundle, finish needs `--close`: the riders the PR delivers, comma-separate
 Without it, finish exits **7** before changing anything, and the finish skill asks.
 Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`; after a merge that already happened, each is reopened instead.
 A tracker that is not the host closes nothing on merge, so the notes name the riders to close there.
+The notes also carry one line on the change's lore (`docs/lore.md`): its intent, decisions and lessons counted, each named when missing, so a change that reached finish without a ship run shows it left none.
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
 A finish that stopped halfway is finished by a rerun: a task with no branch whose plan is in the archive reports `already finished` and exits 0, and a branch whose worktree is gone but whose PR merged is cleaned up without one (dependents released, default branch pulled, plan archived, only the branch deleted, no workspace closed).
 A branch with no worktree and no merged PR is still refused.

@@ -22,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -692,6 +693,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 		cwd:        main,
 		plansDir:   t.sharedPlansDir(),
 		title:      titleLookup(t, r.Number),
+		lore:       func() string { return loreNote(&lore.Store{Root: loreRootFor(t)}, r.Head().ID) },
 		mergedOnly: true,
 	})
 
