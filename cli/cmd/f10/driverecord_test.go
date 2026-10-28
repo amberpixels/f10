@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // A task another drive holds is skipped, naming that drive: nothing is
@@ -301,5 +302,41 @@ func TestRecordArgs(t *testing.T) {
 	)
 	if want := []string{"GH-1", "--flow", "local", "GH-2:opus"}; !slices.Equal(got, want) {
 		t.Errorf("recordArgs = %q, want %q", got, want)
+	}
+}
+
+// A drive this command creates is its session's launch, once; rerunning
+// the same command finds the record and adds nothing.
+func TestOpenRecordRecordsTheLaunch(t *testing.T) {
+	root, stateDir := t.TempDir(), t.TempDir()
+
+	open := func() *driveInput {
+		in := &driveInput{root: root, stateDir: stateDir, session: "sess-1", argv: []string{"GH-1"}, now: time.Now}
+		if err := in.openRecord(nil); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := in.recordLaunch(); err != nil {
+			t.Fatal(err)
+		}
+
+		in.releaseAll()
+
+		return in
+	}
+
+	if in := open(); in.rec.Session != "sess-1" {
+		t.Errorf("record session = %q", in.rec.Session)
+	}
+
+	open()
+
+	b, err := os.ReadFile(state.LaunchesPath(stateDir, "sess-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := string(b); got != "drive 1\n" {
+		t.Errorf("launches file = %q, want one drive line", got)
 	}
 }

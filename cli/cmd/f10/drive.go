@@ -247,6 +247,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 			})
 		},
 		stateDir: state.Dir(),
+		session:  state.Session(),
 		ttl:      state.TTL(),
 		now:      time.Now,
 		asksDir:  asks.Dir(),
@@ -493,6 +494,7 @@ type driveInput struct {
 	// pr: "", or the answer merge or local; progress names each action finish takes
 	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error
 	stateDir string
+	session  string // the session that typed the command, inherited through the daemon's environment
 	ttl      time.Duration
 	now      func() time.Time
 	sleep    func(context.Context, time.Duration) error
@@ -519,6 +521,7 @@ type driveInput struct {
 	inboxNotes []string
 
 	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
+	created  bool        // openRecord created the record rather than resuming one
 	runs     []*driveRun
 	out      io.Writer
 }
@@ -621,6 +624,10 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 	if err := in.openRecord(tasks); err != nil {
 		return err
+	}
+
+	if err := in.recordLaunch(); err != nil {
+		notes = append(notes, "the drive was not recorded as this session's launch: "+err.Error())
 	}
 
 	// runs after releaseAll: an answer claimed while this drive still held

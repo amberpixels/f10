@@ -1,0 +1,235 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/state"
+)
+
+// launchFixture is a main checkout whose session sess-1 launched tasks,
+// each in a linked worktree on its own branch.
+type launchFixture struct {
+	repo, stateDir string
+}
+
+func newLaunchFixture(t *testing.T) launchFixture {
+	t.Helper()
+
+	repo := tracedRepo(t, "main", "")
+	git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
+
+	fx := launchFixture{repo: repo, stateDir: t.TempDir()}
+	t.Setenv("F10_STATE_DIR", fx.stateDir)
+	t.Setenv("F10_SESSION_ID", "sess-1")
+	t.Chdir(repo)
+
+	return fx
+}
+
+// worktree opens id's branch in a sibling worktree, its agent's run
+// reporting there.
+func (fx launchFixture) worktree(t *testing.T, id string, run state.Run) {
+	t.Helper()
+
+	path := filepath.Join(filepath.Dir(fx.repo), "demo."+id)
+	git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
+
+	run.Session, run.Task, run.Root = "agent-"+id, id, canonPath(path)
+	if err := run.Save(fx.stateDir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (fx launchFixture) launch(t *testing.T, kind, value string) {
+	t.Helper()
+
+	if err := state.AppendLaunch(fx.stateDir, "sess-1", state.Launch{Kind: kind, Value: value}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// drive writes a drive record over ids and launches it.
+func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...string) {
+	t.Helper()
+
+	tg, err := targetAt(t.Context(), fx.repo, false, "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := &drives.Record{Args: ids, Session: "sess-1"}
+	for _, id := range ids {
+		rec.Tasks = append(rec.Tasks, drives.Task{ID: id})
+	}
+
+	if change != nil {
+		change(rec)
+	}
+
+	if err := drives.Create(tg.sharedRoot(), rec); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.launch(t, state.LaunchDrive, strconv.Itoa(rec.Number))
+}
+
+// status runs a bare `f10 status` and returns stdout.
+func (fx launchFixture) status(t *testing.T, args ...string) string {
+	t.Helper()
+
+	var out, errOut bytes.Buffer
+
+	app := newApp()
+	app.Writer, app.ErrWriter = &out, &errOut
+
+	if err := app.Run(t.Context(), append([]string{"f10", "status"}, args...)); err != nil {
+		t.Fatalf("status: %v\n%s%s", err, out.String(), errOut.String())
+	}
+
+	return out.String()
+}
+
+func (fx launchFixture) rows(t *testing.T) []taskRow {
+	t.Helper()
+
+	out := fx.status(t, "--json")
+
+	var rows []taskRow
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatalf("not a row list: %v\n%s", err, out)
+	}
+
+	return rows
+}
+
+func rowIDs(rows []taskRow) string {
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID + ":" + r.Stage
+	}
+
+	return strings.Join(ids, " ")
+}
+
+// Two starts and a drive of two more print one tree, launch order kept,
+// an asking task carrying its question.
+func TestBareStatusListsTheSessionLaunches(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	fx.worktree(t, "DM-3", state.Run{
+		Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [refactor | stop]",
+	})
+
+	fx.launch(t, state.LaunchStart, "DM-1")
+	fx.launch(t, state.LaunchStart, "DM-2")
+	fx.drive(t, nil, "DM-3", "DM-4")
+
+	rows := fx.rows(t)
+	if got, want := rowIDs(rows), "DM-1:implementing DM-2:planned DM-3:asking DM-4:not started"; got != want {
+		t.Fatalf("rows = %s, want %s", got, want)
+	}
+
+	if rows[2].Ask == "" {
+		t.Errorf("asking row has no ask: %+v", rows[2])
+	}
+
+	if plain := fx.status(
+		t,
+		"--plain",
+	); !strings.HasPrefix(plain, launchesHead) ||
+		!strings.Contains(plain, "Refactor?") {
+		t.Errorf("plain tree:\n%s", plain)
+	}
+}
+
+// A drive that is done or cancelled adds none of its tasks; a task both
+// started and driven shows once.
+func TestBareStatusDropsFinishedDrives(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+
+	fx.launch(t, state.LaunchStart, "DM-1")
+	fx.drive(t, func(r *drives.Record) {
+		for i := range r.Tasks {
+			r.Tasks[i].Outcome = &drives.Outcome{Row: "done", Code: 0}
+		}
+	}, "DM-5")
+
+	now := time.Now()
+	fx.drive(t, func(r *drives.Record) { r.Cancelled = &now }, "DM-6")
+	fx.drive(t, nil, "DM-1")
+
+	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing"; got != want {
+		t.Errorf("rows = %s, want %s", got, want)
+	}
+}
+
+// The session's own run naming a launched task (planned here, then
+// started) still prints the whole tree; one naming another task adds it.
+func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+
+	own := &state.Run{Session: "sess-1", Task: "DM-1", Root: fx.repo, Capture: "done", Plan: "done", Ship: "pending"}
+	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.launch(t, state.LaunchStart, "DM-1")
+	fx.launch(t, state.LaunchStart, "DM-2")
+
+	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing DM-2:planned"; got != want {
+		t.Errorf("rows = %s, want %s", got, want)
+	}
+
+	own.Task = "DM-9"
+	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing DM-2:planned DM-9:not started"; got != want {
+		t.Errorf("rows = %s, want %s", got, want)
+	}
+}
+
+// No launch, or none still live, prints what a bare status printed before.
+func TestBareStatusWithNoLiveLaunch(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	if got := fx.status(t); got != "no f10 run in this session\n" {
+		t.Errorf("no launches: %q", got)
+	}
+
+	now := time.Now()
+	fx.drive(t, func(r *drives.Record) { r.Cancelled = &now }, "DM-6")
+
+	if got := fx.status(t); got != "no f10 run in this session\n" {
+		t.Errorf("a cancelled drive only: %q", got)
+	}
+}
+
+// Inside a task's worktree, the branch's task wins over the launches.
+func TestBareStatusInATaskWorktreeIgnoresLaunches(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.launch(t, state.LaunchStart, "DM-2")
+	t.Chdir(filepath.Join(filepath.Dir(fx.repo), "demo.DM-1"))
+
+	runs := runStatusJSON(t)
+	if len(runs) != 1 || runs[0].Task != "DM-1" {
+		t.Errorf("bare status in DM-1's worktree = %+v, want DM-1's run", runs)
+	}
+}

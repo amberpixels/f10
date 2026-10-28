@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
@@ -80,6 +81,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 			Flow:        in.args.flow,
 			Model:       in.args.model,
 			DriveFinish: slices.Contains(in.chain, "finish"),
+			Session:     in.session,
 		}
 
 		for i, t := range tasks {
@@ -94,6 +96,8 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		if err := drives.Create(in.root, in.rec); err != nil {
 			return err
 		}
+
+		in.created = true
 	}
 
 	own, err := drives.Acquire(in.root, drives.DriveKey(in.rec.Number), in.rec.Number)
@@ -134,6 +138,18 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	in.args.answers = append(kept, in.args.answers...)
 
 	return nil
+}
+
+// recordLaunch adds a drive this command created to its session's
+// launches. A found record, a resume or an answer sent from another session
+// adds nothing: the drive is the creating session's.
+func (in *driveInput) recordLaunch() error {
+	if !in.created || in.rec == nil {
+		return nil
+	}
+
+	return state.AppendLaunch(in.stateDir, in.session,
+		state.Launch{Kind: state.LaunchDrive, Value: strconv.Itoa(in.rec.Number)})
 }
 
 func suffixOf(s string) string {

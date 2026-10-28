@@ -26,17 +26,19 @@ import (
 
 // The status noun reads what the badge reads, and says the rest: which
 // step a run stopped on, why, and what unblocks it. With no id, the task
-// this session's run records, else the branch's, stands in for one; naming
-// none, the answer is the session's run, or from a plain terminal this
-// repo's live runs, and --all every live run on the machine. A task id
-// names another run: the task's own, reported from the checkout that has
+// this session's run records, else the branch's, stands in for one; in a
+// checkout naming no task, what the session started or drove that is still
+// live comes first, as one tree. Naming none, the answer is the session's
+// run, or from a plain terminal this repo's live runs, and --all every live
+// run on the machine. A task id names another run: the task's own, reported
+// from the checkout that has
 // the task's branch, which is how a session reads the question a driven
 // agent stopped on. With no run of its own, the task gets what is durable:
 // its plan file and its PR.
 func statusCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
-		Usage:     "where this session's f10 run is, a task's run in its own worktree, or every live run in this repo",
+		Usage:     "where this session's f10 run is, what it started or drove, a task's run in its own worktree, or every live run in this repo",
 		ArgsUsage: "[task-id]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "all", Usage: "every live run on this machine, not only this repo's"},
@@ -73,11 +75,21 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// a bare call reads the current task the way `status <id>` does; a
-	// guess that cannot be read only loses the guess, since status only reads
+	// a bare call reads the current task the way `status <id>` does, the
+	// session run's before the checkout's (the reverse of ref.Lookup's
+	// cascade: the run is what status reports); a guess that cannot be read
+	// only loses the guess. A checkout naming no task, the main one, lists
+	// what this session launched first: the session run's task would hide it
 	if !all {
 		if t, err := targetFor(ctx, cmd); err == nil && !t.scoped {
-			if id := bareTaskID(ctx, t, sid); id != "" {
+			here := checkoutTaskID(ctx, t)
+			if here == "" && sid != "" {
+				if done, err := launchStatus(ctx, cmd, t, sid); done {
+					return err
+				}
+			}
+
+			if id := cmp.Or(sessionTaskID(sid), here); id != "" {
 				if done, err := taskStatus(ctx, cmd, t, id, true); done {
 					return err
 				}
@@ -138,17 +150,22 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	return writeRuns(cmd, runs, make([][]gate, len(runs)), showRoot, now)
 }
 
-// bareTaskID is the task a bare `status` stands for: the session run's,
-// else the one the branch names, else the one a linked worktree's directory
-// names on a detached HEAD, or "" when nothing names one. Session first is
-// the reverse of ref.Lookup's cascade: the run is what `status` reports.
-func bareTaskID(ctx context.Context, t *target, sid string) string {
-	if sid != "" {
-		if r, err := state.Load(state.Path(state.Dir(), sid)); err == nil && r.Task != "" {
-			return r.Task
-		}
+// sessionTaskID is the task the session's run names, "" for none.
+func sessionTaskID(sid string) string {
+	if sid == "" {
+		return ""
 	}
 
+	if r, err := state.Load(state.Path(state.Dir(), sid)); err == nil {
+		return r.Task
+	}
+
+	return ""
+}
+
+// checkoutTaskID is the task the branch names, else the one a linked
+// worktree's directory names on a detached HEAD, "" for none.
+func checkoutTaskID(ctx context.Context, t *target) string {
 	if r, err := (ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir, NoSession: true}).Find(ctx, ""); err == nil {
 		return r.Label()
 	}
