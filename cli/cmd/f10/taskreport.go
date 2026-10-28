@@ -46,6 +46,11 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 	var nodes []tasktree.Node
 
 	if children {
+		// a token naming no task has no subtasks to ask for
+		if refs[0].ID == "" {
+			return writeTaskFacts(cmd, tokens[0], "", ledger.TaskRef{})
+		}
+
 		kids, err := t.tracker().children(ctx, refs[0])
 		switch {
 		case errors.Is(err, errNoParentLink):
@@ -54,7 +59,7 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		if refs[0].ID == "" || len(kids) == 0 {
+		if len(kids) == 0 {
 			return writeTaskFacts(cmd, tokens[0], refs[0].ID, known[refs[0].ID])
 		}
 
