@@ -521,7 +521,7 @@ type driveInput struct {
 	inboxNotes []string
 
 	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
-	created  bool        // openRecord created the record rather than resuming one
+	launched bool        // a session typed this drive: not a --resume, not an --answer relay
 	runs     []*driveRun
 	out      io.Writer
 }

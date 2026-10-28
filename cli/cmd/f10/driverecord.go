@@ -57,6 +57,9 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		return nil
 	}
 
+	// before the kept answers join the ones given now
+	in.launched = in.args.resume == 0 && len(in.args.answers) == 0
+
 	var err error
 
 	switch {
@@ -96,8 +99,6 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		if err := drives.Create(in.root, in.rec); err != nil {
 			return err
 		}
-
-		in.created = true
 	}
 
 	own, err := drives.Acquire(in.root, drives.DriveKey(in.rec.Number), in.rec.Number)
@@ -140,11 +141,12 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	return nil
 }
 
-// recordLaunch adds a drive this command created to its session's
-// launches. A found record, a resume or an answer sent from another session
-// adds nothing: the drive is the creating session's.
+// recordLaunch adds the drive to the launches of the session that typed
+// it, a rerun of the same command from a new session included. A --resume
+// (a drained drive, a drive resuming itself) and an --answer relayed from
+// another session add nothing.
 func (in *driveInput) recordLaunch() error {
-	if !in.created || in.rec == nil {
+	if !in.launched || in.rec == nil {
 		return nil
 	}
 

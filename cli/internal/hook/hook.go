@@ -58,8 +58,9 @@ type Env struct {
 	// PromptTyped is told of every prompt submitted, with the session's
 	// cwd: one typed in an asking agent's pane answers its ask.
 	PromptTyped func(ctx context.Context, cwd, prompt string)
-	// StatusText is what `f10 status` prints for a session.
-	StatusText func(ctx context.Context, session string) string
+	// StatusText is what `f10 status` prints for a session, and whether it
+	// holds a question to relay, which needs a model turn.
+	StatusText func(ctx context.Context, session string) (string, bool)
 
 	// Observers receive every observation after the badge has applied it.
 	Observers []observe.Observer
@@ -103,7 +104,8 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 	case "UserPromptExpansion":
 		// the typed path: /f10:ship reaches the model as an expansion, never
 		// as a Skill tool call. Bare status only: `/f10:status <task-id>` may
-		// relay a question, which needs a model turn.
+		// relay a question, which needs a model turn, and so may a bare one
+		// whose launches tree holds an ask: answerStatus lets that through.
 		if (p.CommandName == "f10:status" || p.CommandName == "status") && p.CommandArgs == "" {
 			return answerStatus(ctx, env, sid)
 		}
@@ -354,9 +356,14 @@ func debugLog(dir string, raw []byte) {
 // answerStatus answers a bare `/f10:status` with a blocking verdict that ends
 // the turn before the model runs, so it costs no model turn.
 func answerStatus(ctx context.Context, env *Env, sid string) []byte {
-	text := ""
+	text, asks := "", false
 	if env.StatusText != nil {
-		text = strings.TrimRight(env.StatusText(ctx, sid), "\n")
+		text, asks = env.StatusText(ctx, sid)
+		text = strings.TrimRight(text, "\n")
+	}
+
+	if asks {
+		return nil
 	}
 
 	if text == "" {

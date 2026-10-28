@@ -305,13 +305,18 @@ func TestRecordArgs(t *testing.T) {
 	}
 }
 
-// A drive this command creates is its session's launch, once; rerunning
-// the same command finds the record and adds nothing.
+// A drive is the launch of each session that types it, the rerun of a
+// stopped drive from a new session included; a --resume or an --answer
+// relay is nobody's. The record keeps the session that created it.
 func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 	root, stateDir := t.TempDir(), t.TempDir()
 
-	open := func() *driveInput {
-		in := &driveInput{root: root, stateDir: stateDir, session: "sess-1", argv: []string{"GH-1"}, now: time.Now}
+	open := func(session string, change func(*driveInput)) *driveInput {
+		in := &driveInput{root: root, stateDir: stateDir, session: session, argv: []string{"GH-1"}, now: time.Now}
+		if change != nil {
+			change(in)
+		}
+
 		if err := in.openRecord(nil); err != nil {
 			t.Fatal(err)
 		}
@@ -325,18 +330,25 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 		return in
 	}
 
-	if in := open(); in.rec.Session != "sess-1" {
+	if in := open("sess-1", nil); in.rec.Session != "sess-1" {
 		t.Errorf("record session = %q", in.rec.Session)
 	}
 
-	open()
-
-	b, err := os.ReadFile(state.LaunchesPath(stateDir, "sess-1"))
-	if err != nil {
-		t.Fatal(err)
+	if in := open("sess-2", nil); in.rec.Session != "sess-1" {
+		t.Errorf("a rerun rewrote the record's session to %q", in.rec.Session)
 	}
 
-	if got := string(b); got != "drive 1\n" {
-		t.Errorf("launches file = %q, want one drive line", got)
+	open("sess-3", func(in *driveInput) { in.args.resume = 1 })
+	open("sess-4", func(in *driveInput) { in.args.answers = []string{"1. yes"} })
+
+	for session, want := range map[string]string{"sess-1": "drive 1\n", "sess-2": "drive 1\n", "sess-3": "", "sess-4": ""} {
+		b, err := os.ReadFile(state.LaunchesPath(stateDir, session))
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+
+		if got := string(b); got != want {
+			t.Errorf("%s launches = %q, want %q", session, got, want)
+		}
 	}
 }

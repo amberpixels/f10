@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -231,5 +232,52 @@ func TestBareStatusInATaskWorktreeIgnoresLaunches(t *testing.T) {
 	runs := runStatusJSON(t)
 	if len(runs) != 1 || runs[0].Task != "DM-1" {
 		t.Errorf("bare status in DM-1's worktree = %+v, want DM-1's run", runs)
+	}
+}
+
+// A start whose branch is gone, or a driven task whose plan finish
+// archived, is done with and drops out.
+func TestBareStatusDropsFinishedStarts(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+
+	archive := filepath.Join(fx.repo, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archive, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(archive, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.launch(t, state.LaunchStart, "DM-1")
+	fx.launch(t, state.LaunchStart, "DM-2") // its branch was removed
+	fx.drive(t, nil, "DM-5", "DM-6")
+
+	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing DM-6:not started"; got != want {
+		t.Errorf("rows = %s, want %s", got, want)
+	}
+}
+
+// The hook leaves a bare status to the model only when its tree holds a
+// question to relay.
+func TestHookStatusTextReportsAsks(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.launch(t, state.LaunchStart, "DM-1")
+
+	if text, asks := hookStatusText(t.Context(), "sess-1"); asks || !strings.HasPrefix(text, launchesHead) {
+		t.Errorf("no ask: asks = %v, text:\n%s", asks, text)
+	}
+
+	fx.worktree(t, "DM-3", state.Run{
+		Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [refactor | stop]",
+	})
+	fx.launch(t, state.LaunchStart, "DM-3")
+
+	if _, asks := hookStatusText(t.Context(), "sess-1"); !asks {
+		t.Error("an asking launch did not report an ask")
 	}
 }

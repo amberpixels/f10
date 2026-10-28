@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +18,13 @@ import (
 
 // launchesHead heads the tree of what this session launched.
 const launchesHead = "launched here"
+
+// statusAsks, under statusAsksKey in the context, learns whether a status
+// printed a question to relay: the hook then leaves the turn to the model.
+type (
+	statusAsks    struct{ printed bool }
+	statusAsksKey struct{}
+)
 
 // launchStatus prints the tree of what session started or drove that is
 // still live, reporting whether it printed: with nothing live, the bare
@@ -37,12 +45,17 @@ func launchStatus(ctx context.Context, cmd *cli.Command, t *target, sid string) 
 		return false, nil
 	}
 
+	if a, ok := ctx.Value(statusAsksKey{}).(*statusAsks); ok {
+		a.printed = slices.ContainsFunc(rows, func(r taskRow) bool { return r.Stage == stageAsking })
+	}
+
 	return true, writeTaskRows(cmd, rows, launchesHead)
 }
 
 // launchKids is the session's launches as rows to read, in launch order: a
 // start's task, a drive's tasks unless it is done or cancelled, then the
-// session run's own task when no launch names it. Each task shows once.
+// session run's own task when no launch names it. Each task shows once, and
+// a finished one not at all.
 func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []childRow {
 	launches, err := state.Launches(state.Dir(), sid)
 	if err != nil {
@@ -53,30 +66,41 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		return nil
 	}
 
-	var tokens []string
+	// a start's task has a branch from the start: none left is done with
+	type token struct {
+		text    string
+		started bool
+	}
+
+	var tokens []token
 
 	for _, l := range launches {
 		switch l.Kind {
 		case state.LaunchStart:
-			tokens = append(tokens, l.Value)
+			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
-			tokens = append(tokens, driveTokens(t.sharedRoot(), l.Value)...)
+			for _, id := range driveTokens(t.sharedRoot(), l.Value) {
+				tokens = append(tokens, token{text: id})
+			}
 		}
 	}
 
 	if len(tokens) > 0 {
 		if own := sessionTaskID(sid); own != "" {
-			tokens = append(tokens, own)
+			tokens = append(tokens, token{text: own})
 		}
 	}
 
 	var (
 		kids []childRow
 		refs []ref.Ref
+		seen []childRow
 	)
 
+	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+
 	for _, tok := range tokens {
-		id, suffix := ref.SplitSuffix(tok)
+		id, suffix := ref.SplitSuffix(tok.text)
 
 		r, err := t.reference(ctx, id)
 		if err != nil {
@@ -84,17 +108,31 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		}
 
 		r = r.Head()
-		if slices.ContainsFunc(kids, func(k childRow) bool {
-			return k.ID == r.ID && strings.EqualFold(k.suffix, suffix)
-		}) {
+		k := childRow{ID: r.ID, suffix: suffix}
+
+		if slices.ContainsFunc(
+			seen,
+			func(o childRow) bool { return o.ID == k.ID && strings.EqualFold(o.suffix, k.suffix) },
+		) {
 			continue
 		}
 
-		kids = append(kids, childRow{ID: r.ID, suffix: suffix})
+		seen = append(seen, k)
+
+		// a finished task reads nothing further: its row would only drop
+		branched, err := hasTaskBranch(ctx, main, r.ID)
+		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, t.tracker().archive, r.ID, branched)) {
+			continue
+		}
+
+		kids = append(kids, k)
 		refs = append(refs, r)
 	}
 
-	known := t.taskRefs(ctx, refs, true, false, warn)
+	// titles from the ledger, the tracker only on a miss: the typed status
+	// answers inside a hook with a short timeout, and a row with no title
+	// still reads, so a failed lookup says nothing
+	known := t.taskRefs(ctx, refs, false, false, io.Discard)
 	for i := range kids {
 		kids[i].Title, kids[i].URL = cleanTitle(kids[i].ID, known[kids[i].ID].Title), known[kids[i].ID].URL
 	}
