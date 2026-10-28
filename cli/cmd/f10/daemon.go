@@ -242,7 +242,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 	defer stop()
 
 	// a task the drive leaves unfinished is watched once the drive ends
-	watchProject(ctx, io.Discard, t)
+	watchProject(ctx, w, t)
 
 	return followDrive(ctx, w, dir, ver, req, nil)
 }

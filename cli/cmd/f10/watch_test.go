@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,12 +42,30 @@ func TestDecideWatch(t *testing.T) {
 			kind: watchMerged,
 		},
 		{
-			name: "merged, finish mode", task: watchedTask{pr: mergedPR(), localSHA: "abc", agent: agentctl.StatusIdle},
+			name: "merged, finish mode",
+			task: watchedTask{pr: mergedPR(), localSHA: "abc", agent: agentctl.StatusIdle, listed: true},
+			mode: "finish",
+			kind: watchMerged,
+			act:  true,
+		},
+		{
+			name: "merged, no workspace", task: watchedTask{pr: mergedPR(), localSHA: "abc", listed: true},
 			mode: "finish", kind: watchMerged, act: true,
 		},
 		{
-			name: "merged, agent working", task: watchedTask{pr: mergedPR(), agent: agentctl.StatusWorking},
+			name: "merged, agent status unknown", task: watchedTask{pr: mergedPR(), localSHA: "abc"},
 			mode: "finish", kind: watchMerged,
+		},
+		{
+			name: "merged, agent working",
+			task: watchedTask{pr: mergedPR(), agent: agentctl.StatusWorking, listed: true},
+			mode: "finish",
+			kind: watchMerged,
+		},
+		{
+			name: "host did not answer",
+			task: watchedTask{hostless: true, run: &state.Run{Ship: "done", Updated: watchNow}},
+			mode: "report",
 		},
 		{
 			name: "merged with commits the PR lacks", task: watchedTask{pr: mergedPR(), localSHA: "def"},
@@ -135,10 +154,30 @@ func TestReconcileReportsOnce(t *testing.T) {
 	}
 }
 
+// A fact coming back after another is not told again: a host that did not
+// answer for one pass, or an agent flipping between working and idle.
+func TestReconcileNeverRetellsAFact(t *testing.T) {
+	var out collected
+
+	in := watchInput{mode: "report", now: func() time.Time { return watchNow }, out: &out}
+	store := map[string]watchReport{}
+
+	merged := watchedTask{id: "FT-1", pr: mergedPR(), localSHA: "abc"}
+	ahead := watchedTask{id: "FT-1", pr: mergedPR(), localSHA: "def"}
+
+	for _, task := range []watchedTask{merged, ahead, merged, ahead} {
+		in.reconcile(t.Context(), []watchedTask{task}, store)
+	}
+
+	if len(out) != 2 {
+		t.Errorf("told %d reports, want 2: %+v", len(out), out)
+	}
+}
+
 // Under finish, a merged task is finished and reported as such; a refusal
 // is a report naming it, and a lease someone took meanwhile is none.
 func TestReconcileFinishes(t *testing.T) {
-	task := watchedTask{id: "FT-1", pr: mergedPR(), localSHA: "abc", agent: agentctl.StatusIdle}
+	task := watchedTask{id: "FT-1", pr: mergedPR(), localSHA: "abc", agent: agentctl.StatusIdle, listed: true}
 
 	for _, c := range []struct {
 		err  error
@@ -194,5 +233,59 @@ func TestWatchStoreRoundTrip(t *testing.T) {
 
 	if r := got["FT-1"]; r.Key != "k" || r.Kind != watchMerged || !r.At.Equal(watchNow) {
 		t.Errorf("read back %+v", got)
+	}
+}
+
+// collectWatched reads only task worktrees, marks an owned and a handed
+// back one, and counts only local task branches toward watching.
+func TestCollectWatched(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t,
+		[3]string{"GH-1/x", "a1", "a1"},
+		[3]string{"GH-2/y", "b2", ""},
+		[3]string{"GH-3/z", "c3", ""},
+		[3]string{"GH-4/w", "", "d4"},
+	)
+	fx.f.script(
+		worktrees,
+		porcelain("GH-1/x", "/code/repo.GH-1", "GH-2/y", "/code/repo.GH-2", "GH-3/z", "/code/repo.GH-3"),
+	)
+	fx.f.script("git config --get branch.GH-1/x."+cfgWatch, "")
+	fx.f.script("git config --get branch.GH-2/y."+cfgWatch, "false")
+	fx.request("GH-1/x", "OPEN", "a1", "me")
+
+	root := t.TempDir()
+
+	lease, err := drives.Acquire(root, "GH-3", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Release()
+
+	in := watchInput{main: fx.in.main, root: root, jan: fx.in, stateDir: t.TempDir(), ttl: time.Hour, now: time.Now}
+
+	tasks, local, err := collectWatched(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if local != 3 {
+		t.Errorf("local task branches = %d, want 3: origin's GH-4 does not count", local)
+	}
+
+	if len(tasks) != 3 || tasks[0].id != "GH-1" || tasks[1].id != "GH-2" || tasks[2].id != "GH-3" {
+		t.Fatalf("tasks = %+v, want GH-1, GH-2 and GH-3, the worktrees", tasks)
+	}
+
+	if !strings.HasPrefix(tasks[2].owner, "drive 2") || fx.f.called(ghHeadOf("GH-3/z")) {
+		t.Errorf("GH-3, owned by drive 2: %+v", tasks[2])
+	}
+
+	if tasks[0].pr == nil || tasks[0].pr.HeadSHA != "a1" || tasks[0].off {
+		t.Errorf("GH-1 = %+v", tasks[0])
+	}
+
+	if !tasks[1].off || fx.f.called(ghHeadOf("GH-2/y")) {
+		t.Errorf("GH-2 handed back: off=%v, its requests read: %v", tasks[1].off, fx.f.called(ghHeadOf("GH-2/y")))
 	}
 }

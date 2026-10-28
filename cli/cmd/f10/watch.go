@@ -210,8 +210,12 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 		return err
 	}
 
-	sweepIfDue(ctx, cmd.Writer, filepath.Join(root, janitorStamp), time.Now(),
-		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+	// the janitor deletes branches, here and on origin: an act, which only
+	// watch: finish lets a pass take
+	if in.mode == "finish" {
+		sweepIfDue(ctx, cmd.Writer, filepath.Join(root, janitorStamp), time.Now(),
+			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+	}
 
 	if !watching {
 		return cli.Exit("nothing left to watch", daemon.ExitNothingWatched)
@@ -221,23 +225,40 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 }
 
 // watchProject hands the project to this user's daemon, starting one when
-// none runs, so its tasks are watched once nothing drives them. Nothing it
-// does fails the command: an error is one warning. A variable so tests
-// start no daemon.
+// none runs, so its tasks are watched once nothing drives them. It never
+// replaces or waits out a running daemon: that is f10 drive's, which can
+// tell the user. Nothing it does fails the command: an error is one
+// warning. A variable so tests start no daemon.
 var watchProject = func(ctx context.Context, w io.Writer, t *target) {
 	if !daemon.Supported || t.eff.Watch == "off" {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, watchHandWait)
+	defer cancel()
+
 	dir := daemon.RunDir()
 
-	if _, err := (&daemon.Ensurer{Dir: dir, Version: daemonVersion()}).Ensure(ctx); err != nil {
+	rep, err := daemon.Call(ctx, dir, daemon.Request{Op: daemon.OpHello}, 0)
+
+	switch {
+	case err == nil && rep.Stopping:
+		fmt.Fprintln(w, "watch: the f10 daemon is stopping: the next f10 start or f10 drive hands this project over")
+
+		return
+	case errors.Is(err, daemon.ErrNotRunning):
+		if _, err := (&daemon.Ensurer{Dir: dir, Version: daemonVersion()}).Ensure(ctx); err != nil {
+			fmt.Fprintf(w, "watch: warning: %v\n", err)
+
+			return
+		}
+	case err != nil:
 		fmt.Fprintf(w, "watch: warning: %v\n", err)
 
 		return
 	}
 
-	_, err := daemon.Call(ctx, dir, daemon.Request{
+	_, err = daemon.Call(ctx, dir, daemon.Request{
 		Op:   daemon.OpWatch,
 		Root: t.sharedRoot(),
 		Dir:  cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
@@ -247,6 +268,9 @@ var watchProject = func(ctx context.Context, w io.Writer, t *target) {
 		fmt.Fprintf(w, "watch: warning: %v\n", err)
 	}
 }
+
+// watchHandWait bounds handing a project over, a daemon started included.
+const watchHandWait = 10 * time.Second
 
 // watchInput is everything a pass needs, so it runs in a test without a
 // daemon, Herdr or a host.
@@ -271,9 +295,11 @@ type watchedTask struct {
 	owner    string          // who holds its lease; "" for nobody
 	off      bool            // f10 watch off
 	pr       *forge.PR       // nil with no request, or no host
+	hostless bool            // the host did not answer for its request this pass
 	localSHA string          // the branch's tip
 	run      *state.Run      // the newest run reported from its worktree
-	agent    agentctl.Status // "" with no workspace, or no backend
+	agent    agentctl.Status // "" with no workspace, or no listing
+	listed   bool            // the workspaces were listed, so "" is no workspace
 	ws       string          // its workspace, for a message
 }
 
@@ -284,11 +310,16 @@ type watchReport struct {
 	Text string `yaml:"text"`
 	Next string `yaml:"next,omitempty"`
 	Ask  string `yaml:"ask,omitempty"` // a stopped run's question, options included
-	// Key is the fact the report was made on, so the same fact is told
-	// once and a new one again
-	Key string    `yaml:"key"`
-	At  time.Time `yaml:"at"`
+	// Key is the fact the report was made on; Told, kept on the stored
+	// report, every key told for the task, so an old fact coming back after
+	// another (a host that did not answer for a pass) is not told again
+	Key  string    `yaml:"key"`
+	Told []string  `yaml:"told,omitempty"`
+	At   time.Time `yaml:"at"`
 }
+
+// watchToldMax bounds a task's told keys; the oldest go first.
+const watchToldMax = 32
 
 // A reporter is where a pass tells what it found. The pass's own output,
 // which the daemon keeps in the project's watch log, is the only one.
@@ -313,7 +344,7 @@ func (l lineReporter) report(r watchReport) {
 
 // watchPass reads every task worktree, reports what is new about each one
 // no drive owns, and finishes merged ones when the mode says so. watching
-// is false once the project has no task worktree and no task branch.
+// is false once the project has no task worktree and no local task branch.
 func watchPass(ctx context.Context, in watchInput) (bool, error) {
 	tasks, branches, err := collectWatched(ctx, in)
 	if err != nil {
@@ -356,11 +387,18 @@ func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store m
 
 		rep.Task, rep.At = task.id, now
 
-		if prev, ok := store[task.id]; ok && prev.Key == rep.Key {
+		prev := store[task.id]
+		if prev.Key == rep.Key || slices.Contains(prev.Told, rep.Key) {
 			continue
 		}
 
 		in.out.report(*rep)
+
+		rep.Told = append(slices.Clone(prev.Told), rep.Key)
+		if len(rep.Told) > watchToldMax {
+			rep.Told = rep.Told[len(rep.Told)-watchToldMax:]
+		}
+
 		store[task.id] = *rep
 	}
 
@@ -386,7 +424,7 @@ func (in watchInput) finishReport(ctx context.Context, task watchedTask) *watchR
 			Kind: watchRefused,
 			Text: url + " merged, and finishing it was refused: " + err.Error(),
 			Next: "f10 finish " + task.id,
-			Key:  watchRefused + " " + url + " " + err.Error(),
+			Key:  watchRefused + " " + url, // a refusal's text may vary between passes
 		}
 	}
 
@@ -400,7 +438,9 @@ func (in watchInput) finishReport(ctx context.Context, task watchedTask) *watchR
 // decideWatch is what a pass says about one task, and whether it finishes
 // it: the request first, then a stalled agent, then a stopped run.
 func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool) {
-	if t.owner != "" || t.off {
+	// a host that did not answer leaves the request unknown: saying
+	// anything else about the task this pass could hide a merge
+	if t.owner != "" || t.off || t.hostless {
 		return nil, false
 	}
 
@@ -417,8 +457,8 @@ func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool)
 			}
 
 			// closing the workspace ends the agent's conversation: never
-			// while someone is using it
-			act := mode == "finish" && t.agent != agentctl.StatusWorking
+			// while someone is using it, or while nobody can tell
+			act := mode == "finish" && t.listed && t.agent != agentctl.StatusWorking
 
 			return &watchReport{
 				Kind: watchMerged,
@@ -489,8 +529,8 @@ func runStopText(run *state.Run) string {
 	return "stopped"
 }
 
-// collectWatched reads every task worktree, and counts every task branch,
-// with or without one.
+// collectWatched reads every task worktree, and counts the local task
+// branches, with or without one.
 func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, error) {
 	def, err := janitorDefault(ctx, in.main)
 	if err != nil {
@@ -512,11 +552,17 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		return nil, 0, err
 	}
 
-	var wss []agentctl.Workspace
+	var (
+		wss    []agentctl.Workspace
+		listed bool
+	)
 
 	if in.agents != nil {
-		// no listing is no agent status: stalls wait for a pass that has one
-		wss, _ = in.agents.Workspaces(ctx)
+		// no listing is no agent status: stalls and finishes wait for a pass
+		// that has one
+		var err error
+		wss, err = in.agents.Workspaces(ctx)
+		listed = err == nil
 	}
 
 	j := &sweeper{in: in.jan, def: def}
@@ -529,13 +575,13 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 			continue
 		}
 
-		task := watchedTask{id: b.ids[0], branch: b.name, path: path, localSHA: b.localSHA}
+		task := watchedTask{id: b.ids[0], branch: b.name, path: path, localSHA: b.localSHA, listed: listed}
 
 		if h, ok := drives.Probe(in.root, task.id); ok {
 			task.owner = h.String()
+		} else {
+			task.off = gitx.Out(ctx, in.main, "config", "--get", "branch."+b.name+"."+cfgWatch) == "false"
 		}
-
-		task.off = gitx.Out(ctx, in.main, "config", "--get", "branch."+b.name+"."+cfgWatch) == "false"
 
 		if task.owner != "" || task.off {
 			tasks = append(tasks, task)
@@ -544,8 +590,9 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		}
 
 		if in.jan.host != nil {
-			// a host that does not answer leaves the request unknown this pass
-			task.pr, _ = j.request(ctx, b)
+			var err error
+			task.pr, err = j.request(ctx, b)
+			task.hostless = err != nil
 		}
 
 		if runs := inRoot(live, path); len(runs) > 0 {
@@ -559,7 +606,16 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		tasks = append(tasks, task)
 	}
 
-	return tasks, len(branches), nil
+	// origin's task branches are anyone's: only this checkout's keep it watched
+	local := 0
+
+	for _, b := range branches {
+		if b.localSHA != "" {
+			local++
+		}
+	}
+
+	return tasks, local, nil
 }
 
 // watcherFinish finishes a merged task under its lease, held as the
@@ -572,6 +628,10 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 		return err
 	}
 	defer lease.Release()
+
+	if err := recheckFinish(ctx, reachableAgents(main), main, task); err != nil {
+		return err
+	}
 
 	r, err := t.reference(ctx, task.id)
 	if err != nil {
@@ -617,6 +677,30 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 	}
 
 	return err
+}
+
+// recheckFinish reads again, under the lease, what the pass read before
+// it: an agent that started working, or a commit the PR lacks, since then
+// keeps the task.
+func recheckFinish(ctx context.Context, b agentctl.Backend, main string, task watchedTask) error {
+	if tip := gitx.Out(ctx, main, "rev-parse", "-q", "--verify", "refs/heads/"+task.branch); tip != task.pr.HeadSHA {
+		return fmt.Errorf("%s has commits %s lacks", task.branch, task.pr.URL)
+	}
+
+	if b == nil {
+		return errors.New("no agent status to read, so its workspace stays")
+	}
+
+	wss, err := b.Workspaces(ctx)
+	if err != nil {
+		return fmt.Errorf("listing workspaces: %w", err)
+	}
+
+	if ws := workspaceAt(wss, task.path); ws != nil && ws.Status == agentctl.StatusWorking {
+		return fmt.Errorf("its agent in workspace %s is working", workspaceLabel(ws))
+	}
+
+	return nil
 }
 
 func loadWatchStore(root string) (map[string]watchReport, error) {

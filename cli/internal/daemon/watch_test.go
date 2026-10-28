@@ -129,3 +129,70 @@ func TestWatchListSurvivesARestart(t *testing.T) {
 		t.Errorf("passes = %v, want the kept env", got)
 	}
 }
+
+// A registration that arrives while a pass runs gets one more pass: the
+// running one may have listed the project before the new task, and its
+// exit 7 must not drop the project unread.
+func TestWatchRegisteredDuringAPassGetsAnother(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "code"), []byte("7"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	blocking := func(string) (string, []string) {
+		return "/bin/sh", []string{
+			"-c",
+			`echo pass >> passes; while [ ! -f go ]; do sleep 0.02; done; exit "$(cat code)"`,
+		}
+	}
+
+	s := &Server{
+		Dir:        runDir(t),
+		Version:    "v1",
+		Child:      shell,
+		Pass:       blocking,
+		WatchEvery: time.Hour,
+		Tick:       10 * time.Millisecond,
+	}
+	serve(t, s)
+
+	req := Request{Op: OpWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH")}}
+
+	for range 2 {
+		if _, err := Call(t.Context(), s.Dir, req, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	waitFor(t, "the first pass", func() bool { return len(passes(t, project)) == 1 })
+
+	if err := os.WriteFile(filepath.Join(project, "go"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	waitFor(t, "the project dropped after a second pass", func() bool {
+		rep, err := Call(t.Context(), s.Dir, Request{Op: OpStatus}, 0)
+
+		return err == nil && len(rep.Watches) == 0
+	})
+
+	if got := len(passes(t, project)); got != 2 {
+		t.Errorf("%d passes, want 2: the registration during the first got none", got)
+	}
+}
+
+// A project whose checkout is gone is dropped at its first failed pass.
+func TestWatchDropsAGoneCheckout(t *testing.T) {
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell, Pass: passScript, WatchEvery: time.Hour}
+	serve(t, s)
+
+	gone := filepath.Join(t.TempDir(), "moved")
+	if _, err := Call(t.Context(), s.Dir, Request{Op: OpWatch, Root: "/r", Dir: gone}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	rep, err := Call(t.Context(), s.Dir, Request{Op: OpStatus}, 0)
+	if err != nil || len(rep.Watches) != 0 {
+		t.Errorf("watches = %+v, %v, want none", rep.Watches, err)
+	}
+}

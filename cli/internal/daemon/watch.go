@@ -21,9 +21,11 @@ import (
 type watcher struct {
 	Watch
 
-	env  []string
-	cmd  *exec.Cmd // nil between passes
-	done chan struct{}
+	env   []string
+	cmd   *exec.Cmd // nil between passes
+	done  chan struct{}
+	rerun bool // registered again while a pass ran, which may predate the new task
+	fails int  // passes in a row that failed
 }
 
 // watchedProject is a watcher as watch.json keeps it, env included, so a
@@ -37,6 +39,10 @@ type watchedProject struct {
 }
 
 func watchPath(dir string) string { return filepath.Join(dir, "watch.json") }
+
+// watchFailMax is how many passes in a row may fail before the project
+// is dropped: about half an hour at the default interval.
+const watchFailMax = 10
 
 // watchLogMax caps a project's watch log: a pass appends a few lines every
 // few minutes for as long as the project has tasks.
@@ -69,7 +75,8 @@ func (s *Server) watch(req Request) Reply {
 	}
 
 	w := s.watches[i]
-	w.Dir, w.env = req.Dir, req.Env
+	w.Dir, w.env, w.fails = req.Dir, req.Env, 0
+	w.rerun = w.cmd != nil
 
 	s.saveWatches()
 
@@ -127,6 +134,8 @@ func (s *Server) startPass(w *watcher) {
 		_ = f.Close()
 		w.Last, w.Exit = time.Now(), -1
 		s.Log.Printf("starting a watch pass in %s: %v", w.Dir, err)
+		s.failed(w)
+		s.saveWatches()
 
 		return
 	}
@@ -153,18 +162,50 @@ func (s *Server) reapPass(w *watcher, cmd *exec.Cmd, done chan struct{}, f *os.F
 	s.mu.Lock()
 	w.cmd, w.Last, w.Exit = nil, time.Now(), code
 	s.last = time.Now()
+	rerun := w.rerun
+	w.rerun = false
 
-	if code == ExitNothingWatched {
-		s.watches = slices.DeleteFunc(s.watches, func(o *watcher) bool { return o == w })
-		s.Log.Printf("nothing left to watch in %s", w.Dir)
-	} else if code != 0 {
+	switch {
+	case code == 0:
+		w.fails = 0
+	case code == ExitNothingWatched && !rerun:
+		s.drop(w, "nothing left to watch")
+	case code == ExitNothingWatched:
+		w.fails = 0
+	default:
 		s.Log.Printf("watch pass in %s exited %d: %s", w.Dir, code, w.Log)
+		s.failed(w)
 	}
 
 	s.saveWatches()
+
+	// the pass that ran during a registration may have listed the project
+	// before the new task: one more pass reads it
+	if rerun && !s.draining && slices.Contains(s.watches, w) {
+		s.startPass(w)
+	}
+
 	s.mu.Unlock()
 
 	close(done)
+}
+
+// failed counts a failed pass and drops the project after watchFailMax
+// in a row, or at once when its checkout is gone; the caller holds mu.
+func (s *Server) failed(w *watcher) {
+	w.fails++
+
+	if _, err := os.Stat(w.Dir); err != nil {
+		s.drop(w, "its checkout is gone")
+	} else if w.fails >= watchFailMax {
+		s.drop(w, fmt.Sprintf("%d passes in a row failed, see %s", w.fails, w.Log))
+	}
+}
+
+// drop stops watching w; the caller holds mu.
+func (s *Server) drop(w *watcher, why string) {
+	s.watches = slices.DeleteFunc(s.watches, func(o *watcher) bool { return o == w })
+	s.Log.Printf("stopped watching %s: %s", w.Dir, why)
 }
 
 // saveWatches writes the list; the caller holds mu.
