@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -30,8 +29,8 @@ func daemonCommand() *cli.Command {
 		Name:  "daemon",
 		Usage: "the per-user process that runs drives; f10 drive starts it when needed",
 		Description: "Bare, it serves in the foreground: what f10 drive starts, detached. " +
-			"It exits after ten minutes with no drive and no call, and a client of a newer f10 " +
-			"replaces it, each drive resumed from its record.",
+			"It exits after ten minutes with no drive and no call. A client of a newer release " +
+			"replaces it: each drive stops at its next tick and the new daemon resumes it.",
 		Action: runDaemon,
 		Commands: []*cli.Command{
 			{
@@ -41,7 +40,7 @@ func daemonCommand() *cli.Command {
 			},
 			{
 				Name:   "stop",
-				Usage:  "stop the daemon; each drive stops at its next tick and resumes on its next run",
+				Usage:  "stop the daemon; each drive stops at its next tick, and f10 drive --resume N goes on",
 				Flags:  []cli.Flag{&cli.BoolFlag{Name: "now", Usage: "stop each drive at once, not at its next tick"}},
 				Action: runDaemonStop,
 			},
@@ -115,9 +114,14 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// driveTitle names a run by its project and drive number.
+// driveTitle names a run by its project and drive number: the checkout
+// an in-repo storage root sits in, or an out-of-tree root's own name.
 func driveTitle(r daemon.Run) string {
-	project := filepath.Base(filepath.Dir(r.Root))
+	project := filepath.Base(r.Root)
+	if project == ".f10" {
+		project = filepath.Base(filepath.Dir(r.Root))
+	}
+
 	if r.Drive == 0 {
 		return project + ": drive starting"
 	}
@@ -138,10 +142,10 @@ func runDaemonStop(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("now") {
-		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each drive stops now; rerun it to resume")
+		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each drive stops now; f10 drive --resume <n> goes on with one")
 	} else {
 		fmt.Fprintln(cmd.Writer,
-			"f10 daemon stopping: each drive stops at its next tick; the next f10 drive resumes them")
+			"f10 daemon stopping: each drive stops at its next tick; f10 drive --resume <n> goes on with one")
 	}
 
 	return nil
@@ -220,10 +224,20 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 
+	follow := false
+
 	for {
-		e := &daemon.Ensurer{Dir: dir, Version: ver, Draining: func(old string) {
-			fmt.Fprintf(w, "replacing f10 daemon %s with %s: its drives stop at their next tick\n", old, ver)
-		}}
+		e := &daemon.Ensurer{
+			Dir:     dir,
+			Version: ver,
+			Follow:  follow,
+			Draining: func(old string) {
+				fmt.Fprintf(w, "replacing f10 daemon %s with %s: its drives stop at their next tick\n", old, ver)
+			},
+			Kept: func(running string) {
+				fmt.Fprintf(w, "the f10 daemon runs %s, not this %s: f10 daemon stop replaces it\n", running, ver)
+			},
+		}
 
 		if _, err := e.Ensure(ctx); err != nil {
 			return err
@@ -238,10 +252,13 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 			fmt.Fprintln(w, "following the drive the daemon already runs")
 		}
 
-		code, err := tailLog(ctx, w, rep.Log)
+		exit, err := tailLog(ctx, w, rep.Log)
 		if errors.Is(err, context.Canceled) {
-			n := logDrive(rep.Log)
-			fmt.Fprintf(w, "\ndrive %d keeps running in the f10 daemon: f10 daemon logs %d -f\n", n, n)
+			if n := runningDrive(dir, rep.Log); n > 0 {
+				fmt.Fprintf(w, "\ndrive %d keeps running in the f10 daemon: f10 daemon logs %d -f\n", n, n)
+			} else {
+				fmt.Fprintln(w, "\nthe drive keeps running in the f10 daemon: f10 daemon status")
+			}
 
 			return cli.Exit("", 130)
 		}
@@ -250,33 +267,38 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 			return err
 		}
 
-		if code != exitDrained {
-			if code != 0 {
-				return cli.Exit("", code)
-			}
-
+		switch {
+		case exit.Code == 0:
 			return nil
+		case exit.Code != exitDrained:
+			return cli.Exit("", exit.Code)
+		case exit.Reason != daemon.ReasonUpgrade || exit.Drive == 0:
+			fmt.Fprintf(
+				w,
+				"drive %d stopped with the f10 daemon: f10 drive --resume %d goes on\n",
+				exit.Drive,
+				exit.Drive,
+			)
+
+			return cli.Exit("", exit.Code)
 		}
 
-		n := logDrive(rep.Log)
-		if n == 0 {
-			return cli.Exit("", code)
-		}
-
+		// the new daemon resumed it: follow it there, whatever its version
+		follow = true
 		req = daemon.Request{
 			Op:     daemon.OpRun,
-			Argv:   []string{"--resume", strconv.Itoa(n)},
+			Argv:   []string{"--resume", strconv.Itoa(exit.Drive)},
 			Dir:    cwd,
 			Root:   req.Root,
 			Env:    req.Env,
-			Resume: n,
+			Resume: exit.Drive,
 		}
 	}
 }
 
 // tailLog copies a drive's log to w as it grows, until its exit file
-// appears, and returns the exit code; ctx ending stops only the copy.
-func tailLog(ctx context.Context, w io.Writer, path string) (int, error) {
+// appears, and returns the exit; ctx ending stops only the copy.
+func tailLog(ctx context.Context, w io.Writer, path string) (daemon.Exit, error) {
 	var f *os.File
 
 	for i := 0; ; i++ {
@@ -284,46 +306,43 @@ func tailLog(ctx context.Context, w io.Writer, path string) (int, error) {
 		if f, err = os.Open(path); err == nil {
 			break
 		} else if i >= 50 {
-			return 0, err
+			return daemon.Exit{}, err
 		}
 
 		if err := sleepCtx(ctx, 100*time.Millisecond); err != nil {
-			return 0, err
+			return daemon.Exit{}, err
 		}
 	}
 	defer f.Close()
 
 	for {
 		if _, err := io.Copy(w, f); err != nil {
-			return 0, err
+			return daemon.Exit{}, err
 		}
 
-		if code, ok := daemon.ReadExit(path); ok {
+		if exit, ok := daemon.ReadExit(path); ok {
 			_, err := io.Copy(w, f)
 
-			return code, err
+			return exit, err
 		}
 
 		if err := sleepCtx(ctx, 200*time.Millisecond); err != nil {
-			return 0, err
+			return daemon.Exit{}, err
 		}
 	}
 }
 
-// logDrive is the number a drive's log names on its `drive <n>` line.
-func logDrive(path string) int {
-	f, err := os.Open(path)
+// runningDrive is the number of the drive writing log, as the daemon
+// knows it; 0 before the drive opened its record, or with no daemon.
+func runningDrive(dir, logPath string) int {
+	rep, err := daemon.Call(context.Background(), dir, daemon.Request{Op: daemon.OpStatus}, 0)
 	if err != nil {
 		return 0
 	}
-	defer f.Close()
 
-	sc := bufio.NewScanner(f)
-	for i := 0; sc.Scan() && i < 100; i++ {
-		if rest, ok := strings.CutPrefix(strings.TrimSpace(sc.Text()), "drive "); ok {
-			if n, err := strconv.Atoi(rest); err == nil {
-				return n
-			}
+	for _, r := range rep.Runs {
+		if r.Log == logPath {
+			return r.Drive
 		}
 	}
 

@@ -18,19 +18,24 @@ import (
 type Ensurer struct {
 	Dir     string
 	Version string
+	// Follow takes any daemon running, whatever its version: a client
+	// following a drive into the daemon that resumed it.
+	Follow bool
 	// Spawn starts a daemon detached; by default `<exe> daemon` in its own
 	// session, its output to the daemon log.
 	Spawn func(ctx context.Context) error
-	// Draining is told when an older daemon is being replaced.
-	Draining func(old string)
+	// Draining is told when an older daemon is being replaced, Kept when a
+	// daemon this client does not replace runs another version.
+	Draining, Kept func(running string)
 	// StartWait bounds how long a new daemon has to listen; DrainWait how
 	// long an old one has to drain.
 	StartWait, DrainWait time.Duration
 }
 
-// Ensure returns a daemon of this version listening, starting one when
-// none listens and replacing an older one by draining it first. Two
-// clients at once get one daemon: the start lease, then the daemon's own.
+// Ensure returns a daemon listening, starting one when none does. Only a
+// strictly newer client replaces a running daemon, draining it first, so
+// two versions never take turns. Two clients at once get one daemon: the
+// start lease, then the daemon's own.
 func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 	if e.StartWait == 0 {
 		e.StartWait = 5 * time.Second
@@ -42,23 +47,26 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 
 	rep, err := e.hello(ctx)
 
-	// a daemon that stopped listening may still be draining its drives
-	if _, held := drives.Probe(e.Dir, "daemon"); err != nil && held {
+	_, held := drives.Probe(e.Dir, "daemon")
+
+	switch {
+	case (err == nil && rep.Stopping) || (err != nil && held):
+		// a daemon draining its drives: let it finish, then start anew
 		if err := e.gone(ctx); err != nil {
 			return Reply{}, err
 		}
-	}
-
-	if err == nil {
-		if rep.Version == e.Version {
-			return rep, nil
+	case err == nil && e.keeps(rep):
+		if rep.Version != e.Version && !e.Follow && e.Kept != nil {
+			e.Kept(rep.Version)
 		}
 
+		return rep, nil
+	case err == nil:
 		if e.Draining != nil {
 			e.Draining(rep.Version)
 		}
 
-		if _, err := Call(ctx, e.Dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+		if _, err := Call(ctx, e.Dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
 			return Reply{}, fmt.Errorf("stopping daemon %s: %w", rep.Version, err)
 		}
 
@@ -71,13 +79,17 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 		return Reply{}, fmt.Errorf("daemon: %w", err)
 	}
 
+	if err := ownDir(e.Dir); err != nil {
+		return Reply{}, err
+	}
+
 	lease, err := e.startLease(ctx)
 	if err != nil {
 		return Reply{}, err
 	}
 	defer lease.Release()
 
-	if rep, err := e.hello(ctx); err == nil && rep.Version == e.Version {
+	if rep, err := e.hello(ctx); err == nil && !rep.Stopping && e.keeps(rep) {
 		return rep, nil
 	}
 
@@ -105,6 +117,12 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 			return Reply{}, err
 		}
 	}
+}
+
+// keeps reports a running daemon this client uses as it is: following,
+// the same version, or one this client is not newer than.
+func (e *Ensurer) keeps(rep Reply) bool {
+	return e.Follow || rep.Version == e.Version || !Newer(e.Version, rep.Version)
 }
 
 func (e *Ensurer) hello(ctx context.Context) (Reply, error) {

@@ -20,8 +20,7 @@ import (
 type Record struct {
 	Number      int        `yaml:"number"`
 	Created     time.Time  `yaml:"created"`
-	Dir         string     `yaml:"dir,omitempty"` // where it was typed, for a daemon's resume
-	Args        []string   `yaml:"args"`          // the command line, --answer, --every and --foreground dropped
+	Args        []string   `yaml:"args"` // the command line, --answer, --every and --foreground dropped
 	Tasks       []Task     `yaml:"tasks"`
 	Flow        string     `yaml:"flow,omitempty"`
 	Model       string     `yaml:"model,omitempty"` // the run-wide --model as typed

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"slices"
 	"strconv"
 	"strings"
@@ -149,6 +148,11 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now())
 	}
 
+	// the daemon may drain this drive before it opens anything: the signal
+	// waits in the channel until the loop exists to take it
+	drain, unwatch := watchDrain(a.fore)
+	defer unwatch()
+
 	if err := agents("").Available(); err != nil {
 		return err
 	}
@@ -195,14 +199,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("drive_finish is on, and finish merges through the host: %w", hostErr)
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
-	}
-
 	in := &driveInput{
 		main:     main,
-		dir:      cwd,
 		root:     t.sharedRoot(),
 		driver:   drv,
 		tracker:  t.tracker(),
@@ -247,17 +245,13 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 	in.sleep = in.wake
 
-	// the daemon drains a drive before an upgrade: it stops at its next tick
-	drain := make(chan os.Signal, 1)
-	signal.Notify(drain, drainSignal)
-
-	defer signal.Stop(drain)
-
-	go func() {
-		for range drain {
-			in.draining.Store(true)
-		}
-	}()
+	if drain != nil {
+		go func() {
+			for range drain {
+				in.draining.Store(true)
+			}
+		}()
+	}
 
 	return drive(ctx, cmd.Writer, in)
 }
@@ -503,7 +497,6 @@ type driveInput struct {
 	own    *drives.Lease            // the drive's own lease, held while it runs
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
 
-	dir      string      // where the drive was typed, kept in the record for a daemon's resume
 	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
 	runs     []*driveRun
 	out      io.Writer

@@ -36,7 +36,8 @@ func (*Server) Serve(context.Context) error { return errUnsupported }
 type Ensurer struct {
 	Dir, Version         string
 	Spawn                func(context.Context) error
-	Draining             func(old string)
+	Follow               bool
+	Draining, Kept       func(running string)
 	StartWait, DrainWait time.Duration
 }
 

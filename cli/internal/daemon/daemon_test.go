@@ -53,13 +53,13 @@ func serve(t *testing.T, s *Server) <-chan error {
 	}
 }
 
-func waitExit(t *testing.T, log string) int {
+func waitExit(t *testing.T, log string) Exit {
 	t.Helper()
 
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if code, ok := ReadExit(log); ok {
-			return code
+		if exit, ok := ReadExit(log); ok {
+			return exit
 		}
 
 		if time.Now().After(deadline) {
@@ -103,8 +103,8 @@ func TestServeRunsAndAttaches(t *testing.T) {
 		t.Errorf("another project's drive attached: %+v, %v", rep, err)
 	}
 
-	if code := waitExit(t, first.Log); code != 4 {
-		t.Errorf("exit = %d, want 4", code)
+	if exit := waitExit(t, first.Log); exit != (Exit{Code: 4, Drive: 3}) {
+		t.Errorf("exit = %+v, want 4 of drive 3", exit)
 	}
 
 	raw, _ := os.ReadFile(first.Log)
@@ -168,7 +168,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -176,8 +176,8 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if code := waitExit(t, rep.Log); code != ExitDrained {
-		t.Fatalf("drained drive exited %d", code)
+	if exit := waitExit(t, rep.Log); exit != (Exit{Code: ExitDrained, Drive: 5, Reason: ReasonUpgrade}) {
+		t.Fatalf("drained drive exited %+v", exit)
 	}
 
 	var (
@@ -230,7 +230,7 @@ func TestEnsureStartsOneDaemon(t *testing.T) {
 
 	for range 2 {
 		wg.Go(func() {
-			_, err := ensurer("v1").Ensure(ctx)
+			_, err := ensurer("0.1.0").Ensure(ctx)
 			errs <- err
 		})
 	}
@@ -251,7 +251,7 @@ func TestEnsureStartsOneDaemon(t *testing.T) {
 	// a newer client drains the old daemon and starts its own
 	var drained string
 
-	e := ensurer("v2")
+	e := ensurer("0.2.0")
 	e.Draining = func(old string) { drained = old }
 
 	rep, err := e.Ensure(ctx)
@@ -259,7 +259,7 @@ func TestEnsureStartsOneDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if rep.Version != "v2" || drained != "v1" || spawns.Load() != 2 {
+	if rep.Version != "0.2.0" || drained != "0.1.0" || spawns.Load() != 2 {
 		t.Errorf("replaced to %+v, drained %q, spawns %d", rep, drained, spawns.Load())
 	}
 }
@@ -281,5 +281,184 @@ func TestNumberWriterFindsTheDriveLine(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("no drive line found")
+	}
+}
+
+// A plain stop drains too, but hands nothing to a next daemon: the drive's
+// exit says it stopped, and the next daemon resumes nothing.
+func TestStopKeepsNoDrainedList(t *testing.T) {
+	dir := runDir(t)
+
+	s := &Server{Dir: dir, Version: "v1", Child: shell}
+	done := serve(t, s)
+
+	script := "trap 'exit 6' USR1; echo drive 5; while :; do sleep 0.05; done"
+
+	rep, err := Call(t.Context(), dir, Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/r"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	waitNumbered(t, dir, 5)
+
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	<-done
+
+	if exit := waitExit(t, rep.Log); exit.Reason != ReasonStopped || exit.Drive != 5 {
+		t.Errorf("stopped drive exited %+v", exit)
+	}
+
+	if _, err := os.Stat(drainedPath(dir)); !os.IsNotExist(err) {
+		t.Errorf("a plain stop left a drained list: %v", err)
+	}
+}
+
+// A drive that ignores the drain keeps the socket up, so a stop --now can
+// end it rather than waiting out DrainWait.
+func TestStopNowCutsADrainShort(t *testing.T) {
+	dir := runDir(t)
+
+	s := &Server{Dir: dir, Version: "v1", Child: shell, DrainWait: time.Hour}
+	done := serve(t, s)
+
+	if _, err := Call(
+		t.Context(),
+		dir,
+		Request{
+			Op:   OpRun,
+			Argv: []string{"trap '' USR1; echo drive 2; while :; do sleep 0.05; done"},
+			Dir:  "/",
+			Root: "/r",
+		},
+		0,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	waitNumbered(t, dir, 2)
+
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+	if err != nil || !st.Stopping {
+		t.Fatalf("a draining daemon's status = %+v, %v", st, err)
+	}
+
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stop --now did not end the drain")
+	}
+}
+
+// An older client, or one of another development build, uses the daemon
+// running rather than replacing it; following, any version is used.
+func TestEnsureReplacesOnlyForANewerRelease(t *testing.T) {
+	dir := runDir(t)
+
+	serve(t, &Server{Dir: dir, Version: "0.46.0", Child: shell})
+
+	spawned := false
+
+	for _, e := range []*Ensurer{
+		{Dir: dir, Version: "0.45.0"},
+		{Dir: dir, Version: "devel abc"},
+		{Dir: dir, Version: "0.40.0", Follow: true},
+	} {
+		var kept string
+
+		e.Kept = func(running string) { kept = running }
+		e.Spawn = func(context.Context) error { spawned = true; return nil }
+
+		rep, err := e.Ensure(t.Context())
+		if err != nil || rep.Version != "0.46.0" {
+			t.Errorf("%s: ensure = %+v, %v", e.Version, rep, err)
+		}
+
+		if want := map[bool]string{true: "", false: "0.46.0"}[e.Follow]; kept != want {
+			t.Errorf("%s: kept = %q, want %q", e.Version, kept, want)
+		}
+	}
+
+	if spawned {
+		t.Error("an older or unordered client started a daemon")
+	}
+}
+
+func TestNewer(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"0.46.0", "0.45.9", true},
+		{"v1.0.0", "0.99.0", true},
+		{"0.45.0", "0.46.0", false},
+		{"0.45.0", "0.45.0", false},
+		{"devel abc", "0.45.0", false},
+		{"0.45.0", "devel abc", false},
+	} {
+		if got := Newer(tc.a, tc.b); got != tc.want {
+			t.Errorf("Newer(%q, %q) = %v", tc.a, tc.b, got)
+		}
+	}
+}
+
+func TestPruneLogsKeepsRunningAndRecent(t *testing.T) {
+	dir := runDir(t)
+	logs := logsDir(dir)
+
+	if err := os.MkdirAll(logs, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	old, recent, running := logs+"/old.log", logs+"/recent.log", logs+"/running.log"
+	for _, p := range []string{old, recent, running} {
+		_ = os.WriteFile(p, nil, 0o600)
+	}
+
+	_ = writeExit(old, Exit{Code: 0, Drive: 1})
+	_ = writeExit(recent, Exit{Code: 0, Drive: 2})
+
+	past := time.Now().Add(-2 * logAge)
+	_ = os.Chtimes(old, past, past)
+	_ = os.Chtimes(running, past, past)
+	_ = os.WriteFile(logs+"/index", []byte("/r\t1\t"+old+"\n/r\t2\t"+recent+"\n"), 0o600)
+
+	pruneLogs(dir, time.Now())
+
+	for p, want := range map[string]bool{old: false, recent: true, running: true} {
+		if _, err := os.Stat(p); (err == nil) != want {
+			t.Errorf("%s kept = %v, want %v", p, err == nil, want)
+		}
+	}
+
+	if FindLog(dir, "/r", 1) != "" || FindLog(dir, "/r", 2) != recent {
+		t.Error("the index still names the pruned log, or lost the kept one")
+	}
+}
+
+func waitNumbered(t *testing.T, dir string, n int) {
+	t.Helper()
+
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		st, _ := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+		if len(st.Runs) == 1 && st.Runs[0].Drive == n {
+			return
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("the drive never named itself %d: %+v", n, st)
+		}
+
+		time.Sleep(10 * time.Millisecond)
 	}
 }

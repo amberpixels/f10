@@ -57,7 +57,9 @@ type Server struct {
 	drained  []drained
 	ln       net.Listener
 	ctx      context.Context //nolint:containedctx // the serve call's, for the drives it starts
-	stop     chan bool       // true for a drain
+	stop     chan stopMode
+	escalate chan struct{} // closed by a stop --now during a drain
+	upgrade  bool          // the drain is for a newer daemon, which resumes its drives
 	seq      int
 }
 
@@ -77,6 +79,10 @@ type drained struct {
 	Drive int      `json:"drive"`
 	Env   []string `json:"env"`
 }
+
+// stopMode is how a stop ends the drives: a drain lets each reach its next
+// tick, and an upgrade's drain hands them to the next daemon.
+type stopMode struct{ drain, upgrade bool }
 
 func logsDir(dir string) string { return filepath.Join(dir, "logs") }
 
@@ -110,6 +116,10 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	_ = os.Chmod(s.Dir, 0o700) //nolint:gosec // a directory needs its x bit; 0700 keeps it to this user
 
+	if err := ownDir(s.Dir); err != nil {
+		return err
+	}
+
 	own, err := drives.Acquire(s.Dir, "daemon", 0)
 	if held := (drives.HeldError{}); errors.As(err, &held) {
 		return ErrRunning
@@ -130,10 +140,11 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	_ = os.Chmod(sock, 0o600)
 
-	s.ln, s.stop, s.ctx = ln, make(chan bool, 1), ctx
+	s.ln, s.stop, s.escalate, s.ctx = ln, make(chan stopMode, 1), make(chan struct{}), ctx
 	s.started, s.last = time.Now(), time.Now()
 	s.Log.Printf("daemon %s started, pid %d", s.Version, os.Getpid())
 
+	pruneLogs(s.Dir, time.Now())
 	s.resumeDrained()
 
 	go s.accept()
@@ -141,14 +152,14 @@ func (s *Server) Serve(ctx context.Context) error {
 	tick := time.NewTicker(s.Tick)
 	defer tick.Stop()
 
-	drain := true
+	mode := stopMode{drain: true}
 
 loop:
 	for {
 		select {
 		case <-ctx.Done():
 			break loop
-		case drain = <-s.stop:
+		case mode = <-s.stop:
 			break loop
 		case <-tick.C:
 			if s.idle() {
@@ -159,10 +170,11 @@ loop:
 		}
 	}
 
+	// the socket stays up through the drain: status answers, and a stop
+	// --now cuts it short
+	s.shutdown(mode)
 	_ = ln.Close()
 	_ = os.Remove(sock)
-
-	s.shutdown(drain)
 	s.Log.Printf("daemon %s stopped", s.Version)
 
 	return nil
@@ -203,6 +215,10 @@ func (s *Server) handle(conn net.Conn) {
 	rep := s.reply(req)
 	rep.Version, rep.PID, rep.Started = s.Version, os.Getpid(), s.started
 
+	s.mu.Lock()
+	rep.Stopping = s.draining
+	s.mu.Unlock()
+
 	_ = conn.SetWriteDeadline(time.Now().Add(callTimeout))
 	_ = json.NewEncoder(conn).Encode(rep)
 }
@@ -217,13 +233,19 @@ func (s *Server) reply(req Request) Reply {
 		return Reply{Runs: s.list()}
 	case OpStop:
 		s.mu.Lock()
-		s.draining = true
-		s.mu.Unlock()
+		defer s.mu.Unlock()
 
-		select {
-		case s.stop <- req.Drain:
-		default:
+		if s.draining {
+			// a second stop can only cut a drain short
+			if !req.Drain {
+				s.stopNow()
+			}
+
+			return Reply{}
 		}
+
+		s.draining, s.upgrade = true, req.Upgrade
+		s.stop <- stopMode{drain: req.Drain, upgrade: req.Upgrade}
 
 		return Reply{}
 	}
@@ -329,18 +351,24 @@ func (s *Server) reap(c *child, f *os.File) {
 		code = 1
 	}
 
-	_ = os.WriteFile(ExitPath(c.Log), []byte(strconv.Itoa(code)+"\n"), 0o600)
-
 	s.mu.Lock()
 	s.runs = slices.DeleteFunc(s.runs, func(o *child) bool { return o == c })
 	s.last = time.Now()
 
-	if code == ExitDrained && c.Drive > 0 {
-		s.drained = append(s.drained, drained{Root: c.Root, Dir: c.Dir, Drive: c.Drive, Env: c.env})
+	exit := Exit{Code: code, Drive: c.Drive}
+	if code == ExitDrained {
+		exit.Reason = ReasonStopped
+
+		if s.upgrade && c.Drive > 0 {
+			exit.Reason = ReasonUpgrade
+			s.drained = append(s.drained, drained{Root: c.Root, Dir: c.Dir, Drive: c.Drive, Env: c.env})
+		}
 	}
 
 	n := c.Drive
 	s.mu.Unlock()
+
+	_ = writeExit(c.Log, exit)
 
 	s.Log.Printf("drive %d (pid %d) exited %d", n, c.PID, code)
 	close(c.done)
@@ -380,19 +408,20 @@ func FindLog(dir, root string, n int) string {
 // shutdown ends every drive: a drain asks each to stop at its next tick
 // (SIGUSR1) and keeps the ones that did for the next daemon; otherwise,
 // or past DrainWait, SIGTERM.
-func (s *Server) shutdown(drain bool) {
+func (s *Server) shutdown(mode stopMode) {
 	s.mu.Lock()
-	s.draining = true
+	s.draining, s.upgrade = true, mode.upgrade
 	runs := slices.Clone(s.runs)
+
+	if !mode.drain {
+		s.stopNow()
+	}
 	s.mu.Unlock()
 
-	sig := syscall.SIGTERM
-	if drain {
-		sig = syscall.SIGUSR1
-	}
-
-	for _, c := range runs {
-		_ = c.cmd.Process.Signal(sig)
+	if mode.drain {
+		for _, c := range runs {
+			_ = c.cmd.Process.Signal(syscall.SIGUSR1)
+		}
 	}
 
 	deadline := time.After(s.DrainWait)
@@ -400,7 +429,11 @@ func (s *Server) shutdown(drain bool) {
 	for _, c := range runs {
 		select {
 		case <-c.done:
+		case <-s.escalate:
+			_ = c.cmd.Process.Signal(syscall.SIGTERM)
+			<-c.done
 		case <-deadline:
+			s.Log.Printf("drive %d did not drain within %s: stopping it", c.Drive, s.DrainWait)
 			_ = c.cmd.Process.Signal(syscall.SIGTERM)
 			<-c.done
 		}
@@ -420,6 +453,19 @@ func (s *Server) shutdown(drain bool) {
 
 	if err != nil {
 		s.Log.Printf("keeping drained drives: %v", err)
+	}
+}
+
+// stopNow ends every drive at once; the caller holds mu.
+func (s *Server) stopNow() {
+	select {
+	case <-s.escalate:
+	default:
+		close(s.escalate)
+	}
+
+	for _, c := range s.runs {
+		_ = c.cmd.Process.Signal(syscall.SIGTERM)
 	}
 }
 

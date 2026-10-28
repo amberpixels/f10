@@ -4,5 +4,5 @@ package main
 
 import "os"
 
-// drainSignal never arrives here: there is no daemon to send it.
-var drainSignal = os.Interrupt
+// watchDrain catches nothing here: there is no daemon to drain a drive.
+func watchDrain(bool) (<-chan os.Signal, func()) { return nil, func() {} }

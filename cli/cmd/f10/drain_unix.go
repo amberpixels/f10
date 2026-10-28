@@ -2,7 +2,21 @@
 
 package main
 
-import "syscall"
+import (
+	"os"
+	"os/signal"
+	"syscall"
+)
 
-// drainSignal is what the daemon sends a drive to stop at its next tick.
-const drainSignal = syscall.SIGUSR1
+// watchDrain catches SIGUSR1, the daemon's request that a foreground drive
+// stop at its next tick; nil, and nothing caught, outside the foreground.
+func watchDrain(fore bool) (<-chan os.Signal, func()) {
+	if !fore {
+		return nil, func() {}
+	}
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGUSR1)
+
+	return ch, func() { signal.Stop(ch) }
+}

@@ -101,3 +101,32 @@ func readPrompt(path string) (Prompt, bool) {
 
 	return p, p.Root != "" && !p.At.IsZero()
 }
+
+// FileRoot is the checkout a per-session file in dir is about: a run file's
+// root, a prompt mark's, or for an open wait its session's; "" for any other
+// file, or a session with neither.
+func FileRoot(dir, name string) string {
+	path := filepath.Join(dir, name)
+
+	switch {
+	case strings.HasSuffix(name, promptExt):
+		p, _ := readPrompt(path)
+
+		return p.Root
+	case strings.HasSuffix(name, fileExt):
+		if r, err := Load(path); err == nil {
+			return r.Root
+		}
+	case strings.HasSuffix(name, ".wait"):
+		session := strings.TrimSuffix(name, ".wait")
+		if p, ok := readPrompt(filepath.Join(dir, session+promptExt)); ok {
+			return p.Root
+		}
+
+		if r, err := Load(filepath.Join(dir, session+fileExt)); err == nil {
+			return r.Root
+		}
+	}
+
+	return ""
+}

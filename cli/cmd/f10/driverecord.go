@@ -75,7 +75,6 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	if in.rec == nil {
 		in.rec = &drives.Record{
 			Created:     in.now(),
-			Dir:         in.dir,
 			Args:        recordArgs(in.argv),
 			Flow:        in.args.flow,
 			Model:       in.args.model,
@@ -94,11 +93,6 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		if err := drives.Create(in.root, in.rec); err != nil {
 			return err
 		}
-	}
-
-	if in.dir != "" && in.rec.Dir != in.dir {
-		in.rec.Dir = in.dir
-		in.save(func(r *drives.Record) { r.Dir = in.dir })
 	}
 
 	own, err := drives.Acquire(in.root, drives.DriveKey(in.rec.Number), in.rec.Number)

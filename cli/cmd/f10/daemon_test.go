@@ -103,12 +103,15 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 	t.Cleanup(func() { wakeStep = time.Second })
 
 	in := &driveInput{stateDir: t.TempDir()}
+	in.runs = []*driveRun{{opened: true, o: openedTask{path: "/code/repo.GH-1"}}}
 
-	go func() {
+	write := func(name, root string) {
 		time.Sleep(50 * time.Millisecond)
 
-		_ = os.WriteFile(filepath.Join(in.stateDir, "s.state"), []byte("v 1\n"), 0o600)
-	}()
+		_ = os.WriteFile(filepath.Join(in.stateDir, name), []byte("v 1\nroot "+root+"\n"), 0o600)
+	}
+
+	go write("s1.state", "/code/repo.GH-1")
 
 	start := time.Now()
 	if err := in.wake(t.Context(), 5*time.Second); err != nil {
@@ -119,13 +122,17 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 		t.Errorf("wake took %s with a write after 50ms", took)
 	}
 
+	// another session's run, and a file no session owns, wake nothing
+	go write("s2.state", "/code/elsewhere")
+	go write("hooks.log", "/code/repo.GH-1")
+
 	start = time.Now()
-	if err := in.wake(t.Context(), 100*time.Millisecond); err != nil {
+	if err := in.wake(t.Context(), 300*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
-	if took := time.Since(start); took < 90*time.Millisecond {
-		t.Errorf("wake returned after %s with nothing written", took)
+	if took := time.Since(start); took < 290*time.Millisecond {
+		t.Errorf("wake returned after %s with only other writes", took)
 	}
 }
 
@@ -166,22 +173,18 @@ func TestTailLog(t *testing.T) {
 		_, _ = f.WriteString("GH-1 judge: done\n")
 		_ = f.Close()
 
-		_ = os.WriteFile(daemon.ExitPath(path), []byte("4\n"), 0o600)
+		_ = os.WriteFile(daemon.ExitPath(path), []byte("6 7 upgrade\n"), 0o600)
 	}()
 
 	var out bytes.Buffer
 
-	code, err := tailLog(t.Context(), &out, path)
-	if err != nil || code != 4 {
-		t.Fatalf("tail = %d, %v", code, err)
+	exit, err := tailLog(t.Context(), &out, path)
+	if err != nil || exit != (daemon.Exit{Code: 6, Drive: 7, Reason: daemon.ReasonUpgrade}) {
+		t.Fatalf("tail = %+v, %v", exit, err)
 	}
 
 	if out.String() != "drive 7\nGH-1 judge: sent\nGH-1 judge: done\n" {
 		t.Errorf("tail copied %q", out.String())
-	}
-
-	if n := logDrive(path); n != 7 {
-		t.Errorf("logDrive = %d", n)
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -193,5 +196,16 @@ func TestTailLog(t *testing.T) {
 
 	if _, err := tailLog(ctx, &bytes.Buffer{}, path); err == nil {
 		t.Error("a cancelled tail of a running drive returned no error")
+	}
+}
+
+func TestDriveTitle(t *testing.T) {
+	for root, want := range map[string]string{
+		"/code/repo/.f10":     "repo: drive 3",
+		"/home/u/.f10/widget": "widget: drive 3",
+	} {
+		if got := driveTitle(daemon.Run{Root: root, Drive: 3}); got != want {
+			t.Errorf("driveTitle(%s) = %q, want %q", root, got, want)
+		}
 	}
 }
