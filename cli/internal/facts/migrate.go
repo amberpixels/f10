@@ -45,8 +45,8 @@ func isEmpty(d Declared) bool {
 		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
 }
 
-// A Migration is what `f10 init --migrate` makes of one prose-only
-// project.md: the file with a frontmatter block on top, and the prose each
+// A Migration is what `f10 init --migrate` makes of one project.md: the
+// file with its facts in a frontmatter block on top, and the prose each
 // moved fact came from, for the user to delete.
 type Migration struct {
 	Content    string
@@ -81,74 +81,26 @@ func renameTraces(data, block []byte) (*Migration, error) {
 // detection stay out, so the block says no more than the prose did. A file
 // that already has a block gets its old keys rewritten: pipelines,
 // planless, pipeline_by_area and drive_chain into flows, old-form entries
-// into the colon form, review_traces into traces.
+// into the colon form, review_traces into traces; and every prose fact the
+// block does not declare yet added to it.
 func Migrate(data []byte, path string) (*Migration, error) {
 	if block, body, ok := frontmatter.Split(data); ok {
-		m, err := migrateFlows(data, block, body, path)
-		if !errors.Is(err, ErrHasFrontmatter) {
-			return m, err
-		}
-
-		return renameTraces(data, block)
+		return migrateBlock(data, block, body, path)
 	}
 
 	secs, _ := parseFile(data, path, "main")
 	body := func(name string) string { return secs[name].body }
 	m := &Migration{}
 
-	var d Declared
-
-	moved := func(key, where string) {
-		m.Moved = append(m.Moved, key)
-		m.Superseded = append(m.Superseded, key+": "+where)
-	}
-
-	if w := proseWord(body("Visibility"), "public", "stealth"); w != "" {
-		d.Visibility = w
-		moved("visibility", "the Visibility section")
-	}
-
-	if w := proseWord(body("Storage"), "out-of-tree", "in-repo"); w != "" {
-		d.Storage = w
-		moved("storage", "the Storage section")
-	}
-
-	if decl := mdline.Bare(firstLayering(body("Layering"))); decl != "" {
-		d.Layering = decl
-		moved("layering", "the Layering line")
-	}
-
-	tracker := body("Tracker")
-	if kind := proseTrackerKind(strings.ToLower(tracker)); kind != "" {
-		d.Tracker.Kind = kindKey(kind)
-		moved("tracker.kind", "the tracker's name in the Tracker section")
-	}
-
-	if prefix := idPrefix(tracker); prefix != "" {
-		d.Tracker.ID = prefix + "-###"
-		moved("tracker.id", "the task id format in the Tracker section")
-	}
-
-	hosting := mdline.Unmark(body("Hosting & PR"))
-	if method := firstMatch(mergeMethodRe, hosting); method != "" {
-		d.MergeMethod = method
-		moved("merge_method", "`merge method:` in the Hosting & PR section")
-	}
-
-	if catchup := firstMatch(catchupRe, hosting); catchup != "" {
-		d.Catchup = catchup
-		moved("catchup", "`catchup:` in the Hosting & PR section")
-	}
-
-	r := proseReviewDecl(body("Review"))
-	if r != (ReviewDecl{}) {
-		d.Review = r
-		moved("review", "the Reviewer, Arrives as, Trigger, Done and Settled items in the Review section")
+	d, lifts := readProse(body)
+	for _, l := range lifts {
+		m.Moved = append(m.Moved, l.key)
+		m.Superseded = append(m.Superseded, l.key+": "+l.where)
 	}
 
 	pipes, planless := prosePipelines(body("Ship pipeline(s)"))
 	if chain := proseChain(body("Drive chain")); pipes != nil || len(chain) > 0 {
-		flows, finish := convertLegacy(pipes, planless, chain, r.Reviewer != "")
+		flows, finish := convertLegacy(pipes, planless, chain, d.Review.Reviewer != "")
 
 		d.Flows = flows
 		if finish {
@@ -176,6 +128,216 @@ func Migrate(data []byte, path string) (*Migration, error) {
 	m.Content = block + string(data)
 
 	return m, nil
+}
+
+// A lift is one fact read from prose: its frontmatter key, where the prose
+// says it, and the value the block takes.
+type lift struct {
+	key, where string
+	value      any
+}
+
+// readProse reads every prose fact but flows, which need the old pipeline
+// conversion and stay with the callers.
+func readProse(body func(string) string) (Declared, []lift) {
+	var (
+		d     Declared
+		lifts []lift
+	)
+
+	moved := func(key, where string, value any) {
+		lifts = append(lifts, lift{key: key, where: where, value: value})
+	}
+
+	if w := proseWord(body("Visibility"), "public", "stealth"); w != "" {
+		d.Visibility = w
+		moved("visibility", "the Visibility section", w)
+	}
+
+	if w := proseWord(body("Storage"), "out-of-tree", "in-repo"); w != "" {
+		d.Storage = w
+		moved("storage", "the Storage section", w)
+	}
+
+	if decl := mdline.Bare(firstLayering(body("Layering"))); decl != "" {
+		d.Layering = decl
+		moved("layering", "the Layering line", decl)
+	}
+
+	tracker := body("Tracker")
+	if kind := proseTrackerKind(strings.ToLower(tracker)); kind != "" {
+		d.Tracker.Kind = kindKey(kind)
+		moved("tracker.kind", "the tracker's name in the Tracker section", d.Tracker.Kind)
+	}
+
+	if prefix := idPrefix(tracker); prefix != "" {
+		d.Tracker.ID = prefix + "-###"
+		moved("tracker.id", "the task id format in the Tracker section", d.Tracker.ID)
+	}
+
+	hosting := mdline.Unmark(body("Hosting & PR"))
+	if method := firstMatch(mergeMethodRe, hosting); method != "" {
+		d.MergeMethod = method
+		moved("merge_method", "`merge method:` in the Hosting & PR section", method)
+	}
+
+	if catchup := firstMatch(catchupRe, hosting); catchup != "" {
+		d.Catchup = catchup
+		moved("catchup", "`catchup:` in the Hosting & PR section", catchup)
+	}
+
+	if r := proseReviewDecl(body("Review")); r != (ReviewDecl{}) {
+		d.Review = r
+		moved("review", "the Reviewer, Arrives as, Trigger, Done and Settled items in the Review section", r)
+	}
+
+	return d, lifts
+}
+
+// declares says whether a block already holds a lift's key. Review moves
+// whole: its items belong together.
+func declares(d Declared, key string) bool {
+	switch key {
+	case "visibility":
+		return d.Visibility != ""
+	case "storage":
+		return d.Storage != ""
+	case "layering":
+		return d.Layering != ""
+	case "tracker.kind":
+		return d.Tracker.Kind != ""
+	case "tracker.id":
+		return d.Tracker.ID != ""
+	case "merge_method":
+		return d.MergeMethod != ""
+	case "catchup":
+		return d.Catchup != ""
+	default: // review
+		return d.Review != (ReviewDecl{})
+	}
+}
+
+// migrateBlock runs the passes a file with a block needs: old flow keys,
+// else the review_traces rename, then the prose facts the block lacks.
+// Nothing for any of them is ErrHasFrontmatter.
+func migrateBlock(data, block, body []byte, path string) (*Migration, error) {
+	m, err := migrateFlows(data, block, body, path)
+	if errors.Is(err, ErrHasFrontmatter) {
+		m, err = renameTraces(data, block)
+	}
+
+	switch {
+	case errors.Is(err, ErrHasFrontmatter):
+		m = &Migration{Content: string(data)}
+	case err != nil:
+		return nil, err
+	}
+
+	lifted, err := liftProse([]byte(m.Content), path)
+
+	switch {
+	case errors.Is(err, ErrHasFrontmatter):
+		if len(m.Moved) == 0 {
+			return nil, ErrHasFrontmatter
+		}
+
+		return m, nil
+	case err != nil:
+		return nil, err
+	}
+
+	lifted.Moved = append(m.Moved, lifted.Moved...)
+	lifted.Superseded = append(m.Superseded, lifted.Superseded...)
+
+	return lifted, nil
+}
+
+// liftProse adds every prose fact the block does not declare to the end of
+// it, tracker keys inside its tracker mapping. A fact both declare is left
+// as it is: config already warns when they agree and errors when they do
+// not. The block is edited as a node, so key order and comments stay.
+func liftProse(data []byte, path string) (*Migration, error) {
+	block, body, _ := frontmatter.Split(data)
+
+	d, err := decodeDeclared(block)
+	if err != nil {
+		return nil, fmt.Errorf("reading the frontmatter: %w", err)
+	}
+
+	secs, _ := parseFile(body, path, "main")
+	_, lifts := readProse(func(name string) string { return secs[name].body })
+
+	lifts = slices.DeleteFunc(lifts, func(l lift) bool { return declares(d, l.key) })
+	if len(lifts) == 0 {
+		return nil, ErrHasFrontmatter
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(block, &doc); err != nil || len(doc.Content) == 0 ||
+		doc.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("reading the frontmatter: not a mapping")
+	}
+
+	root := doc.Content[0]
+	m := &Migration{}
+
+	for _, l := range lifts {
+		value := &yaml.Node{}
+		if err := value.Encode(l.value); err != nil {
+			return nil, fmt.Errorf("rendering %s: %w", l.key, err)
+		}
+
+		into, key := root, l.key
+		if sub, ok := strings.CutPrefix(l.key, "tracker."); ok {
+			into, key = mappingAt(root, "tracker"), sub
+		}
+
+		into.Content = append(into.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, value)
+		m.Moved = append(m.Moved, l.key)
+		m.Superseded = append(m.Superseded, l.key+": "+l.where)
+	}
+
+	var b bytes.Buffer
+
+	enc := yaml.NewEncoder(&b)
+	enc.SetIndent(2)
+
+	if err := enc.Encode(&doc); err != nil {
+		return nil, fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	rewritten, err := decodeDeclared(b.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("the rewritten frontmatter does not read back: %w", err)
+	}
+
+	if bad := rewritten.check(); len(bad) > 0 {
+		return nil, fmt.Errorf("the prose does not migrate cleanly: %s", strings.Join(bad, "; "))
+	}
+
+	start := bytes.Index(data, block)
+	m.Content = string(data[:start]) + b.String() + string(data[start+len(block):])
+
+	return m, nil
+}
+
+// mappingAt is the mapping under key in root, added at the end when root
+// has none.
+func mappingAt(root *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key && root.Content[i+1].Kind == yaml.MappingNode {
+			return root.Content[i+1]
+		}
+	}
+
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, m)
+
+	return m
 }
 
 // firstLayering is the value of a Layering section or line.

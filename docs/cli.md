@@ -33,7 +33,7 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 
 ```bash
 f10 init                 # register this checkout: write project.md from detection
-f10 init --migrate       # move the facts an older project.md declares in prose into its frontmatter, and old keys into flows
+f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), and old keys into flows
 f10 config [--json]      # the effective configuration, with the origin of every value
 f10 flow [--json]        # the declared flows, each with what selects it, and drive_finish
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows

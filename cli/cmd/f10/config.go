@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/projects"
 )
 
@@ -122,7 +123,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	renderHuman(cmd.Writer, v)
+	renderHuman(cmd.Writer, v, termWidth(cmd.Writer))
 
 	return nil
 }
@@ -131,42 +132,57 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 // "checkout root", plus the gap.
 const headerIndent = 16
 
+// pageMin and pageMax clamp the page width: rules and prose end at the
+// widest row, but never shorter than pageMin nor wider than pageMax.
+const (
+	pageMin = 60
+	pageMax = 100
+)
+
+// A headerLine is one row of the header block, kept until the page width
+// is measured.
+type headerLine struct {
+	label, value string
+	style        lipgloss.Style
+}
+
 // renderHuman prints the aligned two-column header and the field table. The
 // origin column is the feature; lipgloss colors degrade to plain text when
 // stdout is not a tty or NO_COLOR is set - termenv handles both. Values
 // longer than the terminal wrap inside their own column, never under the
-// labels.
-func renderHuman(w io.Writer, v *view) {
+// labels. limit is the terminal width, 0 when piped.
+func renderHuman(w io.Writer, v *view, limit int) {
 	faint := lipgloss.NewStyle().Faint(true)
 	plain := lipgloss.NewStyle()
-	limit := termWidth(w)
 
-	headerRow(w, "checkout root", v.CheckoutRoot, limit, plain)
-	headerRow(w, "storage root", v.StorageRoot, limit, plain)
+	header := []headerLine{
+		{"checkout root", v.CheckoutRoot, plain},
+		{"storage root", v.StorageRoot, plain},
+	}
 
 	if v.LegacyStorage {
 		note := "this worktree's own .f10: it holds task files from before storage moved to main's"
-		headerRow(w, "note", note, limit, faint)
+		header = append(header, headerLine{"note", note, faint})
 	}
 
-	headerRow(w, "instructions", v.Instructions, limit, plain)
+	header = append(header, headerLine{"instructions", v.Instructions, plain})
 
 	if v.NestedIgnored != "" {
 		note := "ignoring nested " + v.NestedIgnored + " - the layout is anchored to the checkout root"
-		headerRow(w, "note", note, limit, faint)
+		header = append(header, headerLine{"note", note, faint})
 	}
 
 	if v.Remote != "" {
-		headerRow(w, "remote", v.Remote, limit, plain)
+		header = append(header, headerLine{"remote", v.Remote, plain})
 	}
 
 	if v.IDPrefix != "" {
-		headerRow(w, "task ids", v.IDPrefix+"-<n>", limit, plain)
+		header = append(header, headerLine{"task ids", v.IDPrefix + "-<n>", plain})
 
 		// a derived prefix holds only until something declares one, and the
 		// plan files it has already named will not follow a change
 		if v.IDPrefixDerived {
-			headerRow(w, "", v.IDPrefixOrigin+" - `f10 init` declares it", limit, faint)
+			header = append(header, headerLine{"", v.IDPrefixOrigin + " - `f10 init` declares it", faint})
 		}
 	}
 
@@ -176,7 +192,7 @@ func renderHuman(w io.Writer, v *view) {
 		projectLookup = strings.Join(v.Roots, ", ")
 	}
 
-	headerRow(w, "projects", projectLookup, limit, faint)
+	header = append(header, headerLine{"projects", projectLookup, faint})
 
 	if len(v.Plans) > 0 {
 		// the freshest few, not the whole dir - it grows without bound.
@@ -194,31 +210,49 @@ func renderHuman(w io.Writer, v *view) {
 			list += ", ..."
 		}
 
-		headerRow(w, "plans", fmt.Sprintf("%d: %s", len(v.Plans), list), limit, plain)
+		header = append(header, headerLine{"plans", fmt.Sprintf("%d: %s", len(v.Plans), list), plain})
+	}
+
+	factTable := layoutFields(factFields(v.Facts), limit)
+	sections := layoutFields(v.Fields, limit)
+	unrecognized := layoutFields(v.Unrecognized, limit)
+
+	widest := max(factTable.width(), sections.width(), unrecognized.width())
+	for _, h := range header {
+		widest = max(widest, headerIndent+lipgloss.Width(h.value))
+	}
+
+	page := pageWidth(widest, limit)
+
+	for _, h := range header {
+		headerRow(w, h.label, h.value, limit, h.style)
 	}
 
 	fmt.Fprintln(w)
-	banner(w, "facts the binary acts on", limit)
-	renderFields(w, factFields(v.Facts), limit)
+	banner(w, "facts the binary acts on", page)
+	renderFields(w, factTable, page)
 
 	fmt.Fprintln(w)
-	banner(w, "project.md sections", limit)
-	renderFields(w, v.Fields, limit)
+	banner(w, "project.md sections", page)
+	renderFields(w, sections, page)
 
 	if len(v.Unrecognized) > 0 {
-		banner := "unrecognized sections (shown, never dropped)"
-
 		fmt.Fprintln(w)
-
-		if limit > 0 {
-			banner = "── " + banner + " " + rule(limit-len(banner)-4)
-		}
-
-		fmt.Fprintln(w, faint.Render(banner))
-		renderFields(w, v.Unrecognized, limit)
+		banner(w, "unrecognized sections (shown, never dropped)", page)
+		renderFields(w, unrecognized, page)
 	}
 
 	renderProblems(w, v.Problems)
+}
+
+// pageWidth is where rules end and prose wraps: the widest row, clamped to
+// pageMin..pageMax and never past the terminal. 0 (piped) stays 0.
+func pageWidth(widest, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+
+	return min(limit, max(pageMin, min(widest, pageMax)))
 }
 
 // banner prints a dimmed rule naming the block below it.
@@ -277,35 +311,43 @@ func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style
 
 // stanzaIndent and stanzaRightPad are a prose block's margins: a hair of
 // left inset under the header, and enough right inset that text never
-// touches the terminal's edge.
+// touches the page's edge.
 const (
 	stanzaIndent   = 1
 	stanzaRightPad = 2
 )
 
-// renderFields prints scalar values as aligned rows and prose values as
-// stanzas - a `name  origin` header with the value as an indented block
-// using the full width. One table cannot serve both: a three-column prefix
-// leaves a paragraph a ribbon of the terminal, and a paragraph gives a
-// scalar nothing back.
-func renderFields(w io.Writer, fields []facts.Field, limit int) {
+// An entry is one field ready to print: its display origin, its value, and
+// for a stanza whose body is only `**Label** - value` items, those pairs.
+type entry struct {
+	field  facts.Field
+	origin string
+	value  string
+	pairs  [][2]string
+}
+
+// A fieldLayout is a field list split by render form: every inline row
+// first, so scalars scan as one table, then the stanzas. The split is made
+// once, so the page width is measured on exactly what prints.
+type fieldLayout struct {
+	rows, blocks   []entry
+	nameW, originW int
+	blockNameW     int
+}
+
+// layoutFields puts scalar values that fit the terminal in rows and the
+// rest in stanzas - a `name  origin` header with the value as an indented
+// block. One table cannot serve both: a three-column prefix leaves a
+// paragraph a ribbon of the terminal, and a paragraph gives a scalar
+// nothing back.
+func layoutFields(fields []facts.Field, limit int) fieldLayout {
 	origins := displayOrigins(fields)
 
-	nameW, originW := 0, 0
+	var l fieldLayout
 	for i, f := range fields {
-		nameW = max(nameW, len(f.Name))
-		originW = max(originW, len(origins[i]))
+		l.nameW = max(l.nameW, len(f.Name))
+		l.originW = max(l.originW, len(origins[i]))
 	}
-
-	// partition by render form: every inline row first, so scalars scan as
-	// one table, then the prose blocks, a blank line between the groups
-	type entry struct {
-		field  facts.Field
-		origin string
-		value  string
-	}
-
-	var rows, blocks []entry
 
 	for i, f := range fields {
 		value := f.Value
@@ -314,30 +356,117 @@ func renderFields(w io.Writer, fields []facts.Field, limit int) {
 		}
 
 		e := entry{field: f, origin: origins[i], value: value}
-		if !strings.Contains(value, "\n") && (limit <= 0 || nameW+2+originW+2+len(value) <= limit) {
-			rows = append(rows, e)
-		} else {
-			blocks = append(blocks, e)
+		if !strings.Contains(value, "\n") && (limit <= 0 || l.nameW+2+l.originW+2+len(value) <= limit) {
+			l.rows = append(l.rows, e)
+
+			continue
+		}
+
+		e.pairs = keyValues(value)
+		l.blocks = append(l.blocks, e)
+		l.blockNameW = max(l.blockNameW, len(f.Name))
+	}
+
+	return l
+}
+
+// width is the widest row the layout prints: an inline row or a stanza's
+// key/value sub-row. Prose wraps to the page, so it does not count.
+func (l fieldLayout) width() int {
+	widest := 0
+	for _, e := range l.rows {
+		widest = max(widest, l.nameW+2+l.originW+2+lipgloss.Width(e.value))
+	}
+
+	for _, e := range l.blocks {
+		labelW := pairLabelWidth(e.pairs)
+		for _, p := range e.pairs {
+			widest = max(widest, stanzaIndent+labelW+2+lipgloss.Width(p[1]))
 		}
 	}
 
-	for _, e := range rows {
-		paddedOrigin := fmt.Sprintf("%-*s", originW, e.origin)
-		fmt.Fprintf(w, "%-*s  %s  %s\n", nameW, e.field.Name, styleOrigin(e.field.Origin).Render(paddedOrigin), e.value)
+	return widest
+}
+
+// renderFields prints a layout: the rows as one aligned table, then each
+// stanza under its header, a blank line between the groups.
+func renderFields(w io.Writer, l fieldLayout, page int) {
+	for _, e := range l.rows {
+		paddedOrigin := fmt.Sprintf("%-*s", l.originW, e.origin)
+		fmt.Fprintf(
+			w,
+			"%-*s  %s  %s\n",
+			l.nameW,
+			e.field.Name,
+			styleOrigin(e.field.Origin).Render(paddedOrigin),
+			e.value,
+		)
 	}
 
-	blockNameW := 0
-	for _, e := range blocks {
-		blockNameW = max(blockNameW, len(e.field.Name))
-	}
-
-	for i, e := range blocks {
-		if i > 0 || len(rows) > 0 {
+	for i, e := range l.blocks {
+		if i > 0 || len(l.rows) > 0 {
 			fmt.Fprintln(w)
 		}
 
-		stanzaHeader(w, e.field.Name, e.origin, styleOrigin(e.field.Origin), limit, blockNameW)
-		renderProse(w, e.value, limit)
+		stanzaHeader(w, e.field.Name, e.origin, styleOrigin(e.field.Origin), page, l.blockNameW)
+
+		if e.pairs != nil {
+			renderPairs(w, e.pairs, page)
+		} else {
+			renderProse(w, e.value, page)
+		}
+	}
+}
+
+// keyValues reads a body made only of `- **Label** - value` items as its
+// pairs, markup stripped; nil when any line is something else, so ordinary
+// prose keeps its own rendering.
+func keyValues(value string) [][2]string {
+	var pairs [][2]string
+
+	for line := range strings.SplitSeq(value, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		item, ok := mdline.Item(line)
+		if !ok || !strings.HasPrefix(item, "**") {
+			return nil
+		}
+
+		label, v, ok := mdline.Cut(item, " - ", ":")
+		if !ok {
+			return nil
+		}
+
+		pairs = append(pairs, [2]string{label, mdline.Unmark(v)})
+	}
+
+	return pairs
+}
+
+func pairLabelWidth(pairs [][2]string) int {
+	labelW := 0
+	for _, p := range pairs {
+		labelW = max(labelW, lipgloss.Width(p[0]))
+	}
+
+	return labelW
+}
+
+// renderPairs prints key/value items as aligned sub-rows, each value
+// wrapping inside its own column.
+func renderPairs(w io.Writer, pairs [][2]string, page int) {
+	labelW := pairLabelWidth(pairs)
+	col := stanzaIndent + labelW + 2
+
+	for _, p := range pairs {
+		segments := wrap(p[1], page-col-stanzaRightPad)
+		fmt.Fprintf(w, "%-*s%-*s  %s\n", stanzaIndent, "", labelW, p[0], segments[0])
+
+		for _, s := range segments[1:] {
+			fmt.Fprintf(w, "%-*s%s\n", col, "", s)
+		}
 	}
 }
 

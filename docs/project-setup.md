@@ -13,6 +13,7 @@ f10 init
 Writes `.f10/instructions/project.md` from what detection found and adds `.f10/` to `.git/info/exclude`.
 It never overwrites, so re-running is safe.
 A `project.md` written before the frontmatter existed is moved over with `f10 init --migrate`: it puts the facts the file declares in prose into a frontmatter block above it, deletes nothing, and names the prose you can now delete.
+On a file that already has a block, it adds only the prose facts the block does not declare yet, keeping the block's key order and comments.
 The `Project` one-liner is left for you: no probe knows what a project *is*.
 
 Run it before the first plan.
