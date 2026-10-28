@@ -1649,6 +1649,14 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
+			// a catchup clears a mark but restores the ship stop it noted, so
+			// git, not the note, says whether that stop still holds
+			if at := resumeAt(skill, run); at != "" && in.unsettled(ctx, r) == "" {
+				fmt.Fprintf(w, "%s %s: stopped for a catchup, the branch is settled: %s\n", id, skill, at)
+
+				return in.prompt(ctx, w, r, ws, skill, at)
+			}
+
 			in.end(ctx, w, r, in.verdict(r.task, skill, run))
 
 			return nil
@@ -1672,27 +1680,91 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 		return in.next(ctx, w, r)
 	default:
-		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-		if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
-			in.end(ctx, w, r, halted(id, skill, err.Error()))
-
-			return nil
-		}
-
-		if err := promptAgent(
-			ctx,
-			r.o.path,
-			id,
-			r.task.suffix,
-			skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, slices.Contains(r.chain, "finish")),
-		); err != nil {
-			return err
-		}
-
-		fmt.Fprintf(w, "%s %s: sent\n", id, skill)
+		return in.prompt(ctx, w, r, ws, skill, "")
 	}
 
 	return nil
+}
+
+// prompt sends the skill to an agent at rest, steering beside the task,
+// unless the agent idles on a run still running.
+func (in *driveInput) prompt(
+	ctx context.Context,
+	w io.Writer,
+	r *driveRun,
+	ws *agentctl.Workspace,
+	skill, steering string,
+) error {
+	id := r.task.ref.ID
+
+	fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
+	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
+		in.end(ctx, w, r, halted(id, skill, err.Error()))
+
+		return nil
+	}
+
+	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, slices.Contains(r.chain, "finish")), steering)
+	if err := promptAgent(ctx, r.o.path, id, r.task.suffix, p); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(w, "%s %s: sent\n", id, skill)
+
+	return nil
+}
+
+// resumeAt is the steering that resumes a ship the catchup guard stopped,
+// `resume at pr`, naming its place when the flow names the entry twice;
+// "" for any other stop. A failed catchup is no flow entry but keeps the
+// place of the entry it guarded, which is where ship resumes.
+func resumeAt(skill string, run *state.Run) string {
+	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
+		return ""
+	}
+
+	entry := run.Leaf
+
+	switch {
+	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
+		entry = run.Pipeline[run.At-1]
+	case !strings.Contains(run.Next, "/f10:catchup"):
+		return ""
+	}
+
+	step, _, _ := strings.Cut(entry, ":")
+	if !slices.Contains(guardedSteps, step) || !slices.Contains(run.Pipeline, entry) {
+		return ""
+	}
+
+	s := "resume at " + entry
+	twice := slices.Contains(run.Pipeline[slices.Index(run.Pipeline, entry)+1:], entry)
+	if run.At > 0 && twice {
+		s += fmt.Sprintf(" (entry %d)", run.At)
+	}
+
+	return s
+}
+
+// guardedSteps are the entries ship's catchup guard runs before.
+var guardedSteps = []string{"implement", "pr", "judge"}
+
+// steered puts steering after the skill's subject, before any chained
+// clause and the driven marker, so the skill reads it as its own.
+func steered(prompt, steering string) string {
+	if steering == "" {
+		return prompt
+	}
+
+	if i := strings.Index(prompt, " && "); i >= 0 {
+		return prompt[:i] + " " + steering + prompt[i:]
+	}
+
+	if base, ok := strings.CutSuffix(prompt, " "+drivenMarker); ok {
+		return base + " " + steering + " " + drivenMarker
+	}
+
+	return prompt + " " + steering
 }
 
 // phaseDone reports a run past skill: plan and ship own a phase, which

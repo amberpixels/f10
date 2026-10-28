@@ -31,6 +31,8 @@ Deploy has its own confirmation (the **deploy** step).
   Say in one line which task you took and where from, then run it as a **task id**, forward mode included, so a saved plan is reused.
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
+  `resume at <entry>` (sent by `f10 drive` once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.
+  The badge walks to that place: after `pipeline`, one call runs `set ship running` on each entry before it, in order, then on the entry itself.
 
 **Run**
 1. Run `f10-load-project.sh` first, on every call of this skill, naming the steps the input needs: `capture fetch plan` for a description, `fetch plan` for a task id, none for a plan file.
@@ -76,6 +78,7 @@ Catchup is never a flow entry.
 
 The guard runs under the entry it guards, in that entry's load (`catchup pr`) and badge.
 A failure is `set ship failed <entry>`, or `partial` once the run left something durable, the guard's own commit or an open PR (`conventions/failure.md` rule 7), its `state` row naming that commit and its `note` naming catchup and `/f10:catchup`.
+A driven run's `next` is `run /f10:catchup --driven in the worktree, then rerun the drive`: the rerun prompts ship again at this entry.
 
 Run the flow's entries **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
