@@ -24,6 +24,9 @@ const (
 	TaskFinished   = "task_finished"
 	TaskHalted     = "task_halted" // drive's, not a hook's: a task it stopped
 	SessionStopped = "session_stopped"
+	WaitStarted    = "wait_started"
+	WaitEnded      = "wait_ended"
+	TaskSized      = "task_sized" // finish's: the branch's diffstat before it lands
 
 	PlanSaved         = "plan_saved"
 	PlanSuperseded    = "plan_superseded"
@@ -190,6 +193,10 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 		}
 
 		return one(Pushed, Observed, "")
+	case *observe.WaitStarted:
+		return one(WaitStarted, Observed, "")
+	case *observe.WaitEnded:
+		return one(WaitEnded, Observed, "")
 	case *observe.PlanWritten:
 		return one(PlanSaved, Artifact, o.Task)
 	case *observe.PlanArchived:

@@ -278,6 +278,11 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		var sha string
 
+		// measured before landing, recorded once it landed; a branch with
+		// nothing to measure, as a rerun of a local land finds it, records none
+		size, sized := measureBranch(ctx, in.main, name, def, local)
+		sized = sized && size.files > 0
+
 		if local {
 			if sha, notes, err = landLocal(ctx, in, name, def); err != nil {
 				return err
@@ -304,6 +309,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			}
 
 			sha = p.sha()
+		}
+
+		if sized {
+			recordSize(ctx, in.main, name, in.task.ID, size)
 		}
 
 		released, err := releaseDependents(ctx, in.main, name, def)

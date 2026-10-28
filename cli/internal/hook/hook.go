@@ -1,7 +1,9 @@
 // Package hook is f10's one entry point for Claude Code hook events: a skill
 // starting seeds the run's badge, a Bash call or a file write becomes typed
 // observations, Stop backs up the most-dropped badge call, and SessionStart
-// keeps the status line wired and the state directory small.
+// keeps the status line wired and the state directory small. Across them,
+// a run's waits on the user (a turn, a question, a permission dialog) are
+// recorded as they open and end.
 //
 // Nothing here fails a run: a payload it cannot read, a state file it cannot
 // write, an observer that errors - each is dropped, and the hook exits 0.
@@ -31,7 +33,7 @@ type Payload struct {
 	Source       string          `json:"source"`       // SessionStart: startup, resume, clear, compact
 	CommandName  string          `json:"command_name"` // UserPromptExpansion
 	CommandArgs  string          `json:"command_args"`
-	ToolName     string          `json:"tool_name"` // PreToolUse, PostToolUse
+	ToolName     string          `json:"tool_name"` // PreToolUse, PostToolUse, PermissionRequest
 	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
 }
@@ -79,6 +81,8 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 	}
 
 	sid := cmp.Or(p.Session, state.Session())
+
+	notify(ctx, env, sid, p.Cwd, waits(env, sid, p)...)
 
 	switch p.Event {
 	case "UserPromptExpansion":

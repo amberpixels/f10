@@ -1727,3 +1727,46 @@ func TestFinishArchivesALegacyWorktreesPlan(t *testing.T) {
 		}
 	}
 }
+
+// Finish records the branch's size against the base it forked from,
+// lockfiles left out and the markdown share kept; a stacked branch measures
+// against its base branch.
+func TestFinishRecordsTheBranchSize(t *testing.T) {
+	const numstat = "10\t2\tcli/stats.go\n5\t1\tdocs/cli.md\n40\t0\tgo.sum\n-\t-\tlogo.png"
+
+	for _, tc := range []struct {
+		name, after, base string
+	}{
+		{name: "against the default branch", base: "origin/main"},
+		{name: "against its base branch", after: "GH-0", base: "GH-0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.openPR()
+			fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, tc.after)
+			fx.f.script("git diff --numstat --no-renames "+tc.base+"...refs/heads/GH-1", numstat)
+
+			var got []branchSize
+
+			prev := recordSize
+			recordSize = func(_ context.Context, _, branch, task string, s branchSize) {
+				if branch != "GH-1" || task != "GH-1" {
+					t.Errorf("recorded for %s on %s", task, branch)
+				}
+
+				got = append(got, s)
+			}
+
+			t.Cleanup(func() { recordSize = prev })
+
+			if _, err := fx.run(t); err != nil {
+				t.Fatal(err)
+			}
+
+			want := branchSize{lines: 18, md: 6, files: 3, base: tc.base}
+			if len(got) != 1 || got[0] != want {
+				t.Errorf("sizes %+v, want %+v", got, want)
+			}
+		})
+	}
+}

@@ -50,7 +50,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 	_ = json.Unmarshal(raw, &event)
 
 	recorder := &ledger.Observer{StateDir: state.Dir(), Busy: ledger.BusyAsync, TaskID: hookTaskID}
-	if event.Name == "UserPromptExpansion" || event.Name == "PreToolUse" {
+	if event.Name == "UserPromptExpansion" || event.Name == "PreToolUse" || event.Name == "PermissionRequest" {
 		recorder.Busy, recorder.NoReplay = ledger.BusySync, true
 	}
 	defer recorder.Close()

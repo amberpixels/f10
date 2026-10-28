@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/timing"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
@@ -111,12 +112,11 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 				continue
 			}
 
-			args, _ := e.Payload.Val["args"].([]any)
-			if len(args) < 3 || args[0] != "ship" || args[1] != "running" {
+			phase, status, step := timing.Claim(e)
+			if phase != "ship" || status != "running" {
 				continue
 			}
 
-			step, _ := args[2].(string)
 			if step != "" && (len(steps) == 0 || steps[len(steps)-1] != step) {
 				steps = append(steps, step)
 			}

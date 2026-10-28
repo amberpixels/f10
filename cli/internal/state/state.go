@@ -107,6 +107,12 @@ func StartedPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".started")
 }
 
+// WaitPath is the wait a session has open, beside its state file: what the
+// run waits on and since when, until the hook that ends it.
+func WaitPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".wait")
+}
+
 // Load reads one state file. A missing file is os.ErrNotExist, unwrapped
 // enough for errors.Is.
 func Load(path string) (*Run, error) {
