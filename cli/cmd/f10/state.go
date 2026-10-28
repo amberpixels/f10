@@ -156,7 +156,7 @@ func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, 
 	cwd, _ := os.Getwd()
 	place := ledger.Where(ctx, cwd)
 
-	ledger.Record(ctx, ledger.BusyAsync, ledger.Event{
+	ledger.Record(ledger.Event{
 		At:           now,
 		Project:      place.Project,
 		ProjectLocal: place.ProjectLocal,

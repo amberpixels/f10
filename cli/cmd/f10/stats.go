@@ -48,6 +48,8 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("stats: %w", err)
 	}
 
+	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
+
 	l, err := ledger.OpenRead(ctx, ledger.Path())
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil // nothing recorded yet

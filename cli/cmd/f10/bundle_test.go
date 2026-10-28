@@ -159,12 +159,12 @@ func TestLinkedBranchesFindsAnyMember(t *testing.T) {
 	f.script(linkedKeys, "branch.GH-1+GH-2/x."+cfgTaskID+" GH-1\nbranch.GH-1+GH-2/x."+cfgRiders+" GH-2 GH-3")
 
 	for _, id := range []string{"GH-1", "GH-3", "gh-2"} {
-		if got := linkedBranches(t.Context(), "/code/repo", id); strings.Join(got, ",") != "GH-1+GH-2/x" {
+		if got, _ := linkedBranches(t.Context(), "/code/repo", id); strings.Join(got, ",") != "GH-1+GH-2/x" {
 			t.Errorf("linkedBranches(%s) = %v, want [GH-1+GH-2/x]", id, got)
 		}
 	}
 
-	if got := linkedBranches(t.Context(), "/code/repo", "GH-4"); got != nil {
+	if got, _ := linkedBranches(t.Context(), "/code/repo", "GH-4"); got != nil {
 		t.Errorf("linkedBranches(GH-4) = %v, want none", got)
 	}
 }

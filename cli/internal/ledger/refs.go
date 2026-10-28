@@ -120,8 +120,9 @@ func RememberRefs(ctx context.Context, project string, refs ...TaskRef) {
 	_ = l.Remember(ctx, project, refs...)
 }
 
-// LookupRefs reads project's rows for ids without writing anything. A
-// missing database, or one no run has migrated to hold refs yet, knows none.
+// LookupRefs reads project's rows for ids without writing anything: refs
+// are written directly, never spooled, so no replay is needed. A missing
+// database, or one no run has migrated to hold refs yet, knows none.
 func LookupRefs(ctx context.Context, project string, ids []string) map[string]TaskRef {
 	l, err := OpenRead(ctx, Path())
 	if err != nil {

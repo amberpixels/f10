@@ -1,0 +1,20 @@
+#!/bin/sh
+# A driver hung on its tracker. read is the driver itself hanging; search
+# hangs too, after leaving a background child (a curl, say) on its stdout;
+# url answers at once but leaves that child behind.
+case "$1" in
+  read) exec sleep 10 ;;
+  search)
+    sleep 10 &
+    sleep 10
+    ;;
+  url)
+    sleep 10 &
+    echo "https://example.test/$2"
+    ;;
+  create)
+    cat >/dev/null
+    exec sleep 10
+    ;;
+  *) exit 3 ;;
+esac

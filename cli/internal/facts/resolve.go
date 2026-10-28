@@ -372,6 +372,16 @@ func (e *Effective) resolveHosting(
 		Fact{Key: "stale_after", Value: "off", Origin: OriginDefault})
 	e.StaleAfter = fm.StaleAfter
 
+	e.settle("driver_timeout", fmSource("driver_timeout", fm.DriverTimeout), source{},
+		Fact{Key: "driver_timeout", Value: driver.DefaultTimeout.String(), Origin: OriginDefault})
+
+	// a bad value is already a problem that stops the command; the default
+	// stands in until then
+	e.DriverTimeout = driver.DefaultTimeout
+	if d, err := ParseDriverTimeout(fm.DriverTimeout); err == nil {
+		e.DriverTimeout = d
+	}
+
 	if len(fm.DriveEnv) > 0 {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "drive_env",

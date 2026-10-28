@@ -225,7 +225,12 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 	// one config read for every branch's link and recorded riders
 	linked, riders := map[string]string{}, map[string][]string{}
 
-	for _, e := range gitx.ConfigEntries(ctx, in.main, cfgTaskKeys) {
+	entries, err := gitx.ConfigEntries(ctx, in.main, cfgTaskKeys)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, e := range entries {
 		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
 			linked[strings.TrimPrefix(b, "branch.")] = e.Value
 		} else if b, ok := strings.CutSuffix(e.Key, "."+cfgRiders); ok {
@@ -384,7 +389,12 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 	}
 
 	if p.Status != forge.Merged {
-		if deps := dependentsOf(ctx, j.in.main, b.name); len(deps) > 0 {
+		deps, err := dependentsOf(ctx, j.in.main, b.name)
+		if err != nil {
+			return "reading the branches started --after it failed: " + err.Error()
+		}
+
+		if len(deps) > 0 {
 			return strings.Join(deps, ", ") + " started --after it, and " + p.URL + " closed without a merge"
 		}
 	}
@@ -396,10 +406,19 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 // as never pushed and its changes are already in the default branch. Its
 // work ended with its last commit.
 func (j *sweeper) sweepUnpushed(ctx context.Context, b staleBranch) (time.Time, bool) {
-	switch {
-	case b.localSHA == "" || b.originSHA != "":
+	if b.localSHA == "" || b.originSHA != "" {
 		return time.Time{}, false
-	case gitx.Out(ctx, j.in.main, "config", "--get", "branch."+b.name+".merge") != "":
+	}
+
+	// an upstream git cannot read keeps the branch for this pass
+	upstream, err := gitx.Config(ctx, j.in.main, "branch."+b.name+".merge")
+
+	switch {
+	case err != nil:
+		j.say("%s kept: reading its upstream failed: %v", b.name, err)
+
+		return time.Time{}, false
+	case upstream != "":
 		return time.Time{}, false
 	case !alreadyLanded(ctx, j.in.main, "refs/heads/"+j.def, "refs/heads/"+b.name):
 		return time.Time{}, false
@@ -592,14 +611,19 @@ func startShape(name, id string) bool {
 }
 
 // dependentsOf are the local branches started --after branch.
-func dependentsOf(ctx context.Context, dir, branch string) []string {
+func dependentsOf(ctx context.Context, dir, branch string) ([]string, error) {
+	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
+	if err != nil {
+		return nil, err
+	}
+
 	var deps []string
 
-	for _, e := range gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`) {
+	for _, e := range entries {
 		if e.Value == branch {
 			deps = append(deps, strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgAfterBranch))
 		}
 	}
 
-	return deps
+	return deps, nil
 }

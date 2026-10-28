@@ -16,11 +16,37 @@ import (
 
 const spoolName = "ledger.spool"
 
+// gatedWait is how long a gated row with no run start in the database is
+// kept for a later replay before it counts as outside any run.
+const gatedWait = 10 * time.Minute
+
 // staleClaim is how old a claimed spool must be before another opener takes
 // it over: its replayer died mid-way.
 const staleClaim = time.Minute
 
 func spoolPath(dbPath string) string { return filepath.Join(filepath.Dir(dbPath), spoolName) }
+
+// pending reports a spool or a claim beside the database: anything a
+// replay would insert.
+func pending(dbPath string) bool {
+	main := spoolPath(dbPath)
+	if _, err := os.Stat(main); err == nil {
+		return true
+	}
+
+	claims, _ := filepath.Glob(main + ".*")
+
+	return len(claims) > 0
+}
+
+// spooled is a spool line. Gated marks a row kept only for a session the
+// database knows started a run: replay checks what the hook could not
+// without opening it.
+type spooled struct {
+	Event
+
+	Gated bool `json:"gated,omitempty"`
+}
 
 // fill mints what an event needs before it is stored or spooled, so a
 // replayed event keeps its id and a replay retried never duplicates a row.
@@ -49,13 +75,15 @@ func fill(dbPath string, events []Event) {
 	}
 }
 
-// spool appends events as JSON lines in one write, so parallel spoolers'
-// lines never interleave.
-func spool(dbPath string, events []Event) {
+// spool appends events as JSON lines in one O_APPEND write, so parallel
+// spoolers' lines never interleave.
+func spool(dbPath string, events []Event) { spoolAs(dbPath, events, false) }
+
+func spoolAs(dbPath string, events []Event, gated bool) {
 	var buf bytes.Buffer
 
 	for _, e := range events {
-		line, err := json.Marshal(e)
+		line, err := json.Marshal(spooled{Event: e, Gated: gated})
 		if err != nil {
 			continue
 		}
@@ -99,7 +127,10 @@ func appendFile(path string, data []byte) error {
 // once stale. What fails to insert goes back to the spool.
 func (l *Ledger) replay(ctx context.Context) {
 	main := spoolPath(l.path)
-	claims := []string{main}
+
+	// stale claims first: their rows predate the main spool's, and a gated
+	// row needs its run's start replayed before it
+	var claims []string
 
 	if stale, err := filepath.Glob(main + ".*"); err == nil {
 		for _, s := range stale {
@@ -108,6 +139,9 @@ func (l *Ledger) replay(ctx context.Context) {
 			}
 		}
 	}
+
+	claims = append(claims, main)
+	runs := map[string]bool{}
 
 	for i, src := range claims {
 		// one name per source, so a claim kept after a failed replay is never
@@ -123,17 +157,23 @@ func (l *Ledger) replay(ctx context.Context) {
 			continue // nothing there, or another opener took it
 		}
 
-		l.replayFile(ctx, claimed)
+		l.replayFile(ctx, claimed, runs)
 	}
 }
 
-func (l *Ledger) replayFile(ctx context.Context, claimed string) {
+// replayFile inserts a claimed file's rows; runs caches, per session,
+// whether a run started, for the gated rows.
+func (l *Ledger) replayFile(ctx context.Context, claimed string, runs map[string]bool) {
 	f, err := os.Open(claimed)
 	if err != nil {
 		return
 	}
 
-	var left bytes.Buffer
+	var (
+		left bytes.Buffer
+		held []spooled
+		raw  []string
+	)
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -144,20 +184,67 @@ func (l *Ledger) replayFile(ctx context.Context, claimed string) {
 			continue
 		}
 
-		var e Event
+		var e spooled
 		if err := json.Unmarshal([]byte(line), &e); err != nil || e.ID == "" {
 			continue // a torn line carries nothing recoverable
 		}
 
-		if left.Len() > 0 || l.insert(ctx, e) != nil {
+		// a commit or a PR outside any f10 run is dropped, but only once it is
+		// old: its run's start may sit behind it in leftovers or in another
+		// process's live claim
+		if left.Len() == 0 && e.Gated && !l.runStarted(ctx, e.Session, runs) {
+			held, raw = append(held, e), append(raw, line)
+
+			continue
+		}
+
+		if left.Len() > 0 || l.insert(ctx, e.Event) != nil {
 			left.WriteString(line)
 			left.WriteByte('\n')
+
+			continue
+		}
+
+		if e.Kind == RunStarted {
+			runs[e.Session] = true
 		}
 	}
 
 	_ = f.Close()
 
+	// a start later in the same file lets the rows held above it in
+	for i, e := range held {
+		switch {
+		case runs[e.Session] && left.Len() == 0 && l.insert(ctx, e.Event) == nil:
+		case runs[e.Session] || time.Since(e.At) < gatedWait:
+			left.WriteString(raw[i])
+			left.WriteByte('\n')
+		}
+	}
+
 	if appendFile(spoolPath(l.path), left.Bytes()) == nil {
 		_ = os.Remove(claimed)
 	}
+}
+
+// runStarted reports whether the database holds a run start for session.
+// A failed count keeps the row: a spooled event can be ignored later, a
+// dropped one cannot be recovered.
+func (l *Ledger) runStarted(ctx context.Context, session string, runs map[string]bool) bool {
+	if session == "" {
+		return false
+	}
+
+	if ok, seen := runs[session]; seen {
+		return ok
+	}
+
+	n, err := l.Count(ctx, Filter{Session: session, Kind: RunStarted})
+	if err != nil {
+		return true
+	}
+
+	runs[session] = n > 0
+
+	return n > 0
 }

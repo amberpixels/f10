@@ -464,7 +464,7 @@ func commitFacts(
 
 		// a merge made on the default branch merges into it; one not yet
 		// pushed would otherwise read as merging origin's tip in
-		if len(c.Parents) < 2 || c.Branch == def && (defRef == "" || !gitx.IsAncestor(ctx, dir, c.SHA, defRef)) {
+		if len(c.Parents) < 2 || c.Branch == def && (defRef == "" || !onDefault(ctx, dir, c.SHA, defRef)) {
 			continue
 		}
 
@@ -839,4 +839,11 @@ func dayList(days []string) string {
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// onDefault is display only: a commit git cannot place counts as not on it.
+func onDefault(ctx context.Context, dir, sha, defRef string) bool {
+	ok, _ := gitx.IsAncestor(ctx, dir, sha, defRef)
+
+	return ok
 }

@@ -4,11 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/hook"
+	"github.com/amberpixels/f10/cli/internal/observe"
 )
 
 func tempPath(t *testing.T) string {
@@ -119,7 +125,7 @@ func TestParallelWritersLoseNothing(t *testing.T) {
 	for w := range writers {
 		wg.Go(func() {
 			for i := range each {
-				Record(context.Background(), BusyAsync, Event{
+				Record(Event{
 					Session: fmt.Sprintf("w%d", w), Kind: Committed, Source: Observed,
 					Payload: col(Payload{"i": i}),
 				})
@@ -150,8 +156,7 @@ func TestUnwritableDatabaseSpoolsAndTheNextOpenReplays(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	Record(context.Background(), BusyAsync,
-		Event{Session: "s1", Kind: RunStarted, Source: Observed},
+	Record(Event{Session: "s1", Kind: RunStarted, Source: Observed},
 		Event{Session: "s1", Kind: StateSet, Source: Claimed})
 
 	raw, err := os.ReadFile(spoolPath(path))
@@ -364,5 +369,238 @@ func TestLookupRefsKnowsNoneWithoutTheTable(t *testing.T) {
 
 	if got := LookupRefs(ctx, "p", []string{"FT-1"}); len(got) != 0 {
 		t.Errorf("missing table: %v", got)
+	}
+}
+
+func userVersion(t *testing.T, l *Ledger) int {
+	t.Helper()
+
+	var v int
+	if err := l.db.QueryRowContext(context.Background(), "PRAGMA user_version").Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+
+	return v
+}
+
+func tableExists(t *testing.T, l *Ledger, name string) bool {
+	t.Helper()
+
+	var n int
+
+	err := l.db.QueryRowContext(context.Background(),
+		"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", name).Scan(&n)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return n > 0
+}
+
+func migrationCount(t *testing.T) int {
+	t.Helper()
+
+	files, err := fs.Glob(migrations, "migrations/*.sql")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("migrations: %v", err)
+	}
+
+	return len(files)
+}
+
+// A fresh open migrates and stamps user_version; an open of a stamped
+// database skips goose, so its version table is never recreated.
+func TestMigrateRunsOnlyWhenTheSchemaMoved(t *testing.T) {
+	path := tempPath(t)
+	ctx := context.Background()
+
+	l := openT(t, path)
+	if v := userVersion(t, l); v != migrationCount(t) {
+		t.Fatalf("user_version %d after a fresh open", v)
+	}
+
+	if _, err := l.db.ExecContext(ctx, "DROP TABLE goose_db_version"); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = l.Close()
+
+	l = openT(t, path)
+	if tableExists(t, l, "goose_db_version") {
+		t.Error("a current database ran goose again")
+	}
+
+	// a database stamped below the count migrates, here from scratch
+	for _, stmt := range []string{"DROP TABLE events", "DROP TABLE task_refs", "PRAGMA user_version = 1"} {
+		if _, err := l.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_ = l.Close()
+
+	l = openT(t, path)
+	if !tableExists(t, l, "events") || !tableExists(t, l, "task_refs") || userVersion(t, l) != migrationCount(t) {
+		t.Error("a lagging database did not migrate")
+	}
+}
+
+// A database from before the stamp (version 0) migrates once and is stamped.
+func TestMigrateStampsAnUnversionedDatabase(t *testing.T) {
+	path := tempPath(t)
+
+	l := openT(t, path)
+	if _, err := l.db.ExecContext(context.Background(), "PRAGMA user_version = 0"); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = l.Close()
+
+	if v := userVersion(t, openT(t, path)); v != migrationCount(t) {
+		t.Errorf("user_version %d", v)
+	}
+}
+
+func observeT(t *testing.T, ob *Observer, o observe.Observation, session string) {
+	t.Helper()
+
+	observe.Stamp(o, session, t.TempDir(), time.Now())
+
+	if err := ob.Observe(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A hook's rows go to the spool without opening the database; Sync moves
+// them in once, and a commit outside any run is dropped there.
+func TestObservedRowsSpoolAndSyncMovesThemIn(t *testing.T) {
+	path := tempPath(t)
+	ob := &Observer{StateDir: t.TempDir(), Busy: BusyAsync}
+	defer ob.Close()
+
+	observeT(t, ob, &observe.SkillStarted{Skill: "ship"}, "s1")
+	observeT(t, ob, &observe.Committed{SHA: "abc1234", Subject: "x"}, "s1")
+	observeT(t, ob, &observe.Committed{SHA: "def5678", Subject: "y"}, "s2") // no run in s2
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("an observation opened the database: %v", err)
+	}
+
+	if raw, _ := os.ReadFile(spoolPath(path)); strings.Count(string(raw), "\n") != 3 {
+		t.Fatalf("spool:\n%s", raw)
+	}
+
+	for range 2 {
+		if err := Sync(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := list(t, path, Filter{})
+	if len(got) != 2 || got[0].Kind != RunStarted || got[1].Kind != Committed || got[1].Session != "s1" {
+		t.Errorf("synced %+v", got)
+	}
+
+	// s2's commit waits in the spool for a run start that may still come
+	if raw, _ := os.ReadFile(
+		spoolPath(path),
+	); !strings.Contains(string(raw), "def5678") ||
+		strings.Count(string(raw), "\n") != 1 {
+		t.Errorf("spool after sync:\n%s", raw)
+	}
+}
+
+// A gated row replayed before its run's start, as leftovers appended behind
+// newer rows put it, is kept and lands once the start does; one with no
+// start past the wait is dropped.
+func TestGatedRowWaitsForItsRunStart(t *testing.T) {
+	path := tempPath(t)
+	commit := Event{Kind: Committed, Session: "s1", Source: Observed}
+	stale := Event{Kind: Committed, Session: "s9", Source: Observed, At: time.Now().Add(-2 * gatedWait)}
+
+	events := []Event{commit, stale}
+	fill(path, events)
+	spoolAs(path, events, true)
+
+	if err := Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := list(t, path, Filter{}); len(got) != 0 {
+		t.Fatalf("a commit landed before its run start: %+v", got)
+	}
+
+	Record(Event{Kind: RunStarted, Session: "s1", Source: Observed})
+
+	if err := Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := list(t, path, Filter{})
+	if len(got) != 2 || got[0].Kind != RunStarted && got[1].Kind != RunStarted {
+		t.Errorf("synced %+v, want the run start and its commit", got)
+	}
+
+	if pending(path) {
+		t.Error("the stale commit outside any run was kept")
+	}
+}
+
+// The per-tool hooks never open SQLite: a run's start and its commit are
+// spooled, a plain command and a prompt leave nothing, and Sync lands both.
+func TestHotPathHooksNeverOpenTheDatabase(t *testing.T) {
+	path := tempPath(t)
+	env := &hook.Env{StateDir: t.TempDir(), Home: t.TempDir()}
+
+	for _, name := range []string{"pre-skill", "post-bash-other", "prompt-submit", "post-bash-commit"} {
+		raw, err := os.ReadFile(filepath.Join("testdata", "hooks", name+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ob := &Observer{StateDir: env.StateDir, Busy: BusyAsync}
+		env.Observers = []observe.Observer{ob}
+		hook.Dispatch(context.Background(), raw, env)
+		ob.Close()
+
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s opened the database: %v", name, err)
+		}
+	}
+
+	if err := Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	var kinds []string
+	for _, e := range list(t, path, Filter{Session: "bench"}) {
+		kinds = append(kinds, e.Kind)
+	}
+
+	if want := []string{RunStarted, Committed}; !slices.Equal(kinds, want) {
+		t.Errorf("rows %q, want %q", kinds, want)
+	}
+}
+
+// An observation that yields no row creates nothing.
+func TestAnObservationWithNoRowCreatesNoDatabase(t *testing.T) {
+	path := tempPath(t)
+	ob := &Observer{StateDir: t.TempDir(), Busy: BusyAsync}
+	defer ob.Close()
+
+	observeT(t, ob, &observe.Committed{SHA: "abc1234"}, "") // no session: never a run's
+
+	for _, p := range []string{path, spoolPath(path)} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s exists: %v", p, err)
+		}
+	}
+
+	if err := Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("a sync with nothing spooled created the database: %v", err)
 	}
 }

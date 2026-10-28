@@ -275,7 +275,7 @@ func TestRecordBoardFixture(t *testing.T) {
 
 		res := fixtureCall{Stdout: sub(out)}
 		if err != nil {
-			res = fixtureCall{Code: 1, Stderr: sub(err.Error())}
+			res = fixtureCall{Code: gitExitCode(err), Stderr: sub(err.Error())}
 		}
 
 		fx.Calls[sub("git "+strings.Join(args, " "))] = res

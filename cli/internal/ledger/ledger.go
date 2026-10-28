@@ -4,9 +4,9 @@
 // claims, and artifacts (plans, findings) what they hold. Beside it,
 // task_refs keeps each task's last-read title and url, overwritten in place.
 //
-// A ledger write never fails its caller: an event that cannot reach the
-// database goes to a spool file beside it, which the next successful open
-// replays.
+// A ledger write never fails its caller: hooks and `f10 state` append their
+// rows to a spool file beside the database, which SessionStart, Stop and
+// every reader replay into it.
 package ledger
 
 import (
@@ -220,10 +220,9 @@ func (l *Ledger) Count(ctx context.Context, f Filter) (int64, error) {
 	return n, nil
 }
 
-// Record opens the ledger at Path, appends events and closes it. An open that
-// fails spools them; nothing is returned, since no caller may act on a
-// ledger failure.
-func Record(ctx context.Context, busy time.Duration, events ...Event) {
+// Record spools events for the next replay point: a write never opens the
+// database, so no caller waits on a migration or a busy lock.
+func Record(events ...Event) {
 	if len(events) == 0 {
 		return
 	}
@@ -233,23 +232,49 @@ func Record(ctx context.Context, busy time.Duration, events ...Event) {
 		return
 	}
 
-	l, err := Open(ctx, path, busy, true)
-	if err != nil {
-		fill(path, events)
-		spool(path, events)
-
-		return
-	}
-
-	defer l.Close()
-
-	l.Append(ctx, events...)
+	fill(path, events)
+	spool(path, events)
 }
 
+// Sync replays the spool at Path into the database. A reader calls it
+// first, so what writers spooled is read back; with nothing spooled it
+// costs a stat.
+func Sync(ctx context.Context) error { return SyncAt(ctx, Path()) }
+
+// SyncAt is Sync for the database at path.
+func SyncAt(ctx context.Context, path string) error {
+	if path == "" || !pending(path) {
+		return nil
+	}
+
+	l, err := Open(ctx, path, BusyAsync, true)
+	if err != nil {
+		return err
+	}
+
+	return l.Close()
+}
+
+// migrate runs goose only when user_version lags the embedded migrations,
+// so an open of a current database costs one pragma read.
 func (l *Ledger) migrate(ctx context.Context) error {
 	sub, err := fs.Sub(migrations, "migrations")
 	if err != nil {
 		return fmt.Errorf("ledger: %w", err)
+	}
+
+	files, err := fs.Glob(sub, "*.sql")
+	if err != nil {
+		return fmt.Errorf("ledger: %w", err)
+	}
+
+	var version int
+	if err := l.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+		return fmt.Errorf("ledger: %w", err)
+	}
+
+	if version == len(files) {
+		return nil
 	}
 
 	p, err := goose.NewProvider(goose.DialectSQLite3, l.db, sub)
@@ -259,6 +284,11 @@ func (l *Ledger) migrate(ctx context.Context) error {
 
 	if _, err := p.Up(ctx); err != nil {
 		return fmt.Errorf("ledger: migrate: %w", err)
+	}
+
+	// a pragma takes no bound parameter; the count is ours, not input
+	if _, err := l.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", len(files))); err != nil {
+		return fmt.Errorf("ledger: %w", err)
 	}
 
 	return nil

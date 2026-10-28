@@ -70,6 +70,11 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 
 	_, err = cmd.Writer.Write(hook.Dispatch(ctx, raw, env))
 
+	// the replay points: both run async, so a backlog delays no prompt
+	if event.Name == "SessionStart" || event.Name == "Stop" {
+		_ = ledger.Sync(ctx)
+	}
+
 	return err
 }
 

@@ -141,6 +141,8 @@ type ledgerTask struct {
 // readLedger reads the project's events once. A ledger that is missing or
 // will not open has nothing to say: status only reads.
 func readLedger(ctx context.Context, main string) []ledger.Event {
+	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
+
 	l, err := ledger.OpenRead(ctx, ledger.Path())
 	if err != nil {
 		return nil

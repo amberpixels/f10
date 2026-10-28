@@ -147,19 +147,31 @@ func riderRefs(root, id string) []string {
 
 // branchBundle is the lead and riders a branch ships: its recorded link,
 // else the ids its name spells, as a branch fetched from origin carries
-// them. A branch that ships no bundle has no riders.
-func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string) {
+// them. A branch that ships no bundle has no riders. A link git cannot
+// read is an error: falling back to the name would read a bundle's branch
+// as its lead alone.
+func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string, error) {
 	section := "branch." + branch + "."
 
-	if riders := strings.Fields(gitx.Out(ctx, dir, "config", "--get", section+cfgRiders)); len(riders) > 0 {
-		return cmp.Or(gitx.Out(ctx, dir, "config", "--get", section+cfgTaskID), ref.Match(prefix, branch)), riders
+	recorded, err := gitx.Config(ctx, dir, section+cfgRiders)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if riders := strings.Fields(recorded); len(riders) > 0 {
+		lead, err := gitx.Config(ctx, dir, section+cfgTaskID)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return cmp.Or(lead, ref.Match(prefix, branch)), riders, nil
 	}
 
 	if members := ref.Members(prefix, branch); members != nil {
-		return members[0], members[1:]
+		return members[0], members[1:], nil
 	}
 
-	return "", nil
+	return "", nil, nil
 }
 
 // branchesFor lists the branches under root that belong to task id,
@@ -200,9 +212,14 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 		return nil, err
 	}
 
+	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
+	if err != nil {
+		return nil, err
+	}
+
 	linked := map[string]string{}
 
-	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
+	for _, e := range entries {
 		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
 			linked[strings.TrimPrefix(b, "branch.")] = e.Value
 		}
@@ -224,7 +241,12 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 // failure before anything is created; several matching is one too, since
 // guessing would base the work on the wrong attempt.
 func taskBranch(ctx context.Context, dir, id string) (string, error) {
-	switch linked := linkedBranches(ctx, dir, id); len(linked) {
+	linked, err := linkedBranches(ctx, dir, id)
+	if err != nil {
+		return "", err
+	}
+
+	switch len(linked) {
 	case 0:
 	case 1:
 		return linked[0], nil
@@ -259,10 +281,15 @@ const cfgTaskKeys = `^branch\..*\.(` + cfgTaskID + `|` + cfgRiders + `)$`
 // linkedBranches are the local branches whose f10-task names id, or whose
 // f10-tasks lists it: a branch picked up from a PR, whose name need not
 // carry the id at all, and a bundle's branch, found by any member.
-func linkedBranches(ctx context.Context, dir, id string) []string {
+func linkedBranches(ctx context.Context, dir, id string) ([]string, error) {
+	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
+	if err != nil {
+		return nil, err
+	}
+
 	var names []string
 
-	for _, e := range gitx.ConfigEntries(ctx, dir, cfgTaskKeys) {
+	for _, e := range entries {
 		branch, key := e.Key, ""
 		for _, k := range []string{cfgTaskID, cfgRiders} {
 			if b, ok := strings.CutSuffix(e.Key, "."+k); ok {
@@ -281,7 +308,7 @@ func linkedBranches(ctx context.Context, dir, id string) []string {
 		}
 	}
 
-	return names
+	return names, nil
 }
 
 // namedRef is the ref --base names, with the commit it points at: the local
@@ -319,7 +346,12 @@ type foundBranch struct {
 // attempt by its branch name.
 func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBranch, error) {
 	if suffix == "" {
-		switch linked := linkedBranches(ctx, dir, id); len(linked) {
+		linked, err := linkedBranches(ctx, dir, id)
+		if err != nil {
+			return foundBranch{}, err
+		}
+
+		switch len(linked) {
 		case 0:
 		case 1:
 			return foundBranch{name: linked[0]}, nil
