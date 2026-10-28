@@ -201,7 +201,7 @@ func TestPipelineRoundTrip(t *testing.T) {
 
 // A step the pipeline names twice is told apart by its place: the walk of
 // the default flow puts the second judge at 6, a resumed judge stays put,
-// the place survives a save, and an undeclared leaf has none.
+// the place survives a save, and an undeclared leaf keeps it.
 func TestLeafPlace(t *testing.T) {
 	dir := t.TempDir()
 	r := Fresh("at")
@@ -249,12 +249,25 @@ func TestLeafPlace(t *testing.T) {
 		}
 	}
 
+	// catchup's guard stopping before the change judge, then the judge
+	// resuming: still the second judge
+	r.At = 5
+	for _, s := range [][2]string{{"blocked", "catchup"}, {"running", "judge"}} {
+		if err := r.Set("ship", s[0], s[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if r.At != 6 {
+		t.Errorf("judge after a catchup stop: place %d, want 6", r.At)
+	}
+
 	if err := r.Set("ship", "running", "deploy"); err != nil {
 		t.Fatal(err)
 	}
 
-	if r.At != 0 {
-		t.Errorf("undeclared leaf: place %d, want 0", r.At)
+	if r.At != 6 {
+		t.Errorf("undeclared leaf: place %d, want 6 kept", r.At)
 	}
 
 	if err := r.Set("ship", "done", ""); err != nil {

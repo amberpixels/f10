@@ -233,8 +233,9 @@ func (r *Run) Set(phase, status, leaf string) error {
 }
 
 // place is where leaf sits in the pipeline, counted from 1: where the run
-// already is, else the next entry by that name, else the first; 0 when the
-// pipeline does not name it.
+// already is, else the next entry by that name, else the first. A leaf the
+// pipeline does not name (catchup's guard stopping) keeps the place, so the
+// judge resumed after it is still the second one.
 func (r *Run) place(leaf string) int {
 	if leaf == "" {
 		return 0
@@ -249,7 +250,11 @@ func (r *Run) place(leaf string) int {
 		return at + k + 1
 	}
 
-	return slices.Index(r.Pipeline, leaf) + 1
+	if k := slices.Index(r.Pipeline, leaf); k >= 0 {
+		return k + 1
+	}
+
+	return at
 }
 
 // SetTask records the task the run is about. A tracker task id means the
