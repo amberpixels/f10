@@ -196,6 +196,10 @@ func taskClass(t Task, from, to time.Time) string {
 	return ClassUpkeep
 }
 
+// UpkeepPath reports whether a path is a lockfile, generated code or a
+// snapshot: a change nobody wrote by hand.
+func UpkeepPath(p string) bool { return matchAny(upkeepGlobs, p) }
+
 func matchAny(globs []string, p string) bool {
 	for _, g := range globs {
 		if Glob(g, p) {

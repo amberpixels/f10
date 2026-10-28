@@ -1727,3 +1727,107 @@ func TestFinishArchivesALegacyWorktreesPlan(t *testing.T) {
 		}
 	}
 }
+
+// Finish records the branch's size against the base it forked from,
+// lockfiles left out and the markdown share kept: a stacked branch against
+// its base branch while it exists, a PR already merged with a merge commit
+// from that commit's first parent, a branch never pushed against the local
+// default branch. Nothing to measure records nothing.
+func TestFinishRecordsTheBranchSize(t *testing.T) {
+	const (
+		numstat = "10\t2\tcli/stats.go\n5\t1\tdocs/cli.md\n40\t0\tgo.sum\n-\t-\tlogo.png"
+		diff    = "git diff --numstat --no-renames "
+	)
+
+	sized := func(base string) *branchSize { return &branchSize{lines: 18, md: 6, files: 3, base: base} }
+
+	for _, tc := range []struct {
+		name  string
+		setup func(fx *finishFixture)
+		want  *branchSize
+	}{
+		{
+			name:  "against the default branch",
+			setup: func(fx *finishFixture) { fx.f.script(diff+"origin/main...refs/heads/GH-1", numstat) },
+			want:  sized("origin/main"),
+		},
+		{
+			name: "against its base branch",
+			setup: func(fx *finishFixture) {
+				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, "GH-0")
+				fx.f.script(diff+"GH-0...refs/heads/GH-1", numstat)
+			},
+			want: sized("GH-0"),
+		},
+		{
+			name: "a base branch already deleted falls back to the default branch",
+			setup: func(fx *finishFixture) {
+				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, "GH-0")
+				fx.f.fail(diff+"GH-0...refs/heads/GH-1", shell.Result{Code: 128})
+				fx.f.script(diff+"origin/main...refs/heads/GH-1", numstat)
+			},
+			want: sized("origin/main"),
+		},
+		{
+			name: "a PR merged with a merge commit",
+			setup: func(fx *finishFixture) {
+				fx.f.script(diff+"origin/main...refs/heads/GH-1", "")
+				fx.f.script("git rev-list --ancestry-path --merges --reverse refs/heads/GH-1..origin/main", "mc1\nmc2")
+				fx.f.script(diff+"mc1^1...refs/heads/GH-1", numstat)
+			},
+			want: sized("mc1^1"),
+		},
+		{
+			name: "a branch never pushed",
+			setup: func(fx *finishFixture) {
+				fx.noPull()
+				fx.in.method = "merge"
+				fx.f.script("git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1'", "mm")
+				fx.f.script("git merge --ff-only mm", "")
+				fx.f.script(diff+"main...refs/heads/GH-1", numstat)
+			},
+			want: sized("main"),
+		},
+		{
+			name: "a branch never pushed, already landed",
+			setup: func(fx *finishFixture) {
+				fx.noPull()
+				fx.f.script("git rev-parse m0^{tree}", "tr33")
+			},
+		},
+		{
+			name:  "no base resolves",
+			setup: func(fx *finishFixture) { fx.f.fail(diff+"origin/main...refs/heads/GH-1", shell.Result{Code: 128}) },
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.openPR()
+			tc.setup(fx)
+
+			var got []branchSize
+
+			prev := recordSize
+			recordSize = func(_ context.Context, _, branch, task string, s branchSize) {
+				if branch != "GH-1" || task != "GH-1" {
+					t.Errorf("recorded for %s on %s", task, branch)
+				}
+
+				got = append(got, s)
+			}
+
+			t.Cleanup(func() { recordSize = prev })
+
+			if out, err := fx.run(t); err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			switch {
+			case tc.want == nil && len(got) > 0:
+				t.Errorf("recorded %+v, want nothing", got)
+			case tc.want != nil && (len(got) != 1 || got[0] != *tc.want):
+				t.Errorf("sizes %+v, want %+v", got, *tc.want)
+			}
+		})
+	}
+}

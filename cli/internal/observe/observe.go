@@ -168,3 +168,32 @@ type PlanArchived struct {
 func (*SkillStarted) Kind() string   { return "skill_started" }
 func (*SessionStopped) Kind() string { return "session_stopped" }
 func (*PlanArchived) Kind() string   { return "plan_archived" }
+
+// Wait reasons: a turn ended and the user has not answered, an
+// AskUserQuestion open, a permission dialog open.
+const (
+	WaitTurn       = "turn"
+	WaitQuestion   = "question"
+	WaitPermission = "permission"
+)
+
+// WaitStarted is a run starting to wait on the user. Tool names the tool a
+// question or permission dialog belongs to.
+type WaitStarted struct {
+	Meta
+
+	Reason string `json:"reason"`
+	Tool   string `json:"tool,omitempty"`
+}
+
+// WaitEnded is that wait over, By the hook event that ended it.
+type WaitEnded struct {
+	Meta
+
+	Reason string `json:"reason"`
+	Tool   string `json:"tool,omitempty"`
+	By     string `json:"by"`
+}
+
+func (*WaitStarted) Kind() string { return "wait_started" }
+func (*WaitEnded) Kind() string   { return "wait_ended" }

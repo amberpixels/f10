@@ -146,12 +146,17 @@ func TestARunLeavesEveryKindInTheLedger(t *testing.T) {
 		}
 	}
 
+	// every stop opens a turn wait, which the next prompt ends; a stop on an
+	// open turn ends it and opens the next
 	want := []string{
-		"observed:run_started", "observed:task_captured", "observed:session_stopped",
-		"observed:run_started", "artifact:plan_superseded", "artifact:plan_saved", "observed:session_stopped",
+		"observed:run_started", "observed:task_captured",
+		"observed:wait_started", "observed:session_stopped", "observed:wait_ended",
+		"observed:run_started", "artifact:plan_superseded", "artifact:plan_saved",
+		"observed:wait_started", "observed:session_stopped", "observed:wait_ended", "observed:wait_started",
+		"observed:wait_ended",
 		"observed:run_started", "observed:step_entered", "observed:committed", "observed:pushed",
 		"artifact:review_round_opened", "artifact:finding_verdict",
-		"observed:pr_opened", "observed:session_stopped",
+		"observed:pr_opened", "observed:wait_started", "observed:session_stopped", "observed:wait_ended",
 		"observed:run_started", "observed:task_finished",
 	}
 	if !slices.Equal(got, want) {

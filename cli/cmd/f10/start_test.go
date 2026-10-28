@@ -49,7 +49,11 @@ func newFakes(t *testing.T) *fakes {
 	// no local branch carries a task id past a prefix until a test says so
 	f.script(allHeads, "")
 	// no branch is linked to a task, and origin has no task branch, until a test says so
-	f.absent = []string{linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/"}
+	// and finish measures an empty branch, so it records no size
+	f.absent = []string{
+		linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
+		"git rev-list --ancestry-path --merges",
+	}
 
 	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, projectOf
 
@@ -93,6 +97,11 @@ func (f *fakes) answer(key string) shell.Result {
 
 		// no branch records riders until a test says so
 		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgRiders) {
+			return shell.Result{}
+		}
+
+		// no branch is stacked on another, for finish's size, until a test says so
+		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgAfterBranch) {
 			return shell.Result{}
 		}
 

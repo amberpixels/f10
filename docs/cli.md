@@ -62,6 +62,7 @@ f10 status [id] [--all] [--json | --markdown]   # where the run is: a task's in 
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
+f10 stats [--since 30d] [<id>]   # active plan and implement minutes per task, with size and density; a median row
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -254,6 +255,10 @@ There finish merges as usual, brings the default branch up to the merge, switche
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
+
+Before the merge lands, finish also measures the branch for `f10 stats`: lines added plus deleted against the base it forked from (its `--after` base branch, else `origin/<default>`, else the local default branch for a branch never pushed), lockfiles, generated code and snapshots left out, with the markdown share.
+Measured after landing, a local merge would read zero.
+The size goes to the ledger once the merge landed; a branch with nothing to measure records none.
 
 Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already archived, there is no workspace to close, and only what is left is removed.
 
@@ -724,6 +729,23 @@ A state row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, 
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
 The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
 Inside a session, `/f10:board` runs the command with the same flags and prints its output; with `--state` it offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.
+
+## Stats
+
+`f10 stats` is how long planning and implementing took, per task of the current project, newest first, then a median row.
+
+- **plan**: active minutes. A `/f10:plan` run counts from its start to the plan it saves; inside `/f10:ship`, the plan step counts from entering it to entering the next step.
+- **implement**: active minutes of the `implement` step, summed over its stretches (a driven run blocked on an ask and resumed is two).
+- **size**: lines added plus deleted, with the markdown share, as `f10 finish` measured it.
+- **density**: implement minutes per 100 changed lines.
+
+Active means the window minus every wait on the user inside it: a turn ended and not yet answered, an `AskUserQuestion` open, a permission dialog open.
+The hook records each as `wait_started` and `wait_ended` in the ledger.
+Tool run time (tests, lint) stays in, except for a tool that needed a permission dialog: no hook marks the approval, so its whole run counts as waiting.
+Step boundaries are the `f10-state.sh set ship running <entry>` calls; a skipped one counts the next step's time as the step before it.
+A value never recorded prints `-`, never `0`, and no wall duration is printed.
+Counting starts with the release that records waits: a session with no wait in the ledger, and a window a wait with no recorded end runs into, count nothing.
+`--since` takes days or weeks (`7d`, `2w`) and keeps the tasks active in that span; a task id shows that task whatever its age.
 
 ## Lore
 

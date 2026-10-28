@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
     "UserPromptExpansion": [
       {
         "matcher": "f10:.*",
@@ -34,6 +46,16 @@
         ]
       },
       {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Skill",
         "hooks": [
           {
@@ -46,13 +68,37 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Write|Edit",
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|AskUserQuestion|mcp__.*",
         "hooks": [
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
             "timeout": 5,
             "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|AskUserQuestion|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
+            "timeout": 5
           }
         ]
       }
