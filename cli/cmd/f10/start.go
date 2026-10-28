@@ -248,7 +248,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	sweepAfterStart(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 
 	return nil

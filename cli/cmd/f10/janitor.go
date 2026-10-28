@@ -36,7 +36,7 @@ func janitorCommand() *cli.Command {
 	return &cli.Command{
 		Name: "janitor",
 		Usage: "remove task branches whose PR merged or closed, locally and on origin, and archive their plans; " +
-			"f10 start runs it every few hours",
+			"f10 start and f10 finish run it every few hours",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "dry-run", Usage: "list what would be removed and change nothing"},
 		},
@@ -67,10 +67,11 @@ func runJanitor(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// sweepAfterStart runs the janitor once start has reported, when the stamp
-// says it is due. Nothing it does fails the start: an error is one warning.
-// The stamp moves first, so starts in quick succession run it once.
-func sweepAfterStart(ctx context.Context, w io.Writer, stamp string, now time.Time,
+// sweepIfDue runs the janitor after start or finish has done its own work,
+// when the stamp says it is due. Nothing it does fails that command: an
+// error is one warning. The stamp moves first, so commands in quick
+// succession run it once.
+func sweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	run func(context.Context) ([]string, error),
 ) {
 	if !janitorDue(stamp, now) {

@@ -68,7 +68,7 @@ f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --dis
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a flow, each task once its base has a commit
 f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
-f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start runs it every 6 hours
+f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
 f10 lore show <change> [--json]     # the change's effective entries, the intent first
@@ -271,7 +271,7 @@ Out of scope: closing the tracker issue (the PR body does that with "Closes #n")
 
 `f10 janitor` clears the task branches that outlived their task: a PR merged in the host's UI or by `gh pr merge`, a worktree removed by `wt remove`.
 `f10 finish` cleans up after itself; the janitor catches everything that went around it, without relying on a host setting such as GitHub's automatic head-branch deletion.
-`f10 start` runs it after its report at most once every 6 hours, `f10 janitor` runs it by hand, and `f10 janitor --dry-run` prints what it would remove and changes nothing.
+There is no schedule: `f10 start` after its report and `f10 finish` once its own cleanup is done each run it when the last run is 6 hours old or more, `f10 janitor` runs it by hand, and `f10 janitor --dry-run` prints what it would remove and changes nothing.
 
 It considers local branches and origin's (one `git ls-remote --heads origin`) tied to a task id by the rule finish reads a branch with: the `f10-task` link or recorded bundle, else the bundle the name spells, else the id it carries.
 On origin that last rule counts only the shapes start creates (`<id>`, `<id>/<slug>`, `<id>-<suffix>`, `<id>+...`), so a colleague's `revert-<id>` is never read as a task branch.
@@ -295,7 +295,8 @@ The output is one line per removal and per branch kept for a reason worth knowin
 `nothing to clear` when nothing was.
 The last run is the mtime of `janitor.stamp` in the shared storage root (main's `.f10/`, or the out-of-tree root).
 The stamp moves before the run, so starts in quick succession run it once; `--dry-run` leaves it alone.
-`f10 drive` opens its tasks without start's command, so it never runs the janitor.
+Finish runs it before any workspace closes, since closing its own workspace ends the process; its lines go to stderr, as start's do.
+`f10 drive` opens and finishes its tasks without the start and finish commands, so it never runs the janitor.
 
 ## Forward
 

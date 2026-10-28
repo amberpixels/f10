@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
@@ -136,6 +137,10 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		plansDir:  t.sharedPlansDir(),
 		title:     titleLookup(t, r.Number),
 		close:     closing,
+		sweep: func(ctx context.Context) {
+			sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+				func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+		},
 	})
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
@@ -182,6 +187,9 @@ type finishInput struct {
 	// close is a bundle's riders the PR delivers, closed with the lead; nil
 	// until --close answers, which a bundle's merge refuses to go without
 	close []string
+	// sweep runs the janitor once the task's own cleanup is done and before
+	// a workspace closes, since closing this one ends the process; nil for none
+	sweep func(context.Context)
 }
 
 // finish runs the flow: branch, worktree, the refusals, the merge, the
@@ -369,12 +377,20 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if onMain {
-		return switchMain(ctx, in.main, def, name, ended)
+		if err := switchMain(ctx, in.main, def, name, ended); err != nil {
+			return err
+		}
+
+		in.sweepNow(ctx)
+
+		return nil
 	}
 
 	if err := removeCheckout(ctx, in.main, path, name); err != nil {
 		return err
 	}
+
+	in.sweepNow(ctx)
 
 	if self && mainWS != nil {
 		if err := herdr.FocusWorkspace(ctx, in.main, mainWS.ID); err != nil {
@@ -387,6 +403,12 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	return nil
+}
+
+func (in finishInput) sweepNow(ctx context.Context) {
+	if in.sweep != nil {
+		in.sweep(ctx)
+	}
 }
 
 // switchMain ends a finish run on the main checkout: main onto the default

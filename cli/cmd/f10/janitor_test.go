@@ -362,9 +362,9 @@ func TestJanitorDue(t *testing.T) {
 	}
 }
 
-// After start, a fresh stamp skips the janitor; a due one runs it, and its
+// After start or finish, a fresh stamp skips the janitor; a due one runs it, and its
 // failure is a warning with the stamp moved, never an error.
-func TestSweepAfterStart(t *testing.T) {
+func TestSweepIfDue(t *testing.T) {
 	stamp := filepath.Join(t.TempDir(), "f10", janitorStamp)
 	now := time.Now()
 
@@ -378,7 +378,7 @@ func TestSweepAfterStart(t *testing.T) {
 
 	var out bytes.Buffer
 
-	sweepAfterStart(t.Context(), &out, stamp, now, run)
+	sweepIfDue(t.Context(), &out, stamp, now, run)
 
 	if runs != 1 || janitorDue(stamp, now) {
 		t.Fatalf("runs = %d, due after the run = %v", runs, janitorDue(stamp, now))
@@ -389,7 +389,7 @@ func TestSweepAfterStart(t *testing.T) {
 		t.Errorf("out = %q", got)
 	}
 
-	sweepAfterStart(t.Context(), &out, stamp, now.Add(time.Minute), run)
+	sweepIfDue(t.Context(), &out, stamp, now.Add(time.Minute), run)
 
 	if runs != 1 {
 		t.Error("a fresh stamp ran the janitor again")
