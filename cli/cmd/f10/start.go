@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The start verb is the one that leaves the checkout: a branch, a
@@ -246,6 +247,13 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	if err := start(ctx, cmd.Writer, in); err != nil {
 		return err
+	}
+
+	// what a bare status in this session's checkout lists; the task is
+	// already open, so a failed write is a line, not a failed start
+	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
+	if err := state.AppendLaunch(state.Dir(), state.Session(), launch); err != nil {
+		fmt.Fprintf(cmd.ErrWriter, "f10: recording the launch: %v\n", err)
 	}
 
 	watchProject(ctx, cmd.ErrWriter, t)
@@ -553,7 +561,10 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 // since riders are fixed at start.
 func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
 	if existing != "" {
-		lead, riders := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
+		lead, riders, err := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
+		if err != nil {
+			return ref.Ref{}, err
+		}
 
 		switch {
 		case len(task.Riders()) == 0 && len(riders) > 0 && strings.EqualFold(lead, task.ID):
@@ -570,7 +581,10 @@ func settleBundle(ctx context.Context, main string, task ref.Ref, existing strin
 	}
 
 	for _, rider := range task.Riders() {
-		branches := linkedBranches(ctx, main, rider)
+		branches, err := linkedBranches(ctx, main, rider)
+		if err != nil {
+			return ref.Ref{}, err
+		}
 
 		for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
 			refs, err := gitx.Refs(ctx, main, append(taskRefs(root, rider), riderRefs(root, rider)...)...)

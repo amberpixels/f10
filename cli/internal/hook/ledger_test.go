@@ -126,6 +126,10 @@ func TestARunLeavesEveryKindInTheLedger(t *testing.T) {
 		dispatchRecorded(t, env, raw)
 	}
 
+	if err := ledger.SyncAt(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+
 	l, err := ledger.OpenRead(context.Background(), db)
 	if err != nil {
 		t.Fatal(err)
@@ -203,6 +207,10 @@ func TestARunLeavesEveryKindInTheLedger(t *testing.T) {
 
 func recorded(t *testing.T, db string, f ledger.Filter) []ledger.Event {
 	t.Helper()
+
+	if err := ledger.SyncAt(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
 
 	l, err := ledger.OpenRead(context.Background(), db)
 	if err != nil {

@@ -70,6 +70,11 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 
 	_, err = cmd.Writer.Write(hook.Dispatch(ctx, raw, env))
 
+	// the replay points: both run async, so a backlog delays no prompt
+	if event.Name == "SessionStart" || event.Name == "Stop" {
+		_ = ledger.Sync(ctx)
+	}
+
 	return err
 }
 
@@ -88,10 +93,11 @@ func hookTaskID(ctx context.Context, cwd, url string) string {
 	return r.ID
 }
 
-// hookStatusText is `f10 status` for a session, run in this process.
-func hookStatusText(ctx context.Context, session string) string {
+// hookStatusText is `f10 status` for a session, run in this process, and
+// whether it printed a question a driven agent waits on.
+func hookStatusText(ctx context.Context, session string) (string, bool) {
 	if err := os.Setenv("F10_SESSION_ID", session); err != nil {
-		return ""
+		return "", false
 	}
 
 	var out bytes.Buffer
@@ -99,9 +105,10 @@ func hookStatusText(ctx context.Context, session string) string {
 	app := newApp()
 	app.Writer, app.ErrWriter = &out, &out
 
-	if err := app.Run(ctx, []string{"f10", "status"}); err != nil {
+	asks := &statusAsks{}
+	if err := app.Run(context.WithValue(ctx, statusAsksKey{}, asks), []string{"f10", "status"}); err != nil {
 		fmt.Fprintln(&out, "f10:", err)
 	}
 
-	return strings.TrimSpace(out.String())
+	return strings.TrimSpace(out.String()), asks.printed
 }

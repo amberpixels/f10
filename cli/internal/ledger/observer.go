@@ -41,8 +41,9 @@ const (
 	StateFinal = "state_final"
 )
 
-// Observer records a hook's observations. It opens the ledger on the first
-// one, so an event that yields nothing never touches the database; Close
+// Observer records a hook's observations. Rows go to the spool; only an
+// observation that compares against prior rows (a stop, a findings or a
+// verdict file) opens the ledger, so most hooks never touch SQLite. Close
 // releases it.
 type Observer struct {
 	StateDir string
@@ -68,7 +69,9 @@ func (ob *Observer) Close() {
 }
 
 func (ob *Observer) Observe(ctx context.Context, o observe.Observation) error {
-	ob.open(ctx)
+	if ob.path == "" {
+		ob.path = Path()
+	}
 
 	if ob.path == "" {
 		return nil
@@ -100,33 +103,44 @@ func (ob *Observer) Observe(ctx context.Context, o observe.Observation) error {
 		}
 	}
 
-	if ob.l == nil {
-		fill(ob.path, events)
+	fill(ob.path, events)
+
+	switch {
+	case gated(o):
+		spoolAs(ob.path, events, true)
+	case ob.l != nil:
+		ob.l.Append(ctx, events...)
+	default:
 		spool(ob.path, events)
-
-		return nil
 	}
-
-	ob.l.Append(ctx, events...)
 
 	return nil
 }
 
-func (ob *Observer) open(ctx context.Context) {
-	if ob.opened {
-		return
+// open opens the ledger once, for an observation that reads prior rows.
+// A failed open leaves ob.l nil: the reader then sees no prior rows.
+func (ob *Observer) open(ctx context.Context) *Ledger {
+	if !ob.opened {
+		ob.opened = true
+
+		if l, err := Open(ctx, ob.path, ob.Busy, !ob.NoReplay); err == nil {
+			ob.l = l
+		}
 	}
 
-	ob.opened = true
-	ob.path = Path()
+	return ob.l
+}
 
-	if ob.path == "" {
-		return
+// gated reports an observation recorded only inside an f10 run: commits,
+// pushes and created issues or PRs in an unrelated session stay out. The
+// hook cannot tell without the database, so replay decides.
+func gated(o observe.Observation) bool {
+	switch o.(type) {
+	case *observe.IssueCreated, *observe.PRCreated, *observe.Committed, *observe.Pushed:
+		return true
 	}
 
-	if l, err := Open(ctx, ob.path, ob.Busy, !ob.NoReplay); err == nil {
-		ob.l = l
-	}
+	return false
 }
 
 func (ob *Observer) place(ctx context.Context, cwd string) Place {
@@ -164,7 +178,7 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 
 		return one(SessionStopped, Observed, o.Task)
 	case *observe.IssueCreated:
-		if !ob.inRun(ctx, m.Session) {
+		if m.Session == "" {
 			return nil
 		}
 
@@ -176,19 +190,19 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 
 		return e
 	case *observe.PRCreated:
-		if !ob.inRun(ctx, m.Session) {
+		if m.Session == "" {
 			return nil
 		}
 
 		return one(PROpened, Observed, "")
 	case *observe.Committed:
-		if !ob.inRun(ctx, m.Session) {
+		if m.Session == "" {
 			return nil
 		}
 
 		return one(Committed, Observed, "")
 	case *observe.Pushed:
-		if !ob.inRun(ctx, m.Session) {
+		if m.Session == "" {
 			return nil
 		}
 
@@ -210,32 +224,15 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 	return nil
 }
 
-// inRun reports whether the session started an f10 skill, so commits and
-// pushes in an unrelated session stay out. Unknown, with no database to
-// ask, counts as yes: a spooled event can be ignored later, a dropped one
-// cannot be recovered.
-func (ob *Observer) inRun(ctx context.Context, session string) bool {
-	if ob.l == nil {
-		return true
-	}
-
-	if session == "" {
-		return false
-	}
-
-	n, err := ob.l.Count(ctx, Filter{Session: session, Kind: RunStarted})
-
-	return err != nil || n > 0
-}
-
 // sameStop reports whether the session's last stop row says the same: Stop
 // fires at every turn end, and only a change is worth a row.
 func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.SessionStopped) bool {
-	if ob.l == nil {
+	l := ob.open(ctx)
+	if l == nil {
 		return false
 	}
 
-	prior, err := ob.l.List(ctx, Filter{Session: session, Kind: SessionStopped})
+	prior, err := l.List(ctx, Filter{Session: session, Kind: SessionStopped})
 	if err != nil || len(prior) == 0 {
 		return false
 	}
@@ -273,8 +270,8 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 
 	var prior []Event
 
-	if ob.l != nil {
-		prior, _ = ob.l.List(ctx, Filter{Task: o.Task})
+	if l := ob.open(ctx); l != nil {
+		prior, _ = l.List(ctx, Filter{Task: o.Task})
 	}
 
 	var events []Event
@@ -360,8 +357,8 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 	}
 
 	// the database holds every project's rows: scope the lookup to this one
-	if ob.l != nil {
-		prior, _ := ob.l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict})
+	if l := ob.open(ctx); l != nil {
+		prior, _ := l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict})
 		for _, e := range slices.Backward(prior) {
 			if v := e.Payload.Val; v["path"] == o.Path {
 				if e.Session == m.Session && v["verdict"] == f.Verdict && v["decision"] == nonEmpty(f.Decision) {

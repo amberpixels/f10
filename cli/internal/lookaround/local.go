@@ -102,7 +102,12 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 		"|",
 	) + `)$`
 
-	for _, e := range gitx.ConfigEntries(ctx, in.Main, pattern) {
+	entries, err := gitx.ConfigEntries(ctx, in.Main, pattern)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, e := range entries {
 		rest := strings.TrimPrefix(e.Key, "branch.")
 
 		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.FinishKey} {
@@ -285,6 +290,8 @@ func readRoot(root string, l *Local) []string {
 
 // readLedger marks the tasks the ledger holds task_finished for.
 func readLedger(ctx context.Context, path, project string, l *Local) []string {
+	_ = ledger.SyncAt(ctx, path) // a failed replay still reads what the database holds
+
 	db, err := ledger.OpenRead(ctx, path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil

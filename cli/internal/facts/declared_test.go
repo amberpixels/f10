@@ -507,6 +507,50 @@ func TestStaleAfter(t *testing.T) {
 	}
 }
 
+func TestDriverTimeout(t *testing.T) {
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(
+		t,
+		none,
+		"driver_timeout",
+	); none.DriverTimeout != 30*time.Second || f.Origin != OriginDefault ||
+		f.Value != "30s" {
+		t.Errorf("undeclared = %s, %+v", none.DriverTimeout, f)
+	}
+
+	for v, want := range map[string]time.Duration{"45s": 45 * time.Second, "2m": 2 * time.Minute} {
+		if eff := buildWith(
+			t,
+			"---\ndriver_timeout: "+v+"\n---\n",
+			"",
+		); eff.DriverTimeout != want ||
+			eff.Errors() != "" {
+			t.Errorf("%s: driver_timeout %s, errors %q", v, eff.DriverTimeout, eff.Errors())
+		}
+	}
+
+	for _, v := range []string{"0s", "-5s", "30", "soon", "1d"} {
+		if eff := buildWith(
+			t,
+			"---\ndriver_timeout: "+v+"\n---\n",
+			"",
+		); !strings.Contains(
+			eff.Errors(),
+			"driver_timeout",
+		) {
+			t.Errorf("%s is not an error: %q", v, eff.Errors())
+		}
+	}
+
+	if eff := buildWith(
+		t,
+		"---\ndriver_timeout: 2m\n---\n",
+		"---\ndriver_timeout: 10s\n---\n",
+	); eff.DriverTimeout != 10*time.Second {
+		t.Errorf("driver_timeout = %s, want the worktree's 10s", eff.DriverTimeout)
+	}
+}
+
 // tracker.title is read into the effective template and shown as a fact; a
 // template with no {title} is an error and leaves titles bare.
 func TestTrackerTitle(t *testing.T) {

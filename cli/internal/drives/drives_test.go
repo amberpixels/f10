@@ -209,3 +209,25 @@ func TestFind(t *testing.T) {
 		t.Errorf("List = %d records, %v; newest first", len(recs), err)
 	}
 }
+
+// The creating session round-trips; a record written before the field
+// existed reads as none.
+func TestRecordKeepsItsSession(t *testing.T) {
+	root := t.TempDir()
+
+	for _, session := range []string{"sess-1", ""} {
+		rec := &Record{Args: []string{"GH-1", session}, Session: session}
+		if err := Create(root, rec); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := Read(root, rec.Number)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got.Session != session {
+			t.Errorf("record %d session = %q, want %q", rec.Number, got.Session, session)
+		}
+	}
+}

@@ -206,20 +206,20 @@ func TestFromBranchReadsTheLink(t *testing.T) {
 			return out, nil
 		}
 
-		return "", errors.New("exit 1")
+		return "", &gitx.ExitError{Args: args, Code: 1}
 	}
 
 	t.Cleanup(func() { gitx.Exec = prev })
 
 	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
-	if got, _ := r.fromBranch(t.Context()); got != "GH-9" {
+	if got, _, _ := r.fromBranch(t.Context()); got != "GH-9" {
 		t.Errorf("fromBranch with a link = %q, want GH-9", got)
 	}
 
 	delete(answers, "config --get branch.alice/fix-login."+TaskKey)
 	answers["rev-parse --abbrev-ref HEAD"] = "GH-3/slug"
 
-	if got, members := r.fromBranch(t.Context()); got != "GH-3" || members != nil {
+	if got, members, _ := r.fromBranch(t.Context()); got != "GH-3" || members != nil {
 		t.Errorf("fromBranch without a link = %q %v, want GH-3 alone", got, members)
 	}
 }
@@ -234,7 +234,7 @@ func fakeGit(t *testing.T, answers map[string]string) {
 			return out, nil
 		}
 
-		return "", errors.New("exit 1")
+		return "", &gitx.ExitError{Args: args, Code: 1}
 	}
 
 	t.Cleanup(func() { gitx.Exec = prev })

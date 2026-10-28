@@ -152,6 +152,11 @@ Treat any other failure as an unknown outcome and say so on stderr, so the user 
 `update` sets absolute values, so a driver may retry it after a transient 5xx.
 f10 itself never retries a write verb, and its own error after a failed `create` or `comment` says the task or comment may exist.
 
+**Answer within the limit.**
+f10 kills a verb that has not exited within `driver_timeout` (30 seconds unless project.md declares otherwise) and fails the command with `<driver> <verb>: no answer within <limit>`; after a write verb the error adds that the write may still have reached the tracker.
+A child the driver leaves running (a `curl` in the background) gets two more seconds to release stdout before f10 stops reading it.
+Keep your own HTTP timeouts and retries inside that limit, so a slow tracker fails with your message rather than f10's.
+
 **Print the whole task.**
 `read` includes the task's comments after its body, as the host path does: an agent reads the task through this verb alone, and a decision made in a comment is part of what it asks.
 Put the task's labels or type (a Jira issue type, a Notion select) near the top, as the host path puts them beside the state: fetch reads a bug, a refactor or a spike from them.

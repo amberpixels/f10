@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Eval fixture driver: serves tasks from tasks/T-<n>.md, offline. Verbs the
+# run does not need exit 3, the contract's "not implemented".
+set -euo pipefail
+
+verb="${1:-}"
+n="${2:-}"
+file="tasks/T-${n}.md"
+
+case "$verb" in
+  read)
+    cat "$file"
+    ;;
+  url)
+    echo "file://$PWD/$file"
+    ;;
+  comment)
+    cat >/dev/null
+    ;;
+  *)
+    exit 3
+    ;;
+esac

@@ -38,5 +38,9 @@ build: cli::build
 # build this checkout's f10 binary into the shim's cache
 install: cli::install
 
+# run the prompt evals against the real model - costs spend and minutes; on demand and before a release, never in CI
+eval *args:
+    just cli::eval {{args}}
+
 # run all checks - read-only, safe for CI
 ci: lint test

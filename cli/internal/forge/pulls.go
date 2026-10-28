@@ -762,7 +762,12 @@ func (h Host) MRForcePushes(ctx context.Context, iid int, since time.Time) ([]Fo
 
 	for i := 1; i < len(versions); i++ {
 		prev, cur := versions[i-1], versions[i]
-		if cur.CreatedAt.Before(since) || gitx.IsAncestor(ctx, h.Dir, prev.Head, cur.Head) {
+		if cur.CreatedAt.Before(since) {
+			continue
+		}
+
+		// display only: a head git cannot place lists as a force push
+		if ff, _ := gitx.IsAncestor(ctx, h.Dir, prev.Head, cur.Head); ff {
 			continue
 		}
 

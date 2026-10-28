@@ -18,8 +18,8 @@ import (
 )
 
 // The ledger noun reads the local record of what runs did, ~/.f10/f10.db,
-// to check what a run left there. It opens the database read-only: a dump
-// never migrates it or replays the spool.
+// to check what a run left there. It replays the spool first, so spooled
+// rows show, then reads the database read-only.
 func ledgerCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "ledger",
@@ -54,6 +54,8 @@ func runLedgerDump(ctx context.Context, cmd *cli.Command) error {
 
 		f.Project = ledger.Where(ctx, cwd).Project
 	}
+
+	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
 
 	l, err := ledger.OpenRead(ctx, ledger.Path())
 	if errors.Is(err, fs.ErrNotExist) {

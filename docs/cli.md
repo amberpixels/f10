@@ -60,7 +60,7 @@ f10 review ack [n] [--id <id>]                        # leave the declared handl
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape), else this session's, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, task rows under --json), else this session's, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several

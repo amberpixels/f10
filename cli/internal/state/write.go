@@ -155,7 +155,8 @@ func RootOf(cwd string) string {
 const pruneAge = 7 * 24 * time.Hour
 
 // Prune drops the per-session files of long-dead sessions: run state, the
-// conventions marker f10-inject.sh writes, and the session start mark.
+// conventions marker f10-inject.sh writes, the session start mark, and the
+// session's launches.
 func Prune(dir string, now time.Time) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -166,7 +167,7 @@ func Prune(dir string, now time.Time) {
 		name := e.Name()
 		if e.IsDir() ||
 			!slices.ContainsFunc(
-				[]string{fileExt, ".conventions", ".started", ".wait", promptExt},
+				[]string{fileExt, ".conventions", ".started", ".wait", promptExt, launchesExt},
 				func(ext string) bool { return strings.HasSuffix(name, ext) },
 			) {
 			continue

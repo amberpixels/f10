@@ -47,6 +47,10 @@ build:
 ci: lint test
 # <<< justx:ci
 
+# run the prompt evals in ../evals against the real model ([docs/evals.md](../docs/evals.md))
+eval *args:
+    go run ./cmd/f10eval -root .. {{args}}
+
 # build this checkout's binary into the cache slot the plugin's bin/f10 shim runs,
 # and into $GOBIN so a bare `f10` in a terminal runs the same build
 install:

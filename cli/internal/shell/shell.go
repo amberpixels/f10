@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // A Result is one finished command: its trimmed streams and its exit code.
@@ -37,10 +38,15 @@ var CaptureInput = func(ctx context.Context, dir, input, name string, args ...st
 	return run(ctx, dir, strings.NewReader(input), name, args...)
 }
 
+// waitDelay is how long a finished or killed command's leftover children
+// (a driver's curl) may hold its pipes open before run stops reading them.
+const waitDelay = 2 * time.Second
+
 func run(ctx context.Context, dir string, stdin io.Reader, name string, args ...string) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Stdin = stdin
+	cmd.WaitDelay = waitDelay
 
 	var stdout, stderr strings.Builder
 
@@ -56,6 +62,11 @@ func run(ctx context.Context, dir string, stdin io.Reader, name string, args ...
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		res.Code = exitErr.ExitCode()
 
+		return res, nil
+	}
+
+	// the command itself exited 0; only a child it left behind was cut off
+	if errors.Is(err, exec.ErrWaitDelay) {
 		return res, nil
 	}
 

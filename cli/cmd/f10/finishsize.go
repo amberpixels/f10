@@ -96,7 +96,7 @@ func numstatSize(out, base string) branchSize {
 var recordSize = func(ctx context.Context, dir, branch, task string, s branchSize) {
 	place := ledger.Where(ctx, dir)
 
-	ledger.Record(ctx, ledger.BusyAsync, ledger.Event{
+	ledger.Record(ledger.Event{
 		At:           time.Now(),
 		Project:      place.Project,
 		ProjectLocal: place.ProjectLocal,

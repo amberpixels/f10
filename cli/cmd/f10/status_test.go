@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -275,8 +276,8 @@ func TestBareTaskID(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if got := bareTaskID(t.Context(), tg, "sess-1"); got != tc.want {
-				t.Errorf("bareTaskID = %q, want %q", got, tc.want)
+			if got := cmp.Or(sessionTaskID("sess-1"), checkoutTaskID(t.Context(), tg)); got != tc.want {
+				t.Errorf("bare task = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -320,8 +321,8 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := bareTaskID(t.Context(), tg, ""); got != want {
-			t.Errorf("bareTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
+		if got := checkoutTaskID(t.Context(), tg); got != want {
+			t.Errorf("checkoutTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
 		}
 	}
 }

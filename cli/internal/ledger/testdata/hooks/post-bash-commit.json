@@ -1,0 +1,1 @@
+{"session_id":"bench","cwd":"/tmp","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git commit -m \"FT-12: add a retry\"","description":"run"},"tool_response":{"stdout":"[main b48b585] FT-12: add a retry\n 1 file changed, 1 insertion(+)\n","stderr":"","interrupted":false,"isImage":false},"tool_use_id":"toolu_10"}

@@ -32,7 +32,14 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 	case pushed:
 		return false, fmt.Errorf("%w: origin has %s with no PR: open one, or delete origin's copy to merge it here",
 			pullErr, branch)
-	case gitx.Out(ctx, in.main, "config", "--get", "branch."+branch+".merge") != "":
+	}
+
+	upstream, err := gitx.Config(ctx, in.main, "branch."+branch+".merge")
+
+	switch {
+	case err != nil:
+		return false, err
+	case upstream != "":
 		return false, fmt.Errorf("%w: %s tracks a branch origin no longer has; if its request merged on the host, "+
 			"finish it by hand", pullErr, branch)
 	}
@@ -44,16 +51,31 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 // default branch, or origin's copy when the local one is only behind it,
 // so origin's commits are never folded into the merge. Diverged is refused.
 func landingBase(ctx context.Context, dir, def string) (string, error) {
-	local := gitx.Out(ctx, dir, "rev-parse", "-q", "--verify", "refs/heads/"+def)
-	remote := gitx.Out(ctx, dir, "rev-parse", "-q", "--verify", "refs/remotes/origin/"+def)
+	local, err := gitx.Ref(ctx, dir, "refs/heads/"+def)
+	if err != nil {
+		return "", err
+	}
+
+	remote, err := gitx.Ref(ctx, dir, "refs/remotes/origin/"+def)
+	if err != nil {
+		return "", err
+	}
 
 	switch {
 	case local == "":
 		return "", fmt.Errorf("cannot read %s here", def)
-	case remote == "" || remote == local || gitx.IsAncestor(ctx, dir, remote, local):
+	case remote == "" || remote == local:
 		return local, nil
-	case gitx.IsAncestor(ctx, dir, local, remote):
-		return remote, nil
+	}
+
+	behind, err := gitx.IsAncestor(ctx, dir, remote, local)
+	if err != nil || behind {
+		return local, err
+	}
+
+	ahead, err := gitx.IsAncestor(ctx, dir, local, remote)
+	if err != nil || ahead {
+		return remote, err
 	}
 
 	return "", fmt.Errorf("%s and origin/%s have diverged: bring %s up to date with origin first", def, def, def)
@@ -67,14 +89,23 @@ func landingBase(ctx context.Context, dir, def string) (string, error) {
 // the default branch, as a rerun finds it, lands nothing.
 func landLocal(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
 	defRef, head := "refs/heads/"+def, "refs/heads/"+branch
-	old := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", defRef)
+	// old is the compare-and-swap value the ref moves from: an unread one
+	// would move it unchecked
+	old, err := gitx.Ref(ctx, in.main, defRef)
+	if err != nil {
+		return "", nil, err
+	}
 
 	base, err := landingBase(ctx, in.main, def)
 	if err != nil {
 		return "", nil, err
 	}
 
-	tip := gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", head)
+	tip, err := gitx.Ref(ctx, in.main, head)
+	if err != nil {
+		return "", nil, err
+	}
+
 	if tip == "" {
 		return "", nil, fmt.Errorf("cannot read %s here", branch)
 	}
@@ -102,7 +133,12 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 
 	switch method {
 	case "--rebase":
-		if !gitx.IsAncestor(ctx, in.main, base, head) {
+		ff, err := gitx.IsAncestor(ctx, in.main, base, head)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if !ff {
 			return "", nil, fmt.Errorf("%s is behind %s, and a rebase lands only a fast-forward here: "+
 				"run /f10:catchup in its worktree, then finish again", branch, def)
 		}

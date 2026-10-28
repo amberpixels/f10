@@ -2,7 +2,6 @@ package gitx
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,7 +24,7 @@ func script(t *testing.T, answers map[string]string) *[]string {
 
 		out, ok := answers[key]
 		if !ok {
-			return "", errors.New("unscripted: git " + key)
+			return "", &ExitError{Args: args, Code: 1}
 		}
 
 		return out, nil
@@ -150,24 +149,24 @@ func TestStatusListsEveryLine(t *testing.T) {
 func TestIsAncestorReadsTheExitCode(t *testing.T) {
 	script(t, map[string]string{"merge-base --is-ancestor abc main": ""})
 
-	if !IsAncestor(t.Context(), ".", "abc", "main") {
-		t.Error("a scripted success read as not an ancestor")
+	if ok, err := IsAncestor(t.Context(), ".", "abc", "main"); !ok || err != nil {
+		t.Errorf("a scripted success = %v, %v, want an ancestor", ok, err)
 	}
 
-	if IsAncestor(t.Context(), ".", "def", "main") {
-		t.Error("a failing merge-base read as an ancestor")
+	if ok, err := IsAncestor(t.Context(), ".", "def", "main"); ok || err != nil {
+		t.Errorf("merge-base exiting 1 = %v, %v, want no with no error", ok, err)
 	}
 }
 
 func TestMergesCleanlyReadsTheExitCode(t *testing.T) {
 	script(t, map[string]string{"merge-tree --write-tree origin/main origin/GH-1": ""})
 
-	if !MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-1") {
-		t.Error("a scripted clean merge read as a conflict")
+	if ok, err := MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-1"); !ok || err != nil {
+		t.Errorf("a scripted clean merge = %v, %v, want clean", ok, err)
 	}
 
-	if MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-2") {
-		t.Error("a failing merge-tree read as clean")
+	if ok, err := MergesCleanly(t.Context(), ".", "origin/main", "origin/GH-2"); ok || err != nil {
+		t.Errorf("merge-tree exiting 1 = %v, %v, want a conflict with no error", ok, err)
 	}
 }
 
@@ -204,12 +203,65 @@ func TestMergesCleanlyOnARealConflict(t *testing.T) {
 	write("side\n")
 	run("commit", "-qam", "side")
 
-	if MergesCleanly(t.Context(), dir, "main", "side") {
-		t.Error("a conflicting branch read as clean")
+	if ok, err := MergesCleanly(t.Context(), dir, "main", "side"); ok || err != nil {
+		t.Errorf("a conflicting branch = %v, %v, want a conflict", ok, err)
 	}
 
-	if !MergesCleanly(t.Context(), dir, "main", "other") {
-		t.Error("a branch behind main read as conflicting")
+	if ok, err := MergesCleanly(t.Context(), dir, "main", "other"); !ok || err != nil {
+		t.Errorf("a branch behind main = %v, %v, want clean", ok, err)
+	}
+
+	if _, err := MergesCleanly(t.Context(), dir, "main", "no-such-branch"); err == nil {
+		t.Error("a bad ref read as a conflict, want an error")
+	}
+}
+
+// Read tells "not there" from "git could not tell", against a real git: a
+// missing key is absent, a config git cannot parse is an error.
+func TestReadTellsAbsentFromFailed(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := Exec(t.Context(), dir, "init", "-q", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SetConfig(t.Context(), dir, "branch.x.f10-watch", "false"); err != nil {
+		t.Fatal(err)
+	}
+
+	if v, err := Config(t.Context(), dir, "branch.x.f10-watch"); v != "false" || err != nil {
+		t.Errorf("a set key = %q, %v", v, err)
+	}
+
+	if v, present, err := Read(
+		t.Context(),
+		dir,
+		"config",
+		"--get",
+		"branch.y.f10-watch",
+	); v != "" || present ||
+		err != nil {
+		t.Errorf("a missing key = %q, %v, %v, want absent with no error", v, present, err)
+	}
+
+	if sha, err := Ref(t.Context(), dir, "MERGE_HEAD"); sha != "" || err != nil {
+		t.Errorf("no merge in progress = %q, %v, want absent with no error", sha, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[broken\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Config(t.Context(), dir, "branch.x.f10-watch"); err == nil {
+		t.Error("an unparsable config read as absent, want an error")
+	}
+
+	if _, err := ConfigEntries(t.Context(), dir, "^branch\\."); err == nil {
+		t.Error("an unparsable config listed no entries, want an error")
+	}
+
+	if _, err := IsAncestor(t.Context(), dir, "HEAD", "main"); err == nil {
+		t.Error("ancestry in a broken repo read as no, want an error")
 	}
 }
 
@@ -276,7 +328,11 @@ func TestConfigEntries(t *testing.T) {
 		`config --get-regexp ^branch\..*\.f10-after-branch$`: "branch.GH-8/a.b.f10-after-branch GH-7/base\nbranch.GH-9.f10-after-branch main",
 	})
 
-	got := ConfigEntries(t.Context(), ".", `^branch\..*\.f10-after-branch$`)
+	got, err := ConfigEntries(t.Context(), ".", `^branch\..*\.f10-after-branch$`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	want := []ConfigEntry{
 		{Key: "branch.GH-8/a.b.f10-after-branch", Value: "GH-7/base"},
 		{Key: "branch.GH-9.f10-after-branch", Value: "main"},
@@ -287,8 +343,8 @@ func TestConfigEntries(t *testing.T) {
 	}
 
 	// no match is git's exit 1, which reads as an empty list
-	if got := ConfigEntries(t.Context(), ".", "^nothing$"); got != nil {
-		t.Errorf("entries for no match = %+v, want none", got)
+	if got, err := ConfigEntries(t.Context(), ".", "^nothing$"); got != nil || err != nil {
+		t.Errorf("entries for no match = %+v, %v, want none", got, err)
 	}
 }
 

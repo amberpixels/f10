@@ -141,6 +141,8 @@ type ledgerTask struct {
 // readLedger reads the project's events once. A ledger that is missing or
 // will not open has nothing to say: status only reads.
 func readLedger(ctx context.Context, main string) []ledger.Event {
+	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
+
 	l, err := ledger.OpenRead(ctx, ledger.Path())
 	if err != nil {
 		return nil
@@ -249,7 +251,7 @@ type rowSource struct {
 	live   []*state.Run
 	events []ledger.Event
 	// checkout is the task's branch and the checkout holding it, "" for none
-	checkout func(ctx context.Context, id string) (string, string)
+	checkout func(ctx context.Context, id, suffix string) (string, string)
 	// resolve is a reference as typed, in the project's id format; nil
 	// takes it as written
 	resolve func(token string) string
@@ -311,7 +313,7 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts)
 
 	branch, root := "", ""
 	if src.checkout != nil {
-		branch, root = src.checkout(ctx, k.ID)
+		branch, root = src.checkout(ctx, k.ID, k.suffix)
 	}
 
 	if root != "" {
@@ -622,13 +624,13 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 	src := rowSource{live: live, events: readLedger(ctx, main)}
 
-	src.checkout = func(ctx context.Context, id string) (string, string) {
+	src.checkout = func(ctx context.Context, id, suffix string) (string, string) {
 		r, err := t.reference(ctx, id)
 		if err != nil {
 			return "", ""
 		}
 
-		name, root, err := taskCheckout(ctx, main, t.driver(), r, "")
+		name, root, err := taskCheckout(ctx, main, t.driver(), r, suffix)
 		if err != nil {
 			return "", ""
 		}

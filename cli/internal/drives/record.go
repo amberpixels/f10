@@ -26,6 +26,7 @@ type Record struct {
 	Model       string     `yaml:"model,omitempty"` // the run-wide --model as typed
 	DriveFinish bool       `yaml:"drive_finish"`
 	Cancelled   *time.Time `yaml:"cancelled,omitempty"`
+	Session     string     `yaml:"session,omitempty"` // the session that created it, "" from a plain terminal
 	// Answers are given and not yet taken, by task id, "" for the bare one
 	Answers  map[string]string `yaml:"answers,omitempty"`
 	Answered []Answer          `yaml:"answered,omitempty"`

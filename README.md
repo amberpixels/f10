@@ -288,9 +288,10 @@ updated   4m ago
 ```
 
 Bare `f10 status` reads the current task the way `f10 status <id>` does, gates included: the task this session's run records, else the one the branch or the worktree's name carries.
+In the main checkout, where the branch names no task, a session that ran `f10 start` or `f10 drive` gets a `launched here` tree first: a row per task it started or drove that is still live, finished ones and done or cancelled drives left out, `--json` printing task rows.
 With no task to name, a terminal lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
 A named task makes `--json` take the shape `f10 status <id>` prints: a run list, the fallback object, or task rows.
-Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
+Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens, unless the `launched here` tree holds a question a driven agent waits on, which goes to the model to ask and forward.
 
 `f10 status 1042` reads another run: the one in the worktree that has the task's branch.
 An agent there runs **driven** ([modes/driven.md](modes/driven.md)): instead of asking in a pane nobody watches, it writes its questions to run state as one `ask` row and stops blocked.

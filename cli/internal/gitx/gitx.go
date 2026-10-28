@@ -13,15 +13,16 @@ package gitx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// Exec runs git with args in dir and returns trimmed stdout. A failure
-// carries git's own stderr, which names the cause better than any wrapper
-// could.
+// Exec runs git with args in dir and returns trimmed stdout. A non-zero
+// exit is an *ExitError carrying git's own stderr, which names the cause
+// better than any wrapper could, and the code, which Read needs.
 var Exec = func(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
@@ -32,6 +33,10 @@ var Exec = func(ctx context.Context, dir string, args ...string) (string, error)
 
 	out, err := cmd.Output()
 	if err != nil {
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok && ctx.Err() == nil {
+			return "", &ExitError{Args: args, Code: exit.ExitCode(), Stderr: strings.TrimSpace(stderr.String())}
+		}
+
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return "", fmt.Errorf("git %s: %s", args[0], msg)
 		}
@@ -42,8 +47,33 @@ var Exec = func(ctx context.Context, dir string, args ...string) (string, error)
 	return strings.TrimSpace(string(out)), nil
 }
 
-// Out runs git and returns trimmed stdout, or "" on any error - absence is
-// a valid result everywhere a read uses it.
+// An ExitError is git having run and exited non-zero.
+type ExitError struct {
+	Args   []string
+	Code   int
+	Stderr string
+}
+
+func (e *ExitError) Error() string {
+	if e.Stderr != "" {
+		return fmt.Sprintf("git %s: %s", e.Args[0], e.Stderr)
+	}
+
+	return fmt.Sprintf("git %s: exit status %d", e.Args[0], e.Code)
+}
+
+// absent reports whether err is git's exit 1, which the quiet forms of a
+// read (`config --get`, `rev-parse -q --verify`, `symbolic-ref -q`,
+// `merge-base --is-ancestor`) use for "not there" or "no".
+func absent(err error) bool {
+	exit, ok := errors.AsType[*ExitError](err)
+
+	return ok && exit.Code == 1
+}
+
+// Out runs git and returns trimmed stdout, or "" on any error. It cannot
+// tell "not there" from "git failed", so it is for display only: a read
+// that decides what f10 does next goes through Read.
 func Out(ctx context.Context, dir string, args ...string) string {
 	out, err := Exec(ctx, dir, args...)
 	if err != nil {
@@ -51,6 +81,38 @@ func Out(ctx context.Context, dir string, args ...string) string {
 	}
 
 	return out
+}
+
+// Read runs a quiet git read: exit 0 is the value and present, exit 1 is
+// absent with no error, and anything else - a lock, a broken worktree, a
+// killed git - is the error. A form whose "not there" exits 128 (a
+// rev-parse --verify without -q) reads absence as an error, which halts
+// rather than proceeds.
+func Read(ctx context.Context, dir string, args ...string) (string, bool, error) {
+	out, err := Exec(ctx, dir, args...)
+
+	switch {
+	case err == nil:
+		return out, true, nil
+	case absent(err):
+		return "", false, nil
+	default:
+		return "", false, err
+	}
+}
+
+// Config is one local config value; absent is "" with no error.
+func Config(ctx context.Context, dir, key string) (string, error) {
+	v, _, err := Read(ctx, dir, "config", "--get", key)
+
+	return v, err
+}
+
+// Ref is the sha ref names, "" with no error when there is no such ref.
+func Ref(ctx context.Context, dir, ref string) (string, error) {
+	sha, _, err := Read(ctx, dir, "rev-parse", "-q", "--verify", ref)
+
+	return sha, err
 }
 
 // Refs lists the refs matching patterns, in git's own order, as branch
@@ -185,23 +247,51 @@ func CurrentBranch(ctx context.Context, dir string) string {
 	return Out(ctx, dir, "branch", "--show-current")
 }
 
-// IsAncestor reports whether commit is reachable from ref. git answers
-// with its exit code, so any failure reads as "no".
-func IsAncestor(ctx context.Context, dir, commit, ref string) bool {
+// IsAncestor reports whether commit is reachable from ref: git answers
+// with exit 0 or 1. An unknown object is a no too, since a recorded sha may
+// name a commit squashed away; anything else is an error.
+func IsAncestor(ctx context.Context, dir, commit, ref string) (bool, error) {
 	_, err := Exec(ctx, dir, "merge-base", "--is-ancestor", commit, ref)
 
-	return err == nil
+	switch {
+	case err == nil:
+		return true, nil
+	case absent(err) || unknownObject(err):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// quiet reports a git exit with nothing on stderr.
+func quiet(err error) bool {
+	exit, ok := errors.AsType[*ExitError](err)
+
+	return ok && exit.Stderr == ""
+}
+
+func unknownObject(err error) bool {
+	exit, ok := errors.AsType[*ExitError](err)
+
+	return ok && (strings.Contains(exit.Stderr, "Not a valid") || strings.Contains(exit.Stderr, "bad object"))
 }
 
 // MergesCleanly reports whether head merges into base without a conflict,
 // tried in memory the way a host tries a pull request: nothing is checked
-// out or written. git exits 1 for a conflict and higher for a bad ref, and
-// any failure reads as "no", so a caller checks that both refs exist first.
+// out or written. git exits 1 both for a conflict, reported on stdout, and
+// for a ref it cannot merge, reported on stderr, which is an error.
 // Not --quiet: git 2.56 exits 0 with it on a conflict.
-func MergesCleanly(ctx context.Context, dir, base, head string) bool {
+func MergesCleanly(ctx context.Context, dir, base, head string) (bool, error) {
 	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", base, head)
 
-	return err == nil
+	switch {
+	case err == nil:
+		return true, nil
+	case absent(err) && quiet(err):
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 // MergeTree is the tree of head merged into base, built in memory as
@@ -354,11 +444,11 @@ type ConfigEntry struct {
 
 // ConfigEntries lists the local config entries whose key matches pattern,
 // in git's order. No match is an empty list, not an error: git exits 1 for
-// it, and absence is a valid answer here.
-func ConfigEntries(ctx context.Context, dir, pattern string) []ConfigEntry {
-	out := Out(ctx, dir, "config", "--get-regexp", pattern)
-	if out == "" {
-		return nil
+// it.
+func ConfigEntries(ctx context.Context, dir, pattern string) ([]ConfigEntry, error) {
+	out, _, err := Read(ctx, dir, "config", "--get-regexp", pattern)
+	if err != nil || out == "" {
+		return nil, err
 	}
 
 	var entries []ConfigEntry
@@ -368,7 +458,7 @@ func ConfigEntries(ctx context.Context, dir, pattern string) []ConfigEntry {
 		entries = append(entries, ConfigEntry{Key: key, Value: value})
 	}
 
-	return entries
+	return entries, nil
 }
 
 // UnsetConfig removes one entry from the repository's local config.

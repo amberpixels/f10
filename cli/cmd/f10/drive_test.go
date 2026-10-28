@@ -2348,13 +2348,13 @@ func TestDriveSpikeShortcutNeedsABranchNeverPushed(t *testing.T) {
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, chain: []string{"ship"}, pos: 1}
 	r.o.path, r.o.branch = "/code/repo.GH-1", "GH-1"
 
-	if !fx.in.spikeDone(t.Context(), r) {
+	if done, _ := fx.in.spikeDone(t.Context(), r); !done {
 		t.Error("a spike never pushed took no shortcut")
 	}
 
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "abc")
 
-	if fx.in.spikeDone(t.Context(), r) {
+	if done, _ := fx.in.spikeDone(t.Context(), r); done {
 		t.Error("a pushed spike took the shortcut")
 	}
 }
