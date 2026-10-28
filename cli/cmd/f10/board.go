@@ -545,7 +545,7 @@ func boardLines(b lookaround.Board) boardModel {
 // lineOf is one row reduced to its line.
 func lineOf(r lookaround.Row) boardLine {
 	line := boardLine{
-		Group:      boardGroup(r.Stage),
+		Group:      lookaround.StateGroup(r),
 		Key:        r.Key,
 		URL:        rowURL(r),
 		Stage:      r.Stage,
@@ -778,7 +778,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 		)
 
 		for _, r := range b.Rows {
-			if r.Stage == lookaround.StageDone || r.Stage == lookaround.StageNext {
+			if lookaround.StateGroup(r) != lookaround.GroupInProgress {
 				continue
 			}
 
@@ -1075,18 +1075,6 @@ func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 		stageStyle(r.Stage).Render(fmt.Sprintf("%-*s", lay.stageW, r.Stage)),
 		lay.faint.Render(fmt.Sprintf("%-7s", from)),
 		title, lay.faint.Render(strings.Join(tail, "  ")))
-}
-
-// boardGroup is the heading a stage sits under.
-func boardGroup(stage string) string {
-	switch stage {
-	case lookaround.StageNext:
-		return "next"
-	case lookaround.StageDone:
-		return "done"
-	default:
-		return "in progress"
-	}
 }
 
 func boardWho(r lookaround.Row) string {

@@ -1,4 +1,4 @@
-# The board, version 3
+# The board, version 4
 
 What changed in a project over a calendar window (**the feed**, `view: feed`, the default), or where every task of it stands: done lately, in progress at which stage and who owes the next move, and what comes next (**the state**, `view: state`, `f10 board --state`).
 `f10 board` prints it; `--json` prints the **Board JSON** this file specifies, `docs/board.schema.json` is its JSON Schema, and `cli/internal/lookaround` the one implementation.
@@ -10,7 +10,7 @@ The state view:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "generated_at": "2026-10-23T12:00:00Z",
   "view": "state",
   "project": { "id": "github.com/acme/widgets", "name": "widgets", "host": "gh", "checkout": "/code/widgets", "remote": false },
@@ -45,7 +45,7 @@ The state view:
 | `project` | `id` is the normalised remote (`github.com/org/repo`); `name` the main checkout's basename; `host` `gh` or `glab`; `checkout` the main checkout, absent with `--remote`; `remote` true when the local collector was skipped; `local_only` true for a checkout with no origin remote |
 | `window` | `since`, the start of the feed's span or of the period the state's `done` rows cover; for the feed, `end` (exclusive; absent for a span from a time until now), `chosen` (the window named, `since <time>` for a time, or the default's pick: `today` or `last-workday`) and `fallback` (true when the default fell back because today has no activity yet) |
 | `sources` | one entry per collector, in order `host`, `tracker`, `local`: `ok`, `skipped` (on purpose), `error` (why it failed), `notes` (what it could not read, the rest kept; `local only` on a local-only checkout's skipped host), `took_ms` |
-| `rows` | the state's rows, in stage order (below), `next` rows by priority then the tracker's order, the rest by last activity; empty in the feed |
+| `rows` | the state's rows, by group (below) then stage order (below), `next` rows by priority then the tracker's order, the rest by last activity; empty in the feed |
 | `feed` | the feed's rows and quiet line (below); absent in the state |
 
 **A row** is one task, or one request naming no task.
@@ -79,7 +79,7 @@ Rows are listed in this order:
 | `in-review` | reviewed or being reviewed, something still open |
 | `pr-open` | an open request nobody has reviewed |
 | `implementing` | code being written: a live run before `pr`, or a draft request |
-| `planned` | a plan saved, no code yet |
+| `planned` | started, no code yet: a plan saved, or a worktree with nothing ahead |
 | `merged-unfinished` | merged in the window, its worktree still on disk; releases its dependents like `done` |
 | `next` | open on the tracker, not started |
 | `done` | merged in the window, nothing left behind |
@@ -108,13 +108,15 @@ A request merged before the window, or closed unmerged, is no request.
 5. **In review**: a live run at `review`, `resolve` or `judge` (`local`); the latest findings file has open findings and the request is open (`local`); the block's step is one of those with `open` above zero (`trace`); a review submitted, a reviewer requested, changes requested, or the declared remote reviewer's review unhandled (`guessed`).
 6. **Open**: an open request, not a draft: `trace` with a state block, `guessed` without.
 7. **Implementing**: a live run in `ship` (`local`); a draft request (`guessed`); a worktree with commits past the default branch, for a task the tracker lists as open (`local`).
-8. **Planned**: a plan file for a task the tracker lists as open, or a live run in `plan` (`local`).
+8. **Planned**: a plan file or a worktree with no commits past the default branch, for a task the tracker lists as open, or a live run in `plan` (`local`).
 9. **Next**: a task the tracker lists as open (`tracker`).
 10. Nothing above: not a row.
 
 **The base rule** runs after, in dependency order: a row whose base task (the `f10-after` the branch records, else the block's `after`, else the task body's `After:`) has a row neither `done` nor `merged-unfinished` is `blocked` with that base in `blocked_by`, unless a run is working on it or it is already done, merged or asking; `stage_from` is the base link's source.
 Merging releases a dependent; the base's leftover worktree or branch is its own chore.
 A base with no row on the board counts as done, so a reader with the checkout and one without agree.
+
+**The groups.** A state row draws under `in progress`, `next` or `done`, listed in that order: `next` and `done` rows under their own, and a `blocked` row held only by its base, with no worktree, branch or request of its own, under `next`, after the rows that can start now; every other row under `in progress`.
 
 ## Next actions
 
@@ -127,7 +129,7 @@ A base with no row on the board counts as done, so a reader with the checkout an
 | `in-review` | `/f10:resolve <id> ci` with a remote review unhandled; `/f10:resolve <id>` with findings open; `changes requested`; `at <step>` for a live run; else `waiting on review` |
 | `pr-open` | `/f10:review <id>` |
 | `implementing` | `at <step>` for a live run; `/f10:ship <id>` for a worktree; `in progress` for a draft |
-| `planned` | `/f10:ship <id>` with a worktree, else `f10 start <id>` |
+| `planned` | `/f10:status <id>` while a run plans; `/f10:ship <id>` with a worktree; else `f10 start <id>` |
 | `next` | `f10 start <id>` |
 
 A row with no task id gets a sentence where a command would need one.

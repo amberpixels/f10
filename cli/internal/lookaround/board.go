@@ -11,7 +11,7 @@ import "time"
 
 // Version is the Board JSON's version; a change to a stage rule or a
 // field's meaning bumps it with the spec.
-const Version = 3
+const Version = 4
 
 // The two views a board is: what changed in the window, and where every
 // task stands.
@@ -94,6 +94,33 @@ const (
 var Stages = []string{
 	StageAsksWaiting, StageBlocked, StageReady, StageInReview, StagePROpen,
 	StageImplementing, StagePlanned, StageMergedUnfinished, StageNext, StageDone,
+}
+
+// The groups the state's rows draw under, in listing order.
+const (
+	GroupInProgress = "in progress"
+	GroupNext       = "next"
+	GroupDone       = "done"
+)
+
+// StateGroups is every state group in listing order.
+var StateGroups = []string{GroupInProgress, GroupNext, GroupDone}
+
+// StateGroup is the heading a state row draws under: a row held only by
+// its base, with no work of its own, is still next. board.html's group()
+// mirrors it.
+func StateGroup(r Row) string {
+	switch {
+	case r.Stage == StageNext:
+		return GroupNext
+	case r.Stage == StageDone:
+		return GroupDone
+	case r.Stage == StageBlocked && len(r.BlockedBy) > 0 &&
+		r.Where.Worktree == "" && r.Where.Branch == "" && r.Where.PR == nil:
+		return GroupNext
+	default:
+		return GroupInProgress
+	}
 }
 
 // Where a stage's or a group's evidence came from: local state, the

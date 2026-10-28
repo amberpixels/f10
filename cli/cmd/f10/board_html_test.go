@@ -471,3 +471,19 @@ func TestEmitBoard(t *testing.T) {
 		t.Errorf("file: %v, %q", err, got)
 	}
 }
+
+// A task held only by its base, with no work of its own, draws under next,
+// after the tasks that can start now; one held from its own branch stays
+// in progress.
+func TestBoardGroupsAWaitingTaskUnderNext(t *testing.T) {
+	var got []string
+
+	for _, l := range boardLines(htmlBoards(t)["waiting-base"]).Rows {
+		got = append(got, l.Group+" "+l.Key)
+	}
+
+	want := []string{"in progress FT-8", "in progress FT-9", "in progress FT-7", "next FT-11", "next FT-10"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lines %q, want %q", got, want)
+	}
+}

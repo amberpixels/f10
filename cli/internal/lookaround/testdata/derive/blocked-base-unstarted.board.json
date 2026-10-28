@@ -1,0 +1,116 @@
+{
+  "version": 4,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "view": "state",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "checkout": "/code/widgets",
+    "remote": false
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-4",
+      "task": {
+        "id": "FT-4",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/4",
+        "status": "open"
+      },
+      "stage": "blocked",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-4-3bd12f"
+      },
+      "where": {
+        "branch": "FT-4/slug",
+        "worktree": "/code/widgets.FT-4-slug"
+      },
+      "blocked_by": [
+        "FT-1"
+      ],
+      "next": {
+        "text": "waiting on FT-1"
+      }
+    },
+    {
+      "key": "FT-1",
+      "task": {
+        "id": "FT-1",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/1",
+        "status": "open"
+      },
+      "stage": "implementing",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-1-916fca"
+      },
+      "where": {
+        "branch": "FT-1/slug",
+        "worktree": "/code/widgets.FT-1-slug"
+      },
+      "last_activity": "2026-10-23T11:00:00Z",
+      "next": {
+        "text": "at implement"
+      }
+    },
+    {
+      "key": "FT-3",
+      "task": {
+        "id": "FT-3",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/3",
+        "status": "open"
+      },
+      "stage": "next",
+      "stage_from": "tracker",
+      "who": {},
+      "where": {},
+      "next": {
+        "command": "f10 start FT-3"
+      }
+    },
+    {
+      "key": "FT-2",
+      "task": {
+        "id": "FT-2",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/2",
+        "status": "open",
+        "after": "FT-1"
+      },
+      "stage": "blocked",
+      "stage_from": "guessed",
+      "who": {},
+      "where": {},
+      "blocked_by": [
+        "FT-1"
+      ],
+      "next": {
+        "text": "waiting on FT-1"
+      }
+    }
+  ]
+}

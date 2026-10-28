@@ -689,10 +689,10 @@ It writes nothing to the host.
 Each project is collected on its own, a few at a time: one that cannot be read (a `project.md` that does not parse, a host CLI that errors) shows every source failed with the error, and every other project renders.
 Checkouts of one repository are read once, from the first given; a repository named outright that a checkout already covers is dropped.
 
-- `--all` or `--group` prints one line per project. The feed's line counts its rows per group and the quiet requests, under one header naming the shared span; `--state`'s is `<n> in flight` (rows neither `done` nor `next`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
+- `--all` or `--group` prints one line per project. The feed's line counts its rows per group and the quiet requests, under one header naming the shared span; `--state`'s is `<n> in flight` (rows under `in progress`), `<m> waiting on you` (those whose next action is a command: an ask to answer, a review to resolve, a merge to finish, a plan to ship), `oldest <key> <age>` (the in-flight row with the earliest `last_activity`), then any failed source; `nothing in flight` where that is so, and `failed` with the error for a project nothing could read.
 - `--detail`, or a scope of more than one `-C` with no `--all` or `--group`, prints every project's rows under a heading with its name; one `-C` prints the board as this checkout's.
 - `--by person` prints rows grouped by `who.person` across projects, a heading per person, the unresolved last under `nobody`, each row naming its project.
-- `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 3 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
+- `--json` over several projects (`--all`, `--group`, more than one `-C`) prints a JSON array of Board documents, one per project in scope order, each the version 4 document `docs/board.md` specifies; one project, this checkout or one `-C`, prints one document. A server run every few minutes reads each board's `sources[].took_ms` for the cost of a run.
 
 **Your file**, `~/.f10/board.md`, YAML frontmatter then free prose, an unknown key an error:
 
@@ -728,6 +728,7 @@ A task with several requests is one row, led by the latest opened, its summary n
 A state row's stage says where the task is (`asks-waiting`, `blocked`, `ready`, `in-review`, `pr-open`, `implementing`, `planned`, `merged-unfinished` (merged, its worktree still on disk), `next`, `done`) and `stage_from` where the evidence came from: `local` for this machine's state, `trace` for the traces the project left on the host, `tracker` for a `next` row, `guessed` for the host's own facts alone.
 On a repository nothing ever traced, read with `--remote`, every in-progress row is `guessed`.
 The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
+Rows draw under `in progress`, `next` and `done`; a task waiting only on its unmerged base, with nothing of its own started, stays under `next`, after the tasks that can start now.
 Inside a session, `/f10:board` runs the command with the same flags and prints its output; with `--state` it offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.
 
 ## Stats

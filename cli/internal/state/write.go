@@ -353,14 +353,15 @@ func isDescription(args string) bool {
 }
 
 // refTaskOf is the task the argument's first token names: a task id as is, a
-// plan path by basename. Empty for a url, a description or nothing.
+// bundle by its lead, a plan path by basename. Empty for a url, a
+// description or nothing.
 func refTaskOf(args string) string {
 	toks := tokens(args)
 	if len(toks) == 0 {
 		return ""
 	}
 
-	first := toks[0]
+	first, _, _ := strings.Cut(toks[0], "+")
 
 	switch {
 	case strings.HasSuffix(first, ".md"):
@@ -422,6 +423,13 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 		}
 	} else {
 		r.Task, r.URL, r.Capture, r.Plan = "", "", "pending", "pending"
+
+		// a full id names the task before fetch reports it, so the board
+		// ties the run to its row from the start; a bare number waits for
+		// fetch, which knows the project's prefix
+		if ref := refTaskOf(args); skill != "capture" && idToken.MatchString(ref) {
+			r.Task = strings.ToUpper(ref)
+		}
 	}
 
 	// open the first phase here, where the argument is: a description routes

@@ -114,7 +114,7 @@
 // The renderer draws the Board JSON above and decides no stage or group.
 // model() reduces the board to lines, render() draws them; the terminal
 // renderer builds the same model, and a test holds the two to each other.
-var KNOWN_VERSION = 3;
+var KNOWN_VERSION = 4;
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -133,9 +133,13 @@ function localDate(iso) {
   return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 }
 
-function group(stage) {
-  if (stage === "next") return "next";
-  if (stage === "done") return "done";
+// group() mirrors lookaround.StateGroup: a row held only by its base,
+// with no work of its own, is still next
+function group(r) {
+  var w = r.where || {};
+  if (r.stage === "next") return "next";
+  if (r.stage === "done") return "done";
+  if (r.stage === "blocked" && (r.blocked_by || []).length && !w.worktree && !w.branch && !w.pr) return "next";
   return "in progress";
 }
 
@@ -241,7 +245,7 @@ function model(board) {
   rows.forEach(function (r) {
     var pr = r.where && r.where.pr;
     var line = {
-      group: group(r.stage),
+      group: group(r),
       key: r.key,
       url: (r.task && r.task.url) || (pr && pr.url) || "",
       stage: r.stage,
