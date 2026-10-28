@@ -19,7 +19,7 @@ The working tree ends as it started: a reproduction script lives in the session'
 4. **Diagnose**: the root cause at a `file:line`, confirmed by evidence that changing it changes the outcome, not by reading alone.
    Separate cause from symptom: the line that throws is the symptom when the bad value was made elsewhere.
 5. **Not reproduced, or the cause still a guess after a few reads**: ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, per `modes/driven.md`), and retry the reproduction once with the answer.
-   Still not reproduced: `f10-state.sh set capture blocked debug` and, in the same call, a `note` naming what was tried and what to collect next.
+   Still not reproduced, or the cause still a guess: `f10-state.sh set capture blocked debug` and, in the same call, a `note` naming what was tried and what to collect next.
    Report both and stop: no task is created and no file written.
 6. **Output the debug brief**: the report in one line; **Reproduction** (steps or input, expected, actual); **Root cause** (the `file:line` and the evidence that confirmed it); and the test that will fail before the fix, its name and assertion in words.
 

@@ -165,10 +165,15 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 
 // skillOf is the f10 skill a command or Skill-tool name refers to; empty
 // means not one that opens a phase. The bare form is accepted too: a wrong
-// match costs one wrong badge for one turn. debug opens capture.
+// match costs one wrong badge for one turn. debug opens capture, prefixed
+// only: a bare `debug` is as likely another plugin's, and seeding clears the run.
 func skillOf(name string) string {
+	if name == "f10:debug" {
+		return "debug"
+	}
+
 	name = strings.TrimPrefix(name, "f10:")
-	if slices.Contains(state.Phases, name) || name == "debug" {
+	if slices.Contains(state.Phases, name) {
 		return name
 	}
 

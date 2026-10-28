@@ -44,7 +44,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
    **Never re-run a failed `f10 task create` whose error says the task may exist**, whatever `conventions/failure.md` rule 3 allows: report the failure and let the user check the tracker.
    Any other failure (a missing title, an unknown priority or id) ran before the driver did: fix the input and run it again.
    Apply the project's declared default status/labels.
-   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later; a debug brief always gets the bug label, since its kind is confirmed.
+   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later; a debug brief gets it whenever one exists, since its kind is confirmed.
    A spike gets its label only when the user calls the task one, since the label alone makes ship skip the PR.
    A split creates the parent first, then links each subtask to it: through the driver, `--parent` is the link; through the adapter, the tracker's native parent link, the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.

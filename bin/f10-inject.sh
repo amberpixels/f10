@@ -43,6 +43,8 @@ json_get() { # json_get <key> [<parent object>], jq where it exists, sed otherwi
 }
 
 skill_of() { # the skill a payload names, as `f10:plan` or `plan`, if it reads the conventions
+  # a bare `debug` is as likely another plugin's
+  [ "$1" = "debug" ] && return 0
   local n="${1#f10:}"
   case " $skills " in *" $n "*) printf '%s' "$n" ;; esac
 }

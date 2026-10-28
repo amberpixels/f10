@@ -140,6 +140,15 @@ func TestSeedDebugOpensCapture(t *testing.T) {
 	}
 }
 
+// A bare `debug` may be another plugin's skill, so it never reseeds the run.
+func TestSkillOfDebugNeedsThePrefix(t *testing.T) {
+	for name, want := range map[string]string{"f10:debug": "debug", "debug": "", "plan": "plan"} {
+		if got := skillOf(name); got != want {
+			t.Errorf("skillOf(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 type recorder struct{ got []observe.Observation }
 
 func (r *recorder) Observe(_ context.Context, o observe.Observation) error {
