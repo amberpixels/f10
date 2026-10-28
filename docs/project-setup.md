@@ -65,7 +65,7 @@ Go service for invoices.
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |
 | `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
-| `drive_finish` | `on` or `off`: `f10 drive` ends each task with `finish`, merging its PR | `off` |
+| `drive_finish` | `on` or `off`: `f10 drive` ends each task with `finish`, merging its PR; a spike is closed after ship either way, since its close merges nothing | `off` |
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
@@ -231,6 +231,7 @@ Putting a project-defined step in a declared flow is the selection: unlike `push
 A spike is the exception: its run ends after implement, whatever the flow, with a spike report.
 
 `f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when `drive_finish: on`.
+A spike is closed after ship whatever `drive_finish` says: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
 A rerun keeps the flow a task's branch recorded when it started.
 A project whose only merges are a human's leaves `drive_finish` off.
 
