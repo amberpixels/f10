@@ -1652,7 +1652,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			// a catchup clears a mark but restores the ship stop it noted, so
 			// git, not the note, says whether that stop still holds
 			if at := resumeAt(skill, run); at != "" && in.unsettled(ctx, r) == "" {
-				fmt.Fprintf(w, "%s %s: the catchup settled the branch, resuming at %s\n", id, skill, run.Leaf)
+				fmt.Fprintf(w, "%s %s: stopped for a catchup, the branch is settled: %s\n", id, skill, at)
 
 				return in.prompt(ctx, w, r, ws, skill, at)
 			}
@@ -1716,24 +1716,38 @@ func (in *driveInput) prompt(
 
 // resumeAt is the steering that resumes a ship the catchup guard stopped,
 // `resume at pr`, naming its place when the flow names the entry twice;
-// "" for any other stop. Catchup is no flow entry, so a failed catchup has
-// nowhere to resume.
+// "" for any other stop. A failed catchup is no flow entry but keeps the
+// place of the entry it guarded, which is where ship resumes.
 func resumeAt(skill string, run *state.Run) string {
-	switch {
-	case skill != "ship", run.Ask != "", !state.Stopped(run.Ship),
-		!strings.Contains(run.Next, "/f10:catchup"),
-		run.Leaf == "catchup", !slices.Contains(run.Pipeline, run.Leaf):
+	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
 		return ""
 	}
 
-	s := "resume at " + run.Leaf
-	twice := slices.Contains(run.Pipeline[slices.Index(run.Pipeline, run.Leaf)+1:], run.Leaf)
+	entry := run.Leaf
+
+	switch {
+	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
+		entry = run.Pipeline[run.At-1]
+	case !strings.Contains(run.Next, "/f10:catchup"):
+		return ""
+	}
+
+	step, _, _ := strings.Cut(entry, ":")
+	if !slices.Contains(guardedSteps, step) || !slices.Contains(run.Pipeline, entry) {
+		return ""
+	}
+
+	s := "resume at " + entry
+	twice := slices.Contains(run.Pipeline[slices.Index(run.Pipeline, entry)+1:], entry)
 	if run.At > 0 && twice {
 		s += fmt.Sprintf(" (entry %d)", run.At)
 	}
 
 	return s
 }
+
+// guardedSteps are the entries ship's catchup guard runs before.
+var guardedSteps = []string{"implement", "pr", "judge"}
 
 // steered puts steering after the skill's subject, before any chained
 // clause and the driven marker, so the skill reads it as its own.

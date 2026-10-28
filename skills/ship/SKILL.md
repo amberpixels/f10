@@ -32,6 +32,7 @@ Deploy has its own confirmation (the **deploy** step).
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
   `resume at <entry>` (sent by `f10 drive` once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.
+  The badge walks to that place: after `pipeline`, one call runs `set ship running` on each entry before it, in order, then on the entry itself.
 
 **Run**
 1. Run `f10-load-project.sh` first, on every call of this skill, naming the steps the input needs: `capture fetch plan` for a description, `fetch plan` for a task id, none for a plan file.

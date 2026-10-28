@@ -486,41 +486,73 @@ func (fx *driveFixture) adoptsGH1() {
 
 // A ship the catchup guard stopped before pr resumes on a rerun once a
 // catchup settled the branch: the stale stop is not a halt, and ship is
-// prompted again at the entry it stopped on.
+// prompted again at the entry it stopped on. A failed catchup resumes at the
+// entry it guarded, and a resumed ship that stops again halts.
 func TestDriveResumesAShipStopACatchupSettled(t *testing.T) {
-	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.adoptsGH1()
-	fx.writeShipStop(t, "partial", "pr", 7, catchupNext)
-
-	prompt := "/f10:ship GH-1 resume at pr (entry 7) --driven"
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt, "{}")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
-	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
-	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
-
-	if err := fx.drive(t); err != nil {
-		t.Fatalf("%v\n%s", err, fx.out.String())
+	cases := map[string]struct {
+		status, leaf string
+		at           int
+		prompt       string
+		again        bool
+	}{
+		"guard stop":     {"partial", "pr", 7, "/f10:ship GH-1 resume at pr (entry 7) --driven", false},
+		"failed catchup": {"failed", "catchup", 4, "/f10:ship GH-1 resume at pr (entry 4) --driven", false},
+		"stops again":    {"partial", "pr", 7, "/f10:ship GH-1 resume at pr (entry 7) --driven", true},
+		"single entry":   {"partial", "implement", 2, "/f10:ship GH-1 resume at implement --driven", false},
 	}
 
-	if !fx.f.called("herdr agent prompt " + agentOf("GH-1") + " " + prompt) {
-		t.Errorf("ship was not prompted to resume at pr: %q\n%s", fx.f.calls, fx.out.String())
-	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+			fx.writeShipStop(t, tc.status, tc.leaf, tc.at, catchupNext)
 
-	if !strings.Contains(fx.out.String(), "GH-1:    done: ship") {
-		t.Errorf("output = %s", fx.out.String())
+			fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+tc.prompt, "{}")
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+			fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+			fx.onTick[2] = func() {
+				if tc.again {
+					fx.writeShipStop(t, "partial", "pr", 7, catchupNext)
+
+					return
+				}
+
+				fx.writeRun(t, "done", "", "", "")
+			}
+
+			err := fx.drive(t)
+
+			if !fx.f.called("herdr agent prompt " + agentOf("GH-1") + " " + tc.prompt) {
+				t.Errorf("ship was not prompted with %q: %q\n%s", tc.prompt, fx.f.calls, fx.out.String())
+			}
+
+			if tc.again {
+				if exitCode(err) != exitHalted ||
+					!strings.Contains(fx.out.String(), "GH-1 halted at ship: conflict with main") {
+					t.Errorf("err = %v\n%s", err, fx.out.String())
+				}
+
+				return
+			}
+
+			if err != nil || !strings.Contains(fx.out.String(), "GH-1:    done: ship") {
+				t.Errorf("err = %v\n%s", err, fx.out.String())
+			}
+		})
 	}
 }
 
 // Every other stop still halts on a rerun, its note and next printed and
 // nothing prompted: a branch catchup has not settled, a stop catchup does
-// not fix, or a leaf with no flow entry to resume at.
+// not fix, or an entry the guard does not run before. A marked branch is
+// sent a catchup first, which halts on the same stop.
 func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 	cases := map[string]struct {
 		status, leaf string
 		next         string
 		git          [2]string // a command the branch answers otherwise
 	}{
-		"still marked": {
+		"marked, catchup first": {
 			"partial",
 			"pr",
 			catchupNext,
@@ -529,7 +561,13 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 		"merge in progress": {"partial", "pr", catchupNext, [2]string{"git rev-parse -q --verify MERGE_HEAD", "abc"}},
 		"dirty tree":        {"partial", "pr", catchupNext, [2]string{"git status --porcelain", " M a.go"}},
 		"red verify":        {"failed", "implement", "fix the failing test, then rerun the drive", [2]string{}},
-		"catchup failed":    {"failed", "catchup", catchupNext, [2]string{}},
+		"catchup failed, merge left": {
+			"failed",
+			"catchup",
+			catchupNext,
+			[2]string{"git rev-parse -q --verify MERGE_HEAD", "abc"},
+		},
+		"review advises catchup": {"partial", "review:local", catchupNext, [2]string{}},
 	}
 
 	for name, tc := range cases {
@@ -550,7 +588,6 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 			}
 
 			out := fx.out.String()
-			// a marked branch halts at the catchup drive sends it first
 			if !strings.Contains(out, ": conflict with main") || !strings.Contains(out, "next: "+tc.next) {
 				t.Errorf("output = %s", out)
 			}
@@ -2281,9 +2318,12 @@ func TestResumeAtSteering(t *testing.T) {
 	}
 
 	for run, want := range map[*state.Run]string{
-		stop("pr", 4):      "resume at pr (entry 4)",
-		stop("cleanup", 3): "resume at cleanup",
-		stop("catchup", 4): "",
+		stop("pr", 4):        "resume at pr (entry 4)",
+		stop("implement", 2): "resume at implement",
+		stop("catchup", 4):   "resume at pr (entry 4)",
+		stop("catchup", 0):   "",
+		stop("pr", 0):        "resume at pr",
+		stop("cleanup", 3):   "",
 		{Ship: "partial", Leaf: "pr", At: 4, Pipeline: pipeline, Next: "fix it"}: "",
 	} {
 		if got := resumeAt("ship", run); got != want {
