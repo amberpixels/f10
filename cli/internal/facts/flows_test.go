@@ -202,8 +202,9 @@ func TestBuildFlowsFromLegacyKeys(t *testing.T) {
 		t.Errorf("finish %v, problems %+v", eff.DriveFinish, eff.Problems)
 	}
 
+	// the ignored chain says nothing about finish either: the default holds
 	both := buildWith(t, "---\nflows: {default: plan implement pr}\ndrive_chain: [plan, ship]\n---\n", "")
-	if got := strings.Join(both.Flows["default"], " "); got != "plan implement pr" || both.DriveFinish {
+	if got := strings.Join(both.Flows["default"], " "); got != "plan implement pr" || !both.DriveFinish {
 		t.Errorf("flows beside drive_chain = %q, finish %v", got, both.DriveFinish)
 	}
 
@@ -217,8 +218,9 @@ func TestBuildFlowsFromLegacyKeys(t *testing.T) {
 		t.Errorf("paren flow = %q, problems %+v", got, paren.Problems)
 	}
 
+	// nothing declared: the default flow, and a drive that finishes its tasks
 	none := buildWith(t, "---\nvisibility: stealth\n---\n", "")
-	if got := strings.Join(none.Flows["default"], " "); got != DefaultFlow || none.DriveFinish {
+	if got := strings.Join(none.Flows["default"], " "); got != DefaultFlow || !none.DriveFinish {
 		t.Errorf("default flow = %q, finish %v", got, none.DriveFinish)
 	}
 }
@@ -259,6 +261,15 @@ func TestMigrateLegacyBlock(t *testing.T) {
 
 	if _, err := Migrate([]byte(m.Content), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
 		t.Errorf("a second migration = %v", err)
+	}
+
+	// a chain without finish meant a drive that stops after ship, which the
+	// default no longer says, so the migration writes the opt-out
+	stops, err := Migrate(
+		[]byte("---\npipelines:\n  default: implement → pr\ndrive_chain: plan → ship\n---\n"), "project.md",
+	)
+	if err != nil || !strings.Contains(stops.Content, "flows:\n  default: plan implement pr\ndrive_finish: off\n") {
+		t.Errorf("a chain without finish = %+v, %v", stops, err)
 	}
 
 	// old-form entries inside flows are rewritten too
