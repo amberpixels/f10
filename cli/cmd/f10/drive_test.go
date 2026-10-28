@@ -561,6 +561,12 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 			[2]string{"git rev-parse -q --verify MERGE_HEAD", "abc"},
 		},
 		"review advises catchup": {"partial", "review:local", catchupNext, [2]string{}},
+		"judge stop, marked": {
+			"blocked",
+			"judge",
+			"answer the judge, then rerun the drive",
+			[2]string{"git config --get branch.GH-1." + cfgLanded, "main"},
+		},
 	}
 
 	for name, tc := range cases {
@@ -614,7 +620,17 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 		"settled": {
 			after: restored,
 			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
-			want:  []string{"the catchup guard conflicted, catching up", "the branch is settled: resume at pr", "GH-1:    done: ship"},
+			want: []string{
+				"the catchup guard conflicted, catching up",
+				"the branch is settled: resume at pr",
+				"GH-1:    done: ship",
+			},
+		},
+		"settled, nothing written": {
+			// a catchup that never stopped leaves the run as it found it
+			after: func(fx *driveFixture, _ *testing.T) { fx.f.script("git config --get branch.GH-1."+cfgLanded, "") },
+			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
+			want:  []string{"the branch is settled: resume at pr", "GH-1:    done: ship"},
 		},
 		"rerun": {
 			rerun: true,
@@ -701,8 +717,8 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	}
 }
 
-// restored is what a clean driven catchup leaves: the mark cleared and the
-// ship stop it found written back.
+// restored is what a driven catchup that stopped, then ended clean, leaves:
+// the mark cleared and the ship stop it found written back.
 func restored(fx *driveFixture, t *testing.T) {
 	t.Helper()
 	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)

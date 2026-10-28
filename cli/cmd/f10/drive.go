@@ -1867,7 +1867,8 @@ func (in *driveInput) poll(
 	if recent && stoppedRun(run) {
 		switch {
 		case skill == "catchup" && guardStop(run):
-			// a clean catchup restores the stop it found, so git says how it ended
+			// a catchup that stopped and then ended clean restores the stop it
+			// found, so git says how it ended
 		case skill == "ship" && guardStop(run) && !r.guardCatchup && in.marked(ctx, r):
 			r.guardCatchup = true
 
@@ -2070,11 +2071,13 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 	ledger.Record(ctx, ledger.BusyAsync, e)
 }
 
-// guardStop reports a ship stop a catchup does not own, as the catchup
-// guard leaves one: no question, and a leaf other than catchup, where a
-// driven catchup writes its own ask and failure.
+// guardStop reports a ship stop shaped like the catchup guard's: failed
+// or partial with no question, at an entry the guard runs before. A
+// judge's stop is blocked, and a driven catchup stops at leaf catchup.
 func guardStop(run *state.Run) bool {
-	return run.Ask == "" && state.Stopped(run.Ship) && run.Leaf != "catchup"
+	step, _, _ := strings.Cut(run.Leaf, ":")
+
+	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(guardedSteps, step)
 }
 
 // stoppedRun reports whether any phase halted: blocked, failed or partial.
