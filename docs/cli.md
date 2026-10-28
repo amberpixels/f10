@@ -365,7 +365,7 @@ The title goes on the line beneath, cut to fit; the ask, the halt reason and wha
 A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
 On a terminal the id and the PR are links (OSC 8).
-`--plain` prints the same tree with no color, each row's url (the PR's, else the task's) as a last column and its gates as a `gates` line under the title, titles and lines cut to `$COLUMNS`, else 100.
+`--plain` prints the same tree with no color, its gates as a `gates` line and its url (the PR's, else the task's) as a `url` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask or a url is never cut.
 A skill relays it in a fenced block: relayed text shows an OSC 8 link's escape bytes, and a markdown table is reflowed at pane width.
 It applies only to the tree; a run's block prints as without it.
 
@@ -896,7 +896,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
-`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, each task's url last, and `--open` leaves out the finished rows.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, each task's url on a `url` line beneath it, and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
 
 ## Children
 
@@ -943,7 +943,7 @@ An id the tracker does not know, or a tracker that fails, prints bare with a not
 `f10 task report` prints the facts block a skill's report opens with (`conventions/report.md`), from the same titles and urls as `task ref`.
 One id prints its `task`, `title` and `url` rows.
 Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
-`--children` takes one parent and hangs its open subtasks under it, in `f10 task children` order, on box-drawing lines:
+`--children` takes one parent and hangs the subtasks `f10 task children` lists (closed ones left out) under it, in that order, on box-drawing lines:
 
 ```
 FT-71:        ↗ https://github.com/amberpixels/f10/issues/71

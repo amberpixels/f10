@@ -35,7 +35,7 @@ The status-line badge draws the same facts as three glyphs.
    Print forward's block (task, workspace, sent) in a fenced `yaml` block and stop.
    The agent resumes in its own tab; this session's badge stays as it is.
 3. **A parent prints a tree**, a row per child, instead of a block.
-   An `asking` child carries an `ask` line under its row; read the asks from `f10 status <task-id> --json` (the `ask` of each row) and put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
+   An `asking` child carries its question, whole, on an `ask` line under its row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
    No `asking` child: the tree is the whole answer.
    Stop.
 4. No `ask` row: the status is the whole answer.

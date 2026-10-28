@@ -55,14 +55,17 @@ func TestParent(t *testing.T) {
 		{
 			Depth: 2, Cells: cells("✗ FT-213", "halted", "implement"), Title: "Keep asks in an inbox",
 			Notes: []Note{
-				{"halt", "catchup guard: merging FT-212 conflicts in drives/record.go, docs/cli.md"},
-				{"next", "/f10:catchup in this worktree, then /f10:ship FT-213"},
+				{Label: "halt", Text: "catchup guard: merging FT-212 conflicts in drives/record.go, docs/cli.md"},
+				{Label: "next", Text: "/f10:catchup in this worktree, then /f10:ship FT-213"},
 			},
 		},
 		{
 			Depth: 2, Cells: cells("? FT-214", "asking", "judge"),
 			Title: "Let the daemon watch tasks no drive owns, a title long enough to be cut at eighty",
-			Notes: []Note{{"ask", "1. Proceed? [yes | no]"}},
+			Notes: []Note{{
+				Label: "ask", Whole: true,
+				Text: "1. Proceed? [yes | no], an ask long enough that a cut would lose its options",
+			}},
 		},
 		{Cells: cells("✓ FT-211", "done", "finish", "#215"), Title: "Put agent control behind an interface"},
 		{Cells: cells("· FT-230", "not started", ""), Title: "An unrelated task"},
@@ -73,7 +76,7 @@ func TestParent(t *testing.T) {
 func TestSingle(t *testing.T) {
 	golden(t, "single", Tree{Align: true}, []Node{{
 		Cells: cells("✓ FT-1", "done", "finish", "#2"), Title: "One task",
-		Notes: []Note{{"judge", "proceed"}, {"implement", "done"}},
+		Notes: []Note{{Label: "judge", Text: "proceed"}, {Label: "implement", Text: "done"}},
 	}})
 }
 

@@ -20,10 +20,12 @@ type Cell struct {
 	Render func(text string) string
 }
 
-// A Note is a labelled line under a row: an ask, a halt, a gate.
+// A Note is a labelled line under a row: an ask, a halt, a gate. Whole
+// keeps it uncut, for text a reader acts on (a url, a question).
 type Note struct {
 	Label string
 	Text  string
+	Whole bool
 }
 
 // A Node is one task. Depth 0 is the top level; a node one deeper than the
@@ -155,7 +157,12 @@ func (t Tree) Write(w io.Writer, nodes []Node) error {
 			}
 
 			gap := strings.Repeat(" ", text-2-width(note.Label)-width(conts[i]))
-			b.WriteString(t.Indent + conts[i] + gap + label + "  " + t.cut(note.Text, text) + "\n")
+			value := note.Text
+			if !note.Whole {
+				value = t.cut(value, text)
+			}
+
+			b.WriteString(t.Indent + conts[i] + gap + label + "  " + value + "\n")
 		}
 	}
 

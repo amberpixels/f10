@@ -112,7 +112,7 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("open") {
-		rows = slices.DeleteFunc(rows, func(r childRow) bool { return r.Finished })
+		rows = openRows(rows)
 	}
 
 	plain := cmd.Bool("plain")
@@ -128,6 +128,12 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return writeTree(cmd.Writer, rows, plain)
+}
+
+// openRows is rows without the finished ones, put in tree order again: a
+// dependent of a finished base moves up to where its base stood.
+func openRows(rows []childRow) []childRow {
+	return childTree(slices.DeleteFunc(slices.Clone(rows), func(r childRow) bool { return r.Finished }))
 }
 
 // rawChildren asks the driver's `children`, else the host. A driver that
@@ -280,7 +286,8 @@ func childTree(rows []childRow) []childRow {
 
 // writeTree prints the rows as the tree drive shows: box lines down each
 // After: chain, the base named beside each dependent, and draft marked.
-// plain adds each task's url, for text relayed where a link does not survive.
+// plain adds each task's url on a line beneath, for text relayed where a
+// link does not survive.
 func writeTree(w io.Writer, rows []childRow, plain bool) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no children")
@@ -305,11 +312,12 @@ func writeTree(w io.Writer, rows []childRow, plain bool) error {
 			cells = append(cells, tasktree.Cell{Text: "finished"})
 		}
 
-		if plain {
-			cells = append(cells, tasktree.Cell{Text: r.URL})
+		node := tasktree.Node{Depth: r.Depth, Cells: cells}
+		if plain && r.URL != "" {
+			node.Notes = []tasktree.Note{{Label: "url", Text: r.URL, Whole: true}}
 		}
 
-		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells}
+		nodes[i] = node
 	}
 
 	return tasktree.Tree{}.Write(w, nodes)

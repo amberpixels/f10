@@ -70,6 +70,38 @@ func TestChildTree(t *testing.T) {
 	}
 }
 
+// --open drops the finished rows and re-trees the rest: a dependent of a
+// finished base moves up to its base's level instead of hanging under the
+// row before it. --plain puts each url on a line beneath its row.
+func TestOpenPlainTree(t *testing.T) {
+	rows := childTree(childRows(
+		[2]string{"FT-72", ""},
+		[2]string{"FT-73", ""},
+		[2]string{"FT-74", "FT-73"},
+		[2]string{"FT-75", "FT-74"},
+	))
+	for i := range rows {
+		rows[i].URL = "https://tracker.example/" + strings.TrimPrefix(rows[i].ID, "FT-")
+		rows[i].Finished = rows[i].ID == "FT-73"
+	}
+
+	var out bytes.Buffer
+	if err := writeTree(&out, openRows(rows), true); err != nil {
+		t.Fatal(err)
+	}
+
+	want := `FT-72  t72
+  url  https://tracker.example/72
+FT-74  t74  after FT-73
+│ url  https://tracker.example/74
+└─ FT-75  t75  after FT-74
+     url  https://tracker.example/75
+`
+	if out.String() != want {
+		t.Errorf("open plain tree =\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
 // childTarget is a GitHub or GitLab target with no driver and an empty
 // plan archive, under the fakes.
 func childTarget(t *testing.T, cli string) *target {

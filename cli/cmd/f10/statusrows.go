@@ -401,7 +401,7 @@ func rowStageStyle(stage string) lipgloss.Style {
 }
 
 // rowView is how task rows print: on a terminal in color with the ids and
-// PRs linked, else as text, which plain gives a url column and a width so a
+// PRs linked, else as text, which plain gives a url line and a width so a
 // skill can relay it where a terminal link does not survive.
 type rowView struct {
 	parent string // the parent's id, heading its children; "" for a task alone
@@ -454,10 +454,6 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 
 		cells = append(cells, tasktree.Cell{Text: prColumn(r)})
 
-		if v.plain {
-			cells = append(cells, tasktree.Cell{Text: cmp.Or(r.PR, r.URL)})
-		}
-
 		if v.term {
 			glyph, id, url := stateGlyph(r.Stage), r.ID, r.URL
 			stage, pr := rowStageStyle(r.Stage), r.PR
@@ -474,7 +470,12 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 		}
 
 		for _, sub := range r.subLines() {
-			notes = append(notes, tasktree.Note{Label: sub[0], Text: sub[1]})
+			notes = append(notes, tasktree.Note{Label: sub[0], Text: sub[1], Whole: sub[0] == "ask"})
+		}
+
+		// a url is never cut, and on a line of its own the row stays narrow
+		if url := cmp.Or(r.PR, r.URL); v.plain && url != "" {
+			notes = append(notes, tasktree.Note{Label: "url", Text: url, Whole: true})
 		}
 
 		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells, Title: r.Title, Notes: notes}

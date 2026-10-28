@@ -11,7 +11,7 @@ FT-209  4 done · 2 halted · 1 asking
 │     │      next  /f10:catchup in this worktree, then /f10:ship FT-213
 │     └─ ? FT-214  asking       judge
 │                  Let the daemon watch tasks no drive owns, a title long enoug…
-│             ask  1. Proceed? [yes | no]
+│             ask  1. Proceed? [yes | no], an ask long enough that a cut would lose its options
 ├─ ✓ FT-211        done         finish     #215
 │            Put agent control behind an interface
 └─ · FT-230        not started
