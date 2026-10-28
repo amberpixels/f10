@@ -612,16 +612,16 @@ func TestDriveEnv(t *testing.T) {
 }
 
 func TestWatch(t *testing.T) {
-	if eff := buildWith(t, "", ""); eff.Watch != "report" {
-		t.Errorf("default watch = %q, want report", eff.Watch)
+	if eff := buildWith(t, "", ""); eff.Watch != "finish" {
+		t.Errorf("default watch = %q, want finish", eff.Watch)
 	}
 
-	eff := buildWith(t, "---\nwatch: finish\n---\n", "")
-	if eff.Watch != "finish" || eff.Errors() != "" {
+	eff := buildWith(t, "---\nwatch: report\n---\n", "")
+	if eff.Watch != "report" || eff.Errors() != "" {
 		t.Errorf("watch %q, errors %q", eff.Watch, eff.Errors())
 	}
 
-	if f := factFor(t, eff, "watch"); f.Value != "finish" {
+	if f := factFor(t, eff, "watch"); f.Value != "report" {
 		t.Errorf("fact = %+v", f)
 	}
 

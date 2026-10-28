@@ -61,7 +61,7 @@ func watchCommand() *cli.Command {
 			"their merged PRs, stalled agents and stopped runs",
 		Description: "Bare, it lists each task the last pass saw and what it reported. " +
 			"f10 start and f10 drive hand the project to the daemon, which runs a pass every few minutes; " +
-			"watch: report (the default), finish or off in project.md says what a pass may do.",
+			"watch: finish (the default), report or off in project.md says what a pass may do.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "pass", Hidden: true, Usage: "run one pass over this project, as the daemon does"},
 		},

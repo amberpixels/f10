@@ -171,7 +171,7 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 		})
 	}
 
-	e.Watch = cmp.Or(fm.Watch, "report")
+	e.Watch = cmp.Or(fm.Watch, "finish")
 	if fm.Watch != "" {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "watch",
