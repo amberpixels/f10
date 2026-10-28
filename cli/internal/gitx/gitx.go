@@ -321,6 +321,30 @@ func RemoteBranchExists(ctx context.Context, dir, branch string) (bool, error) {
 	return out != "", nil
 }
 
+// RemoteBranches is every branch origin has, name to tip sha, in one
+// network read. A checkout with no origin has none.
+func RemoteBranches(ctx context.Context, dir string) (map[string]string, error) {
+	if Out(ctx, dir, "remote", "get-url", "origin") == "" {
+		return map[string]string{}, nil
+	}
+
+	out, err := Exec(ctx, dir, "ls-remote", "--heads", "origin")
+	if err != nil {
+		return nil, err
+	}
+
+	branches := map[string]string{}
+
+	for line := range strings.Lines(out) {
+		sha, name, ok := strings.Cut(strings.TrimSpace(line), "\t")
+		if ok {
+			branches[strings.TrimPrefix(name, "refs/heads/")] = sha
+		}
+	}
+
+	return branches, nil
+}
+
 // A ConfigEntry is one key and its value as `config --get-regexp` lists them.
 type ConfigEntry struct {
 	Key   string

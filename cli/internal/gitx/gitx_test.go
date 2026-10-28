@@ -249,6 +249,28 @@ func TestRemoteBranchExists(t *testing.T) {
 	}
 }
 
+func TestRemoteBranches(t *testing.T) {
+	script(t, map[string]string{
+		"remote get-url origin":    "git@x:a/b.git",
+		"ls-remote --heads origin": "abc\trefs/heads/GH-1\ndef\trefs/heads/feat/GH-2-x",
+	})
+
+	got, err := RemoteBranches(t.Context(), ".")
+	if err != nil || len(got) != 2 || got["GH-1"] != "abc" || got["feat/GH-2-x"] != "def" {
+		t.Errorf("RemoteBranches = %v, %v", got, err)
+	}
+}
+
+// Without origin there is nothing to ask, and ls-remote is never run.
+func TestRemoteBranchesWithoutOrigin(t *testing.T) {
+	calls := script(t, map[string]string{})
+
+	got, err := RemoteBranches(t.Context(), ".")
+	if err != nil || len(got) != 0 || len(*calls) != 1 {
+		t.Errorf("RemoteBranches = %v, %v, calls %q", got, err, *calls)
+	}
+}
+
 func TestConfigEntries(t *testing.T) {
 	script(t, map[string]string{
 		`config --get-regexp ^branch\..*\.f10-after-branch$`: "branch.GH-8/a.b.f10-after-branch GH-7/base\nbranch.GH-9.f10-after-branch main",

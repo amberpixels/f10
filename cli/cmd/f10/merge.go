@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -240,11 +241,17 @@ func (h host) retargetPull(ctx context.Context, p pull, base string) error {
 // because it also deletes the local branch, which git refuses while a
 // worktree has it checked out, and gh then exits non-zero after the merge
 // landed. Unlike the host's own delete on merge, this one closes every
-// request still based on branch, so callers retarget them first.
+// request still based on branch, so callers retarget them first. GitHub
+// takes the ref's slashes as path segments, GitLab wants the name as one.
 func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
+	segments := strings.Split(branch, "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+
 	_, err := h.Run(ctx, h.Pick(
-		[]string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + branch},
-		[]string{"api", "-X", "DELETE", "projects/:fullpath/repository/branches/" + branch},
+		[]string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + strings.Join(segments, "/")},
+		[]string{"api", "-X", "DELETE", "projects/:fullpath/repository/branches/" + url.PathEscape(branch)},
 	)...)
 
 	return err

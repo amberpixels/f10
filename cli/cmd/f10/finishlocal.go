@@ -132,6 +132,15 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 	return sha, notes, nil
 }
 
+// alreadyLanded reports whether every change on head is in base already:
+// merging it would leave base's tree as it is, the case landLocal lands
+// nothing for. A conflict is not landed.
+func alreadyLanded(ctx context.Context, dir, base, head string) bool {
+	tree, err := gitx.MergeTree(ctx, dir, base, head)
+
+	return err == nil && tree == gitx.Out(ctx, dir, "rev-parse", base+"^{tree}")
+}
+
 // squashMessage is what a squash merged here says: the task and its title,
 // as a PR title carries them, else the branch's first commit subject; then
 // the branch's subjects when it has several, and the trailers with traces

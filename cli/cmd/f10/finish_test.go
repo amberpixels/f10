@@ -1834,6 +1834,27 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 	}
 }
 
+// The janitor runs once the task's own cleanup is done and before the
+// workspace closes, since closing its own workspace ends the process.
+func TestFinishSweepsBeforeTheWorkspaceCloses(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script("sweep", "")
+	fx.in.sweep = func(context.Context) { fx.f.answer("sweep") }
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	removed := slices.Index(fx.f.calls, "git branch -D GH-1")
+	swept := slices.Index(fx.f.calls, "sweep")
+	closed := slices.Index(fx.f.calls, "herdr workspace close ws:9")
+
+	if removed < 0 || swept < removed || closed < swept {
+		t.Errorf("branch removed at %d, swept at %d, workspace closed at %d", removed, swept, closed)
+	}
+}
+
 // A bare finish is the branch's task, over the session's; a typed id still
 // splits its suffix, and on the default branch, or under -C, nothing
 // finishes unasked, the session's task included.
