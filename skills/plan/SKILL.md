@@ -1,8 +1,8 @@
 ---
 name: plan
-description: "f10 plan skill - produce a senior-architect implementation plan for a task. Use when the user says \"/f10:plan <task-id | description>\". Fetches or creates the task, investigates the code, writes a staged plan, then stops before implementing."
+description: "f10 plan skill - produce a senior-architect implementation plan for a task. Use when the user says \"/f10:plan [<task-id | description>]\". Fetches or creates the task, investigates the code, writes a staged plan, then stops before implementing."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ExitPlanMode
-argument-hint: "<task-id | free-text description>"
+argument-hint: "[<task-id | free-text description>]"
 ---
 
 # f10 · plan
@@ -19,7 +19,9 @@ argument-hint: "<task-id | free-text description>"
   - **A task already in this conversation** (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.
     **Skip `capture` and the `fetch` investigation**; go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
     Fetch's kind rules still run: settle the kind, and reproduce a bug or ask.
-  - No task in the conversation: ask for one in one line and wait.
+  - No task in the conversation, and `f10 task current` prints an id (the branch's task): run it as a **task id**.
+    Say in one line which task you took and where from.
+  - `f10 task current` exits non-zero: ask for a task in one line and wait.
 - Extra text beside a task id is steering for the run, except a `&& /f10:<skill> ...` tail: that is a chain, run once the plan is saved (`conventions/report.md`).
 
 **Run**

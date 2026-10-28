@@ -40,6 +40,7 @@ f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
+f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
@@ -67,7 +68,7 @@ f10 stats [--since 30d] [<id>]   # active plan and implement minutes per task, w
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a flow, each task once its base has a commit
-f10 finish <id>[-suffix] [--yes] [--close <ids|all|none>]   # merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
+f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id

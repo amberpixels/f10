@@ -10,10 +10,12 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The fixture every finish test starts from: GH-1's branch is checked out
@@ -1850,5 +1852,80 @@ func TestFinishSweepsBeforeTheWorkspaceCloses(t *testing.T) {
 
 	if removed < 0 || swept < removed || closed < swept {
 		t.Errorf("branch removed at %d, swept at %d, workspace closed at %d", removed, swept, closed)
+	}
+}
+
+// A bare finish is the branch's task, over the session's; a typed id still
+// splits its suffix, and on the default branch, or under -C, nothing
+// finishes unasked, the session's task included.
+func TestFinishRef(t *testing.T) {
+	repo := tracedRepo(t, "DM-5/fix", "")
+	sessionTask(t, "DM-9")
+
+	tg, err := targetAt(t.Context(), repo, false, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r, suffix, _, err := finishRef(t.Context(), tg, ""); err != nil || r.ID != "DM-5" || suffix != "" {
+		t.Errorf("bare = %q %q %v, want DM-5 and no suffix", r.ID, suffix, err)
+	}
+
+	if _, _, branch, _ := finishRef(t.Context(), tg, ""); branch != "DM-5/fix" {
+		t.Errorf("bare branch = %q, want the one checked out here", branch)
+	}
+
+	if r, suffix, _, err := finishRef(t.Context(), tg, "DM-7-b"); err != nil || r.ID != "DM-7" || suffix != "b" {
+		t.Errorf("DM-7-b = %q %q %v, want DM-7 and suffix b", r.ID, suffix, err)
+	}
+
+	scoped, err := targetAt(t.Context(), repo, true, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err = finishRef(t.Context(), scoped, "")
+	if err == nil || !strings.Contains(err.Error(), "explicit task id") {
+		t.Errorf("bare under -C: err = %v, want a refusal", err)
+	}
+
+	onMain := tracedRepo(t, "main", "")
+	sessionTask(t, "DM-9")
+
+	tg, err = targetAt(t.Context(), onMain, false, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r, _, _, err := finishRef(t.Context(), tg, "")
+	if err == nil || !strings.Contains(err.Error(), "branch names no task") {
+		t.Errorf("bare on main with a session task = %q, %v; want a refusal", r.ID, err)
+	}
+}
+
+// A bare call in a suffixed task's worktree finishes that branch, not the
+// unsuffixed sibling the id alone would find.
+func TestFinishTargetTakesTheBareCallsBranch(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(refsLocal, heads("GH-1", "GH-1-b"))
+	fx.f.script(worktrees, porcelain("GH-1", fx.main+".other", "GH-1-b", fx.wt))
+	fx.in.branch = "GH-1-b"
+
+	name, path, _, err := finishTarget(t.Context(), fx.in)
+	if err != nil || name != "GH-1-b" || path != fx.wt {
+		t.Errorf("finishTarget = %q %q %v, want GH-1-b at %s", name, path, err, fx.wt)
+	}
+}
+
+// sessionTask records id as this session's task, as a plan run's badge does.
+func sessionTask(t *testing.T, id string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", dir)
+	t.Setenv("F10_SESSION_ID", "sess-1")
+
+	if err := (&state.Run{Session: "sess-1", Task: id}).Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
 	}
 }

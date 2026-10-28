@@ -42,6 +42,12 @@ func taskCommand() *cli.Command {
 				Action: runTaskRead,
 			},
 			{
+				Name: "current",
+				Usage: "print the task the branch names, else the one this session's run records " +
+					"(exit 1: none)",
+				Action: runTaskCurrent,
+			},
+			{
 				Name: "ref",
 				Usage: "print each task as `<id> (<title>)`, or a markdown link with --md, from the titles f10 " +
 					"already read; an unknown id prints bare",
@@ -163,6 +169,24 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return writeDoc(ctx, cmd.Writer, t.dir, strings.Join(docs, "\n\n---\n\n"))
+}
+
+// runTaskCurrent names the task a bare skill call stands for, by the cascade
+// a bare finish walks, so no skill parses a branch name itself.
+func runTaskCurrent(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	r, err := t.reference(ctx, "")
+	if err != nil {
+		return fmt.Errorf("no current task: %w", err)
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, r.Label())
+
+	return err
 }
 
 // fetchFallback tells an agent reading a failed read that the project's
