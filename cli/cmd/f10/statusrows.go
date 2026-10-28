@@ -7,6 +7,7 @@ import (
 	"io"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
 // Stages, as `status <parent>` names them, one per row.
@@ -398,131 +400,121 @@ func rowStageStyle(stage string) lipgloss.Style {
 	}
 }
 
-// renderRows prints a line per row, columns padded to the widest value and
-// the title cut so the line fits limit (0: no limit), with the ask or the
-// halt reason on the lines beneath.
-func renderRows(w io.Writer, rows []taskRow, limit int) {
+// rowView is how task rows print: on a terminal in color with the ids and
+// PRs linked, else as text, which plain gives a url line and a width so a
+// skill can relay it where a terminal link does not survive.
+type rowView struct {
+	parent string // the parent's id, heading its children; "" for a task alone
+	width  int    // 0: no limit
+	term   bool
+	plain  bool
+}
+
+// stageOrder is the stages as a parent's heading counts them.
+var stageOrder = []string{
+	stageDone, stageShipped, stageAsking, stageHalted, stageImplementing, stageReviewing,
+	stageResolving, stageJudging, stagePlanning, stagePlanned, stageWaiting, stageNotStarted,
+}
+
+// renderRows prints the rows as a task tree: a parent's heading with a
+// count per stage, then a row per task with its title on the line beneath
+// and the ask, the halt reason, what unblocks it or a finished task's gates
+// under that.
+func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 	if len(rows) == 0 {
-		fmt.Fprintln(w, "no children")
+		_, err := fmt.Fprintln(w, "no children")
 
-		return
+		return err
 	}
 
-	ids := make([]string, len(rows))
-	prs := make([]string, len(rows))
-	gcs := make([]string, len(rows))
-
-	var idW, stageW, titleW, stepW, gatesW int
-
-	for i, r := range rows {
-		ids[i] = strings.Repeat("  ", r.Depth) + r.ID
-		prs[i] = prColumn(r)
-		gcs[i] = r.gateColumn()
-		idW = max(idW, lipgloss.Width(ids[i]))
-		stageW = max(stageW, len(r.Stage))
-		titleW = max(titleW, lipgloss.Width(r.Title))
-		stepW = max(stepW, lipgloss.Width(r.Step))
-		gatesW = max(gatesW, lipgloss.Width(gcs[i]))
-	}
-
-	if limit > 0 {
-		prW := 0
-		for _, p := range prs {
-			prW = max(prW, lipgloss.Width(p))
-		}
-
-		// two spaces between each of the columns
-		gap := 8
-		if gatesW > 0 {
-			gap += 2
-		}
-
-		titleW = max(10, min(titleW, limit-idW-stageW-stepW-gatesW-prW-gap))
+	tree := tasktree.Tree{Align: true, Width: v.width}
+	if v.parent != "" {
+		tree.Head = v.parent + "  " + stageCounts(rows)
 	}
 
 	faint := lipgloss.NewStyle().Faint(true)
-	indent := strings.Repeat(" ", idW+2)
+	if v.term {
+		tree.Label = func(s string) string { return faint.Render(s) }
+	}
+
+	// plain output keeps its rows narrow: the gates go on a line beneath
+	withGates := !v.plain && slices.ContainsFunc(rows, func(r taskRow) bool { return r.gateColumn() != "" })
+	nodes := make([]tasktree.Node, len(rows))
 
 	for i, r := range rows {
-		id, pr := pad(ids[i], idW), prs[i]
-
-		// links only on a terminal: piped output stays plain text
-		if limit > 0 {
-			lead := strings.Repeat("  ", r.Depth)
-			gap := strings.Repeat(" ", idW-lipgloss.Width(ids[i]))
-			id = lead + hyperlink(r.URL, r.ID) + gap
-			pr = hyperlink(r.PR, pr)
+		cells := []tasktree.Cell{
+			{Text: stateGlyph(r.Stage) + " " + r.ID},
+			{Text: r.Stage},
+			{Text: r.Step},
 		}
 
-		step := faint.Render(pad(r.Step, stepW))
-		if gatesW > 0 {
-			step += "  " + pad(gcs[i], gatesW)
+		if withGates {
+			cells = append(cells, tasktree.Cell{Text: r.gateColumn()})
 		}
 
-		line := fmt.Sprintf("%s  %s  %s  %s  %s",
-			id,
-			rowStageStyle(r.Stage).Render(pad(r.Stage, stageW)),
-			pad(cutTo(r.Title, titleW), titleW),
-			step,
-			pr)
-		fmt.Fprintln(w, strings.TrimRight(line, " "))
+		cells = append(cells, tasktree.Cell{Text: prColumn(r)})
+
+		if v.term {
+			glyph, id, url := stateGlyph(r.Stage), r.ID, r.URL
+			stage, pr := rowStageStyle(r.Stage), r.PR
+
+			cells[0].Render = func(string) string { return glyph + " " + hyperlink(url, id) }
+			cells[1].Render = func(s string) string { return stage.Render(s) }
+			cells[2].Render = func(s string) string { return faint.Render(s) }
+			cells[len(cells)-1].Render = func(s string) string { return hyperlink(pr, s) }
+		}
+
+		notes := make([]tasktree.Note, 0, 3)
+		if gc := r.gateColumn(); v.plain && gc != "" {
+			notes = append(notes, tasktree.Note{Label: "gates", Text: gc})
+		}
 
 		for _, sub := range r.subLines() {
-			fmt.Fprintf(w, "%s%s %s\n", indent, faint.Render(sub[0]+":"), sub[1])
+			notes = append(notes, tasktree.Note{Label: sub[0], Text: sub[1], Whole: sub[0] == "ask"})
 		}
+
+		// a url is never cut, and on a line of its own the row stays narrow
+		if url := cmp.Or(r.PR, r.URL); v.plain && url != "" {
+			notes = append(notes, tasktree.Note{Label: "url", Text: url, Whole: true})
+		}
+
+		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells, Title: r.Title, Notes: notes}
 	}
+
+	return tree.Write(w, nodes)
 }
 
-// markdownRows writes rows as a markdown table, ids and PRs linked, for a
-// skill to print in chat where a fenced block would show no links. A child
-// is indented with no-break spaces, which a table cell does not trim, and
-// an ask, halt or next line takes a row of its own under its task.
-func markdownRows(w io.Writer, rows []taskRow) {
-	if len(rows) == 0 {
-		fmt.Fprintln(w, "no children")
-
-		return
+// stateGlyph marks a row's stage at a glance: done, stopped, waiting on an
+// answer, or anything else.
+func stateGlyph(stage string) string {
+	switch stage {
+	case stageDone, stageShipped:
+		return "✓"
+	case stageHalted:
+		return "✗"
+	case stageAsking:
+		return "?"
 	}
 
-	cell := func(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
-	link := func(url, text string) string {
-		if url == "" {
-			return text
-		}
+	return "·"
+}
 
-		return "[" + text + "](" + url + ")"
-	}
-
-	withGates := slices.ContainsFunc(rows, func(r taskRow) bool { return r.gateColumn() != "" })
-
-	head, rule, blank := "| task | stage | title | step | PR |", "|---|---|---|---|---|", "| |"
-	if withGates {
-		head, rule, blank = "| task | stage | title | step | gates | PR |", "|---|---|---|---|---|---|", "| | |"
-	}
-
-	fmt.Fprintln(w, head)
-	fmt.Fprintln(w, rule)
-
+// stageCounts is `4 done · 2 halted`, the stages in stageOrder.
+func stageCounts(rows []taskRow) string {
+	n := map[string]int{}
 	for _, r := range rows {
-		pr := prColumn(r)
-		if r.PR != "" {
-			num, prState, _ := strings.Cut(pr, " ")
-			pr = strings.TrimSpace(link(r.PR, num) + " " + prState)
-		}
+		n[r.Stage]++
+	}
 
-		step := cell(r.Step)
-		if withGates {
-			step += " | " + cell(r.gateColumn())
-		}
+	var parts []string
 
-		fmt.Fprintf(w, "| %s%s | %s | %s | %s | %s |\n",
-			strings.Repeat("\u00a0\u00a0", r.Depth), link(r.URL, r.ID),
-			r.Stage, cell(r.Title), step, pr)
-
-		for _, sub := range r.subLines() {
-			fmt.Fprintf(w, "| | | %s: %s %s |\n", sub[0], cell(sub[1]), blank)
+	for _, st := range stageOrder {
+		if n[st] > 0 {
+			parts = append(parts, strconv.Itoa(n[st])+" "+st)
 		}
 	}
+
+	return strings.Join(parts, " · ")
 }
 
 // subLines is what prints under a row: the ask, the halt reason and what
@@ -572,24 +564,6 @@ func prColumn(r taskRow) string {
 // pullNumber is a request's url as `#128`.
 func pullNumber(url string) string {
 	return "#" + path.Base(url)
-}
-
-func pad(s string, width int) string {
-	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
-}
-
-// cutTo shortens s to width cells, an ellipsis marking the cut.
-func cutTo(s string, width int) string {
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-
-	runes := []rune(s)
-	for len(runes) > 0 && lipgloss.Width(string(runes))+1 > width {
-		runes = runes[:len(runes)-1]
-	}
-
-	return string(runes) + "…"
 }
 
 // parentRows is `status <id>` for a parent: its children, closed ones

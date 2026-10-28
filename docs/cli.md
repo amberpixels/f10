@@ -42,9 +42,10 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
+f10 task report <id>... [--children]   # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
-f10 task children [id] [--json]   # the task's open subtasks, in After: order
+f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] < task.md   # through the driver; prints the new id
 f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--set k=v]...   # absolute values
@@ -59,7 +60,7 @@ f10 review ack [n] [--id <id>]                        # leave the declared handl
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json | --markdown]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape), else this session's, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape), else this session's, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
@@ -69,6 +70,7 @@ f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --dis
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
+f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
@@ -344,20 +346,29 @@ Out of scope: more than one task or more than one command per call, tailing the 
 
 ## Status
 
-`f10 status 116` on a parent prints one row per child, closed ones included, in `f10 task children` order and indented the same way:
+`f10 status 116` on a parent prints a tree: a heading with a count per stage, then a row per child, closed ones included, in `f10 task children` order, on box-drawing lines down each `After:` chain:
 
 ```
-FT-117    done       trailers + traces switch  finish        #128 merged
-FT-118    reviewing  PR state block            review        #129
-  FT-120  waiting    look-around + f10 board   after FT-118
-FT-121    halted     sidebar icons             ship
-          halt: agent gh-121-1a2b3c in workspace w3 is idle while its run says ship running: implement
+FT-116  2 done · 1 halted · 1 reviewing
+├─ ✓ FT-117     done       finish  #128 merged
+│            trailers + traces switch
+├─ · FT-118     reviewing  review  #129
+│  │         PR state block
+│  └─ ✓ FT-120  done       finish  #131 merged
+│               look-around + f10 board
+└─ ✗ FT-121     halted     ship
+             sidebar icons
+       halt  agent gh-121-1a2b3c in workspace w3 is idle while its run says ship running: implement
 ```
 
-The columns are the id, the stage, the title cut to fit the terminal, the current or last step, and the PR with its state when it is not open.
+A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking, `·` anything else), the id, the stage, the current or last step, and the PR with its state when it is not open.
+The title goes on the line beneath, cut to fit; the ask, the halt reason and what unblocks it (`next`) follow as labelled lines.
+A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
 On a terminal the id and the PR are links (OSC 8).
-`--markdown` writes the same rows as a markdown table, ids and PRs linked, for a skill to print in chat where a fenced block shows no links; it applies only to rows, and a run's block prints as without it.
+`--plain` prints the same tree with no color, its gates as a `gates` line and its url (the PR's, else the task's) as a `url` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask or a url is never cut.
+A skill relays it in a fenced block: relayed text shows an OSC 8 link's escape bytes, and a markdown table is reflowed at pane width.
+It applies only to the tree; a run's block prints as without it.
 
 | stage | when | color |
 |---|---|---|
@@ -399,7 +410,7 @@ ship            running: review:local
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
 - **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), each block for the half its `source:` names, else the header's: remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each half; the newest `verdicts/<id>/<n>.md`, the task or plan judge's when its `subject:` is the task or a plan.
 
-A parent's rows carry the same gates as one column after the step, `L 3/4 · R open · J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` not in the flow, `…` running, `?` unknown; `--markdown` adds it as a `gates` column.
+A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `L 3/4 · R open · J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` not in the flow, `…` running, `?` unknown.
 `--json` holds them in a `gates` array, on a run and on a row.
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 
@@ -498,7 +509,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
    No sign within two minutes halts the task, and so does a workspace that still shows no agent status by then.
    Once the agent is idle again, the run says how the turn ended:
-   - **blocked with an ask** - the question is printed with its options.
+   - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      At the end of that poll the driver prints every task's ask and the command that answers them all, and exits **4**.
      The other agents keep working in their own panes;
    - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
@@ -519,11 +530,14 @@ A cancelled record is never picked up again: the same command line starts a new 
 Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
+An answer sent closes the task's ask in the inbox. An answer the inbox already holds for a task goes first: one typed in the agent's pane is followed as the turn it started, with nothing sent; any other is sent as an `--answer` would be, and an `--answer` for the same task goes unused with a note.
+A drive whose task was answered after it last looked, while it still held its lease, resumes itself once it has stopped: `f10 asks resume` waits for its process to end, then has the daemon run `--resume <n>`.
+`f10 drive cancel <n>` closes the drive's open asks.
 An agent found mid-turn is attached to rather than prompted again.
 A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
-`/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, runs the `answer with:` line (`f10 drive --resume <n> --answer …`) with the answers, and prints the final report.
+`/f10:drive` runs the command in the background, answers an exit 4 through `/f10:asks` (the questions in one questionnaire, the answers written to the inbox, the drive resumed), and prints the final report.
 
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
 
@@ -541,6 +555,18 @@ Nothing registers it as a service: `f10 drive` and `f10 start` start it when non
 `f10 daemon status` prints the pid, version and start time, then each drive: its project, number, pid, log, and each task's standing from its record; then each watched project: its last pass, that pass's exit, and its log.
 `f10 daemon stop` drains the daemon the same way but keeps no drained list: each drive stops at its next tick, a client following one ends with `f10 drive --resume <n> goes on`, and nothing resumes until someone runs that. `--now` stops each drive at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its drives are gone.
 `f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
+
+## Asks
+
+A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a drive's own finish question, wait in one per-user inbox until the first answer from any way in.
+
+- **Where.** `~/.claude/f10/asks/` (`F10_ASKS_DIR` overrides), beside the run state and outside every project: one YAML file per open ask, `<root hash>-<TASK>.yaml`, naming its task, url, storage root, main checkout, worktree, drive (none for an agent no drive watches), skill, the ask's text and its parsed questions. The first answer moves it to `answered/` with the answer, the way in (`pane`, `asks`, `skill`, `drive`, `cancelled`) and the time, through a rename only one caller wins; a later one is told who answered and when. At each session start, answered asks older than a week are pruned, and so is an open ask whose worktree is gone.
+- **Raised.** `f10-state.sh ask` writes the ask as the agent stops; the drive that sees it adds its number. The same text is one ask, so the user is told once.
+- **Told.** The status line counts open asks, ` f10 · 2 asks`, with or without a run (`docs/statusline.md`). A `UserPromptSubmit` and `SessionStart` hook (`f10 asks hook`) adds each open ask to a session's context once, leaving out the asking agent's own session. And `notify` runs per new ask: `~/.f10/asks.md` frontmatter, `notify: ntfy publish f10 "{task} asks: {question}" {url}`, run through `sh -c` for up to 10s, with `{task}`, `{question}` (the first question) and `{url}` standing for the shell variables `${F10_ASK_TASK}`, `${F10_ASK_QUESTION}` and `${F10_ASK_URL}`, so an agent's text is never run as shell; quote them as any variable; `notify: off` runs nothing, and absent it is a desktop notification (`osascript` on macOS, `notify-send` on Linux when installed).
+- **Answered.** Typed in the agent's own pane, the prompt is the answer: the agent goes on, and its drive, if stopped, is resumed to follow the turn. `f10 asks answer <task> 1=b 2=8080` answers questions by option letter, number or text; free text only for a question with no options, and every question not named takes its default (one with no default must be named). `<project>:<task>` picks between two projects' asks. Bare `f10 asks` in a terminal walks the open asks, Enter taking each default and `s` skipping an ask; elsewhere it is `f10 asks list`. `/f10:asks` asks them in one questionnaire and runs `f10 asks answer --by skill`.
+- **Delivered.** An answer to a drive's task goes to its drive: a stopped drive is resumed through the daemon (`--resume <n>` from its main checkout, with the answering process's allowlisted environment), and a drive still running takes it as it stops. An answer to an agent no drive watches is sent to the agent, as `f10 forward` would; one that cannot be sent is printed to type in its pane.
+
+`f10 asks list` prints the open asks, oldest first, then those answered in the last day; `--json` prints `{open: [...], answered: [...]}`.
 
 ## Watch
 
@@ -904,7 +930,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
-`children` prints a tree to a terminal and JSON to a pipe or with `--json`.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, each task's url on a `url` line beneath it, and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
 
 ## Children
 
@@ -945,6 +971,22 @@ A task not there costs one tracker call (the host's issue, or the driver's `read
 `--fresh` asks the tracker for every task and rewrites what is kept.
 A title renamed on the tracker stays stale until f10 reads that task again.
 An id the tracker does not know, or a tracker that fails, prints bare with a note on stderr, and the exit is 0.
+
+## Report
+
+`f10 task report` prints the facts block a skill's report opens with (`conventions/report.md`), from the same titles and urls as `task ref`.
+One id prints its `task`, `title` and `url` rows.
+Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
+`--children` takes one parent and hangs the subtasks `f10 task children` lists (closed ones left out) under it, in that order, on box-drawing lines:
+
+```
+FT-71:        ↗ https://github.com/amberpixels/f10/issues/71
+├─ FT-72:     ↗ https://github.com/amberpixels/f10/issues/72
+│  └─ FT-73:  ↗ https://github.com/amberpixels/f10/issues/73
+└─ FT-74:     ↗ https://github.com/amberpixels/f10/issues/74
+```
+
+A task with no url known prints bare, a tracker with no parent link prints the parent alone with a note on stderr, and the exit is 0 either way.
 
 ## Comment and update
 

@@ -37,6 +37,7 @@ type Payload struct {
 	ToolUseID    string          `json:"tool_use_id"`
 	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
+	Prompt       string          `json:"prompt"` // UserPromptSubmit
 }
 
 // Env is everything a hook reaches outside its payload, so a test can point
@@ -54,6 +55,9 @@ type Env struct {
 	// TaskID is the tracker task id a created issue's url names, in the
 	// project's id format; empty when it cannot tell.
 	TaskID func(ctx context.Context, cwd, url string) string
+	// PromptTyped is told of every prompt submitted, with the session's
+	// cwd: one typed in an asking agent's pane answers its ask.
+	PromptTyped func(ctx context.Context, cwd, prompt string)
 	// StatusText is what `f10 status` prints for a session.
 	StatusText func(ctx context.Context, session string) string
 
@@ -91,6 +95,10 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		// the turn ended between two of its looks
 		if sid != "" && p.Cwd != "" {
 			_ = state.MarkPrompt(env.StateDir, sid, state.RootOf(p.Cwd), env.now())
+		}
+
+		if env.PromptTyped != nil && p.Cwd != "" {
+			env.PromptTyped(ctx, p.Cwd, p.Prompt)
 		}
 	case "UserPromptExpansion":
 		// the typed path: /f10:ship reaches the model as an expansion, never

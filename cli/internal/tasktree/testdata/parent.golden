@@ -1,0 +1,18 @@
+FT-209  4 done · 2 halted · 1 asking
+├─ ✓ FT-206        done         finish     #208
+│            Show who runs a driven finish
+├─ ✓ FT-210        done         finish     #216
+│  │         Keep a drive as a record with a lease per task
+│  └─ ✓ FT-212     done         finish     #219
+│     │         Run drives in a per-user daemon
+│     ├─ ✗ FT-213  halted       implement
+│     │            Keep asks in an inbox
+│     │      halt  catchup guard: merging FT-212 conflicts in drives/record.go,…
+│     │      next  /f10:catchup in this worktree, then /f10:ship FT-213
+│     └─ ? FT-214  asking       judge
+│                  Let the daemon watch tasks no drive owns, a title long enoug…
+│             ask  1. Proceed? [yes | no], an ask long enough that a cut would lose its options
+├─ ✓ FT-211        done         finish     #215
+│            Put agent control behind an interface
+└─ · FT-230        not started
+             An unrelated task

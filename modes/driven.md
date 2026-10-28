@@ -21,13 +21,15 @@ Every question the steps call for (**wait or proceed** on a base with no code, a
 3. **End the turn**, printing the ask once under a facts block carrying the task.
    The print is for a person looking at this pane: end it with "Answer here", never a command for another session (`f10 forward`, `f10 status`, `f10 drive --answer`).
    The driving session reads the ask through `f10 status <task-id>` and knows its own way back.
+   `f10-state.sh ask` also puts the ask in the user's asks inbox, which counts it on the status line, tells other sessions and notifies the user (`f10 asks`).
 
 A gap never becomes an ask: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`).
 Neither does a stale task's verdict (`steps/fetch.md` point 1): the run ends blocked with the verdict file named, and the user decides by sending `anyway` (`f10 drive --answer <id> anyway`, or typed here) or closing the task.
 
 ## The answer
 
-Answers arrive as your **next prompt**, plain text, numbered as the ask was, typed in this pane or sent from the driving session.
+Answers arrive as your **next prompt**, plain text, numbered as the ask was: typed in this pane, sent by the drive, or sent by `f10 asks answer` or `/f10:asks` from anywhere.
+The first answer closes the ask in the inbox, whichever way it came.
 Run `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the answers in as `conventions/gaps.md` does (gaps **Resolved** in the plan file, decisions into the stages, and Consequences where they change a cost); resume from the step that stopped.
 An answer with no ask recorded is steering.
 

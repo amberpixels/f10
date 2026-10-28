@@ -80,6 +80,7 @@ func newApp() *cli.Command {
 			forwardCommand(),
 			driveCommand(),
 			daemonCommand(),
+			asksCommand(),
 			watchCommand(),
 			finishCommand(),
 			janitorCommand(),

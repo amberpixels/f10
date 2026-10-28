@@ -516,3 +516,20 @@ func TestPromptSubmitMarksThePrompt(t *testing.T) {
 		t.Errorf("a prompt created a run file: %v", err)
 	}
 }
+
+// A typed prompt is passed on with its cwd, for the asks inbox to read as
+// an answer in an asking agent's pane.
+func TestPromptSubmitTellsPromptTyped(t *testing.T) {
+	env := testEnv(t)
+	cwd := t.TempDir()
+
+	var got []string
+	env.PromptTyped = func(_ context.Context, dir, prompt string) { got = append(got, dir, prompt) }
+
+	raw := []byte(`{"hook_event_name":"UserPromptSubmit","session_id":"s9","cwd":"` + cwd + `","prompt":"1. yes"}`)
+	Dispatch(context.Background(), raw, env)
+
+	if len(got) != 2 || got[0] != cwd || got[1] != "1. yes" {
+		t.Errorf("PromptTyped got %q", got)
+	}
+}

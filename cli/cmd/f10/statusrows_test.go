@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -161,54 +165,89 @@ func TestRowsFromTheLedger(t *testing.T) {
 	}
 }
 
-func TestRenderRows(t *testing.T) {
-	rows := []taskRow{
-		{
-			ID: "FT-117", Title: "trailers + traces switch", Stage: stageDone, Step: "finish",
-			PR: "https://github.com/a/b/pull/128", PRState: "merged",
-		},
-		{
-			ID: "FT-118", Title: "PR state block", Stage: stageReviewing, Step: "review",
-			PR: "https://github.com/a/b/pull/129", PRState: pullOpen,
-		},
-		{ID: "FT-120", Title: "look-around + f10 board", Depth: 1, Stage: stageWaiting, Step: "after FT-118"},
-		{ID: "FT-121", Title: "a halted one", Stage: stageHalted, Step: "ship", Note: "agent idle", Next: "rerun"},
-		{ID: "FT-122", Title: "an asking one", Stage: stageAsking, Step: "judge", Ask: "1. Proceed? [yes | no]"},
-	}
+// statusGolden compares out with testdata/status/<name>.golden, rewriting
+// it under -update.
+func statusGolden(t *testing.T, name, out string) {
+	t.Helper()
 
-	var out bytes.Buffer
-	renderRows(&out, rows, 0)
+	path := filepath.Join("testdata", "status", name+".golden")
+	if *updateGolden {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
 
-	got := out.String()
-	if strings.Contains(got, "\x1b") {
-		t.Errorf("color off a terminal:\n%q", got)
-	}
-
-	for _, want := range []string{
-		"FT-117    done       trailers + traces switch  finish        #128 merged\n",
-		"FT-118    reviewing  PR state block            review        #129\n",
-		"  FT-120  waiting    look-around + f10 board   after FT-118\n",
-		"          halt: agent idle\n",
-		"          next: rerun\n",
-		"          ask: 1. Proceed? [yes | no]\n",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("output lacks %q:\n%s", want, got)
+		if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
 
-	out.Reset()
-	renderRows(&out, rows[:1], 50)
-
-	line := strings.TrimSuffix(out.String(), "\n")
-	if !strings.Contains(line, hyperlink(rows[0].PR, "#128 merged")) {
-		t.Errorf("a terminal line = %q, want the PR linked", line)
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// the link's escape sequences take no columns
-	visible := strings.ReplaceAll(line, hyperlink(rows[0].PR, "#128 merged"), "#128 merged")
-	if len([]rune(visible)) > 50 || !strings.Contains(visible, "…") {
-		t.Errorf("a 50-column line = %q, want the title cut to fit", visible)
+	if out != string(want) {
+		t.Errorf("%s:\n%s\nwant:\n%s", name, out, want)
+	}
+}
+
+var updateGolden = flag.Bool("update", false, "rewrite the golden files")
+
+// A parent's children as a tree: nested After: chains, a halted child with
+// its halt and next, an asking child, and an unrelated task; every line a
+// task row carries an id, and none of it is a markdown table.
+func TestRenderRows(t *testing.T) {
+	gh := func(kind string, n int) string { return "https://github.com/a/b/" + kind + "/" + strconv.Itoa(n) }
+	rows := []taskRow{
+		{
+			ID: "FT-206", URL: gh("issues", 206), Title: "Show who runs a driven finish", Stage: stageDone,
+			Step: "finish", PR: gh("pull", 208), PRState: "merged",
+		},
+		{
+			ID: "FT-210", URL: gh("issues", 210), Title: "Keep a drive as a record", Stage: stageDone,
+			Step: "finish", PR: gh("pull", 216), PRState: "merged",
+		},
+		{
+			ID: "FT-212", URL: gh("issues", 212), Title: "Run drives in a per-user daemon", Depth: 1,
+			After: "FT-210", Stage: stageReviewing, Step: "review", PR: gh("pull", 219), PRState: pullOpen,
+			Gates: []gate{{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}}},
+		},
+		{
+			ID: "FT-213", URL: gh("issues", 213), Title: "Keep asks in an inbox the user is told about",
+			Depth: 2, After: "FT-212", Stage: stageHalted, Step: "implement",
+			Note: "catchup guard: merging FT-212 conflicts in drives/record.go",
+			Next: "/f10:catchup, then /f10:ship FT-213",
+		},
+		{
+			ID: "FT-214", URL: gh("issues", 214), Title: "Let the daemon watch tasks no drive owns", Depth: 2,
+			After: "FT-212", Stage: stageAsking, Step: "judge", Ask: "1. Proceed? [yes | no]",
+		},
+		{ID: "FT-230", URL: gh("issues", 230), Title: "An unrelated task", Stage: stageNotStarted},
+	}
+
+	var out bytes.Buffer
+	if err := renderRows(&out, rows, rowView{parent: "FT-209", plain: true, width: 100}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "\x1b") || strings.Contains(got, "|") && strings.Contains(got, "|---") {
+		t.Errorf("plain output carries escapes or a table:\n%s", got)
+	}
+
+	statusGolden(t, "parent", got)
+
+	// on a terminal the id and the PR are links that take no columns
+	out.Reset()
+
+	if err := renderRows(&out, rows[:1], rowView{term: true, width: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	line, _, _ := strings.Cut(out.String(), "\n")
+	if !strings.Contains(line, hyperlink(rows[0].URL, "FT-206")) ||
+		!strings.Contains(line, hyperlink(rows[0].PR, "#208 merged")) {
+		t.Errorf("a terminal line = %q, want the id and the PR linked", line)
 	}
 
 	out.Reset()
@@ -227,31 +266,25 @@ func TestRenderRows(t *testing.T) {
 	}
 }
 
-func TestMarkdownRows(t *testing.T) {
-	rows := []taskRow{
-		{
-			ID: "FT-117", URL: "https://github.com/a/b/issues/117", Title: "trailers", Stage: stageDone, Step: "finish",
-			PR: "https://github.com/a/b/pull/128", PRState: "merged",
+// A finished task alone is a one-row tree with every gate on a line.
+func TestRenderFinishedRow(t *testing.T) {
+	row := taskRow{
+		ID: "FT-210", URL: "https://github.com/a/b/issues/210", Title: "Keep a drive as a record",
+		Stage: stageDone, Step: "finish", PR: "https://github.com/a/b/pull/216", PRState: "merged", full: true,
+		Gates: []gate{
+			{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}},
+			{Step: "implement", State: gateDone},
+			{Step: "cleanup", State: gateDone},
+			{Step: "pr", State: gateDone},
 		},
-		{
-			ID: "FT-118", URL: "https://github.com/a/b/issues/118", Title: "a | pipe", Depth: 1, Stage: stageAsking,
-			Step: "judge", PR: "https://github.com/a/b/pull/129", PRState: pullOpen, Ask: "1. Proceed? [yes | no]",
-		},
-		{ID: "FT-120", Title: "no links", Depth: 2, Stage: stageWaiting, Step: "after FT-118"},
 	}
 
 	var out bytes.Buffer
-	markdownRows(&out, rows)
-
-	want := "| task | stage | title | step | PR |\n" +
-		"|---|---|---|---|---|\n" +
-		"| [FT-117](https://github.com/a/b/issues/117) | done | trailers | finish | [#128](https://github.com/a/b/pull/128) merged |\n" +
-		"|   [FT-118](https://github.com/a/b/issues/118) | asking | a \\| pipe | judge | [#129](https://github.com/a/b/pull/129) |\n" +
-		"| | | ask: 1. Proceed? [yes \\| no] | | |\n" +
-		"|     FT-120 | waiting | no links | after FT-118 |  |\n"
-	if got := out.String(); got != want {
-		t.Errorf("markdown rows:\n%s\nwant:\n%s", got, want)
+	if err := renderRows(&out, []taskRow{row}, rowView{plain: true, width: 100}); err != nil {
+		t.Fatal(err)
 	}
+
+	statusGolden(t, "finished", out.String())
 }
 
 // A task with a run is read from its checkout and never asks for children;

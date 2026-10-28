@@ -23,7 +23,7 @@
 #   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
 #   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
-#   f10-state.sh render [<session id>]  the status-line segment; status-line JSON on stdin
+#   f10-state.sh render [<session id>]  the status-line segment, open asks counted; status-line JSON on stdin
 #   f10-state.sh doctor                 is any of this actually wired up?
 #
 # A fixed path, not ${CLAUDE_PLUGIN_DATA}: the renderer runs from the user's `statusLine` command,
@@ -38,7 +38,8 @@
 set -uo pipefail
 
 state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
-ttl="${F10_STATE_TTL:-86400}" # a badge older than this reads as stale and renders as nothing
+asks_dir="${F10_ASKS_DIR:-$HOME/.claude/f10/asks}" # one file per open ask, any project
+ttl="${F10_STATE_TTL:-86400}"                      # a badge older than this reads as stale and renders as nothing
 phases="capture plan ship"
 
 # --- the state file: `key value` lines, one per key ---------------------------------------------
@@ -123,6 +124,24 @@ color_for() {
   esac
 }
 
+# The open asks across projects, as ` f10 · 2 asks`, or nothing: a glob, no parse, since it runs on
+# every refresh. Shown with or without a run, since an ask is the user's wherever it was raised.
+asks_segment() {
+  _asks=""
+  local n=0 f
+  for f in "$asks_dir"/*.yaml; do
+    [ -e "$f" ] && n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] || return 0
+
+  local noun="asks"
+  [ "$n" = 1 ] && noun="ask"
+  _asks=" f10 · $n $noun"
+  if [ -z "${NO_COLOR:-}" ] && [ "${F10_STATE_COLOR:-1}" != "0" ]; then
+    _asks=" "$'\033[1;33m'"f10 · $n $noun"$'\033[0m'
+  fi
+}
+
 render() {
   local want="${1:-}"
   # The piped status-line JSON carries the authoritative session id; the environment is the
@@ -137,12 +156,22 @@ render() {
     fi
   fi
 
-  find_sid "$want" || return 0
-  load || return 0
+  asks_segment
+  find_sid "$want" || {
+    printf '%s' "$_asks"
+    return 0
+  }
+  load || {
+    printf '%s' "$_asks"
+    return 0
+  }
 
   local now
   now="$(date +%s)"
-  [ "$((now - st_updated))" -le "$ttl" ] || return 0
+  [ "$((now - st_updated))" -le "$ttl" ] || {
+    printf '%s' "$_asks"
+    return 0
+  }
 
   local color=1
   { [ -n "${NO_COLOR:-}" ] || [ "${F10_STATE_COLOR:-1}" = "0" ]; } && color=0
@@ -185,7 +214,7 @@ render() {
   fi
 
   # Leading space, so a status-line script can append the result unconditionally.
-  printf ' %s %s%s' "$label" "$icons" "$word"
+  printf ' %s %s%s%s' "$label" "$icons" "$word" "$_asks"
 }
 
 # --- the writer verbs -------------------------------------------------------------------------
@@ -272,7 +301,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   pipeline <step>...       declare the ship pipeline's steps, the last one final
   show                     the current run, human-readable
   clear | prune            drop this session's state | drop long-dead sessions
-  render [<session id>]    the status-line segment; status-line JSON on stdin
+  render [<session id>]    the status-line segment, open asks counted; status-line JSON on stdin
   doctor                   is any of this actually wired up?
 USAGE
     exit 2

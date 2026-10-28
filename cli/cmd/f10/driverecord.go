@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
 // A drive keeps a record under the storage root, what it was started with,
@@ -335,18 +336,13 @@ func driveList(w io.Writer, root string, all bool) error {
 		fmt.Fprintf(w, "drive %d  %s  %s\n", rec.Number, rec.Created.Local().Format(time.DateTime), status)
 		fmt.Fprintf(w, "  f10 drive %s\n", strings.Join(rec.Args, " "))
 
-		width := 0
-		for _, t := range rec.Tasks {
-			width = max(width, len(t.ID))
+		nodes := make([]tasktree.Node, len(rec.Tasks))
+		for j, t := range rec.Tasks {
+			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{{Text: t.ID + ":"}, {Text: taskStanding(t, running)}}}
 		}
 
-		for j, t := range rec.Tasks {
-			branch := "├─"
-			if j == len(rec.Tasks)-1 {
-				branch = "└─"
-			}
-
-			fmt.Fprintf(w, "  %s %-*s  %s\n", branch, width+1, t.ID+":", taskStanding(t, running))
+		if err := (tasktree.Tree{Indent: "  ", Hang: true, Align: true}).Write(w, nodes); err != nil {
+			return err
 		}
 	}
 
