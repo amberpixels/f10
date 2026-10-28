@@ -12,8 +12,8 @@ import (
 // catchup ended clean, and the push after one.
 
 // prTarget is what a task's pull request targets and the mark that sends
-// a catchup for it, read as the catchup step's point 2 reads the base: the
-// branch f10-after-branch records, here or on origin, else the default
+// a catchup for it: origin's copy of the branch f10-after-branch records,
+// which the stacked PR targets, else its local copy, else the default
 // branch as defaultTarget resolves it. sha is "" for a base found nowhere.
 type prTarget struct {
 	sha, name, key, value string
@@ -28,7 +28,7 @@ func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
 	if after != "" {
 		sha := ""
 
-		for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
+		for _, ref := range []string{"refs/remotes/origin/" + after, "refs/heads/" + after} {
 			if sha, err = gitx.Ref(ctx, main, ref); err != nil || sha != "" {
 				break
 			}

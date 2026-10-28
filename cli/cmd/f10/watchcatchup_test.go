@@ -197,34 +197,46 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 	}
 }
 
-// A base that is another task's branch marks f10-base-moved with its head.
+// A base that is another task's branch marks f10-base-moved with origin's
+// head of it, what the stacked request targets; a base origin lacks waits.
 func TestWatchCatchesUpAStackedPR(t *testing.T) {
-	fx := newJanitorFixture(t)
-	scriptTarget(fx)
-	fx.f.script("git config --get branch.GH-1/x."+cfgAfterBranch, "GH-9/y")
-	fx.f.script("git rev-parse -q --verify refs/heads/GH-9/y", "b2")
-	fx.f.fail("git merge-base --is-ancestor b2 refs/heads/GH-1/x", shell.Result{Code: 1})
-	fx.f.script("git config branch.GH-1/x."+cfgMoved+" b2", "")
+	for _, onOrigin := range []bool{true, false} {
+		fx := newJanitorFixture(t)
+		scriptTarget(fx)
+		fx.f.script("git config --get branch.GH-1/x."+cfgAfterBranch, "GH-9/y")
+		fx.f.script("git rev-parse -q --verify refs/heads/GH-9/y", "b2")
+		fx.f.fail("git merge-base --is-ancestor b2 refs/heads/GH-1/x", shell.Result{Code: 1})
+		fx.f.script("git config branch.GH-1/x."+cfgMoved+" b2", "")
 
-	task := undrivenTask()
-	task.pr.Base = "GH-9/y"
+		if onOrigin {
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-9/y", "b2")
+			fx.f.script("git merge-base --is-ancestor b2 refs/remotes/origin/GH-9/y", "")
+		} else {
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-9/y", "")
+			fx.f.fail("git merge-base --is-ancestor b2 refs/remotes/origin/GH-9/y", shell.Result{Code: 128})
+		}
 
-	prompts := 0
-	in := watchInput{
-		main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
-		prompt: func(context.Context, watchedTask, string) error { prompts++; return nil },
-	}
+		task := undrivenTask()
+		task.pr.Base = "GH-9/y"
 
-	store := map[string]watchReport{}
-	out := catchupPass(t, in, []watchedTask{task}, store)
+		prompts := 0
+		in := watchInput{
+			main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
+			prompt: func(context.Context, watchedTask, string) error { prompts++; return nil },
+		}
 
-	if prompts != 1 || !fx.f.called("git config branch.GH-1/x."+cfgMoved+" b2") || len(out) != 1 {
-		t.Errorf("prompted %d, marked %v, reported %+v",
-			prompts, fx.f.called("git config branch.GH-1/x."+cfgMoved), out)
-	}
+		store := map[string]watchReport{}
+		out := catchupPass(t, in, []watchedTask{task}, store)
+		marked := fx.f.called("git config branch.GH-1/x." + cfgMoved + " b2")
 
-	if rec := store["GH-1"].Catchup; rec == nil || rec.Target != "b2" || rec.Base != "GH-9/y" {
-		t.Errorf("record = %+v", rec)
+		want := map[bool]int{true: 1, false: 0}[onOrigin]
+		if prompts != want || marked != onOrigin || len(out) != want {
+			t.Errorf("on origin %v: prompted %d, marked %v, reported %+v", onOrigin, prompts, marked, out)
+		}
+
+		if rec := store["GH-1"].Catchup; onOrigin && (rec == nil || rec.Target != "b2" || rec.Base != "GH-9/y") {
+			t.Errorf("record = %+v", rec)
+		}
 	}
 }
 

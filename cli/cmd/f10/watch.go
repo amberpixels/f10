@@ -1059,6 +1059,21 @@ func (in watchInput) sendCatchup(
 		return nil
 	}
 
+	// a stacked base read from its local branch only: its unpushed commits
+	// would ride into this request, so the catchup waits for its push
+	if target.key == cfgMoved {
+		on, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/remotes/origin/"+target.name)
+
+		switch {
+		case err != nil:
+			in.warnf("%s skipped this pass, reading origin/%s: %v", task.id, target.name, err)
+
+			return nil
+		case !on:
+			return nil
+		}
+	}
+
 	behind := func(reason, text string) *watchReport {
 		return &watchReport{
 			Kind: watchBehind,

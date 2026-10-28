@@ -32,7 +32,7 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 3. **Integrate.**
    Strategy: `catchup: merge` or `catchup: rebase` in the frontmatter (or, from an older file, under Hosting & PR); absent, **rebase**.
-   `catchup: off` turns off only the guard ship runs (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, uses the default method (rebase, a stacked base merged as below).
+   `catchup: off` turns off only the guard ship runs (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, uses the default method (rebase, a stacked base as `catchup_stacked` says).
    A base found through `f10-after-branch` (another task's branch) follows `catchup_stacked: merge | rebase` instead, **merge** when absent: rebasing onto a branch that later rebases or squash-merges replays its old commits, and `rebase` is the project accepting that.
    A branch already on origin whose ship stopped (`f10-state.sh show` reads ship `failed` or `partial`) is merged too: ship resumes after it, and its push never forces.
    - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; clear the marks as point 5 does, report and stop;
