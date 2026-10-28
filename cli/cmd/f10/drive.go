@@ -16,9 +16,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -118,7 +118,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if err := herdr.Available(); err != nil {
+	if err := agents("").Available(); err != nil {
 		return err
 	}
 
@@ -654,7 +654,7 @@ func createdAt(ctx context.Context, dir, branch string) string {
 // boundary sends a catchup. A catchup in flight is left alone: it clears
 // the mark when it ends, and the next poll marks again if the base moved
 // meanwhile. A finished base's branch is gone, and f10-landed takes over.
-func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveRun, wss []herdr.Listed) error {
+func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveRun, wss []agentctl.Workspace) error {
 	for _, r := range runs {
 		b := r.base
 		if !r.active() || r.skill == "catchup" || b == nil || !b.opened {
@@ -662,7 +662,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 		}
 
 		if b.end == nil {
-			if ws := workspaceByID(wss, b.o.ws.ID); ws == nil || ws.Agent == "working" {
+			if ws := workspaceByID(wss, b.o.ws.ID); ws == nil || ws.Status == agentctl.StatusWorking {
 				continue
 			}
 		}
@@ -1499,7 +1499,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	r.skill, r.sentAt, r.begun, r.idleSince = skill, in.now(), false, time.Time{}
 
 	switch {
-	case ws.Agent == "working":
+	case ws.Status == agentctl.StatusWorking:
 		r.begun = true
 
 		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
@@ -1518,7 +1518,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
 	default:
 		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-		if err := refuseStalled(fwd, ws, herdr.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
+		if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
 			in.end(ctx, w, r, halted(id, skill, err.Error()))
 
 			return nil
@@ -1560,7 +1560,13 @@ func (in *driveInput) takeAnswer(id string) string {
 // Herdr's `done` lasts from the previous turn until someone looks, so it
 // proves nothing. Once the agent is idle again, the run says how the turn
 // ended.
-func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []herdr.Listed, live []*state.Run) error {
+func (in *driveInput) poll(
+	ctx context.Context,
+	w io.Writer,
+	r *driveRun,
+	wss []agentctl.Workspace,
+	live []*state.Run,
+) error {
 	id, skill := r.task.ref.ID, r.skill
 
 	if r.waiting {
@@ -1581,12 +1587,12 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 	since := r.sentAt.Truncate(time.Second) // the state file keeps whole seconds
 	recent := run != nil && !run.Updated.Before(since)
 
-	switch ws.Agent {
-	case "working":
+	switch ws.Status {
+	case agentctl.StatusWorking:
 		r.begun, r.idleSince = true, time.Time{}
 
 		return nil
-	case "idle", "done":
+	case agentctl.StatusIdle, agentctl.StatusDone:
 	default:
 		// Herdr shows no agent yet: the start window bounds this wait too
 		if !r.begun && now.Sub(r.sentAt) > startWindow {
@@ -1632,7 +1638,7 @@ func (in *driveInput) poll(ctx context.Context, w io.Writer, r *driveRun, wss []
 				w,
 				r,
 				halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
-					"it stopped without reporting, answer it in that pane", herdr.AgentName(id, r.task.suffix, r.o.path),
+					"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
 					workspaceName(ws), skill, run.PhaseText(skill))),
 			)
 		}
@@ -1809,8 +1815,8 @@ func stoppedRun(r *state.Run) bool {
 // look is the task's workspace, by the id open settled on, since a
 // checkout can show in more than one, and the newest run reported from the
 // checkout. A workspace gone mid-run is an error: the agent went with it.
-func (in *driveInput) look(ctx context.Context, r *driveRun) (*herdr.Listed, *state.Run, error) {
-	wss, err := herdr.Workspaces(ctx, in.main)
+func (in *driveInput) look(ctx context.Context, r *driveRun) (*agentctl.Workspace, *state.Run, error) {
+	wss, err := agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1830,7 +1836,7 @@ func workspaceGone(r *driveRun) error {
 }
 
 // workspaceName is a workspace as a halt names it: its label and its id.
-func workspaceName(ws *herdr.Listed) string {
+func workspaceName(ws *agentctl.Workspace) string {
 	if ws.Label == "" || ws.Label == ws.ID {
 		return ws.ID
 	}
@@ -1840,8 +1846,8 @@ func workspaceName(ws *herdr.Listed) string {
 
 // lookAll is one tick's view: every workspace Herdr shows and every live
 // run, read once for all the tasks in flight.
-func (in *driveInput) lookAll(ctx context.Context) ([]herdr.Listed, []*state.Run, error) {
-	wss, err := herdr.Workspaces(ctx, in.main)
+func (in *driveInput) lookAll(ctx context.Context) ([]agentctl.Workspace, []*state.Run, error) {
+	wss, err := agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

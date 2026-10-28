@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -26,10 +26,10 @@ type LocalInputs struct {
 	Main       string // the main checkout
 	StateDir   string // run state files
 	TTL        time.Duration
-	SharedRoot string // the storage root every checkout shares; "" reads each checkout's .f10
-	LedgerPath string // "" reads no ledger
-	ProjectID  string // the ledger's project id
-	Herdr      bool   // Herdr is reachable: read its workspaces
+	SharedRoot string           // the storage root every checkout shares; "" reads each checkout's .f10
+	LedgerPath string           // "" reads no ledger
+	ProjectID  string           // the ledger's project id
+	Agents     agentctl.Backend // the agent backend, when reachable: read its workspaces; nil reads none
 }
 
 // collectLocal reads the worktrees and branches, the live runs in them,
@@ -153,8 +153,8 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 		notes = append(notes, readLedger(ctx, in.LedgerPath, in.ProjectID, l)...)
 	}
 
-	if in.Herdr {
-		list, err := herdr.Workspaces(ctx, in.Main)
+	if in.Agents != nil {
+		list, err := in.Agents.Workspaces(ctx)
 		if err != nil {
 			notes = append(notes, "workspaces not read: "+err.Error())
 		}
@@ -164,7 +164,7 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 		for _, ws := range list {
 			for _, wt := range l.Worktrees {
 				if ws.Path != "" && canon(ws.Path) == canon(wt.Path) {
-					l.Workspaces[wt.Path] = Workspace{ID: ws.ID, Label: ws.Label, AgentStatus: ws.Agent}
+					l.Workspaces[wt.Path] = Workspace{ID: ws.ID, Label: ws.Label, AgentStatus: string(ws.Status)}
 				}
 			}
 		}

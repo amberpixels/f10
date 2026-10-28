@@ -12,8 +12,8 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -119,11 +119,11 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 		return cli.Exit("f10: "+reason, exitHere)
 	}
 
-	if err := herdr.Available(); err != nil {
+	if err := agents("").Available(); err != nil {
 		return err
 	}
 
-	wss, err := herdr.Workspaces(ctx, in.main)
+	wss, err := agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 		return fmt.Errorf("no Herdr workspace shows %s (branch %s): open it with f10 start %s", path, name, in.task.ID)
 	}
 
-	if err := refuseStalled(in, ws, herdr.AgentName(in.task.ID, in.suffix, path), path); err != nil {
+	if err := refuseStalled(in, ws, agentctl.AgentName(in.task.ID, in.suffix, path), path); err != nil {
 		return err
 	}
 
@@ -170,8 +170,8 @@ func hereReason(in forwardInput, name, path string) string {
 // Claude Code permission dialog, a question asked outside driven mode - and a
 // prompt submitted behind that would wait with it. A blocked run with an idle
 // agent is the driven state this verb exists for, and is sent to.
-func refuseStalled(in forwardInput, ws *herdr.Listed, agent, root string) error {
-	if ws.Agent != "idle" {
+func refuseStalled(in forwardInput, ws *agentctl.Workspace, agent, root string) error {
+	if ws.Status != agentctl.StatusIdle {
 		return nil
 	}
 

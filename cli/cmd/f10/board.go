@@ -19,7 +19,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -403,7 +402,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			TTL:        state.TTL(),
 			LedgerPath: ledger.Path(),
 			ProjectID:  place.Project,
-			Herdr:      herdr.Available() == nil,
+			Agents:     reachableAgents(main),
 			SharedRoot: t.sharedRoot(),
 		}
 	}

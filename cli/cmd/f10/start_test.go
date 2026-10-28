@@ -15,6 +15,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -199,7 +200,7 @@ const (
 
 // agentOf is the name start gives the agent of a task with no suffix,
 // checked out at the sibling path these tests use.
-func agentOf(id string) string { return herdr.AgentName(id, "", "/code/repo."+id) }
+func agentOf(id string) string { return agentctl.AgentName(id, "", "/code/repo."+id) }
 
 var gh1 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit}
 
@@ -845,23 +846,23 @@ func TestSiblingPathAndAgentName(t *testing.T) {
 		t.Errorf("siblingPath = %q, want %q", got, want)
 	}
 
-	if got, want := herdr.BareAgentName("GH-1", ""), "gh-1"; got != want {
+	if got, want := agentctl.BareAgentName("GH-1", ""), "gh-1"; got != want {
 		t.Errorf("bareAgentName = %q, want %q", got, want)
 	}
 
-	if got, want := herdr.BareAgentName("GH-1", "Attempt2"), "gh-1-attempt2"; got != want {
+	if got, want := agentctl.BareAgentName("GH-1", "Attempt2"), "gh-1-attempt2"; got != want {
 		t.Errorf("bareAgentName = %q, want %q", got, want)
 	}
 
 	// the same task in two checkouts gets two names, each in herdr's shape
 	valid := regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
-	one, other := herdr.AgentName("GH-1", "", "/code/repo.GH-1"), herdr.AgentName("GH-1", "", "/code/other.GH-1")
+	one, other := agentctl.AgentName("GH-1", "", "/code/repo.GH-1"), agentctl.AgentName("GH-1", "", "/code/other.GH-1")
 
 	if one == other || !strings.HasPrefix(one, "gh-1-") || !valid.MatchString(one) {
 		t.Errorf("agentName = %q and %q, want two distinct gh-1-<hash> names", one, other)
 	}
 
-	if long := herdr.AgentName("ABCDEFGH-123456", "a-very-long-attempt-suffix", "/p"); !valid.MatchString(long) {
+	if long := agentctl.AgentName("ABCDEFGH-123456", "a-very-long-attempt-suffix", "/p"); !valid.MatchString(long) {
 		t.Errorf("agentName = %q (%d chars), want at most 32", long, len(long))
 	}
 }
@@ -1473,7 +1474,7 @@ func TestStartSlugsTheBranch(t *testing.T) {
 		opened,
 	)
 	f.script(
-		"herdr agent start "+herdr.AgentName(
+		"herdr agent start "+agentctl.AgentName(
 			"GH-1",
 			"",
 			"/code/repo.GH-1-add-dark-mode",
@@ -1481,7 +1482,7 @@ func TestStartSlugsTheBranch(t *testing.T) {
 		"{}",
 	)
 	f.script(
-		"herdr agent prompt "+herdr.AgentName(
+		"herdr agent prompt "+agentctl.AgentName(
 			"GH-1",
 			"",
 			"/code/repo.GH-1-add-dark-mode",
@@ -1598,7 +1599,7 @@ func TestStartReadsMainsPlanInPlace(t *testing.T) {
 	src := filepath.Join(plans, "GH-1.md")
 	writePlan(t, src)
 
-	agent := herdr.AgentName("GH-1", "", wt)
+	agent := agentctl.AgentName("GH-1", "", wt)
 
 	f := newFakes(t)
 	f.has["wt"] = true
@@ -1640,11 +1641,11 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	f.script("git worktree add /code/repo.GH-1-slug GH-1/slug", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1-slug --label GH-1/slug", opened)
 	f.script(
-		"herdr agent start "+herdr.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" --kind claude --pane pane:7",
+		"herdr agent start "+agentctl.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" --kind claude --pane pane:7",
 		"{}",
 	)
 	f.script(
-		"herdr agent prompt "+herdr.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
+		"herdr agent prompt "+agentctl.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
 			prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""),
 		"{}",
 	)

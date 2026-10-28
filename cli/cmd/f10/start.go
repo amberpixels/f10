@@ -14,9 +14,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -118,7 +118,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("--base and --after are exclusive: one names a git ref, the other a task to depend on")
 	}
 
-	if err := herdr.Available(); err != nil {
+	if err := agents("").Available(); err != nil {
 		return err
 	}
 
@@ -441,10 +441,9 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	}
 
 	if o.fresh {
-		if err := herdr.Prompt(
+		if err := agents(o.path).Prompt(
 			ctx,
-			o.path,
-			herdr.AgentName(in.task.ID, in.suffix, o.path),
+			agentctl.AgentName(in.task.ID, in.suffix, o.path),
 			prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note),
 		); err != nil {
 			return err
@@ -617,7 +616,7 @@ type openedTask struct {
 	task   ref.Ref // the task, with the riders its branch ships
 	branch string
 	path   string
-	ws     herdr.Workspace
+	ws     agentctl.Opened
 	dep    *dependency
 	plan   string // the task's plan the worktree reads, or "" when none was saved or no agent was started
 	fresh  bool
@@ -727,7 +726,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		}
 	}
 
-	ws, wsNotes, err := openWorkspace(ctx, in.main, path, name)
+	ws, wsNotes, err := agents(in.main).Open(ctx, path, name)
 	if err != nil {
 		return openedTask{}, err
 	}
@@ -736,7 +735,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	o := openedTask{task: in.task, branch: name, path: path, ws: ws, dep: dep}
 
-	agent := herdr.AgentName(in.task.ID, in.suffix, path)
+	agent := agentctl.AgentName(in.task.ID, in.suffix, path)
 
 	launch, note, err := needsAgent(ctx, path, ws)
 	if err != nil {
@@ -751,14 +750,13 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 			return openedTask{}, err
 		}
 
-		if err := herdr.StartAgent(
+		if err := agents(path).StartAgent(
 			ctx,
-			path,
+			ws,
 			agent,
 			agentKind,
-			ws.RootPane,
 			agentArgs(in.model, in.plansDir, path),
-			shellWait(in.progress, ws.RootPane),
+			shellWait(in.progress, ws.Slot),
 		); err != nil {
 			return openedTask{}, err
 		}
@@ -834,70 +832,16 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 	return settledBranch{name: name, slugNote: slugNote, base: base, dep: dep, existing: existing}, nil
 }
 
-// openWorkspace is the workspace showing the checkout at path. One Herdr
-// already shows is adopted rather than opened again, since `worktree open`
-// can answer with a second workspace beside it: the first with an agent in
-// a pane wins, else the first. Any other is named in a note, never closed,
-// since its panes may hold the user's own work.
-func openWorkspace(ctx context.Context, dir, path, label string) (herdr.Workspace, []string, error) {
-	wss, err := herdr.Workspaces(ctx, dir)
-	if err != nil {
-		return herdr.Workspace{}, nil, err
-	}
-
-	shown := workspacesAt(wss, path)
-	if len(shown) == 0 {
-		ws, err := herdr.OpenWorktree(ctx, dir, path, label)
-
-		return ws, nil, err
-	}
-
-	var adopted herdr.Workspace
-
-	for _, l := range shown {
-		panes, err := herdr.Panes(ctx, dir, l.ID)
-		if err != nil {
-			return herdr.Workspace{}, nil, err
-		}
-
-		if i := slices.IndexFunc(panes, func(p herdr.Pane) bool { return p.Agent != "" }); i >= 0 {
-			adopted = herdr.Workspace{ID: l.ID, RootPane: panes[i].ID, AlreadyOpen: true}
-
-			break
-		}
-
-		if adopted.ID == "" && len(panes) > 0 {
-			adopted = herdr.Workspace{ID: l.ID, RootPane: panes[0].ID, AlreadyOpen: true}
-		}
-	}
-
-	if adopted.ID == "" {
-		return herdr.Workspace{}, nil, fmt.Errorf("herdr shows %s in workspace %s, which has no pane",
-			path, shown[0].ID)
-	}
-
-	var notes []string
-
-	for _, l := range shown {
-		if l.ID != adopted.ID {
-			notes = append(notes, fmt.Sprintf("workspace %s also shows this checkout and was left open: "+
-				"close it with herdr workspace close %s", cmp.Or(l.Label, l.ID), l.ID))
-		}
-	}
-
-	return adopted, notes, nil
-}
-
 // shellWait reports a wait for the pane's shell to finish starting, so a
 // slow rc file reads as progress rather than a hang. A nil w reports nothing.
-func shellWait(w io.Writer, pane string) func(time.Duration) {
+func shellWait(w io.Writer, pane string) func(waited, limit time.Duration) {
 	if w == nil {
 		return nil
 	}
 
-	return func(waited time.Duration) {
+	return func(waited, limit time.Duration) {
 		fmt.Fprintf(w, "waiting for the shell in pane %s to finish starting: %.1fs of %s\n",
-			pane, waited.Seconds(), herdr.StartDeadline)
+			pane, waited.Seconds(), limit)
 	}
 }
 
@@ -906,28 +850,23 @@ func shellWait(w io.Writer, pane string) func(time.Duration) {
 // agent in that pane, whatever its name; with none, as after a start that
 // failed on a busy pane, an idle shell gets one and anything else the user
 // runs there is left alone.
-func needsAgent(ctx context.Context, dir string, ws herdr.Workspace) (bool, string, error) {
+func needsAgent(ctx context.Context, dir string, ws agentctl.Opened) (bool, string, error) {
 	if !ws.AlreadyOpen {
 		return true, "", nil
 	}
 
-	exists, err := herdr.AgentExists(ctx, dir, ws.RootPane)
+	occ, err := agents(dir).Occupancy(ctx, ws)
 	if err != nil {
 		return false, "", err
 	}
 
-	if exists {
+	switch occ {
+	case agentctl.AgentPresent:
 		return false, "workspace already open: its agent left as it was, nothing prompted", nil
-	}
-
-	idle, err := herdr.PaneIdleShell(ctx, dir, ws.RootPane)
-	if err != nil {
-		return false, "", err
-	}
-
-	if !idle {
+	case agentctl.Busy:
 		return false, fmt.Sprintf("workspace already open with no agent, and pane %s runs something "+
-			"other than an idle shell: left alone, nothing prompted", ws.RootPane), nil
+			"other than an idle shell: left alone, nothing prompted", ws.Slot), nil
+	case agentctl.Free:
 	}
 
 	return true, "workspace already open with no agent: started one in its idle shell", nil
@@ -1056,9 +995,11 @@ func recordDependency(ctx context.Context, dir, branch string, dep *dependency) 
 // promptAgent prompts the task's agent in the worktree at path, falling back
 // to the bare name an agent started before the path hash still answers to.
 func promptAgent(ctx context.Context, path, id, suffix, text string) error {
-	err := herdr.Prompt(ctx, path, herdr.AgentName(id, suffix, path), text)
-	if herdr.IsCode(err, herdr.CodeAgentNotFound) {
-		return herdr.Prompt(ctx, path, herdr.BareAgentName(id, suffix), text)
+	agent := agents(path)
+
+	err := agent.Prompt(ctx, agentctl.AgentName(id, suffix, path), text)
+	if errors.Is(err, agentctl.ErrAgentNotFound) {
+		return agent.Prompt(ctx, agentctl.BareAgentName(id, suffix), text)
 	}
 
 	return err

@@ -8,7 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 )
 
 func TestPullToken(t *testing.T) {
@@ -196,9 +196,9 @@ func TestStartPicksUpAPR(t *testing.T) {
 	f.script("git worktree add "+wt+" alice/fix-login", "")
 	f.script("git config branch.alice/fix-login.f10-task GH-1", "")
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label alice/fix-login", opened)
-	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
+	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
-		"herdr agent prompt "+herdr.AgentName(
+		"herdr agent prompt "+agentctl.AgentName(
 			"GH-1",
 			"",
 			wt,
@@ -252,9 +252,9 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1/slug", wt))
 	f.script("git worktree add "+wt+" GH-1/slug", "")
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/slug", opened)
-	f.script("herdr agent start "+herdr.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
+	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
-		"herdr agent prompt "+herdr.AgentName(
+		"herdr agent prompt "+agentctl.AgentName(
 			"GH-1",
 			"",
 			wt,

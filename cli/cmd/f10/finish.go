@@ -13,9 +13,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
@@ -104,7 +104,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("--keep keeps a spike's experiment, which has no PR to --merge or leave --local")
 	}
 
-	if err := herdr.Available(); err != nil {
+	if err := agents("").Available(); err != nil {
 		return err
 	}
 
@@ -254,12 +254,12 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		}
 	}
 
-	wss, err := herdr.Workspaces(ctx, in.main)
+	wss, err := agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return err
 	}
 
-	var ws, mainWS *herdr.Listed
+	var ws, mainWS *agentctl.Workspace
 
 	var self bool
 
@@ -532,13 +532,13 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	in.sweepNow(ctx)
 
 	if self && mainWS != nil {
-		if err := herdr.FocusWorkspace(ctx, in.main, mainWS.ID); err != nil {
+		if err := agents(in.main).Focus(ctx, mainWS.ID); err != nil {
 			return err
 		}
 	}
 
 	if ws != nil {
-		return herdr.CloseWorkspace(ctx, in.main, ws.ID)
+		return agents(in.main).Close(ctx, ws.ID)
 	}
 
 	return nil
@@ -682,7 +682,7 @@ func refuseDirty(ctx context.Context, path string) error {
 }
 
 // workspaceAt is the workspace showing the checkout at path, or nil.
-func workspaceAt(wss []herdr.Listed, path string) *herdr.Listed {
+func workspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
 	for i := range wss {
 		if wss[i].Path != "" && samePath(wss[i].Path, path) {
 			return &wss[i]
@@ -692,22 +692,8 @@ func workspaceAt(wss []herdr.Listed, path string) *herdr.Listed {
 	return nil
 }
 
-// workspacesAt is every workspace showing the checkout at path, in Herdr's
-// order: more than one when something opened the checkout twice.
-func workspacesAt(wss []herdr.Listed, path string) []herdr.Listed {
-	var shown []herdr.Listed
-
-	for _, ws := range wss {
-		if ws.Path != "" && samePath(ws.Path, path) {
-			shown = append(shown, ws)
-		}
-	}
-
-	return shown
-}
-
 // workspaceByID is the workspace with id, or nil once Herdr no longer shows it.
-func workspaceByID(wss []herdr.Listed, id string) *herdr.Listed {
+func workspaceByID(wss []agentctl.Workspace, id string) *agentctl.Workspace {
 	for i := range wss {
 		if wss[i].ID == id {
 			return &wss[i]
@@ -717,7 +703,7 @@ func workspaceByID(wss []herdr.Listed, id string) *herdr.Listed {
 	return nil
 }
 
-func workspaceLabel(ws *herdr.Listed) string {
+func workspaceLabel(ws *agentctl.Workspace) string {
 	if ws == nil {
 		return ""
 	}
