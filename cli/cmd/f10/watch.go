@@ -195,6 +195,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 		ttl:      state.TTL(),
 		now:      time.Now,
 		out:      lineReporter{w: cmd.Writer},
+		warn:     func(line string) { fmt.Fprintln(cmd.Writer, line) },
 	}
 
 	if b := reachableAgents(main); b != nil {
@@ -287,6 +288,7 @@ type watchInput struct {
 	// finish finishes a merged task under its lease; nil in report mode
 	finish func(context.Context, watchedTask) error
 	out    reporter
+	warn   func(string) // a line for the pass's output that is no report; nil drops it
 }
 
 // A watchedTask is what one pass knows about a task with a worktree.
@@ -625,7 +627,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		if h, ok := drives.Probe(in.root, task.id); ok {
 			task.owner = h.String()
 		} else {
-			task.off = gitx.Out(ctx, in.main, "config", "--get", "branch."+b.name+"."+cfgWatch) == "false"
+			task.off = in.handedBack(ctx, b.name)
 		}
 
 		if task.owner != "" || task.off {
@@ -713,11 +715,32 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 	return err
 }
 
+// handedBack reports branch handed back by f10 watch off. A mark git
+// cannot read counts as handed back for this pass, with a line naming it:
+// a finish must never run on a task the user may have taken back.
+func (in watchInput) handedBack(ctx context.Context, branch string) bool {
+	v, err := gitx.Config(ctx, in.main, "branch."+branch+"."+cfgWatch)
+	if err != nil {
+		if in.warn != nil {
+			in.warn(fmt.Sprintf("%s skipped this pass: its f10 watch off mark could not be read: %v", branch, err))
+		}
+
+		return true
+	}
+
+	return v == "false"
+}
+
 // recheckFinish reads again, under the lease, what the pass read before
 // it: an agent that started working, or a commit the PR lacks, since then
 // keeps the task.
 func recheckFinish(ctx context.Context, b agentctl.Backend, main string, task watchedTask) error {
-	if tip := gitx.Out(ctx, main, "rev-parse", "-q", "--verify", "refs/heads/"+task.branch); tip != task.pr.HeadSHA {
+	tip, err := gitx.Ref(ctx, main, "refs/heads/"+task.branch)
+	if err != nil {
+		return fmt.Errorf("reading %s's tip: %w", task.branch, err)
+	}
+
+	if tip != task.pr.HeadSHA {
 		return fmt.Errorf("%s has commits %s lacks", task.branch, task.pr.URL)
 	}
 

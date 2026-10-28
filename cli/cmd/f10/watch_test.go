@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -317,12 +318,20 @@ func TestRecheckFinish(t *testing.T) {
 		{name: "listing failed", tip: "abc", backend: failingAgents{&memAgents{}}},
 		{name: "no backend", tip: "abc"},
 		{name: "a commit the PR lacks", tip: "def", backend: at(agentctl.StatusIdle)},
+		{name: "the tip unreadable", tip: "fail", backend: at(agentctl.StatusIdle)},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFakes(t)
-			f.script("git rev-parse -q --verify refs/heads/GH-1/x", c.tip)
+			if c.tip == "fail" {
+				f.fail(
+					"git rev-parse -q --verify refs/heads/GH-1/x",
+					shell.Result{Code: 128, Stderr: "fatal: bad object"},
+				)
+			} else {
+				f.script("git rev-parse -q --verify refs/heads/GH-1/x", c.tip)
+			}
 
 			err := recheckFinish(t.Context(), c.backend, t.TempDir(), task)
 			if (err == nil) != c.ok {
@@ -356,5 +365,42 @@ func TestHostTrouble(t *testing.T) {
 
 	if _, ok := store[watchHostKey]; ok {
 		t.Error("the host answered, and its trouble stayed")
+	}
+}
+
+// A handed-back mark git cannot read counts as handed back for the pass:
+// the task is skipped, its request never read, and a line names it.
+func TestCollectWatchedSkipsAnUnreadableMark(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "a1", "a1"})
+	fx.f.script(worktrees, porcelain("GH-1/x", "/code/repo.GH-1"))
+	fx.f.fail(
+		"git config --get branch.GH-1/x."+cfgWatch,
+		shell.Result{Code: 128, Stderr: "fatal: unable to read config"},
+	)
+
+	var warned []string
+
+	in := watchInput{
+		main: fx.in.main, root: t.TempDir(), jan: fx.in, stateDir: t.TempDir(), ttl: time.Hour, now: time.Now,
+		warn: func(line string) { warned = append(warned, line) },
+	}
+
+	tasks, _, err := collectWatched(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tasks) != 1 || !tasks[0].off || fx.f.called(ghHeadOf("GH-1/x")) {
+		t.Errorf("tasks = %+v, request read: %v", tasks, fx.f.called(ghHeadOf("GH-1/x")))
+	}
+
+	if len(warned) != 1 || !strings.Contains(warned[0], "GH-1/x") ||
+		!strings.Contains(warned[0], "unable to read config") {
+		t.Errorf("warned = %q", warned)
+	}
+
+	if rep, _ := decideWatch(tasks[0], "finish", time.Now()); rep != nil {
+		t.Errorf("a task whose mark is unreadable got a report: %+v", rep)
 	}
 }

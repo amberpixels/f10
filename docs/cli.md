@@ -585,7 +585,7 @@ Owning is the task's lease (**Drive**): a task a drive or a finish holds is neve
   Each fact is told once: `watch.yaml` in the storage root keeps the last report per task and every fact told for it (the PR's state, the run's update time), so a fact is never repeated, even after another, and a newer one is told. Under `watch: finish` the janitor then runs if it is due; under `report` it never runs from a pass, since it deletes branches.
   A pass exits 7 when nothing is left to watch, which drops the project from the daemon's list.
 - **Telling.** A pass reports through its own output, one line per report, into the project's watch log; `f10 watch` prints the last report per task.
-- **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task or finishes it. `f10 watch on <id>` removes it. Typing in the task's own pane needs nothing: a working agent is never stalled.
+- **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task or finishes it. A mark git cannot read (a lock, a broken config) counts as handed back for that pass, with a line naming the branch and the error. `f10 watch on <id>` removes it. Typing in the task's own pane needs nothing: a working agent is never stalled.
 
 ## Review
 
