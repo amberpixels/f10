@@ -47,7 +47,11 @@ func taskSpike(checkout, plansDir, id string) string {
 	return ""
 }
 
-// spikePlan reports whether the plan's head carries a `Kind: spike` line.
+// kindSpike matches a plan's kind line as plans write it: `Kind: spike`,
+// `- **Kind**: spike, from the label`, `**Kind:** spike (a question)`.
+var kindSpike = regexp.MustCompile(`(?i)^(- )?kind\s*:\s*spike\b`)
+
+// spikePlan reports whether the plan's head carries a spike's kind line.
 func spikePlan(path string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -56,7 +60,7 @@ func spikePlan(path string) bool {
 
 	lines := strings.Split(string(b), "\n")
 	for _, l := range lines[:min(len(lines), 20)] {
-		if strings.EqualFold(strings.Trim(strings.TrimSpace(l), "*_"), "Kind: spike") {
+		if kindSpike.MatchString(strings.NewReplacer("*", "", "_", "", "`", "").Replace(strings.TrimSpace(l))) {
 			return true
 		}
 	}
@@ -83,6 +87,21 @@ func spikeArchiveName(main, plansDir, id string) (string, error) {
 // archiveSpike moves the report to target.
 func archiveSpike(report, target string) error {
 	if err := os.Rename(report, target); err != nil {
+		return fmt.Errorf("archiving the spike report at %s: %w", report, err)
+	}
+
+	return nil
+}
+
+// copySpike copies the report to target, leaving the original where a
+// rerun still finds it until the worktree holding it is removed.
+func copySpike(report, target string) error {
+	b, err := os.ReadFile(report)
+	if err == nil {
+		err = os.WriteFile(target, b, 0o600) //nolint:gosec // a path in the storage root this run named
+	}
+
+	if err != nil {
 		return fmt.Errorf("archiving the spike report at %s: %w", report, err)
 	}
 
@@ -203,11 +222,19 @@ func discardExperiment(ctx context.Context, path string) error {
 // keepBranch moves the branch to kept, created at its tip; deleting the old
 // name drops its config section, the task link with it.
 func keepBranch(ctx context.Context, main, branch, kept string) error {
+	if err := createKept(ctx, main, branch, kept); err != nil {
+		return err
+	}
+
+	return gitx.DeleteBranch(ctx, main, branch)
+}
+
+func createKept(ctx context.Context, main, branch, kept string) error {
 	if _, err := gitx.Exec(ctx, main, "branch", kept, "refs/heads/"+branch); err != nil {
 		return fmt.Errorf("keeping %s as %s: %w", branch, kept, err)
 	}
 
-	return gitx.DeleteBranch(ctx, main, branch)
+	return nil
 }
 
 // removeTaskCheckout removes the worktree and the branch. A spike closed
@@ -233,7 +260,13 @@ func removeTaskCheckout(
 		return removeCheckout(ctx, in.main, path, name)
 	}
 
+	// the kept branch exists before the worktree goes, so a failed removal
+	// leaves the worktree a rerun can still finish
 	if err := commitExperiment(ctx, path, in.task.ID, dirty); err != nil {
+		return err
+	}
+
+	if err := createKept(ctx, in.main, name, kept); err != nil {
 		return err
 	}
 
@@ -241,5 +274,5 @@ func removeTaskCheckout(
 		return err
 	}
 
-	return keepBranch(ctx, in.main, name, kept)
+	return gitx.DeleteBranch(ctx, in.main, name)
 }

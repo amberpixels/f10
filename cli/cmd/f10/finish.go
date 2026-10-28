@@ -439,8 +439,9 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
-	// a worktree's own report leaves before the worktree; a shared one after
-	// the removal, so a rerun after a failed one still finds the spike
+	// a worktree's own report is copied out before the worktree goes, and
+	// goes with it; a shared one moves after the removal: either way a rerun
+	// after a failed removal still finds the spike
 	var spikeDst string
 
 	early := spike != "" && !onMain && inside(spike, path)
@@ -451,7 +452,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		}
 
 		if early {
-			if err := archiveSpike(spike, spikeDst); err != nil {
+			if err := copySpike(spike, spikeDst); err != nil {
 				return err
 			}
 		}

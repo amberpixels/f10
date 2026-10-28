@@ -1171,7 +1171,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	wasWaiting := r.waiting
 	r.waiting = false
 
-	spike := in.spikeDone(r)
+	spike := in.spikeDone(ctx, r)
 	if spike && r.pos >= len(r.chain) {
 		if err := in.closeAfterShip(ctx, r); err != nil {
 			return err
@@ -1229,15 +1229,16 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	return in.send(ctx, w, r, skill)
 }
 
-// spikeDone reports whether the task's ship ended as a spike: past ship in
-// its chain, with a spike report written.
-func (in *driveInput) spikeDone(r *driveRun) bool {
+// spikeDone reports whether the task's ship ended as a spike that finish
+// closes without a merge: past ship in its chain, a spike report written,
+// and the branch never pushed, since a pushed one finishes through its PR.
+func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) bool {
 	i := slices.Index(r.chain, "ship")
-	if i < 0 || r.pos <= i {
+	if i < 0 || r.pos <= i || taskSpike(r.o.path, in.plansDir, r.task.ref.ID) == "" {
 		return false
 	}
 
-	return taskSpike(r.o.path, in.plansDir, r.task.ref.ID) != ""
+	return gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/remotes/origin/"+r.o.branch) == ""
 }
 
 // closeAfterShip adds finish to a spike's chain that lacks it: a spike close

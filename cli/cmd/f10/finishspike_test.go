@@ -69,7 +69,8 @@ func TestFinishClosesASpike(t *testing.T) {
 }
 
 // --keep commits the experiment and keeps it on a branch that names no
-// task, so every lookup reads the spike as finished.
+// task, so every lookup reads the spike as finished; the kept branch is
+// made before the worktree goes, so a failed removal is finished again.
 func TestFinishKeepsASpikesExperiment(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
@@ -94,7 +95,8 @@ func TestFinishKeepsASpikesExperiment(t *testing.T) {
 	kept := slices.Index(fx.f.calls, "git branch kept/spike refs/heads/GH-1")
 	deleted := slices.Index(fx.f.calls, "git branch -D GH-1")
 
-	if commit < 0 || removed < commit || kept < removed || deleted < kept {
+	// the kept branch exists before the worktree goes
+	if commit < 0 || kept < commit || removed < kept || deleted < removed {
 		t.Errorf("calls = %q", fx.f.calls)
 	}
 
@@ -264,5 +266,31 @@ func TestFinishArchivesALegacyWorktreesSpikeReport(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.spike.md"))
 	if err != nil || string(got) != "answer" {
 		t.Errorf("archived report = %q, %v", got, err)
+	}
+
+	// the worktree's own copy goes with the worktree, so a rerun still finds it
+	if taskSpike(fx.wt, fx.in.plansDir, "GH-1") == "" {
+		t.Error("a rerun after the failed removal sees no spike")
+	}
+}
+
+// The kind line is read in the shapes plans write it, and a kind that only
+// starts with spike is not one.
+func TestSpikePlan(t *testing.T) {
+	for body, want := range map[string]bool{
+		"Roles: x\nKind: spike\n":                      true,
+		"- **Kind**: spike, from the label.\n":         true,
+		"**Kind:** spike (the task asks a question)\n": true,
+		"Kind: `spike`\n":                              true,
+		"Kind: feature\n":                              false,
+		"Kind: spiked\n":                               false,
+		"# plan\n\nThe kind is not spike here.\n":      false,
+	} {
+		p := filepath.Join(t.TempDir(), "plan.md")
+		writeFile(t, p, body)
+
+		if got := spikePlan(p); got != want {
+			t.Errorf("spikePlan(%q) = %v, want %v", body, got, want)
+		}
 	}
 }

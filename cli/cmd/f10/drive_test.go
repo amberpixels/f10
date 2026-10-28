@@ -2031,3 +2031,21 @@ func TestDriveStartsADependentOfAClosedSpike(t *testing.T) {
 		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 	}
 }
+
+// A spike-reported task whose branch is on origin finishes through its PR,
+// so drive takes no shortcut for it.
+func TestDriveSpikeShortcutNeedsABranchNeverPushed(t *testing.T) {
+	fx := spikeDrive(t, "GH-1", "ship")
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, chain: []string{"ship"}, pos: 1}
+	r.o.path, r.o.branch = "/code/repo.GH-1", "GH-1"
+
+	if !fx.in.spikeDone(t.Context(), r) {
+		t.Error("a spike never pushed took no shortcut")
+	}
+
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "abc")
+
+	if fx.in.spikeDone(t.Context(), r) {
+		t.Error("a pushed spike took the shortcut")
+	}
+}
