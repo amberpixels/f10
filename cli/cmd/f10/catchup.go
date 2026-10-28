@@ -107,9 +107,9 @@ func markOn(ctx context.Context, main, branch string) (string, error) {
 }
 
 // branchUnsettled says why a catchup of branch, checked out at dir, did not
-// bring it up to date, or "" when it did. Catchup owns no phase, so its
-// success is read from git: the mark gone, which catchup clears only once
-// verify is green, no merge or rebase left open, and a clean tree.
+// bring it up to date, or "" when it did. Whether a catchup that reported
+// ended clean is read from git: the mark gone, which catchup clears only
+// once verify is green, no merge or rebase left open, and a clean tree.
 func branchUnsettled(ctx context.Context, main, dir, branch string) string {
 	key, err := markOn(ctx, main, branch)
 

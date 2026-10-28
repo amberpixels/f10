@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -658,9 +659,12 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 				"GH-1:    done: ship",
 			},
 		},
-		"settled, nothing written": {
-			// a catchup that never stopped leaves the run as it found it
-			after: func(fx *driveFixture, _ *testing.T) { fx.f.script("git config --get branch.GH-1."+cfgLanded, "") },
+		"settled, never stopped": {
+			// a catchup that never stopped writes only its done signal
+			after: func(fx *driveFixture, t *testing.T) {
+				fx.f.script("git config --get branch.GH-1."+cfgLanded, "")
+				fx.reports(t, fx.clock)
+			},
 			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
 			want:  []string{"the branch is settled: resume at pr", "GH-1:    done: ship"},
 		},
@@ -671,9 +675,13 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			want:  []string{"the branch is settled: resume at pr", "GH-1:    done: ship"},
 		},
 		"unsettled": {
-			after: func(fx *driveFixture, t *testing.T) { fx.writeShipStop(t, "partial", "pr", 4, catchupNext) },
-			code:  exitHalted,
-			want:  []string{"halted at catchup: the catchup did not end clean", "next: settle it with /f10:catchup in"},
+			// reported, but the mark is still there
+			after: func(fx *driveFixture, t *testing.T) {
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.reports(t, fx.clock)
+			},
+			code: exitHalted,
+			want: []string{"halted at catchup: the catchup did not end clean", "next: settle it with /f10:catchup in"},
 		},
 		"asks": {
 			after: func(fx *driveFixture, t *testing.T) {
@@ -790,11 +798,141 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 }
 
 // restored is what a driven catchup that stopped, then ended clean, leaves:
-// the mark cleared and the ship stop it found written back.
+// the mark cleared, the ship stop it found written back, and its done signal.
 func restored(fx *driveFixture, t *testing.T) {
 	t.Helper()
 	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+	fx.reports(t, fx.clock)
 	fx.f.script("git config --get branch.GH-1."+cfgLanded, "")
+}
+
+// reports writes the catchup's done signal, dated at, into GH-1's run file,
+// updated at the fixture clock: what the step's report leaves.
+func (fx *driveFixture) reports(t *testing.T, at time.Time) {
+	t.Helper()
+	fx.reportsFor(t, "GH-1", at)
+}
+
+// reportsFor writes a task's catchup done signal into its run file, the
+// rest of the run kept, or a fresh run when the agent wrote none before.
+func (fx *driveFixture) reportsFor(t *testing.T, id string, at time.Time) {
+	t.Helper()
+
+	path := filepath.Join(fx.in.stateDir, "s-"+id+".state")
+	kept := []string{"v 1", "task " + id, "root /code/repo." + id}
+
+	if raw, err := os.ReadFile(path); err == nil {
+		kept = nil
+
+		for line := range strings.SplitSeq(strings.TrimSpace(string(raw)), "\n") {
+			key, _, _ := strings.Cut(line, " ")
+			if key != "done" && key != "done_at" && key != "updated" {
+				kept = append(kept, line)
+			}
+		}
+	}
+
+	kept = append(kept,
+		"done catchup",
+		"done_at "+strconv.FormatInt(at.Unix(), 10),
+		"updated "+strconv.FormatInt(fx.clock.Unix(), 10),
+	)
+
+	if err := os.WriteFile(path, []byte(strings.Join(kept, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A catchup's turn that ends idle before its report is not done: the drive
+// waits through the grace, and reads the catchup as done only once the
+// signal its report writes is there, dated after the prompt. A signal an
+// earlier catchup left does not count.
+func TestDriveWaitsOnACatchupThatHasNotReported(t *testing.T) {
+	landed := "git config --get branch.GH-1." + cfgLanded
+	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
+
+	for name, stale := range map[string]bool{"no signal yet": false, "stale signal": true} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+			fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+			fx.f.script(landed, "main")
+			fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
+			fx.f.script(resume, "{}")
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+			if stale {
+				fx.reports(t, fx.clock.Add(-time.Hour))
+			}
+
+			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
+			// the catchup's turn ends idle at the second look and stays so
+			// until the report lands two looks later; then the look before
+			// the resumed ship, its turn and its end
+			fx.f.script(wsList, unopened, idle, working, idle, idle, idle, idle, working, idle)
+
+			doneEarly := false
+			fx.onTick[3] = func() { doneEarly = strings.Contains(fx.out.String(), "catchup: done") }
+			fx.onTick[4] = func() {
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.reports(t, fx.clock)
+				fx.f.script(landed, "")
+			}
+			fx.onTick[6] = func() { fx.writeRun(t, "done", "", "", "") }
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if doneEarly {
+				t.Errorf("the catchup was read as done before it reported:\n%s", out)
+			}
+
+			if err != nil || !strings.Contains(out, "GH-1 catchup: done") ||
+				!strings.Contains(out, "GH-1:    done: ship") {
+				t.Errorf("err = %v\n%s", err, out)
+			}
+
+			if !fx.f.called(resume) {
+				t.Errorf("ship was not resumed after the catchup reported: %q", fx.f.calls)
+			}
+		})
+	}
+}
+
+// A catchup's agent idle past the grace with no report halts the task as a
+// ship turn would: stopped without reporting, the workspace named, the
+// halt in the ledger.
+func TestDriveHaltsOnACatchupThatStoppedWithoutReporting(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+	fx.f.script("git config --get branch.GH-1."+cfgLanded, "main")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+	var recorded []ledger.Event
+
+	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { recorded = append(recorded, e) }
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != exitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, out)
+	}
+
+	if !strings.Contains(out, "GH-1 halted at catchup") || !strings.Contains(out, "stopped without reporting") ||
+		strings.Contains(out, "did not end clean") {
+		t.Errorf("output = %s", out)
+	}
+
+	if len(recorded) != 1 || recorded[0].Kind != ledger.TaskHalted || recorded[0].Payload.Val["skill"] != "catchup" {
+		t.Errorf("recorded %+v, want one halt at catchup", recorded)
+	}
+
+	if fx.sleeps < int(stallGrace/defaultEvery) {
+		t.Errorf("halted after %d polls, before the grace ran out", fx.sleeps)
+	}
 }
 
 func countCalls(calls []string, call string) int {
@@ -1623,6 +1761,8 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 				all("working", ids...), all("idle", ids...), // the catchup
 				all("idle", ids...), // before GH-2's judge
 				all("working", ids...), all("idle", ids...))
+			// the catchup reports as its turn ends, clean or not
+			fx.onTick[4] = func() { fx.reportsFor(t, "GH-2", fx.clock) }
 
 			err := fx.drive(t)
 
@@ -1758,6 +1898,8 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			// catchup: its send, its turn and its end
 			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
 			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
+			fx.onTick[2] = func() { fx.reports(t, fx.clock) }
+			fx.onTick[4] = func() { fx.reports(t, fx.clock) }
 
 			err := fx.drive(t)
 			out := fx.out.String()
@@ -1945,6 +2087,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			// its end, where finish runs
 			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
 			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
+			fx.onTick[2] = func() { fx.reports(t, fx.clock) } // the catchup reports as its turn ends
 
 			err := fx.drive(t)
 			out := fx.out.String()
@@ -2507,8 +2650,9 @@ func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
-	fx.onTick[3] = func() { fx.f.script(moved, "b2") } // what the drive set
-	fx.onTick[4] = func() { fx.f.script(moved, "") }   // the catchup cleared it
+	fx.onTick[3] = func() { fx.f.script(moved, "b2") }           // what the drive set
+	fx.onTick[4] = func() { fx.f.script(moved, "") }             // the catchup cleared it
+	fx.onTick[5] = func() { fx.reportsFor(t, "GH-2", fx.clock) } // and reports as its turn ends
 
 	fx.f.script(wsList,
 		unopened, all("idle", "GH-1"),
@@ -2630,6 +2774,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 				fx.f.script("git status --porcelain", "")
 				fx.f.script(wsList,
 					unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+				fx.onTick[2] = func() { fx.reports(t, fx.clock) } // the catchup reports as its turn ends
 			} else {
 				fx.f.script("git merge-tree --write-tree m0 refs/heads/GH-1", "tree")
 			}

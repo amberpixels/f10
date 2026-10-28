@@ -511,7 +511,9 @@ A cancelled record is never picked up again: the same command line starts a new 
    A branch that conflicts again after a catchup is judged by progress, not counted: the default branch moved since the catchup and other files conflict, it is caught up again; the catchup left the branch unchanged, the default branch has not moved, or the same files conflict twice in a row, the task halts naming the files.
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.
-   The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
+   The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt.
+   An idle agent without it is a stall, halted after the same grace a ship or plan turn gets, never read as done.
+   The chain resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails halts the task.
 6. **Waiting.**
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
