@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -88,7 +89,7 @@ type gateInput struct {
 	events   []ledger.Event
 	chain    []string        // drive's chain recorded on the branch
 	driven   string          // the last chain skill drive saw finish
-	finish   ref.DriveFinish // drive's record of running finish, zero for none or a gone drive
+	finish   ref.DriveFinish // drive's record of running finish, zero for none or a drive gone
 	pipeline []string        // ship's entries of the branch's flow, when the run recorded none
 	// remoteFlow is a remote reviewer declared: it reviews every PR
 	remoteFlow bool
@@ -315,7 +316,7 @@ func (in gateInput) chainStates(entries, states []string, shipLen int) {
 // queued or running, as the record says, once ship is done.
 func (in gateInput) finishGate(st string) gate {
 	g := gate{Step: "finish", State: st}
-	if st != gatePending || in.finish.PID == 0 || !in.shipDone() {
+	if st != gatePending || in.finish.State == "" || !in.shipDone() {
 		return g
 	}
 
@@ -1001,8 +1002,11 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	if branch != "" && src.main != "" {
 		in.chain = strings.Fields(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgChain))
 		in.driven = gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgDrive)
-		rec := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+ref.FinishKey)
-		in.finish, _ = ref.LiveDriveFinish(rec)
+		// the record outlives a killed drive; the lease does not
+		if _, held := drives.Probe(src.shared, id); held {
+			rec := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+ref.FinishKey)
+			in.finish, _ = ref.ParseDriveFinish(rec)
+		}
 
 		if recorded := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgFlow); recorded != "" {
 			flow = recorded

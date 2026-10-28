@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -990,12 +991,92 @@ func TestFinishRefusesWithoutBranchOrWorktree(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 
+	// a branch whose PR is still open is one start never made, or work not landed
 	fx = newFinishFixture(t)
 	fx.f.script(worktrees, porcelain())
+	fx.f.script(ghView, prOpen)
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "has no worktree here") {
 		t.Errorf("err = %v", err)
 	}
+}
+
+// A finish that stopped after removing the worktree is rerun to the end:
+// the PR merged, so the rest is cleaned up and only the branch deleted.
+func TestFinishMergedWithoutWorktree(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(worktrees, porcelain())
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	if !fx.f.called("git branch -D GH-1") || fx.f.called("git worktree remove") ||
+		fx.f.called("herdr workspace close") {
+		t.Errorf("calls: %v", fx.f.calls)
+	}
+
+	for _, want := range []string{"was already merged", "had no worktree left", "https://gh/pr/9"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// A task with no branch left and its plan archived is already finished.
+func TestFinishAlreadyFinished(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(refsLocal, "")
+	fx.in.plansDir = filepath.Join(t.TempDir(), "plans")
+
+	if err := os.MkdirAll(filepath.Join(fx.in.plansDir, "archive"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(fx.in.plansDir, "archive", "GH-1.1.md"), []byte("# plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := fx.run(t)
+	if err != nil || !strings.Contains(out, "already finished") {
+		t.Errorf("err = %v, out:\n%s", err, out)
+	}
+
+	// a re-plan archives the old plan too, and keeps the new one live
+	if err := os.WriteFile(filepath.Join(fx.in.plansDir, "GH-1.md"), []byte("# plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "nothing to finish") {
+		t.Errorf("a re-planned task with a live plan: err = %v", err)
+	}
+}
+
+// f10 finish refuses a task a drive holds, naming the drive.
+func TestFinishLeaseRefusesADrivenTask(t *testing.T) {
+	root := t.TempDir()
+
+	held, err := drives.Acquire(root, "GH-1", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := finishLease(root, "GH-1"); err == nil || !strings.Contains(err.Error(), "owned by drive 3") ||
+		!strings.Contains(err.Error(), "f10 drive cancel 3") {
+		t.Errorf("err = %v", err)
+	}
+
+	held.Release()
+
+	l, err := finishLease(root, "GH-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	l.Release()
 }
 
 func TestFinishRefusesOutsideHerdr(t *testing.T) {

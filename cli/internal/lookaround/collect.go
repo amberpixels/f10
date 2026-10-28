@@ -138,7 +138,7 @@ func Collect(ctx context.Context, in Inputs) Facts {
 		skip(SourceLocal)
 	default:
 		timed(SourceLocal, func() ([]string, error) {
-			l, notes, err := collectLocal(ctx, *in.Local, now())
+			l, notes, err := collectLocal(ctx, *in.Local, in.Prefix, now())
 			if err == nil {
 				f.Local = l
 			}

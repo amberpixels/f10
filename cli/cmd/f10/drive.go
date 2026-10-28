@@ -18,6 +18,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -40,15 +41,16 @@ import (
 // status for the turn's start and end, and the task's run state for the
 // outcome.
 //
-// Rerunning the same command is the resume. A finished task is skipped, a
-// started one reads its position from its branch, and an ask is answered
-// by the same command with --answer, one per asking task.
+// Rerunning the same command, or --resume with the record's number, is the
+// resume. A finished task is skipped, a started one reads its position from
+// its branch, and an ask is answered with --answer, one per asking task.
 func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
 		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping when an agent asks",
 		ArgsUsage: "<id>[:model]... | <id> -- <id>  [--flow NAME | --local] " +
-			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]",
+			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]\n" +
+			"   f10 drive --resume N [--answer [ID=]TEXT ...] | list [--all] | cancel N",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
 			"then finish when drive_finish is on. A rerun keeps the flow a task's branch records.\n" +
@@ -56,6 +58,9 @@ func driveCommand() *cli.Command {
 			"every task whose base branch has a commit runs at once, its finish waits for the base's, " +
 			"and a halt stops only its dependents.\n" +
 			"--model starts every agent on MODEL; <id>:<model> starts one task's agent on its own, which wins.\n" +
+			"Each drive keeps a record under the storage root, picked up by the same command or --resume N, " +
+			"and holds a lease on each task: a task another drive holds is skipped, and f10 finish refuses it. " +
+			"list shows the drives; cancel N stops one from prompting further.\n" +
 			"Exit 0: every task went through its chain. 4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
@@ -118,6 +123,19 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	if a.list || a.cancel > 0 {
+		t, err := targetFor(ctx, cmd)
+		if err != nil {
+			return err
+		}
+
+		if a.list {
+			return driveList(cmd.Writer, t.sharedRoot(), a.all)
+		}
+
+		return driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now())
+	}
+
 	if err := agents("").Available(); err != nil {
 		return err
 	}
@@ -125,6 +143,23 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
+	}
+
+	// a resume runs the record's own command line, with the answers and
+	// --every given now
+	if a.resume > 0 {
+		rec, err := drives.Read(t.sharedRoot(), a.resume)
+		if err != nil {
+			return err
+		}
+
+		given := a
+		if a, err = parseDriveArgs(rec.Args); err != nil {
+			return fmt.Errorf("drive %d: %w", rec.Number, err)
+		}
+
+		a.resume, a.answers, a.every = given.resume, given.answers, given.every
+		argv = rec.Args
 	}
 
 	fl, err := resolveShipFlow(t.eff, a.flow)
@@ -144,6 +179,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 	return drive(ctx, cmd.Writer, &driveInput{
 		main:     main,
+		root:     t.sharedRoot(),
 		driver:   drv,
 		tracker:  t.tracker(),
 		args:     a,
@@ -156,7 +192,6 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		started:  startedMove(t),
 		record:   recordAt,
-		pid:      os.Getpid(),
 		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -198,6 +233,10 @@ type driveArgs struct {
 	flow    string   // --flow, or local for --local; "" for default
 	answers []string // each --answer as typed: `GH-1=text` for one task, or bare text
 	every   time.Duration
+	resume  int  // --resume: the record to pick up
+	list    bool // `drive list`
+	all     bool // `drive list --all`
+	cancel  int  // `drive cancel <n>`
 }
 
 // parseDriveArgs reads tasks, with --model, --answer, --every, --flow and
@@ -206,11 +245,26 @@ type driveArgs struct {
 func parseDriveArgs(args []string) (driveArgs, error) {
 	a := driveArgs{every: defaultEvery}
 
+	if len(args) > 0 {
+		switch strings.TrimSpace(args[0]) {
+		case "list":
+			return parseDriveList(args[1:])
+		case "cancel":
+			if len(args) != 2 {
+				return driveArgs{}, errors.New("cancel takes one drive number: f10 drive cancel 3")
+			}
+
+			n, err := driveNumber(args[1])
+
+			return driveArgs{cancel: n}, err
+		}
+	}
+
 	for i := 0; i < len(args); i++ {
 		tok := strings.TrimSpace(args[i])
 
 		name, value, inline := strings.Cut(tok, "=")
-		if name == "--model" || name == "--answer" || name == "--every" || name == "--flow" {
+		if name == "--model" || name == "--answer" || name == "--every" || name == "--flow" || name == "--resume" {
 			if !inline {
 				if i+1 >= len(args) {
 					return driveArgs{}, fmt.Errorf("%s needs a value", name)
@@ -251,7 +305,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
 			return driveArgs{}, fmt.Errorf(
-				"unknown flag %s: drive takes --flow, --local, --model, --answer and --every",
+				"unknown flag %s: drive takes --flow, --local, --model, --answer, --every and --resume",
 				tok,
 			)
 		default:
@@ -265,6 +319,11 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 	}
 
 	switch {
+	case a.resume > 0 && (len(a.tasks) > 0 || a.flow != "" || a.model != ""):
+		return driveArgs{}, fmt.Errorf("--resume %d runs the drive's own tasks, flow and models: "+
+			"it takes only --answer and --every", a.resume)
+	case a.resume > 0:
+		return a, nil
 	case len(a.tasks) == 0:
 		return driveArgs{}, errors.New("drive needs the tasks: GH-12 GH-15, or a range GH-12 -- GH-15")
 	case a.span && len(a.tasks) != 2:
@@ -278,6 +337,11 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 
 func (a *driveArgs) set(name, value string) error {
 	switch name {
+	case "--resume":
+		n, err := driveNumber(value)
+		a.resume = n
+
+		return err
 	case "--model":
 		if a.model != "" {
 			return errors.New("--model is given twice: one run-wide model, and <id>:<model> for a task's own")
@@ -319,6 +383,31 @@ func (a *driveArgs) set(name, value string) error {
 	return nil
 }
 
+// parseDriveList reads `drive list [--all]`.
+func parseDriveList(args []string) (driveArgs, error) {
+	a := driveArgs{list: true}
+
+	for _, tok := range args {
+		if tok != "--all" {
+			return driveArgs{}, fmt.Errorf("drive list takes only --all, not %s", tok)
+		}
+
+		a.all = true
+	}
+
+	return a, nil
+}
+
+// driveNumber reads a drive's number.
+func driveNumber(s string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%q is not a drive number: f10 drive list shows them", s)
+	}
+
+	return n, nil
+}
+
 // splitModel cuts a task token's :model off. Only the last colon counts,
 // and only when what follows has no slash, so a url's scheme and port stay
 // part of the task.
@@ -343,6 +432,7 @@ func isArrow(tok string) bool {
 // flow can be tested without a checkout, a clock or a wait.
 type driveInput struct {
 	main     string
+	root     string // the storage root every checkout shares, for the record and the leases; "" keeps none
 	driver   *driver.Driver
 	tracker  tracker
 	args     driveArgs
@@ -356,7 +446,6 @@ type driveInput struct {
 	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	// pr: "", or the answer merge or local; progress names each action finish takes
 	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error
-	pid      int // this process, for the finish record status reads
 	stateDir string
 	ttl      time.Duration
 	now      func() time.Time
@@ -367,6 +456,12 @@ type driveInput struct {
 	answer  string            // a bare --answer, until the first task stopped on a question takes it
 	answers map[string]string // --answer ID=text, by task id, until that task takes it
 	models  map[string]string // each model as typed, resolved; "" for claude's default
+
+	rec    *drives.Record           // this drive's record; nil with no root
+	own    *drives.Lease            // the drive's own lease, held while it runs
+	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
+	runs   []*driveRun
+	out    io.Writer
 }
 
 // A driveTask is one task of the list, as the validation pass found it.
@@ -392,6 +487,9 @@ type driveResult struct {
 	reason string
 	// fromRun is a halt the run itself reported, already in the ledger
 	fromRun bool
+	// drives is an end this drive gave the task, owned elsewhere or
+	// cancelled, which says nothing about the task itself
+	drives bool
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -442,6 +540,7 @@ func (r *driveRun) through() bool { return r.end != nil && r.end.code == 0 }
 // or one asks, or nothing can move. Nothing is created or prompted before the
 // graph passed validation.
 func drive(ctx context.Context, w io.Writer, in *driveInput) error {
+	in.out, in.leases = w, map[string]*drives.Lease{}
 	in.resolveModels(w)
 
 	tasks, notes, err := in.resolveTasks(ctx)
@@ -456,8 +555,19 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 	notes = append(notes, graphNotes...)
 
+	if err := in.openRecord(tasks); err != nil {
+		return err
+	}
+
+	defer in.releaseAll()
+
 	if err := in.takeAnswers(tasks); err != nil {
 		return err
+	}
+
+	if in.rec != nil {
+		fmt.Fprintf(w, "drive %d\n", in.rec.Number)
+		in.savePending(nil)
 	}
 
 	runs := make([]*driveRun, 0, len(order))
@@ -483,6 +593,20 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		r.base = byID[r.task.base]
 	}
 
+	in.runs = runs
+
+	// every task this drive may act on is its own before anything opens,
+	// so a second drive cannot start one this one is waiting to run
+	for _, r := range runs {
+		if r.end != nil {
+			continue
+		}
+
+		if why, ok := in.lease(r); !ok {
+			in.end(ctx, w, r, driveResult{row: why, code: exitHalted, drives: true})
+		}
+	}
+
 	if err := in.startRunnable(ctx, w, runs); err != nil {
 		return err
 	}
@@ -499,6 +623,16 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	for !stopping(runs) {
 		if err := in.sleep(ctx, in.args.every); err != nil {
 			return err
+		}
+
+		if in.cancelled() {
+			for _, r := range runs {
+				if r.end == nil {
+					in.end(ctx, w, r, driveResult{row: "cancelled", code: exitHalted, drives: true})
+				}
+			}
+
+			break
 		}
 
 		wss, live, err := in.lookAll(ctx)
@@ -755,7 +889,7 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 
 	if len(asking) > 0 {
 		code = exitAsk
-		lines = append(lines, "answer with: "+resumeCommand(in.argv)+answerFlags(asking))
+		lines = append(lines, "answer with: "+in.resumeLine()+answerFlags(asking))
 	}
 
 	if in.answer != "" {
@@ -767,6 +901,11 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 			notes = append(notes, "--answer for "+r.task.ref.ID+" went unused: it was not stopped on a question")
 		}
 	}
+
+	// an answer reported unused is dropped, so a resume never sends it to a
+	// question nobody saw; only one a stopped drive never reached is kept
+	in.answer, in.answers = "", map[string]string{}
+	in.savePending(nil)
 
 	notes = append(notes, lines...)
 
@@ -1433,7 +1572,7 @@ func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, a
 		return
 	}
 
-	rec := ref.DriveFinish{PID: in.pid, State: st, Action: action}
+	rec := ref.DriveFinish{State: st, Action: action}
 	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+ref.FinishKey, rec.Format()); err != nil {
 		fmt.Fprintf(w, "  recording finish's progress on %s: %v\n", branch, err)
 	}
@@ -1455,6 +1594,7 @@ func (in *driveInput) clearFinish(ctx context.Context, r *driveRun) {
 func (in *driveInput) finishAnswer(id string) (string, error) {
 	if a, ok := in.answers[id]; ok {
 		delete(in.answers, id)
+		in.took(id, "finish", a)
 
 		if c := finishChoice(a); c != "" {
 			return c, nil
@@ -1465,6 +1605,7 @@ func (in *driveInput) finishAnswer(id string) (string, error) {
 
 	if c := finishChoice(in.answer); c != "" {
 		in.answer = ""
+		in.took(id, "finish", c)
 
 		return c, nil
 	}
@@ -1498,6 +1639,8 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	run = r.current(run)
 	r.skill, r.sentAt, r.begun, r.idleSince = skill, in.now(), false, time.Time{}
 
+	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
+
 	switch {
 	case ws.Status == agentctl.StatusWorking:
 		r.begun = true
@@ -1515,7 +1658,19 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			return err
 		}
 
+		in.took(id, skill, answer)
 		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
+	case run != nil && phaseDone(run, skill):
+		// the agent got there before a drive that stopped could see it
+		fmt.Fprintf(w, "%s %s: already done\n", id, skill)
+
+		if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
+			return fmt.Errorf("recording %s done: %w", skill, err)
+		}
+
+		r.pos++
+
+		return in.next(ctx, w, r)
 	default:
 		fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
 		if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
@@ -1538,6 +1693,18 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	}
 
 	return nil
+}
+
+// phaseDone reports a run past skill: plan and ship own a phase, which
+// reads done, or prior for a plan an earlier run wrote.
+func phaseDone(run *state.Run, skill string) bool {
+	if skill != "plan" && skill != "ship" {
+		return false
+	}
+
+	s := run.Status(skill)
+
+	return s == "done" || s == "prior"
 }
 
 // takeAnswer is the answer for a task stopped on a question: its own keyed
@@ -1757,7 +1924,12 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 		in.clearFinish(ctx, r)
 	}
 
-	if res.code == exitHalted && !res.fromRun {
+	in.saveTask(r, func(t *drives.Task) {
+		t.Skill, t.Outcome = "", &drives.Outcome{Row: res.row, Code: res.code}
+	})
+	in.unlease(r, in.runs)
+
+	if res.code == exitHalted && !res.fromRun && !res.drives {
 		in.recordHalt(ctx, r, res)
 	}
 
