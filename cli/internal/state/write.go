@@ -375,6 +375,12 @@ func refTaskOf(args string) string {
 	return ""
 }
 
+// createsTask is a skill whose argument describes a task still to be
+// created, never a reference: debug's error text can hold an id-shaped token.
+func createsTask(skill string) bool {
+	return skill == "capture" || skill == "debug"
+}
+
 // Seed begins a run for a skill invocation and resets the phases, except a
 // chain over one task (plan, then ship) whose argument names the task already
 // held: that carries settled phases forward, or ship would show this
@@ -393,7 +399,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	chain := false
 
-	if ref := refTaskOf(args); skill != "capture" && ref != "" && r.Task != "" {
+	if ref := refTaskOf(args); !createsTask(skill) && ref != "" && r.Task != "" {
 		upRef, upTask := strings.ToUpper(ref), strings.ToUpper(r.Task)
 		chain = upRef == upTask || (numberToken.MatchString(ref) && strings.HasSuffix(upTask, "-"+ref))
 	}
@@ -427,7 +433,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 		// a full id names the task before fetch reports it, so the board
 		// ties the run to its row from the start; a bare number waits for
 		// fetch, which knows the project's prefix
-		if ref := refTaskOf(args); skill != "capture" && idToken.MatchString(ref) {
+		if ref := refTaskOf(args); !createsTask(skill) && idToken.MatchString(ref) {
 			r.Task = strings.ToUpper(ref)
 		}
 	}
@@ -435,7 +441,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	// open the first phase here, where the argument is: a description routes
 	// plan and ship through capture; a reference sends plan to fetch
 	switch skill {
-	case "capture":
+	case "capture", "debug":
 		r.Capture = "running"
 	case "plan":
 		if isDescription(args) {

@@ -124,6 +124,31 @@ func TestSeedRecordsTheSkill(t *testing.T) {
 	}
 }
 
+// debug runs before any task exists: it seeds capture, and an id-shaped
+// token in the error text names no task.
+func TestSeedDebugOpensCapture(t *testing.T) {
+	env := testEnv(t)
+	Dispatch(context.Background(), payload(t, "ue-debug-error"), env)
+
+	r, err := state.Load(state.Path(env.StateDir, "s1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r.Skill != "debug" || r.Capture != "running" || r.Task != "" {
+		t.Errorf("skill, capture, task = %q, %q, %q; want debug, running, empty", r.Skill, r.Capture, r.Task)
+	}
+}
+
+// A bare `debug` may be another plugin's skill, so it never reseeds the run.
+func TestSkillOfDebugNeedsThePrefix(t *testing.T) {
+	for name, want := range map[string]string{"f10:debug": "debug", "debug": "", "plan": "plan"} {
+		if got := skillOf(name); got != want {
+			t.Errorf("skillOf(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 type recorder struct{ got []observe.Observation }
 
 func (r *recorder) Observe(_ context.Context, o observe.Observation) error {

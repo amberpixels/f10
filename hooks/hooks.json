@@ -24,7 +24,7 @@
         ]
       },
       {
-        "matcher": "f10:(brainstorm|capture|catchup|cleanup|demo|explain|judge|plan|resolve|review|ship|standup)",
+        "matcher": "f10:(brainstorm|capture|catchup|cleanup|debug|demo|explain|judge|plan|resolve|review|ship|standup)",
         "hooks": [
           {
             "type": "command",

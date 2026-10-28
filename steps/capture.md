@@ -1,7 +1,7 @@
 # Step · capture - from a description to a task
 
 Role: a **senior engineer** capturing a well-scoped task.
-Input: a free-text feature/bug description (may be terse).
+Input: a free-text feature/bug description (may be terse), or a debug brief.
 Context: `project.md → Tracker` (the **create adapter**, used where no driver creates tasks, and **id format**).
 
 1. **Scope check.**
@@ -19,6 +19,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
 
      The _Areas_ note names the parts of the codebase likely affected (user-facing UI, schema, auth, …) plainly, since later steps key conditional roles off it.
      A small body carries no note; `fetch` derives the areas from the code.
+   - **From a debug brief**: at least **normal**, with _Reproduction_ (steps or input, expected, actual) and _Root cause_ (the `file:line` and its evidence) sections from the brief, and a title naming the defect, not the fix.
    - **Altitude: write for the engineer who will pick this up, not a stranger to the codebase.**
      - **A snippet only when the shape *is* the ask** (a required output format, a wire payload); otherwise name the file and say what is wrong with it.
      - **Repro detail stops at what reproduces it**, not the session that found it.
@@ -43,7 +44,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
    **Never re-run a failed `f10 task create` whose error says the task may exist**, whatever `conventions/failure.md` rule 3 allows: report the failure and let the user check the tracker.
    Any other failure (a missing title, an unknown priority or id) ran before the driver did: fix the input and run it again.
    Apply the project's declared default status/labels.
-   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later.
+   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later; a debug brief gets it whenever one exists, since its kind is confirmed.
    A spike gets its label only when the user calls the task one, since the label alone makes ship skip the PR.
    A split creates the parent first, then links each subtask to it: through the driver, `--parent` is the link; through the adapter, the tracker's native parent link, the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
