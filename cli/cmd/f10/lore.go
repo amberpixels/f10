@@ -41,6 +41,9 @@ func loreCommand() *cli.Command {
 				Name:      "add",
 				Usage:     "write one entry and print its id",
 				ArgsUsage: "<intent|decision|finding|verdict|lesson>",
+				// a rejected option's reason is prose, and prose has commas:
+				// repeating the flag is the only way to pass several
+				DisableSliceFlagSeparator: true,
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "change", Usage: "the change `ID` (the task id)", Required: true},
 					&cli.StringSliceFlag{

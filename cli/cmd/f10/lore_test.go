@@ -99,7 +99,7 @@ func TestLoreVerbs(t *testing.T) {
 		"--chosen",
 		"token bucket",
 		"--rejected",
-		"fixed window: edge bursts",
+		"fixed window: edge bursts, twice the limit",
 		"--agent-model",
 		"claude-opus-5-5",
 		"-m",
@@ -126,6 +126,7 @@ func TestLoreVerbs(t *testing.T) {
 	show := must("show", "FT-1")
 	if !strings.HasPrefix(show, "FT-1  5 entries") || !strings.Contains(show, "anchor: api/limit.go:2-3@") ||
 		!strings.Contains(show, "with claude-opus-5-5") || strings.Contains(show, "Never pruned") ||
+		!strings.Contains(show, "edge bursts, twice the limit") ||
 		!strings.Contains(show, "judged: change") {
 		t.Errorf("show:\n%s", show)
 	}

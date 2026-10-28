@@ -75,6 +75,10 @@ func (s *Store) Add(ctx context.Context, e Entry) (string, error) {
 		}
 	}
 
+	if err := s.checkOneIntent(e); err != nil {
+		return "", err
+	}
+
 	data, err := Marshal(e)
 	if err != nil {
 		return "", err
@@ -373,6 +377,28 @@ func (s *Store) checkSupersedes(e Entry) error {
 
 			return fmt.Errorf("lore: %s is already superseded by %s; supersede the chain's head, %s",
 				e.Supersedes, x.ID, head)
+		}
+	}
+
+	return nil
+}
+
+// checkOneIntent keeps a change on one effective intent, the entry show and
+// why print first: a second one must supersede it, and the refusal names
+// the standing one so a replan can.
+func (s *Store) checkOneIntent(e Entry) error {
+	if e.Kind != KindIntent || e.Supersedes != "" {
+		return nil
+	}
+
+	entries, err := s.Effective(e.Change)
+	if err != nil && !errors.Is(err, ErrNoRecord) {
+		return err
+	}
+
+	for _, x := range entries {
+		if x.Kind == KindIntent {
+			return fmt.Errorf("lore: %s already has an intent, %s; supersede it", e.Change, x.ID)
 		}
 	}
 
