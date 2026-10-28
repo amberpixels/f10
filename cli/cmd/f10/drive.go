@@ -1097,42 +1097,10 @@ func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRu
 	return nil
 }
 
-// prTarget is what a task's pull request targets and the mark that sends
-// a catchup for it, read as the catchup step's point 2 reads the base: the
-// branch f10-after-branch records, here or on origin, else the default
-// branch as catchupTarget resolves it. sha is "" for a base found nowhere.
-type prTarget struct {
-	sha, name, key, value string
-}
-
+// prTarget is what a task's pull request targets, read as prTargetOf reads
+// it, for the mark that sends a catchup.
 func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (prTarget, error) {
-	after, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+cfgAfterBranch)
-	if err != nil {
-		return prTarget{}, err
-	}
-
-	if after != "" {
-		sha := ""
-
-		for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
-			if sha, err = gitx.Ref(ctx, in.main, ref); err != nil || sha != "" {
-				break
-			}
-		}
-
-		return prTarget{sha: sha, name: after, key: cfgMoved, value: sha}, err
-	}
-
-	// the default branch resolves as the catchup will read it, so the mark
-	// and the catchup never name different commits
-	sha, name, err := in.catchupTarget(ctx, r, cfgLanded)
-	if err != nil {
-		return prTarget{}, err
-	}
-
-	def, err := localDefault(ctx, in.main)
-
-	return prTarget{sha: sha, name: name, key: cfgLanded, value: def}, err
+	return prTargetOf(ctx, in.main, r.o.branch)
 }
 
 // takeAnswers sorts the --answer values: `ID=text` naming a listed task is
@@ -1772,40 +1740,7 @@ func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string
 		return target, "its base", nil
 	}
 
-	def, err := localDefault(ctx, in.main)
-	if err != nil {
-		return "", "", err
-	}
-
-	local, err := gitx.Ref(ctx, in.main, "refs/heads/"+def)
-	if err != nil {
-		return "", "", fmt.Errorf("reading %s: %w", def, err)
-	}
-
-	remote, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
-	if err != nil {
-		return "", "", fmt.Errorf("reading origin/%s: %w", def, err)
-	}
-
-	switch {
-	case local == "" && remote == "":
-		return "", "", fmt.Errorf("cannot read %s here", def)
-	case remote == "":
-		return local, def, nil
-	case local == "":
-		return remote, "origin/" + def, nil
-	}
-
-	holds, err := gitx.IsAncestor(ctx, in.main, remote, local)
-
-	switch {
-	case err != nil:
-		return "", "", err
-	case holds:
-		return local, def, nil
-	}
-
-	return remote, "origin/" + def, nil
+	return defaultTarget(ctx, in.main)
 }
 
 // conflictAgain says why a conflict with the mark's target, after the
@@ -2013,23 +1948,12 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 // lease against that sha when it rebased. skill names the step for the
 // line it prints and the error it returns.
 func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun, skill, pushed, base string) error {
-	id, branch := r.task.ref.ID, r.o.branch
-
-	fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
+	how, err := pushCaughtUp(ctx, r.o.path, r.o.branch, pushed, base)
 	if err != nil {
 		return err
 	}
 
-	lease, how := "", "pushed"
-	if !fastForward {
-		lease, how = pushed, "pushed with --force-with-lease (the catchup rewrote it)"
-	}
-
-	if err := gitx.Push(ctx, r.o.path, branch, lease); err != nil {
-		return fmt.Errorf("pushing %s, caught up with %s: %w", branch, base, err)
-	}
-
-	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", id, skill, branch, base, how)
+	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", r.task.ref.ID, skill, r.o.branch, base, how)
 
 	return nil
 }
@@ -2599,18 +2523,7 @@ func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
 // base's code is in the default branch and not yet in this one, else
 // f10-base-moved when its base branch moved past it.
 func (in *driveInput) mark(ctx context.Context, r *driveRun) (string, error) {
-	for _, key := range []string{cfgLanded, cfgMoved} {
-		v, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+key)
-		if err != nil {
-			return "", fmt.Errorf("reading the %s mark on %s: %w", key, r.o.branch, err)
-		}
-
-		if v != "" {
-			return key, nil
-		}
-	}
-
-	return "", nil
+	return markOn(ctx, in.main, r.o.branch)
 }
 
 // unsettled says why a catchup that ended without a stop did not bring the
@@ -2618,36 +2531,7 @@ func (in *driveInput) mark(ctx context.Context, r *driveRun) (string, error) {
 // success is read from git: the mark gone, which catchup clears only once
 // verify is green, no merge or rebase left open, and a clean tree.
 func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
-	key, err := in.mark(ctx, r)
-
-	switch {
-	case err != nil:
-		return err.Error()
-	case key != "":
-		return "the branch is still marked " + key
-	}
-
-	for _, head := range []struct{ ref, what string }{{"MERGE_HEAD", "merge"}, {"REBASE_HEAD", "rebase"}} {
-		sha, err := gitx.Ref(ctx, r.o.path, head.ref)
-
-		switch {
-		case err != nil:
-			return fmt.Sprintf("could not tell whether a %s is in progress in %s: %v", head.what, r.o.path, err)
-		case sha != "":
-			return fmt.Sprintf("a %s is still in progress in %s", head.what, r.o.path)
-		}
-	}
-
-	dirty, err := gitx.Status(ctx, r.o.path)
-
-	switch {
-	case err != nil:
-		return err.Error()
-	case len(dirty) > 0:
-		return fmt.Sprintf("%d uncommitted paths in %s", len(dirty), r.o.path)
-	}
-
-	return ""
+	return branchUnsettled(ctx, in.main, r.o.path, r.o.branch)
 }
 
 // verdict reads a stopped run: an ask goes to the user, anything else halts.

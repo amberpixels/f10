@@ -85,9 +85,9 @@ It differs from the run above:
 - **Marks**: `f10-landed` and `f10-base-moved` are unset once the integration is clean and verify, where it ran, is green.
 - **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 
-**Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, when the branch its open PR targets moved past it, when the branch conflicts with the default branch at finish, or when ship's guard marked it): on entry, note the ship status (`f10-state.sh show`).
+**Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, when the branch its open PR targets moved past it, when the branch conflicts with the default branch at finish, or when ship's guard marked it; the watcher sends it, under `watch_catchup: on`, when the branch's open PR fell behind its target and no drive owns the task): on entry, note the ship status (`f10-state.sh show`).
 The method is point 3's.
-The drive pushes the branch itself once this run ends clean, with a lease after a rebase, so the open PR carries it before the next skill.
+The sender, the drive or the watcher, pushes the branch itself once this run ends clean, with a lease after a rebase, so the open PR carries it before the next skill or pass.
 Nobody is at the keyboard, so the run never asks: no `AskUserQuestion`, no `f10-state.sh ask`.
 Every question point 4 would put to the user is decided by the task's intent, read once from the plan file (`<storage root>/plans/<id>.md`, the id from `f10 task current`) and the task body (`f10 task read <id>`):
 
@@ -103,6 +103,7 @@ Each choice is written down, one per file, so the reviewer and the change judge 
   No PR, no line: lore and the report carry it, and the pr step renders the heading from lore when it opens one.
 
 Any failure, the **On failure** cases below included and a conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails), is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
+**Sent by the watcher** (the prompt says so): a failure also aborts the operation (`git merge --abort` / `git rebase --abort`) whatever was settled, so the branch is as it was with its marks kept, since nobody follows up in this pane; the watcher reads the mark still set as a catchup that did not end and reports it once.
 A clean end after a failure restores the noted status; a clean end that never stopped writes nothing.
 Run by hand, without `--driven`, point 4 asks exactly as written.
 
