@@ -33,10 +33,10 @@ plan:    .f10/plans/GH-2.md
 5. **The marker means "an openable url"**, never a path, a sha or a branch.
    It is `↗` (U+2197), not `🔗`, which is double-width.
 
-**Several tasks** from one run drop the `task` and `url` rows for one row per task: the id as the label, its url as the value.
-A subtask hangs under its parent on box-drawing lines (`├─`, `└─`, a level deeper `│  ├─`), padded with the labels so the marker column stays aligned.
-Rows run in `After:` order, a task outside the chain last; unrelated tasks get the same rows with no tree lines.
-Titles go in the prose beneath; no emoji, which are double-width.
+**Several tasks** from one run drop the `task` and `url` rows for one row per task: print `f10 task report <ids>` verbatim, in the fenced `yaml` block, ids in `After:` order and a task outside the chain last.
+A parent and its subtasks are `f10 task report <parent> --children`, which hangs the subtasks under it on box-drawing lines.
+Never draw the rows or the glyphs by hand.
+Titles go in the prose beneath.
 
 ```yaml
 FT-71:     ↗ https://github.com/amberpixels/f10/issues/71

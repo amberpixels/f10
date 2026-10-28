@@ -542,26 +542,24 @@ func TestRenderGates(t *testing.T) {
 	rows := []taskRow{{ID: "FT-1", Title: "Thing", Stage: stageReviewing, Step: "review", Gates: gates}}
 
 	out.Reset()
-	renderRows(&out, rows, 0)
+
+	if err := renderRows(&out, rows, rowView{}); err != nil {
+		t.Fatal(err)
+	}
 
 	if !strings.Contains(out.String(), "review  L … · R pending · J pending") {
 		t.Errorf("rows lack the gate column:\n%s", out.String())
 	}
 
-	out.Reset()
-	markdownRows(&out, rows)
-
-	if !strings.Contains(out.String(), "| task | stage | title | step | gates | PR |") ||
-		!strings.Contains(out.String(), "| review | L … · R pending · J pending |") {
-		t.Errorf("markdown lacks the gate column:\n%s", out.String())
-	}
-
 	rows[0].full = true
 
 	out.Reset()
-	markdownRows(&out, rows)
 
-	if !strings.Contains(out.String(), "| | | implement: done | | |") {
+	if err := renderRows(&out, rows, rowView{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "implement  done\n") || strings.Contains(out.String(), "L … ·") {
 		t.Errorf("a finished row lacks its gate lines:\n%s", out.String())
 	}
 }

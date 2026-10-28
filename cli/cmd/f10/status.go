@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +42,9 @@ func statusCommand() *cli.Command {
 			&cli.BoolFlag{Name: "all", Usage: "every live run on this machine, not only this repo's"},
 			&cli.BoolFlag{Name: "json", Usage: "emit the same runs as JSON"},
 			&cli.BoolFlag{
-				Name:  "markdown",
-				Usage: "print task rows (a parent's children, a finished task) as a markdown table with links",
+				Name: "plain",
+				Usage: "print a parent's or a finished task's tree as plain text, each task's url last, " +
+					"cut to $COLUMNS (else 100), for a skill to relay",
 			},
 		},
 		Action: runStatus,
@@ -187,7 +189,7 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 	case err != nil:
 		return false, err
 	case in == nil:
-		return true, writeTaskRows(cmd, rows)
+		return true, writeTaskRows(cmd, rows, r.ID)
 	}
 
 	now := time.Now()
@@ -402,22 +404,36 @@ func (fb fallback) render(w io.Writer, limit int) {
 	}
 }
 
-// writeTaskRows prints task rows, or encodes them under --json, or writes
-// them as a markdown table under --markdown.
-func writeTaskRows(cmd *cli.Command, rows []taskRow) error {
+// writeTaskRows prints task rows as a tree, headed by parent unless the
+// one row is a finished task alone, or encodes them under --json.
+func writeTaskRows(cmd *cli.Command, rows []taskRow, parent string) error {
 	if cmd.Bool("json") {
 		return encodeJSON(cmd.Writer, rows)
 	}
 
-	if cmd.Bool("markdown") {
-		markdownRows(cmd.Writer, rows)
-
-		return nil
+	v := rowView{parent: parent, plain: cmd.Bool("plain")}
+	if len(rows) == 1 && rows[0].full {
+		v.parent = ""
 	}
 
-	renderRows(cmd.Writer, rows, termWidth(cmd.Writer))
+	switch {
+	case v.plain:
+		v.width = plainWidth()
+	case isTerminal(cmd.Writer):
+		v.term, v.width = true, termWidth(cmd.Writer)
+	}
 
-	return nil
+	return renderRows(cmd.Writer, rows, v)
+}
+
+// plainWidth is the width plain output is cut to: $COLUMNS, else 100, as
+// a skill relays it into a pane whose width the binary cannot read.
+func plainWidth() int {
+	if n, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && n > 0 {
+		return n
+	}
+
+	return 100
 }
 
 func encodeJSON(w io.Writer, v any) error {
