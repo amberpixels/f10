@@ -19,7 +19,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
-	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -44,7 +43,7 @@ func taskCommand() *cli.Command {
 			},
 			{
 				Name: "current",
-				Usage: "print the task this session's run records, else the one the branch names " +
+				Usage: "print the task the branch names, else the one this session's run records " +
 					"(exit 1: none)",
 				Action: runTaskCurrent,
 			},
@@ -173,19 +172,19 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 }
 
 // runTaskCurrent names the task a bare skill call stands for, by the cascade
-// a bare `status` walks, so no skill parses a branch name itself.
+// a bare finish walks, so no skill parses a branch name itself.
 func runTaskCurrent(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	id := bareTaskID(ctx, t, state.Session())
-	if id == "" {
-		return errors.New("no current task: this session recorded none and the branch names none")
+	r, err := t.reference(ctx, "")
+	if err != nil {
+		return fmt.Errorf("no current task: %w", err)
 	}
 
-	_, err = fmt.Fprintln(cmd.Writer, id)
+	_, err = fmt.Fprintln(cmd.Writer, r.Label())
 
 	return err
 }

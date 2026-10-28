@@ -58,13 +58,16 @@ func finishCommand() *cli.Command {
 	}
 }
 
-// finishRef is the task a finish token names. An empty one is the current
-// task (the branch's, else the session's), with no suffix to split off;
-// the workspace refusal still stands between a bare call and the merge.
+// finishRef is the task a finish token names. An empty one is the branch's
+// task, with no suffix to split off; the session's is refused, since off a
+// task branch no workspace refusal stands between a bare call and the merge.
 func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		r, err := t.reference(ctx, "")
+		if err == nil && r.Origin == ref.OriginSession {
+			return ref.Ref{}, "", fmt.Errorf("the branch names no task: name it (f10 finish %s)", r.Label())
+		}
 
 		return r, "", err
 	}

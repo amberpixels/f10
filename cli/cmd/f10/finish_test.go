@@ -10,10 +10,12 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The fixture every finish test starts from: GH-1's branch is checked out
@@ -1832,10 +1834,12 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 	}
 }
 
-// A bare finish is the branch's task; a typed id still splits its suffix,
-// and nothing on the default branch, or under -C, finishes unasked.
+// A bare finish is the branch's task, over the session's; a typed id still
+// splits its suffix, and on the default branch, or under -C, nothing
+// finishes unasked, the session's task included.
 func TestFinishRef(t *testing.T) {
 	repo := tracedRepo(t, "DM-5/fix", "")
+	sessionTask(t, "DM-9")
 
 	tg, err := targetAt(t.Context(), repo, false, "finish")
 	if err != nil {
@@ -1861,13 +1865,28 @@ func TestFinishRef(t *testing.T) {
 	}
 
 	onMain := tracedRepo(t, "main", "")
+	sessionTask(t, "DM-9")
 
 	tg, err = targetAt(t.Context(), onMain, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if r, _, err := finishRef(t.Context(), tg, ""); err == nil {
-		t.Errorf("bare on main = %q, want a refusal", r.ID)
+	r, _, err := finishRef(t.Context(), tg, "")
+	if err == nil || !strings.Contains(err.Error(), "branch names no task") {
+		t.Errorf("bare on main with a session task = %q, %v; want a refusal", r.ID, err)
+	}
+}
+
+// sessionTask records id as this session's task, as a plan run's badge does.
+func sessionTask(t *testing.T, id string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", dir)
+	t.Setenv("F10_SESSION_ID", "sess-1")
+
+	if err := (&state.Run{Session: "sess-1", Task: id}).Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
 	}
 }

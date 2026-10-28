@@ -19,7 +19,7 @@ argument-hint: "[<task-id | free-text description>]"
   - **A task already in this conversation** (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.
     **Skip `capture` and the `fetch` investigation**; go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
     Fetch's kind rules still run: settle the kind, and reproduce a bug or ask.
-  - No task in the conversation, and `f10 task current` prints an id (this session's task, else the branch's): run it as a **task id**.
+  - No task in the conversation, and `f10 task current` prints an id (the branch's task, else this session's): run it as a **task id**.
     Say in one line which task you took and where from.
   - `f10 task current` exits non-zero: ask for a task in one line and wait.
 - Extra text beside a task id is steering for the run, except a `&& /f10:<skill> ...` tail: that is a chain, run once the plan is saved (`conventions/report.md`).

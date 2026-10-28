@@ -13,7 +13,7 @@ This skill only runs the command and relays its output; it runs no step.
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - Everything else goes to `f10 finish` verbatim.
-  With no task id, the command finishes the current task (the branch's, else this session's) and its report names it; the own-workspace question below still guards it.
+  With no task id, the command finishes the branch's task and its report names it; off a task branch it refuses, and the own-workspace question below still guards a bare call inside the task's workspace.
 
 ```
 f10 finish <arguments>
