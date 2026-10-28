@@ -68,7 +68,7 @@ f10 stats [--since 30d] [<id>]   # active plan and implement minutes per task, w
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a flow, each task once its base has a commit
-f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree
+f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
@@ -264,6 +264,16 @@ Before the merge lands, finish also measures the branch for `f10 stats`: lines a
 Measured after landing, a local merge would read zero.
 The size goes to the ledger once the merge landed; a branch with nothing to measure records none.
 
+**A spike.**
+A task whose spike report (`<storage root>/spikes/<ID>.md`, or a legacy worktree's own `.f10/spikes/<ID>.md`) exists and whose branch has no PR, no copy on origin and no upstream is closed without a merge.
+Its worktree may hold the experiment uncommitted, so the dirty refusal of step 1 does not apply to it; in the main checkout, whose tree may hold anything, it still does: discard the experiment by the paths the report names first.
+Nothing is merged, pulled or measured; dependents are released as in step 6; the plan is archived as in step 7 and the report beside it, as `plans/archive/<ID>.spike.md` (`<ID>.spike.<N>.md` when taken), which counts a spike planned with no plan file as finished too.
+After the report the experiment is discarded (`git reset --hard`, `git clean -fd`, ignored files left), its paths listed in the notes, with a branch commit's recovery command when the branch had commits of its own; then the worktree, branch and workspace go as in step 8.
+`--keep` keeps the experiment instead: it is committed onto the branch (`--no-verify`), the worktree is removed, and the branch moves to `kept/<name>`, its name with the task ids taken out, so no task lookup, the janitor or drive finds it and the task reads as finished.
+`--keep` on a task with no spike report, or with a PR, is a refusal.
+A spike branch with a PR finishes the normal way, clean tree required, and its report is archived with the plan.
+Nothing closes the task on the tracker: the notes say so.
+
 Run twice, finish changes nothing it already did: the PR reads as merged, the plan is already archived, there is no workspace to close, and only what is left is removed.
 
 Out of scope: closing the tracker issue (the PR body does that with "Closes #n"), a pushed branch whose PR was never opened, a checkout with no origin, and worktrees f10 did not start.
@@ -396,6 +406,7 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
    It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the frontmatter's `drive_finish` is on.
+   A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
    `--flow`, `--local`, `--model`, `--answer` and `--every` go anywhere.
    The command parses its own arguments, so the range's `--` survives.

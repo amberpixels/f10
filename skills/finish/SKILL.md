@@ -1,13 +1,14 @@
 ---
 name: finish
-description: "f10 finish skill - close a task without leaving this session: merge its PR or MR (a branch never pushed merges into the local default branch), archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main. Use when the user says \"/f10:finish [<task-id>] [--yes] [--merge | --local]\" or asks to finish, close out or clean up a merged task, or to clean up after reviewing someone else's PR."
+description: "f10 finish skill - close a task without leaving this session: merge its PR or MR (a branch never pushed merges into the local default branch), archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main; a spike with no PR closes without a merge, its report archived and its experiment discarded or, with --keep, kept on a branch. Use when the user says \"/f10:finish [<task-id>] [--yes] [--merge | --local | --keep]\" or asks to finish, close out or clean up a merged task, or to clean up after reviewing someone else's PR."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "[<task-id>] [--merge | --local]"
+argument-hint: "[<task-id>] [--merge | --local | --keep]"
 ---
 
 # f10 · finish
 
 Finish a task: `f10 finish` merges its PR or MR, or a branch never pushed into the local default branch, archives its plan, closes its workspace and removes its worktree and branch.
+A spike with no PR is closed without a merge: its report is archived beside the plan and its experiment discarded, or kept on a `kept/` branch with `--keep`.
 This skill only runs the command and relays its output; it runs no step.
 
 **Arguments**

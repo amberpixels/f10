@@ -1171,6 +1171,13 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	wasWaiting := r.waiting
 	r.waiting = false
 
+	spike := in.spikeDone(r)
+	if spike && r.pos >= len(r.chain) {
+		if err := in.closeAfterShip(ctx, r); err != nil {
+			return err
+		}
+	}
+
 	if r.pos >= len(r.chain) {
 		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(r.chain, " ")})
 
@@ -1195,6 +1202,13 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
+	// a spike merges nothing, so it needs no catchup and no clean merge
+	if skill == "finish" && spike {
+		in.end(ctx, w, r, in.runFinish(ctx, w, r.task))
+
+		return nil
+	}
+
 	if skill == "finish" && !in.marked(ctx, r) {
 		if res := in.readyToMerge(ctx, w, r); res != nil {
 			in.end(ctx, w, r, *res)
@@ -1213,6 +1227,30 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	return in.send(ctx, w, r, skill)
+}
+
+// spikeDone reports whether the task's ship ended as a spike: past ship in
+// its chain, with a spike report written.
+func (in *driveInput) spikeDone(r *driveRun) bool {
+	i := slices.Index(r.chain, "ship")
+	if i < 0 || r.pos <= i {
+		return false
+	}
+
+	return taskSpike(r.o.path, in.plansDir, r.task.ref.ID) != ""
+}
+
+// closeAfterShip adds finish to a spike's chain that lacks it: a spike close
+// merges nothing, which drive_finish gates, and a spike left open keeps its
+// dependents on an empty base. status reads the recorded chain.
+func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) error {
+	r.chain = append(slices.Clone(r.chain), "finish")
+
+	if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgChain, strings.Join(r.chain, " ")); err != nil {
+		return fmt.Errorf("recording the chain: %w", err)
+	}
+
+	return nil
 }
 
 // baseHalted ends a dependent whose base halted after releasing it, at the

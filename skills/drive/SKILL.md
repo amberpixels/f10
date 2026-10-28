@@ -8,7 +8,7 @@ argument-hint: "<id>... [--flow <name> | --local] [--model <model>]"
 # f10 · drive
 
 Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
-Each task runs the `default` flow, or the one `--flow <name>` or `--local` names (`f10 flow` lists them): `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the frontmatter's `drive_finish` is on.
+Each task runs the `default` flow, or the one `--flow <name>` or `--local` names (`f10 flow` lists them): `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the frontmatter's `drive_finish` is on; a spike is closed after ship either way (`f10 finish` closes it without a merge).
 A rerun keeps the flow a task's branch already records.
 No chain is typed after the ids: the flow says what runs.
 `--model` picks every agent's model, `<id>:<model>` one task's, which wins.

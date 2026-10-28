@@ -34,10 +34,13 @@ import (
 //
 // A PR someone else opened is not merged unasked: --merge merges it, and
 // --local cleans up here and leaves it open, for a review handed back.
+//
+// A spike with no PR is closed without a merge (finishspike.go).
 func finishCommand() *cli.Command {
 	return &cli.Command{
-		Name:      "finish",
-		Usage:     "finish a task: merge its PR (or a branch never pushed, here), archive the plan, remove the worktree, close the workspace, pull main",
+		Name: "finish",
+		Usage: "finish a task: merge its PR (or a branch never pushed, here), archive the plan, remove the worktree, " +
+			"close the workspace, pull main; a spike with no PR closes without a merge",
 		ArgsUsage: "[<task-id>[-suffix] | <any id of a bundle>]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -48,6 +51,10 @@ func finishCommand() *cli.Command {
 			&cli.BoolFlag{
 				Name:  "local",
 				Usage: "clean up the worktree, branch and workspace and leave the PR open: a review handed back",
+			},
+			&cli.BoolFlag{
+				Name:  "keep",
+				Usage: "for a spike, commit the experiment onto a kept/ branch instead of discarding it",
 			},
 			&cli.StringFlag{
 				Name: "close",
@@ -91,6 +98,10 @@ const exitForeign = 3
 func runFinish(ctx context.Context, cmd *cli.Command) error {
 	if cmd.Bool("merge") && cmd.Bool("local") {
 		return errors.New("--merge and --local are exclusive: one merges the PR, the other leaves it open")
+	}
+
+	if cmd.Bool("keep") && (cmd.Bool("merge") || cmd.Bool("local")) {
+		return errors.New("--keep keeps a spike's experiment, which has no PR to --merge or leave --local")
 	}
 
 	if err := herdr.Available(); err != nil {
@@ -153,6 +164,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		yes:       cmd.Bool("yes"),
 		merge:     cmd.Bool("merge"),
 		local:     cmd.Bool("local"),
+		keep:      cmd.Bool("keep"),
 		plansDir:  t.sharedPlansDir(),
 		title:     titleLookup(t, r.Number),
 		close:     closing,
@@ -201,7 +213,8 @@ type finishInput struct {
 	yes       bool
 	merge     bool   // merge the PR even when someone else opened it
 	local     bool   // leave the PR open and clean up only what is here
-	plansDir  string // the plans dir every checkout shares
+	keep      bool   // a spike's experiment is committed onto a kept/ branch, not discarded
+	plansDir  string // the plans dir every checkout shares; the spikes dir sits beside it
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
 	// close is a bundle's riders the PR delivers, closed with the lead; nil
@@ -226,8 +239,17 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	if err := refuseDirty(ctx, path); err != nil {
-		return err
+	// a spike's worktree holds its experiment uncommitted, which the close
+	// discards; main's tree may hold anything, so it stays refused
+	spike := taskSpike(path, in.plansDir, in.task.ID)
+
+	switch {
+	case in.keep && spike == "":
+		return fmt.Errorf("--keep keeps a spike's experiment, and %s has no spike report", in.task.ID)
+	case spike == "" || onMain:
+		if err := refuseDirty(ctx, path); err != nil {
+			return err
+		}
 	}
 
 	wss, err := herdr.Workspaces(ctx, in.main)
@@ -262,6 +284,27 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
+	// a spike with a PR finishes the normal way, and its tree must be clean
+	closeSpike := spike != "" && local
+
+	var dirty []string
+
+	if spike != "" && !onMain {
+		if !closeSpike {
+			if err := refuseDirty(ctx, path); err != nil {
+				return err
+			}
+		}
+
+		if dirty, err = gitx.Status(ctx, path); err != nil {
+			return err
+		}
+	}
+
+	if in.keep && !closeSpike {
+		return fmt.Errorf("--keep keeps a spike's experiment, and %s has a PR: finish it the normal way", in.task.ID)
+	}
+
 	var leave bool
 
 	if !local {
@@ -280,7 +323,28 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		ended = name + " merged into " + def
 	}
 
-	if leave {
+	var kept string
+
+	switch {
+	case closeSpike:
+		ended = "the spike " + in.task.ID + " closed"
+
+		if in.keep {
+			kept = keptName(ctx, in.main, name, in.task.Members())
+		}
+
+		released, err := releaseDependents(ctx, in.main, name, def)
+		if err != nil {
+			return err
+		}
+
+		rows = []fact{{label: "task", value: in.task.Label()}}
+		if kept != "" {
+			rows = append(rows, fact{label: "branch", value: kept})
+		}
+
+		notes = append(spikeNotes(ctx, in, name, def, kept, dirty), released...)
+	case leave:
 		if err := refuseUnpushed(ctx, in.main, name); err != nil {
 			return err
 		}
@@ -289,7 +353,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows = []fact{{label: "task", value: in.task.ID}, {label: "pr", value: p.url(), url: true}}
 		notes = append(notes, fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
 			p.url(), p.status()))
-	} else {
+	default:
 		var riderNotes []string
 
 		if len(in.task.Riders()) > 0 {
@@ -375,6 +439,15 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
+	if spike != "" {
+		report, err := archiveSpike(spike, in.main, in.plansDir, in.task.ID)
+		if err != nil {
+			return err
+		}
+
+		rows = append(rows, fact{label: "spike", value: report})
+	}
+
 	switch {
 	case onMain:
 		notes = append(notes, fmt.Sprintf("%s is checked out in the main checkout at %s: after this report "+
@@ -397,7 +470,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if onMain {
-		if err := switchMain(ctx, in.main, def, name, ended); err != nil {
+		if err := switchMain(ctx, in.main, def, name, kept, ended); err != nil {
 			return err
 		}
 
@@ -406,7 +479,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return nil
 	}
 
-	if err := removeCheckout(ctx, in.main, path, name); err != nil {
+	if err := removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike); err != nil {
 		return err
 	}
 
@@ -432,11 +505,20 @@ func (in finishInput) sweepNow(ctx context.Context) {
 }
 
 // switchMain ends a finish run on the main checkout: main onto the default
-// branch, then the task's branch deleted. Each error names what already
-// happened to the PR (ended: "<url> merged") and what is left to do by hand.
-func switchMain(ctx context.Context, main, def, branch, ended string) error {
+// branch, then the task's branch deleted, or moved to kept when not "".
+// Each error names what already happened to the PR (ended: "<url> merged")
+// and what is left to do by hand.
+func switchMain(ctx context.Context, main, def, branch, kept, ended string) error {
 	if err := gitx.Switch(ctx, main, def); err != nil {
 		return fmt.Errorf("%s, but switching the main checkout to %s failed: %w", ended, def, err)
+	}
+
+	if kept != "" {
+		if err := keepBranch(ctx, main, branch, kept); err != nil {
+			return fmt.Errorf("%s and main is on %s, but %w", ended, def, err)
+		}
+
+		return nil
 	}
 
 	if err := gitx.DeleteBranch(ctx, main, branch); err != nil {

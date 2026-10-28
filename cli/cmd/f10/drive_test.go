@@ -1937,3 +1937,97 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 		})
 	}
 }
+
+// spikeDrive is the fixture for GH-1 shipped as a spike, its report in the
+// spikes dir beside the shared plans dir once its ship turn ends, and
+// GH-2, when listed, after it; finish closes a task the way the tracker
+// would. The chain is ship alone unless the args name more.
+func spikeDrive(t *testing.T, args ...string) *driveFixture {
+	t.Helper()
+
+	fx := newDriveFixture(t, args...)
+	root := t.TempDir()
+	fx.in.plansDir = filepath.Join(root, "plans")
+
+	var pairs []string
+
+	for i, id := range []string{"GH-1", "GH-2"} {
+		path := "/code/repo." + id
+		pairs = append(pairs, id, path)
+		fx.opens(id, "ws:"+id, fmt.Sprintf("pane:%d", i))
+		addDir := " -- " + strings.Join(agentArgs("", fx.in.plansDir, path), " ")
+		fx.f.script(fmt.Sprintf("herdr agent start %s --kind claude --pane pane:%d%s", agentOf(id), i, addDir), "{}")
+		fx.expects(id, "ship")
+	}
+
+	fx.task("GH-1", taskInfo{body: "a question"}, "")
+	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
+	fx.f.script(worktrees, porcelain(pairs...))
+
+	// the ship turn writes the report
+	writePlan(t, filepath.Join(root, "spikes", "GH-1.md"))
+
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
+		fx.infos[task.ID] = taskInfo{closed: true}
+
+		return nil
+	}
+
+	return fx
+}
+
+// A spike's chain ends with its close even where drive_finish leaves finish
+// out: no catchup and no merge check before it (neither is scripted), the
+// chain recorded with finish for status.
+func TestDriveClosesASpikeAfterShip(t *testing.T) {
+	for _, chain := range [][]string{{"ship"}, {"ship", "finish"}} {
+		t.Run(strings.Join(chain, " "), func(t *testing.T) {
+			fx := spikeDrive(t, append([]string{"GH-1"}, chain...)...)
+			fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+			if err := fx.drive(t); err != nil {
+				t.Fatalf("%v\n%s", err, fx.out.String())
+			}
+
+			if !fx.f.called("finish GH-1") {
+				t.Errorf("the spike was not closed: %q", fx.f.calls)
+			}
+
+			if want := "GH-1:    finished"; !strings.Contains(fx.out.String(), want) {
+				t.Errorf("output lacks %q:\n%s", want, fx.out.String())
+			}
+
+			if record := "git config branch.GH-1." + cfgChain + " ship finish"; !fx.f.called(record) {
+				t.Errorf("%q did not run: %q", record, fx.f.calls)
+			}
+		})
+	}
+}
+
+// A task after a spike starts once the spike is closed, as on a finished
+// base, and runs its own chain without a close of its own.
+func TestDriveStartsADependentOfAClosedSpike(t *testing.T) {
+	fx := spikeDrive(t, "GH-1", "GH-2", "ship")
+	// GH-2 opens on the default branch, its base finished
+	fx.f.script(headRef, "origin/main")
+	fx.f.script(wsList,
+		unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"),
+		unopened, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	fx.assertOrder(t, []string{
+		agentOf("GH-1") + " /f10:ship", "finish GH-1", agentOf("GH-2") + " /f10:ship",
+	}, "herdr agent prompt", "finish")
+
+	if fx.f.called("finish GH-2") {
+		t.Errorf("a task that is not a spike was closed: %q", fx.f.calls)
+	}
+
+	if want := "GH-2:    done: ship"; !strings.Contains(fx.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
+	}
+}
