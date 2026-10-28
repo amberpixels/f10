@@ -572,4 +572,26 @@ func TestMigrateLiftsProseUnderABlock(t *testing.T) {
 		strings.Join(m.Moved, ",") != "tracker.id" {
 		t.Errorf("tracker id not lifted into the mapping: %v %+v\n%s", err, m, m.Content)
 	}
+	// an empty or comment-only block, and a null tracker, still take the facts
+	for _, file := range []string{
+		"---\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n",
+		"---\n# only a comment\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n",
+		"---\ntracker:\n---\n# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n",
+	} {
+		m, err := Migrate([]byte(file), "project.md")
+		if err != nil {
+			t.Errorf("%q: %v", file, err)
+
+			continue
+		}
+
+		eff := buildWith(t, m.Content, "")
+		proseRead := slices.ContainsFunc(eff.Problems, func(p Problem) bool {
+			return strings.Contains(p.Message, "read from the prose")
+		})
+		if eff.Errors() != "" || proseRead ||
+			strings.Contains(file, "comment") && !strings.Contains(m.Content, "---\n# only a comment\n") {
+			t.Errorf("%q migrated to\n%s\nproblems %+v", file, m.Content, eff.Problems)
+		}
+	}
 }

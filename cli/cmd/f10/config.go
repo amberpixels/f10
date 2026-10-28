@@ -370,19 +370,12 @@ func layoutFields(fields []facts.Field, limit int) fieldLayout {
 	return l
 }
 
-// width is the widest row the layout prints: an inline row or a stanza's
-// key/value sub-row. Prose wraps to the page, so it does not count.
+// width is the widest inline row the layout prints. Stanzas wrap to the
+// page, key/value sub-rows included, so they do not count.
 func (l fieldLayout) width() int {
 	widest := 0
 	for _, e := range l.rows {
 		widest = max(widest, l.nameW+2+l.originW+2+lipgloss.Width(e.value))
-	}
-
-	for _, e := range l.blocks {
-		labelW := pairLabelWidth(e.pairs)
-		for _, p := range e.pairs {
-			widest = max(widest, stanzaIndent+labelW+2+lipgloss.Width(p[1]))
-		}
 	}
 
 	return widest

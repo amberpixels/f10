@@ -68,6 +68,8 @@ func sampleView() *view {
 		Facts: []facts.Fact{
 			{Key: "visibility", Value: "stealth", Origin: facts.OriginDefault},
 			{Key: "merge_method", Value: "squash", Origin: "declared (main, frontmatter)"},
+			// the widest row: 12 + 2 + 8 + 2 + 61 = 85 cells
+			{Key: "stale_after", Value: strings.Repeat("x", 61), Origin: "declared (main, frontmatter)"},
 		},
 		Fields: []facts.Field{
 			{Name: "Project", Value: "Go.", Origin: "declared (main)"},
@@ -84,7 +86,7 @@ func sampleView() *view {
 // Every rule ends at the page width: the widest row, clamped to 60..100,
 // never past the terminal; piped output draws none.
 func TestRenderHumanPageWidth(t *testing.T) {
-	for _, tc := range []struct{ limit, want int }{{200, -1}, {50, 50}, {0, 0}} {
+	for _, tc := range []struct{ limit, want int }{{200, 85}, {50, 50}, {0, 0}} {
 		var b bytes.Buffer
 		renderHuman(&b, sampleView(), tc.limit)
 
@@ -97,14 +99,6 @@ func TestRenderHumanPageWidth(t *testing.T) {
 
 			rules++
 
-			// on a wide terminal the page is the widest row, whatever it is
-			if tc.want < 0 {
-				tc.want = lipgloss.Width(line)
-				if tc.want < pageMin || tc.want > pageMax {
-					t.Errorf("page width %d outside %d..%d", tc.want, pageMin, pageMax)
-				}
-			}
-
 			if got := lipgloss.Width(line); got != tc.want {
 				t.Errorf("limit %d: rule %q is %d cells, want %d", tc.limit, line, got, tc.want)
 			}
@@ -115,8 +109,10 @@ func TestRenderHumanPageWidth(t *testing.T) {
 		}
 	}
 
-	if got := pageWidth(130, 200); got != pageMax {
-		t.Errorf("a 130-cell row on 200 columns = %d, want %d", got, pageMax)
+	for _, tc := range []struct{ widest, want int }{{130, pageMax}, {20, pageMin}} {
+		if got := pageWidth(tc.widest, 200); got != tc.want {
+			t.Errorf("a %d-cell row on 200 columns = %d, want %d", tc.widest, got, tc.want)
+		}
 	}
 }
 

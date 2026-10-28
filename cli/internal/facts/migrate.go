@@ -273,8 +273,21 @@ func liftProse(data []byte, path string) (*Migration, error) {
 	}
 
 	var doc yaml.Node
-	if err := yaml.Unmarshal(block, &doc); err != nil || len(doc.Content) == 0 ||
-		doc.Content[0].Kind != yaml.MappingNode {
+	if err := yaml.Unmarshal(block, &doc); err != nil {
+		return nil, fmt.Errorf("reading the frontmatter: %w", err)
+	}
+
+	// an empty or comment-only block decodes to no mapping: start one,
+	// keeping the comments
+	if len(doc.Content) == 0 {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{
+			Kind:        yaml.MappingNode,
+			Tag:         "!!map",
+			HeadComment: strings.TrimSpace(string(block)),
+		}}}
+	}
+
+	if doc.Content[0].Kind != yaml.MappingNode {
 		return nil, errors.New("reading the frontmatter: not a mapping")
 	}
 
@@ -319,22 +332,31 @@ func liftProse(data []byte, path string) (*Migration, error) {
 		return nil, fmt.Errorf("the prose does not migrate cleanly: %s", strings.Join(bad, "; "))
 	}
 
-	start := bytes.Index(data, block)
-	m.Content = string(data[:start]) + b.String() + string(data[start+len(block):])
+	// rebuilt around the body, since an empty block has no bytes to find
+	m.Content = "---\n" + b.String() + "---\n" + string(body)
 
 	return m, nil
 }
 
-// mappingAt is the mapping under key in root, added at the end when root
-// has none.
+// mappingAt is the mapping under key in root: the existing one, a new one
+// in place of a null value, or a new one at the end.
 func mappingAt(root *yaml.Node, key string) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == key && root.Content[i+1].Kind == yaml.MappingNode {
-			return root.Content[i+1]
+		if root.Content[i].Value != key {
+			continue
 		}
+
+		if value := root.Content[i+1]; value.Kind == yaml.MappingNode {
+			return value
+		}
+
+		root.Content[i+1] = m
+
+		return m
 	}
 
-	m := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, m)
 
 	return m
