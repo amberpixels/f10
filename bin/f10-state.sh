@@ -298,6 +298,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   task <id> [<url>]        record the task this run is about
   note <reason> [<next>]   why a run stopped, and what unblocks it
   ask <text>               the question a driven run stopped on, options included
+  done <step>              a step with no phase (catchup) reported; f10 drive reads it as its end
   final <step>             declare the ship pipeline's last step
   pipeline <step>...       declare the ship pipeline's steps, the last one final
   show                     the current run, human-readable

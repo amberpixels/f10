@@ -2329,13 +2329,14 @@ func phaseRunning(run *state.Run, phase string) bool {
 // unreported reports a turn whose end the run has not told: a plan or ship
 // phase still running, or a catchup with no done signal written since the
 // prompt went out at since. A nil run never reported anything, and a
-// signal an earlier catchup left is older than the prompt.
+// signal an earlier catchup left is not after the prompt: both times are
+// whole seconds, and no catchup reports within the second it was sent.
 func unreported(run *state.Run, skill string, since time.Time) bool {
 	if skill != "catchup" {
 		return phaseRunning(run, skill)
 	}
 
-	return run == nil || run.Done != "catchup" || run.DoneAt.Before(since)
+	return run == nil || run.Done != "catchup" || !run.DoneAt.After(since)
 }
 
 // stalled reports an agent idle for at least grace while its turn's end is

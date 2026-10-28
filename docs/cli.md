@@ -526,7 +526,7 @@ A cancelled record is never picked up again: the same command line starts a new 
      The other agents keep working in their own panes;
    - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
      Every other task runs on, and the driver exits **5** once nothing can move;
-   - **still running** under plan or ship, a minute after the agent went idle - the agent stopped without reporting, usually a permission dialog in its pane; the task halts naming the workspace.
+   - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting, usually a permission dialog in its pane; the task halts naming the workspace.
      Found at prompt time on an agent the driver did not start, the same halt also says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
 

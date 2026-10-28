@@ -92,7 +92,7 @@ The method is point 3's.
 The sender, the drive or the watcher, pushes the branch itself once this run ends clean, with a lease after a rebase, so the open PR carries it before the next skill or pass.
 Nobody is at the keyboard, so the run never asks: no `AskUserQuestion`, no `f10-state.sh ask`.
 Nobody wakes an idle agent either: verify runs in the foreground or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
-Point 5's `done catchup` signal is the end the sender reads.
+Point 5's `done catchup` signal is the end `f10 drive` reads; the watcher reads the mark and the tree alone.
 Every question point 4 would put to the user is decided by the task's intent, read once from the plan file (`<storage root>/plans/<id>.md`, the id from `f10 task current`) and the task body (`f10 task read <id>`):
 
 - **genuine ambiguity**: reconcile where both sides can be, as point 4 says; where they truly clash, keep the side that serves the task, named in the report as `decided by the task's intent`;
