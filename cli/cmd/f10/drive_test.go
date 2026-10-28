@@ -99,7 +99,6 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 			return nil
 		},
-		pid: 4242,
 		finish: func(context.Context, io.Writer, ref.Ref, string, func(string)) error {
 			t.Fatal("finish ran although the chain has none")
 
@@ -2086,8 +2085,8 @@ func TestDriveRecordsFinishProgress(t *testing.T) {
 		}
 	}
 
-	key := "git config branch.GH-11." + ref.FinishKey + " 4242"
-	want := []string{key + " queued", key + " running starting", key + " running merging #9"}
+	key := "git config branch.GH-11." + ref.FinishKey
+	want := []string{key + " queued", key + " running: starting", key + " running: merging #9"}
 
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("finish record writes:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))

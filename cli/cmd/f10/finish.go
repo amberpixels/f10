@@ -15,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
@@ -143,6 +144,14 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	// drive's own finish runs under the lease drive holds, so only the
+	// command takes it
+	lease, err := finishLease(t.sharedRoot(), r.ID)
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
@@ -183,6 +192,21 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return err
+}
+
+// finishLease takes the task's lease for the command, refusing while a
+// drive or another finish holds it.
+func finishLease(root, id string) (*drives.Lease, error) {
+	lease, err := drives.Acquire(root, id, 0)
+	if held := (drives.HeldError{}); errors.As(err, &held) {
+		if held.Holder.Drive > 0 {
+			return nil, fmt.Errorf("%w: f10 drive cancel %d stops it, or let it finish", held, held.Holder.Drive)
+		}
+
+		return nil, fmt.Errorf("%w: wait for it to end", held)
+	}
+
+	return lease, err
 }
 
 // A foreignPullError is an open PR someone else opened, met with neither
@@ -237,6 +261,10 @@ type finishInput struct {
 // out in main, main's workspace is neither closed nor focused.
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	name, path, onMain, err := finishTarget(ctx, in)
+	if gone := (goneError{}); errors.As(err, &gone) {
+		return finishGone(ctx, w, in, gone)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -650,9 +678,12 @@ func finishTarget(ctx context.Context, in finishInput) (string, string, bool, er
 	case err != nil:
 		return "", "", false, err
 	case name == "":
-		return "", "", false, fmt.Errorf("%s has no branch here: nothing to finish", in.task.ID)
+		return "", "", false, goneError{fmt.Errorf("%s has no branch here: nothing to finish", in.task.ID), ""}
 	case path == "":
-		return "", "", false, fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name)
+		return "", "", false, goneError{
+			fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name),
+			name,
+		}
 	}
 
 	return name, path, gitx.SamePath(path, in.main), nil

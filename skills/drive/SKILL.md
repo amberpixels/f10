@@ -51,6 +51,7 @@ f10 drive <arguments>
 ```
 
 The arguments are the expanded ones from **Parents**.
+Its first line is `drive <n>`, the record it keeps; rerunning the same arguments picks that record up.
 When it exits, read its output and act on the exit code.
 On every exit, a line starting `!!!` goes first, verbatim, above everything else.
 
@@ -59,12 +60,14 @@ On every exit, a line starting `!!!` goes first, verbatim, above everything else
 - **4** - one or more agents asked.
   The output carries one `<id> asks at <skill>: ...` line per asking task: numbered questions, each with its options in brackets, the first the default.
   Put every asking task's questions to the user in **one `AskUserQuestion`**: one question per numbered item, its header carrying the task id, the bracketed options as the choices, the first marked recommended.
-  Then run the output's `answer with:` line in the background, its placeholders filled with the answers, numbered the way each ask was.
+  Then run the output's `answer with:` line (`f10 drive --resume <n> --answer …`) in the background, its placeholders filled with the answers, numbered the way each ask was.
   Repeat on every exit 4.
 - **5** - a task halted; the lines beneath the report say which and why.
   Print the report block and those lines verbatim, and stop.
-  The user settles it in that workspace, then reruns the same command, which resumes where each task stands.
+  A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 drive list` shows it and `f10 drive cancel <n>` stops it.
+  The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
 - **anything else** - the command refused; its message names the cause.
+  `drive <n> is running` means another session drives the same list: point at `f10 drive list`, and at `f10 drive cancel <n>` if the user wants to take it over.
   Print it verbatim and stop.
 
 A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

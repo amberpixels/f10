@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -35,8 +36,9 @@ type LocalInputs struct {
 // collectLocal reads the worktrees and branches, the live runs in them,
 // every plan, findings and verdict file under the roots, what the ledger
 // closed, and Herdr's workspaces. Git failing fails the source; a file or
-// the ledger that cannot be read is a note.
-func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, []string, error) {
+// the ledger that cannot be read is a note. prefix spells a branch's task
+// from its name where nothing links one.
+func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.Time) (*Local, []string, error) {
 	l := &Local{
 		Branches:   map[string]Branch{},
 		Plans:      map[string]time.Time{},
@@ -121,7 +123,7 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 			case ref.ModelKey:
 				b.Model = e.Value
 			case ref.FinishKey:
-				if d, ok := ref.LiveDriveFinish(e.Value); ok {
+				if d, ok := ref.ParseDriveFinish(e.Value); ok {
 					b.Finish = &d
 				}
 			}
@@ -129,6 +131,8 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 			l.Branches[name] = b
 		}
 	}
+
+	dropDeadFinish(l.Branches, in.SharedRoot, prefix)
 
 	runs, err := state.List(in.StateDir, now, in.TTL)
 	if err != nil {
@@ -392,4 +396,28 @@ func collectTips(ctx context.Context, main string) ([]Tip, error) {
 	}
 
 	return tips, nil
+}
+
+// dropDeadFinish forgets a finish record whose task's lease nobody holds:
+// the drive that wrote it was killed before it could clear it.
+func dropDeadFinish(branches map[string]Branch, root, prefix string) {
+	for name, b := range branches {
+		if b.Finish == nil {
+			continue
+		}
+
+		lead := b.Task
+		if lead == "" {
+			if members := ref.Members(prefix, name); members != nil {
+				lead = members[0]
+			} else {
+				lead = ref.Match(prefix, name)
+			}
+		}
+
+		if _, held := drives.Probe(root, lead); root == "" || lead == "" || !held {
+			b.Finish = nil
+			branches[name] = b
+		}
+	}
 }

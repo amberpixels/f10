@@ -208,9 +208,13 @@ Without it, finish exits **7** before changing anything, and the finish skill as
 Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`; after a merge that already happened, each is reopened instead.
 A tracker that is not the host closes nothing on merge, so the notes name the riders to close there.
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
+A finish that stopped halfway is finished by a rerun: a task with no branch whose plan is in the archive reports `already finished` and exits 0, and a branch whose worktree is gone but whose PR merged is cleaned up without one (dependents released, default branch pulled, plan archived, only the branch deleted, no workspace closed).
+A branch with no worktree and no merged PR is still refused.
 There finish merges as usual, brings the default branch up to the merge, switches main to it, deletes the local branch, and leaves main's workspace open; the report says the checkout was main's and was switched, not removed.
 
 1. **Refusals, before anything changes.**
+   A task a drive holds (its lease, **Drive** below): `GH-12 is owned by drive 3 (pid 4242)`, with `f10 drive cancel 3` named.
+   Finish takes the same lease for its own run, so two finishes of one task never run at once; drive's own finish runs under the lease drive already holds.
    A dirty worktree, named file by file, with no `--force`: commit or discard first.
    A cwd inside the worktree being removed, or a `HERDR_WORKSPACE_ID` naming its workspace, unless `--yes` was passed: the message says the command would close its own workspace.
    With the branch checked out in main, nothing closes, so this refusal does not apply.
@@ -387,7 +391,8 @@ ship            running: review:local
   A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote half's, and inside ship the half reads `resolve running` once a round lands after ship entered the review.
   The remote half is in the flow when an entry names a remote review (`review:ci`, or both halves in one `review:local+ci`, which shows both halves on the one review row), or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
 - **Finish** in a chain `f10 drive` runs reads `pending` until ship is done, then `queued (drive)`, then `running (drive): <action>` while the driver's finish works (`merging #204`, `pulling main`, `removing worktree`), and `done`; a finish held for its base reads `queued (drive): waiting for <id>`.
-  The driver records this on the branch as `branch.<name>.f10-finish`: its own pid, `queued` or `running`, then the action. A record whose process is gone (or is now another user's) is ignored, so a killed driver leaves the row `pending`.
+  The driver records this on the branch as `branch.<name>.f10-finish`: `queued` or `running: <action>`.
+  Whether the driver still runs is the task's lease (**Drive**, below), never the record: a record whose lease nobody holds is ignored, so a killed driver leaves the row `pending`.
   A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`drive: merging #204`, `drive finishes it`) in place of `f10 finish`.
 - **Judge** reads `pending`, `running`, or its outcome and reason; a judge or review half the flow does not declare shows once one ran, and otherwise the row reads `not in this flow`.
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
@@ -407,13 +412,34 @@ A task whose checkout has its branch is read from there first, so only a task wi
 Each task waits for its one base to have a commit, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
 The driver is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
 
+**The record.**
+Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every` and `--resume`), the tasks with their `:model`, the flow, the run-wide model, `drive_finish`, the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
+Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer` and `--every` beside it.
+An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
+The branch's `f10-drive`, `f10-chain` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
+
+**The lease.**
+Before anything opens, the driver takes an exclusive, non-blocking `flock` on `<storage root>/drives/locks/<id>.lock` for every task not already finished, its pid and drive number written into it, and one for itself (`drive-<n>.lock`).
+The key is the task's lead id, so two attempts at one task share it.
+A task whose lease another process holds ends at once with the row `owned by drive 3 (pid 4242)` (or `owned by f10 finish (pid …)`), and its dependents halt with it.
+A task's lease is released when the task ends, so a halted task can be finished by hand while the drive runs on; the kernel releases every lease when the driver's process ends, however it ends.
+A second drive on a record whose driver still runs is refused.
+Readers (`f10 status`, `f10 board`) probe the lease with a shared lock for an instant; the driver retries a held lease for about 200ms to absorb that.
+On a platform without `flock` nothing is exclusive.
+Lock files are never deleted.
+
+**List and cancel.**
+`f10 drive list` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
+`f10 drive cancel <n>` marks the record cancelled: a running driver stops at its next poll, after any finish it is in the middle of, ends every task still going with the row `cancelled` and exits **5**; nothing more is prompted, and worktrees, branches and agents stay as they are.
+A cancelled record is never picked up again: the same command line starts a new one.
+
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
    It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the frontmatter's `drive_finish` is on.
    A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
-   `--flow`, `--local`, `--model`, `--answer` and `--every` go anywhere.
+   `--flow`, `--local`, `--model`, `--answer`, `--every` and `--resume` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--model` starts every agent on that model, read as start reads it; `<id>:<model>` starts one task's agent on its own, which wins (`42:sonnet 43 --model opus`).
    Only a colon with no slash after it is read this way, so a url keeps its own.
@@ -474,18 +500,22 @@ The driver is this binary rather than a Claude session: ordering, prompting and 
    - **still running** under plan or ship, a minute after the agent went idle - the agent stopped without reporting, usually a permission dialog in its pane; the task halts naming the workspace.
      Found at prompt time on an agent the driver did not start, the same halt also says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
+
+   **Every prompt checks first.**
+   An agent working is attached to, not prompted.
+   A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `not reached`.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
 
-Rerunning the same command is the resume: each task's position is read from its own branch and run state.
+Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
 An agent found mid-turn is attached to rather than prompted again.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
-`/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, reruns the command with the answers, and prints the final report.
+`/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, runs the `answer with:` line (`f10 drive --resume <n> --answer …`) with the answers, and prints the final report.
 
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
 

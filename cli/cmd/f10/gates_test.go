@@ -711,11 +711,11 @@ func TestOutcomesTaskJudge(t *testing.T) {
 }
 
 func queued(action string) ref.DriveFinish {
-	return ref.DriveFinish{PID: 7, State: ref.FinishQueued, Action: action}
+	return ref.DriveFinish{State: ref.FinishQueued, Action: action}
 }
 
 func running(action string) ref.DriveFinish {
-	return ref.DriveFinish{PID: 7, State: ref.FinishRunning, Action: action}
+	return ref.DriveFinish{State: ref.FinishRunning, Action: action}
 }
 
 // Drive's record of running finish turns the finish row from pending to

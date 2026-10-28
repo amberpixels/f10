@@ -81,8 +81,8 @@ type Branch struct {
 	Riders []string // a bundle's other members
 	After  string   // the base task recorded on it
 	Model  string   // the agent's model, where start recorded it
-	// Finish is `f10 drive`'s record of running the branch's finish, when
-	// that drive still runs
+	// Finish is `f10 drive`'s record of running the branch's finish, while
+	// that drive holds the task's lease
 	Finish *ref.DriveFinish
 }
 
