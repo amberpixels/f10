@@ -610,3 +610,22 @@ func TestDriveEnv(t *testing.T) {
 		t.Errorf("a bad key passed: %q", eff.Errors())
 	}
 }
+
+func TestWatch(t *testing.T) {
+	if eff := buildWith(t, "", ""); eff.Watch != "report" {
+		t.Errorf("default watch = %q, want report", eff.Watch)
+	}
+
+	eff := buildWith(t, "---\nwatch: finish\n---\n", "")
+	if eff.Watch != "finish" || eff.Errors() != "" {
+		t.Errorf("watch %q, errors %q", eff.Watch, eff.Errors())
+	}
+
+	if f := factFor(t, eff, "watch"); f.Value != "finish" {
+		t.Errorf("fact = %+v", f)
+	}
+
+	if eff := buildWith(t, "---\nwatch: always\n---\n", ""); !strings.Contains(eff.Errors(), "watch") {
+		t.Errorf("a bad value passed: %q", eff.Errors())
+	}
+}

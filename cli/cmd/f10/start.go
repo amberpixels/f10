@@ -248,6 +248,8 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	watchProject(ctx, cmd.ErrWriter, t)
+
 	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 

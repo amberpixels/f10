@@ -104,6 +104,7 @@ const (
 	OpRun    = "run"
 	OpStatus = "status"
 	OpStop   = "stop"
+	OpWatch  = "watch"
 )
 
 // A Request is one call: an op and what it needs.
@@ -111,9 +112,9 @@ type Request struct {
 	Op      string   `json:"op"`
 	Version string   `json:"version,omitempty"` // hello: the client's
 	Argv    []string `json:"argv,omitempty"`    // run: drive's arguments, --foreground added by the daemon
-	Dir     string   `json:"dir,omitempty"`     // run: where the drive was typed
-	Root    string   `json:"root,omitempty"`    // run: the storage root, telling projects apart
-	Env     []string `json:"env,omitempty"`     // run: the allowlisted environment
+	Dir     string   `json:"dir,omitempty"`     // run: where the drive was typed; watch: the main checkout
+	Root    string   `json:"root,omitempty"`    // run, watch: the storage root, telling projects apart
+	Env     []string `json:"env,omitempty"`     // run, watch: the allowlisted environment
 	Key     string   `json:"key,omitempty"`     // run: the record's command line, joined; "" never attaches
 	Resume  int      `json:"resume,omitempty"`  // run: the record --resume names
 	Drain   bool     `json:"drain,omitempty"`   // stop: let each drive reach a tick boundary
@@ -127,9 +128,10 @@ type Reply struct {
 	Version  string    `json:"version,omitempty"`
 	PID      int       `json:"pid,omitempty"`
 	Started  time.Time `json:"started,omitzero"`
-	Log      string    `json:"log,omitempty"`    // run, logs: the drive's log
-	Attach   bool      `json:"attach,omitempty"` // run: the log is a drive already running
-	Runs     []Run     `json:"runs,omitempty"`   // status
+	Log      string    `json:"log,omitempty"`     // run, logs: the drive's log; watch: the project's pass log
+	Attach   bool      `json:"attach,omitempty"`  // run: the log is a drive already running
+	Runs     []Run     `json:"runs,omitempty"`    // status
+	Watches  []Watch   `json:"watches,omitempty"` // status
 }
 
 // A Run is one drive process the daemon supervises.
@@ -141,6 +143,20 @@ type Run struct {
 	Since time.Time `json:"since"`
 	Log   string    `json:"log"`
 }
+
+// A Watch is one project the daemon watches for tasks no drive owns: a
+// `watch --pass` in its main checkout every few minutes.
+type Watch struct {
+	Root string    `json:"root"`
+	Dir  string    `json:"dir"`           // the main checkout
+	Last time.Time `json:"last,omitzero"` // when the last pass ended
+	Exit int       `json:"exit"`          // its exit code
+	Log  string    `json:"log"`           // the project's pass log
+}
+
+// ExitNothingWatched is a pass's exit when the project has no task left
+// to watch: the daemon stops watching it.
+const ExitNothingWatched = 7
 
 // NumberFileEnv names the file a drive the daemon runs writes its record
 // number to, once the record is open.

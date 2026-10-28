@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,9 @@ func TestMain(m *testing.M) {
 	}
 
 	_ = os.Setenv(ledger.PathEnv, filepath.Join(dir, "f10.db"))
+
+	// a start or a drive run here hands nothing to a real daemon
+	watchProject = func(context.Context, io.Writer, *target) {}
 
 	code := m.Run()
 

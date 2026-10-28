@@ -41,6 +41,7 @@ type Declared struct {
 	FlowByArea   map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
 	DriveFinish  string            `yaml:"drive_finish,omitempty"`
 	DriveEnv     []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
+	Watch        string            `yaml:"watch,omitempty"`     // what the daemon does for tasks no drive owns
 	ReportBack   string            `yaml:"report_back,omitempty"`
 	Review       ReviewDecl        `yaml:"review,omitempty"`
 	Standup      StandupDecl       `yaml:"standup,omitempty"`
@@ -190,6 +191,7 @@ var vocab = map[string][]string{
 	"review_traces": {"on", "off"},
 	"report_back":   {"on", "off"},
 	"drive_finish":  {"on", "off"},
+	"watch":         {"report", "finish", "off"},
 }
 
 // staleAfterRE is a stale_after value: whole days or weeks. Hours mean
@@ -246,6 +248,7 @@ func (d Declared) check() []string {
 		"review_traces": d.ReviewTraces,
 		"report_back":   d.ReportBack,
 		"drive_finish":  d.DriveFinish,
+		"watch":         d.Watch,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
 			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
@@ -402,6 +405,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
 	set("drive_finish", d.DriveFinish != "", func() { l.DriveFinish = d.DriveFinish })
 	set("drive_env", d.DriveEnv != nil, func() { l.DriveEnv = d.DriveEnv })
+	set("watch", d.Watch != "", func() { l.Watch = d.Watch })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("pipeline_by_area", d.ByArea != nil, func() { l.ByArea = d.ByArea })

@@ -92,6 +92,10 @@ func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, s
 	return r, suffix, "", err
 }
 
+// errNotMerged is a finish that only finishes merged work meeting a
+// branch whose request has not merged.
+var errNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
+
 // exitForeign is finish's exit when the PR is someone else's and no flag
 // says what to do with it: the finish skill asks, and reruns with one.
 const exitForeign = 3
@@ -249,6 +253,9 @@ type finishInput struct {
 	sweep func(context.Context)
 	// progress names each action as it starts, for drive's record; nil for none
 	progress func(string)
+	// mergedOnly refuses everything but a request already merged on the
+	// host: the watcher finishes merged work and never merges anything
+	mergedOnly bool
 }
 
 // finish runs the flow: branch, worktree, the refusals, the merge, the
@@ -312,6 +319,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	local, err := neverPushed(ctx, in, name, err)
 	if err != nil {
 		return err
+	}
+
+	if in.mergedOnly && (local || p.status() != pullMerged) {
+		return errNotMerged
 	}
 
 	// a spike with a PR finishes the normal way, and its tree must be clean

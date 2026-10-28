@@ -27,15 +27,15 @@ import (
 func daemonCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "daemon",
-		Usage: "the per-user process that runs drives; f10 drive starts it when needed",
+		Usage: "the per-user process that runs drives and watches started tasks; f10 drive and f10 start start it when needed",
 		Description: "Bare, it serves in the foreground: what f10 drive starts, detached. " +
-			"It exits after ten minutes with no drive and no call. A client of a newer release " +
+			"It exits after ten minutes with no drive, no watched project and no call. A client of a newer release " +
 			"replaces it: each drive stops at its next tick and the new daemon resumes it.",
 		Action: runDaemon,
 		Commands: []*cli.Command{
 			{
 				Name:   "status",
-				Usage:  "pid, version and the drives it runs",
+				Usage:  "pid, version, the drives it runs and the projects it watches",
 				Action: runDaemonStatus,
 			},
 			{
@@ -93,8 +93,8 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\n", rep.PID, rep.Version,
-		rep.Started.Format(time.DateTime), len(rep.Runs))
+	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
+		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
 	for _, r := range rep.Runs {
 		fmt.Fprintf(w, "\n%s\n", driveTitle(r))
@@ -111,22 +111,39 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	for _, wt := range rep.Watches {
+		fmt.Fprintf(w, "\n%s: watched\n", projectName(wt.Root))
+
+		if wt.Last.IsZero() {
+			fmt.Fprintln(w, "  pass   first one running")
+		} else {
+			fmt.Fprintf(w, "  pass   last %s, exit %d\n", wt.Last.Format(time.DateTime), wt.Exit)
+		}
+
+		fmt.Fprintf(w, "  log    %s\n", wt.Log)
+	}
+
 	return nil
 }
 
-// driveTitle names a run by its project and drive number: the checkout
-// an in-repo storage root sits in, or an out-of-tree root's own name.
+// driveTitle names a run by its project and drive number.
 func driveTitle(r daemon.Run) string {
-	project := filepath.Base(r.Root)
-	if project == ".f10" {
-		project = filepath.Base(filepath.Dir(r.Root))
-	}
-
+	project := projectName(r.Root)
 	if r.Drive == 0 {
 		return project + ": drive starting"
 	}
 
 	return fmt.Sprintf("%s: drive %d", project, r.Drive)
+}
+
+// projectName is the checkout an in-repo storage root sits in, or an
+// out-of-tree root's own name.
+func projectName(root string) string {
+	if project := filepath.Base(root); project != ".f10" {
+		return project
+	}
+
+	return filepath.Base(filepath.Dir(root))
 }
 
 func runDaemonStop(ctx context.Context, cmd *cli.Command) error {
@@ -223,6 +240,9 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
+
+	// a task the drive leaves unfinished is watched once the drive ends
+	watchProject(ctx, io.Discard, t)
 
 	return followDrive(ctx, w, dir, ver, req, nil)
 }
