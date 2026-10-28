@@ -75,7 +75,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    A block with no `lore:` line (a round from before lore) writes nothing; a failing `lore add` is one line in the report, never a failed step.
    Never edit the reviewer's text, the `lore:` line above aside.
 9. **Land the fixes on an open PR or MR.**
-   When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes as `steps/commit.md` point 2 says and push them to that branch, never forcing.
+   When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes per `conventions/context.md` → Commits and push them to that branch, never forcing.
    The trailers are `f10 trace trailers --step resolve --round <n> --fixed <n> --skipped <n>`: `--round` is this file's round, `--fixed` and `--skipped` count the verdicts in it at the time of the commit, an open `ask` in neither; in round two the counts cover both files, as point 10's comment does.
    Outward-facing, under the run's authorization.
    With `traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.

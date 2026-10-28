@@ -99,6 +99,7 @@ func (r *Run) Save(dir string, now time.Time) error {
 		{"plan", r.Plan},
 		{"ship", r.Ship},
 		{"leaf", r.Leaf},
+		{"at", atText(r.At)},
 		{"final", r.Final},
 		{"pipeline", strings.Join(r.Pipeline, PipelineSep)},
 		{"note", r.Note},
@@ -123,6 +124,14 @@ func (r *Run) Save(dir string, now time.Time) error {
 	}
 
 	return nil
+}
+
+func atText(at int) string {
+	if at <= 0 {
+		return ""
+	}
+
+	return strconv.Itoa(at)
 }
 
 func oneLine(s string) string { return strings.ReplaceAll(s, "\n", " ") }
@@ -212,7 +221,40 @@ func (r *Run) Set(phase, status, leaf string) error {
 		r.Leaf = ""
 	}
 
+	// only ship's leaves are pipeline entries
+	at := 0
+	if phase == "ship" {
+		at = r.place(r.Leaf)
+	}
+
+	r.At = at
+
 	return nil
+}
+
+// place is where leaf sits in the pipeline, counted from 1: where the run
+// already is, else the next entry by that name, else the first. A leaf the
+// pipeline does not name (catchup's guard stopping) keeps the place, so the
+// judge resumed after it is still the second one.
+func (r *Run) place(leaf string) int {
+	if leaf == "" {
+		return 0
+	}
+
+	at := min(max(r.At, 0), len(r.Pipeline))
+	if at > 0 && r.Pipeline[at-1] == leaf {
+		return at
+	}
+
+	if k := slices.Index(r.Pipeline[at:], leaf); k >= 0 {
+		return at + k + 1
+	}
+
+	if k := slices.Index(r.Pipeline, leaf); k >= 0 {
+		return k + 1
+	}
+
+	return at
 }
 
 // SetTask records the task the run is about. A tracker task id means the
@@ -285,6 +327,7 @@ func (r *Run) SetPipeline(steps []string) error {
 
 	r.Pipeline = kept
 	r.Final = kept[len(kept)-1]
+	r.At = 0
 
 	return nil
 }
@@ -295,7 +338,7 @@ func (r *Run) PlanWritten(task string) {
 	r.Task = task
 	r.backfill("plan")
 	r.Plan = "done"
-	r.Leaf = ""
+	r.Leaf, r.At = "", 0
 }
 
 // Backstop is the Stop hook's promotion, for the most-dropped call: the final
@@ -315,7 +358,7 @@ func (r *Run) Backstop() bool {
 	}
 
 	if r.Ship == "running" && (r.Final == "" || r.Leaf == "" || r.Leaf == r.Final) {
-		r.Ship, r.Leaf, changed = "done", "", true
+		r.Ship, r.Leaf, r.At, changed = "done", "", 0, true
 	}
 
 	return changed
@@ -406,7 +449,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	r.Skill = skill
 	r.Leaf, r.Final, r.Note, r.Next, r.Ask = "", "", "", "", ""
-	r.Pipeline = nil
+	r.Pipeline, r.At = nil, 0
 	r.Ship = "pending"
 
 	// the checkout root, so a terminal with no session id can still find its

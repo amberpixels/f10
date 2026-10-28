@@ -1,0 +1,187 @@
+{
+  "Project": {
+    "ID": "github.com/acme/widgets",
+    "Name": "widgets",
+    "Host": "gh",
+    "Checkout": "/code/widgets"
+  },
+  "Prefix": "FT",
+  "Tasks": [
+    {
+      "id": "FT-1",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/1",
+      "status": "open"
+    },
+    {
+      "id": "FT-2",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/2",
+      "status": "open"
+    },
+    {
+      "id": "FT-3",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/3",
+      "status": "open"
+    },
+    {
+      "id": "FT-4",
+      "title": "thing",
+      "url": "https://github.com/acme/widgets/issues/4",
+      "status": "open"
+    }
+  ],
+  "PRs": [
+    {
+      "Number": 20,
+      "Title": "FT-2: thing",
+      "URL": "https://github.com/acme/widgets/pull/20",
+      "Status": "open",
+      "Head": "FT-2/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z"
+    },
+    {
+      "Number": 40,
+      "Title": "FT-4: thing",
+      "URL": "https://github.com/acme/widgets/pull/40",
+      "Status": "open",
+      "Head": "FT-4/slug",
+      "Base": "main",
+      "Author": "ann",
+      "UpdatedAt": "2026-10-20T10:00:00Z"
+    }
+  ],
+  "Sources": [
+    {
+      "Name": "host",
+      "OK": true,
+      "TookMS": 5
+    },
+    {
+      "Name": "tracker",
+      "OK": true,
+      "TookMS": 3
+    },
+    {
+      "Name": "local",
+      "OK": true,
+      "Skipped": false,
+      "TookMS": 1
+    }
+  ],
+  "Local": {
+    "Runs": [
+      {
+        "session": "s1",
+        "task": "FT-1",
+        "capture": "prior",
+        "plan": "prior",
+        "ship": "running",
+        "leaf": "judge",
+        "at": 1,
+        "pipeline": [
+          "judge",
+          "implement",
+          "cleanup",
+          "pr",
+          "review:local",
+          "judge",
+          "pr"
+        ],
+        "updated": "2026-10-23T11:59:00Z"
+      },
+      {
+        "session": "s2",
+        "task": "FT-2",
+        "capture": "prior",
+        "plan": "prior",
+        "ship": "running",
+        "leaf": "judge",
+        "at": 6,
+        "pipeline": [
+          "judge",
+          "implement",
+          "cleanup",
+          "pr",
+          "review:local",
+          "judge",
+          "pr"
+        ],
+        "updated": "2026-10-23T11:59:00Z"
+      },
+      {
+        "session": "s3",
+        "task": "FT-3",
+        "capture": "prior",
+        "plan": "running",
+        "ship": "pending",
+        "leaf": "judge",
+        "updated": "2026-10-23T11:59:00Z"
+      },
+      {
+        "session": "s4",
+        "task": "FT-4",
+        "capture": "prior",
+        "plan": "prior",
+        "ship": "running",
+        "leaf": "review:local",
+        "at": 5,
+        "pipeline": [
+          "judge",
+          "implement",
+          "cleanup",
+          "pr",
+          "review:local",
+          "judge",
+          "pr"
+        ],
+        "updated": "2026-10-23T11:59:00Z"
+      }
+    ],
+    "Worktrees": [
+      {
+        "Path": "/code/widgets.FT-1-slug",
+        "Branch": "FT-1/slug",
+        "Ahead": 0
+      },
+      {
+        "Path": "/code/widgets.FT-2-slug",
+        "Branch": "FT-2/slug",
+        "Ahead": 2
+      },
+      {
+        "Path": "/code/widgets.FT-3-slug",
+        "Branch": "FT-3/slug",
+        "Ahead": 0
+      },
+      {
+        "Path": "/code/widgets.FT-4-slug",
+        "Branch": "FT-4/slug",
+        "Ahead": 2
+      }
+    ],
+    "Branches": {
+      "FT-1/slug": {
+        "Task": "FT-1"
+      },
+      "FT-2/slug": {
+        "Task": "FT-2"
+      },
+      "FT-3/slug": {
+        "Task": "FT-3"
+      },
+      "FT-4/slug": {
+        "Task": "FT-4"
+      }
+    },
+    "Plans": {},
+    "Archived": {},
+    "Findings": {},
+    "Verdicts": {},
+    "Finished": {},
+    "Workspaces": {}
+  }
+}

@@ -37,7 +37,7 @@ Deploy has its own confirmation (the **deploy** step).
    The flow is declared in the `project.md` it prints; a planless one loads `plan` but never runs it.
 2. Follow those steps in the order the Arguments item gives.
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
-   A `review` entry loads `review resolve`; a change judge after a `pr` entry loads `judge implement commit`, for the yellow route; the catchup guard (below) adds `catchup` to the load of each entry it guards.
+   A `review` entry loads `review resolve`; the catchup guard (below) adds `catchup` to the load of each entry it guards.
 
 **Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
 `f10 flow` lists them and what selects each.
@@ -69,7 +69,7 @@ Catchup is never a flow entry.
   A base with no code yet (its branch still at the default branch's commit): before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
-- **Before every `pr` entry**, the first and each refresh: fetch and check ancestry first; only when the base moved, commit what the tree holds as the pr step would (`steps/commit.md` point 2, `--step implement`) and integrate, so the push carries it.
+- **Before every `pr` entry**, the first and each refresh: fetch and check ancestry first; only when the base moved, commit what the tree holds as the pr step would (`conventions/context.md` → Commits, `--step implement`) and integrate, so the push carries it.
   An unmoved base leaves the commit to pr and its adapter.
 - **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree (implement leaves its work uncommitted, so `implement judge pr` always has some), skip it in one line: that judge sees the branch on its old base, and a later `pr` entry's guard, when the flow has one, brings the base in before the code leaves.
   After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.

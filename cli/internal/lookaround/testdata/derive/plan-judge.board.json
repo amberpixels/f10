@@ -1,0 +1,142 @@
+{
+  "version": 4,
+  "generated_at": "2026-10-23T12:00:00Z",
+  "view": "state",
+  "project": {
+    "id": "github.com/acme/widgets",
+    "name": "widgets",
+    "host": "gh",
+    "checkout": "/code/widgets",
+    "remote": false
+  },
+  "window": {
+    "since": "2026-10-16T12:00:00Z"
+  },
+  "sources": [
+    {
+      "name": "host",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "tracker",
+      "ok": true,
+      "took_ms": 0
+    },
+    {
+      "name": "local",
+      "ok": true,
+      "took_ms": 0
+    }
+  ],
+  "rows": [
+    {
+      "key": "FT-2",
+      "task": {
+        "id": "FT-2",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/2",
+        "status": "open"
+      },
+      "stage": "in-review",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-2-bc3293",
+        "author": "ann",
+        "person": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 20,
+          "title": "FT-2: thing",
+          "url": "https://github.com/acme/widgets/pull/20",
+          "state": "open",
+          "head": "FT-2/slug",
+          "base": "main"
+        },
+        "branch": "FT-2/slug",
+        "worktree": "/code/widgets.FT-2-slug"
+      },
+      "last_activity": "2026-10-23T11:59:00Z",
+      "next": {
+        "text": "at judge"
+      }
+    },
+    {
+      "key": "FT-4",
+      "task": {
+        "id": "FT-4",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/4",
+        "status": "open"
+      },
+      "stage": "in-review",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-4-3bd12f",
+        "author": "ann",
+        "person": "ann"
+      },
+      "where": {
+        "pr": {
+          "number": 40,
+          "title": "FT-4: thing",
+          "url": "https://github.com/acme/widgets/pull/40",
+          "state": "open",
+          "head": "FT-4/slug",
+          "base": "main"
+        },
+        "branch": "FT-4/slug",
+        "worktree": "/code/widgets.FT-4-slug"
+      },
+      "last_activity": "2026-10-23T11:59:00Z",
+      "next": {
+        "text": "at review:local"
+      }
+    },
+    {
+      "key": "FT-3",
+      "task": {
+        "id": "FT-3",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/3",
+        "status": "open"
+      },
+      "stage": "planning",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-3-f02c46"
+      },
+      "where": {
+        "branch": "FT-3/slug",
+        "worktree": "/code/widgets.FT-3-slug"
+      },
+      "last_activity": "2026-10-23T11:59:00Z",
+      "next": {
+        "command": "/f10:status FT-3"
+      }
+    },
+    {
+      "key": "FT-1",
+      "task": {
+        "id": "FT-1",
+        "title": "thing",
+        "url": "https://github.com/acme/widgets/issues/1",
+        "status": "open"
+      },
+      "stage": "planned",
+      "stage_from": "local",
+      "who": {
+        "agent": "ft-1-916fca"
+      },
+      "where": {
+        "branch": "FT-1/slug",
+        "worktree": "/code/widgets.FT-1-slug"
+      },
+      "last_activity": "2026-10-23T11:59:00Z",
+      "next": {
+        "command": "/f10:status FT-1"
+      }
+    }
+  ]
+}

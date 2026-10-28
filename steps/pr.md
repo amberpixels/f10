@@ -21,14 +21,14 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    The base must already be on origin; when it is not, stop and report (`conventions/failure.md`) with the branch named and `next: push the base task's branch`.
    One exception: a base that exists neither locally nor on origin was finished and deleted, so its code is in the default branch: `git config --unset` both keys and open against the default branch.
 5. **Open it** via the project's PR adapter: a skill, or plain `gh pr create` / `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
-   A commit made here is made as `steps/commit.md` point 2 says, trailers included (`--step implement`).
+   A commit made here follows `conventions/context.md` → Commits, `--step implement`.
    In stealth mode, no f10 traces in the branch name, commits, or PR text (`conventions/context.md`).
    Another task named in the PR text is a link with its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
    A **bundle** (riders in `git config --get branch."$(git branch --show-current)".f10-tasks`): the title is the lead's, and the body links every member with its title.
    On a host that closes issues on merge it carries one closing keyword per member, each on a line of its own (`Closes #12`): `f10 finish` rewrites a rider's line to keep it open.
    Once it is open, `f10 trace state --step pr` writes the hidden state block into its body (`docs/traces.md`): nothing with `traces: off`, and a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
-   - **Push first**: commit what the tree holds per the adapter (`steps/commit.md` point 2, `--step implement`), then push, never forcing, so the description never covers code the PR lacks.
+   - **Push first**: commit what the tree holds per the adapter (`conventions/context.md` → Commits, `--step implement`), then push, never forcing, so the description never covers code the PR lacks.
    - **Someone else's PR** (`author.login` other than `gh api user --jq .login`, `author.username` other than `glab api user`'s `username`, compared case-insensitively): stop after the push and leave the title and body as they are.
    - **Rewrite from scratch**: `git fetch origin <base>` for the PR's own base (`baseRefName` / `target_branch`), then draft title and body as point 5 would for a new PR, from `git diff origin/<base>...HEAD`, the task and the plan, never patching the old body ("also adds…").
      The title keeps its task id.

@@ -50,8 +50,11 @@ type Run struct {
 	Capture string `json:"capture"`
 	Plan    string `json:"plan"`
 	Ship    string `json:"ship"`
-	Leaf    string `json:"leaf,omitempty"`  // the pipeline step running, or stopped on
-	Final   string `json:"final,omitempty"` // the ship pipeline's declared last step
+	Leaf    string `json:"leaf,omitempty"` // the pipeline step running, or stopped on
+	// Leaf's place in Pipeline, counted from 1, so a step the pipeline
+	// names twice (`judge`, `pr`) is told apart; 0 is unknown
+	At    int    `json:"at,omitempty"`
+	Final string `json:"final,omitempty"` // the ship pipeline's declared last step
 	// the ship pipeline's steps as declared, in order
 	Pipeline []string  `json:"pipeline,omitempty"`
 	Note     string    `json:"note,omitempty"` // why the run stopped
@@ -150,6 +153,8 @@ func Load(path string) (*Run, error) {
 			r.Ship = cmp.Or(value, "pending")
 		case "leaf":
 			r.Leaf = value
+		case "at":
+			r.At, _ = strconv.Atoi(value)
 		case "final":
 			r.Final = value
 		case "pipeline":
