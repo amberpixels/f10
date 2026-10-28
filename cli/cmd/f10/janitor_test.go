@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // The fixture every janitor test starts from: origin's HEAD is main, the
@@ -289,6 +290,7 @@ func TestJanitorWithoutAHost(t *testing.T) {
 	fx.f.script("git merge-tree --write-tree refs/heads/main refs/heads/GH-1/x", "t1")
 	fx.f.script("git merge-tree --write-tree refs/heads/main refs/heads/GH-2/y", "t2")
 	fx.f.script("git rev-parse refs/heads/main^{tree}", "t1")
+	fx.f.script("git log -1 --format=%cI abc", "2026-10-01T00:00:00Z")
 
 	out := fx.run(t)
 
@@ -391,5 +393,103 @@ func TestSweepAfterStart(t *testing.T) {
 
 	if runs != 1 {
 		t.Error("a fresh stamp ran the janitor again")
+	}
+}
+
+// A plan written after the request ended belongs to a new attempt at the
+// task, and stays.
+func TestJanitorKeepsAPlanWrittenAfterTheRequestEnded(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
+	fx.f.script(ghHeadOf("GH-1/x"), `[{"number":9,"state":"CLOSED","url":"https://gh/pr/9","headRefOid":"abc",`+
+		`"closedAt":"2026-01-01T00:00:00Z","author":{"login":"me"}}]`)
+	plan := fx.plan(t)
+
+	out := fx.run(t)
+
+	if !fx.f.called("git branch -D GH-1/x") || !exists(plan) || !strings.Contains(out, "written after") {
+		t.Errorf("out = %q", out)
+	}
+}
+
+// A bundle branch ships every member: its riders' plans go with the lead's.
+func TestJanitorArchivesARidersPlan(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1+GH-2/x", "abc", ""})
+	fx.request("GH-1+GH-2/x", "MERGED", "abc", "me")
+	fx.plan(t)
+
+	rider := filepath.Join(fx.in.plansDir, "GH-2.md")
+	if err := os.WriteFile(rider, []byte("plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := fx.run(t)
+
+	if exists(rider) || !exists(filepath.Join(fx.in.plansDir, "archive", "GH-2.md")) {
+		t.Errorf("rider's plan not archived:\n%s", out)
+	}
+}
+
+// On origin only the shapes start creates count; a name merely mentioning
+// an id is someone else's branch.
+func TestJanitorReadsOriginByStartsShapes(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.f.script(allHeads, heads("main"))
+	fx.f.script(lsHeads, "abc\trefs/heads/revert-GH-1\nabc\trefs/heads/feat/GH-2-x")
+
+	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") {
+		t.Errorf("out = %q, calls %q", out, fx.f.calls)
+	}
+}
+
+// With a host, a branch with no request is removed only as never pushed.
+func TestJanitorRemovesALandedBranchWithNoRequest(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
+	fx.f.script(ghHeadOf("GH-1/x"), "[]")
+	fx.f.script("git config --get branch.GH-1/x.merge", "")
+	fx.f.script("git merge-tree --write-tree refs/heads/main refs/heads/GH-1/x", "t1")
+	fx.f.script("git rev-parse refs/heads/main^{tree}", "t1")
+	fx.f.script("git log -1 --format=%cI abc", "2026-10-01T00:00:00Z")
+
+	if out := fx.run(t); !strings.Contains(out, "removed GH-1/x (never pushed, already in main)") {
+		t.Errorf("out = %q", out)
+	}
+}
+
+// A step failing keeps that branch and its plan, says so, and the next
+// branch is still swept.
+func TestJanitorFailureKeepsTheBranch(t *testing.T) {
+	for _, c := range []struct{ fail, want string }{
+		{"gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1/x", "deleting origin/GH-1/x failed"},
+		{"git branch -D GH-1/x", "deleting the local branch failed"},
+	} {
+		fx := newJanitorFixture(t)
+		fx.branches(t, [3]string{"GH-1/x", "abc", "abc"}, [3]string{"GH-2/y", "def", ""})
+		fx.request("GH-1/x", "MERGED", "abc", "me")
+		fx.request("GH-2/y", "MERGED", "def", "me")
+		fx.f.fail(c.fail, shell.Result{Code: 1, Stderr: "refused"})
+		plan := fx.plan(t)
+
+		out := fx.run(t)
+
+		if !strings.Contains(out, "kept GH-1/x: "+c.want) || !exists(plan) || !fx.f.called("git branch -D GH-2/y") {
+			t.Errorf("%s: out = %q", c.fail, out)
+		}
+	}
+}
+
+// The delete escapes the branch: GitHub keeps its slashes as segments,
+// GitLab takes the whole name as one.
+func TestDeleteRemoteBranchEscapesTheName(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1/a%23b", "")
+	f.script("glab api -X DELETE projects/:fullpath/repository/branches/GH-1%2Fa%23b", "")
+
+	for _, name := range []string{"gh", "glab"} {
+		if err := newHost(name, "/code/repo").deleteRemoteBranch(t.Context(), "GH-1/a#b"); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }

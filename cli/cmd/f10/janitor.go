@@ -69,7 +69,7 @@ func runJanitor(ctx context.Context, cmd *cli.Command) error {
 
 // sweepAfterStart runs the janitor once start has reported, when the stamp
 // says it is due. Nothing it does fails the start: an error is one warning.
-// The stamp moves first, so several starts at once run it once.
+// The stamp moves first, so starts in quick succession run it once.
 func sweepAfterStart(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	run func(context.Context) ([]string, error),
 ) {
@@ -137,8 +137,9 @@ func janitorFor(t *target) janitorInput {
 
 // A staleBranch is one branch tied to a task, local, on origin or both.
 type staleBranch struct {
-	name, id            string
-	localSHA, originSHA string // "" where the branch is not
+	name                string
+	ids                 []string // the tasks it ships, a bundle's lead first
+	localSHA, originSHA string   // "" where the branch is not
 }
 
 // janitor removes every task branch that qualifies and returns a line per
@@ -156,15 +157,16 @@ func janitor(ctx context.Context, in janitorInput) ([]string, error) {
 
 	j := &sweeper{in: in, def: def}
 
-	removed := map[string]bool{}
+	// each removed branch, and when its request ended
+	removed := map[string]time.Time{}
 
 	for _, b := range branches {
 		if held[b.name] {
 			continue
 		}
 
-		if j.sweep(ctx, b) {
-			removed[b.name] = true
+		if ended, ok := j.sweep(ctx, b); ok {
+			removed[b.name] = ended
 		}
 	}
 
@@ -194,9 +196,10 @@ func janitorDefault(ctx context.Context, main string) (string, error) {
 }
 
 // taskBranches lists every local and origin branch tied to a task id, by
-// the rule finish reads a branch with: its f10-task link, else the bundle
-// its name spells, else the id it carries. The default branch is never
-// one. held is every branch a checkout has, main's included.
+// the rule finish reads a branch with: its f10-task link or recorded
+// bundle, else the bundle its name spells, else the id it carries, which
+// on origin only counts in the shapes start creates. The default branch is
+// never one. held is every branch a checkout has, main's included.
 func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBranch, map[string]bool, error) {
 	locals, err := gitx.Refs(ctx, in.main, "refs/heads/")
 	if err != nil {
@@ -229,33 +232,46 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 	match := ref.Matcher(in.prefix)
 	byName := map[string]*staleBranch{}
 
-	add := func(name string) *staleBranch {
+	add := func(name string, local bool) *staleBranch {
 		if b, ok := byName[name]; ok {
 			return b
 		}
 
-		id := linked[name]
-		if members := ref.Members(in.prefix, name); id == "" && members != nil {
-			id = members[0]
+		var ids []string
+
+		switch lead, riders := branchBundle(ctx, in.main, name, in.prefix); {
+		case name == def:
+		case lead != "":
+			ids = append([]string{lead}, riders...)
+		case linked[name] != "":
+			ids = []string{linked[name]}
+		case local:
+			if id := match(name); id != "" {
+				ids = []string{id}
+			}
+		default:
+			if id := match(name); id != "" && startShape(name, id) {
+				ids = []string{id}
+			}
 		}
 
-		if id = cmp.Or(id, match(name)); id == "" || name == def {
+		if len(ids) == 0 {
 			return nil
 		}
 
-		byName[name] = &staleBranch{name: name, id: id}
+		byName[name] = &staleBranch{name: name, ids: ids}
 
 		return byName[name]
 	}
 
 	for _, name := range locals {
-		if b := add(name); b != nil {
+		if b := add(name, true); b != nil {
 			b.localSHA = gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/heads/"+name)
 		}
 	}
 
 	for name, sha := range origin {
-		if b := add(name); b != nil {
+		if b := add(name, false); b != nil {
 			b.originSHA = sha
 		}
 	}
@@ -283,8 +299,8 @@ func (j *sweeper) say(format string, args ...any) {
 }
 
 // sweep removes b when it qualifies, reporting whether it was (or, dry,
-// would be) removed.
-func (j *sweeper) sweep(ctx context.Context, b staleBranch) bool {
+// would be) removed and when its request ended.
+func (j *sweeper) sweep(ctx context.Context, b staleBranch) (time.Time, bool) {
 	var (
 		p   *forge.PR
 		err error
@@ -294,7 +310,7 @@ func (j *sweeper) sweep(ctx context.Context, b staleBranch) bool {
 		if p, err = j.request(ctx, b); err != nil {
 			j.say("kept %s: %v", b.name, err)
 
-			return false
+			return time.Time{}, false
 		}
 	}
 
@@ -303,16 +319,16 @@ func (j *sweeper) sweep(ctx context.Context, b staleBranch) bool {
 	}
 
 	if p.Status == forge.Open {
-		return false
+		return time.Time{}, false
 	}
 
 	if reason := j.keep(ctx, b, p); reason != "" {
 		j.say("kept %s: %s", b.name, reason)
 
-		return false
+		return time.Time{}, false
 	}
 
-	return j.remove(ctx, b, p)
+	return cmp.Or(p.MergedAt, p.ClosedAt), j.remove(ctx, b, p)
 }
 
 // request is the request that decides b: an open one when any is, else
@@ -364,18 +380,21 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 }
 
 // sweepUnpushed removes a branch with no request when finish would read it
-// as never pushed and its changes are already in the default branch.
-func (j *sweeper) sweepUnpushed(ctx context.Context, b staleBranch) bool {
+// as never pushed and its changes are already in the default branch. Its
+// work ended with its last commit.
+func (j *sweeper) sweepUnpushed(ctx context.Context, b staleBranch) (time.Time, bool) {
 	switch {
 	case b.localSHA == "" || b.originSHA != "":
-		return false
+		return time.Time{}, false
 	case gitx.Out(ctx, j.in.main, "config", "--get", "branch."+b.name+".merge") != "":
-		return false
+		return time.Time{}, false
 	case !alreadyLanded(ctx, j.in.main, "refs/heads/"+j.def, "refs/heads/"+b.name):
-		return false
+		return time.Time{}, false
 	}
 
-	return j.remove(ctx, b, nil)
+	ended, _ := time.Parse(time.RFC3339, gitx.Out(ctx, j.in.main, "log", "-1", "--format=%cI", b.localSHA))
+
+	return ended, j.remove(ctx, b, nil)
 }
 
 // remove deletes b: dependents released for a merged request, origin's
@@ -472,17 +491,22 @@ func (j *sweeper) own(ctx context.Context, p *forge.PR) bool {
 }
 
 // archive moves the plan, and drops the images, of every task whose
-// branches all went. A task with a branch left keeps both: a second
-// attempt's worktree may still read its plan.
-func (j *sweeper) archive(branches []staleBranch, removed map[string]bool) {
+// branches all went, a bundle's riders included. A task with a branch left
+// keeps both: a second attempt's worktree may still read its plan. So does
+// a plan written after the request ended: the task was planned again.
+func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) {
 	left := map[string][]string{}
-	cleared := map[string]bool{}
+	cleared := map[string]time.Time{}
 
 	for _, b := range branches {
-		if removed[b.name] {
-			cleared[b.id] = true
-		} else {
-			left[b.id] = append(left[b.id], b.name)
+		ended, ok := removed[b.name]
+
+		for _, id := range b.ids {
+			if ok {
+				cleared[id] = laterOf(cleared[id], ended)
+			} else {
+				left[id] = append(left[id], b.name)
+			}
 		}
 	}
 
@@ -500,6 +524,8 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]bool) {
 		case !exists(plan):
 		case len(left[id]) > 0:
 			j.say("kept the plan for %s: %s still uses it", id, strings.Join(left[id], ", "))
+		case writtenAfter(plan, cleared[id]):
+			j.say("kept the plan for %s: it was written after its branch's work ended", id)
 		case j.in.dry:
 			j.say("would archive %s", plan)
 		default:
@@ -519,6 +545,30 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]bool) {
 			}
 		}
 	}
+}
+
+// laterOf is the later of two times.
+func laterOf(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+
+	return a
+}
+
+// writtenAfter reports whether the file at path changed after t; a zero t
+// is no bound.
+func writtenAfter(path string, t time.Time) bool {
+	fi, err := os.Stat(path)
+
+	return err == nil && !t.IsZero() && fi.ModTime().After(t)
+}
+
+// startShape reports whether name is a branch start would create for id:
+// the id itself, or the id followed by a slug, a suffix or a bundle.
+func startShape(name, id string) bool {
+	return name == id || strings.HasPrefix(name, id+"/") || strings.HasPrefix(name, id+"-") ||
+		strings.HasPrefix(name, id+ref.Separator)
 }
 
 // dependentsOf are the local branches started --after branch.

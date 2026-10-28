@@ -273,7 +273,8 @@ Out of scope: closing the tracker issue (the PR body does that with "Closes #n")
 `f10 finish` cleans up after itself; the janitor catches everything that went around it, without relying on a host setting such as GitHub's automatic head-branch deletion.
 `f10 start` runs it after its report at most once every 6 hours, `f10 janitor` runs it by hand, and `f10 janitor --dry-run` prints what it would remove and changes nothing.
 
-It considers local branches and origin's (one `git ls-remote --heads origin`) tied to a task id by the rule finish reads a branch with: the `f10-task` link, else the bundle the name spells, else the id it carries.
+It considers local branches and origin's (one `git ls-remote --heads origin`) tied to a task id by the rule finish reads a branch with: the `f10-task` link or recorded bundle, else the bundle the name spells, else the id it carries.
+On origin that last rule counts only the shapes start creates (`<id>`, `<id>/<slug>`, `<id>-<suffix>`, `<id>+...`), so a colleague's `revert-<id>` is never read as a task branch.
 Other branches and the default branch are never touched, and neither is a branch any checkout holds, main's included; those are dropped before the host is asked anything.
 For each remaining branch the host lists its requests (`gh pr list --head` / the GitLab MR API by source branch), and the branch goes only when all of these hold:
 
@@ -286,13 +287,15 @@ A branch with no request, or any branch when the checkout has no host CLI, goes 
 A host that fails to answer for a branch keeps it, with a line.
 
 Removal, per branch: a merged request's dependents are released as finish releases them; origin's copy is deleted through the host's API with its local tracking ref, but only for a request the signed-in user opened (someone else's keeps its origin branch, with a line, and one only on origin is not touched); then the local branch (`git branch -D`).
-Once every branch of a task is gone, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering, and its images are dropped; a task with another branch left, such as a second attempt still in a worktree, keeps both, with a line.
+Once every branch of a task is gone, a bundle's riders included, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering, and its images are dropped.
+A task with another branch left, such as a second attempt still in a worktree, keeps both, with a line; so does a plan written after the request merged or closed (for a branch never pushed, after its last commit), since the task was planned again.
 A step failing keeps that branch, with a line, and the run goes on to the next.
 
 The output is one line per removal and per branch kept for a reason worth knowing; a branch whose request is still open is kept without one.
 `nothing to clear` when nothing was.
 The last run is the mtime of `janitor.stamp` in the shared storage root (main's `.f10/`, or the out-of-tree root).
-The stamp moves before the run, so `f10 drive` starting several tasks at once runs it once; `--dry-run` leaves it alone.
+The stamp moves before the run, so starts in quick succession run it once; `--dry-run` leaves it alone.
+`f10 drive` opens its tasks without start's command, so it never runs the janitor.
 
 ## Forward
 
