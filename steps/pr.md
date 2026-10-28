@@ -25,7 +25,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    In stealth mode, no f10 traces in the branch name, commits, or PR text (`conventions/context.md`).
    Another task named in the PR text is a link with its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
    A **bundle** (riders in `git config --get branch."$(git branch --show-current)".f10-tasks`): the title is the lead's, and the body links every member with its title.
-   A `## Catchup` section lists the choices a driven catchup made on this branch, one line per file (`<path>: kept <side>, <why>`), rendered from the change's lore decision entries whose body opens `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`); no such entry, no section.
+   A `## Catchup` section lists the choices a catchup made on this branch, one line per file (`<path>: kept <side>, <why>`), rendered from the change's lore decision entries whose body opens `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`); no such entry, no section.
    On a host that closes issues on merge it carries one closing keyword per member, each on a line of its own (`Closes #12`): `f10 finish` rewrites a rider's line to keep it open.
    Once it is open, `f10 trace state --step pr` writes the hidden state block into its body (`docs/traces.md`): nothing with `traces: off`, and a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.

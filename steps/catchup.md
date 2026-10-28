@@ -54,7 +54,8 @@ No conflict, or nothing to bring in, is a **correct run**.
    - `git add` each file, confirm no conflict or marker remains (`git grep` over the staged files), then conclude.
      Under a merge, `git commit -m "<subject>" -m "$trailers"` with the trailers `f10 trace trailers --step catchup` printed first (`conventions/context.md` → Commits), never `git merge --continue`, so the merge commit carries them.
      Under a rebase, `git rebase --continue`, repeated for every conflicting commit; replayed commits keep their own messages.
-   - Once concluded, a hunk settled by taking one side, or by a named reconciliation, is a **decision** on the branch's task (`docs/lore.md`), anchored at the commit that now holds it: `f10 lore add decision --change <the id f10 task current prints> --anchor <path:line[-end]> --chosen <the side or the reconciliation> --rejected '<the other side>: <why it gave way>' -m <the intent both sides had>`.
+   - Once concluded, a hunk settled by taking one side, or by a named reconciliation, is a **decision** on the branch's task (`docs/lore.md`), anchored at the commit that now holds it: `f10 lore add decision --change <the id f10 task current prints> --anchor <path:line[-end]> --chosen <the side or the reconciliation> --rejected '<the other side>: <why it gave way>' -m "catchup: <path> - <the intent both sides had>"`.
+     The body opens `catchup: <path>`, so the pr step renders the change's catchup decisions under the PR's `## Catchup` heading.
      Both sides kept mechanically, a branch with no task, or a clean integration writes none; a failing `lore add` is one line in the report, never a failed step.
    - A clean merge takes the same message through `git merge <base> -m "<subject>" -m "$trailers"`.
 
@@ -94,7 +95,7 @@ Every question point 4 would put to the user is decided by the task's intent, re
 
 Each choice is written down, one per file, so the reviewer and the change judge see what was chosen:
 
-- a lore `decision` entry, after the commit that carries the choice: `f10 lore add decision --change <id> --chosen "<the side kept, one line>" --rejected "<the other side>: <why it lost>" --anchor <path>:<line>@<HEAD's sha> -m "catchup: <path> - <what conflicted and why this side>"`, the body opening `catchup: <path>` so the pr step can find it; a failing `lore add` is one line in the report, never a failed step;
+- the lore `decision` point 4 writes for a hunk settled by taking one side, here for every file decided by the task's intent, a modify-versus-delete and a regenerate included;
 - a line under a `## Catchup` heading in the PR body, when the branch has an open PR (`gh pr view --json number,body` / `glab mr view -F json`): `<path>: kept <side>, <why>`, added to the heading's lines, or under a new heading at the end of the body.
   Write it with `gh pr edit <n> --body-file <file>` / `glab mr update <n> --description "$(cat <file>)"`, the draft in a temp file outside the repo.
   No PR, no line: lore and the report carry it, and the pr step renders the heading from lore when it opens one.

@@ -19,7 +19,7 @@ The package imports nothing else from f10, so it can be copied out as a standalo
 - **Entry kinds**, following the life of a change:
   - `intent`: what we are doing and why, written before code.
   - `decision`: a choice made: the option taken, the options rejected, and why.
-    A driven catchup writes one per file it settled by the task's intent, its body opening `catchup: <path>`, which the pr step renders into the PR's Catchup section.
+    A catchup's decision body opens `catchup: <path>`, which the pr step renders into the PR's Catchup section.
   - `finding`: something a reviewer challenged: where, how severe, and how it was settled.
   - `verdict`: a gate's judgment on the change at a given commit.
   - `lesson`: lasting knowledge anchored to code, which outlives the change.
