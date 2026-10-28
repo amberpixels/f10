@@ -595,3 +595,18 @@ func TestMigrateLiftsProseUnderABlock(t *testing.T) {
 		}
 	}
 }
+
+func TestDriveEnv(t *testing.T) {
+	eff := buildWith(t, "---\ndrive_env: [ZIG, AWS_PROFILE]\n---\n", "")
+	if !slices.Equal(eff.DriveEnv, []string{"ZIG", "AWS_PROFILE"}) || eff.Errors() != "" {
+		t.Errorf("drive_env %v, errors %q", eff.DriveEnv, eff.Errors())
+	}
+
+	if f := factFor(t, eff, "drive_env"); f.Value != "ZIG, AWS_PROFILE" {
+		t.Errorf("fact = %+v", f)
+	}
+
+	if eff := buildWith(t, "---\ndrive_env: [\"A-B\"]\n---\n", ""); !strings.Contains(eff.Errors(), "drive_env") {
+		t.Errorf("a bad key passed: %q", eff.Errors())
+	}
+}

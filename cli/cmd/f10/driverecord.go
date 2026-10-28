@@ -31,6 +31,8 @@ func recordArgs(argv []string) []string {
 		switch {
 		case tok == "":
 			continue
+		case tok == "--foreground":
+			continue
 		case name == "--answer" || name == "--every" || name == "--resume":
 			if !inline {
 				i++
@@ -73,6 +75,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	if in.rec == nil {
 		in.rec = &drives.Record{
 			Created:     in.now(),
+			Dir:         in.dir,
 			Args:        recordArgs(in.argv),
 			Flow:        in.args.flow,
 			Model:       in.args.model,
@@ -91,6 +94,11 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		if err := drives.Create(in.root, in.rec); err != nil {
 			return err
 		}
+	}
+
+	if in.dir != "" && in.rec.Dir != in.dir {
+		in.rec.Dir = in.dir
+		in.save(func(r *drives.Record) { r.Dir = in.dir })
 	}
 
 	own, err := drives.Acquire(in.root, drives.DriveKey(in.rec.Number), in.rec.Number)
@@ -273,6 +281,15 @@ func (in *driveInput) releaseAll() {
 }
 
 // resumeLine is how the report says to answer the drive.
+// number is the drive's record number, 0 with no record.
+func (in *driveInput) number() int {
+	if in.rec == nil {
+		return 0
+	}
+
+	return in.rec.Number
+}
+
 func (in *driveInput) resumeLine() string {
 	if in.rec != nil {
 		return "f10 drive --resume " + strconv.Itoa(in.rec.Number)

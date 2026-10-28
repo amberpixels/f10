@@ -9,14 +9,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -49,7 +52,7 @@ func driveCommand() *cli.Command {
 		Name:  "drive",
 		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping when an agent asks",
 		ArgsUsage: "<id>[:model]... | <id> -- <id>  [--flow NAME | --local] " +
-			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION]\n" +
+			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
 			"   f10 drive --resume N [--answer [ID=]TEXT ...] | list [--all] | cancel N",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
@@ -61,6 +64,8 @@ func driveCommand() *cli.Command {
 			"Each drive keeps a record under the storage root, picked up by the same command or --resume N, " +
 			"and holds a lease on each task: a task another drive holds is skipped, and f10 finish refuses it. " +
 			"list shows the drives; cancel N stops one from prompting further.\n" +
+			"The drive runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
+			"Ctrl+C stops only that, and rerunning it follows the drive again. --foreground runs it in this process.\n" +
 			"Exit 0: every task went through its chain. 4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
@@ -74,10 +79,18 @@ func driveCommand() *cli.Command {
 const (
 	exitAsk    = 4
 	exitHalted = 5
+	// exitDrained is a drive stopped for a daemon upgrade, its record kept
+	// for the new daemon to resume; only the daemon and its clients see it
+	exitDrained = daemon.ExitDrained
 )
 
 const (
-	defaultEvery = 15 * time.Second
+	// defaultEvery is the fallback look: a run-state write wakes a drive
+	// sooner (drivewait.go)
+	defaultEvery = 30 * time.Second
+	// promptSettle is how old a prompt mark must be before an idle agent
+	// beside it reads as a turn that ended, not one Herdr has yet to show
+	promptSettle = 5 * time.Second
 	// startWindow is how long a prompted agent has to show it took the
 	// prompt: Herdr reporting it working, or its run reporting.
 	startWindow = 2 * time.Minute
@@ -145,6 +158,11 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	// the drive outlives this process unless asked to run in it
+	if !a.fore && daemon.Supported {
+		return driveThroughDaemon(ctx, cmd.Writer, t, argv, a)
+	}
+
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
 	if a.resume > 0 {
@@ -158,7 +176,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("drive %d: %w", rec.Number, err)
 		}
 
-		a.resume, a.answers, a.every = given.resume, given.answers, given.every
+		a.resume, a.answers, a.every, a.fore = given.resume, given.answers, given.every, given.fore
 		argv = rec.Args
 	}
 
@@ -177,8 +195,14 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("drive_finish is on, and finish merges through the host: %w", hostErr)
 	}
 
-	return drive(ctx, cmd.Writer, &driveInput{
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getwd: %w", err)
+	}
+
+	in := &driveInput{
 		main:     main,
+		dir:      cwd,
 		root:     t.sharedRoot(),
 		driver:   drv,
 		tracker:  t.tracker(),
@@ -220,8 +244,22 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		stateDir: state.Dir(),
 		ttl:      state.TTL(),
 		now:      time.Now,
-		sleep:    sleepCtx,
-	})
+	}
+	in.sleep = in.wake
+
+	// the daemon drains a drive before an upgrade: it stops at its next tick
+	drain := make(chan os.Signal, 1)
+	signal.Notify(drain, drainSignal)
+
+	defer signal.Stop(drain)
+
+	go func() {
+		for range drain {
+			in.draining.Store(true)
+		}
+	}()
+
+	return drive(ctx, cmd.Writer, in)
 }
 
 // driveArgs is the command line, parsed by hand so `--` survives.
@@ -234,6 +272,7 @@ type driveArgs struct {
 	answers []string // each --answer as typed: `GH-1=text` for one task, or bare text
 	every   time.Duration
 	resume  int  // --resume: the record to pick up
+	fore    bool // --foreground: run the loop in this process, not the daemon
 	list    bool // `drive list`
 	all     bool // `drive list --all`
 	cancel  int  // `drive cancel <n>`
@@ -266,12 +305,13 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		name, value, inline := strings.Cut(tok, "=")
 		if name == "--model" || name == "--answer" || name == "--every" || name == "--flow" || name == "--resume" {
 			if !inline {
-				if i+1 >= len(args) {
+				rest := args[i+1:]
+				if len(rest) == 0 {
 					return driveArgs{}, fmt.Errorf("%s needs a value", name)
 				}
 
+				value = rest[0]
 				i++
-				value = args[i]
 			}
 
 			if err := a.set(name, value); err != nil {
@@ -286,6 +326,8 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		switch {
 		case tok == "":
 			continue
+		case tok == "--foreground":
+			a.fore = true
 		case tok == "--local":
 			if a.flow != "" && a.flow != "local" {
 				return driveArgs{}, fmt.Errorf("--local and --flow %s name two flows", a.flow)
@@ -305,7 +347,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
 			return driveArgs{}, fmt.Errorf(
-				"unknown flag %s: drive takes --flow, --local, --model, --answer, --every and --resume",
+				"unknown flag %s: drive takes --flow, --local, --model, --answer, --every, --resume and --foreground",
 				tok,
 			)
 		default:
@@ -460,8 +502,11 @@ type driveInput struct {
 	rec    *drives.Record           // this drive's record; nil with no root
 	own    *drives.Lease            // the drive's own lease, held while it runs
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
-	runs   []*driveRun
-	out    io.Writer
+
+	dir      string      // where the drive was typed, kept in the record for a daemon's resume
+	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
+	runs     []*driveRun
+	out      io.Writer
 }
 
 // A driveTask is one task of the list, as the validation pass found it.
@@ -623,6 +668,12 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	for !stopping(runs) {
 		if err := in.sleep(ctx, in.args.every); err != nil {
 			return err
+		}
+
+		if in.draining.Load() {
+			fmt.Fprintf(w, "drive %d drained for an upgrade; the new daemon resumes it\n", in.number())
+
+			return cli.Exit("", exitDrained)
 		}
 
 		if in.cancelled() {
@@ -1768,6 +1819,18 @@ func (in *driveInput) poll(
 		}
 
 		return nil
+	}
+
+	// a prompt mark proves a turn the looks missed: one that began and ended
+	// between two of them
+	if !r.begun && !recent {
+		if p, ok := state.LastPrompt(in.stateDir, r.o.path); ok && !p.At.Before(since) {
+			if now.Sub(p.At) < promptSettle {
+				return nil
+			}
+
+			r.begun = true
+		}
 	}
 
 	if !r.begun && !recent {

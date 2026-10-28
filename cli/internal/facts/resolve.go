@@ -371,6 +371,16 @@ func (e *Effective) resolveHosting(
 	e.settle("stale_after", fmSource("stale_after", fm.StaleAfter), source{},
 		Fact{Key: "stale_after", Value: "off", Origin: OriginDefault})
 	e.StaleAfter = fm.StaleAfter
+
+	if len(fm.DriveEnv) > 0 {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "drive_env",
+			Value:  strings.Join(fm.DriveEnv, ", "),
+			Origin: "declared (" + fm.origin["drive_env"] + ", frontmatter)",
+		})
+	}
+
+	e.DriveEnv = fm.DriveEnv
 }
 
 func (e *Effective) resolveReview(

@@ -497,3 +497,22 @@ func TestDebugLogAndGarbage(t *testing.T) {
 		t.Errorf("hooks.log:\n%s", raw)
 	}
 }
+
+// A prompt leaves a mark naming the checkout it was typed in, and no run:
+// a session f10 does not run gets no state file.
+func TestPromptSubmitMarksThePrompt(t *testing.T) {
+	env := testEnv(t)
+	cwd := t.TempDir()
+
+	raw := []byte(`{"hook_event_name":"UserPromptSubmit","session_id":"s9","cwd":"` + cwd + `","prompt":"hi"}`)
+	Dispatch(context.Background(), raw, env)
+
+	p, ok := state.LastPrompt(env.StateDir, cwd)
+	if !ok || p.Session != "s9" || !p.At.Equal(fixedNow) {
+		t.Fatalf("mark = %+v, %v", p, ok)
+	}
+
+	if _, err := os.Stat(state.Path(env.StateDir, "s9")); !os.IsNotExist(err) {
+		t.Errorf("a prompt created a run file: %v", err)
+	}
+}

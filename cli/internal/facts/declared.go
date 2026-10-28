@@ -40,6 +40,7 @@ type Declared struct {
 	Flows        map[string]Flow   `yaml:"flows,omitempty"`
 	FlowByArea   map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
 	DriveFinish  string            `yaml:"drive_finish,omitempty"`
+	DriveEnv     []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
 	ReportBack   string            `yaml:"report_back,omitempty"`
 	Review       ReviewDecl        `yaml:"review,omitempty"`
 	Standup      StandupDecl       `yaml:"standup,omitempty"`
@@ -195,6 +196,9 @@ var vocab = map[string][]string{
 // nothing against a tracker's created date, and a month has no fixed length.
 var staleAfterRE = regexp.MustCompile(`^([1-9]\d*)([dw])$`)
 
+// envKeyRE is an environment variable name, as drive_env lists them.
+var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // ParseStaleAfter reads a stale_after value, `10d` or `3w`.
 func ParseStaleAfter(value string) (time.Duration, error) {
 	m := staleAfterRE.FindStringSubmatch(value)
@@ -251,6 +255,12 @@ func (d Declared) check() []string {
 	if d.StaleAfter != "" {
 		if _, err := ParseStaleAfter(d.StaleAfter); err != nil {
 			bad = append(bad, "stale_after: "+err.Error())
+		}
+	}
+
+	for _, key := range d.DriveEnv {
+		if !envKeyRE.MatchString(key) {
+			bad = append(bad, fmt.Sprintf("drive_env: %q is not an environment variable name", key))
 		}
 	}
 
@@ -391,6 +401,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
 	set("drive_finish", d.DriveFinish != "", func() { l.DriveFinish = d.DriveFinish })
+	set("drive_env", d.DriveEnv != nil, func() { l.DriveEnv = d.DriveEnv })
 	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
 	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
 	set("pipeline_by_area", d.ByArea != nil, func() { l.ByArea = d.ByArea })

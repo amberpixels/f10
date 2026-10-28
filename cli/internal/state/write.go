@@ -141,6 +141,15 @@ func Clear(dir, session string) {
 	_ = os.Remove(Path(dir, session))
 }
 
+// RootOf is the checkout root a cwd is in; outside git, the cwd itself.
+func RootOf(cwd string) string {
+	if top := gitx.Out(context.Background(), cwd, "rev-parse", "--show-toplevel"); top != "" {
+		return top
+	}
+
+	return cwd
+}
+
 // pruneAge is far past the TTL, so prune only reclaims files that already
 // render nothing. Sessions end without notice, so every file outlives its run.
 const pruneAge = 7 * 24 * time.Hour
@@ -156,9 +165,10 @@ func Prune(dir string, now time.Time) {
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() ||
-			!slices.ContainsFunc([]string{fileExt, ".conventions", ".started", ".wait"}, func(ext string) bool {
-				return strings.HasSuffix(name, ext)
-			}) {
+			!slices.ContainsFunc(
+				[]string{fileExt, ".conventions", ".started", ".wait", promptExt},
+				func(ext string) bool { return strings.HasSuffix(name, ext) },
+			) {
 			continue
 		}
 
@@ -455,10 +465,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	// the checkout root, so a terminal with no session id can still find its
 	// runs; outside git the cwd is the root
 	if cwd != "" {
-		r.Root = cwd
-		if top := gitx.Out(context.Background(), cwd, "rev-parse", "--show-toplevel"); top != "" {
-			r.Root = top
-		}
+		r.Root = RootOf(cwd)
 	}
 
 	if chain {

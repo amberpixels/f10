@@ -67,7 +67,8 @@ f10 stats [--since 30d] [<id>]   # active plan and implement minutes per task, w
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
-f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 15s]   # a list through a flow, each task once its base has a commit
+f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
+f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
@@ -411,9 +412,12 @@ A task whose checkout has its branch is read from there first, so only a task wi
 `f10 drive 42 43` runs tasks through a flow from the main session.
 Each task waits for its one base to have a commit, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
 The driver is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
+The driver runs in the per-user [daemon](#daemon), not in the process that typed the command: that process prints the drive's log as it grows and exits with the drive's exit code, so closing or clearing the session that ran `/f10:drive` leaves the drive running.
+Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it again; rerunning the same command follows the drive already running instead of starting a second one.
+`--foreground` runs the driver in this process, as the daemon itself runs each drive; it is for tests and debugging, and on a platform without unix sockets it is how every drive runs.
 
 **The record.**
-Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every` and `--resume`), the tasks with their `:model`, the flow, the run-wide model, `drive_finish`, the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
+Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the directory it was typed in, the command line (without `--answer`, `--every`, `--resume` and `--foreground`), the tasks with their `:model`, the flow, the run-wide model, `drive_finish`, the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
 Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer` and `--every` beside it.
 An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
 The branch's `f10-drive`, `f10-chain` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
@@ -439,7 +443,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the frontmatter's `drive_finish` is on.
    A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
-   `--flow`, `--local`, `--model`, `--answer`, `--every` and `--resume` go anywhere.
+   `--flow`, `--local`, `--model`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--model` starts every agent on that model, read as start reads it; `<id>:<model>` starts one task's agent on its own, which wins (`42:sonnet 43 --model opus`).
    Only a colon with no slash after it is read this way, so a url keeps its own.
@@ -488,8 +492,9 @@ A cancelled record is never picked up again: the same command line starts a new 
    The chain resumes only on a clean end: the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A conflict the catchup cannot settle is an ask; anything else halts the task.
 6. **Waiting.**
-   Every `--every` (15s by default) it reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
-   A turn has begun once Herdr shows the agent working or the run reports after the prompt; Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
+   It looks once a write lands in the state dir (a step boundary, a turn's end, a prompt taken) or in its record (a cancel), checked every second, and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
+   A turn has begun once Herdr shows the agent working, the run reports after the prompt, or the agent's session left a prompt mark after it: the `UserPromptSubmit` hook writes `<session>.prompted` beside the run file, naming the checkout and the time, so a turn that began and ended between two looks still counts as taken once the mark is five seconds old.
+   Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
    No sign within two minutes halts the task, and so does a workspace that still shows no agent status by then.
    Once the agent is idle again, the run says how the turn ended:
    - **blocked with an ask** - the question is printed with its options.
@@ -508,6 +513,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
    Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
+   Exit 6 is a drive stopped for a daemon upgrade; only the daemon and the command following it see it.
 
 Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
@@ -518,6 +524,21 @@ A task halted for another reason stays halted until its run changes: settle it i
 `/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, runs the `answer with:` line (`f10 drive --resume <n> --answer …`) with the answers, and prints the final report.
 
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
+
+## Daemon
+
+`f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it.
+Nothing registers it as a service: `f10 drive` starts it when none listens, and it exits after ten minutes with no drive running and no call.
+
+- **Where.** `$XDG_RUNTIME_DIR/f10`, else `~/.f10/run` (`F10_RUN_DIR` overrides), kept `0700`: the socket `daemon.sock`, the daemon's own `daemon.log`, a log per drive run under `logs/`, the locks under `drives/locks/`, and `drained.json` between an upgrade's two daemons.
+- **Starting one.** A client dials the socket; with nothing listening it takes the `start` lock, dials again (another client may have started one), else starts `f10 daemon` detached in its own session and waits up to 5s for it to listen. The daemon holds its own `daemon` lock for life and exits at once if another holds it, so two clients at once get one daemon.
+- **A drive.** The client sends the command line, its directory, its storage root and an allowlisted copy of its environment: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SSH_AUTH_SOCK`, `XDG_*`, `GH_*`, `GITHUB_TOKEN`, `GLAB_*`, `GITLAB_TOKEN`, `HERDR_*`, `F10_*`, `CLAUDE_*`, and the keys the frontmatter's `drive_env` lists. The daemon runs `f10 drive --foreground <command line>` in that directory with exactly that environment, its output to the drive's log, and writes `<log>.exit` with its exit code when it ends. A request for a drive already running in the same storage root (the same command line, or `--resume` of its number) with no `--answer` follows that drive's log instead.
+- **Upgrades.** A client sends its version first. On a mismatch it asks the old daemon to drain: each drive stops at its next tick, after any finish it is in the middle of, ends no task, releases its leases and exits 6; the old daemon writes those drives (storage root, directory, number and environment) to `drained.json`, `0600`, and exits, waiting at most ten minutes before it stops a drive outright. The client then starts its own binary's daemon, which runs each drained drive again as `--resume <n>`, and every client that was following one follows it into the new daemon.
+- **A crash or a reboot** leaves running drives stopped, their records intact: rerunning the drive's command resumes it.
+
+`f10 daemon status` prints the pid, version and start time, then each drive: its project, number, pid, log, and each task's standing from its record.
+`f10 daemon stop` drains the daemon as an upgrade does, the next `f10 drive` resuming the drives; `--now` stops each drive at once instead.
+`f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
 
 ## Review
 

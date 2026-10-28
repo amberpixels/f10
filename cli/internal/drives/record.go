@@ -20,7 +20,8 @@ import (
 type Record struct {
 	Number      int        `yaml:"number"`
 	Created     time.Time  `yaml:"created"`
-	Args        []string   `yaml:"args"` // the command line, --answer and --every dropped
+	Dir         string     `yaml:"dir,omitempty"` // where it was typed, for a daemon's resume
+	Args        []string   `yaml:"args"`          // the command line, --answer, --every and --foreground dropped
 	Tasks       []Task     `yaml:"tasks"`
 	Flow        string     `yaml:"flow,omitempty"`
 	Model       string     `yaml:"model,omitempty"` // the run-wide --model as typed
@@ -76,6 +77,9 @@ func (r *Record) Task(id string) *Task {
 func (r *Record) Same(args []string) bool {
 	return slices.EqualFunc(r.Args, args, strings.EqualFold)
 }
+
+// Path is record n's file under the storage root.
+func Path(root string, n int) string { return recordPath(root, n) }
 
 func recordPath(root string, n int) string {
 	return filepath.Join(root, Dir, strconv.Itoa(n)+".yaml")
