@@ -889,7 +889,8 @@ func (in watchInput) readTargets(ctx context.Context, tasks []watchedTask, store
 	var want []int
 
 	for i, t := range tasks {
-		if t.owner != "" || t.off || t.hostErr != nil || !t.listed || t.agent == agentctl.StatusWorking {
+		if t.owner != "" || t.off || t.hostErr != nil || !t.listed || t.agent == agentctl.StatusWorking ||
+			waitingOnAsk(t.run) {
 			continue
 		}
 
@@ -929,7 +930,7 @@ func (in watchInput) readTargets(ctx context.Context, tasks []watchedTask, store
 // current: it settles a catchup it sent on an earlier pass, or sends one
 // when the request's target moved past the branch.
 func (in watchInput) catchupStep(ctx context.Context, task watchedTask, store map[string]watchReport) *watchReport {
-	if !task.fetched || task.agent == agentctl.StatusWorking {
+	if !task.fetched || task.agent == agentctl.StatusWorking || waitingOnAsk(task.run) {
 		return nil
 	}
 
@@ -1172,6 +1173,10 @@ func (in watchInput) sendCatchup(
 		Key:  watchCatchup + " sent " + target.sha + " " + head,
 	}
 }
+
+// waitingOnAsk reports a run stopped on a question for a person: its agent
+// is idle, but the next prompt it gets should be the answer, not a catchup.
+func waitingOnAsk(run *state.Run) bool { return run != nil && run.Ask != "" }
 
 // worktreeBusy reads again, under the lease, what the pass read before it:
 // an agent that started working, or a tree no longer clean, keeps the

@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // undrivenTask is an undriven task with an open PR on main, its agent idle.
@@ -74,6 +75,9 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		"behind, idle, clean": {key: true, prompt: true, kind: watchCatchup},
 		"agent working":       {key: true, task: func(w *watchedTask) { w.agent = agentctl.StatusWorking }},
 		"no listing":          {key: true, task: func(w *watchedTask) { w.listed = false; w.agent = "" }},
+		"waiting on an ask": {key: true, task: func(w *watchedTask) {
+			w.run = &state.Run{Ship: "blocked", Leaf: "judge", Ask: "1. Go on? [yes | no]", Updated: watchNow}
+		}, kind: watchStopped},
 		"tree dirty": {key: true, script: func(fx *janitorFixture) {
 			fx.f.script("git status --porcelain", " M a.go")
 		}},
@@ -173,7 +177,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 				t.Errorf("a record was stored: %+v", store["GH-1"].Catchup)
 			}
 
-			if !tc.key || tc.task != nil && (task.off || task.owner != "" || !task.listed) {
+			if !tc.key || tc.task != nil && (task.off || task.owner != "" || !task.listed || waitingOnAsk(task.run)) {
 				if fx.f.called("git fetch origin") {
 					t.Error("origin was fetched")
 				}
