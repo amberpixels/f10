@@ -44,6 +44,7 @@ The checks (`cli/cmd/f10eval/checks.go`):
 | check | passes when |
 |---|---|
 | `plan` | `.f10/plans/<task>.md` has a `Roles:` line, a stage, `## Consequences` and `## Gaps` |
+| `intent` | `.f10/lore/<task>/` holds an `intent` entry, the one plan writes |
 | `verify` | every `verify` command exits 0 on the result |
 | `accept` | every `accept` command prints its `want` (verify alone passes on the untouched fixture) |
 | `commit` | the repo has a commit past the fixture's initial one |
