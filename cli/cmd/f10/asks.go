@@ -348,7 +348,12 @@ func (d deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.
 		return fmt.Errorf("sending the answer to %s's agent: %w; type it in its pane: %s", a.Task, err, a.Answer)
 	}
 
-	if err := asks.Update(dir, a.Key(), func(x *asks.Ask) { x.DeliveredAt = time.Now() }); err != nil {
+	// no drive takes an answer sent this way: it is done once sent
+	if err := asks.Update(
+		dir,
+		a.Key(),
+		func(x *asks.Ask) { x.DeliveredAt, x.TakenAt = time.Now(), time.Now() },
+	); err != nil {
 		fmt.Fprintf(w, "  recording the answer sent: %v\n", err)
 	}
 
@@ -591,7 +596,8 @@ var askNotifier = notifyAsk
 // asksConfig is ~/.f10/asks.md's frontmatter.
 type asksConfig struct {
 	// Notify runs per new ask through sh, {task}, {question} and {url}
-	// filled shell-quoted; "off" runs nothing, empty the desktop default
+	// standing for shell variables; "off" runs nothing, empty the desktop
+	// default
 	Notify string `yaml:"notify"`
 }
 
@@ -602,7 +608,7 @@ func notifyAsk(ctx context.Context, a asks.Ask) error {
 		return err
 	}
 
-	argv := notifyArgv(cfg.Notify, a, runtime.GOOS, exec.LookPath)
+	argv, env := notifyArgv(cfg.Notify, a, runtime.GOOS, exec.LookPath)
 	if len(argv) == 0 {
 		return nil
 	}
@@ -611,7 +617,10 @@ func notifyAsk(ctx context.Context, a asks.Ask) error {
 	defer cancel()
 
 	//nolint:gosec // the user's own notify command, from their own settings
-	out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Env = append(os.Environ(), env...)
+
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %w: %s", argv[0], err, strings.TrimSpace(string(out)))
 	}
@@ -619,9 +628,12 @@ func notifyAsk(ctx context.Context, a asks.Ask) error {
 	return nil
 }
 
-// notifyArgv is the command to run for a: the configured one through sh,
-// else osascript on macOS or notify-send where it is installed.
-func notifyArgv(notify string, a asks.Ask, goos string, look func(string) (string, error)) []string {
+// notifyArgv is the command to run for a, and the environment it adds:
+// the configured one through sh, else osascript on macOS or notify-send
+// where it is installed. A placeholder becomes a shell variable, never the
+// agent's text itself, so a question holding `$(...)` or a backtick is
+// printed, not run, however the template quotes it.
+func notifyArgv(notify string, a asks.Ask, goos string, look func(string) (string, error)) ([]string, []string) {
 	question := a.Text
 	if len(a.Questions) > 0 {
 		question = a.Questions[0].Text
@@ -629,16 +641,17 @@ func notifyArgv(notify string, a asks.Ask, goos string, look func(string) (strin
 
 	switch strings.TrimSpace(notify) {
 	case "off":
-		return nil
+		return nil, nil
 	case "":
 	default:
 		cmd := strings.NewReplacer(
-			"{task}", shellQuote(a.Task),
-			"{question}", shellQuote(question),
-			"{url}", shellQuote(a.URL),
+			"{task}", "${F10_ASK_TASK}",
+			"{question}", "${F10_ASK_QUESTION}",
+			"{url}", "${F10_ASK_URL}",
 		).Replace(notify)
 
-		return []string{"sh", "-c", cmd}
+		return []string{"sh", "-c", cmd},
+			[]string{"F10_ASK_TASK=" + a.Task, "F10_ASK_QUESTION=" + question, "F10_ASK_URL=" + a.URL}
 	}
 
 	title := "f10 · " + a.Task + " asks"
@@ -649,17 +662,15 @@ func notifyArgv(notify string, a asks.Ask, goos string, look func(string) (strin
 			"osascript",
 			"-e",
 			"display notification " + appleQuote(question) + " with title " + appleQuote(title),
-		}
+		}, nil
 	case "linux":
 		if _, err := look("notify-send"); err == nil {
-			return []string{"notify-send", title, question}
+			return []string{"notify-send", title, question}, nil
 		}
 	}
 
-	return nil
+	return nil, nil
 }
-
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 func appleQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
@@ -723,6 +734,11 @@ func runAsksHook(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if json.Unmarshal(raw, &p) != nil || p.Session == "" {
+		return nil
+	}
+
+	// every prompt in every session runs this: an empty inbox costs no git
+	if open, _ := asks.Open(asks.Dir()); len(open) == 0 {
 		return nil
 	}
 

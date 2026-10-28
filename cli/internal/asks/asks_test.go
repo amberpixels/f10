@@ -197,3 +197,58 @@ func TestUntakenAndPrune(t *testing.T) {
 		t.Errorf("after prune %d answered, want 1", len(left))
 	}
 }
+
+// A drive-less ask answered where the agent heard it is done: the same
+// question asked again is a new ask, told again. One a drive will take
+// stays the same ask until the drive takes it.
+func TestRaiseAfterAnswer(t *testing.T) {
+	dir, now := t.TempDir(), time.Now()
+
+	a, _, _ := Raise(dir, sample("/r"), now)
+	if _, err := Claim(dir, a.Key(), ByPane, "1. yes", true, now); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, fresh, _ := Raise(dir, sample("/r"), now.Add(time.Minute)); !fresh {
+		t.Error("a re-ask after a heard answer was swallowed")
+	}
+
+	if open, _ := Open(dir); len(open) != 1 {
+		t.Fatalf("open = %+v", open)
+	}
+
+	driven := sample("/d")
+	driven.Drive = 2
+
+	b, _, _ := Raise(dir, driven, now)
+	if _, err := Claim(dir, b.Key(), ByPane, "1. yes", true, now); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, fresh, _ := Raise(dir, driven, now.Add(time.Minute)); fresh {
+		t.Error("a drive's answered ask was raised again before the drive took it")
+	}
+}
+
+// A raise merging into an open ask while claims race never reopens an
+// answered one.
+func TestRaiseMergeNeverReopens(t *testing.T) {
+	for range 20 {
+		dir, now := t.TempDir(), time.Now()
+
+		a, _, _ := Raise(dir, sample("/r"), now)
+		withDrive := sample("/r")
+		withDrive.Drive = 5
+
+		var wg sync.WaitGroup
+
+		wg.Go(func() { _, _, _ = Raise(dir, withDrive, now) })
+		wg.Go(func() { _, _ = Claim(dir, a.Key(), ByAsks, "1. no", false, now) })
+		wg.Wait()
+
+		_, isOpen, err := Get(dir, a.Key())
+		if err != nil || isOpen {
+			t.Fatalf("after a claim the ask reads open %v, %v", isOpen, err)
+		}
+	}
+}

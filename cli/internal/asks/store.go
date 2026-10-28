@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -87,26 +88,65 @@ func openPath(dir, key string) string { return filepath.Join(dir, key+ext) }
 
 func answeredPath(dir, key string) string { return filepath.Join(dir, answeredDir, key+ext) }
 
-// Raise records a, open, and reports whether it is new. An open ask, or an
-// answered one no drive has taken, with the same text is the same ask: it
-// keeps its time and answer, takes whatever a knows that it did not (the
-// drive, the url), and is not new, so the agent's ask and its drive's
-// report of it tell the user once.
+// Raise records a, open, and reports whether it is new. An open ask with
+// the same text is the same ask, and so is an answered one still on its
+// way: no drive has taken it, and it either awaits delivery or belongs to a
+// drive that will take it. The same ask keeps its time and answer, takes
+// whatever a knows that it did not (the drive, the url), and is not new, so
+// the agent's ask and its drive's report of it tell the user once. An
+// answer the agent already heard, with no drive to take it, is done: the
+// same question asked again is a new ask.
 func Raise(dir string, a Ask, now time.Time) (Ask, bool, error) {
 	a.Text = strings.TrimSpace(a.Text)
 	a.Questions = Parse(a.Text)
 	key := a.Key()
 
-	for _, path := range []string{answeredPath(dir, key), openPath(dir, key)} {
-		prev, err := read(path)
-		if err != nil || prev.Text != a.Text || !prev.TakenAt.IsZero() {
+	for range holdTries {
+		if prev, err := read(answeredPath(dir, key)); err == nil && prev.Text == a.Text && prev.pending() {
+			if merge(prev, a) {
+				if err := write(answeredPath(dir, key), prev); err != nil {
+					return Ask{}, false, err
+				}
+			}
+
+			return *prev, false, nil
+		}
+
+		prev, err := read(openPath(dir, key))
+		if errors.Is(err, fs.ErrNotExist) && heldElsewhere(dir, key) {
+			// a claim or a raise holds it: wait for it to answer or put it back
+			time.Sleep(holdWait)
+
 			continue
 		}
 
-		if merge(prev, a) {
-			if err := write(path, prev); err != nil {
-				return Ask{}, false, err
-			}
+		if err != nil || prev.Text != a.Text {
+			break
+		}
+
+		if !merge(prev, a) {
+			return *prev, false, nil
+		}
+
+		// rewritten only while held, so a claim landing meanwhile is
+		// never undone by the write
+		held, err := hold(dir, key)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+
+		if err != nil {
+			return Ask{}, false, err
+		}
+
+		if cur, err := read(held); err == nil {
+			merge(cur, a)
+			prev = cur
+			_ = write(held, cur)
+		}
+
+		if err := os.Rename(held, openPath(dir, key)); err != nil {
+			return Ask{}, false, err
 		}
 
 		return *prev, false, nil
@@ -118,6 +158,12 @@ func Raise(dir string, a Ask, now time.Time) (Ask, bool, error) {
 	}
 
 	return a, true, nil
+}
+
+// pending reports an answer still on its way to acting: no drive took it,
+// and either nobody delivered it or a drive will take it.
+func (a *Ask) pending() bool {
+	return a.TakenAt.IsZero() && (a.DeliveredAt.IsZero() || a.Drive > 0)
 }
 
 // merge fills prev's empty fields from a, reporting a change.
@@ -140,22 +186,66 @@ func merge(prev *Ask, a Ask) bool {
 	return changed
 }
 
-// Claim answers the open ask key: the first claim wins, through a rename
-// only one caller can make; a later one gets ClosedError naming the winner.
-// delivered says the answer already reached the agent.
-func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, error) {
+const (
+	holdTries = 20
+	holdWait  = 50 * time.Millisecond
+)
+
+var holds atomic.Int64
+
+// hold takes the open ask key by renaming it into claims/: only one caller
+// can, and the ask reads as held, not gone, until it is put back or
+// answered.
+func hold(dir, key string) (string, error) {
 	claims := filepath.Join(dir, claimDir)
 	if err := os.MkdirAll(claims, 0o700); err != nil {
-		return Ask{}, err
+		return "", err
 	}
 
-	held := filepath.Join(claims, key+"."+strconv.Itoa(os.Getpid()))
+	held := filepath.Join(claims, key+"."+strconv.Itoa(os.Getpid())+"-"+strconv.FormatInt(holds.Add(1), 10))
 	if err := os.Rename(openPath(dir, key), held); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return Ask{}, closed(dir, key)
+		return "", err
+	}
+
+	return held, nil
+}
+
+// heldElsewhere reports the ask key held by a claim or a raise.
+func heldElsewhere(dir, key string) bool {
+	held, _ := filepath.Glob(filepath.Join(dir, claimDir, key+".*"))
+
+	return len(held) > 0
+}
+
+// Claim answers the open ask key: the first claim wins, through a rename
+// only one caller can make; a later one gets ClosedError naming the winner.
+// delivered says the answer already reached the agent; one delivered with
+// no drive to take it is done, and so marked taken.
+func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, error) {
+	var held string
+
+	for i := 0; ; i++ {
+		h, err := hold(dir, key)
+		if err == nil {
+			held = h
+
+			break
 		}
 
-		return Ask{}, err
+		if !errors.Is(err, fs.ErrNotExist) {
+			return Ask{}, err
+		}
+
+		// answered: name who did; held by a raise or a claim: wait for it
+		if a, err := read(answeredPath(dir, key)); err == nil {
+			return Ask{}, ClosedError{By: a.By, At: a.AnsweredAt}
+		}
+
+		if !heldElsewhere(dir, key) || i >= holdTries {
+			return Ask{}, ClosedError{}
+		}
+
+		time.Sleep(holdWait)
 	}
 
 	a, err := read(held)
@@ -169,6 +259,9 @@ func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, err
 	a.Answer, a.By, a.AnsweredAt = answer, by, now
 	if delivered {
 		a.DeliveredAt = now
+		if a.Drive == 0 {
+			a.TakenAt = now
+		}
 	}
 
 	if err := write(answeredPath(dir, key), a); err != nil {
@@ -180,24 +273,6 @@ func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, err
 	_ = os.Remove(held)
 
 	return *a, nil
-}
-
-// closed names who answered key. A winner still writing its answer holds a
-// claim file, so a loser waits for it briefly rather than naming nobody.
-func closed(dir, key string) error {
-	for range 20 {
-		if a, err := read(answeredPath(dir, key)); err == nil {
-			return ClosedError{By: a.By, At: a.AnsweredAt}
-		}
-
-		if held, _ := filepath.Glob(filepath.Join(dir, claimDir, key+".*")); len(held) == 0 {
-			break
-		}
-
-		time.Sleep(50 * time.Millisecond)
-	}
-
-	return ClosedError{}
 }
 
 // Update rewrites the answered ask key through fn.
