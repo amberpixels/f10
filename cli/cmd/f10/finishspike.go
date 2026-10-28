@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -26,36 +27,66 @@ func taskSpikesDir(checkout, plansDir string) string {
 }
 
 // taskSpike is the task's spike report, "" for none: in the shared spikes
-// dir, unless only a worktree keeping its own .f10 holds it.
+// dir, unless only a worktree keeping its own .f10 holds it. A plan that is
+// not a spike's wins over a report, so a report left from an earlier spike
+// under the same id never closes a task planned again as something else.
 func taskSpike(checkout, plansDir, id string) string {
 	for _, dir := range []string{taskSpikesDir(checkout, plansDir), filepath.Join(checkout, ".f10", "spikes")} {
-		if p := filepath.Join(dir, id+".md"); exists(p) {
-			return p
+		p := filepath.Join(dir, id+".md")
+		if !exists(p) {
+			continue
 		}
+
+		if plan := taskPlan(checkout, plansDir, id); exists(plan) && !spikePlan(plan) {
+			return ""
+		}
+
+		return p
 	}
 
 	return ""
 }
 
-// archiveSpike moves the spike report into the plans archive beside the
-// plan, as <id>.spike.md, which also counts the task finished for a spike
-// planned inline with no plan file.
-func archiveSpike(report, main, plansDir, id string) (string, error) {
+// spikePlan reports whether the plan's head carries a `Kind: spike` line.
+func spikePlan(path string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+
+	lines := strings.Split(string(b), "\n")
+	for _, l := range lines[:min(len(lines), 20)] {
+		if strings.EqualFold(strings.Trim(strings.TrimSpace(l), "*_"), "Kind: spike") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// spikeArchiveName is where the spike report goes in the plans archive,
+// beside the plan: <id>.spike.md, which also counts the task finished for a
+// spike planned inline with no plan file.
+func spikeArchiveName(main, plansDir, id string) (string, error) {
 	dst := filepath.Join(main, ".f10", "plans", "archive")
 	if plansDir != "" {
 		dst = filepath.Join(plansDir, "archive")
 	}
 
 	if err := os.MkdirAll(dst, 0o750); err != nil {
-		return "", fmt.Errorf("archiving the spike report at %s: %w", report, err)
+		return "", fmt.Errorf("archiving the spike report: %w", err)
 	}
 
-	target := freeArchiveName(dst, id+".spike")
+	return freeArchiveName(dst, id+".spike"), nil
+}
+
+// archiveSpike moves the report to target.
+func archiveSpike(report, target string) error {
 	if err := os.Rename(report, target); err != nil {
-		return "", fmt.Errorf("archiving the spike report at %s: %w", report, err)
+		return fmt.Errorf("archiving the spike report at %s: %w", report, err)
 	}
 
-	return target, nil
+	return nil
 }
 
 // spikeNotes are the report's lines for a spike closed without a merge:
@@ -99,7 +130,7 @@ func trimStatus(lines []string) []string {
 func keptName(ctx context.Context, main, branch string, ids []string) string {
 	slug := branch
 	for _, id := range ids {
-		slug = strings.ReplaceAll(slug, id, "")
+		slug = idPattern(id).ReplaceAllString(slug, "")
 	}
 
 	slug = strings.NewReplacer("/-", "/", "-/", "/", "+", "", "//", "/").Replace(slug)
@@ -115,6 +146,17 @@ func keptName(ctx context.Context, main, branch string, ids []string) string {
 	}
 
 	return name
+}
+
+// idPattern matches id as branch lookups do: any case, the dash before
+// the number optional.
+func idPattern(id string) *regexp.Regexp {
+	prefix, num, ok := strings.Cut(id, "-")
+	if !ok {
+		return regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id))
+	}
+
+	return regexp.MustCompile(`(?i)` + regexp.QuoteMeta(prefix) + `-?` + regexp.QuoteMeta(num) + `\b`)
 }
 
 // commitExperiment commits everything in the worktree onto the branch,

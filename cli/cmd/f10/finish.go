@@ -439,13 +439,36 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
+	// a worktree's own report leaves before the worktree; a shared one after
+	// the removal, so a rerun after a failed one still finds the spike
+	var spikeDst string
+
+	early := spike != "" && !onMain && inside(spike, path)
+
 	if spike != "" {
-		report, err := archiveSpike(spike, in.main, in.plansDir, in.task.ID)
-		if err != nil {
+		if spikeDst, err = spikeArchiveName(in.main, in.plansDir, in.task.ID); err != nil {
 			return err
 		}
 
-		rows = append(rows, fact{label: "spike", value: report})
+		if early {
+			if err := archiveSpike(spike, spikeDst); err != nil {
+				return err
+			}
+		}
+
+		rows = append(rows, fact{label: "spike", value: spikeDst})
+	}
+
+	archiveLate := func() error {
+		if spike == "" || early {
+			return nil
+		}
+
+		if err := archiveSpike(spike, spikeDst); err != nil {
+			return fmt.Errorf("%s, but %w", ended, err)
+		}
+
+		return nil
 	}
 
 	switch {
@@ -474,12 +497,20 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			return err
 		}
 
+		if err := archiveLate(); err != nil {
+			return err
+		}
+
 		in.sweepNow(ctx)
 
 		return nil
 	}
 
 	if err := removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike); err != nil {
+		return err
+	}
+
+	if err := archiveLate(); err != nil {
 		return err
 	}
 

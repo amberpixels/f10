@@ -266,10 +266,12 @@ The size goes to the ledger once the merge landed; a branch with nothing to meas
 
 **A spike.**
 A task whose spike report (`<storage root>/spikes/<ID>.md`, or a legacy worktree's own `.f10/spikes/<ID>.md`) exists and whose branch has no PR, no copy on origin and no upstream is closed without a merge.
+A plan without a `Kind: spike` line overrides the report: a report left from an earlier spike under the same id never closes a task planned again as something else.
 Its worktree may hold the experiment uncommitted, so the dirty refusal of step 1 does not apply to it; in the main checkout, whose tree may hold anything, it still does: discard the experiment by the paths the report names first.
 Nothing is merged, pulled or measured; dependents are released as in step 6; the plan is archived as in step 7 and the report beside it, as `plans/archive/<ID>.spike.md` (`<ID>.spike.<N>.md` when taken), which counts a spike planned with no plan file as finished too.
+The report moves once the worktree is gone (a legacy worktree's own, before), so a rerun after a failed removal still closes the spike.
 After the report the experiment is discarded (`git reset --hard`, `git clean -fd`, ignored files left), its paths listed in the notes, with a branch commit's recovery command when the branch had commits of its own; then the worktree, branch and workspace go as in step 8.
-`--keep` keeps the experiment instead: it is committed onto the branch (`--no-verify`), the worktree is removed, and the branch moves to `kept/<name>`, its name with the task ids taken out, so no task lookup, the janitor or drive finds it and the task reads as finished.
+`--keep` keeps the experiment instead: in a linked worktree it is committed onto the branch (`--no-verify`) and the worktree is removed; on the main checkout, which is refused dirty, only the branch's own commits are kept. Either way the branch moves to `kept/<name>`, its name with the task ids taken out (in any case, dash or not), so no task lookup, the janitor or drive finds it and the task reads as finished.
 `--keep` on a task with no spike report, or with a PR, is a refusal.
 A spike branch with a PR finishes the normal way, clean tree required, and its report is archived with the plan.
 Nothing closes the task on the tracker: the notes say so.

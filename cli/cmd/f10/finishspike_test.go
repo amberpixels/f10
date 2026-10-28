@@ -1,10 +1,13 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // spike gives the fixture shared storage in main's .f10 with GH-1's plan
@@ -13,7 +16,7 @@ func (fx *finishFixture) spike(t *testing.T) string {
 	t.Helper()
 
 	fx.in.plansDir = filepath.Join(fx.main, ".f10", "plans")
-	writePlan(t, filepath.Join(fx.in.plansDir, "GH-1.md"))
+	writeFile(t, filepath.Join(fx.in.plansDir, "GH-1.md"), "Roles: senior engineer\nKind: spike\n\n# GH-1\n")
 	writePlan(t, filepath.Join(fx.main, ".f10", "spikes", "GH-1.md"))
 	fx.f.script("git status --porcelain", " M cli/a.go\n?? probe.txt")
 	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
@@ -171,6 +174,9 @@ func TestKeptName(t *testing.T) {
 		{"feat/FT-1-slug", []string{"FT-1"}, "kept/feat/slug"},
 		{"GH-1+GH-2/x", []string{"GH-1", "GH-2"}, "kept/x"},
 		{"GH-1", []string{"GH-1"}, "kept/spike"},
+		{"feat/ft-115-slug", []string{"FT-115"}, "kept/feat/slug"},
+		{"FT115/slug", []string{"FT-115"}, "kept/slug"},
+		{"GH-12/x", []string{"GH-1"}, "kept/GH-12/x"},
 	}
 
 	for _, c := range cases {
@@ -198,5 +204,65 @@ func TestFinishedTaskBySpikeReport(t *testing.T) {
 
 	if !finishedTask(taskInfo{}, []string{dir}, "GH-1", false) {
 		t.Error("an archived spike report did not count")
+	}
+}
+
+// A report left under an id whose plan is not a spike's closes nothing:
+// the dirty tree is refused as for any task.
+func TestFinishIgnoresAReportUnderAPlanThatIsNoSpike(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.spike(t)
+	writeFile(t, filepath.Join(fx.in.plansDir, "GH-1.md"), "Roles: senior engineer\n\n# GH-1\n")
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Fatalf("err = %v", err)
+	}
+
+	if fx.f.called("git reset") || fx.f.called("gh ") {
+		t.Errorf("calls = %q", fx.f.calls)
+	}
+}
+
+// A shared report moves only once the worktree is gone: a removal that
+// fails leaves it in spikes/, so a rerun closes the spike again.
+func TestFinishKeepsTheReportWhenTheRemovalFails(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.spike(t)
+	fx.f.script("git reset --hard", "")
+	fx.f.script("git clean -fd", "")
+	fx.f.fail("git worktree remove "+fx.wt, shell.Result{Code: 1, Stderr: "locked"})
+
+	if _, err := fx.run(t); err == nil {
+		t.Fatal("a failed removal finished")
+	}
+
+	if !exists(filepath.Join(fx.main, ".f10", "spikes", "GH-1.md")) {
+		t.Error("the report left spikes/ before the worktree went")
+	}
+}
+
+// A worktree keeping its own .f10 holds the report: it moves to main's
+// archive before the worktree, and with it, goes.
+func TestFinishArchivesALegacyWorktreesSpikeReport(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.f.script("git status --porcelain", "?? probe.txt")
+	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
+	fx.f.script("git reset --hard", "")
+	fx.f.script("git clean -fd", "")
+	fx.plan(t, "GH-1.md", "Kind: spike\n")
+	writeFile(t, filepath.Join(fx.wt, ".f10", "spikes", "GH-1.md"), "answer")
+	fx.f.fail("git worktree remove "+fx.wt, shell.Result{Code: 1, Stderr: "locked"})
+
+	if _, err := fx.run(t); err == nil {
+		t.Fatal("a failed removal finished")
+	}
+
+	got, err := os.ReadFile(filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.spike.md"))
+	if err != nil || string(got) != "answer" {
+		t.Errorf("archived report = %q, %v", got, err)
 	}
 }
