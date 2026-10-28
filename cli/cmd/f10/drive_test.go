@@ -1879,6 +1879,8 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			fx.f.fail("git merge-base --is-ancestor "+target+" refs/heads/GH-1", ancestor)
+			// local main does not hold origin's, so origin/main is the target
+			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
 			fx.f.script(landed, "")
 			fx.f.script(moved, "")
 
@@ -1895,7 +1897,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			fx.f.script(catchup, "{}")
-			fx.f.script("git merge-tree --write-tree --name-only --no-messages "+target+" HEAD", "tree")
+			fx.f.script("git merge-tree --write-tree --no-messages "+target+" HEAD", "tree")
 			fx.f.script("git rev-parse -q --verify HEAD", "head0", "head1")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")

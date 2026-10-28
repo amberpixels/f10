@@ -1098,8 +1098,8 @@ func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRu
 
 // prTarget is what a task's pull request targets and the mark that sends
 // a catchup for it, read as the catchup step's point 2 reads the base: the
-// branch f10-after-branch records, here or on origin, else origin's
-// default branch. sha is "" for a base found nowhere.
+// branch f10-after-branch records, here or on origin, else the default
+// branch as catchupTarget resolves it. sha is "" for a base found nowhere.
 type prTarget struct {
 	sha, name, key, value string
 }
@@ -1122,14 +1122,16 @@ func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (prTarget, erro
 		return prTarget{sha: sha, name: after, key: cfgMoved, value: sha}, err
 	}
 
-	def, err := localDefault(ctx, in.main)
+	// the default branch resolves as the catchup will read it, so the mark
+	// and the catchup never name different commits
+	sha, name, err := in.catchupTarget(ctx, r, cfgLanded)
 	if err != nil {
 		return prTarget{}, err
 	}
 
-	sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
+	def, err := localDefault(ctx, in.main)
 
-	return prTarget{sha: sha, name: "origin/" + def, key: cfgLanded, value: def}, err
+	return prTarget{sha: sha, name: name, key: cfgLanded, value: def}, err
 }
 
 // takeAnswers sorts the --answer values: `ID=text` naming a listed task is
