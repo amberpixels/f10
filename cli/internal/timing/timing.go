@@ -199,6 +199,9 @@ func windows(evs []ledger.Event) []Window {
 // A turn also ends at the first row only a working turn writes: Stop and
 // the next prompt are both async hooks, and a prompt hook that ran before
 // Stop wrote its marker leaves the turn open into the work that followed.
+// Only a claim or a run's start counts: both are written while the turn
+// runs, where an observed row from the last turn's async PostToolUse can
+// land after Stop.
 func waitSpans(evs []ledger.Event) []span {
 	var out []span
 
@@ -212,7 +215,7 @@ func waitSpans(evs []ledger.Event) []span {
 
 		for _, next := range evs[i+1:] {
 			if next.Kind == ledger.WaitEnded || next.Kind == ledger.WaitStarted ||
-				turn && next.Kind != ledger.SessionStopped && next.At.After(e.At) {
+				turn && (next.Source == ledger.Claimed || next.Kind == ledger.RunStarted) && next.At.After(e.At) {
 				s.to = next.At
 
 				break

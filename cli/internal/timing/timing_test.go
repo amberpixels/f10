@@ -26,7 +26,10 @@ func run(minute float64, skill string) ledger.Event {
 }
 
 func claim(minute float64, args ...any) ledger.Event {
-	return ev(minute, ledger.StateSet, "FT-1", ledger.Payload{"args": args})
+	e := ev(minute, ledger.StateSet, "FT-1", ledger.Payload{"args": args})
+	e.Source = ledger.Claimed
+
+	return e
 }
 
 func wait(from, to float64, reason string) []ledger.Event {
@@ -160,6 +163,18 @@ func TestWindows(t *testing.T) {
 				claim(10, "ship", "running", "pr"),
 			),
 			want: []got{{"implement", 8}},
+		},
+		{
+			name: "the last turn's late observed row leaves the turn open",
+			events: join(
+				run(0, "ship"),
+				claim(0, "ship", "running", "implement"),
+				ev(2, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(2.5, ledger.Pushed, "FT-1", nil),
+				ev(9, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				claim(10, "ship", "running", "pr"),
+			),
+			want: []got{{"implement", 3}},
 		},
 		{
 			name: "the Stop backstop ends the step",
