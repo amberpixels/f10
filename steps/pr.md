@@ -25,6 +25,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    In stealth mode, no f10 traces in the branch name, commits, or PR text (`conventions/context.md`).
    Another task named in the PR text is a link with its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
    A **bundle** (riders in `git config --get branch."$(git branch --show-current)".f10-tasks`): the title is the lead's, and the body links every member with its title.
+   A `## Catchup` section lists the choices a driven catchup made on this branch, one line per file (`<path>: kept <side>, <why>`), rendered from the change's lore decision entries whose body opens `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`); no such entry, no section.
    On a host that closes issues on merge it carries one closing keyword per member, each on a line of its own (`Closes #12`): `f10 finish` rewrites a rider's line to keep it open.
    Once it is open, `f10 trace state --step pr` writes the hidden state block into its body (`docs/traces.md`): nothing with `traces: off`, and a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
@@ -34,6 +35,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
      The title keeps its task id.
      Other tasks it names resolve through `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
    - **Owned sections**: a section the overlay names as maintained elsewhere (a screenshots section a script regenerates) is copied verbatim from the old body into its place in the new one; one the old body lacks stays out.
+     `## Catchup` is owned by the **catchup** step the same way, except that where the old body has none it is rendered from lore as point 5 says, so a choice made before the first PR reaches it.
      The old body is read for these sections only.
    - **The state block** (`docs/traces.md`): with plain mechanics, run `f10 trace state --step pr --body-file <file>` on the draft before writing it, and the block and its counts come over from the old body.
      A skill adapter takes no draft: there the block is an owned section, copied verbatim whatever the switch, and `f10 trace state --step pr` runs after the skill's write.

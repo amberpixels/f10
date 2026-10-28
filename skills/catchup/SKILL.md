@@ -13,7 +13,7 @@ Running this skill authorizes the merge commit or rebased commits it produces, n
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
-- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
+- `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs, and the step settles every conflict itself instead of asking (its Driven paragraph).
 - `<steering>`: how to settle the run ("take theirs for the lockfile", "ask me before touching the migration").
   The subject is always the branch checked out here.
 - No argument: catch the branch checked out here up with its base.

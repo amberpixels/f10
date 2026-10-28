@@ -83,9 +83,23 @@ It differs from the run above:
 - **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 
 **Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, when the branch conflicts with the default branch at finish, or when ship's guard marked it): on entry, note the ship status (`f10-state.sh show`).
-The ambiguity question is the run's one ask: `f10-state.sh ask "<the questions>"; f10-state.sh set ship blocked catchup`.
-A failure: `f10-state.sh set ship failed catchup` with a `note`.
-A clean end after either restores the noted status; a clean end that never stopped writes nothing.
+Nobody is at the keyboard, so the run never asks: no `AskUserQuestion`, no `f10-state.sh ask`.
+Every question point 4 would put to the user is decided by the task's intent, read once from the plan file (`<storage root>/plans/<id>.md`, the id from `f10 task current`) and the task body (`f10 task read <id>`):
+
+- **genuine ambiguity**: reconcile where both sides can be, as point 4 says; where they truly clash, keep the side that serves the task, named in the report as `decided by the task's intent`;
+- **modify-versus-delete**: decided the same way, never asked;
+- **generated files**: settle the source and regenerate with the project's command, without asking; a regenerate that fails is a failure as below.
+
+Each choice is written down, one per file, so the reviewer and the change judge see what was chosen:
+
+- a lore `decision` entry, after the commit that carries the choice: `f10 lore add decision --change <id> --chosen "<the side kept, one line>" --rejected "<the other side>: <why it lost>" --anchor <path>:<line>@<HEAD's sha> -m "catchup: <path> - <what conflicted and why this side>"`, the body opening `catchup: <path>` so the pr step can find it; a failing `lore add` is one line in the report, never a failed step;
+- a line under a `## Catchup` heading in the PR body, when the branch has an open PR (`gh pr view --json number,body` / `glab mr view -F json`): `<path>: kept <side>, <why>`, added to the heading's lines, or under a new heading at the end of the body.
+  Write it with `gh pr edit <n> --body-file <file>` / `glab mr update <n> --description "$(cat <file>)"`, the draft in a temp file outside the repo.
+  No PR, no line: lore and the report carry it, and the pr step renders the heading from lore when it opens one.
+
+A conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails) is a failure, never an ask: `f10-state.sh set ship failed catchup` with a `note`.
+A clean end after a failure restores the noted status; a clean end that never stopped writes nothing.
+Run by hand, without `--driven`, point 4 asks exactly as written.
 
 **On failure:** no ref for the base, the operation cannot start, or verify stays red.
 Abort (`git merge --abort` / `git rebase --abort`) only if nothing is settled yet; otherwise keep the resolutions and report which operation is in progress and which files are settled and staged.

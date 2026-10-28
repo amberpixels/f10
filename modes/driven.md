@@ -13,7 +13,7 @@ A step with a **Driven** paragraph (judge, catchup) adds to this file for that s
 ## No interactive question, ever
 
 Never open `AskUserQuestion`, never end a turn on a question in chat.
-Every question the steps call for (**wait or proceed** on a base with no code, a judge's rethink, a resolve `ask`, a conflict catchup cannot settle, a deploy confirmation) goes through run state:
+Every question the steps call for (**wait or proceed** on a base with no code, a judge's rethink, a resolve `ask`, a deploy confirmation) goes through run state:
 
 1. **The whole batch as one ask**: `f10-state.sh ask "<text>"`, one line, numbered questions, options in brackets, the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Base GH-7 has no code yet: [wait | proceed on its plan]`.
 2. **Stop blocked, in the same call**: `; f10-state.sh set <phase> blocked [<leaf>]` (for ship, the flow entry as leaf).
@@ -24,6 +24,7 @@ Every question the steps call for (**wait or proceed** on a base with no code, a
    `f10-state.sh ask` also puts the ask in the user's asks inbox, which counts it on the status line, tells other sessions and notifies the user (`f10 asks`).
 
 A gap never becomes an ask: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`).
+Neither does a conflict: a driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
 Neither does a stale task's verdict (`steps/fetch.md` point 1): the run ends blocked with the verdict file named, and the user decides by sending `anyway` (`f10 drive --answer <id> anyway`, or typed here) or closing the task.
 
 ## The answer
