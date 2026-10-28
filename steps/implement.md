@@ -29,18 +29,17 @@ Context: `project.md` guardrails and Verify.
    Fix what you broke; a spike records red verify in its report instead (point 1).
    **The one skip: a tree that did not move.**
    If *this session* already ran these same commands green and nothing has touched the working tree since, say so and move on.
-3. **Record the decisions** (`docs/lore.md`), with a task id, once verify is green.
+3. **Note the decisions** (`docs/lore.md`), with a task id, once verify is green.
    A decision is a fork the plan's stages left open, where another competent engineer could have gone the other way and the choice shapes code someone will edit.
    The kinds: a library or dependency over another, a data shape or file format, where a check or a responsibility lives, an algorithm or structure with a real tradeoff, a behavior under an edge the plan did not name.
    Not one: naming, formatting, a choice the plan already made (its stage tradeoffs are that record), a change with one sane option.
-   Each: `f10 lore add decision --change <id> --anchor <path:line[-end][#symbol]> --chosen <option> --rejected 'option: reason' -m <why>`, `--rejected` once per option, anchored to the code it shaped.
-   The anchor's commit defaults to HEAD, the base this uncommitted work sits on; `why` links it by ancestry until the commit that follows carries the task trailer.
-   Most small changes record none, and a spike records none: its report holds its reasoning.
-   A failing `lore add` is one line in the hand-off, never a failed step.
+   For each, the hand-off records the option taken, every rejected option with its reason, the why in a sentence, and the code it shaped by file and symbol.
+   The ship skill's **Lore** pass writes them as `decision` entries once the code is committed, so their anchors name lines that cleanup and the commit no longer move; implement writes none itself.
+   Most small changes note none, and a spike notes none: its report holds its reasoning.
 4. **Hand off.**
    Briefly note what changed, then continue with the next ship-pipeline step.
    A bug or refactor names its proof in one line: the test, red before and green after, or the manual check and its result.
    A spike names its report's path and the answer in one line.
-   The decisions take one line: `decisions: none`, or the count and their anchors.
+   The decisions of point 3 follow, one per line, or `decisions: none`.
 
 **On failure:** verify stays red and you cannot fix it (`conventions/failure.md`), except in a spike (point 1).

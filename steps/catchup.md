@@ -51,11 +51,11 @@ No conflict, or nothing to bring in, is a **correct run**.
      Rename-and-modify keeps the rename and re-applies the change; both-added becomes one implementation; modify-versus-delete is decided from context, else asked.
    - **Never leave a marker** (`<<<<<<<`, `=======`, `>>>>>>>`), and never invent code beyond merge glue such as a combined import list.
    - **Genuine ambiguity** (both sides changed the same business logic incompatibly): collect every such file into **one** `AskUserQuestion`, per file what ours and theirs wanted, with options keep ours, keep theirs, a named reconciliation.
-   - A hunk settled by taking one side, or by a named reconciliation, is a **decision** on the branch's task (`docs/lore.md`): `f10 lore add decision --change <the id f10 task current prints> --anchor <path:line[-end]> --chosen <the side or the reconciliation> --rejected '<the other side>: <why it gave way>' -m <the intent both sides had>`.
-     Both sides kept mechanically, a branch with no task, or a clean integration writes none; a failing `lore add` is one line in the report, never a failed step.
    - `git add` each file, confirm no conflict or marker remains (`git grep` over the staged files), then conclude.
      Under a merge, `git commit -m "<subject>" -m "$trailers"` with the trailers `f10 trace trailers --step catchup` printed first (`conventions/context.md` → Commits), never `git merge --continue`, so the merge commit carries them.
      Under a rebase, `git rebase --continue`, repeated for every conflicting commit; replayed commits keep their own messages.
+   - Once concluded, a hunk settled by taking one side, or by a named reconciliation, is a **decision** on the branch's task (`docs/lore.md`), anchored at the commit that now holds it: `f10 lore add decision --change <the id f10 task current prints> --anchor <path:line[-end]> --chosen <the side or the reconciliation> --rejected '<the other side>: <why it gave way>' -m <the intent both sides had>`.
+     Both sides kept mechanically, a branch with no task, or a clean integration writes none; a failing `lore add` is one line in the report, never a failed step.
    - A clean merge takes the same message through `git merge <base> -m "<subject>" -m "$trailers"`.
 
 5. **Verify** with `project.md → Verify` (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands).

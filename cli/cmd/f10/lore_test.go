@@ -98,6 +98,7 @@ func TestLoreVerbs(t *testing.T) {
 		"limit.go:2-3#Allow",
 		"--chosen",
 		"token bucket",
+		// one value per occurrence, the comma kept: split, the tail has no reason
 		"--rejected",
 		"fixed window: edge bursts, twice the limit",
 		"--agent-model",
@@ -345,5 +346,38 @@ func TestLoreStepCommands(t *testing.T) {
 
 	if o := readOutcomes(store, "", "FT-1"); len(o.local) != 1 || o.local[0].Ask != 1 || o.local[0].Fixed != 0 {
 		t.Errorf("a reopened finding reads %+v, want it open", o.local)
+	}
+}
+
+func TestLoreNote(t *testing.T) {
+	store := &lore.Store{Root: t.TempDir()}
+
+	want := "lore: no entries for FT-9: no intent, no decisions, no lessons"
+	if got := loreNote(store, "FT-9"); got != want {
+		t.Errorf("empty: %q, want %q", got, want)
+	}
+
+	add := func(e lore.Entry) {
+		t.Helper()
+
+		e.Change, e.Human, e.Body = "FT-9", "dev@example.com", "why"
+		if _, err := store.Add(t.Context(), e); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	anchor := lore.Anchor{Path: "a.go", Line: 1, Commit: "abcdef1"}
+	add(lore.Entry{Kind: lore.KindDecision, Chosen: "x", Anchors: []lore.Anchor{anchor}})
+	add(lore.Entry{Kind: lore.KindDecision, Chosen: "y", Anchors: []lore.Anchor{anchor}})
+
+	if got, want := loreNote(store, "FT-9"), "lore: no intent, 2 decisions, no lessons"; got != want {
+		t.Errorf("decisions only: %q, want %q", got, want)
+	}
+
+	add(lore.Entry{Kind: lore.KindIntent})
+	add(lore.Entry{Kind: lore.KindLesson, Anchors: []lore.Anchor{anchor}})
+
+	if got, want := loreNote(store, "FT-9"), "lore: intent, 2 decisions, 1 lesson"; got != want {
+		t.Errorf("all kinds: %q, want %q", got, want)
 	}
 }
