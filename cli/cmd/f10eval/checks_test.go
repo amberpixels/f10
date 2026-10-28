@@ -110,3 +110,23 @@ func TestScenariosLoad(t *testing.T) {
 		}
 	}
 }
+
+// accept compares each command's stdout with what the scenario wants, and
+// fails a scenario that names none: verify alone passes on the fixture.
+func TestAcceptCheck(t *testing.T) {
+	dir := canned(t)
+
+	for _, c := range []struct {
+		accept []Accept
+		pass   bool
+	}{
+		{[]Accept{{Run: "echo HELLO, ADA!", Want: "HELLO, ADA!"}}, true},
+		{[]Accept{{Run: "echo Hello, Ada!", Want: "HELLO, ADA!"}}, false},
+		{[]Accept{{Run: "exit 1", Want: ""}}, false},
+		{nil, false},
+	} {
+		if got := checkAccept(t.Context(), dir, Scenario{Accept: c.accept}); got.Pass != c.pass {
+			t.Errorf("accept %+v = %+v, want pass %v", c.accept, got, c.pass)
+		}
+	}
+}

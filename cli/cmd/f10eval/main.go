@@ -27,9 +27,19 @@ type Scenario struct {
 	Task        string   `json:"task"`
 	Prompt      string   `json:"prompt"`
 	Verify      []string `json:"verify"`
+	Accept      []Accept `json:"accept"`
 	Checks      []string `json:"checks"`
 
 	env []string // the run's environment, so a check that runs f10 reads the run's state
+	f10 string   // this checkout's bin/f10, the binary the run itself used
+}
+
+// An Accept is a command run in the repo after the run and the stdout it
+// must print. It lives in scenario.json, outside the fixture, so the run
+// never sees what it is checked against.
+type Accept struct {
+	Run  string `json:"run"`
+	Want string `json:"want"`
 }
 
 // A Report is one scenario's run.
@@ -81,10 +91,18 @@ func run(ctx context.Context, o options) error {
 		return err
 	}
 
+	// the plugin's bin/f10 runs its cached build of this checkout, else the
+	// release: build it, so the report's commit is the code that ran
+	f10 := filepath.Join(root, "bin", "f10")
+	if out, err := exec.CommandContext(ctx, f10, "--shim-rebuild").CombinedOutput(); err != nil {
+		return fmt.Errorf("building this checkout's f10: %w: %s", err, lastLine(string(out)))
+	}
+
 	version, commit := pluginVersion(root), gitOut(ctx, root, "rev-parse", "--short", "HEAD")
 	failed := 0
 
 	for _, s := range scenarios {
+		s.f10 = f10
 		rep := runScenario(ctx, root, s, o)
 		rep.Version, rep.Commit = version, commit
 

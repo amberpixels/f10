@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ type Check struct {
 // fixture's repo after the run.
 var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"plan":     checkPlan,
+	"accept":   checkAccept,
 	"verify":   checkVerify,
 	"commit":   checkCommit,
 	"findings": checkFindings,
@@ -76,6 +78,27 @@ func checkVerify(ctx context.Context, dir string, s Scenario) Check {
 	}
 
 	return result("verify", problems)
+}
+
+// checkAccept: every acceptance command prints what it must. Verify alone
+// passes on an untouched fixture; this is what proves the feature exists.
+func checkAccept(ctx context.Context, dir string, s Scenario) Check {
+	problems := []string{}
+	if len(s.Accept) == 0 {
+		problems = append(problems, "the scenario names no accept command")
+	}
+
+	for _, a := range s.Accept {
+		cmd := exec.CommandContext(ctx, "sh", "-c", a.Run) //nolint:gosec // the scenario's own accept command
+		cmd.Dir = dir
+
+		out, err := cmd.Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != a.Want {
+			problems = append(problems, fmt.Sprintf("%s: got %q (%v), want %q", a.Run, got, err, a.Want))
+		}
+	}
+
+	return result("accept", problems)
 }
 
 // checkCommit: the flow left a commit past the fixture's initial one.
@@ -152,7 +175,8 @@ func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 
 // checkLore: the change's lore entries pass f10's own schema lint.
 func checkLore(ctx context.Context, dir string, s Scenario) Check {
-	cmd := exec.CommandContext(ctx, "f10", "-C", dir, "lore", "validate", s.Task)
+	f10 := cmp.Or(s.f10, "f10")
+	cmd := exec.CommandContext(ctx, f10, "-C", dir, "lore", "validate", s.Task)
 	cmd.Env = s.env
 
 	if out, err := cmd.CombinedOutput(); err != nil {

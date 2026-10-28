@@ -16,6 +16,10 @@ import (
 
 const spoolName = "ledger.spool"
 
+// gatedWait is how long a gated row with no run start in the database is
+// kept for a later replay before it counts as outside any run.
+const gatedWait = 10 * time.Minute
+
 // staleClaim is how old a claimed spool must be before another opener takes
 // it over: its replayer died mid-way.
 const staleClaim = time.Minute
@@ -165,7 +169,11 @@ func (l *Ledger) replayFile(ctx context.Context, claimed string, runs map[string
 		return
 	}
 
-	var left bytes.Buffer
+	var (
+		left bytes.Buffer
+		held []spooled
+		raw  []string
+	)
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -181,8 +189,13 @@ func (l *Ledger) replayFile(ctx context.Context, claimed string, runs map[string
 			continue // a torn line carries nothing recoverable
 		}
 
+		// a commit or a PR outside any f10 run is dropped, but only once it is
+		// old: its run's start may sit behind it in leftovers or in another
+		// process's live claim
 		if left.Len() == 0 && e.Gated && !l.runStarted(ctx, e.Session, runs) {
-			continue // a commit or a PR outside any f10 run
+			held, raw = append(held, e), append(raw, line)
+
+			continue
 		}
 
 		if left.Len() > 0 || l.insert(ctx, e.Event) != nil {
@@ -198,6 +211,16 @@ func (l *Ledger) replayFile(ctx context.Context, claimed string, runs map[string
 	}
 
 	_ = f.Close()
+
+	// a start later in the same file lets the rows held above it in
+	for i, e := range held {
+		switch {
+		case runs[e.Session] && left.Len() == 0 && l.insert(ctx, e.Event) == nil:
+		case runs[e.Session] || time.Since(e.At) < gatedWait:
+			left.WriteString(raw[i])
+			left.WriteByte('\n')
+		}
+	}
 
 	if appendFile(spoolPath(l.path), left.Bytes()) == nil {
 		_ = os.Remove(claimed)

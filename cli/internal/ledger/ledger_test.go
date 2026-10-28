@@ -501,8 +501,48 @@ func TestObservedRowsSpoolAndSyncMovesThemIn(t *testing.T) {
 		t.Errorf("synced %+v", got)
 	}
 
+	// s2's commit waits in the spool for a run start that may still come
+	if raw, _ := os.ReadFile(
+		spoolPath(path),
+	); !strings.Contains(string(raw), "def5678") ||
+		strings.Count(string(raw), "\n") != 1 {
+		t.Errorf("spool after sync:\n%s", raw)
+	}
+}
+
+// A gated row replayed before its run's start, as leftovers appended behind
+// newer rows put it, is kept and lands once the start does; one with no
+// start past the wait is dropped.
+func TestGatedRowWaitsForItsRunStart(t *testing.T) {
+	path := tempPath(t)
+	commit := Event{Kind: Committed, Session: "s1", Source: Observed}
+	stale := Event{Kind: Committed, Session: "s9", Source: Observed, At: time.Now().Add(-2 * gatedWait)}
+
+	events := []Event{commit, stale}
+	fill(path, events)
+	spoolAs(path, events, true)
+
+	if err := Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := list(t, path, Filter{}); len(got) != 0 {
+		t.Fatalf("a commit landed before its run start: %+v", got)
+	}
+
+	Record(Event{Kind: RunStarted, Session: "s1", Source: Observed})
+
+	if err := Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := list(t, path, Filter{})
+	if len(got) != 2 || got[0].Kind != RunStarted && got[1].Kind != RunStarted {
+		t.Errorf("synced %+v, want the run start and its commit", got)
+	}
+
 	if pending(path) {
-		t.Error("spool left after a sync")
+		t.Error("the stale commit outside any run was kept")
 	}
 }
 

@@ -551,7 +551,10 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 // since riders are fixed at start.
 func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
 	if existing != "" {
-		lead, riders := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
+		lead, riders, err := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
+		if err != nil {
+			return ref.Ref{}, err
+		}
 
 		switch {
 		case len(task.Riders()) == 0 && len(riders) > 0 && strings.EqualFold(lead, task.ID):

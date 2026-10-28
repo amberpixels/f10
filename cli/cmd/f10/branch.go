@@ -147,19 +147,31 @@ func riderRefs(root, id string) []string {
 
 // branchBundle is the lead and riders a branch ships: its recorded link,
 // else the ids its name spells, as a branch fetched from origin carries
-// them. A branch that ships no bundle has no riders.
-func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string) {
+// them. A branch that ships no bundle has no riders. A link git cannot
+// read is an error: falling back to the name would read a bundle's branch
+// as its lead alone.
+func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string, error) {
 	section := "branch." + branch + "."
 
-	if riders := strings.Fields(gitx.Out(ctx, dir, "config", "--get", section+cfgRiders)); len(riders) > 0 {
-		return cmp.Or(gitx.Out(ctx, dir, "config", "--get", section+cfgTaskID), ref.Match(prefix, branch)), riders
+	recorded, err := gitx.Config(ctx, dir, section+cfgRiders)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if riders := strings.Fields(recorded); len(riders) > 0 {
+		lead, err := gitx.Config(ctx, dir, section+cfgTaskID)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return cmp.Or(lead, ref.Match(prefix, branch)), riders, nil
 	}
 
 	if members := ref.Members(prefix, branch); members != nil {
-		return members[0], members[1:]
+		return members[0], members[1:], nil
 	}
 
-	return "", nil
+	return "", nil, nil
 }
 
 // branchesFor lists the branches under root that belong to task id,

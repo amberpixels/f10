@@ -110,8 +110,8 @@ func (d *Driver) Run(ctx context.Context, verb string, args ...string) (string, 
 	defer cancel()
 
 	res, err := shell.Capture(ctx, d.Dir, d.Path, append([]string{verb}, args...)...)
-	if err := d.timedOut(ctx, verb); err != nil {
-		return "", err
+	if terr := d.timedOut(ctx, verb, res, err); terr != nil {
+		return "", terr
 	}
 
 	if err != nil {
@@ -134,8 +134,8 @@ func (d *Driver) RunInput(ctx context.Context, input, verb string, args ...strin
 	defer cancel()
 
 	res, err := shell.CaptureInput(ctx, d.Dir, input, d.Path, append([]string{verb}, args...)...)
-	if err := d.timedOut(ctx, verb); err != nil {
-		return "", "", fmt.Errorf("%w; the write may still have reached the tracker", err)
+	if terr := d.timedOut(ctx, verb, res, err); terr != nil {
+		return "", "", fmt.Errorf("%w; the write may still have reached the tracker", terr)
 	}
 
 	if err != nil {
@@ -157,10 +157,11 @@ func (d *Driver) limit() time.Duration {
 	return DefaultTimeout
 }
 
-// timedOut names a verb that hit its limit. Only the verb's own deadline
-// counts: a cancelled parent is the caller's doing, not the driver's.
-func (d *Driver) timedOut(ctx context.Context, verb string) error {
-	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+// timedOut names a verb the deadline killed. A verb that exited 0 answered,
+// even when the deadline passed while a child it left held stdout; a
+// cancelled parent is the caller's doing, not the driver's.
+func (d *Driver) timedOut(ctx context.Context, verb string, res shell.Result, err error) error {
+	if err == nil && res.Code == 0 || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return nil
 	}
 

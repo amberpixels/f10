@@ -232,3 +232,13 @@ func TestCancelledParentIsNotTimeout(t *testing.T) {
 		t.Errorf("Run with a cancelled parent = %v, want a non-timeout error", err)
 	}
 }
+
+// A verb that exited 0 answered, even when its limit passed while a child
+// it left behind still held stdout: a write reported as timed out would be
+// retried into a duplicate.
+func TestAnswerBeforeTheLimitIsNotATimeout(t *testing.T) {
+	out, err := hanging(t).Run(t.Context(), VerbURL, "22")
+	if err != nil || out != "https://example.test/22" {
+		t.Errorf("Run(url) with its limit inside the wait for the child = %q, %v; want the url", out, err)
+	}
+}
