@@ -497,11 +497,12 @@ A cancelled record is never picked up again: the same command line starts a new 
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` in the chain ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
 5. **Catchup when the base or the target moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
-   On each poll where some task's branch is on origin, the driver fetches once and marks each pushed branch whose pull request's target moved past it, so an open PR never sits behind.
+   Before a task's next skill, when its branch is on origin, the driver fetches once and marks the branch if its pull request's target moved past it, so an open PR never sits behind.
    The mark is `f10-landed` with the default branch's name when the PR targets it, `f10-base-moved` with the base's head for a base branch no task in the drive owns.
    A branch already marked, one its target is already in, or one never pushed is left alone, and a fetch that fails skips the poll.
    The catchup follows `catchup:`, or `catchup_stacked:` for a base branch.
    Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against the sha it read after a rebase, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
+   A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
    `finish` marks each branch that depended on the finished task `f10-landed`.
    Before a marked task's next skill, the driver sends it `/f10:catchup --driven`; the driver never interrupts a turn.
    Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.

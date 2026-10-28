@@ -1704,6 +1704,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git fetch origin", "")
 			// origin's copy of the branch before the catchup, then what the push left
 			fx.f.script("git rev-parse -q --verify origin/GH-1", "old", tc.head)
+			// read before and after the push's fetch, then what the push left
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "old", "old", tc.head)
 			fx.f.fail("git merge-tree --write-tree origin/main old", shell.Result{Code: 1})
 			fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
@@ -1721,6 +1722,8 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor old HEAD", shell.Result{Code: 1})
 			fx.f.script("git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1", "")
+			// origin holds the target, so the caught-up branch may be pushed
+			fx.f.script("git merge-base --is-ancestor m1 refs/remotes/origin/main", "")
 			// the record when the catchup goes out: origin/main at m1, ahead of
 			// the local main, HEAD at head0, a.go conflicting one way
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m1", tc.main)
@@ -1813,12 +1816,13 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 }
 
 // A task whose branch is on origin is kept up to date with what its pull
-// request targets: each look fetches and marks the branch once the target
-// moved past it (f10-landed for the default branch, f10-base-moved for a
-// base branch no task in the drive owns), the catchup goes out at the next
-// skill boundary, never mid-turn, and the caught-up branch is pushed before
-// the next skill runs. A branch never pushed, one the target is already in
-// and one already marked are left alone; a fetch that fails skips the look.
+// request targets: at the boundary before each skill the drive fetches once
+// and marks the branch if the target moved past it (f10-landed for the
+// default branch, f10-base-moved for a base branch no task in the drive
+// owns), the catchup goes out there, never mid-turn, and the caught-up branch
+// is pushed before the next skill runs, unless origin does not hold what the
+// catchup brought in. A branch never pushed, one the target is already in
+// and one already marked are left alone; a fetch that fails skips the check.
 func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 	landed := "git config branch.GH-1." + cfgLanded + " main"
 	moved := "git config branch.GH-1." + cfgMoved + " b2"
@@ -1829,21 +1833,26 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 	cases := map[string]struct {
 		pushed   string // origin's copy of the branch, "" for one never pushed
 		after    string // a base branch recorded on the branch, outside the drive
+		unpushed bool   // that base's head is not on origin yet
 		ancestor bool   // the target is in the branch already
 		marked   bool   // the branch is marked already
 		fetch    shell.Result
 		pushFail bool
-		mark     string // the mark the look sets
+		mark     string // the mark the boundary sets
+		fetches  int    // git fetch origin calls: the boundary before ship, once more after a catchup, the push, finish
 		halt     string
 	}{
-		"origin/main moved":      {pushed: "p1", mark: landed},
-		"never pushed":           {},
-		"already an ancestor":    {pushed: "p1", ancestor: true},
-		"already marked":         {pushed: "p1", marked: true},
-		"fetch fails":            {pushed: "p1", fetch: shell.Result{Code: 128, Stderr: "no route to host"}},
-		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved},
+		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 4},
+		"never pushed":           {fetches: 1},
+		"already an ancestor":    {pushed: "p1", ancestor: true, fetches: 2},
+		"already marked":         {pushed: "p1", marked: true, fetches: 4},
+		"fetch fails":            {pushed: "p1", fetch: shell.Result{Code: 128, Stderr: "no route"}, fetches: 2},
+		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved, fetches: 4},
+		"an unlisted base moved, not on origin": {
+			pushed: "p1", after: "GH-9", unpushed: true, mark: moved, fetches: 4,
+		},
 		"push rejected": {
-			pushed: "p1", mark: landed, pushFail: true,
+			pushed: "p1", mark: landed, pushFail: true, fetches: 2,
 			halt: "GH-1 halted at catchup: pushing GH-1, caught up with origin/main: ",
 		},
 	}
@@ -1871,29 +1880,42 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 				target = "b2"
 				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, tc.after)
 				fx.f.script("git rev-parse -q --verify refs/heads/"+tc.after, "b2")
+
+				if !tc.unpushed {
+					fx.f.script("git rev-parse -q --verify refs/remotes/origin/"+tc.after, "b2")
+				}
 			}
 
-			ancestor := shell.Result{Code: 1}
-			if tc.ancestor {
-				ancestor = shell.Result{}
+			// behind at the boundary, caught up once the catchup ran
+			ancestor := []shell.Result{{Code: 1}, {}}
+			if tc.ancestor || tc.marked {
+				ancestor = []shell.Result{{}}
 			}
 
-			fx.f.fail("git merge-base --is-ancestor "+target+" refs/heads/GH-1", ancestor)
+			fx.f.answers["git merge-base --is-ancestor "+target+" refs/heads/GH-1"] = ancestor
 			// local main does not hold origin's, so origin/main is the target
 			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
+			// origin holds the target, unless the base was never pushed
+			fx.f.script("git merge-base --is-ancestor m2 refs/remotes/origin/main", "")
+			onOrigin := shell.Result{}
+			if tc.unpushed {
+				onOrigin = shell.Result{Code: 1}
+			}
+
+			fx.f.fail("git merge-base --is-ancestor b2 refs/remotes/origin/"+tc.after, onOrigin)
 			fx.f.script(landed, "")
 			fx.f.script(moved, "")
 
-			// the mark read by the open, by the look, by the boundary that
+			// the mark read by the boundary's check, then by the boundary as it
 			// sends the catchup (which reads a moved mark once more for its
-			// target), after the catchup, and before finish
+			// target), then after the catchup and before finish
 			switch {
 			case tc.marked:
-				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main", "main", "", "")
+				fx.f.script("git config --get branch.GH-1."+cfgLanded, "main", "main", "")
 			case tc.mark == landed:
-				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "", "main", "", "")
+				fx.f.script("git config --get branch.GH-1."+cfgLanded, "", "main", "")
 			case tc.mark == moved:
-				fx.f.script("git config --get branch.GH-1."+cfgMoved, "", "", "b2", "b2", "", "")
+				fx.f.script("git config --get branch.GH-1."+cfgMoved, "", "b2", "b2", "")
 			}
 
 			fx.f.script(catchup, "{}")
@@ -1918,14 +1940,18 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 				return nil
 			}
 
-			// the open and ship's send, ship's turn (the look that marks), its
-			// end (the boundary that sends the catchup) and the catchup's send,
-			// the catchup's turn and its end
+			// the open, whose boundary marks and sends the catchup; the
+			// catchup's turn and its end, which sends ship; ship's turn and
+			// its end, where finish runs
 			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
 			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
 
 			err := fx.drive(t)
 			out := fx.out.String()
+
+			if n := countCalls(fx.f.calls, "git fetch origin"); n != tc.fetches {
+				t.Errorf("fetched %d times, want %d: %q", n, tc.fetches, fx.f.calls)
+			}
 
 			if tc.halt != "" {
 				if exitCode(err) != exitHalted || !strings.Contains(out, tc.halt) ||
@@ -1951,8 +1977,14 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 				t.Errorf("catchup prompted %d times, want %d: %q", n, want, fx.f.calls)
 			}
 
-			if n, want := countCalls(fx.f.calls, push), map[bool]int{false: 0, true: 1}[caught]; n != want {
-				t.Errorf("pushed %d times, want %d: %q", n, want, fx.f.calls)
+			pushes := map[bool]int{false: 0, true: 1}[caught && !tc.unpushed]
+			if n := countCalls(fx.f.calls, push); n != pushes {
+				t.Errorf("pushed %d times, want %d: %q", n, pushes, fx.f.calls)
+			}
+
+			if tc.unpushed &&
+				!strings.Contains(out, "caught up with its base, not pushed: its base is not on origin yet") {
+				t.Errorf("a base origin lacks was pushed, or the skip went unsaid:\n%s", out)
 			}
 
 			if !caught {
@@ -1960,17 +1992,22 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 					t.Errorf("no catchup although origin/main moved past the branch:\n%s", out)
 				}
 
-				if tc.fetch.Code != 0 && !strings.Contains(out, "skipped this look, fetching origin: ") {
+				if tc.fetch.Code != 0 && !strings.Contains(out, "skipped the target check, fetching origin: ") {
 					t.Errorf("a failed fetch was not reported:\n%s", out)
 				}
 
 				return
 			}
 
-			// the mark is set during ship's turn and acted on at its end
-			order := []string{ship, "git config branch.GH-1." + cfgDrive + " ship", catchup, push, "finish GH-1"}
+			// the mark is set at the boundary before ship and acted on there,
+			// so ship runs on the caught-up branch
+			order := []string{catchup, push, ship, "git config branch.GH-1." + cfgDrive + " ship", "finish GH-1"}
+			if tc.unpushed {
+				order = slices.DeleteFunc(order, func(c string) bool { return c == push })
+			}
+
 			if tc.mark != "" {
-				order = slices.Insert(order, 1, tc.mark)
+				order = slices.Insert(order, 0, tc.mark)
 			}
 
 			fx.assertOrder(t, order, "herdr agent prompt", "git config branch.GH-1."+cfgDrive+" ", landed, moved,

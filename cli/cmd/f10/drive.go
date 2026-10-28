@@ -592,9 +592,11 @@ func (r *driveRun) active() bool { return r.opened && r.end == nil }
 // catchupSent is what the branch looked like when a catchup went out: the
 // sha it was being caught up to, its head, and the conflicts then, each path
 // with the blobs on both sides (conflictWay), "" when none were read. A
-// field left "" compares to nothing. base names the target in prose.
+// field left "" compares to nothing. base names the target in prose, and
+// origin is the remote-tracking ref of the target's branch, what the PR can
+// see, "" when the base is recorded nowhere.
 type catchupSent struct {
-	target, head, way, base string
+	target, head, way, base, origin string
 }
 
 // halts says why a conflict after this catchup halts the task instead of
@@ -792,10 +794,6 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 
 		if err := in.markMoved(ctx, w, runs, wss); err != nil {
-			return err
-		}
-
-		if err := in.markBehind(ctx, w, runs); err != nil {
 			return err
 		}
 
@@ -1005,64 +1003,41 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 	return nil
 }
 
-// markBehind marks each running task whose branch is on origin and whose
-// pull request's target moved past it, so its next boundary sends a catchup
-// and the open PR never sits behind (a listed base still in flight is
-// markMoved's). One fetch per look, only while a pushed branch is in flight;
-// a fetch or read git cannot answer skips the look, and the next reads again.
-func (in *driveInput) markBehind(ctx context.Context, w io.Writer, runs []*driveRun) error {
-	var pushed []*driveRun
+// markBehind marks a task whose branch is on origin and whose pull request's
+// target moved past it, at the boundary before its next skill, so the catchup
+// goes out now and the open PR never sits behind (a listed base still in
+// flight is markMoved's, and finish has readyToMerge). One fetch per boundary,
+// only for a pushed branch; a fetch or read git cannot answer skips the check,
+// and the next boundary reads again.
+func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) error {
+	id, branch := r.task.ref.ID, r.o.branch
 
-	for _, r := range runs {
-		if !r.active() || r.skill == "catchup" || (r.base != nil && !r.base.through()) {
-			continue
-		}
-
-		sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+r.o.branch)
-		if err != nil {
-			fmt.Fprintf(w, "%s: skipped this look, reading origin/%s: %v\n", r.task.ref.ID, r.o.branch, err)
-
-			continue
-		}
-
-		if sha != "" {
-			pushed = append(pushed, r)
-		}
+	if r.base != nil && !r.base.through() {
+		return nil
 	}
 
-	if len(pushed) == 0 {
+	skip := func(what string, err error) error {
+		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", id, what, err)
+
+		return nil
+	}
+
+	pushed, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return skip("reading origin/"+branch, err)
+	}
+
+	if pushed == "" {
 		return nil
 	}
 
 	if _, err := gitx.Exec(ctx, in.main, "fetch", "origin"); err != nil {
-		fmt.Fprintf(w, "skipped this look, fetching origin: %v\n", err)
-
-		return nil
-	}
-
-	for _, r := range pushed {
-		if err := in.markBehindOne(ctx, w, r); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// markBehindOne marks one pushed branch its PR's target moved past, unless
-// it is marked already or the target is in it.
-func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRun) error {
-	id, branch := r.task.ref.ID, r.o.branch
-
-	skip := func(what string, err error) error {
-		fmt.Fprintf(w, "%s: skipped this look, reading %s: %v\n", id, what, err)
-
-		return nil
+		return skip("fetching origin", err)
 	}
 
 	target, err := in.prTarget(ctx, r)
 	if err != nil {
-		return skip("what "+branch+" targets", err)
+		return skip("reading what "+branch+" targets", err)
 	}
 
 	// a base gone from everywhere is nobody's target until finish releases the dependent
@@ -1072,7 +1047,7 @@ func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRu
 
 	key, err := in.mark(ctx, r)
 	if err != nil {
-		return skip("the marks on "+branch, err)
+		return skip("reading the marks on "+branch, err)
 	}
 
 	if key != "" {
@@ -1081,7 +1056,7 @@ func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRu
 
 	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+branch)
 	if err != nil {
-		return skip(branch, err)
+		return skip("reading "+branch, err)
 	}
 
 	if has {
@@ -1089,7 +1064,7 @@ func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRu
 	}
 
 	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+target.key, target.value); err != nil {
-		return fmt.Errorf("%s: marking %s behind %s: %w", id, branch, target.name, err)
+		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
 	}
 
 	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", id, target.name, branch)
@@ -1098,8 +1073,8 @@ func (in *driveInput) markBehindOne(ctx context.Context, w io.Writer, r *driveRu
 }
 
 // prTarget is what a task's pull request targets and the mark that sends
-// a catchup for it, read as the catchup step's point 2 reads the base: the
-// branch f10-after-branch records, here or on origin, else the default
+// a catchup for it: origin's copy of the branch f10-after-branch records,
+// which the stacked PR targets, else its local copy, else the default
 // branch as catchupTarget resolves it. sha is "" for a base found nowhere.
 type prTarget struct {
 	sha, name, key, value string
@@ -1114,7 +1089,7 @@ func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (prTarget, erro
 	if after != "" {
 		sha := ""
 
-		for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
+		for _, ref := range []string{"refs/remotes/origin/" + after, "refs/heads/" + after} {
 			if sha, err = gitx.Ref(ctx, in.main, ref); err != nil || sha != "" {
 				break
 			}
@@ -1697,6 +1672,16 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
+	// finish tries the merge itself and catches up only a conflict, under
+	// the progress rule, so a clean PR merges as it stands
+	if skill != "finish" {
+		if err := in.markBehind(ctx, w, r); err != nil {
+			in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
+
+			return nil
+		}
+	}
+
 	key, err := in.mark(ctx, r)
 	if err == nil && skill == "finish" && key == "" {
 		if res := in.readyToMerge(ctx, w, r); res != nil {
@@ -1751,9 +1736,35 @@ func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string
 		return fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
 	}
 
-	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts), base: base}
+	origin, err := in.targetOrigin(ctx, r, key)
+	if err != nil {
+		return err
+	}
+
+	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts), base: base, origin: origin}
 
 	return nil
+}
+
+// targetOrigin is the remote-tracking ref of the branch a mark's catchup
+// brings in: origin's copy of the recorded base for f10-base-moved, of the
+// default branch for f10-landed. A base recorded nowhere gives "".
+func (in *driveInput) targetOrigin(ctx context.Context, r *driveRun, key string) (string, error) {
+	if key == cfgMoved {
+		after, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+cfgAfterBranch)
+		if err != nil || after == "" {
+			return "", err
+		}
+
+		return "refs/remotes/origin/" + after, nil
+	}
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return "", err
+	}
+
+	return "refs/remotes/origin/" + def, nil
 }
 
 // catchupTarget is the sha the catchup step will bring in for a mark, and
@@ -2036,8 +2047,11 @@ func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun
 
 // pushCatchup pushes a branch origin has once a catchup ended clean, so its
 // pull request carries the integration before the next skill; a branch never
-// pushed is left to ship's pr step or to finish. Origin is fetched first: the
-// lease must be origin's current sha, never a stale tracking ref.
+// pushed is left to ship's pr step or to finish, and so is one whose catchup
+// brought in commits origin does not hold yet (a base read from its local
+// branch), since another task's unpushed work never rides into this PR.
+// Origin is fetched first: the lease must be origin's current sha, never a
+// stale tracking ref.
 func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
 	id, branch := r.task.ref.ID, r.o.branch
 
@@ -2077,6 +2091,20 @@ func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun)
 	base := "its base"
 	if r.lastCatchup != nil {
 		base = r.lastCatchup.base
+	}
+
+	if c := r.lastCatchup; c != nil && c.origin != "" && c.target != "" {
+		seen, err := gitx.IsAncestor(ctx, r.o.path, c.target, c.origin)
+		if err != nil {
+			return halt(err)
+		}
+
+		if !seen {
+			fmt.Fprintf(w, "%s catchup: %s caught up with %s, not pushed: %s is not on origin yet\n",
+				id, branch, base, base)
+
+			return nil
+		}
 	}
 
 	if err := in.pushCaughtUp(ctx, w, r, "catchup", pushed, base); err != nil {
