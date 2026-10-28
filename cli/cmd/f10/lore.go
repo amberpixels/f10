@@ -41,6 +41,9 @@ func loreCommand() *cli.Command {
 				Name:      "add",
 				Usage:     "write one entry and print its id",
 				ArgsUsage: "<intent|decision|finding|verdict|lesson>",
+				// a rejected option's reason is prose, and prose has commas:
+				// repeating the flag is the only way to pass several
+				DisableSliceFlagSeparator: true,
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "change", Usage: "the change `ID` (the task id)", Required: true},
 					&cli.StringSliceFlag{
@@ -149,10 +152,7 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 			return nil, err
 		}
 
-		root = localLoreRoot(t.lay)
-		if t.eff.Lore == "committed" {
-			root = filepath.Join(t.lay.CheckoutRoot, ".lore")
-		}
+		root = loreRootFor(t)
 	}
 
 	return &loreEnv{
@@ -160,6 +160,54 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 		cwd:   cwd,
 		top:   top,
 	}, nil
+}
+
+// loreRootFor is the project's lore root as project.md's lore key picks it:
+// committed beside the code, else the local one every checkout shares.
+func loreRootFor(t *target) string {
+	if t.eff.Lore == "committed" {
+		return filepath.Join(t.lay.CheckoutRoot, ".lore")
+	}
+
+	return localLoreRoot(t.lay)
+}
+
+// loreNote is finish's one line on what the change left in lore: the intent,
+// the decisions and the lessons, each named when missing, so a change that
+// reached finish without a ship run shows it there. "" when lore cannot be
+// read: finish never fails on it.
+func loreNote(store *lore.Store, change string) string {
+	entries, err := store.Effective(change)
+
+	switch {
+	case errors.Is(err, lore.ErrNoRecord):
+		return "lore: no entries for " + change + ": no intent, no decisions, no lessons"
+	case err != nil:
+		return ""
+	}
+
+	count := map[lore.Kind]int{}
+	for _, e := range entries {
+		count[e.Kind]++
+	}
+
+	parts := []string{"no intent"}
+	if count[lore.KindIntent] > 0 {
+		parts[0] = "intent"
+	}
+
+	for _, k := range []struct {
+		kind      lore.Kind
+		one, many string
+	}{{lore.KindDecision, "decision", "decisions"}, {lore.KindLesson, "lesson", "lessons"}} {
+		if n := count[k.kind]; n > 0 {
+			parts = append(parts, strconv.Itoa(n)+" "+pluralWord(n, k.one, k.many))
+		} else {
+			parts = append(parts, "no "+k.many)
+		}
+	}
+
+	return "lore: " + strings.Join(parts, ", ")
 }
 
 // localLoreRoot is the lore root every checkout of the project shares: the

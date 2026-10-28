@@ -24,6 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -240,6 +241,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				progress:  progress,
 				plansDir:  t.sharedPlansDir(),
 				title:     titleLookup(t, task.Number),
+				lore:      func() string { return loreNote(&lore.Store{Root: loreRootFor(t)}, task.ID) },
 				// a driven finish asks no second question, since a resume
 				// carries only the latest answer: a bundle's riders stay
 				// open, the reversible choice, and the report names them

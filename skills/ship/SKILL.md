@@ -53,6 +53,7 @@ The old keys (`pipelines`, `planless`, `drive_chain`) still read, converted to f
 Free-text input also skips capture and fetch, so the run has no task id.
 A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
 Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.
+With a task id, the inline plan also writes the change's intent as the plan step does (`f10 lore add intent --change <id> -m <what and why>`, `docs/lore.md`); a standing intent, or a failing add, is one line in the report, never a failed step.
 The **shipment** is the last delivering entry's (`conventions/context.md` → shipment): its rows are the ones that step declares, a project-defined step's on its overlay's `Shipment:` line; a `judge` or `demo` after it adds rows, never replaces them.
 A `demo` entry with nothing to show skips in one line (the **demo** step), a normal end that adds no rows.
 
@@ -90,6 +91,17 @@ After `pr`, the changes folded into the plan are built by the judge step's own r
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
+**Lore** (`docs/lore.md`), after the flow's last entry and before the report back, when the run has a task id and is not a spike (a spike's knowledge is its report): the change's decisions and lessons, written now because every anchor names HEAD, the pushed commit after the last `pr` or the committed one after `commit`, so cleanup and the commit no longer move its lines.
+A flow ending at `implement` anchors the base commit and the tree's lines, and the report says so.
+**Decisions**: each fork implement's hand-off noted becomes `f10 lore add decision --change <id> --anchor <path:line[-end][#symbol]> --chosen <option> --rejected 'option: reason' -m <why>`, `--rejected` once per option, anchored to the code as it is now committed; the final report says `decisions: none`, or the count.
+**Lessons**: read this run's findings under `<storage root>/reviews/<id>/`, their resolve verdicts and fixes, the judge's verdicts, and what the run itself hit.
+A lesson is knowledge about a file a reader of the code alone would not get: a trap (an ordering, shared state, a silent default), an invariant two places depend on, why the simpler shape fails.
+Not a lesson: a bug this change fixed, a style finding, what a comment at the line already says, a restatement of the intent.
+Most changes leave none, and the final report says so in one line: `lessons: none`, or the count with the paths.
+Run `f10 lore lessons <path>` first for each file: a standing lesson this change proves wrong is superseded inside its own change, `f10 lore add lesson --change <that change> --supersedes <id> --anchor <path:line[-end]> -m <the corrected text>`, or `--retired` with a one-line body saying what retired it.
+A new one is `f10 lore add lesson --change <id> --anchor <path:line[-end][#symbol]> -m <text>`.
+Nothing is asked, driven or not; a failing `lore add` is one line in the report, never a failed step, and never holds the report back.
+
 **Report back**, after the last step (a spike's: implement), when the run has a task id, the frontmatter's `report_back` is not `off`, and the shipment left the machine: a flow whose last delivering entry is `implement` or `commit` promises it does not, and reports back nothing.
 A spike's answer is the exception: it carries no code, so it is posted.
 
@@ -106,4 +118,4 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's or demo's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.
+- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's or demo's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.

@@ -319,3 +319,31 @@ func TestBranchesMergeWithoutConflict(t *testing.T) {
 		t.Errorf("tracked lore files:\n%s", out)
 	}
 }
+
+func TestAddKeepsOneIntent(t *testing.T) {
+	s := testStore(t, t.TempDir(), nil)
+
+	first := s.mustAdd(t, intent("FT-1", "2026-10-20T09:00:00Z"))
+	s.mustAdd(t, intent("FT-2", "2026-10-20T09:00:00Z"))
+
+	_, err := s.Add(t.Context(), intent("FT-1", "2026-10-20T10:00:00Z"))
+	if err == nil || !strings.Contains(err.Error(), first) {
+		t.Fatalf("a second intent: err = %v, want one naming %s", err, first)
+	}
+
+	second := s.mustAdd(t, withSupersedes(intent("FT-1", "2026-10-20T11:00:00Z"), first))
+
+	got, err := s.Effective("FT-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{second}; !slices.Equal(ids(got), want) {
+		t.Errorf("effective = %v, want %v", ids(got), want)
+	}
+
+	if _, err := s.Add(t.Context(), intent("FT-1", "2026-10-20T12:00:00Z")); err == nil ||
+		!strings.Contains(err.Error(), second) {
+		t.Errorf("a third intent: err = %v, want one naming the chain's head %s", err, second)
+	}
+}
