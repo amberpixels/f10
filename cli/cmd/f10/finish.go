@@ -58,24 +58,29 @@ func finishCommand() *cli.Command {
 	}
 }
 
-// finishRef is the task a finish token names. An empty one is the branch's
-// task, with no suffix to split off; the session's is refused, since off a
-// task branch no workspace refusal stands between a bare call and the merge.
-func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, error) {
+// finishRef is the task a finish token names, its suffix, and for an empty
+// token the branch checked out here, which picks it among suffixed siblings.
+// The session's task is refused: off a task branch no workspace refusal
+// stands between a bare call and the merge.
+func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		r, err := t.reference(ctx, "")
-		if err == nil && r.Origin == ref.OriginSession {
-			return ref.Ref{}, "", fmt.Errorf("the branch names no task: name it (f10 finish %s)", r.Label())
+		if err != nil {
+			return ref.Ref{}, "", "", err
 		}
 
-		return r, "", err
+		if r.Origin == ref.OriginSession {
+			return ref.Ref{}, "", "", fmt.Errorf("the branch names no task: name it (f10 finish %s)", r.Label())
+		}
+
+		return r, "", gitx.Out(ctx, t.dir, "rev-parse", "--abbrev-ref", "HEAD"), nil
 	}
 
 	id, suffix := ref.SplitSuffix(token)
 	r, err := t.reference(ctx, id)
 
-	return r, suffix, err
+	return r, suffix, "", err
 }
 
 // exitForeign is finish's exit when the PR is someone else's and no flag
@@ -101,7 +106,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, suffix, err := finishRef(ctx, t, cmd.Args().First())
+	r, suffix, branch, err := finishRef(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
@@ -138,6 +143,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		driver:    t.driver(),
 		task:      r,
 		suffix:    suffix,
+		branch:    branch,
 		host:      h.at(main),
 		method:    t.eff.MergeMethod,
 		traces:    t.eff.Traces,
@@ -181,6 +187,7 @@ type finishInput struct {
 	driver    *driver.Driver // nil without one
 	task      ref.Ref
 	suffix    string
+	branch    string // a bare call's own branch, "" to look it up by task and suffix
 	host      host
 	method    string // the merge method project.md declares, "" for none
 	traces    bool   // traces: on; the squash or merge commit's body ends in the task's trailers
@@ -474,7 +481,14 @@ func appendNote(notes []string, note string) []string {
 // itself for a task shipped from there. A branch checked out nowhere is a
 // refusal, since finish cleans up only those two shapes.
 func finishTarget(ctx context.Context, in finishInput) (string, string, bool, error) {
-	name, path, err := taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
+	name, path, err := in.branch, "", error(nil)
+	if name == "" {
+		name, path, err = taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
+	} else if wts, werr := gitx.Worktrees(ctx, in.main); werr != nil {
+		err = werr
+	} else {
+		path = worktreeOf(wts, name)
+	}
 
 	switch {
 	case err != nil:

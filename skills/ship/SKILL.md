@@ -27,7 +27,7 @@ Deploy has its own confirmation (the **deploy** step).
   Missing: under `stale_after`, fetch judges an old task first and may end the run blocked before any plan or flow entry (`anyway` in the steering skips it); then run the **plan** step when the flow leads with `plan` (with `flow_by_area`, start and drive leave planning to ship); a **planless** flow (below) never runs it, and the fetch brief becomes the inline plan.
   Then the flow.
 - A **free-text description**: the **capture**, **fetch** and **plan** steps, then the flow.
-- **No argument** (an argument that names no task counts as none): a task already in this conversation (a plan just saved, a task fetched), else the id `f10 task current` prints (the branch's task, else this session's).
+- **No argument** (flags or a flow word alone count as none; a description is free text, above): a task already in this conversation (a plan just saved, a task fetched), else the branch's task, the id `f10 task current` prints.
   Say in one line which task you took and where from, then run it as a **task id**, forward mode included, so a saved plan is reused.
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
