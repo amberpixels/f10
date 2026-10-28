@@ -171,6 +171,15 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 		})
 	}
 
+	e.Watch = cmp.Or(fm.Watch, "finish")
+	if fm.Watch != "" {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "watch",
+			Value:  fm.Watch,
+			Origin: "declared (" + fm.origin["watch"] + ", frontmatter)",
+		})
+	}
+
 	// frontmatter only: no prose ever declared it
 	if e.UpkeepPaths = fm.Standup.Upkeep; e.UpkeepPaths != nil {
 		e.Facts = append(e.Facts, Fact{

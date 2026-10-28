@@ -59,6 +59,27 @@ func TestLeaseIsExclusive(t *testing.T) {
 	}
 }
 
+// The watcher's lease names it, so a drive or a finish refused by it says
+// who holds the task.
+func TestWatcherLeaseNamesIt(t *testing.T) {
+	root := t.TempDir()
+
+	l, err := AcquireAs(root, "GH-1", Holder{Watch: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Release()
+
+	h, ok := Probe(root, "GH-1")
+	if !ok || h != (Holder{PID: os.Getpid(), Watch: true}) {
+		t.Errorf("Probe = %+v, %v", h, ok)
+	}
+
+	if got := h.String(); got != "the f10 watcher (pid "+strconv.Itoa(os.Getpid())+")" {
+		t.Errorf("String = %q", got)
+	}
+}
+
 func TestProbeOnNoLockFile(t *testing.T) {
 	if _, ok := Probe(t.TempDir(), "GH-9"); ok {
 		t.Error("a lease never taken reads held")

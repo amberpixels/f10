@@ -2053,3 +2053,34 @@ func TestFinishReportsProgress(t *testing.T) {
 		}
 	})
 }
+
+// The watcher's finish never merges: an open PR is refused before anything
+// moves, and a merged one finishes as any finish would.
+func TestFinishMergedOnly(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.mergedOnly = true
+	fx.openPR()
+
+	if _, err := fx.run(t); !errors.Is(err, errNotMerged) {
+		t.Fatalf("err = %v, want errNotMerged", err)
+	}
+
+	for _, p := range []string{"gh pr merge", "git worktree remove", "herdr workspace close", "git branch -D"} {
+		if fx.f.called(p) {
+			t.Errorf("%q ran for an open PR", p)
+		}
+	}
+
+	fx = newFinishFixture(t)
+	fx.in.mergedOnly = true
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called("git worktree remove") {
+		t.Errorf("a merged PR was not finished: %v", fx.f.calls)
+	}
+}

@@ -15,6 +15,7 @@ A PR link or `#n` picks up that PR: its branch checked out tracking origin's and
 `ABC-1+ABC-2` starts a **bundle**: several tasks on one branch, one worktree, one agent and one PR, keyed on the lead (the first id); any member's id reopens it.
 With `--discuss` or a PR, words after the id are a note: the agent acts on it after its summary, then waits.
 This skill only runs the command and relays its output; it runs no step and never waits on the new agent.
+The per-user f10 daemon then watches the task while no drive owns it: a merged PR, a stalled agent and a stopped run land in its watch log, which `f10 watch` reads (`docs/cli.md` → Watch).
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.

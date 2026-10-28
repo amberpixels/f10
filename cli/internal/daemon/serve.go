@@ -41,14 +41,19 @@ type Server struct {
 	Version string
 	// Child is the command a drive's argv runs as: by default the daemon's
 	// own binary, `drive --foreground <argv>`.
-	Child     func(argv []string) (string, []string)
-	Idle      time.Duration // no drive and no call this long: exit
-	DrainWait time.Duration // how long a drain waits for drives before SIGTERM
-	Tick      time.Duration // how often idleness is checked
-	Log       *log.Logger
+	Child func(argv []string) (string, []string)
+	// Pass is the command one watch pass runs as in a project's main
+	// checkout: by default the daemon's own binary, `watch --pass`.
+	Pass       func(dir string) (string, []string)
+	WatchEvery time.Duration // how often each watched project gets a pass
+	Idle       time.Duration // no drive, no watched project and no call this long: exit
+	DrainWait  time.Duration // how long a drain waits for drives before SIGTERM
+	Tick       time.Duration // how often idleness is checked
+	Log        *log.Logger
 
 	mu       sync.Mutex
 	runs     []*child
+	watches  []*watcher
 	last     time.Time
 	started  time.Time
 	draining bool
@@ -92,6 +97,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	s.Idle = cmp.Or(s.Idle, 10*time.Minute)
 	s.DrainWait = cmp.Or(s.DrainWait, 10*time.Minute)
 	s.Tick = cmp.Or(s.Tick, time.Minute)
+	s.WatchEvery = cmp.Or(s.WatchEvery, 3*time.Minute)
 
 	if s.Log == nil {
 		s.Log = log.New(io.Discard, "", 0)
@@ -105,6 +111,10 @@ func (s *Server) Serve(ctx context.Context) error {
 
 		s.Child = func(argv []string) (string, []string) {
 			return exe, append([]string{"drive", "--foreground"}, argv...)
+		}
+
+		if s.Pass == nil {
+			s.Pass = func(string) (string, []string) { return exe, []string{"watch", "--pass"} }
 		}
 	}
 
@@ -144,6 +154,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	pruneLogs(s.Dir, time.Now())
 	s.resumeDrained()
+	s.loadWatches()
 
 	go s.accept()
 
@@ -159,7 +170,9 @@ loop:
 			break loop
 		case mode = <-s.stop:
 			break loop
-		case <-tick.C:
+		case now := <-tick.C:
+			s.passDue(now)
+
 			if s.idle() {
 				s.Log.Printf("idle for %s: exiting", s.Idle)
 
@@ -182,7 +195,7 @@ func (s *Server) idle() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return len(s.runs) == 0 && time.Since(s.last) >= s.Idle
+	return len(s.runs) == 0 && len(s.watches) == 0 && time.Since(s.last) >= s.Idle
 }
 
 func (s *Server) accept() {
@@ -228,7 +241,9 @@ func (s *Server) reply(req Request) Reply {
 	case OpRun:
 		return s.run(req)
 	case OpStatus:
-		return Reply{Runs: s.list()}
+		return Reply{Runs: s.list(), Watches: s.watchList()}
+	case OpWatch:
+		return s.watch(req)
 	case OpStop:
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -451,6 +466,14 @@ func (s *Server) shutdown(mode stopMode) {
 
 	deadline := time.NewTimer(s.DrainWait)
 	defer deadline.Stop()
+
+	// a pass finishing a task ends like a drive at its tick: let it
+	passes := make(chan struct{})
+	go func() {
+		s.endPasses(time.After(s.DrainWait))
+		close(passes)
+	}()
+	defer func() { <-passes }()
 
 	late := false
 

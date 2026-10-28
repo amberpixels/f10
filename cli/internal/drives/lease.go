@@ -20,14 +20,19 @@ const Dir = "drives"
 // A Holder is who holds a lease, as its lock file names it.
 type Holder struct {
 	PID   int
-	Drive int // 0 for `f10 finish` itself
+	Drive int  // 0 for `f10 finish` itself
+	Watch bool // the daemon's watcher, finishing a task no drive owns
 }
 
 // String names the holder for a refusal: `drive 3 (pid 4242)`.
 func (h Holder) String() string {
 	who := "f10 finish"
-	if h.Drive > 0 {
+
+	switch {
+	case h.Drive > 0:
 		who = "drive " + strconv.Itoa(h.Drive)
+	case h.Watch:
+		who = "the f10 watcher"
 	}
 
 	if h.PID > 0 {
@@ -67,6 +72,11 @@ func lockPath(root, key string) string {
 // Acquire takes key's lease for drive (0 for finish) under the storage
 // root, without waiting on a holder: a held one is a HeldError naming it.
 func Acquire(root, key string, drive int) (*Lease, error) {
+	return AcquireAs(root, key, Holder{Drive: drive})
+}
+
+// AcquireAs takes key's lease as h, whose PID is always this process.
+func AcquireAs(root, key string, h Holder) (*Lease, error) {
 	path := lockPath(root, key)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, fmt.Errorf("lease %s: %w", key, err)
@@ -100,8 +110,12 @@ func Acquire(root, key string, drive int) (*Lease, error) {
 	}
 
 	body := "pid=" + strconv.Itoa(os.Getpid())
-	if drive > 0 {
-		body += " drive=" + strconv.Itoa(drive)
+	if h.Drive > 0 {
+		body += " drive=" + strconv.Itoa(h.Drive)
+	}
+
+	if h.Watch {
+		body += " watch=1"
 	}
 
 	if err := f.Truncate(0); err == nil {
@@ -146,7 +160,7 @@ func Probe(root, key string) (Holder, bool) {
 	return Holder{}, false
 }
 
-// readHolder reads `pid=<n> [drive=<n>]` from a lock file; zero values for
+// readHolder reads `pid=<n> [drive=<n>] [watch=1]` from a lock file; zero values for
 // anything unreadable.
 func readHolder(path string) Holder {
 	b, err := os.ReadFile(path)
@@ -165,6 +179,8 @@ func readHolder(path string) Holder {
 			h.PID = n
 		case "drive":
 			h.Drive = n
+		case "watch":
+			h.Watch = n == 1
 		}
 	}
 

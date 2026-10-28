@@ -1977,6 +1977,19 @@ func steered(prompt, steering string) string {
 	return prompt + " " + steering
 }
 
+// phaseRunning reports run's plan or ship phase still running: the two
+// phases a turn owns, so the turn has not reported its end.
+func phaseRunning(run *state.Run, phase string) bool {
+	return (phase == "plan" || phase == "ship") && run != nil && run.Status(phase) == "running"
+}
+
+// stalled reports an agent idle for at least grace while its run says
+// phase is running: a turn that ended without reporting, once the Stop
+// hook had time. drive and the watcher both read a stall this way.
+func stalled(status agentctl.Status, run *state.Run, phase string, idle, grace time.Duration) bool {
+	return (status == agentctl.StatusIdle || status == agentctl.StatusDone) && phaseRunning(run, phase) && idle >= grace
+}
+
 // phaseDone reports a run past skill: plan and ship own a phase, which
 // reads done, or prior for a plan an earlier run wrote.
 func phaseDone(run *state.Run, skill string) bool {
@@ -2098,14 +2111,12 @@ func (in *driveInput) poll(
 		}
 	}
 
-	// plan and ship own a phase; one still running with the agent idle is a
-	// turn that ended without reporting, once the Stop hook had time
-	if (skill == "plan" || skill == "ship") && run != nil && run.Status(skill) == "running" {
+	if phaseRunning(run, skill) {
 		if r.idleSince.IsZero() {
 			r.idleSince = now
 		}
 
-		if now.Sub(r.idleSince) >= stallGrace {
+		if stalled(ws.Status, run, skill, now.Sub(r.idleSince), stallGrace) {
 			in.end(
 				ctx,
 				w,

@@ -291,7 +291,7 @@ Out of scope: closing the tracker issue (the PR body does that with "Closes #n")
 
 `f10 janitor` clears the task branches that outlived their task: a PR merged in the host's UI or by `gh pr merge`, a worktree removed by `wt remove`.
 `f10 finish` cleans up after itself; the janitor catches everything that went around it, without relying on a host setting such as GitHub's automatic head-branch deletion.
-There is no schedule: `f10 start` after its report and `f10 finish` once its own cleanup is done each run it when the last run is 6 hours old or more, `f10 janitor` runs it by hand, and `f10 janitor --dry-run` prints what it would remove and changes nothing.
+There is no schedule: `f10 start` after its report, `f10 finish` once its own cleanup is done and each watch pass under `watch: finish` (**Watch** below) run it when the last run is 6 hours old or more, `f10 janitor` runs it by hand, and `f10 janitor --dry-run` prints what it would remove and changes nothing.
 
 It considers local branches and origin's (one `git ls-remote --heads origin`) tied to a task id by the rule finish reads a branch with: the `f10-task` link or recorded bundle, else the bundle the name spells, else the id it carries.
 On origin that last rule counts only the shapes start creates (`<id>`, `<id>/<slug>`, `<id>-<suffix>`, `<id>+...`), so a colleague's `revert-<id>` is never read as a task branch.
@@ -436,7 +436,7 @@ The branch's `f10-drive`, `f10-chain` and `f10-flow` keys stay what position and
 **The lease.**
 Before anything opens, the driver takes an exclusive, non-blocking `flock` on `<storage root>/drives/locks/<id>.lock` for every task not already finished, its pid and drive number written into it, and one for itself (`drive-<n>.lock`).
 The key is the task's lead id, so two attempts at one task share it.
-A task whose lease another process holds ends at once with the row `owned by drive 3 (pid 4242)` (or `owned by f10 finish (pid …)`), and its dependents halt with it.
+A task whose lease another process holds ends at once with the row `owned by drive 3 (pid 4242)` (or `owned by f10 finish (pid …)`, `owned by the f10 watcher (pid …)`), and its dependents halt with it.
 A task's lease is released when the task ends, so a halted task can be finished by hand while the drive runs on; the kernel releases every lease when the driver's process ends, however it ends.
 A second drive on a record whose driver still runs is refused.
 Readers (`f10 status`, `f10 board`) probe the lease with a shared lock for an instant; the driver retries a held lease for about 200ms to absorb that.
@@ -543,16 +543,16 @@ Out of scope: more than one base per task, and ordering tasks by anything but th
 
 ## Daemon
 
-`f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it.
-Nothing registers it as a service: `f10 drive` starts it when none listens, and it exits after ten minutes with no drive running and no call.
+`f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it, and watches the projects tasks were started in (**Watch** below).
+Nothing registers it as a service: `f10 drive` and `f10 start` start it when none listens, and it exits after ten minutes with no drive running, no project watched and no call.
 
-- **Where.** `$XDG_RUNTIME_DIR/f10`, else `~/.f10/run` (`F10_RUN_DIR` overrides), kept `0700` and refused when another user owns it: the socket `daemon.sock`, the daemon's own `daemon.log`, a log per drive run under `logs/` (with its `.exit` file and an `index`, finished ones pruned after seven days), the locks under `drives/locks/`, and `drained.json` between an upgrade's two daemons.
+- **Where.** `$XDG_RUNTIME_DIR/f10`, else `~/.f10/run` (`F10_RUN_DIR` overrides), kept `0700` and refused when another user owns it: the socket `daemon.sock`, the daemon's own `daemon.log`, a log per drive run under `logs/` (with its `.exit` file and an `index`, finished ones pruned after seven days), the locks under `drives/locks/`, `drained.json` between an upgrade's two daemons, and `watch.json` (`0600`), the watched projects with the environment their passes run with, tokens such as `GH_TOKEN` included, for as long as each project is watched, with a `logs/watch-<hash>.log` per project.
 - **Starting one.** A client dials the socket; with nothing listening it takes the `start` lock, dials again (another client may have started one), else starts `f10 daemon` detached in its own session and waits up to 5s for it to listen. The daemon holds its own `daemon` lock for life and exits at once if another holds it, so two clients at once get one daemon.
 - **A drive.** The client sends the command line, its directory, its storage root and an allowlisted copy of its environment: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SSH_AUTH_SOCK`, `XDG_*`, `GH_*`, `GITHUB_TOKEN`, `GLAB_*`, `GITLAB_TOKEN`, `HERDR_*`, `F10_*`, `CLAUDE_*`, and the keys the frontmatter's `drive_env` lists. The daemon runs `f10 drive --foreground <command line>` in that directory with exactly that environment, its output to the drive's log and `F10_DRIVE_FILE` naming a file the drive writes its record number to once the record is open, and writes `<log>.exit` when it ends: the exit code, the drive's number, and for exit 6 why it drained (`upgrade` or `stopped`). A request for a drive already running in the same storage root (the same command line, or `--resume` of its number) with no `--answer` follows that drive's log instead.
 - **Upgrades.** A client sends its version first. Only a client of a strictly newer release (`0.46.0` over `0.45.2`) replaces the daemon; an older client, or a development build, uses the daemon running and says which version it runs, and `f10 daemon stop` is how to replace one by hand. A client following a drive never starts a daemon while another drains: the replacing client starts the next one, and a follower starts one only when none has listened for 5s after the old one is gone. A replacing client asks the old daemon to drain: each drive stops at its next tick, after any finish it is in the middle of, ends no task, releases its leases and exits 6; the old daemon writes those drives (storage root, directory, number and environment) to `drained.json`, `0600`, and exits. The client then starts its own binary's daemon, which runs each drained drive again as `--resume <n>`, and every client that was following one follows it into the new daemon, whatever its version. A drive that has not stopped after ten minutes is stopped outright and not resumed; rerunning its command resumes it.
 - **A crash or a reboot** leaves running drives stopped, their records intact: rerunning the drive's command resumes it.
 
-`f10 daemon status` prints the pid, version and start time, then each drive: its project, number, pid, log, and each task's standing from its record.
+`f10 daemon status` prints the pid, version and start time, then each drive: its project, number, pid, log, and each task's standing from its record; then each watched project: its last pass, that pass's exit, and its log.
 `f10 daemon stop` drains the daemon the same way but keeps no drained list: each drive stops at its next tick, a client following one ends with `f10 drive --resume <n> goes on`, and nothing resumes until someone runs that. `--now` stops each drive at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its drives are gone.
 `f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
 
@@ -567,6 +567,25 @@ A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a drive's own 
 - **Delivered.** An answer to a drive's task goes to its drive: a stopped drive is resumed through the daemon (`--resume <n>` from its main checkout, with the answering process's allowlisted environment), and a drive still running takes it as it stops. An answer to an agent no drive watches is sent to the agent, as `f10 forward` would; one that cannot be sent is printed to type in its pane.
 
 `f10 asks list` prints the open asks, oldest first, then those answered in the last day; `--json` prints `{open: [...], answered: [...]}`.
+
+## Watch
+
+The daemon watches every project `f10 start` or `f10 drive` ran in, for the tasks no drive owns: a task started by hand whose PR merged on the host, an agent left idle, a run that stopped with nobody looking.
+`watch: finish` is the default: a pass also finishes a task whose PR merged; `watch: report` only reports, and `watch: off` watches nothing.
+Owning is the task's lease (**Drive**): a task a drive or a finish holds is never looked at, and the watcher's own finish takes the lease first, so a drive started later is refused with `owned by the f10 watcher`.
+
+- **Registering.** After its report, `f10 start` hands the daemon the project's storage root, its main checkout and the same allowlisted environment a drive gets; `f10 drive` does the same before it follows its drive. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` or `f10 drive` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
+- **A pass.** Every 3 minutes, and at once on registering, the daemon runs `f10 watch --pass` in the main checkout with that environment, its output appended to the project's watch log. For each task worktree whose lease nobody holds and that `f10 watch off` did not hand back, it reads the PR (`gh pr list --head`, one call per branch), the newest run reported from the worktree and the agent's status, and says at most one thing, in this order:
+  - **merged**: the PR merged on the host. Under `watch: finish`, with the branch's tip equal to the PR's head and the agent not working, the pass takes the task's lease, reads the agent's status and the branch's tip again, and finishes the task as `f10 finish` would (the worktree removed, the workspace closed, the plan archived, main pulled), with a finish that refuses anything but a merged PR, so the watcher never merges. A refusal (a dirty worktree, someone else's PR, a bundle's riders) is reported with `f10 finish <id>` to run by hand. A branch with commits the PR lacks is only reported.
+  - **closed**: the PR closed without a merge; reported, never cleaned up.
+  - **stalled**: the agent idle while its run says plan or ship is running and the run has not changed for 10 minutes: the test a drive halts on, with a longer grace, measured from the run's last write since a pass keeps no memory between runs.
+  - **stopped**: the run ended `blocked` (with its question), `failed`, `partial`, or ship `done`.
+
+  A pass lists only this checkout's branches, so it asks the network nothing before the host. An agent whose status cannot be read (no listing from Herdr) is never finished. A host that does not answer for a task's PR leaves the task out of the pass, and the pass says so in one line naming the error and the tasks left out, every pass until the host answers; `f10 watch` shows it under `host`.
+  Each fact is told once: `watch.yaml` in the storage root keeps the last report per task and every fact told for it (the PR's state, the run's update time), so a fact is never repeated, even after another, and a newer one is told. Under `watch: finish` the janitor then runs if it is due; under `report` it never runs from a pass, since it deletes branches.
+  A pass exits 7 when nothing is left to watch, which drops the project from the daemon's list.
+- **Telling.** A pass reports through its own output, one line per report, into the project's watch log; `f10 watch` prints the last report per task.
+- **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task or finishes it. A mark git cannot read (a lock, a broken config) counts as handed back for that pass, with a line naming the branch and the error. `f10 watch on <id>` removes it. Typing in the task's own pane needs nothing: a working agent is never stalled.
 
 ## Review
 
