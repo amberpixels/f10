@@ -43,9 +43,9 @@ type Declared struct {
 	Flows          map[string]Flow   `yaml:"flows,omitempty"`
 	FlowByArea     map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
 	DriveFinish    string            `yaml:"drive_finish,omitempty"`
-	DriveEnv       []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
-	Watch          string            `yaml:"watch,omitempty"`
-	WatchCatchup   string            `yaml:"watch_catchup,omitempty"` // the watcher also catches an undriven open PR up with its target     // what the daemon does for tasks no drive owns
+	DriveEnv       []string          `yaml:"drive_env,omitempty"`     // environment keys a drive passes to its commands, beyond the built-in ones
+	Watch          string            `yaml:"watch,omitempty"`         // what the daemon does for tasks no drive owns
+	WatchCatchup   string            `yaml:"watch_catchup,omitempty"` // the watcher also catches an undriven open PR up with its target
 	ReportBack     string            `yaml:"report_back,omitempty"`
 	Review         ReviewDecl        `yaml:"review,omitempty"`
 	Standup        StandupDecl       `yaml:"standup,omitempty"`

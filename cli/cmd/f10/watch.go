@@ -349,6 +349,7 @@ type watchedTask struct {
 type sentCatchup struct {
 	Target string    `yaml:"target"` // the sha the branch was caught up to
 	Head   string    `yaml:"head"`   // the branch's tip when the catchup went out
+	Origin string    `yaml:"origin"` // origin's tip then: what the push after it leases against
 	Base   string    `yaml:"base"`   // the target's name in prose
 	At     time.Time `yaml:"at"`
 	// Failed is a catchup that did not end clean, told once; another goes
@@ -947,12 +948,20 @@ func (in watchInput) catchupStep(ctx context.Context, task watchedTask, store ma
 }
 
 // settleCatchup reads from git how a sent catchup ended: clean, the branch
-// is pushed under the task's lease; not clean with the agent idle, the
-// failure is told once and the branch left as it is, since an operation
-// in progress there may be someone's hand merge.
+// is pushed under the task's lease, against the origin tip the catchup
+// started from, so a commit pushed to the request meanwhile is never
+// overwritten; not clean with the agent idle, the failure is told once and
+// the branch left as it is, since an operation in progress there may be
+// someone's hand merge.
 func (in watchInput) settleCatchup(
 	ctx context.Context, task watchedTask, rec *sentCatchup, store map[string]watchReport,
 ) *watchReport {
+	if task.pr == nil || task.pr.Status != forge.Open {
+		setCatchup(store, task.id, nil) // its request is gone: nothing to keep current
+
+		return nil
+	}
+
 	if reason := branchUnsettled(ctx, in.main, task.path, task.branch); reason != "" {
 		rec.Failed = true
 
@@ -994,7 +1003,21 @@ func (in watchInput) settleCatchup(
 		return nil
 	}
 
-	how, err := pushCaughtUp(ctx, task.path, task.branch, task.originSHA, rec.Base)
+	if task.originSHA != rec.Origin {
+		// someone pushed to the request while the catchup ran: the branch
+		// here no longer carries it, so a push would drop their commits
+		rec.Failed, rec.Head = true, head
+
+		return &watchReport{
+			Kind: watchCatchup,
+			Text: fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed",
+				task.branch, rec.Base, task.branch),
+			Next: "bring origin/" + task.branch + " into " + task.path + ", then /f10:catchup there",
+			Key:  watchCatchup + " origin moved " + task.originSHA,
+		}
+	}
+
+	how, err := pushCaughtUp(ctx, task.path, task.branch, rec.Origin, rec.Base)
 	if err != nil {
 		return in.pushFailed(task, rec, err)
 	}
@@ -1052,17 +1075,17 @@ func (in watchInput) sendCatchup(
 			pr.URL, pr.Base, base, task.branch))
 	}
 
-	key, err := markOn(ctx, in.main, task.branch)
-	if err != nil {
-		in.warnf("%s skipped this pass, reading the marks on %s: %v", task.id, task.branch, err)
-
-		return nil
+	// the branch and its request must agree before either moves: a worktree
+	// behind origin would rebase a stale branch, one ahead of it is work the
+	// request has not seen
+	if task.localSHA != task.originSHA {
+		return behind("diverged", fmt.Sprintf("%s moved past %s, whose tip is not origin's: not caught up",
+			target.name, task.branch))
 	}
 
-	if key != "" {
-		return nil // a catchup is already owed, whoever sent it
-	}
-
+	// a mark already on the branch (a finish that landed its base, a ship
+	// guard that stopped on a conflict, a catchup of the watcher's own that
+	// failed) is a catchup owed that nobody else will send: set again below
 	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+task.branch)
 
 	switch {
@@ -1124,7 +1147,9 @@ func (in watchInput) sendCatchup(
 			target.name, task.branch, err))
 	}
 
-	setCatchup(store, task.id, &sentCatchup{Target: target.sha, Head: head, Base: target.name, At: in.now()})
+	setCatchup(store, task.id, &sentCatchup{
+		Target: target.sha, Head: head, Origin: task.originSHA, Base: target.name, At: in.now(),
+	})
 
 	return &watchReport{
 		Kind: watchCatchup,

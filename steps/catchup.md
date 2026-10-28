@@ -103,7 +103,7 @@ Each choice is written down, one per file, so the reviewer and the change judge 
   No PR, no line: lore and the report carry it, and the pr step renders the heading from lore when it opens one.
 
 Any failure, the **On failure** cases below included and a conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails), is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
-**Sent by the watcher** (the prompt says so): a failure also aborts the operation (`git merge --abort` / `git rebase --abort`) whatever was settled, so the branch is as it was with its marks kept, since nobody follows up in this pane; the watcher reads the mark still set as a catchup that did not end and reports it once.
+**Sent by the watcher** (the prompt says so): note HEAD's sha before point 3 moves anything, and a failure also puts the branch back there, its marks kept, since nobody follows up in this pane: `git merge --abort` / `git rebase --abort` for an operation still in progress, whatever was settled, else (verify red after the integration concluded) `git reset --hard <that sha>`; the report says which. The watcher reads the mark still set as a catchup that did not end and reports it once.
 A clean end after a failure restores the noted status; a clean end that never stopped writes nothing.
 Run by hand, without `--driven`, point 4 asks exactly as written.
 
