@@ -421,6 +421,7 @@ func TestSetRejectsTypos(t *testing.T) {
 		r.SetNote("", "x"),
 		r.SetAsk(""),
 		r.SetFinal(""),
+		r.SetDone("", time.Unix(1_800_000_000, 0)),
 	} {
 		if _, ok := errors.AsType[*UsageError](err); !ok {
 			t.Errorf("got %v, want a UsageError", err)
@@ -446,8 +447,57 @@ func TestSaveFlattensAndRoundTrips(t *testing.T) {
 		t.Errorf("read back %+v", back)
 	}
 
+	if back.Done != "" || !back.DoneAt.IsZero() {
+		t.Errorf("a run that never reported a phaseless step read back done %q at %v", back.Done, back.DoneAt)
+	}
+
 	if matches, _ := filepath.Glob(filepath.Join(dir, "*.state.*")); len(matches) != 0 {
 		t.Errorf("temp files left: %v", matches)
+	}
+}
+
+// A phaseless step's done signal round-trips with its own time, touches no
+// phase, survives a stop, and is retired by a phase running again or a new
+// skill's seed.
+func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
+	dir := t.TempDir()
+	r := Fresh("s")
+	r.Ship, r.Leaf = "partial", "pr"
+
+	if err := r.SetDone("catchup", time.Unix(1_800_000_100, 0)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Save(dir, time.Unix(1_800_000_200, 0)); err != nil {
+		t.Fatal(err)
+	}
+
+	back, err := Load(Path(dir, "s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if back.Done != "catchup" || back.DoneAt.Unix() != 1_800_000_100 || back.Updated.Unix() != 1_800_000_200 {
+		t.Errorf("read back done %q at %v, updated %v", back.Done, back.DoneAt, back.Updated)
+	}
+
+	if back.Ship != "partial" || back.Leaf != "pr" {
+		t.Errorf("the signal touched the ship phase: %+v", back)
+	}
+
+	if err := back.Set("ship", "partial", "pr"); err != nil || back.Done != "catchup" {
+		t.Errorf("a restored stop dropped the signal: %v, %+v", err, back)
+	}
+
+	if err := back.Set("ship", "running", "judge"); err != nil || back.Done != "" || !back.DoneAt.IsZero() {
+		t.Errorf("a phase running again kept the signal: %v, %+v", err, back)
+	}
+
+	_ = back.SetDone("catchup", time.Unix(1_800_000_300, 0))
+	back.Seed("ship", "GH-1", "")
+
+	if back.Done != "" || !back.DoneAt.IsZero() {
+		t.Errorf("a new skill's seed kept the signal: %+v", back)
 	}
 }
 

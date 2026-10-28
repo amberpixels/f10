@@ -5,7 +5,7 @@ Input: the current branch, in this checkout.
 Output: the branch on top of (or merged with) its base, every conflict settled, verify green.
 Nothing pushed, no task, no plan, no tracker comment.
 Context: the `catchup` and `catchup_stacked` frontmatter keys (strategy), `project.md → Verify`.
-Badge: none, and it never retires or overwrites a badge a ship run left.
+Badge: none, and it never retires or overwrites a badge a ship run left; `f10-state.sh done catchup` (point 5) is the end signal `f10 drive` reads, not a badge.
 
 No conflict, or nothing to bring in, is a **correct run**.
 
@@ -35,7 +35,7 @@ No conflict, or nothing to bring in, is a **correct run**.
    `catchup: off` turns off only the guard ship runs (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, uses the default method (rebase, a stacked base as `catchup_stacked` says).
    A base found through `f10-after-branch` (another task's branch) follows `catchup_stacked: merge | rebase` instead, **merge** when absent: rebasing onto a branch that later rebases or squash-merges replays its old commits, and `rebase` is the project accepting that.
    A branch already on origin whose ship stopped (`f10-state.sh show` reads ship `failed` or `partial`) is merged too: ship resumes after it, and its push never forces.
-   - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; clear the marks as point 5 does, report and stop;
+   - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; clear the marks and write the signal as point 5 does, report and stop;
    - merge: `git merge --no-edit <base>`; rebase: `git rebase <base>`.
 
    Clean: point 5.
@@ -61,8 +61,9 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 5. **Verify** with `project.md → Verify` (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands).
    Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`conventions/context.md` → Commits, `--step catchup`) or folded into its commit under a rebase, and re-verify.
-   Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set, before the report.
-   `f10 drive` reads a mark still set as a catchup that did not finish, and halts the task.
+   Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set, then `f10-state.sh done catchup`, both before the report.
+   The signal is the catchup's end for `f10 drive`: an idle agent without it is one that stopped without reporting, halted after a minute; a signal beside a mark still set is a catchup that did not end clean, and halts the task too.
+   Every run writes it, by hand included: outside a drive it is read by nobody.
 
 6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows.
    Then: commits brought in, each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
@@ -83,12 +84,15 @@ It differs from the run above:
 - **Verify**, when commits came in, except before implement, whose own verify follows.
   Red is a semantic conflict the guard leaves to `/f10:catchup`: `git reset --hard` to the sha read before integrating (the tree was clean), then mark and fail as a conflict does.
 - **Marks**: `f10-landed` and `f10-base-moved` are unset once the integration is clean and verify, where it ran, is green.
+  No `done catchup` signal: ship's phase reports for the guard.
 - **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 
 **Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, when the branch its open PR targets moved past it, when the branch conflicts with the default branch at finish, or when ship's guard marked it; the watcher sends it, under `watch_catchup: on`, when the branch's open PR fell behind its target and no drive owns the task): on entry, note the ship status (`f10-state.sh show`).
 The method is point 3's.
 The sender, the drive or the watcher, pushes the branch itself once this run ends clean, with a lease after a rebase, so the open PR carries it before the next skill or pass.
 Nobody is at the keyboard, so the run never asks: no `AskUserQuestion`, no `f10-state.sh ask`.
+Nobody wakes an idle agent either: verify runs in the foreground or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
+Point 5's `done catchup` signal is the end `f10 drive` reads; the watcher reads the mark and the tree alone.
 Every question point 4 would put to the user is decided by the task's intent, read once from the plan file (`<storage root>/plans/<id>.md`, the id from `f10 task current`) and the task body (`f10 task read <id>`):
 
 - **genuine ambiguity**: reconcile where both sides can be, as point 4 says; where they truly clash, keep the side that serves the task, named in the report as `decided by the task's intent`;
@@ -104,7 +108,7 @@ Each choice is written down, one per file, so the reviewer and the change judge 
 
 Any failure, the **On failure** cases below included and a conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails), is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
 **Sent by the watcher** (the prompt says so): note HEAD's sha before point 3 moves anything, and a failure also puts the branch back there, its marks kept, since nobody follows up in this pane: `git merge --abort` / `git rebase --abort` for an operation still in progress, whatever was settled, else (verify red after the integration concluded) `git reset --hard <that sha>`; the report says which. The watcher reads the mark still set as a catchup that did not end and reports it once.
-A clean end after a failure restores the noted status; a clean end that never stopped writes nothing.
+A clean end after a failure restores the noted status beside the signal, in either order: a stop status keeps the signal; a clean end that never stopped writes the signal alone.
 Run by hand, without `--driven`, point 4 asks exactly as written.
 
 **On failure:** no ref for the base, the operation cannot start, or verify stays red.

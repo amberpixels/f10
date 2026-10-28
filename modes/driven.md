@@ -27,6 +27,16 @@ A gap never becomes an ask: a driven run takes every gap on its default, listing
 Neither does a conflict: a driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
 Neither does a stale task's verdict (`steps/fetch.md` point 1): the run ends blocked with the verdict file named, and the user decides by sending `anyway` (`f10 drive --answer <id> anyway`, or typed here) or closing the task.
 
+## A turn ends at its report, never before
+
+The drive and the watcher read an idle agent as a turn that ended.
+A turn that ended before its report is one that stopped without reporting.
+The task halts after a minute's grace, and the report that lands later finds the drive gone.
+
+- Verify, and every other long command, runs in the foreground, with a raised `timeout` where the default is short.
+- A command that must run in the background is waited on in the same turn, with a Monitor until-loop on its exit, never by ending the turn to be woken when it reports.
+- The only ends of a driven turn are the step's report, an ask or a failure.
+
 ## The answer
 
 Answers arrive as your **next prompt**, plain text, numbered as the ask was: typed in this pane, sent by the drive, or sent by `f10 asks answer` or `/f10:asks` from anywhere.

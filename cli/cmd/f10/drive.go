@@ -2326,11 +2326,37 @@ func phaseRunning(run *state.Run, phase string) bool {
 	return (phase == "plan" || phase == "ship") && run != nil && run.Status(phase) == "running"
 }
 
-// stalled reports an agent idle for at least grace while its run says
-// phase is running: a turn that ended without reporting, once the Stop
-// hook had time. drive and the watcher both read a stall this way.
-func stalled(status agentctl.Status, run *state.Run, phase string, idle, grace time.Duration) bool {
-	return (status == agentctl.StatusIdle || status == agentctl.StatusDone) && phaseRunning(run, phase) && idle >= grace
+// unreported reports a turn whose end the run has not told: a plan or ship
+// phase still running, or a catchup with no done signal written since the
+// prompt went out at since. A nil run never reported anything, and a
+// signal an earlier catchup left is not after the prompt: both times are
+// whole seconds, and no catchup reports within the second it was sent.
+func unreported(run *state.Run, skill string, since time.Time) bool {
+	if skill != "catchup" {
+		return phaseRunning(run, skill)
+	}
+
+	return run == nil || run.Done != "catchup" || !run.DoneAt.After(since)
+}
+
+// stalled reports an agent idle for at least grace while its turn's end is
+// unreported: a turn that ended without reporting, once the Stop hook had
+// time. drive and the watcher both read a stall this way; since is the
+// prompt's time, which only a catchup needs.
+func stalled(status agentctl.Status, run *state.Run, skill string, since time.Time, idle, grace time.Duration) bool {
+	atRest := status == agentctl.StatusIdle || status == agentctl.StatusDone
+
+	return atRest && unreported(run, skill, since) && idle >= grace
+}
+
+// idleWhile says what an idle agent still owes: the running phase its run
+// shows, or the catchup report it has not written.
+func idleWhile(run *state.Run, skill string) string {
+	if skill == "catchup" {
+		return "and its catchup has not reported"
+	}
+
+	return "while its run says " + skill + " " + run.PhaseText(skill)
 }
 
 // phaseDone reports a run past skill: plan and ship own a phase, which
@@ -2364,7 +2390,8 @@ func (in *driveInput) takeAnswer(id string) string {
 // Herdr shows the agent working or its run reports after the prompt:
 // Herdr's `done` lasts from the previous turn until someone looks, so it
 // proves nothing. Once the agent is idle again, the run says how the turn
-// ended.
+// ended; idle alone does not, since a turn parked on a background task
+// reads idle too, and waits out the grace as one that has not reported.
 func (in *driveInput) poll(
 	ctx context.Context,
 	w io.Writer,
@@ -2460,19 +2487,19 @@ func (in *driveInput) poll(
 		}
 	}
 
-	if phaseRunning(run, skill) {
+	if unreported(run, skill, since) {
 		if r.idleSince.IsZero() {
 			r.idleSince = now
 		}
 
-		if stalled(ws.Status, run, skill, now.Sub(r.idleSince), stallGrace) {
+		if stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), stallGrace) {
 			in.end(
 				ctx,
 				w,
 				r,
-				halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle while its run says %s %s: "+
+				halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
 					"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
-					workspaceName(ws), skill, run.PhaseText(skill))),
+					workspaceName(ws), idleWhile(run, skill))),
 			)
 		}
 
@@ -2554,10 +2581,10 @@ func (in *driveInput) mark(ctx context.Context, r *driveRun) (string, error) {
 	return markOn(ctx, in.main, r.o.branch)
 }
 
-// unsettled says why a catchup that ended without a stop did not bring the
-// branch up to date, or "" when it did. Catchup owns no phase, so its
-// success is read from git: the mark gone, which catchup clears only once
-// verify is green, no merge or rebase left open, and a clean tree.
+// unsettled says why a catchup that reported without a stop did not bring
+// the branch up to date, or "" when it did: the mark still set (catchup
+// clears it only once verify is green), a merge or rebase left open, or a
+// dirty tree. The run's done signal is the end; git says whether it was clean.
 func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
 	return branchUnsettled(ctx, in.main, r.o.path, r.o.branch)
 }

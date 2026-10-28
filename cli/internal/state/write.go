@@ -90,7 +90,13 @@ func (r *Run) Save(dir string, now time.Time) error {
 
 	b.WriteString("v 1\n")
 
-	for _, kv := range [][2]string{
+	// the done signal is a key most runs never write: absent reads as none
+	var signal [][2]string
+	if r.Done != "" {
+		signal = [][2]string{{"done", r.Done}, {"done_at", unixText(r.DoneAt)}}
+	}
+
+	for _, kv := range slices.Concat([][2]string{
 		{"task", r.Task},
 		{"url", r.URL},
 		{"root", r.Root},
@@ -105,8 +111,9 @@ func (r *Run) Save(dir string, now time.Time) error {
 		{"note", r.Note},
 		{"next", r.Next},
 		{"ask", r.Ask},
+	}, signal, [][2]string{
 		{"updated", strconv.FormatInt(r.Updated.Unix(), 10)},
-	} {
+	}) {
 		b.WriteString(kv[0] + " " + oneLine(kv[1]) + "\n")
 	}
 
@@ -124,6 +131,15 @@ func (r *Run) Save(dir string, now time.Time) error {
 	}
 
 	return nil
+}
+
+// unixText is a time as the file holds it, "" for the zero time.
+func unixText(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+
+	return strconv.FormatInt(t.Unix(), 10)
 }
 
 func atText(at int) string {
@@ -208,7 +224,8 @@ func (r *Run) backfill(phase string) {
 
 // Set records a phase's status. A stop state keeps the leaf (the argument,
 // else the last running one): "blocked at judge" is the answer to "ship
-// blocked". A phase running again retires the old note and question.
+// blocked". A phase running again retires the old note, question and done
+// signal; a stop keeps the signal a driven catchup wrote before restoring it.
 func (r *Run) Set(phase, status, leaf string) error {
 	if !slices.Contains(Phases, phase) {
 		return usagef("unknown phase '%s' (want: %s)", phase, strings.Join(Phases, " "))
@@ -224,6 +241,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 	switch {
 	case status == "running":
 		r.Leaf, r.Note, r.Next, r.Ask = leaf, "", "", ""
+		r.Done, r.DoneAt = "", time.Time{}
 	case Stopped(status):
 		if leaf != "" {
 			r.Leaf = leaf
@@ -307,6 +325,20 @@ func (r *Run) SetAsk(text string) error {
 	}
 
 	r.Ask = oneLine(text)
+
+	return nil
+}
+
+// SetDone records that a step with no phase of its own (catchup) has
+// reported, at now. The drive reads it as the step's end; an idle agent
+// without it is a turn that stopped without reporting. It touches no phase,
+// so the badge a ship run left stands.
+func (r *Run) SetDone(step string, now time.Time) error {
+	if step == "" {
+		return usagef("done needs the step that reported")
+	}
+
+	r.Done, r.DoneAt = step, time.Unix(now.Unix(), 0)
 
 	return nil
 }
@@ -460,6 +492,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	r.Skill = skill
 	r.Leaf, r.Final, r.Note, r.Next, r.Ask = "", "", "", "", ""
+	r.Done, r.DoneAt = "", time.Time{}
 	r.Pipeline, r.At = nil, 0
 	r.Ship = "pending"
 

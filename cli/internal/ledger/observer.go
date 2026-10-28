@@ -38,6 +38,7 @@ const (
 	StateTask  = "state_task"
 	StateNote  = "state_note"
 	StateAsk   = "state_ask"
+	StateDone  = "state_done" // a phaseless step's report is out: the drive's end signal
 	StateFinal = "state_final"
 )
 

@@ -603,7 +603,7 @@ func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool)
 	updated := run.Updated.UTC().Format(time.RFC3339)
 
 	for _, phase := range []string{"ship", "plan"} {
-		if stalled(t.agent, run, phase, now.Sub(run.Updated), watchStallGrace) {
+		if stalled(t.agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace) {
 			return &watchReport{
 				Kind: watchStalled,
 				Text: fmt.Sprintf("agent idle while its run says %s %s", phase, run.PhaseText(phase)),

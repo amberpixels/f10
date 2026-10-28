@@ -56,11 +56,16 @@ type Run struct {
 	At    int    `json:"at,omitempty"`
 	Final string `json:"final,omitempty"` // the ship pipeline's declared last step
 	// the ship pipeline's steps as declared, in order
-	Pipeline []string  `json:"pipeline,omitempty"`
-	Note     string    `json:"note,omitempty"` // why the run stopped
-	Next     string    `json:"next,omitempty"` // what unblocks it
-	Ask      string    `json:"ask,omitempty"`  // the question a driven run stopped on, options included
-	Updated  time.Time `json:"updated"`
+	Pipeline []string `json:"pipeline,omitempty"`
+	Note     string   `json:"note,omitempty"` // why the run stopped
+	Next     string   `json:"next,omitempty"` // what unblocks it
+	Ask      string   `json:"ask,omitempty"`  // the question a driven run stopped on, options included
+	// Done is the step with no phase of its own (catchup) whose report is
+	// out, and DoneAt when it said so: a reader compares DoneAt against the
+	// prompt it sent, since a later write to this file moves Updated alone
+	Done    string    `json:"done,omitempty"`
+	DoneAt  time.Time `json:"done_at,omitzero"`
+	Updated time.Time `json:"updated"`
 }
 
 // Dir is where state files live: F10_STATE_DIR, else the default.
@@ -165,6 +170,12 @@ func Load(path string) (*Run, error) {
 			r.Next = value
 		case "ask":
 			r.Ask = value
+		case "done":
+			r.Done = value
+		case "done_at":
+			if n, err := strconv.ParseInt(value, 10, 64); err == nil && n > 0 {
+				r.DoneAt = time.Unix(n, 0)
+			}
 		case "updated":
 			// the one field anything does maths on: garbage reads as the
 			// zero time, which is stale under any ttl, never an error
