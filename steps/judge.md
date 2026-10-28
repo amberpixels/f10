@@ -111,7 +111,7 @@ On a clean tree (always the case right after a `pr` entry) it judges the branch 
 
 - **proceed** - continue (`decision: continue`); the verdict is one line in the report.
 - **stop** - end **blocked** (`decision: block`): `f10-state.sh set ship blocked judge` and, in the same call, `f10-state.sh note "stop: <the reason, one line>" "<the smallest thing that would change the verdict>"`; then the verdict as the report, naming any durable work (commits, an open PR).
-- **rethink** / **proceed with changes** - discuss it (**Discussion**, below).
+- **rethink** / **proceed with changes** - discuss it (**Discussion**, above).
   Each change or objection becomes a gap in one `AskUserQuestion` (`conventions/gaps.md`), the judge's answer first, **block the run** a real option.
   On **continue**, the ship skill folds the answers into the plan file (stages, Consequences and Gaps) and runs the next step; on **block**, end as stop, with this verdict in the note.
   `decision:` records the answer, `continue` or `block`.
@@ -125,12 +125,12 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 
 - **Green, proceed** - leave the trace (below) and continue (`decision: continue`); the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.
-  The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, run `project.md → Verify`, commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
+  The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, its CLAUDE.md rules and `project.md` guardrails, and run `project.md → Verify`, keeping its "never run X" rules (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands); commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
   With `traces: on`, the commit body names each change in plain words for a reader of the PR.
   No second review round: a judge plus green verify is enough.
   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`), the changes left uncommitted and nothing posted.
   Green: leave the trace on the pushed commit and continue (`decision: continue`).
-- **Orange, rethink** - discuss it (**Discussion**, below).
+- **Orange, rethink** - discuss it (**Discussion**, above).
   Once the shape is settled, one `AskUserQuestion`: **refactor as agreed** (first, when the judge believes the agreed refactor is reachable) or **stop**.
   Refactor runs the yellow route with the agreed refactor as its changes, its comment naming the reconsidered design (`decision: refactor as agreed`); stop runs the red route.
   If the discussion clears the design, the judge changes its verdict to green, with a new banner.

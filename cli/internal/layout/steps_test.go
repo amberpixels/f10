@@ -25,35 +25,39 @@ var (
 
 // The ship skill loads each flow entry at run time, named in project.md, so its
 // loads are prose, not calls: this mirrors skills/ship/SKILL.md Run points 1 and 3.
+// Every step outside nonFlowSteps can be a flow entry, so a new step is covered.
 var (
-	pipelineSteps = []string{
-		"implement",
-		"cleanup",
-		"commit",
-		"push",
-		"pr",
-		"review",
-		"resolve",
-		"judge",
-		"demo",
-		"deploy",
-		"catchup",
-	}
-	shipLoads = func() [][]string {
-		loads := [][]string{{"capture", "fetch", "plan"}, {"fetch", "plan"}, {"review", "resolve"}}
-		for _, s := range pipelineSteps {
-			// a review entry loads both, and resolve is never named
-			if s != "review" && s != "resolve" {
-				loads = append(loads, []string{s})
-			}
-		}
-		// the catchup guard joins the load of each entry it guards
-		for _, s := range []string{"implement", "pr", "judge"} {
-			loads = append(loads, []string{"catchup", s})
-		}
-		return loads
-	}()
+	nonFlowSteps = []string{"brainstorm", "capture", "explain", "fetch", "plan", "standup"}
+	guardedSteps = []string{"implement", "pr", "judge"}
 )
+
+func pipelineSteps(steps []string) []string {
+	var pipeline []string
+	for _, s := range steps {
+		if !slices.Contains(nonFlowSteps, s) {
+			pipeline = append(pipeline, s)
+		}
+	}
+
+	return pipeline
+}
+
+func shipLoads(steps []string) [][]string {
+	loads := [][]string{{"capture", "fetch", "plan"}, {"fetch", "plan"}, {"review", "resolve"}}
+	for _, s := range pipelineSteps(steps) {
+		// a review entry loads both, and resolve is never named
+		if s != "review" && s != "resolve" {
+			loads = append(loads, []string{s})
+		}
+	}
+
+	// the catchup guard joins the load of each entry it guards
+	for _, s := range guardedSteps {
+		loads = append(loads, []string{"catchup", s})
+	}
+
+	return loads
+}
 
 type loadSite struct {
 	where string
@@ -153,7 +157,7 @@ func TestStepReferences(t *testing.T) {
 	const ship = "skills/ship/SKILL.md"
 
 	var sites []loadSite
-	for _, s := range shipLoads {
+	for _, s := range shipLoads(steps) {
 		sites = append(sites, loadSite{where: ship + " (flow entry load)", steps: s})
 	}
 
@@ -168,7 +172,7 @@ func TestStepReferences(t *testing.T) {
 		}
 	}
 
-	for _, s := range shipLoads {
+	for _, s := range shipLoads(steps) {
 		skillLoads[ship] = append(skillLoads[ship], s...)
 	}
 
@@ -179,6 +183,11 @@ func TestStepReferences(t *testing.T) {
 
 	if !strings.Contains(shipText.String(), "loads `review resolve`") {
 		t.Errorf("%s no longer says a review entry loads `review resolve`: update shipLoads with it", ship)
+	}
+
+	// the guard's sentence and its three bullets name guardedSteps
+	if !strings.Contains(shipText.String(), "brings the base in before three kinds of entry") {
+		t.Errorf("%s no longer guards three kinds of entry: update guardedSteps with it", ship)
 	}
 
 	// every name a load or a delegation uses has a step file
@@ -204,7 +213,7 @@ func TestStepReferences(t *testing.T) {
 	for rel, loads := range skillLoads {
 		for _, l := range files[rel] {
 			for _, s := range boldSteps(l.text, steps) {
-				if rel == ship && slices.Contains(pipelineSteps, s) {
+				if rel == ship && slices.Contains(pipelineSteps(steps), s) {
 					continue
 				}
 
