@@ -147,8 +147,10 @@ func TestLoreVerbs(t *testing.T) {
 		t.Errorf("why at a revision:\n%s", out)
 	}
 
-	if _, err := runLore(t, "why", "limit.go:3@"); err == nil {
-		t.Error("an empty revision was accepted")
+	for _, bad := range []string{"limit.go:3@", "limit.go:3@-S/etc/passwd", "limit.go:3@--contents=x"} {
+		if _, err := runLore(t, "why", bad); err == nil {
+			t.Errorf("%q was accepted as a revision", bad)
+		}
 	}
 
 	if out := must("lessons", "limit.go"); !strings.Contains(out, "1 lesson") || !strings.Contains(out, "Per process") {

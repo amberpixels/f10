@@ -135,7 +135,7 @@ Every verb takes `--root <dir>`.
   An agent reads it before editing a file.
 - **`check`** exits 1, naming each reason, when the intent is missing, no verdict exists, the latest verdict is `rethink` or `stop`, or a `blocker` or `major` finding is still effectively `open`.
   It exits 0 otherwise.
-  `f10 finish` runs it right before a merge, under `project.md`'s `lore_gate` (`docs/project-setup.md`): `warn`, the default, notes the reasons and merges; `block` refuses.
+  `f10 finish` runs it right before a merge, under `project.md`'s `lore_gate` (`docs/project-setup.md`): `warn`, the default, notes the reasons and merges; `block` refuses, which suits a flow with a `judge` entry, the one writer of verdicts.
 - **`validate`** lints every entry of the change, or of every change: parse errors, missing or misplaced fields, bad anchors, a filename or directory that disagrees with the frontmatter, dangling `supersedes`, cross-kind `supersedes` and forks.
   It exits 1 when it finds any.
 

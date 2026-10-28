@@ -184,7 +184,6 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		plansDir:  t.sharedPlansDir(),
 		title:     titleLookup(t, r.Number),
 		close:     closing,
-		lore:      func() string { return loreNote(&lore.Store{Root: loreRootFor(t)}, r.ID) },
 		sweep: func(ctx context.Context) {
 			sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
 				func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
@@ -240,8 +239,9 @@ type finishInput struct {
 	host   host
 	method string // the merge method project.md declares, "" for none
 	traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
-	// loreStore is the change's lore, checked right before its merge lands;
-	// nil checks nothing. gate is lore_gate: warn notes the reasons, block refuses
+	// loreStore is the change's lore: the report's one line on what it left
+	// (loreNote) and the check right before its merge lands; nil reads nothing.
+	// gate is lore_gate: warn notes a failing check's reasons, block refuses
 	loreStore *lore.Store
 	gate      string
 	cwd       string // where the command runs: inside the worktree is the self-close case
@@ -259,9 +259,6 @@ type finishInput struct {
 	// sweep runs the janitor once the task's own cleanup is done and before
 	// a workspace closes, since closing this one ends the process; nil for none
 	sweep func(context.Context)
-	// lore is one line on the entries the change left (loreNote), so a
-	// change finished without a ship run shows it has no lessons; nil for none
-	lore func() string
 	// progress names each action as it starts, for drive's record; nil for none
 	progress func(string)
 	// mergedOnly refuses everything but a request already merged on the
@@ -504,8 +501,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
-	if in.lore != nil {
-		notes = appendNote(notes, in.lore())
+	if in.loreStore != nil {
+		notes = appendNote(notes, loreNote(in.loreStore, in.task.ID))
 	}
 
 	if archived != "" {

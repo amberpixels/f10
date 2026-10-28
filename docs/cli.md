@@ -229,6 +229,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Already merged: confirmed.
    Closed without a merge: a refusal.
    Right before an open request merges, or a branch never pushed lands (below), `f10 lore check <id>` runs on the task: under `lore_gate: warn`, the default, its reasons are a note under the report and the merge goes on; under `block` they are the error, with nothing changed.
+   A passing check needs the intent, a judge verdict of proceed and no open blocker or major finding, so a flow with no `judge` entry stays on `warn`.
    A request already merged, `--local` and a spike's close merge nothing and are not checked; a lore root this clone lacks reads as `no entries`, which `block` refuses too.
    A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and its finish retargets this PR.
    **Someone else's PR.**

@@ -425,7 +425,8 @@ func runLoreWhy(ctx context.Context, cmd *cli.Command) error {
 	n, rev, hasRev := strings.Cut(n, "@")
 	line, convErr := strconv.Atoi(n)
 
-	if !ok || convErr != nil || line < 1 || (hasRev && rev == "") {
+	// a revision starting with a dash would reach git blame as an option
+	if !ok || convErr != nil || line < 1 || (hasRev && (rev == "" || strings.HasPrefix(rev, "-"))) {
 		return fmt.Errorf("lore why takes path:line[@rev] (got %q)", arg)
 	}
 

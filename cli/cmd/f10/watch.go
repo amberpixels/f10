@@ -693,7 +693,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 		cwd:        main,
 		plansDir:   t.sharedPlansDir(),
 		title:      titleLookup(t, r.Number),
-		lore:       func() string { return loreNote(&lore.Store{Root: loreRootFor(t)}, r.Head().ID) },
+		loreStore:  &lore.Store{Root: loreRootFor(t)},
 		mergedOnly: true,
 	})
 

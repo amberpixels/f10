@@ -2154,6 +2154,46 @@ func TestFinishLoreGate(t *testing.T) {
 		}
 	})
 
+	// a branch never pushed lands here, and is gated the same way
+	neverPushed := func(t *testing.T, gate string) (*finishFixture, string, error) {
+		t.Helper()
+
+		fx := newFinishFixture(t)
+		fx.noPull()
+		fx.in.method = "squash"
+		fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+		fx.f.script("git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second", "s9")
+		fx.f.script("git merge --ff-only s9", "")
+		fx.in.loreStore, fx.in.gate = storeIn(fx), gate
+
+		out, err := fx.run(t)
+
+		return fx, out, err
+	}
+
+	t.Run("never pushed, warn", func(t *testing.T) {
+		fx, out, err := neverPushed(t, "warn")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !fx.f.called("git merge --ff-only s9") ||
+			!strings.Contains(out, "lore check GH-1: no entries for GH-1 (lore_gate: warn): merged anyway") {
+			t.Errorf("warn did not land the branch with a note:\n%s", out)
+		}
+	})
+
+	t.Run("never pushed, block", func(t *testing.T) {
+		fx, _, err := neverPushed(t, "block")
+		if err == nil || !strings.Contains(err.Error(), "(lore_gate: block)") {
+			t.Fatalf("err = %v", err)
+		}
+
+		if fx.f.called("git commit-tree") || fx.f.called("git merge --ff-only") || fx.f.called("git worktree remove") {
+			t.Errorf("block landed or removed something: %v", fx.f.calls)
+		}
+	})
+
 	t.Run("passes", func(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
