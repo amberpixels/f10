@@ -606,6 +606,14 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	if in.rec != nil {
 		fmt.Fprintf(w, "drive %d\n", in.rec.Number)
 		in.savePending(nil)
+
+		// the daemon running this drive learns its number here
+		if path := os.Getenv(daemon.NumberFileEnv); path != "" {
+			//nolint:gosec // the daemon names the path, as this same user
+			if err := os.WriteFile(path, []byte(strconv.Itoa(in.rec.Number)+"\n"), 0o600); err != nil {
+				fmt.Fprintf(w, "  telling the daemon the drive's number: %v\n", err)
+			}
+		}
 	}
 
 	runs := make([]*driveRun, 0, len(order))

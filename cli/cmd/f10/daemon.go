@@ -224,6 +224,19 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 
+	return followDrive(ctx, w, dir, ver, req, nil)
+}
+
+// followDrive hands req to the daemon in dir and follows the drive until
+// it exits, into the next daemon when an upgrade drained it. spawn starts a
+// daemon; nil is this binary's.
+func followDrive(
+	ctx context.Context,
+	w io.Writer,
+	dir, ver string,
+	req daemon.Request,
+	spawn func(context.Context) error,
+) error {
 	follow := false
 
 	for {
@@ -231,6 +244,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 			Dir:     dir,
 			Version: ver,
 			Follow:  follow,
+			Spawn:   spawn,
 			Draining: func(old string) {
 				fmt.Fprintf(w, "replacing f10 daemon %s with %s: its drives stop at their next tick\n", old, ver)
 			},
@@ -288,7 +302,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 		req = daemon.Request{
 			Op:     daemon.OpRun,
 			Argv:   []string{"--resume", strconv.Itoa(exit.Drive)},
-			Dir:    cwd,
+			Dir:    req.Dir,
 			Root:   req.Root,
 			Env:    req.Env,
 			Resume: exit.Drive,

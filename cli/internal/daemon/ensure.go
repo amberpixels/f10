@@ -45,6 +45,33 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 		e.DrainWait = 11 * time.Minute
 	}
 
+	// the client that drained the daemon starts the next one; a follower
+	// starting its own could bring an older binary back
+	if e.Follow {
+		if rep, ok := e.awaitAny(ctx); ok {
+			return rep, nil
+		}
+	}
+
+	for range 3 {
+		rep, done, err := e.settle(ctx)
+		if err != nil || done {
+			return rep, err
+		}
+
+		rep, started, err := e.start(ctx)
+		if err != nil || started {
+			return rep, err
+		}
+	}
+
+	return Reply{}, errors.New("the f10 daemon kept changing while this client started: run the command again")
+}
+
+// settle uses a running daemon this client keeps, else waits out one that
+// is stopping or drains one this client replaces; done is false when a
+// daemon must be started.
+func (e *Ensurer) settle(ctx context.Context) (Reply, bool, error) {
 	rep, err := e.hello(ctx)
 
 	_, held := drives.Probe(e.Dir, "daemon")
@@ -52,45 +79,52 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 	switch {
 	case (err == nil && rep.Stopping) || (err != nil && held):
 		// a daemon draining its drives: let it finish, then start anew
-		if err := e.gone(ctx); err != nil {
-			return Reply{}, err
-		}
+		return Reply{}, false, e.gone(ctx)
 	case err == nil && e.keeps(rep):
 		if rep.Version != e.Version && !e.Follow && e.Kept != nil {
 			e.Kept(rep.Version)
 		}
 
-		return rep, nil
+		return rep, true, nil
 	case err == nil:
 		if e.Draining != nil {
 			e.Draining(rep.Version)
 		}
 
 		if _, err := Call(ctx, e.Dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
-			return Reply{}, fmt.Errorf("stopping daemon %s: %w", rep.Version, err)
+			return Reply{}, false, fmt.Errorf("stopping daemon %s: %w", rep.Version, err)
 		}
 
-		if err := e.gone(ctx); err != nil {
-			return Reply{}, err
-		}
+		return Reply{}, false, e.gone(ctx)
 	}
 
+	return Reply{}, false, nil
+}
+
+// start spawns this binary's daemon under the start lease. started is
+// false when, holding the lease, it finds a daemon it must not start over:
+// one stopping, or one it replaces, which settle handles again.
+func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 	if err := os.MkdirAll(e.Dir, 0o700); err != nil {
-		return Reply{}, fmt.Errorf("daemon: %w", err)
+		return Reply{}, false, fmt.Errorf("daemon: %w", err)
 	}
 
 	if err := ownDir(e.Dir); err != nil {
-		return Reply{}, err
+		return Reply{}, false, err
 	}
 
 	lease, err := e.startLease(ctx)
 	if err != nil {
-		return Reply{}, err
+		return Reply{}, false, err
 	}
 	defer lease.Release()
 
-	if rep, err := e.hello(ctx); err == nil && !rep.Stopping && e.keeps(rep) {
-		return rep, nil
+	if rep, err := e.hello(ctx); err == nil {
+		return rep, !rep.Stopping && e.keeps(rep), nil
+	}
+
+	if _, held := drives.Probe(e.Dir, "daemon"); held {
+		return Reply{}, false, nil
 	}
 
 	spawn := e.Spawn
@@ -99,24 +133,61 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 	}
 
 	if err := spawn(ctx); err != nil {
-		return Reply{}, fmt.Errorf("starting the f10 daemon: %w", err)
+		return Reply{}, false, fmt.Errorf("starting the f10 daemon: %w", err)
 	}
 
 	deadline := time.Now().Add(e.StartWait)
 	for {
 		rep, err := e.hello(ctx)
 		if err == nil {
-			return rep, nil
+			return rep, true, nil
 		}
 
 		if time.Now().After(deadline) {
-			return Reply{}, fmt.Errorf("the f10 daemon did not start within %s: see %s", e.StartWait, LogPath(e.Dir))
+			return Reply{}, false, fmt.Errorf(
+				"the f10 daemon did not start within %s: see %s",
+				e.StartWait,
+				LogPath(e.Dir),
+			)
 		}
 
 		if err := sleep(ctx, 50*time.Millisecond); err != nil {
-			return Reply{}, err
+			return Reply{}, false, err
 		}
 	}
+}
+
+// awaitAny waits for a daemon, any version, to listen and not be stopping.
+// False when none appears: past DrainWait, or once no daemon has held the
+// lease for StartWait, the upgrading client having died.
+func (e *Ensurer) awaitAny(ctx context.Context) (Reply, bool) {
+	deadline := time.Now().Add(e.DrainWait + e.StartWait)
+
+	var free time.Time
+
+	for time.Now().Before(deadline) {
+		rep, err := e.hello(ctx)
+		if err == nil && !rep.Stopping {
+			return rep, true
+		}
+
+		_, held := drives.Probe(e.Dir, "daemon")
+
+		switch {
+		case err == nil || held:
+			free = time.Time{}
+		case free.IsZero():
+			free = time.Now()
+		case time.Since(free) > e.StartWait:
+			return Reply{}, false
+		}
+
+		if sleep(ctx, 100*time.Millisecond) != nil {
+			return Reply{}, false
+		}
+	}
+
+	return Reply{}, false
 }
 
 // keeps reports a running daemon this client uses as it is: following,

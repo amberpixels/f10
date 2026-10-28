@@ -6,7 +6,6 @@ import (
 	"context"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -76,7 +75,7 @@ func TestServeRunsAndAttaches(t *testing.T) {
 
 	req := Request{
 		Op:   OpRun,
-		Argv: []string{"echo drive 3; sleep 0.3; echo done; exit 4"},
+		Argv: []string{`echo 3 > "$F10_DRIVE_FILE"; echo drive 3; sleep 0.3; echo done; exit 4`},
 		Dir:  "/",
 		Root: "/r",
 		Key:  "GH-1",
@@ -143,7 +142,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
 	done := serve(t, s)
 
-	script := "trap 'exit 6' USR1; echo drive 5; while :; do sleep 0.05; done"
+	script := `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`
 
 	rep, err := Call(
 		t.Context(),
@@ -190,7 +189,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 		got = append(got, argv)
 		mu.Unlock()
 
-		return "/bin/sh", []string{"-c", "echo drive 5; echo \"$A\""}
+		return "/bin/sh", []string{"-c", `echo 5 > "$F10_DRIVE_FILE"; echo "$A"`}
 	}}
 	serve(t, next)
 
@@ -264,26 +263,6 @@ func TestEnsureStartsOneDaemon(t *testing.T) {
 	}
 }
 
-func TestNumberWriterFindsTheDriveLine(t *testing.T) {
-	found := make(chan int, 1)
-	w := &numberWriter{w: &strings.Builder{}, found: func(n int) { found <- n }}
-
-	for _, chunk := range []string{"note: model fell back\ndri", "ve 12\nGH-1 sent\n"} {
-		if _, err := w.Write([]byte(chunk)); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	select {
-	case n := <-found:
-		if n != 12 {
-			t.Errorf("found %d", n)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("no drive line found")
-	}
-}
-
 // A plain stop drains too, but hands nothing to a next daemon: the drive's
 // exit says it stopped, and the next daemon resumes nothing.
 func TestStopKeepsNoDrainedList(t *testing.T) {
@@ -292,7 +271,7 @@ func TestStopKeepsNoDrainedList(t *testing.T) {
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
 	done := serve(t, s)
 
-	script := "trap 'exit 6' USR1; echo drive 5; while :; do sleep 0.05; done"
+	script := `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`
 
 	rep, err := Call(t.Context(), dir, Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/r"}, 0)
 	if err != nil {
@@ -329,7 +308,7 @@ func TestStopNowCutsADrainShort(t *testing.T) {
 		dir,
 		Request{
 			Op:   OpRun,
-			Argv: []string{"trap '' USR1; echo drive 2; while :; do sleep 0.05; done"},
+			Argv: []string{`trap '' USR1; echo 2 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`},
 			Dir:  "/",
 			Root: "/r",
 		},
@@ -460,5 +439,31 @@ func waitNumbered(t *testing.T, dir string, n int) {
 		}
 
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// Past the drain deadline every drive still running is stopped, not only
+// the first one the deadline reaches.
+func TestDrainDeadlineStopsEveryDrive(t *testing.T) {
+	dir := runDir(t)
+
+	s := &Server{Dir: dir, Version: "v1", Child: shell, DrainWait: 200 * time.Millisecond}
+	done := serve(t, s)
+
+	for _, root := range []string{"/a", "/b"} {
+		req := Request{Op: OpRun, Argv: []string{"trap '' USR1; while :; do sleep 0.05; done"}, Dir: "/", Root: root}
+		if _, err := Call(t.Context(), dir, req, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a second drive that ignores the drain kept the daemon up")
 	}
 }

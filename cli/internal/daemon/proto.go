@@ -142,6 +142,10 @@ type Run struct {
 	Log   string    `json:"log"`
 }
 
+// NumberFileEnv names the file a drive the daemon runs writes its record
+// number to, once the record is open.
+const NumberFileEnv = "F10_DRIVE_FILE"
+
 // ErrNotRunning is a socket nobody listens on.
 var ErrNotRunning = errors.New("no f10 daemon is running")
 

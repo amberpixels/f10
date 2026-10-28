@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -15,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -294,11 +292,12 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 
 	c := &child{env: env, done: make(chan struct{})}
 	c.Root, c.Dir, c.Since, c.Log = root, dir, time.Now(), path
-	out := &numberWriter{w: f, found: func(n int) { s.numbered(c, n) }}
 
 	// a drive outlives the call that started it, and stops by its own signals
 	cmd := exec.CommandContext(context.WithoutCancel(s.ctx), name, args...)
-	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = dir, env, out, out
+	numberFile := path + ".drive"
+	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, f, f
+	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile)
 
 	if err := cmd.Start(); err != nil {
 		_ = f.Close()
@@ -312,8 +311,34 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 	s.Log.Printf("drive started in %s, pid %d, log %s", dir, c.PID, path)
 
 	go s.reap(c, f)
+	go s.awaitNumber(c, numberFile)
 
 	return c, nil
+}
+
+// awaitNumber reads the number the drive writes to numberFile once its
+// record opens, until the drive ends.
+func (s *Server) awaitNumber(c *child, numberFile string) {
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+
+	defer os.Remove(numberFile)
+
+	for {
+		if raw, err := os.ReadFile(numberFile); err == nil {
+			if n, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil && n > 0 {
+				s.numbered(c, n)
+
+				return
+			}
+		}
+
+		select {
+		case <-c.done:
+			return
+		case <-tick.C:
+		}
+	}
 }
 
 // numbered records the drive number the child printed, and the record's
@@ -424,19 +449,26 @@ func (s *Server) shutdown(mode stopMode) {
 		}
 	}
 
-	deadline := time.After(s.DrainWait)
+	deadline := time.NewTimer(s.DrainWait)
+	defer deadline.Stop()
+
+	late := false
 
 	for _, c := range runs {
-		select {
-		case <-c.done:
-		case <-s.escalate:
-			_ = c.cmd.Process.Signal(syscall.SIGTERM)
-			<-c.done
-		case <-deadline:
-			s.Log.Printf("drive %d did not drain within %s: stopping it", c.Drive, s.DrainWait)
-			_ = c.cmd.Process.Signal(syscall.SIGTERM)
-			<-c.done
+		if !late {
+			select {
+			case <-c.done:
+				continue
+			case <-s.escalate:
+			case <-deadline.C:
+				// past the deadline every drive left is stopped, not only this one
+				late = true
+			}
 		}
+
+		s.Log.Printf("drive %d did not drain: stopping it", c.Drive)
+		_ = c.cmd.Process.Signal(syscall.SIGTERM)
+		<-c.done
 	}
 
 	s.mu.Lock()
@@ -500,49 +532,4 @@ func (s *Server) resumeDrained() {
 
 		c.Drive = d.Drive
 	}
-}
-
-var driveLine = regexp.MustCompile(`^drive (\d+)$`)
-
-// numberWriter copies a drive's output to its log and reports the number
-// the drive prints on its `drive <n>` line, within its first lines.
-type numberWriter struct {
-	w     io.Writer
-	found func(int)
-
-	mu   sync.Mutex
-	head []byte
-	done bool
-}
-
-func (n *numberWriter) Write(p []byte) (int, error) {
-	n.mu.Lock()
-	if !n.done {
-		n.head = append(n.head, p...)
-
-		for {
-			i := bytes.IndexByte(n.head, '\n')
-			if i < 0 {
-				break
-			}
-
-			if m := driveLine.FindSubmatch(bytes.TrimSpace(n.head[:i])); m != nil {
-				num, _ := strconv.Atoi(string(m[1]))
-				n.done = true
-
-				go n.found(num)
-
-				break
-			}
-
-			n.head = n.head[i+1:]
-		}
-
-		if n.done || len(n.head) > 8<<10 {
-			n.done, n.head = true, nil
-		}
-	}
-	n.mu.Unlock()
-
-	return n.w.Write(p)
 }

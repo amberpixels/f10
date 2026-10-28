@@ -274,7 +274,6 @@ func (in *driveInput) releaseAll() {
 	in.own.Release()
 }
 
-// resumeLine is how the report says to answer the drive.
 // number is the drive's record number, 0 with no record.
 func (in *driveInput) number() int {
 	if in.rec == nil {
@@ -284,6 +283,7 @@ func (in *driveInput) number() int {
 	return in.rec.Number
 }
 
+// resumeLine is how the report says to answer the drive.
 func (in *driveInput) resumeLine() string {
 	if in.rec != nil {
 		return "f10 drive --resume " + strconv.Itoa(in.rec.Number)
