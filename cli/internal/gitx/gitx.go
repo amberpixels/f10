@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -34,7 +35,12 @@ var Exec = func(ctx context.Context, dir string, args ...string) (string, error)
 	out, err := cmd.Output()
 	if err != nil {
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok && ctx.Err() == nil {
-			return "", &ExitError{Args: args, Code: exit.ExitCode(), Stderr: strings.TrimSpace(stderr.String())}
+			return "", &ExitError{
+				Args:   args,
+				Code:   exit.ExitCode(),
+				Stdout: strings.TrimSpace(string(out)),
+				Stderr: strings.TrimSpace(stderr.String()),
+			}
 		}
 
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
@@ -47,10 +53,13 @@ var Exec = func(ctx context.Context, dir string, args ...string) (string, error)
 	return strings.TrimSpace(string(out)), nil
 }
 
-// An ExitError is git having run and exited non-zero.
+// An ExitError is git having run and exited non-zero. Stdout is what git
+// printed before exiting, for the reads whose exit 1 carries an answer
+// (merge-tree names the conflicting files that way).
 type ExitError struct {
 	Args   []string
 	Code   int
+	Stdout string
 	Stderr string
 }
 
@@ -292,6 +301,37 @@ func MergesCleanly(ctx context.Context, dir, base, head string) (bool, error) {
 	default:
 		return false, err
 	}
+}
+
+// Conflicts is the paths on which head conflicts with base, sorted, tried
+// in memory as MergesCleanly does: nil is a clean merge. git exits 1 with
+// the tree and the paths on stdout for a conflict, and with its reason on
+// stderr for a ref it cannot merge, which is an error.
+func Conflicts(ctx context.Context, dir, base, head string) ([]string, error) {
+	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head)
+
+	switch {
+	case err == nil:
+		return nil, nil
+	case absent(err) && quiet(err):
+	default:
+		return nil, err
+	}
+
+	exit, _ := errors.AsType[*ExitError](err)
+	_, rest, _ := strings.Cut(exit.Stdout, "\n")
+
+	var paths []string
+
+	for line := range strings.SplitSeq(rest, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			paths = append(paths, line)
+		}
+	}
+
+	slices.Sort(paths)
+
+	return paths, nil
 }
 
 // MergeTree is the tree of head merged into base, built in memory as

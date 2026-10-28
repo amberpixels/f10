@@ -359,3 +359,80 @@ func TestUnsetConfig(t *testing.T) {
 		t.Errorf("calls = %v", *calls)
 	}
 }
+
+// Conflicts reads the conflicting paths from merge-tree's stdout on exit 1,
+// sorted and without the tree line; a clean merge is nil, and a loud exit
+// is an error.
+func TestConflictsNamesThePaths(t *testing.T) {
+	prev := Exec
+	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+		switch args[len(args)-1] {
+		case "clean":
+			return "tree", nil
+		case "bad":
+			return "", &ExitError{Args: args, Code: 1, Stderr: "fatal: not something we can merge"}
+		default:
+			return "", &ExitError{Args: args, Code: 1, Stdout: "tree\nb.go\na.go\n"}
+		}
+	}
+
+	t.Cleanup(func() { Exec = prev })
+
+	if paths, err := Conflicts(t.Context(), ".", "main", "clean"); paths != nil || err != nil {
+		t.Errorf("a clean merge = %q, %v, want nil", paths, err)
+	}
+
+	paths, err := Conflicts(t.Context(), ".", "main", "side")
+	if err != nil || strings.Join(paths, ",") != "a.go,b.go" {
+		t.Errorf("a conflict = %q, %v, want a.go,b.go", paths, err)
+	}
+
+	if _, err := Conflicts(t.Context(), ".", "main", "bad"); err == nil {
+		t.Error("a bad ref read as a conflict, want an error")
+	}
+}
+
+// Conflicts against a real git: the paths come from merge-tree's stdout,
+// which Exec keeps on the exit error.
+func TestConflictsOnARealConflict(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+
+		if _, err := Exec(t.Context(), dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(name, body string) {
+		t.Helper()
+
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "t@t")
+	run("config", "user.name", "t")
+	write("f", "base\n")
+	write("g", "base\n")
+	run("add", "f", "g")
+	run("commit", "-qm", "base")
+	run("branch", "side")
+	write("f", "main\n")
+	write("g", "main\n")
+	run("commit", "-qam", "main")
+	run("checkout", "-q", "side")
+	write("f", "side\n")
+	write("g", "side\n")
+	run("commit", "-qam", "side")
+
+	paths, err := Conflicts(t.Context(), dir, "main", "side")
+	if err != nil || strings.Join(paths, ",") != "f,g" {
+		t.Errorf("a conflicting branch = %q, %v, want f,g", paths, err)
+	}
+
+	if paths, err := Conflicts(t.Context(), dir, "main", "main"); paths != nil || err != nil {
+		t.Errorf("main into main = %q, %v, want clean", paths, err)
+	}
+}
