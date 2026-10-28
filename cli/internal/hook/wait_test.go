@@ -5,16 +5,20 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 )
 
+// event is a hook payload; a tool given as `Bash#7` carries tool_use_id 7.
 func event(t *testing.T, session, name, tool string) []byte {
 	t.Helper()
 
+	tool, id, _ := strings.Cut(tool, "#")
+
 	raw, err := json.Marshal(map[string]any{
-		"session_id": session, "cwd": "/work/acme", "hook_event_name": name, "tool_name": tool,
+		"session_id": session, "cwd": "/work/acme", "hook_event_name": name, "tool_name": tool, "tool_use_id": id,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,6 +99,22 @@ func TestWaitsOpenAndEnd(t *testing.T) {
 			name:   "a denied permission ends at the turn's end",
 			events: [][3]string{{"s1", "PermissionRequest", "Bash"}, {"s1", "Stop"}},
 			want:   []string{"wait_started permission", "wait_ended permission by Stop", "wait_started turn"},
+		},
+		{
+			name: "a tool that fails after its dialog ends it",
+			events: [][3]string{
+				{"s1", "PermissionRequest", "Bash"}, {"s1", "PostToolUseFailure", "Bash"},
+			},
+			want: []string{"wait_started permission", "wait_ended permission by PostToolUseFailure"},
+		},
+		{
+			name: "another call of the same tool leaves the dialog open",
+			events: [][3]string{
+				{"s1", "PermissionRequest", "Bash#2"},
+				{"s1", "PostToolUse", "Bash#1"},
+				{"s1", "PostToolUse", "Bash#2"},
+			},
+			want: []string{"wait_started permission", "wait_ended permission by PostToolUse"},
 		},
 		{
 			name:   "a session with no run waits on nothing",

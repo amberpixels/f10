@@ -68,7 +68,20 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "*",
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|AskUserQuestion|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch|AskUserQuestion|mcp__.*",
         "hooks": [
           {
             "type": "command",

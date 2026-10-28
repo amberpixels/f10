@@ -13,6 +13,7 @@ import (
 type openWait struct {
 	Reason string `json:"reason"`
 	Tool   string `json:"tool,omitempty"`
+	UseID  string `json:"tool_use_id,omitempty"`
 }
 
 // waits ends the session's open wait when this event ends it, then opens
@@ -41,7 +42,7 @@ func waits(env *Env, sid string, p Payload) []observe.Observation {
 		return obs
 	}
 
-	raw, err := json.Marshal(openWait{Reason: reason, Tool: tool})
+	raw, err := json.Marshal(openWait{Reason: reason, Tool: tool, UseID: p.ToolUseID})
 	if err != nil || os.MkdirAll(env.StateDir, 0o750) != nil || os.WriteFile(path, raw, 0o600) != nil {
 		return obs
 	}
@@ -65,16 +66,21 @@ func opens(p Payload) (string, string) {
 }
 
 // ends reports whether an event ends an open wait. A prompt ends any wait;
-// a tool finishing ends only its own question or dialog, since an async
-// PostToolUse of the turn's last tool can land after Stop opened the turn.
-// A denied permission has no PostToolUse: the next prompt or turn end
-// closes it.
+// a tool finishing, or failing, ends only its own question or dialog, since
+// an async PostToolUse of the turn's last tool can land after Stop opened
+// the turn. Its own is the same tool call where both payloads carry the id,
+// else the same tool. A denied permission runs no tool: the next prompt or
+// turn end closes it.
 func ends(w openWait, p Payload) bool {
 	switch p.Event {
 	case "UserPromptSubmit", "UserPromptExpansion":
 		return true
-	case "PostToolUse":
-		return w.Reason != observe.WaitTurn && w.Tool == p.ToolName
+	case "PostToolUse", "PostToolUseFailure":
+		if w.Reason == observe.WaitTurn || w.Tool != p.ToolName {
+			return false
+		}
+
+		return w.UseID == "" || p.ToolUseID == "" || w.UseID == p.ToolUseID
 	}
 
 	return false

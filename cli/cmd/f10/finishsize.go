@@ -24,7 +24,9 @@ type branchSize struct {
 // measureBranch reads the branch's size before it lands: a local merge or
 // rebase moves the merge base to the branch's tip, after which the diff
 // reads zero. A stacked branch measures against its base branch, else the
-// default branch's copy the merge goes into. False when no base resolves.
+// default branch's copy the merge goes into. A PR the host already merged
+// with a merge commit reads zero the same way, so it is measured from that
+// commit's first parent. False when no base resolves.
 func measureBranch(ctx context.Context, dir, branch, def string, local bool) (branchSize, bool) {
 	bases := []string{"origin/" + def}
 	if local {
@@ -35,11 +37,32 @@ func measureBranch(ctx context.Context, dir, branch, def string, local bool) (br
 		bases = append([]string{after}, bases...)
 	}
 
+	head := "refs/heads/" + branch
+
 	for _, base := range bases {
-		out, err := gitx.Exec(ctx, dir, "diff", "--numstat", "--no-renames", base+"...refs/heads/"+branch)
-		if err == nil {
-			return numstatSize(out, base), true
+		out, err := gitx.Exec(ctx, dir, "diff", "--numstat", "--no-renames", base+"..."+head)
+		if err != nil {
+			continue
 		}
+
+		s := numstatSize(out, base)
+		if s.files == 0 && !local {
+			if merge, _, _ := strings.Cut(gitx.Out(ctx, dir, "rev-list", "--ancestry-path", "--merges",
+				"--reverse", head+".."+base), "\n"); merge != "" {
+				if out, err := gitx.Exec(
+					ctx,
+					dir,
+					"diff",
+					"--numstat",
+					"--no-renames",
+					merge+"^1..."+head,
+				); err == nil {
+					s = numstatSize(out, merge+"^1")
+				}
+			}
+		}
+
+		return s, true
 	}
 
 	return branchSize{}, false

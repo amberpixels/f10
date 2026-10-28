@@ -195,6 +195,10 @@ func windows(evs []ledger.Event) []Window {
 // waitSpans pairs each wait's start with its end. The hook ends a wait
 // before it opens the next, so a start followed by another start lost its
 // end: it ends there. One with neither after it has no end.
+//
+// A turn also ends at the first row only a working turn writes: Stop and
+// the next prompt are both async hooks, and a prompt hook that ran before
+// Stop wrote its marker leaves the turn open into the work that followed.
 func waitSpans(evs []ledger.Event) []span {
 	var out []span
 
@@ -203,10 +207,12 @@ func waitSpans(evs []ledger.Event) []span {
 			continue
 		}
 
+		turn := e.Payload.Val["reason"] == "turn"
 		s := span{from: e.At}
 
 		for _, next := range evs[i+1:] {
-			if next.Kind == ledger.WaitEnded || next.Kind == ledger.WaitStarted {
+			if next.Kind == ledger.WaitEnded || next.Kind == ledger.WaitStarted ||
+				turn && next.Kind != ledger.SessionStopped && next.At.After(e.At) {
 				s.to = next.At
 
 				break

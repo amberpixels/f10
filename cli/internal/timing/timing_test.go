@@ -149,6 +149,19 @@ func TestWindows(t *testing.T) {
 			want: []got{{"implement", 3}},
 		},
 		{
+			name: "a turn whose end was lost ends at the next work",
+			events: join(
+				run(0, "ship"),
+				claim(0, "ship", "running", "implement"),
+				ev(2, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(2, ledger.SessionStopped, "FT-1", nil),
+				claim(4, "plan", "done"),
+				ev(9, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				claim(10, "ship", "running", "pr"),
+			),
+			want: []got{{"implement", 8}},
+		},
+		{
 			name: "the Stop backstop ends the step",
 			events: join(
 				run(0, "ship"),
@@ -193,13 +206,13 @@ func TestWindowsSkipASessionWithNoWaits(t *testing.T) {
 	}
 }
 
-// A wait nothing ended runs to the end of the record: the window it starts
-// in has no active time to report.
+// A question nothing ended runs to the end of the record: the window it
+// starts in has no active time to report.
 func TestWindowsDropAWindowAnUnendedWaitRunsInto(t *testing.T) {
 	ws := Windows(join(
 		run(0, "ship"),
 		claim(0, "ship", "running", "implement"),
-		ev(3, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+		ev(3, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "question"}),
 		claim(9, "ship", "running", "pr"),
 	))
 	if len(ws) != 0 {

@@ -741,7 +741,8 @@ Inside a session, `/f10:board` runs the command with the same flags and prints i
 
 Active means the window minus every wait on the user inside it: a turn ended and not yet answered, an `AskUserQuestion` open, a permission dialog open.
 The hook records each as `wait_started` and `wait_ended` in the ledger.
-Tool run time (tests, lint) stays in.
+Tool run time (tests, lint) stays in, except for a tool that needed a permission dialog: no hook marks the approval, so its whole run counts as waiting.
+Step boundaries are the `f10-state.sh set ship running <entry>` calls; a skipped one counts the next step's time as the step before it.
 A value never recorded prints `-`, never `0`, and no wall duration is printed.
 Counting starts with the release that records waits: a session with no wait in the ledger, and a window a wait with no recorded end runs into, count nothing.
 `--since` takes days or weeks (`7d`, `2w`) and keeps the tasks active in that span; a task id shows that task whatever its age.

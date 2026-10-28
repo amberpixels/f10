@@ -52,6 +52,7 @@ func newFakes(t *testing.T) *fakes {
 	// and finish measures an empty branch, so it records no size
 	f.absent = []string{
 		linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
+		"git rev-list --ancestry-path --merges",
 	}
 
 	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, projectOf

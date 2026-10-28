@@ -33,7 +33,8 @@ type Payload struct {
 	Source       string          `json:"source"`       // SessionStart: startup, resume, clear, compact
 	CommandName  string          `json:"command_name"` // UserPromptExpansion
 	CommandArgs  string          `json:"command_args"`
-	ToolName     string          `json:"tool_name"` // PreToolUse, PostToolUse, PermissionRequest
+	ToolName     string          `json:"tool_name"` // PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest
+	ToolUseID    string          `json:"tool_use_id"`
 	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
 }
