@@ -86,6 +86,12 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 	notify(ctx, env, sid, p.Cwd, waits(env, sid, p)...)
 
 	switch p.Event {
+	case "UserPromptSubmit":
+		// the mark proves to a drive that the agent took a prompt, even when
+		// the turn ended between two of its looks
+		if sid != "" && p.Cwd != "" {
+			_ = state.MarkPrompt(env.StateDir, sid, state.RootOf(p.Cwd), env.now())
+		}
 	case "UserPromptExpansion":
 		// the typed path: /f10:ship reaches the model as an expansion, never
 		// as a Skill tool call. Bare status only: `/f10:status <task-id>` may

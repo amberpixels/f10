@@ -85,6 +85,7 @@ type Effective struct {
 	Flows       map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
 	FlowByArea  map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
 	DriveFinish bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
+	DriveEnv    []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
 	ReportBack  bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
 	UpkeepPaths []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 
