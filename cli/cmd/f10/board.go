@@ -1125,6 +1125,8 @@ func stageStyle(stage string) lipgloss.Style {
 		return s.Bold(true).Foreground(lipgloss.Color("3"))
 	case lookaround.StageInReview, lookaround.StagePROpen:
 		return s.Bold(true).Foreground(lipgloss.Color("5"))
+	case lookaround.StagePlanning:
+		return s.Bold(true).Foreground(lipgloss.Color("4"))
 	case lookaround.StagePlanned:
 		return s.Foreground(lipgloss.Color("4"))
 	case lookaround.StageMergedUnfinished:

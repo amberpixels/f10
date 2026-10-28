@@ -87,6 +87,8 @@ func (r *row) next() {
 		default:
 			r.Next = text("in progress")
 		}
+	case StagePlanning:
+		r.Next = command(cmdStatus)
 	case StagePlanned:
 		switch {
 		case r.running():
@@ -106,6 +108,7 @@ func (r *row) next() {
 			StageMergedUnfinished: "merged, branch left behind",
 			StageReady:            "ready to merge",
 			StagePROpen:           "open, no review yet",
+			StagePlanning:         "planning",
 			StagePlanned:          "planned",
 			StageNext:             "not started",
 		}[r.Stage])

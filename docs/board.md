@@ -79,7 +79,8 @@ Rows are listed in this order:
 | `in-review` | reviewed or being reviewed, something still open |
 | `pr-open` | an open request nobody has reviewed |
 | `implementing` | code being written: a live run before `pr`, or a draft request |
-| `planned` | started, no code yet: a plan saved, or a worktree with nothing ahead |
+| `planning` | a live run writing its plan |
+| `planned` | started, no code yet: a plan saved, a worktree with nothing ahead, or a live run at the plan judge |
 | `merged-unfinished` | merged in the window, its worktree still on disk; releases its dependents like `done` |
 | `next` | open on the tracker, not started |
 | `done` | merged in the window, nothing left behind |
@@ -105,12 +106,13 @@ A request merged before the window, or closed unmerged, is no request.
 2. **Asks**: a live run holding an ask (`local`); the state block's `asks` above zero (`trace`).
 3. **Stopped**: a live run failed or blocked (`local`); the latest verdict file says rethink or stop, no run is live, and the task is still open or has a request (`local`).
 4. **Ready**: an open request, not a draft, mergeable, checks not red, and the state block says a review round ran with nothing open (`trace`), or, with no block, the host's review decision is approved (`guessed`).
-5. **In review**: a live run at `review`, `resolve` or `judge` (`local`); the latest findings file has open findings and the request is open (`local`); the block's step is one of those with `open` above zero (`trace`); a review submitted, a reviewer requested, changes requested, or the declared remote reviewer's review unhandled (`guessed`).
+5. **In review**: a live ship run at `review`, `resolve` or a `judge` after `implement` (`local`), but `planned` at a `judge` before `implement`, the plan judge (`local`); the latest findings file has open findings and the request is open (`local`); the block's step is one of those with `open` above zero (`trace`); a review submitted, a reviewer requested, changes requested, or the declared remote reviewer's review unhandled (`guessed`).
 6. **Open**: an open request, not a draft: `trace` with a state block, `guessed` without.
 7. **Implementing**: a live run in `ship` (`local`); a draft request (`guessed`); a worktree with commits past the default branch, for a task the tracker lists as open (`local`).
-8. **Planned**: a plan file or a worktree with no commits past the default branch, for a task the tracker lists as open, or a live run in `plan` (`local`).
-9. **Next**: a task the tracker lists as open (`tracker`).
-10. Nothing above: not a row.
+8. **Planning**: a live run in `plan`, the judge fetch runs on a stale task included (`local`).
+9. **Planned**: a plan file or a worktree with no commits past the default branch, for a task the tracker lists as open (`local`).
+10. **Next**: a task the tracker lists as open (`tracker`).
+11. Nothing above: not a row.
 
 **The base rule** runs after, in dependency order: a row whose base task (the `f10-after` the branch records, else the block's `after`, else the task body's `After:`) has a row neither `done` nor `merged-unfinished` is `blocked` with that base in `blocked_by`, unless a run is working on it or it is already done, merged or asking; `stage_from` is the base link's source.
 Merging releases a dependent; the base's leftover worktree or branch is its own chore.
@@ -129,7 +131,8 @@ A base with no row on the board counts as done, so a reader with the checkout an
 | `in-review` | `/f10:resolve <id> ci` with a remote review unhandled; `/f10:resolve <id>` with findings open; `changes requested`; `at <step>` for a live run; else `waiting on review` |
 | `pr-open` | `/f10:review <id>` |
 | `implementing` | `at <step>` for a live run; `/f10:ship <id>` for a worktree; `in progress` for a draft |
-| `planned` | `/f10:status <id>` while a run plans; `/f10:ship <id>` with a worktree; else `f10 start <id>` |
+| `planning` | `/f10:status <id>` |
+| `planned` | `/f10:status <id>` while a run is at the plan judge; `/f10:ship <id>` with a worktree; else `f10 start <id>` |
 | `next` | `f10 start <id>` |
 
 A row with no task id gets a sentence where a command would need one.

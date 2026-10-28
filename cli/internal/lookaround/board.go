@@ -87,6 +87,7 @@ const (
 	StageInReview         = "in-review"
 	StagePROpen           = "pr-open"
 	StageImplementing     = "implementing"
+	StagePlanning         = "planning"
 	StagePlanned          = "planned"
 	StageMergedUnfinished = "merged-unfinished"
 	StageNext             = "next"
@@ -96,7 +97,7 @@ const (
 // Stages is every stage in listing order.
 var Stages = []string{
 	StageAsksWaiting, StageBlocked, StageReady, StageInReview, StagePROpen,
-	StageImplementing, StagePlanned, StageMergedUnfinished, StageNext, StageDone,
+	StageImplementing, StagePlanning, StagePlanned, StageMergedUnfinished, StageNext, StageDone,
 }
 
 // The groups the state's rows draw under, in listing order.

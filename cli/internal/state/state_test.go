@@ -199,6 +199,73 @@ func TestPipelineRoundTrip(t *testing.T) {
 	}
 }
 
+// A step the pipeline names twice is told apart by its place: the walk of
+// the default flow puts the second judge at 6, a resumed judge stays put,
+// the place survives a save, and an undeclared leaf has none.
+func TestLeafPlace(t *testing.T) {
+	dir := t.TempDir()
+	r := Fresh("at")
+
+	steps := []string{"judge", "implement", "cleanup", "pr", "review:local", "judge", "pr"}
+	if err := r.SetPipeline(steps); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, step := range steps {
+		if err := r.Set("ship", "running", step); err != nil {
+			t.Fatal(err)
+		}
+
+		if r.At != i+1 {
+			t.Errorf("at %s: place %d, want %d", step, r.At, i+1)
+		}
+
+		if i == 0 {
+			// a judge that stops and resumes is the same judge
+			for _, status := range []string{"blocked", "running"} {
+				if err := r.Set("ship", status, step); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if r.At != 1 {
+				t.Errorf("resumed judge: place %d, want 1", r.At)
+			}
+		}
+
+		if i == 5 {
+			if err := r.Save(dir, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := Load(Path(dir, "at"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got.At != 6 {
+				t.Errorf("loaded place %d, want 6", got.At)
+			}
+		}
+	}
+
+	if err := r.Set("ship", "running", "deploy"); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.At != 0 {
+		t.Errorf("undeclared leaf: place %d, want 0", r.At)
+	}
+
+	if err := r.Set("ship", "done", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.At != 0 {
+		t.Errorf("done: place %d, want 0", r.At)
+	}
+}
+
 // Show and `f10 status` print the same facts: every label Show prints must
 // come back with the same value from the Run, so a field added to one fails
 // here until the other carries it too.
