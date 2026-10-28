@@ -1735,8 +1735,10 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
 	case answered:
-		// the agent heard the answer where it was given: its turn began then
-		r.sentAt = answeredAt.Truncate(time.Second)
+		// the agent heard the answer where it was given: its turn began
+		// then, and the prompt mark the hook wrote just before the claim
+		// may fall in the second before
+		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
 		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", id, skill)
 	case run != nil && skill == "catchup" && guardStop(run):

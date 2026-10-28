@@ -190,11 +190,28 @@ func TestUntakenAndPrune(t *testing.T) {
 		t.Errorf("Untaken(/a) = %+v", got)
 	}
 
+	gone := sample("/c")
+	gone.Worktree = filepath.Join(dir, "removed")
+
+	here := sample("/e")
+	here.Worktree = dir
+
+	for _, a := range []Ask{gone, here} {
+		if _, _, err := Raise(dir, a, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	Prune(dir, time.Now())
 
 	left, _ := os.ReadDir(filepath.Join(dir, answeredDir))
 	if len(left) != 1 {
 		t.Errorf("after prune %d answered, want 1", len(left))
+	}
+
+	// an ask whose worktree is gone has nobody left to answer it
+	if open, _ := Open(dir); len(open) != 1 || open[0].Root != "/e" {
+		t.Errorf("open after prune = %+v", open)
 	}
 }
 

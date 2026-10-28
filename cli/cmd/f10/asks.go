@@ -737,6 +737,10 @@ func runAsksHook(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
+	if p.Event == "SessionStart" {
+		asks.Prune(asks.Dir(), time.Now())
+	}
+
 	// every prompt in every session runs this: an empty inbox costs no git
 	if open, _ := asks.Open(asks.Dir()); len(open) == 0 {
 		return nil

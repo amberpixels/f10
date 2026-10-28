@@ -333,8 +333,16 @@ func Untaken(dir, root string) ([]Ask, error) {
 	return out, err
 }
 
-// Prune drops answered asks older than a week.
+// Prune drops answered asks older than a week, and open ones whose
+// worktree is gone: a task finished or removed has no agent left to ask.
 func Prune(dir string, now time.Time) {
+	open, _ := list(dir)
+	for _, a := range open {
+		if _, err := os.Stat(a.Worktree); a.Worktree != "" && errors.Is(err, fs.ErrNotExist) {
+			_ = os.Remove(openPath(dir, a.Key()))
+		}
+	}
+
 	entries, _ := os.ReadDir(filepath.Join(dir, answeredDir))
 
 	for _, e := range entries {
