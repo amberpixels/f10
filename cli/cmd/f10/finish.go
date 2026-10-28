@@ -223,6 +223,8 @@ type finishInput struct {
 	// sweep runs the janitor once the task's own cleanup is done and before
 	// a workspace closes, since closing this one ends the process; nil for none
 	sweep func(context.Context)
+	// progress names each action as it starts, for drive's record; nil for none
+	progress func(string)
 }
 
 // finish runs the flow: branch, worktree, the refusals, the merge, the
@@ -376,12 +378,16 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		sized = sized && size.files > 0
 
 		if local {
+			in.step("merging " + name + " into " + def)
+
 			if sha, notes, err = landLocal(ctx, in, name, def); err != nil {
 				return err
 			}
 
 			notes = append(notes, unclosedNote(in))
 		} else {
+			in.step("merging " + pullNumber(p.url()))
+
 			if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
 				return err
 			}
@@ -391,6 +397,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			// on main, the default branch is checked out nowhere, so pullMain fetches
 			// into it and main stays on the task's branch until the end: a failure
 			// before then leaves a rerun the same shape to find
+			in.step("pulling " + def)
+
 			note, err := pullMain(ctx, in.main, def, p.sha())
 			if err != nil {
 				return err
@@ -426,6 +434,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			rows = append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
 		}
 	}
+
+	in.step("archiving the plan")
 
 	archived, note, err := archivePlan(path, in.main, in.plansDir, in.task.ID)
 	if err != nil {
@@ -507,6 +517,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return nil
 	}
 
+	in.step("removing worktree")
+
 	if err := removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike); err != nil {
 		return err
 	}
@@ -524,10 +536,18 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if ws != nil {
+		in.step("closing workspace")
+
 		return herdr.CloseWorkspace(ctx, in.main, ws.ID)
 	}
 
 	return nil
+}
+
+func (in finishInput) step(action string) {
+	if in.progress != nil {
+		in.progress(action)
+	}
 }
 
 func (in finishInput) sweepNow(ctx context.Context) {

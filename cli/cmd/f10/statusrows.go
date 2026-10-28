@@ -352,6 +352,15 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts)
 func (row *taskRow) finish(f rowFacts) {
 	row.Stage, row.Step = stageOf(f)
 
+	// a shipped task whose finish drive holds says so where the step goes
+	if row.Stage == stageShipped {
+		for _, g := range row.Gates {
+			if g.Step == "finish" && g.Via == viaDrive {
+				row.Step = "finish: " + g.text()
+			}
+		}
+	}
+
 	switch row.Stage {
 	case stageAsking:
 		row.Ask = f.run.Ask
@@ -552,12 +561,17 @@ func prColumn(r taskRow) string {
 		return ""
 	}
 
-	col := "#" + path.Base(r.PR)
+	col := pullNumber(r.PR)
 	if r.PRState != "" && r.PRState != pullOpen {
 		col += " " + r.PRState
 	}
 
 	return col
+}
+
+// pullNumber is a request's url as `#128`.
+func pullNumber(url string) string {
+	return "#" + path.Base(url)
 }
 
 func pad(s string, width int) string {

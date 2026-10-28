@@ -1929,3 +1929,45 @@ func sessionTask(t *testing.T, id string) {
 		t.Fatal(err)
 	}
 }
+
+// finish names each action as it starts, for drive's record: the merge by
+// its PR, or the branch it lands here, then the local cleanup.
+func TestFinishReportsProgress(t *testing.T) {
+	t.Run("pr", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.openPR()
+
+		var got []string
+
+		fx.in.progress = func(a string) { got = append(got, a) }
+
+		if out, err := fx.run(t); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		want := []string{"merging #9", "pulling main", "archiving the plan", "removing worktree", "closing workspace"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("progress = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("local", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.noPull()
+		fx.in.method = "merge"
+		fx.f.script("git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1'", "mm")
+		fx.f.script("git merge --ff-only mm", "")
+
+		var got []string
+
+		fx.in.progress = func(a string) { got = append(got, a) }
+
+		if out, err := fx.run(t); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		if len(got) == 0 || got[0] != "merging GH-1 into main" || slices.Contains(got, "pulling main") {
+			t.Errorf("progress = %q, want a local merge first and no pull", got)
+		}
+	})
+}

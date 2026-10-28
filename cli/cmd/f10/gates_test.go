@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -706,5 +707,43 @@ func TestOutcomesTaskJudge(t *testing.T) {
 			o.taskJudge.Verdict != tc.want {
 			t.Errorf("lore at %v over the file = %+v, want %s", tc.at, o.taskJudge, tc.want)
 		}
+	}
+}
+
+// Drive's record of running finish turns the finish row from pending to
+// queued once ship is done, then running with the action finish is on; a
+// base wait stays queued.
+func TestGatesDriveFinish(t *testing.T) {
+	chain := []string{"plan", "ship", "finish"}
+	shipped := &state.Run{Session: "s1", Task: "FT-1", Plan: "done", Ship: "done", Pipeline: gatePipeline}
+	working := &state.Run{
+		Session: "s1", Task: "FT-1", Plan: "done", Ship: "running", Leaf: "pr", Pipeline: gatePipeline,
+	}
+
+	for _, tc := range []struct {
+		name   string
+		run    *state.Run
+		driven string
+		finish ref.DriveFinish
+		want   string
+	}{
+		{"no record", shipped, "", ref.DriveFinish{}, gatePending},
+		{"ship not done", working, "", ref.DriveFinish{PID: 7}, gatePending},
+		{"queued", shipped, "", ref.DriveFinish{PID: 7}, "queued (drive)"},
+		{"queued by the recorded chain", nil, "ship", ref.DriveFinish{PID: 7}, "queued (drive)"},
+		{"waiting for a base", shipped, "", ref.DriveFinish{PID: 7, Action: "waiting for FT-0"}, "queued (drive): waiting for FT-0"},
+		{"merging", shipped, "", ref.DriveFinish{PID: 7, Action: "merging #204"}, "running (drive): merging #204"},
+		{"finished", shipped, "finish", ref.DriveFinish{PID: 7, Action: "removing worktree"}, gateDone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gates := taskGates(context.Background(), gateInput{
+				task: "FT-1", pipeline: gatePipeline, now: time.Now(),
+				run: tc.run, chain: chain, driven: tc.driven, finish: tc.finish,
+			})
+
+			if got := texts(gates)["finish"]; got != tc.want {
+				t.Errorf("finish = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

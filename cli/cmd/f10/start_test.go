@@ -110,6 +110,11 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
+		// drive records its finish's progress on every branch it finishes
+		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+ref.FinishKey) {
+			return shell.Result{}
+		}
+
 		// start and drive record the flow on every branch they open, and
 		// none records one until a test says so
 		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+cfgFlow) {

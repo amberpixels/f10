@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
@@ -80,6 +81,9 @@ type Branch struct {
 	Riders []string // a bundle's other members
 	After  string   // the base task recorded on it
 	Model  string   // the agent's model, where start recorded it
+	// Finish is `f10 drive`'s record of running the branch's finish, when
+	// that drive still runs
+	Finish *ref.DriveFinish
 }
 
 // Findings is a task's latest review round as its findings file holds it.

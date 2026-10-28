@@ -99,7 +99,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 			return nil
 		},
-		finish: func(context.Context, io.Writer, ref.Ref, string) error {
+		pid: 4242,
+		finish: func(context.Context, io.Writer, ref.Ref, string, func(string)) error {
 			t.Fatal("finish ran although the chain has none")
 
 			return nil
@@ -154,7 +155,8 @@ func (fx *driveFixture) opensOn(id, ws, pane, model string) {
 
 // expects scripts the prompt for one skill and the record of it done.
 func (fx *driveFixture) expects(id, skill string) {
-	fx.f.script("herdr agent prompt "+agentOf(id)+" "+skillPrompt(skill, id, nil, shipFlow{}), "{}")
+	prompt := skillPrompt(skill, id, nil, shipFlow{}, slices.Contains(fx.in.chain, "finish"))
+	fx.f.script("herdr agent prompt "+agentOf(id)+" "+prompt, "{}")
 	fx.f.script("git config branch."+id+"."+cfgDrive+" "+skill, "")
 }
 
@@ -390,7 +392,7 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
@@ -456,7 +458,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.f.script(headRef, "origin/main") // GH-1 has no commit, so GH-2 waits
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
@@ -487,7 +489,7 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, shipFlow{}), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, shipFlow{}, false), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() { fx.writeRun(t, "running", "implement", "", "") }
 
@@ -544,7 +546,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 
 	var finished []string
 
-	fx.in.finish = func(_ context.Context, w io.Writer, task ref.Ref, _ string) error {
+	fx.in.finish = func(_ context.Context, w io.Writer, task ref.Ref, _ string, _ func(string)) error {
 		finished = append(finished, task.ID)
 		fmt.Fprintln(w, "task:  "+task.ID)
 
@@ -952,11 +954,11 @@ func TestSkillPrompt(t *testing.T) {
 	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
 
 	cases := map[string]string{
-		skillPrompt("plan", "GH-1", nil, shipFlow{}):              "/f10:plan GH-1 --driven",
-		skillPrompt("ship", "GH-1", nil, shipFlow{}):              "/f10:ship GH-1 --driven",
-		skillPrompt("ship", "GH-1", nil, shipFlow{name: "local"}): "/f10:ship local: GH-1 --driven",
-		skillPrompt("plan", "GH-1", nil, shipFlow{name: "local"}): "/f10:plan GH-1 --driven",
-		skillPrompt("judge", "GH-1", dep, shipFlow{}):             "/f10:judge GH-1 --driven",
+		skillPrompt("plan", "GH-1", nil, shipFlow{}, false):              "/f10:plan GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, shipFlow{}, false):              "/f10:ship GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, shipFlow{name: "local"}, false): "/f10:ship local: GH-1 --driven",
+		skillPrompt("plan", "GH-1", nil, shipFlow{name: "local"}, false): "/f10:plan GH-1 --driven",
+		skillPrompt("judge", "GH-1", dep, shipFlow{}, false):             "/f10:judge GH-1 --driven",
 	}
 
 	for got, want := range cases {
@@ -965,7 +967,7 @@ func TestSkillPrompt(t *testing.T) {
 		}
 	}
 
-	if p := skillPrompt("ship", "GH-1", dep, shipFlow{}); !strings.Contains(p, "GH-1 depends on GH-7") {
+	if p := skillPrompt("ship", "GH-1", dep, shipFlow{}, false); !strings.Contains(p, "GH-1 depends on GH-7") {
 		t.Errorf("a dependent ship carries no contract: %q", p)
 	}
 }
@@ -1099,7 +1101,7 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	fx.f.script(worktrees, porcelain(pairs...))
 	fx.mergeable("GH-11", "GH-12", "GH-13", "GH-14", "GH-15")
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 		fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -1218,7 +1220,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fx.mergeable("GH-1", "GH-2")
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 				fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -1312,7 +1314,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 
 			fx.f.answers["git merge-base --is-ancestor origin/main HEAD"] = []shell.Result{{Code: 1}, after}
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 				return nil
@@ -1606,7 +1608,7 @@ func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}), "{}")
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
 	fx.f.script(wsList, unopened, listing("GH-1", "unknown"))
 
 	err := fx.drive(t)
@@ -1630,7 +1632,7 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 
 	in := &driveInput{
 		answers: map[string]string{},
-		finish: func(_ context.Context, _ io.Writer, _ ref.Ref, pr string) error {
+		finish: func(_ context.Context, _ io.Writer, _ ref.Ref, pr string, _ func(string)) error {
 			got = append(got, pr)
 			if pr == "" {
 				return foreignPullError{url: "https://gh/pr/9", author: "alice"}
@@ -1640,29 +1642,29 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 		},
 	}
 
-	task := driveTask{ref: gh1}
+	run := &driveRun{task: driveTask{ref: gh1}}
 
-	res := in.runFinish(t.Context(), io.Discard, task)
+	res := in.runFinish(t.Context(), io.Discard, run)
 	if res.code != exitAsk || len(res.lines) != 1 || !strings.Contains(res.lines[0], "[local | merge]") {
 		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
 	}
 
 	in.answers["GH-1"] = "1. local"
 
-	if res = in.runFinish(t.Context(), io.Discard, task); res.code != 0 {
+	if res = in.runFinish(t.Context(), io.Discard, run); res.code != 0 {
 		t.Fatalf("runFinish answered local = %+v, want finished", res)
 	}
 
 	// a bare answer that is no finish choice belongs to some agent's question
 	in.answer = "1. yes"
 
-	if res = in.runFinish(t.Context(), io.Discard, task); res.code != exitAsk || in.answer != "1. yes" {
+	if res = in.runFinish(t.Context(), io.Discard, run); res.code != exitAsk || in.answer != "1. yes" {
 		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.answer)
 	}
 
 	in.answers["GH-1"] = "maybe"
 
-	if res = in.runFinish(t.Context(), io.Discard, task); res.code != exitHalted {
+	if res = in.runFinish(t.Context(), io.Discard, run); res.code != exitHalted {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
 	}
 
@@ -1698,7 +1700,7 @@ func TestDriveStartsADependentAtItsBasesFirstCommit(t *testing.T) {
 	fx.expects("GH-2", "judge")
 	fx.mergeable("GH-1", "GH-2")
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 		return nil
@@ -1898,7 +1900,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 			fx.f.script("git rev-parse -q --verify refs/heads/main", "m0")
 			fx.f.script(wsList, unopened, listing("GH-1", "idle"))
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 				return nil
@@ -1967,7 +1969,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 	// the ship turn writes the report
 	writePlan(t, filepath.Join(root, "spikes", "GH-1.md"))
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 		fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -2047,5 +2049,107 @@ func TestDriveSpikeShortcutNeedsABranchNeverPushed(t *testing.T) {
 
 	if fx.in.spikeDone(t.Context(), r) {
 		t.Error("a pushed spike took the shortcut")
+	}
+}
+
+// Drive records its finish of a task on the branch for status to read:
+// queued once the task opens, then each action finish names.
+func TestDriveRecordsFinishProgress(t *testing.T) {
+	ids := []string{"GH-11", "GH-12", "GH-13", "GH-14", "GH-15"}
+	fx := wave(t, "GH-11", "GH-12", "GH-13", "GH-14", "GH-15", "judge", "finish")
+
+	fx.f.script(wsList,
+		unopened, all("idle", ids...),
+		all("working", ids...), all("idle", ids...),
+		unopened, all("idle", ids...), unopened, all("idle", ids...),
+		unopened, all("idle", ids...),
+		all("working", ids...), all("idle", ids...),
+		unopened, all("idle", ids...),
+		all("working", ids...), all("idle", ids...))
+
+	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, progress func(string)) error {
+		progress("merging #9")
+		fx.infos[task.ID] = taskInfo{closed: true}
+
+		return nil
+	}
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	var got []string
+
+	for _, c := range fx.f.calls {
+		if strings.Contains(c, "GH-11."+ref.FinishKey) {
+			got = append(got, c)
+		}
+	}
+
+	key := "git config branch.GH-11." + ref.FinishKey + " 4242"
+	want := []string{key, key + " starting", key + " merging #9"}
+
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("finish record writes:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A chain with no finish writes no finish record.
+func TestDriveWithoutFinishWritesNoRecord(t *testing.T) {
+	fx := wave(t, "GH-11", "judge")
+
+	fx.f.script(wsList, unopened, all("idle", "GH-11"), all("working", "GH-11"), all("idle", "GH-11"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if !fx.f.called("git config branch.GH-11." + cfgChain) {
+		t.Fatal("drive opened no task")
+	}
+
+	if fx.f.called("git config branch.GH-11." + ref.FinishKey) {
+		t.Error("a chain without finish wrote a finish record")
+	}
+
+	for _, c := range fx.f.calls {
+		if strings.Contains(c, ref.FinishKey) {
+			t.Errorf("unexpected finish record call %q", c)
+		}
+	}
+}
+
+// A task that ends any way but finished drops its finish record; a
+// finished one's went with its branch.
+func TestDriveEndClearsFinishRecord(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	r := &driveRun{opened: true, chain: []string{"ship", "finish"}, o: openedTask{branch: "GH-1"}}
+
+	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "asked at finish", code: exitAsk})
+
+	unset := "git config --unset branch.GH-1." + ref.FinishKey
+	if !fx.f.called(unset) {
+		t.Errorf("an ask left the finish record; calls: %v", fx.f.calls)
+	}
+
+	fx.f.calls = nil
+	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "finished"})
+
+	if fx.f.called(unset) {
+		t.Error("a finished task's record was unset again")
+	}
+}
+
+// A ship drive finishes after names it, so the report says nothing is
+// owed in that pane; no other prompt carries it.
+func TestSkillPromptNamesDriveFinish(t *testing.T) {
+	if p := skillPrompt("ship", "GH-1", nil, shipFlow{}, true); p != "/f10:ship GH-1 && "+finishClause+" --driven" {
+		t.Errorf("ship with finish = %q", p)
+	}
+
+	for _, skill := range []string{"plan", "judge", "catchup"} {
+		if p := skillPrompt(skill, "GH-1", nil, shipFlow{}, true); strings.Contains(p, finishClause) {
+			t.Errorf("%s prompt names finish: %q", skill, p)
+		}
 	}
 }

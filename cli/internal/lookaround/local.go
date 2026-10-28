@@ -96,14 +96,14 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 	}
 
 	pattern := `^branch\..*\.(` + strings.Join(
-		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey},
+		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.FinishKey},
 		"|",
 	) + `)$`
 
 	for _, e := range gitx.ConfigEntries(ctx, in.Main, pattern) {
 		rest := strings.TrimPrefix(e.Key, "branch.")
 
-		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey} {
+		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.FinishKey} {
 			name, ok := strings.CutSuffix(rest, "."+key)
 			if !ok {
 				continue
@@ -120,6 +120,10 @@ func collectLocal(ctx context.Context, in LocalInputs, now time.Time) (*Local, [
 				b.After = e.Value
 			case ref.ModelKey:
 				b.Model = e.Value
+			case ref.FinishKey:
+				if d, ok := ref.LiveDriveFinish(e.Value); ok {
+					b.Finish = &d
+				}
 			}
 
 			l.Branches[name] = b

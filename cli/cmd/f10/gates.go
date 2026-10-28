@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -30,6 +31,7 @@ const (
 	gateOff     = "not in this flow"
 	gatePending = "pending"
 	gateRunning = "running"
+	gateQueued  = "queued"
 	gateDone    = "done"
 	gateSkipped = "skipped"
 	gateOpen    = "open"
@@ -42,6 +44,7 @@ const (
 	viaShip   = "in ship"
 	viaDriven = "driven"
 	viaManual = "manual"
+	viaDrive  = "drive" // finish, which drive runs in its own process
 	viaHost   = "on host"
 )
 
@@ -55,6 +58,7 @@ type gate struct {
 	Step    string        `json:"step"`
 	State   string        `json:"state,omitempty"`  // plain steps and judges
 	Via     string        `json:"via,omitempty"`    // a running gate: in ship, driven or manual
+	Action  string        `json:"action,omitempty"` // drive's finish: what it is doing
 	Judged  string        `json:"judged,omitempty"` // a judge: task, plan or change
 	Outcome *judgeOutcome `json:"outcome,omitempty"`
 	Local   *reviewHalf   `json:"local,omitempty"`
@@ -82,9 +86,10 @@ type gateInput struct {
 
 	run      *state.Run // live, or the ledger's last claim; nil for none
 	events   []ledger.Event
-	chain    []string // drive's chain recorded on the branch
-	driven   string   // the last chain skill drive saw finish
-	pipeline []string // ship's entries of the branch's flow, when the run recorded none
+	chain    []string        // drive's chain recorded on the branch
+	driven   string          // the last chain skill drive saw finish
+	finish   ref.DriveFinish // drive's record of running finish, zero for none or a gone drive
+	pipeline []string        // ship's entries of the branch's flow, when the run recorded none
 	// remoteFlow is a remote reviewer declared: it reviews every PR
 	remoteFlow bool
 
@@ -131,6 +136,8 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 				judges[judged] = len(gates)
 				gates = append(gates, gate{Step: "judge", Judged: judged})
 			}
+		case "finish":
+			gates = append(gates, in.finishGate(steps[i]))
 		default:
 			if base == "pr" {
 				isPR = true
@@ -302,6 +309,38 @@ func (in gateInput) chainStates(entries, states []string, shipLen int) {
 
 		i++
 	}
+}
+
+// finishGate is the chain's finish: drive's record turns a pending one
+// queued once ship is done, and running with an action once finish works;
+// a base wait stays queued with its action.
+func (in gateInput) finishGate(st string) gate {
+	g := gate{Step: "finish", State: st}
+	if st != gatePending || in.finish.PID == 0 || !in.shipDone() {
+		return g
+	}
+
+	g.Via, g.Action = viaDrive, in.finish.Action
+
+	switch {
+	case g.Action == "" || in.finish.Waiting():
+		g.State = gateQueued
+	default:
+		g.State = gateRunning
+	}
+
+	return g
+}
+
+// shipDone reports ship through: its run says so, or drive recorded it.
+func (in gateInput) shipDone() bool {
+	if in.run != nil && in.run.Ship == "done" {
+		return true
+	}
+
+	ship, last := slices.Index(in.chain, "ship"), slices.Index(in.chain, in.driven)
+
+	return ship >= 0 && last >= ship
 }
 
 // half builds the local or the remote review, nil when the flow has none.
@@ -790,8 +829,10 @@ func (g gate) text() string {
 
 func (g gate) stateText() string {
 	switch {
-	case g.State == gateRunning && g.Via != "":
-		return "running (" + g.Via + ")"
+	case (g.State == gateRunning || g.State == gateQueued) && g.Via != "" && g.Action != "":
+		return g.State + " (" + g.Via + "): " + g.Action
+	case (g.State == gateRunning || g.State == gateQueued) && g.Via != "":
+		return g.State + " (" + g.Via + ")"
 	case g.State == gateDone && g.Outcome != nil:
 		text := g.Outcome.Verdict
 		if g.Outcome.Reason != "" {
@@ -963,6 +1004,8 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	if branch != "" && src.main != "" {
 		in.chain = strings.Fields(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgChain))
 		in.driven = gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgDrive)
+		rec := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+ref.FinishKey)
+		in.finish, _ = ref.LiveDriveFinish(rec)
 
 		if recorded := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgFlow); recorded != "" {
 			flow = recorded
