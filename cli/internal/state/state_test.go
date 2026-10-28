@@ -597,6 +597,7 @@ func TestSeedRecordsTheTask(t *testing.T) {
 		{"plan", "https://github.com/acme/widgets/issues/9", ""},
 		{"ship", "add a retry to the client", ""},
 		{"capture", "FT-6 needs a retry", ""},
+		{"debug", "HTTP-500 on /login after the upgrade", ""},
 	} {
 		t.Run(tc.skill+" "+tc.args, func(t *testing.T) {
 			r := Fresh("s")
