@@ -48,6 +48,12 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    - **Archive an existing plan, never edit it**: `mkdir -p <storage root>/plans/archive/`, move it to `archive/<TASK-ID>.<N>.md` (`<N>` = next integer), then `Write` the new one (no `Read` first; a `Write` error is a real failure, never "already written").
    - **Plan / read-only mode:** never stop silently.
      Call `ExitPlanMode` to present the plan and get the go-ahead (or ask the user to exit plan mode with shift+tab), then write the file.
+   - **Lore** (`docs/lore.md`), with a task id (a bundle's lead) and the file on disk: `f10 lore add intent --change <id> -m "<text>"`.
+     The body is two to four sentences on what the change does and why, for someone reading it beside the code later: the domain reason, in no plan, stage or f10 vocabulary.
+     A spike's intent states the question and what its answer decides.
+     A replan (a plan was archived above) supersedes the standing intent: `--supersedes <id>`, the id of the `intent` entry `f10 lore show <id> --json` lists; a judge's revision of the plan file in place is not a replan and leaves it.
+     A second intent without `--supersedes` is refused, naming the standing one.
+     A failing `lore add` is one line in the hand-off, never a failed step; a plan with no task id writes none.
 4. **Hand off.**
    Confirm the file exists, present the plan, and report per `conventions/report.md`: `task`, `title`, `url` if the tracker gave one, `plan`.
    Offer to fill open gaps (`conventions/gaps.md`).
