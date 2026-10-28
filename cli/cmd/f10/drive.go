@@ -234,6 +234,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				task:      task,
 				host:      h.at(main),
 				method:    t.eff.MergeMethod,
+				loreStore: &lore.Store{Root: loreRootFor(t)},
+				gate:      t.eff.LoreGate,
 				cwd:       cwd,
 				workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 				merge:     pr == finishMerge,
@@ -241,7 +243,6 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				progress:  progress,
 				plansDir:  t.sharedPlansDir(),
 				title:     titleLookup(t, task.Number),
-				lore:      func() string { return loreNote(&lore.Store{Root: loreRootFor(t)}, task.ID) },
 				// a driven finish asks no second question, since a resume
 				// carries only the latest answer: a bundle's riders stay
 				// open, the reversible choice, and the report names them

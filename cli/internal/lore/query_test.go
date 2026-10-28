@@ -138,7 +138,7 @@ func TestWhy(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			res, err := fx.store.Why(t.Context(), c.path, c.line)
+			res, err := fx.store.Why(t.Context(), c.path, c.line, "")
 
 			switch {
 			case c.want.noRec:
@@ -181,7 +181,7 @@ func TestWhy(t *testing.T) {
 func TestWhyRecordHasIntentAndLatestVerdict(t *testing.T) {
 	fx := newWhyFixture(t)
 
-	res, err := fx.store.Why(t.Context(), "api/limit.go", 15)
+	res, err := fx.store.Why(t.Context(), "api/limit.go", 15, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestGolden(t *testing.T) {
 			return RenderShow(b, "FT-1", entries)
 		},
 		"why-trailer": func(b *bytes.Buffer) error {
-			res, err := fx.store.Why(t.Context(), "api/limit.go", 15)
+			res, err := fx.store.Why(t.Context(), "api/limit.go", 15, "")
 			if err != nil {
 				return err
 			}
@@ -334,7 +334,7 @@ func TestGolden(t *testing.T) {
 			return RenderWhy(b, res)
 		},
 		"why-anchor": func(b *bytes.Buffer) error {
-			res, err := fx.store.Why(t.Context(), "plain.go", 4)
+			res, err := fx.store.Why(t.Context(), "plain.go", 4, "")
 			if err != nil {
 				return err
 			}
@@ -402,7 +402,7 @@ func TestWhyFallbackFindsEntryWrittenBeforeItsCode(t *testing.T) {
 
 	r.commit("change line 3", map[string]string{"x.go": "line\nline\nchanged\nline\nline\n"})
 
-	res, err := s.Why(t.Context(), "x.go", 3)
+	res, err := s.Why(t.Context(), "x.go", 3, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestWhyFallbackFindsEntryWrittenBeforeItsCode(t *testing.T) {
 	}
 
 	// line 5 was not touched: blame names base itself, the exact match
-	res, err = s.Why(t.Context(), "x.go", 5)
+	res, err = s.Why(t.Context(), "x.go", 5, "")
 	if err != nil || len(res.Records[0].Entries) != 2 {
 		t.Errorf("why x.go:5 = %+v, %v; want both decisions anchored at base", res, err)
 	}
@@ -440,11 +440,38 @@ func TestQueriesSkipStrayFiles(t *testing.T) {
 		t.Errorf("lessons = %d, %v; want 2", len(got), err)
 	}
 
-	if _, err := fx.store.Why(t.Context(), "plain.go", 1); err != nil {
+	if _, err := fx.store.Why(t.Context(), "plain.go", 1, ""); err != nil {
 		t.Errorf("why: %v", err)
 	}
 
 	if problems, err := fx.store.Validate("FT-9"); err != nil || len(problems) != 2 {
 		t.Errorf("validate FT-9 = %v, %v; want both files reported", problems, err)
+	}
+}
+
+// A reviewer asks about a line as the base had it: the answer is the change
+// that wrote it, not the one rewriting it in the working tree.
+func TestWhyAtARevision(t *testing.T) {
+	fx := newWhyFixture(t)
+
+	fx.store.mustAdd(t, intent("FT-8", "2026-10-21T09:00:00Z"))
+	fx.repo.commit(
+		"Rewrite the alias\n\nTask: FT-8",
+		map[string]string{"alias.go": "line\nchanged\nline\nline\nline\n"},
+	)
+
+	now, err := fx.store.Why(t.Context(), "alias.go", 2, "")
+	if err != nil || len(now.Records) != 1 || now.Records[0].Change != "FT-8" || now.Rev != "" {
+		t.Fatalf("why at the working tree = %+v, %v; want FT-8", now, err)
+	}
+
+	then, err := fx.store.Why(t.Context(), "alias.go", 2, fx.alias)
+	if err != nil || len(then.Records) != 1 || then.Records[0].Change != "FT-2" || then.Rev != fx.alias {
+		t.Fatalf("why at %s = %+v, %v; want FT-2", fx.alias[:7], then, err)
+	}
+
+	// plain.go did not exist yet at that revision
+	if _, err := fx.store.Why(t.Context(), "plain.go", 1, fx.alias); !errors.Is(err, ErrNoRecord) {
+		t.Errorf("why for a path absent at the revision = %v, want ErrNoRecord", err)
 	}
 }

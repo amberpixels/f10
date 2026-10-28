@@ -143,6 +143,16 @@ func TestLoreVerbs(t *testing.T) {
 		t.Errorf("why off the anchors still names the change:\n%s", out)
 	}
 
+	if out := must("why", "limit.go:3@HEAD"); !strings.HasPrefix(out, "api/limit.go:3@HEAD  last changed in") {
+		t.Errorf("why at a revision:\n%s", out)
+	}
+
+	for _, bad := range []string{"limit.go:3@", "limit.go:3@-S/etc/passwd", "limit.go:3@--contents=x"} {
+		if _, err := runLore(t, "why", bad); err == nil {
+			t.Errorf("%q was accepted as a revision", bad)
+		}
+	}
+
 	if out := must("lessons", "limit.go"); !strings.Contains(out, "1 lesson") || !strings.Contains(out, "Per process") {
 		t.Errorf("lessons:\n%s", out)
 	}

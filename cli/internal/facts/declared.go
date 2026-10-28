@@ -35,6 +35,7 @@ type Declared struct {
 	Catchup       string            `yaml:"catchup,omitempty"`
 	Traces        string            `yaml:"traces,omitempty"`
 	Lore          string            `yaml:"lore,omitempty"`
+	LoreGate      string            `yaml:"lore_gate,omitempty"`      // what finish does with a failing lore check before a merge
 	StaleAfter    string            `yaml:"stale_after,omitempty"`    // a task older than this is judged before it is planned
 	DriverTimeout string            `yaml:"driver_timeout,omitempty"` // one driver verb's limit, a Go duration
 	ReviewTraces  string            `yaml:"review_traces,omitempty"`  // the old spelling of traces, read and folded in
@@ -189,6 +190,7 @@ var vocab = map[string][]string{
 	"catchup":       {"rebase", "merge", "off"},
 	"traces":        {"on", "off"},
 	"lore":          {"local", "committed"},
+	"lore_gate":     {"warn", "block"},
 	"review_traces": {"on", "off"},
 	"report_back":   {"on", "off"},
 	"drive_finish":  {"on", "off"},
@@ -257,6 +259,7 @@ func (d Declared) check() []string {
 		"catchup":       d.Catchup,
 		"traces":        d.Traces,
 		"lore":          d.Lore,
+		"lore_gate":     d.LoreGate,
 		"review_traces": d.ReviewTraces,
 		"report_back":   d.ReportBack,
 		"drive_finish":  d.DriveFinish,
@@ -418,6 +421,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
 	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
 	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
+	set("lore_gate", d.LoreGate != "", func() { l.LoreGate = d.LoreGate })
 	set("stale_after", d.StaleAfter != "", func() { l.StaleAfter = d.StaleAfter })
 	set("driver_timeout", d.DriverTimeout != "", func() { l.DriverTimeout = d.DriverTimeout })
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })

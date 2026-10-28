@@ -82,6 +82,7 @@ type Effective struct {
 	Catchup       string              `json:"catchup"`
 	Traces        bool                `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
 	Lore          string              `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
+	LoreGate      string              `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
 	StaleAfter    string              `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
 	DriverTimeout time.Duration       `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
 	Flows         map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form

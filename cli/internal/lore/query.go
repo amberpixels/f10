@@ -19,6 +19,7 @@ const (
 type WhyResult struct {
 	Path    string   `json:"path"`
 	Line    int      `json:"line"`
+	Rev     string   `json:"rev,omitempty"` // the revision the line was read at; the working tree when empty
 	Commit  string   `json:"commit"`
 	Via     string   `json:"via"`
 	Records []Record `json:"records"`
@@ -36,9 +37,12 @@ type Record struct {
 // the commit's Change: trailers (else Task:) to their changes, and keep the
 // entries anchored on the line. A commit with no trailer, or whose changes
 // hold nothing, falls back to entries anchored at the blamed commit on the
-// same path. Nothing found is ErrNoRecord.
-func (s *Store) Why(ctx context.Context, path string, line int) (*WhyResult, error) {
-	commit, err := s.Git.BlameLine(ctx, path, line)
+// same path. The line is the working tree's, or the file's at rev: a
+// reviewer asks about a line the diff rewrote at the base, where the
+// answer is the earlier change and not this one. Nothing found is
+// ErrNoRecord.
+func (s *Store) Why(ctx context.Context, path string, line int, rev string) (*WhyResult, error) {
+	commit, err := s.Git.BlameLine(ctx, path, line, rev)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +52,7 @@ func (s *Store) Why(ctx context.Context, path string, line int) (*WhyResult, err
 		return nil, err
 	}
 
-	res := &WhyResult{Path: path, Line: line, Commit: commit, Via: ViaTrailer}
+	res := &WhyResult{Path: path, Line: line, Rev: rev, Commit: commit, Via: ViaTrailer}
 
 	changes := trailers[TrailerChange]
 	if len(changes) == 0 {

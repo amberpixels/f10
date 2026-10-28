@@ -36,7 +36,20 @@ func RenderWhy(w io.Writer, r *WhyResult) error {
 		link = "linked by an anchor at the commit; the commit carries no trailer naming a change with entries"
 	}
 
-	if _, err := fmt.Fprintf(w, "%s:%d  last changed in %s, %s\n", r.Path, r.Line, short(r.Commit), link); err != nil {
+	at := ""
+	if r.Rev != "" {
+		at = "@" + r.Rev
+	}
+
+	if _, err := fmt.Fprintf(
+		w,
+		"%s:%d%s  last changed in %s, %s\n",
+		r.Path,
+		r.Line,
+		at,
+		short(r.Commit),
+		link,
+	); err != nil {
 		return err
 	}
 

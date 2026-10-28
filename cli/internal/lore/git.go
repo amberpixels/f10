@@ -18,9 +18,10 @@ var ErrNoRecord = errors.New("lore: no record")
 
 // Git is all lore asks of git. Paths are relative to the repository root.
 type Git interface {
-	// BlameLine is the commit that last touched the line; ErrNoRecord when
-	// the line is not committed yet.
-	BlameLine(ctx context.Context, path string, line int) (string, error)
+	// BlameLine is the commit that last touched the line, in the working
+	// tree or, with rev, in the file as that revision has it; ErrNoRecord
+	// when the line is not committed yet, or the path is absent at rev.
+	BlameLine(ctx context.Context, path string, line int, rev string) (string, error)
 	// Trailers is the commit message's trailers, keys as written except
 	// Change and Task, which are normalised so a lookup ignores case.
 	Trailers(ctx context.Context, commit string) (map[string][]string, error)
@@ -60,15 +61,21 @@ func (e *gitError) Unwrap() error { return e.err }
 
 // BlameLine asks blame for one line; git names an uncommitted line with an
 // all-zero sha.
-func (g CLIGit) BlameLine(ctx context.Context, path string, line int) (string, error) {
+func (g CLIGit) BlameLine(ctx context.Context, path string, line int, rev string) (string, error) {
 	n := strconv.Itoa(line)
 
-	out, err := g.run(ctx, "blame", "--porcelain", "-L", n+","+n, "--", path)
+	args := []string{"blame", "--porcelain", "-L", n + "," + n}
+	if rev != "" {
+		args = append(args, rev)
+	}
+
+	out, err := g.run(ctx, append(args, "--", path)...)
 	if err != nil {
-		// a file on disk that HEAD lacks is not committed yet, unlike a typo
+		// a file on disk that HEAD lacks is not committed yet, unlike a typo;
+		// at a revision, a path it lacks has no line to ask about
 		var ge *gitError
 		if errors.As(err, &ge) && strings.Contains(ge.stderr, "no such path") {
-			if _, statErr := os.Stat(filepath.Join(g.Dir, path)); statErr == nil {
+			if _, statErr := os.Stat(filepath.Join(g.Dir, path)); rev != "" || statErr == nil {
 				return "", ErrNoRecord
 			}
 		}
