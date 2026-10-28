@@ -552,6 +552,9 @@ type driveRun struct {
 	// mergeCatchup is set once this drive sent a catchup because the pull
 	// request conflicted at finish: a second conflict halts rather than loops
 	mergeCatchup bool
+	// guardCatchup is set once this drive sent a catchup because ship's
+	// catchup guard conflicted: a second conflict halts rather than loops
+	guardCatchup bool
 	// waiting is set while finish waits for the base to be through: no turn
 	// is in flight, so the poll only asks next again
 	waiting bool
@@ -1698,6 +1701,9 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		r.begun = true
 
 		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
+	case run != nil && skill == "catchup" && guardStop(run):
+		// the ship stop is the one this catchup settles
+		return in.prompt(ctx, w, r, ws, skill, "")
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
@@ -1936,9 +1942,21 @@ func (in *driveInput) poll(
 	r.begun = true
 
 	if recent && stoppedRun(run) {
-		in.end(ctx, w, r, in.verdict(r.task, skill, run))
+		switch {
+		case skill == "catchup" && guardStop(run):
+			// a catchup that stopped and then ended clean restores the stop it
+			// found, so git says how it ended
+		case skill == "ship" && guardStop(run) && !r.guardCatchup && in.marked(ctx, r):
+			r.guardCatchup = true
 
-		return nil
+			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", id)
+
+			return in.next(ctx, w, r)
+		default:
+			in.end(ctx, w, r, in.verdict(r.task, skill, run))
+
+			return nil
+		}
 	}
 
 	if phaseRunning(run, skill) {
@@ -1964,7 +1982,9 @@ func (in *driveInput) poll(
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
-			in.end(ctx, w, r, halted(id, skill, "the catchup did not end clean: "+reason))
+			res := halted(id, skill, "the catchup did not end clean: "+reason)
+			res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
+			in.end(ctx, w, r, res)
 
 			return nil
 		}
@@ -2124,6 +2144,15 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 	e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, place.Branch
 
 	ledger.Record(ctx, ledger.BusyAsync, e)
+}
+
+// guardStop reports a ship stop shaped like the catchup guard's: failed
+// or partial with no question, at an entry the guard runs before. A
+// judge's stop is blocked, and a driven catchup stops at leaf catchup.
+func guardStop(run *state.Run) bool {
+	step, _, _ := strings.Cut(run.Leaf, ":")
+
+	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(guardedSteps, step)
 }
 
 // stoppedRun reports whether any phase halted: blocked, failed or partial.
