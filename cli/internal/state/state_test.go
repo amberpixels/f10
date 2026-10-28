@@ -510,6 +510,7 @@ func TestSeedRecordsTheTask(t *testing.T) {
 		{"ship", "ft-7 extra steering", "FT-7"},
 		{"ship", "local: FT-3", "FT-3"},
 		{"plan", "FT-1+FT-2", "FT-1"},
+		{"ship", "FT-1+FT-2 focus on the retry", "FT-1"},
 		{"plan", "FT-4 && /f10:ship FT-4 --driven", "FT-4"},
 		{"ship", "plans/FT-5.md", "FT-5"},
 		{"plan", "195", ""},
@@ -523,6 +524,11 @@ func TestSeedRecordsTheTask(t *testing.T) {
 
 			if r.Task != tc.want {
 				t.Errorf("Task = %q, want %q", r.Task, tc.want)
+			}
+
+			// a reference never opens capture
+			if tc.want != "" && r.Capture == "running" {
+				t.Errorf("Capture = running for a reference")
 			}
 		})
 	}

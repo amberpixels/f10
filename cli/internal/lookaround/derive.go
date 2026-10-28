@@ -52,16 +52,7 @@ func Derive(f Facts, now, since time.Time) Board {
 	}
 
 	slices.SortStableFunc(b.Rows, func(a, c Row) int {
-		if d := slices.Index(StateGroups, StateGroup(a)) - slices.Index(StateGroups, StateGroup(c)); d != 0 {
-			return d
-		}
-
-		// a row waiting on its base follows the rows that can start now
-		if d := slices.Index(Stages, a.Stage) - slices.Index(Stages, c.Stage); d != 0 {
-			if StateGroup(a) == GroupNext {
-				return -d
-			}
-
+		if d := StateRank(a) - StateRank(c); d != 0 {
 			return d
 		}
 

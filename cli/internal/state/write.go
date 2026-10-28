@@ -344,7 +344,7 @@ func isDescription(args string) bool {
 		return false
 	}
 
-	first := toks[0]
+	first, _, _ := strings.Cut(toks[0], "+")
 	if strings.HasSuffix(first, ".md") || isURL(first) || idToken.MatchString(first) || numberToken.MatchString(first) {
 		return false
 	}

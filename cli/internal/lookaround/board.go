@@ -7,7 +7,10 @@
 // schema.
 package lookaround
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // Version is the Board JSON's version; a change to a stage rule or a
 // field's meaning bumps it with the spec.
@@ -121,6 +124,17 @@ func StateGroup(r Row) string {
 	default:
 		return GroupInProgress
 	}
+}
+
+// StateRank orders state rows: by group, then by stage, except that a row
+// waiting on its base follows the rows that can start now.
+func StateRank(r Row) int {
+	stage := slices.Index(Stages, r.Stage)
+	if StateGroup(r) == GroupNext {
+		stage = len(Stages) - stage
+	}
+
+	return slices.Index(StateGroups, StateGroup(r))*(len(Stages)+1) + stage
 }
 
 // Where a stage's or a group's evidence came from: local state, the

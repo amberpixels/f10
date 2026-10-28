@@ -914,7 +914,7 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 
 		for _, r := range b.Rows {
 			add(b.Project.Name, r.Who.Person, entry{
-				line: lineOf(r), rank: slices.Index(lookaround.Stages, r.Stage), at: r.LastActivity,
+				line: lineOf(r), rank: lookaround.StateRank(r), at: r.LastActivity,
 			})
 		}
 
