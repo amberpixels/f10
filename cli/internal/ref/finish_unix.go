@@ -2,14 +2,10 @@
 
 package ref
 
-import (
-	"errors"
-	"syscall"
-)
+import "syscall"
 
-// processAlive probes pid with signal 0; EPERM is a process someone else owns.
+// processAlive probes pid with signal 0. Drive runs as the user who reads
+// its record, so a pid only another user may signal (EPERM) is a reused one.
 func processAlive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return syscall.Kill(pid, 0) == nil
 }

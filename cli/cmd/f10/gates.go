@@ -312,8 +312,7 @@ func (in gateInput) chainStates(entries, states []string, shipLen int) {
 }
 
 // finishGate is the chain's finish: drive's record turns a pending one
-// queued once ship is done, and running with an action once finish works;
-// a base wait stays queued with its action.
+// queued or running, as the record says, once ship is done.
 func (in gateInput) finishGate(st string) gate {
 	g := gate{Step: "finish", State: st}
 	if st != gatePending || in.finish.PID == 0 || !in.shipDone() {
@@ -322,10 +321,8 @@ func (in gateInput) finishGate(st string) gate {
 
 	g.Via, g.Action = viaDrive, in.finish.Action
 
-	switch {
-	case g.Action == "" || in.finish.Waiting():
-		g.State = gateQueued
-	default:
+	g.State = gateQueued
+	if in.finish.Running() {
 		g.State = gateRunning
 	}
 

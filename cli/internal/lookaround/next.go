@@ -125,10 +125,10 @@ func (r *row) next() {
 	}
 }
 
-// driveFinishes reports a row past its ship whose finish a running drive
-// holds: a PR open or merged, with no turn of the agent's in flight.
+// driveFinishes reports a row whose finish a running drive holds, read
+// as `f10 status` reads it: ship done, with a PR open or merged.
 func (r *row) driveFinishes() bool {
-	if r.branch == nil || r.branch.Finish == nil || r.running() {
+	if r.branch == nil || r.branch.Finish == nil || r.run == nil || r.run.Ship != "done" {
 		return false
 	}
 

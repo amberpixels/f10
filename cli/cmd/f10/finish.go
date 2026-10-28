@@ -517,6 +517,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return nil
 	}
 
+	// the last action: removing the checkout deletes the branch, and the
+	// record with it
 	in.step("removing worktree")
 
 	if err := removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike); err != nil {
@@ -536,8 +538,6 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if ws != nil {
-		in.step("closing workspace")
-
 		return herdr.CloseWorkspace(ctx, in.main, ws.ID)
 	}
 

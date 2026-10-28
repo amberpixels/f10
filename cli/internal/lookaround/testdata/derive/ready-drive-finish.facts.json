@@ -57,9 +57,20 @@
         "Task": "FT-1",
         "Finish": {
           "PID": 7,
+          "State": "running",
           "Action": "merging #10"
         }
       }
-    }
+    },
+    "Runs": [
+      {
+        "session": "s1",
+        "task": "FT-1",
+        "capture": "skipped",
+        "plan": "done",
+        "ship": "done",
+        "updated": "2026-10-20T10:00:00Z"
+      }
+    ]
   }
 }

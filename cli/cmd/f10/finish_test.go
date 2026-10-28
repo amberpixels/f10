@@ -1945,7 +1945,8 @@ func TestFinishReportsProgress(t *testing.T) {
 			t.Fatalf("%v\n%s", err, out)
 		}
 
-		want := []string{"merging #9", "pulling main", "archiving the plan", "removing worktree", "closing workspace"}
+		// removing the worktree deletes the branch and the record: nothing after it
+		want := []string{"merging #9", "pulling main", "archiving the plan", "removing worktree"}
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("progress = %q, want %q", got, want)
 		}

@@ -1073,7 +1073,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	if slices.Contains(chain, "finish") {
-		in.finishStep(ctx, w, o.branch, "")
+		in.finishStep(ctx, w, o.branch, ref.FinishQueued, "")
 	}
 
 	for _, n := range appendNote(o.notes, note) {
@@ -1212,7 +1212,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
 			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", r.task.ref.ID, r.base.task.ref.ID)
-			in.finishStep(ctx, w, r.o.branch, "waiting for "+r.base.task.ref.ID)
+			in.finishStep(ctx, w, r.o.branch, ref.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
 		r.waiting = true
@@ -1360,7 +1360,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	r.mergeCatchup = true
 
 	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
-	in.finishStep(ctx, w, branch, "catching up with "+base)
+	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
 
 	return nil
 }
@@ -1387,9 +1387,11 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	var buf bytes.Buffer
 
-	in.finishStep(ctx, w, r.o.branch, "starting")
+	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
 
-	err = in.finish(ctx, &buf, task.ref, pr, func(action string) { in.finishStep(ctx, w, r.o.branch, action) })
+	err = in.finish(ctx, &buf, task.ref, pr, func(action string) {
+		in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
+	})
 
 	sc := bufio.NewScanner(&buf)
 	for sc.Scan() {
@@ -1423,15 +1425,15 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 	return driveResult{row: "finished"}
 }
 
-// finishStep records on the branch what drive's finish of it is doing,
-// "" for queued, for status to read. A failed write is a line, never a
+// finishStep records on the branch where drive's finish of it stands and
+// what it is doing, for status to read. A failed write is a line, never a
 // halt: the record is only a view.
-func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, action string) {
+func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, action string) {
 	if branch == "" {
 		return
 	}
 
-	rec := ref.DriveFinish{PID: in.pid, Action: action}
+	rec := ref.DriveFinish{PID: in.pid, State: st, Action: action}
 	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+ref.FinishKey, rec.Format()); err != nil {
 		fmt.Fprintf(w, "  recording finish's progress on %s: %v\n", branch, err)
 	}

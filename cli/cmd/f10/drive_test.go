@@ -2087,7 +2087,7 @@ func TestDriveRecordsFinishProgress(t *testing.T) {
 	}
 
 	key := "git config branch.GH-11." + ref.FinishKey + " 4242"
-	want := []string{key, key + " starting", key + " merging #9"}
+	want := []string{key + " queued", key + " running starting", key + " running merging #9"}
 
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("finish record writes:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -2151,5 +2151,30 @@ func TestSkillPromptNamesDriveFinish(t *testing.T) {
 		if p := skillPrompt(skill, "GH-1", nil, shipFlow{}, true); strings.Contains(p, finishClause) {
 			t.Errorf("%s prompt names finish: %q", skill, p)
 		}
+	}
+}
+
+// An interrupted drive clears the finish record of every task still in
+// flight, so status never reads a drive that is gone as queued.
+func TestDriveInterruptClearsFinishRecord(t *testing.T) {
+	fx := wave(t, "GH-11", "judge", "finish")
+	fx.f.script(wsList, unopened, all("idle", "GH-11"), all("working", "GH-11"))
+
+	ticks := 0
+	fx.in.sleep = func(context.Context, time.Duration) error {
+		ticks++
+		if ticks > 1 {
+			return context.Canceled
+		}
+
+		return nil
+	}
+
+	if err := fx.drive(t); !errors.Is(err, context.Canceled) {
+		t.Fatalf("drive = %v, want the interrupt\n%s", err, fx.out.String())
+	}
+
+	if unset := "git config --unset branch.GH-11." + ref.FinishKey; !fx.f.called(unset) {
+		t.Errorf("%q did not run: %q", unset, fx.f.calls)
 	}
 }
