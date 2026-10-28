@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
 // A parent's subtasks, as capture links them: GitHub sub-issues, GitLab
@@ -110,7 +111,12 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if cmd.Bool("json") || !isTerminal(cmd.Writer) {
+	if cmd.Bool("open") {
+		rows = slices.DeleteFunc(rows, func(r childRow) bool { return r.Finished })
+	}
+
+	plain := cmd.Bool("plain")
+	if cmd.Bool("json") || (!plain && !isTerminal(cmd.Writer)) {
 		enc := json.NewEncoder(cmd.Writer)
 		enc.SetIndent("", "  ")
 
@@ -121,7 +127,7 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	return writeTree(cmd.Writer, rows)
+	return writeTree(cmd.Writer, rows, plain)
 }
 
 // rawChildren asks the driver's `children`, else the host. A driver that
@@ -274,81 +280,39 @@ func childTree(rows []childRow) []childRow {
 
 // writeTree prints the rows as the tree drive shows: box lines down each
 // After: chain, the base named beside each dependent, and draft marked.
-func writeTree(w io.Writer, rows []childRow) error {
+// plain adds each task's url, for text relayed where a link does not survive.
+func writeTree(w io.Writer, rows []childRow, plain bool) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no children")
 
 		return err
 	}
 
-	// last[i] reports whether rows[i] is the last of its siblings
-	last := make([]bool, len(rows))
+	nodes := make([]tasktree.Node, len(rows))
 
 	for i, r := range rows {
-		last[i] = true
-
-		for _, next := range rows[i+1:] {
-			if next.Depth < r.Depth {
-				break
-			}
-
-			if next.Depth == r.Depth {
-				last[i] = false
-
-				break
-			}
-		}
-	}
-
-	var open []bool // per depth above this row: a sibling still follows
-
-	for i, r := range rows {
-		open = open[:min(len(open), r.Depth)]
-
-		var b strings.Builder
-
-		for d := 1; d < r.Depth; d++ {
-			if d < len(open) && open[d] {
-				b.WriteString("│  ")
-			} else {
-				b.WriteString("   ")
-			}
-		}
-
-		switch {
-		case r.Depth == 0:
-		case last[i]:
-			b.WriteString("└─ ")
-		default:
-			b.WriteString("├─ ")
-		}
-
-		fmt.Fprintf(&b, "%s  %s", r.ID, r.Title)
+		cells := []tasktree.Cell{{Text: r.ID}, {Text: r.Title}}
 
 		if r.After != "" {
-			b.WriteString("  after " + r.After)
+			cells = append(cells, tasktree.Cell{Text: "after " + r.After})
 		}
 
 		if slices.Contains(r.Labels, "draft") {
-			b.WriteString("  draft")
+			cells = append(cells, tasktree.Cell{Text: "draft"})
 		}
 
 		if r.Finished {
-			b.WriteString("  finished")
+			cells = append(cells, tasktree.Cell{Text: "finished"})
 		}
 
-		if _, err := fmt.Fprintln(w, b.String()); err != nil {
-			return fmt.Errorf("writing rows: %w", err)
+		if plain {
+			cells = append(cells, tasktree.Cell{Text: r.URL})
 		}
 
-		for len(open) <= r.Depth {
-			open = append(open, false)
-		}
-
-		open[r.Depth] = !last[i]
+		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells}
 	}
 
-	return nil
+	return tasktree.Tree{}.Write(w, nodes)
 }
 
 // subIssues reads an issue's GitHub sub-issues. A 404 is a host without

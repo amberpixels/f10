@@ -18,10 +18,11 @@ The status-line badge draws the same facts as three glyphs.
   The hook lets this form through, because the answer may need you.
   Follow the numbered points below.
 
-!`command -v f10 >/dev/null 2>&1 && f10 status --markdown || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
+!`command -v f10 >/dev/null 2>&1 && f10 status --plain || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
 
-1. Run `f10 status <task-id> --markdown`.
-   A table (a parent's rows, a finished task's row) is printed verbatim **outside any fence**, so ids and PRs stay links; anything else is printed verbatim in a fenced block.
+1. Run `f10 status <task-id> --plain`.
+   Print the output verbatim in a plain fenced block, whatever it is: a parent's tree, a finished task's tree, or a run's block.
+   Never redraw, reorder or turn it into a table.
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
    Put it to the user in **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the choices, the first as recommended.
@@ -33,14 +34,14 @@ The status-line badge draws the same facts as three glyphs.
 
    Print forward's block (task, workspace, sent) in a fenced `yaml` block and stop.
    The agent resumes in its own tab; this session's badge stays as it is.
-3. **A parent prints one table row per child** (task, stage, title, step, PR) instead of a block.
-   Each `ask:` row sits under an `asking` child's row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
-   No `ask:` row: the rows are the whole answer.
+3. **A parent prints a tree**, a row per child, instead of a block.
+   An `asking` child carries an `ask` line under its row; read the asks from `f10 status <task-id> --json` (the `ask` of each row) and put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
+   No `asking` child: the tree is the whole answer.
    Stop.
 4. No `ask` row: the status is the whole answer.
    Stop.
    A task with no live run of its own prints `run none for <id>` instead: what the agent in its checkout is on now (`agent`), and its `plan` and `pr` where they exist.
    That block never carries an `ask` row.
-   A finished task, its branch gone, prints its single `done` row with the merged PR.
+   A finished task, its branch gone, prints a one-row tree, `done` with the merged PR, its gates as lines under it.
 
 A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

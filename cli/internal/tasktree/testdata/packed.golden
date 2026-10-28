@@ -1,0 +1,4 @@
+FT-72  t72
+├─ FT-73  t73  after FT-72
+└─ FT-74  t74  after FT-72
+   └─ FT-75  t75  after FT-74

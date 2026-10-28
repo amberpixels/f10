@@ -28,9 +28,8 @@ A task id whose task has subtasks is never driven itself: the user picks which s
    Exit 3 or `[]`: the id stays as given.
    Rows: the id is a parent; its unfinished rows are the candidates.
    A parent whose rows are all finished is dropped from the list with one line saying so.
-2. **Show each parent's tree** in chat, outside any code fence, so ids are links: a line `**<parent id>**`, then a nested markdown list in the rows' order, one level per `depth`.
-   Each item: `[<id>](<url>) <title>`, then ` · after <after>` when `after` is set, then ` · draft` when `labels` holds `draft`.
-   Finished rows are left out.
+2. **Show each parent's tree**: a line `<parent id>`, then the output of `f10 task children <id> --open --plain` verbatim, in one plain fenced block per parent.
+   Never redraw it; the rows, glyphs and urls are the binary's.
 3. **Ask once, in one `AskUserQuestion`**: multi-select questions, header the parent id.
    An option is one candidate: label `<id> <title>`, cut to fit; description `after <after>`, or `first in its chain`.
    Non-draft candidates are marked recommended, draft ones are not.

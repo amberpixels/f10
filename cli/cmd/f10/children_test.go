@@ -55,7 +55,7 @@ func TestChildTree(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeTree(&out, got[:5]); err != nil {
+	if err := writeTree(&out, got[:5], false); err != nil {
 		t.Fatal(err)
 	}
 
