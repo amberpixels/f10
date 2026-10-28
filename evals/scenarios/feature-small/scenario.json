@@ -1,0 +1,7 @@
+{
+  "description": "a small feature: a flag on a tiny CLI, planned and shipped on a local flow",
+  "task": "T-1",
+  "prompt": "/f10:plan T-1 && /f10:ship T-1 --driven",
+  "verify": ["just lint", "just test"],
+  "checks": ["plan", "verify", "commit"]
+}
