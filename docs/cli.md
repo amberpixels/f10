@@ -70,6 +70,7 @@ f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --dis
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
 f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
+f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
@@ -508,7 +509,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
    No sign within two minutes halts the task, and so does a workspace that still shows no agent status by then.
    Once the agent is idle again, the run says how the turn ended:
-   - **blocked with an ask** - the question is printed with its options.
+   - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      At the end of that poll the driver prints every task's ask and the command that answers them all, and exits **4**.
      The other agents keep working in their own panes;
    - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
@@ -529,11 +530,14 @@ A cancelled record is never picked up again: the same command line starts a new 
 Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
+An answer sent closes the task's ask in the inbox. An answer the inbox already holds for a task goes first: one typed in the agent's pane is followed as the turn it started, with nothing sent; any other is sent as an `--answer` would be, and an `--answer` for the same task goes unused with a note.
+A drive whose task was answered after it last looked, while it still held its lease, resumes itself once it has stopped: `f10 asks resume` waits for its process to end, then has the daemon run `--resume <n>`.
+`f10 drive cancel <n>` closes the drive's open asks.
 An agent found mid-turn is attached to rather than prompted again.
 A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
-`/f10:drive` runs the command in the background, puts an exit-4 question to you in one questionnaire, runs the `answer with:` line (`f10 drive --resume <n> --answer …`) with the answers, and prints the final report.
+`/f10:drive` runs the command in the background, answers an exit 4 through `/f10:asks` (the questions in one questionnaire, the answers written to the inbox, the drive resumed), and prints the final report.
 
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
 
@@ -551,6 +555,18 @@ Nothing registers it as a service: `f10 drive` starts it when none listens, and 
 `f10 daemon status` prints the pid, version and start time, then each drive: its project, number, pid, log, and each task's standing from its record.
 `f10 daemon stop` drains the daemon the same way but keeps no drained list: each drive stops at its next tick, a client following one ends with `f10 drive --resume <n> goes on`, and nothing resumes until someone runs that. `--now` stops each drive at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its drives are gone.
 `f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
+
+## Asks
+
+A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a drive's own finish question, wait in one per-user inbox until the first answer from any way in.
+
+- **Where.** `~/.claude/f10/asks/` (`F10_ASKS_DIR` overrides), beside the run state and outside every project: one YAML file per open ask, `<root hash>-<TASK>.yaml`, naming its task, url, storage root, main checkout, worktree, drive (none for an agent no drive watches), skill, the ask's text and its parsed questions. The first answer moves it to `answered/` with the answer, the way in (`pane`, `asks`, `skill`, `drive`, `cancelled`) and the time, through a rename only one caller wins; a later one is told who answered and when. At each session start, answered asks older than a week are pruned, and so is an open ask whose worktree is gone.
+- **Raised.** `f10-state.sh ask` writes the ask as the agent stops; the drive that sees it adds its number. The same text is one ask, so the user is told once.
+- **Told.** The status line counts open asks, ` f10 · 2 asks`, with or without a run (`docs/statusline.md`). A `UserPromptSubmit` and `SessionStart` hook (`f10 asks hook`) adds each open ask to a session's context once, leaving out the asking agent's own session. And `notify` runs per new ask: `~/.f10/asks.md` frontmatter, `notify: ntfy publish f10 "{task} asks: {question}" {url}`, run through `sh -c` for up to 10s, with `{task}`, `{question}` (the first question) and `{url}` standing for the shell variables `${F10_ASK_TASK}`, `${F10_ASK_QUESTION}` and `${F10_ASK_URL}`, so an agent's text is never run as shell; quote them as any variable; `notify: off` runs nothing, and absent it is a desktop notification (`osascript` on macOS, `notify-send` on Linux when installed).
+- **Answered.** Typed in the agent's own pane, the prompt is the answer: the agent goes on, and its drive, if stopped, is resumed to follow the turn. `f10 asks answer <task> 1=b 2=8080` answers questions by option letter, number or text; free text only for a question with no options, and every question not named takes its default (one with no default must be named). `<project>:<task>` picks between two projects' asks. Bare `f10 asks` in a terminal walks the open asks, Enter taking each default and `s` skipping an ask; elsewhere it is `f10 asks list`. `/f10:asks` asks them in one questionnaire and runs `f10 asks answer --by skill`.
+- **Delivered.** An answer to a drive's task goes to its drive: a stopped drive is resumed through the daemon (`--resume <n>` from its main checkout, with the answering process's allowlisted environment), and a drive still running takes it as it stops. An answer to an agent no drive watches is sent to the agent, as `f10 forward` would; one that cannot be sent is printed to type in its pane.
+
+`f10 asks list` prints the open asks, oldest first, then those answered in the last day; `--json` prints `{open: [...], answered: [...]}`.
 
 ## Review
 

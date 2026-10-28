@@ -378,8 +378,9 @@ func TestRenderParity(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// an empty inbox: the user's open asks would add a count
 		cmd := exec.Command(script, "render", r.Session)
-		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1")
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_ASKS_DIR="+t.TempDir())
 
 		out, err := cmd.Output()
 		if err != nil {
@@ -612,5 +613,41 @@ func TestSeedRecordsTheTask(t *testing.T) {
 				t.Errorf("Capture = running for a reference")
 			}
 		})
+	}
+}
+
+// The open asks count on the status line, with a run and without one.
+func TestRenderCountsAsks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash script")
+	}
+
+	_, file, _, _ := runtime.Caller(0)
+	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
+	dir, asks := t.TempDir(), t.TempDir()
+
+	for _, name := range []string{"a-FT-1.yaml", "b-FT-2.yaml"} {
+		if err := os.WriteFile(filepath.Join(asks, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r := &Run{Session: "asks", Capture: "pending", Plan: "pending", Ship: "pending"}
+	if err := r.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	for session, want := range map[string]string{"asks": " 󱊴 ○○○ f10 · 2 asks", "none": " f10 · 2 asks"} {
+		cmd := exec.Command(script, "render", session)
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_ASKS_DIR="+asks)
+
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+
+		if string(out) != want {
+			t.Errorf("render %s = %q, want %q", session, out, want)
+		}
 	}
 }

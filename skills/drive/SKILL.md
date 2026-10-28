@@ -58,11 +58,9 @@ On every exit, a line starting `!!!` goes first, verbatim, above everything else
 
 - **0** - every task went through its flow.
   Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
-- **4** - one or more agents asked.
-  The output carries one `<id> asks at <skill>: ...` line per asking task: numbered questions, each with its options in brackets, the first the default.
-  Put every asking task's questions to the user in **one `AskUserQuestion`**: one question per numbered item, its header carrying the task id, the bracketed options as the choices, the first marked recommended.
-  Then run the output's `answer with:` line (`f10 drive --resume <n> --answer …`) in the background, its placeholders filled with the answers, numbered the way each ask was.
-  Repeat on every exit 4.
+- **4** - one or more agents asked; each ask waits in the asks inbox, so it can also be answered in the agent's pane, with `f10 asks` or from another session.
+  Follow `${CLAUDE_PLUGIN_ROOT}/skills/asks/SKILL.md` for this drive's asking tasks: the questions in one `AskUserQuestion`, then `f10 asks answer`, which resumes the drive through the daemon.
+  Then rerun the same arguments in the background to follow the resumed drive, and act on its exit as above; an ask already answered elsewhere resumes the drive the same way.
 - **5** - a task halted; the lines beneath the report say which and why.
   Print the report block and those lines verbatim, and stop.
   A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 drive list` shows it and `f10 drive cancel <n>` stops it.

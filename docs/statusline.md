@@ -35,6 +35,7 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | `󰜺` | blocked: a judge verdict ended the run |
 
 A stopped run adds the step it stopped on, so `◉ ● 󰜺 judge` reads "blocked at judge".
+Open asks, across projects, add a count, ` f10 · 2 asks`, shown with or without a run: a driven agent is waiting on you (`f10 asks`, `/f10:asks`).
 The rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on (`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own worktree, from the task's own run only; when the agent there has moved on to another task, it names that task and falls back to the task's plan file and PR.
 Bare `f10 status` is `f10 status <task-id>` for the task this session's run records, else the one the branch or worktree name carries; with neither, it prints the session's run, or this repo's live runs.
 
@@ -50,6 +51,7 @@ On an unpatched font they show as an empty box while the circles still read.
 | `F10_STATE_GLYPHS` | replace the glyph set |
 | `F10_STATE_DIR` | where state files live, default `~/.claude/f10/state` |
 | `F10_STATE_TTL` | seconds before a badge reads as stale, default one day |
+| `F10_ASKS_DIR` | where open asks are counted from, default `~/.claude/f10/asks` |
 
 State is one small file per session, outside every repo, so stealth mode keeps nothing f10-shaped inside a project.
 `/clear` starts a new session and retires the badge.
