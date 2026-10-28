@@ -34,6 +34,7 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
    The kind adds what it must prove:
    - **bug** - reproduce it where the project can run it (a test, the CLI, the verify commands): the steps or input, expected against actual.
      Then trace the root cause to a `file:line`.
+     A reproduction and root cause this run already confirmed (the debug step) are not redone: check the cited `file:line` still reads as the brief says, and carry both into this brief.
      A bug that does not reproduce, or a cause still a guess after a few reads, never becomes a plan: ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, per `modes/driven.md`), and retry the reproduction once with the answer.
      Still not reproduced: stop with `f10-state.sh set plan blocked` and a `note` naming what was tried and what to collect next.
    - **refactor** - the behavior that must not change, the tests that pin it, and where coverage is missing.

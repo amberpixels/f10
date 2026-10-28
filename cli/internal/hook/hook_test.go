@@ -124,6 +124,22 @@ func TestSeedRecordsTheSkill(t *testing.T) {
 	}
 }
 
+// debug runs before any task exists: it seeds capture, and an id-shaped
+// token in the error text names no task.
+func TestSeedDebugOpensCapture(t *testing.T) {
+	env := testEnv(t)
+	Dispatch(context.Background(), payload(t, "ue-debug-error"), env)
+
+	r, err := state.Load(state.Path(env.StateDir, "s1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r.Skill != "debug" || r.Capture != "running" || r.Task != "" {
+		t.Errorf("skill, capture, task = %q, %q, %q; want debug, running, empty", r.Skill, r.Capture, r.Task)
+	}
+}
+
 type recorder struct{ got []observe.Observation }
 
 func (r *recorder) Observe(_ context.Context, o observe.Observation) error {
