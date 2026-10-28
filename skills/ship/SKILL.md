@@ -99,6 +99,7 @@ A lesson is knowledge about a file a reader of the code alone would not get: a t
 Not a lesson: a bug this change fixed, a style finding, what a comment at the line already says, a restatement of the intent.
 Most changes leave none, and the final report says so in one line: `lessons: none`, or the count with the paths.
 Run `f10 lore lessons <path>` first for each file: a standing lesson this change proves wrong is superseded inside its own change, `f10 lore add lesson --change <that change> --supersedes <id> --anchor <path:line[-end]> -m <the corrected text>`, or `--retired` with a one-line body saying what retired it.
+A lesson implement's hand-off marked as overridden is the first candidate: superseded with the corrected text, or retired, with the decision noted beside it as the reason.
 A new one is `f10 lore add lesson --change <id> --anchor <path:line[-end][#symbol]> -m <text>`.
 Nothing is asked, driven or not; a failing `lore add` is one line in the report, never a failed step, and never holds the report back.
 
