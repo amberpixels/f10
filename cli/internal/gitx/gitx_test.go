@@ -360,10 +360,11 @@ func TestUnsetConfig(t *testing.T) {
 	}
 }
 
-// Conflicts reads the conflicting paths from merge-tree's stdout on exit 1,
-// sorted and without the tree line; a clean merge is nil, and a loud exit
-// is an error.
-func TestConflictsNamesThePaths(t *testing.T) {
+// Conflicts reads the conflicted stages from merge-tree's stdout on exit 1,
+// one Conflict per path sorted by path, each stage's blob in place and ""
+// for a side that lacks the path; a clean merge is nil, and a loud exit is
+// an error.
+func TestConflictsNamesThePathsAndTheirBlobs(t *testing.T) {
 	prev := Exec
 	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
 		switch args[len(args)-1] {
@@ -372,19 +373,22 @@ func TestConflictsNamesThePaths(t *testing.T) {
 		case "bad":
 			return "", &ExitError{Args: args, Code: 1, Stderr: "fatal: not something we can merge"}
 		default:
-			return "", &ExitError{Args: args, Code: 1, Stdout: "tree\nb.go\na.go\n"}
+			return "", &ExitError{Args: args, Code: 1, Stdout: "tree\n" +
+				"100644 b1 1\tb.go\n100644 b2 2\tb.go\n100644 b3 3\tb.go\n" +
+				"100644 a2 2\ta.go\n100644 a3 3\ta.go\n"}
 		}
 	}
 
 	t.Cleanup(func() { Exec = prev })
 
-	if paths, err := Conflicts(t.Context(), ".", "main", "clean"); paths != nil || err != nil {
-		t.Errorf("a clean merge = %q, %v, want nil", paths, err)
+	if conflicts, err := Conflicts(t.Context(), ".", "main", "clean"); conflicts != nil || err != nil {
+		t.Errorf("a clean merge = %v, %v, want nil", conflicts, err)
 	}
 
-	paths, err := Conflicts(t.Context(), ".", "main", "side")
-	if err != nil || strings.Join(paths, ",") != "a.go,b.go" {
-		t.Errorf("a conflict = %q, %v, want a.go,b.go", paths, err)
+	conflicts, err := Conflicts(t.Context(), ".", "main", "side")
+	if err != nil || len(conflicts) != 2 ||
+		conflicts[0].Key() != "a.go@/a2/a3" || conflicts[1].Key() != "b.go@b1/b2/b3" {
+		t.Errorf("a conflict = %+v, %v, want a.go then b.go with their blobs", conflicts, err)
 	}
 
 	if _, err := Conflicts(t.Context(), ".", "main", "bad"); err == nil {
@@ -427,12 +431,18 @@ func TestConflictsOnARealConflict(t *testing.T) {
 	write("g", "side\n")
 	run("commit", "-qam", "side")
 
-	paths, err := Conflicts(t.Context(), dir, "main", "side")
-	if err != nil || strings.Join(paths, ",") != "f,g" {
-		t.Errorf("a conflicting branch = %q, %v, want f,g", paths, err)
+	conflicts, err := Conflicts(t.Context(), dir, "main", "side")
+	if err != nil || len(conflicts) != 2 || conflicts[0].Path != "f" || conflicts[1].Path != "g" {
+		t.Fatalf("a conflicting branch = %+v, %v, want f,g", conflicts, err)
 	}
 
-	if paths, err := Conflicts(t.Context(), dir, "main", "main"); paths != nil || err != nil {
-		t.Errorf("main into main = %q, %v, want clean", paths, err)
+	for _, c := range conflicts {
+		if c.Stages[1] == "" || c.Stages[2] == "" || c.Stages[3] == "" || c.Stages[2] == c.Stages[3] {
+			t.Errorf("%s: stages %q, want three distinct blobs", c.Path, c.Stages[1:])
+		}
+	}
+
+	if conflicts, err := Conflicts(t.Context(), dir, "main", "main"); conflicts != nil || err != nil {
+		t.Errorf("main into main = %v, %v, want clean", conflicts, err)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -303,12 +304,27 @@ func MergesCleanly(ctx context.Context, dir, base, head string) (bool, error) {
 	}
 }
 
-// Conflicts is the paths on which head conflicts with base, sorted, tried
-// in memory as MergesCleanly does: nil is a clean merge. git exits 1 with
-// the tree and the paths on stdout for a conflict, and with its reason on
-// stderr for a ref it cannot merge, which is an error.
-func Conflicts(ctx context.Context, dir, base, head string) ([]string, error) {
-	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head)
+// A Conflict is one path a merge would conflict on, with the blob each
+// stage brought: 1 the merge base, 2 base's side, 3 head's side, "" where
+// a side lacks the path. Two conflicts on a path are the same conflict only
+// when their blobs are.
+type Conflict struct {
+	Path   string
+	Stages [4]string
+}
+
+// Key tells this conflict from another on the same path.
+func (c Conflict) Key() string {
+	return c.Path + "@" + strings.Join(c.Stages[1:], "/")
+}
+
+// Conflicts is what head conflicts on in base, sorted by path, tried in
+// memory as MergesCleanly does: nil is a clean merge. git exits 1 with the
+// tree and a `<mode> <oid> <stage>\t<path>` line per conflicted stage on
+// stdout, and with its reason on stderr for a ref it cannot merge, which is
+// an error.
+func Conflicts(ctx context.Context, dir, base, head string) ([]Conflict, error) {
+	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--no-messages", base, head)
 
 	switch {
 	case err == nil:
@@ -320,18 +336,38 @@ func Conflicts(ctx context.Context, dir, base, head string) ([]string, error) {
 
 	exit, _ := errors.AsType[*ExitError](err)
 	_, rest, _ := strings.Cut(exit.Stdout, "\n")
-
-	var paths []string
+	byPath := map[string]*Conflict{}
 
 	for line := range strings.SplitSeq(rest, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			paths = append(paths, line)
+		info, path, ok := strings.Cut(line, "\t")
+		fields := strings.Fields(info)
+
+		if !ok || len(fields) != 3 {
+			continue
 		}
+
+		stage, err := strconv.Atoi(fields[2])
+		if err != nil || stage < 1 || stage > 3 {
+			continue
+		}
+
+		c := byPath[path]
+		if c == nil {
+			c = &Conflict{Path: path}
+			byPath[path] = c
+		}
+
+		c.Stages[stage] = fields[1]
 	}
 
-	slices.Sort(paths)
+	conflicts := make([]Conflict, 0, len(byPath))
+	for _, c := range byPath {
+		conflicts = append(conflicts, *c)
+	}
 
-	return paths, nil
+	slices.SortFunc(conflicts, func(a, b Conflict) int { return strings.Compare(a.Path, b.Path) })
+
+	return conflicts, nil
 }
 
 // MergeTree is the tree of head merged into base, built in memory as

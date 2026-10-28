@@ -97,7 +97,7 @@ Each choice is written down, one per file, so the reviewer and the change judge 
   Write it with `gh pr edit <n> --body-file <file>` / `glab mr update <n> --description "$(cat <file>)"`, the draft in a temp file outside the repo.
   No PR, no line: lore and the report carry it, and the pr step renders the heading from lore when it opens one.
 
-A conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails) is a failure, never an ask: `f10-state.sh set ship failed catchup` with a `note`.
+Any failure, the **On failure** cases below included and a conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails), is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
 A clean end after a failure restores the noted status; a clean end that never stopped writes nothing.
 Run by hand, without `--driven`, point 4 asks exactly as written.
 
