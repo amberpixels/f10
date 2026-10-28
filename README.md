@@ -72,6 +72,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task, printed, and drafted where your settings or the project's overlay name a delivery adapter; the next one starts where it ended |
 | `/f10:status [id]` | nothing: a hook answers it; with an id, `f10 status <id>` | the run's status in words; with an id, another worktree's run and its agent's question, relayed and answered |
+| `/f10:asks [id]` | nothing: it runs `f10 asks` | the questions driven agents wait on, across projects, asked in one questionnaire; each answer resumes its drive or reaches its agent |
 | `/f10:read [id \| id+id]` | nothing: it runs `f10 task read` | the task, its comments and every image it links in context, opened; nothing planned or started |
 | `/f10:board [<window>] [--state] [--remote] [-C <checkout>]` | nothing: it runs `f10 board` | what changed today (else the last working day), by group; with `--state`, every task's stage and next action, your own next moves offered one per line (the `next` group as one line for its first task), none run |
 | `/f10:start <id \| PR url \| #n> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--task <id>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent; a PR's branch picked up |
@@ -470,7 +471,7 @@ f10 drive 1042 1043 --answer "1. proceed"   # the same command, answering the qu
 A task opens once its base's branch has a commit of its own, and its `finish` waits until the base finished; every task released that way runs at once, opened as `f10 start` does, its agent prompted one skill at a time (Herdr says when a turn ends, run state says how).
 `finish` runs in the driver.
 Each task gets `/f10:plan` when the flow leads with `plan` and it has no plan file, then `/f10:ship`, which runs the rest of the flow, then `finish` when `drive_finish: on`.
-An agent's question exits 4, and `/f10:drive` asks you and reruns with one answer per asking task.
+An agent's question exits 4 and waits in the asks inbox: `/f10:drive` asks you and the answers resume the drive, or answer it in the agent's pane, with `f10 asks`, or with `/f10:asks` from any session.
 A judge stop or failure halts that task and its dependents, the rest run on, and the exit is 5.
 A started task whose base just finished is caught up by `/f10:catchup` first.
 Rerunning the same command resumes from each task's last recorded skill.

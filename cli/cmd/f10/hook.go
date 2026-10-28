@@ -64,6 +64,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot },
 		TaskID:      hookTaskID,
 		StatusText:  hookStatusText,
+		PromptTyped: paneAnswered,
 		Observers:   []observe.Observer{recorder},
 	}
 

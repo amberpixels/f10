@@ -21,6 +21,9 @@ func TestMain(m *testing.M) {
 	}
 
 	_ = os.Setenv(ledger.PathEnv, filepath.Join(dir, "f10.db"))
+	// no test's ask reaches the user's inbox
+	_ = os.Setenv("F10_ASKS_DIR", filepath.Join(dir, "asks"))
+	askNotifier = nil
 
 	code := m.Run()
 

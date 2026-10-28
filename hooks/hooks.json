@@ -10,6 +10,15 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 asks hook",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "UserPromptExpansion": [
@@ -140,6 +149,15 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10-inject.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 asks hook",
             "timeout": 5
           }
         ]

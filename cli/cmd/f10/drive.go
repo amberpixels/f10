@@ -18,6 +18,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
@@ -145,7 +146,13 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 			return driveList(cmd.Writer, t.sharedRoot(), a.all)
 		}
 
-		return driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now())
+		if err := driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now()); err != nil {
+			return err
+		}
+
+		closeDriveAsks(asks.Dir(), t.sharedRoot(), a.cancel, time.Now())
+
+		return nil
 	}
 
 	// the daemon may drain this drive before it opens anything: the signal
@@ -242,8 +249,11 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		stateDir: state.Dir(),
 		ttl:      state.TTL(),
 		now:      time.Now,
+		asksDir:  asks.Dir(),
+		notify:   askNotifier,
 	}
 	in.sleep = in.wake
+	in.resume = in.resumeSelf
 
 	if drain != nil {
 		go func() {
@@ -497,6 +507,17 @@ type driveInput struct {
 	own    *drives.Lease            // the drive's own lease, held while it runs
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
 
+	// asksDir is the inbox an ask goes to and answers come from; "" keeps
+	// none. notify tells the user of a new ask; resume starts this drive
+	// again for an answer that came after it stopped looking.
+	asksDir string
+	notify  func(context.Context, asks.Ask) error
+	resume  func(ctx context.Context, n int) error
+	// answeredIn is when a task's ask was answered where the agent heard
+	// it: the drive follows that turn instead of sending the skill again
+	answeredIn map[string]time.Time
+	inboxNotes []string
+
 	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
 	runs     []*driveRun
 	out      io.Writer
@@ -528,6 +549,8 @@ type driveResult struct {
 	// drives is an end this drive gave the task, owned elsewhere or
 	// cancelled, which says nothing about the task itself
 	drives bool
+	// ask is the question an exitAsk end waits on, for the inbox
+	ask string
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -597,11 +620,16 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		return err
 	}
 
+	// runs after releaseAll: an answer claimed while this drive still held
+	// its lease is seen here, or by its claimer once the lease is free
+	defer in.resumeAnswered(context.WithoutCancel(ctx), tasks)
 	defer in.releaseAll()
 
 	if err := in.takeAnswers(tasks); err != nil {
 		return err
 	}
+
+	in.takeInbox(tasks)
 
 	if in.rec != nil {
 		fmt.Fprintf(w, "drive %d\n", in.rec.Number)
@@ -711,7 +739,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 	}
 
-	return in.report(w, runs, notes)
+	return in.report(w, runs, append(notes, in.inboxNotes...))
 }
 
 // resolveModels resolves every model the command line names, once each,
@@ -1590,11 +1618,13 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 	}
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
+		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.url, fp.author, finishLocal, finishMerge)
+
 		return driveResult{
-			row:  "asked at finish",
-			code: exitAsk,
-			lines: []string{fmt.Sprintf("%s asks at finish: 1. %s was opened by %s: [%s | %s]",
-				id, fp.url, fp.author, finishLocal, finishMerge)},
+			row:   "asked at finish",
+			code:  exitAsk,
+			lines: []string{id + " asks at finish: " + ask},
+			ask:   ask,
 		}
 	}
 
@@ -1693,11 +1723,19 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
 
+	answeredAt, answered := in.answeredIn[id]
+	delete(in.answeredIn, id)
+
 	switch {
 	case ws.Status == agentctl.StatusWorking:
 		r.begun = true
 
 		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
+	case answered:
+		// the agent heard the answer where it was given: its turn began then
+		r.sentAt = answeredAt.Truncate(time.Second)
+
+		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", id, skill)
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
@@ -1713,6 +1751,10 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 			return nil
 		}
+
+		// closed before the prompt, so the pane hook does not read the
+		// drive's own answer as one typed there
+		in.claimSent(r, answer)
 
 		if err := promptAgent(ctx, r.o.path, id, r.task.suffix, answer); err != nil {
 			return err
@@ -2025,6 +2067,7 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 			row:   "asked at " + skill,
 			code:  exitAsk,
 			lines: []string{fmt.Sprintf("%s asks at %s: %s", id, skill, run.Ask)},
+			ask:   run.Ask,
 		}
 	}
 
@@ -2064,6 +2107,10 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 		t.Skill, t.Outcome = "", &drives.Outcome{Row: res.row, Code: res.code}
 	})
 	in.unlease(r, in.runs)
+
+	if res.code == exitAsk && res.ask != "" {
+		in.raise(ctx, r, strings.TrimPrefix(res.row, "asked at "), res.ask)
+	}
 
 	if res.code == exitHalted && !res.fromRun && !res.drives {
 		in.recordHalt(ctx, r, res)
