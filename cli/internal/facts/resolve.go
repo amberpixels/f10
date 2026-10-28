@@ -367,6 +367,14 @@ func (e *Effective) resolveHosting(
 		e.Catchup = "rebase"
 	}
 
+	// frontmatter only: a stacked base is merged unless the project takes the replay a rebase risks
+	if e.settle("catchup_stacked", fmSource("catchup_stacked", fm.CatchupStacked), source{},
+		Fact{Key: "catchup_stacked", Value: "merge", Origin: OriginDefault}) == "frontmatter" {
+		e.CatchupStacked = fm.CatchupStacked
+	} else {
+		e.CatchupStacked = "merge"
+	}
+
 	// frontmatter only: no prose ever declared it
 	e.settle("traces", fmSource("traces", fm.Traces), source{},
 		Fact{Key: "traces", Value: "off", Origin: OriginDefault})

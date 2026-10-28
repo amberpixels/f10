@@ -43,6 +43,7 @@ type view struct {
 	Review          facts.Review        `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
 	MergeMethod     string              `json:"mergeMethod,omitempty"`
 	Catchup         string              `json:"catchup"`
+	CatchupStacked  string              `json:"catchupStacked"`
 	Traces          bool                `json:"traces"`
 	Lore            string              `json:"lore"`
 	StaleAfter      string              `json:"staleAfter,omitempty"`
@@ -100,6 +101,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Review:          eff.Review,
 		MergeMethod:     eff.MergeMethod,
 		Catchup:         eff.Catchup,
+		CatchupStacked:  eff.CatchupStacked,
 		Traces:          eff.Traces,
 		Lore:            eff.Lore,
 		StaleAfter:      eff.StaleAfter,

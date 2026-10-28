@@ -72,7 +72,7 @@ func buildWith(t *testing.T, main, worktree string) *Effective {
 
 func TestBuildFrontmatter(t *testing.T) {
 	eff := buildWith(t, "---\n"+
-		"visibility: public\ntracker: {kind: gitlab, id: AB-###}\nmerge_method: rebase\ncatchup: merge\n"+
+		"visibility: public\ntracker: {kind: gitlab, id: AB-###}\nmerge_method: rebase\ncatchup: merge\ncatchup_stacked: rebase\n"+
 		"flows: {default: plan implement pr, local: [implement, commit]}\ndrive_finish: on\n"+
 		"review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n"+
 		"---\n# demo\n\n## Verify\n\n`just test`\n", "")
@@ -82,7 +82,7 @@ func TestBuildFrontmatter(t *testing.T) {
 	}
 
 	if eff.Visibility != "public" || eff.TrackerKind != "GitLab work items" || eff.IDPrefix != "AB" ||
-		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || len(eff.Flows) != 2 ||
+		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || eff.CatchupStacked != "rebase" || len(eff.Flows) != 2 ||
 		!eff.DriveFinish || eff.Review.Reviewer != "claude[bot]" {
 		t.Errorf("typed facts = %+v", eff)
 	}
@@ -477,6 +477,24 @@ func TestCatchupOff(t *testing.T) {
 
 	if eff := buildWith(t, "---\ncatchup: squash\n---\n", ""); !strings.Contains(eff.Errors(), "catchup") {
 		t.Errorf("an unknown method is not an error: %q", eff.Errors())
+	}
+}
+
+// catchup_stacked picks the method for a base that is another task's
+// branch: merge unless declared, rebase on request, nothing else.
+func TestCatchupStacked(t *testing.T) {
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "catchup_stacked"); none.CatchupStacked != "merge" || f.Origin != OriginDefault {
+		t.Errorf("default = %q (%s), want merge by default", none.CatchupStacked, f.Origin)
+	}
+
+	eff := buildWith(t, "---\ncatchup_stacked: rebase\n---\n", "")
+	if eff.CatchupStacked != "rebase" || eff.Errors() != "" {
+		t.Errorf("declared: catchup_stacked %q, errors %q", eff.CatchupStacked, eff.Errors())
+	}
+
+	if eff := buildWith(t, "---\ncatchup_stacked: off\n---\n", ""); !strings.Contains(eff.Errors(), "catchup_stacked") {
+		t.Errorf("off is not an error: %q", eff.Errors())
 	}
 }
 

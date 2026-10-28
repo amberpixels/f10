@@ -27,25 +27,26 @@ import (
 
 // Declared is one layer's frontmatter.
 type Declared struct {
-	Visibility    string            `yaml:"visibility,omitempty"`
-	Storage       string            `yaml:"storage,omitempty"`
-	Layering      string            `yaml:"layering,omitempty"`
-	Tracker       TrackerDecl       `yaml:"tracker,omitempty"`
-	MergeMethod   string            `yaml:"merge_method,omitempty"`
-	Catchup       string            `yaml:"catchup,omitempty"`
-	Traces        string            `yaml:"traces,omitempty"`
-	Lore          string            `yaml:"lore,omitempty"`
-	StaleAfter    string            `yaml:"stale_after,omitempty"`    // a task older than this is judged before it is planned
-	DriverTimeout string            `yaml:"driver_timeout,omitempty"` // one driver verb's limit, a Go duration
-	ReviewTraces  string            `yaml:"review_traces,omitempty"`  // the old spelling of traces, read and folded in
-	Flows         map[string]Flow   `yaml:"flows,omitempty"`
-	FlowByArea    map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
-	DriveFinish   string            `yaml:"drive_finish,omitempty"`
-	DriveEnv      []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
-	Watch         string            `yaml:"watch,omitempty"`     // what the daemon does for tasks no drive owns
-	ReportBack    string            `yaml:"report_back,omitempty"`
-	Review        ReviewDecl        `yaml:"review,omitempty"`
-	Standup       StandupDecl       `yaml:"standup,omitempty"`
+	Visibility     string            `yaml:"visibility,omitempty"`
+	Storage        string            `yaml:"storage,omitempty"`
+	Layering       string            `yaml:"layering,omitempty"`
+	Tracker        TrackerDecl       `yaml:"tracker,omitempty"`
+	MergeMethod    string            `yaml:"merge_method,omitempty"`
+	Catchup        string            `yaml:"catchup,omitempty"`
+	CatchupStacked string            `yaml:"catchup_stacked,omitempty"` // how a branch catches up with a base that is another task's branch
+	Traces         string            `yaml:"traces,omitempty"`
+	Lore           string            `yaml:"lore,omitempty"`
+	StaleAfter     string            `yaml:"stale_after,omitempty"`    // a task older than this is judged before it is planned
+	DriverTimeout  string            `yaml:"driver_timeout,omitempty"` // one driver verb's limit, a Go duration
+	ReviewTraces   string            `yaml:"review_traces,omitempty"`  // the old spelling of traces, read and folded in
+	Flows          map[string]Flow   `yaml:"flows,omitempty"`
+	FlowByArea     map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
+	DriveFinish    string            `yaml:"drive_finish,omitempty"`
+	DriveEnv       []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
+	Watch          string            `yaml:"watch,omitempty"`     // what the daemon does for tasks no drive owns
+	ReportBack     string            `yaml:"report_back,omitempty"`
+	Review         ReviewDecl        `yaml:"review,omitempty"`
+	Standup        StandupDecl       `yaml:"standup,omitempty"`
 
 	// The keys flows replaces, read and converted with a warning.
 	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
@@ -181,18 +182,19 @@ func decodeDeclared(block []byte) (Declared, error) {
 
 // The vocabularies the scalar keys accept.
 var vocab = map[string][]string{
-	"visibility":    {"stealth", "public"},
-	"storage":       {"in-repo", "out-of-tree"},
-	"layering":      {layout.LayeringExtends, layout.LayeringReplaces},
-	"tracker.kind":  {"github", "gitlab", "notion", "jira"},
-	"merge_method":  {"squash", "merge", "rebase"},
-	"catchup":       {"rebase", "merge", "off"},
-	"traces":        {"on", "off"},
-	"lore":          {"local", "committed"},
-	"review_traces": {"on", "off"},
-	"report_back":   {"on", "off"},
-	"drive_finish":  {"on", "off"},
-	"watch":         {"report", "finish", "off"},
+	"visibility":      {"stealth", "public"},
+	"storage":         {"in-repo", "out-of-tree"},
+	"layering":        {layout.LayeringExtends, layout.LayeringReplaces},
+	"tracker.kind":    {"github", "gitlab", "notion", "jira"},
+	"merge_method":    {"squash", "merge", "rebase"},
+	"catchup":         {"rebase", "merge", "off"},
+	"catchup_stacked": {"merge", "rebase"},
+	"traces":          {"on", "off"},
+	"lore":            {"local", "committed"},
+	"review_traces":   {"on", "off"},
+	"report_back":     {"on", "off"},
+	"drive_finish":    {"on", "off"},
+	"watch":           {"report", "finish", "off"},
 }
 
 // staleAfterRE is a stale_after value: whole days or weeks. Hours mean
@@ -249,18 +251,19 @@ func (d Declared) check() []string {
 	var bad []string
 
 	for key, value := range map[string]string{
-		"visibility":    d.Visibility,
-		"storage":       d.Storage,
-		"layering":      d.Layering,
-		"tracker.kind":  d.Tracker.Kind,
-		"merge_method":  d.MergeMethod,
-		"catchup":       d.Catchup,
-		"traces":        d.Traces,
-		"lore":          d.Lore,
-		"review_traces": d.ReviewTraces,
-		"report_back":   d.ReportBack,
-		"drive_finish":  d.DriveFinish,
-		"watch":         d.Watch,
+		"visibility":      d.Visibility,
+		"storage":         d.Storage,
+		"layering":        d.Layering,
+		"tracker.kind":    d.Tracker.Kind,
+		"merge_method":    d.MergeMethod,
+		"catchup":         d.Catchup,
+		"catchup_stacked": d.CatchupStacked,
+		"traces":          d.Traces,
+		"lore":            d.Lore,
+		"review_traces":   d.ReviewTraces,
+		"report_back":     d.ReportBack,
+		"drive_finish":    d.DriveFinish,
+		"watch":           d.Watch,
 	} {
 		if value != "" && !slices.Contains(vocab[key], value) {
 			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
@@ -416,6 +419,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("tracker", !d.Tracker.empty(), func() { l.Tracker = d.Tracker })
 	set("merge_method", d.MergeMethod != "", func() { l.MergeMethod = d.MergeMethod })
 	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
+	set("catchup_stacked", d.CatchupStacked != "", func() { l.CatchupStacked = d.CatchupStacked })
 	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
 	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
 	set("stale_after", d.StaleAfter != "", func() { l.StaleAfter = d.StaleAfter })
