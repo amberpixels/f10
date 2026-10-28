@@ -1,11 +1,13 @@
 package driver
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // storageWith links one testdata driver into a temp storage root, which is
@@ -159,5 +161,74 @@ func TestPriorityRank(t *testing.T) {
 		if got, ok := PriorityRank(value); ok || got != -1 {
 			t.Errorf("PriorityRank(%q) = %d, %v; want -1, false", value, got, ok)
 		}
+	}
+}
+
+// hanging is the hanging-driver fixture with a limit far below its sleeps.
+func hanging(t *testing.T) *Driver {
+	t.Helper()
+
+	d := Find(storageWith(t, "hanging-driver"), t.TempDir())
+	d.Timeout = 100 * time.Millisecond
+
+	return d
+}
+
+// A verb past its limit is ErrTimeout naming the driver, the verb and the
+// limit, returned long before the driver would have answered.
+func TestRunTimeout(t *testing.T) {
+	start := time.Now()
+
+	_, err := hanging(t).Run(t.Context(), VerbRead, "22")
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("Run(read) = %v, want ErrTimeout", err)
+	}
+
+	if want := "driver read: no answer within 100ms"; err.Error() != want {
+		t.Errorf("error = %q, want %q", err, want)
+	}
+
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("Run took %s, want well under the driver's 10s sleep", took)
+	}
+}
+
+// A write past its limit says it may have landed, since it is never retried.
+func TestRunInputTimeout(t *testing.T) {
+	_, _, err := hanging(t).RunInput(t.Context(), "# x\n", VerbCreate)
+	if !errors.Is(err, ErrTimeout) || !strings.Contains(err.Error(), "may still have reached the tracker") {
+		t.Errorf("RunInput(create) = %v, want ErrTimeout saying the write may have landed", err)
+	}
+}
+
+// A background child still holding stdout cannot keep a killed driver, or
+// one that already answered, from returning.
+func TestLeftoverChildDoesNotBlock(t *testing.T) {
+	start := time.Now()
+
+	if _, err := hanging(t).Run(t.Context(), VerbSearch, "x"); !errors.Is(err, ErrTimeout) {
+		t.Errorf("Run(search) = %v, want ErrTimeout", err)
+	}
+
+	d := hanging(t)
+	d.Timeout = 0
+
+	out, err := d.Run(t.Context(), VerbURL, "22")
+	if err != nil || out != "https://example.test/22" {
+		t.Errorf("Run(url) = %q, %v; want the url", out, err)
+	}
+
+	if took := time.Since(start); took > 8*time.Second {
+		t.Errorf("both runs took %s, want the pipes cut off well before the child's 10s sleep", took)
+	}
+}
+
+// Only the verb's own deadline is a timeout; a caller cancelling is not.
+func TestCancelledParentIsNotTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := hanging(t).Run(ctx, VerbRead, "22"); err == nil || errors.Is(err, ErrTimeout) {
+		t.Errorf("Run with a cancelled parent = %v, want a non-timeout error", err)
 	}
 }

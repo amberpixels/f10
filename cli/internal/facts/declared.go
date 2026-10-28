@@ -27,23 +27,24 @@ import (
 
 // Declared is one layer's frontmatter.
 type Declared struct {
-	Visibility   string            `yaml:"visibility,omitempty"`
-	Storage      string            `yaml:"storage,omitempty"`
-	Layering     string            `yaml:"layering,omitempty"`
-	Tracker      TrackerDecl       `yaml:"tracker,omitempty"`
-	MergeMethod  string            `yaml:"merge_method,omitempty"`
-	Catchup      string            `yaml:"catchup,omitempty"`
-	Traces       string            `yaml:"traces,omitempty"`
-	Lore         string            `yaml:"lore,omitempty"`
-	StaleAfter   string            `yaml:"stale_after,omitempty"`   // a task older than this is judged before it is planned
-	ReviewTraces string            `yaml:"review_traces,omitempty"` // the old spelling of traces, read and folded in
-	Flows        map[string]Flow   `yaml:"flows,omitempty"`
-	FlowByArea   map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
-	DriveFinish  string            `yaml:"drive_finish,omitempty"`
-	DriveEnv     []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
-	ReportBack   string            `yaml:"report_back,omitempty"`
-	Review       ReviewDecl        `yaml:"review,omitempty"`
-	Standup      StandupDecl       `yaml:"standup,omitempty"`
+	Visibility    string            `yaml:"visibility,omitempty"`
+	Storage       string            `yaml:"storage,omitempty"`
+	Layering      string            `yaml:"layering,omitempty"`
+	Tracker       TrackerDecl       `yaml:"tracker,omitempty"`
+	MergeMethod   string            `yaml:"merge_method,omitempty"`
+	Catchup       string            `yaml:"catchup,omitempty"`
+	Traces        string            `yaml:"traces,omitempty"`
+	Lore          string            `yaml:"lore,omitempty"`
+	StaleAfter    string            `yaml:"stale_after,omitempty"`    // a task older than this is judged before it is planned
+	DriverTimeout string            `yaml:"driver_timeout,omitempty"` // one driver verb's limit, a Go duration
+	ReviewTraces  string            `yaml:"review_traces,omitempty"`  // the old spelling of traces, read and folded in
+	Flows         map[string]Flow   `yaml:"flows,omitempty"`
+	FlowByArea    map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
+	DriveFinish   string            `yaml:"drive_finish,omitempty"`
+	DriveEnv      []string          `yaml:"drive_env,omitempty"` // environment keys a drive passes to its commands, beyond the built-in ones
+	ReportBack    string            `yaml:"report_back,omitempty"`
+	Review        ReviewDecl        `yaml:"review,omitempty"`
+	Standup       StandupDecl       `yaml:"standup,omitempty"`
 
 	// The keys flows replaces, read and converted with a warning.
 	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
@@ -221,6 +222,17 @@ func ParseStaleAfter(value string) (time.Duration, error) {
 	return time.Duration(n) * unit, nil
 }
 
+// ParseDriverTimeout reads a driver_timeout value, a positive Go duration
+// like `45s` or `2m`.
+func ParseDriverTimeout(value string) (time.Duration, error) {
+	d, err := time.ParseDuration(value)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("%q is not a positive duration, like 45s or 2m", value)
+	}
+
+	return d, nil
+}
+
 // trackerKinds maps the declared kind to the name the rest of f10 shows.
 var trackerKinds = map[string]string{
 	"github": "GitHub Issues",
@@ -255,6 +267,12 @@ func (d Declared) check() []string {
 	if d.StaleAfter != "" {
 		if _, err := ParseStaleAfter(d.StaleAfter); err != nil {
 			bad = append(bad, "stale_after: "+err.Error())
+		}
+	}
+
+	if d.DriverTimeout != "" {
+		if _, err := ParseDriverTimeout(d.DriverTimeout); err != nil {
+			bad = append(bad, "driver_timeout: "+err.Error())
 		}
 	}
 
@@ -398,6 +416,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
 	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
 	set("stale_after", d.StaleAfter != "", func() { l.StaleAfter = d.StaleAfter })
+	set("driver_timeout", d.DriverTimeout != "", func() { l.DriverTimeout = d.DriverTimeout })
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
 	set("drive_finish", d.DriveFinish != "", func() { l.DriveFinish = d.DriveFinish })

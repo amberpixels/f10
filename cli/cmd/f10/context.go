@@ -194,6 +194,10 @@ func (t *target) driverPaths() []string {
 func (t *target) driver() *driver.Driver {
 	for _, p := range t.driverPaths() {
 		if d := driver.Find(filepath.Dir(p), t.dir); d != nil {
+			if t.eff != nil {
+				d.Timeout = t.eff.DriverTimeout
+			}
+
 			return d
 		}
 	}

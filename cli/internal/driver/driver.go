@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -72,10 +73,18 @@ const ExitUnsupported = 3
 // then falls back or explains, rather than failing the command.
 var ErrUnsupported = errors.New("driver does not implement this verb")
 
+// DefaultTimeout bounds one verb when a Driver sets no Timeout.
+const DefaultTimeout = 30 * time.Second
+
+// ErrTimeout is a verb that gave no answer within its limit: the driver
+// hung on its tracker, and f10 stops waiting rather than hang with it.
+var ErrTimeout = errors.New("no answer")
+
 // A Driver is one project's executable.
 type Driver struct {
-	Path string // the executable
-	Dir  string // the checkout it runs in
+	Path    string        // the executable
+	Dir     string        // the checkout it runs in
+	Timeout time.Duration // one verb's limit; zero is DefaultTimeout
 }
 
 // Find returns the driver for a storage root, or nil when the project has
@@ -97,7 +106,14 @@ func Find(storageRoot, dir string) *Driver {
 // driver's own stderr verbatim, because the driver knows why it failed and
 // f10 does not.
 func (d *Driver) Run(ctx context.Context, verb string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, d.limit())
+	defer cancel()
+
 	res, err := shell.Capture(ctx, d.Dir, d.Path, append([]string{verb}, args...)...)
+	if err := d.timedOut(ctx, verb); err != nil {
+		return "", err
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("running %s %s: %w", d.Path, verb, err)
 	}
@@ -112,9 +128,16 @@ func (d *Driver) Run(ctx context.Context, verb string, args ...string) (string, 
 // RunInput invokes a write verb with input on its stdin and returns its
 // stdout and, on success, its stderr: a warning about a property the
 // tracker has no field for. It is never retried, because a failed write
-// may still have changed the tracker.
+// may still have changed the tracker, a timed-out one too.
 func (d *Driver) RunInput(ctx context.Context, input, verb string, args ...string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, d.limit())
+	defer cancel()
+
 	res, err := shell.CaptureInput(ctx, d.Dir, input, d.Path, append([]string{verb}, args...)...)
+	if err := d.timedOut(ctx, verb); err != nil {
+		return "", "", fmt.Errorf("%w; the write may still have reached the tracker", err)
+	}
+
 	if err != nil {
 		return "", "", fmt.Errorf("running %s %s: %w", d.Path, verb, err)
 	}
@@ -124,6 +147,24 @@ func (d *Driver) RunInput(ctx context.Context, input, verb string, args ...strin
 	}
 
 	return res.Stdout, res.Stderr, nil
+}
+
+func (d *Driver) limit() time.Duration {
+	if d.Timeout > 0 {
+		return d.Timeout
+	}
+
+	return DefaultTimeout
+}
+
+// timedOut names a verb that hit its limit. Only the verb's own deadline
+// counts: a cancelled parent is the caller's doing, not the driver's.
+func (d *Driver) timedOut(ctx context.Context, verb string) error {
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return nil
+	}
+
+	return fmt.Errorf("%s %s: %w within %s", filepath.Base(d.Path), verb, ErrTimeout, d.limit())
 }
 
 // classify reads an exit code per the contract: nil for 0, ErrUnsupported
