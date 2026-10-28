@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The start verb is the one that leaves the checkout: a branch, a
@@ -246,6 +247,13 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	if err := start(ctx, cmd.Writer, in); err != nil {
 		return err
+	}
+
+	// what a bare status in this session's checkout lists; the task is
+	// already open, so a failed write is a line, not a failed start
+	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
+	if err := state.AppendLaunch(state.Dir(), state.Session(), launch); err != nil {
+		fmt.Fprintf(cmd.ErrWriter, "f10: recording the launch: %v\n", err)
 	}
 
 	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
