@@ -221,11 +221,14 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 		held[wt.Branch] = true
 	}
 
-	linked := map[string]string{}
+	// one config read for every branch's link and recorded riders
+	linked, riders := map[string]string{}, map[string][]string{}
 
 	for _, e := range gitx.ConfigEntries(ctx, in.main, cfgTaskKeys) {
 		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
 			linked[strings.TrimPrefix(b, "branch.")] = e.Value
+		} else if b, ok := strings.CutSuffix(e.Key, "."+cfgRiders); ok {
+			riders[strings.TrimPrefix(b, "branch.")] = strings.Fields(e.Value)
 		}
 	}
 
@@ -237,14 +240,23 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 			return b
 		}
 
+		if name == def {
+			return nil
+		}
+
+		// the bundle as branchBundle reads it, from the config read above
+		lead, rest := linked[name], riders[name]
+		if len(rest) > 0 {
+			lead = cmp.Or(lead, match(name))
+		} else if members := ref.Members(in.prefix, name); members != nil {
+			lead, rest = members[0], members[1:]
+		}
+
 		var ids []string
 
-		switch lead, riders := branchBundle(ctx, in.main, name, in.prefix); {
-		case name == def:
+		switch {
 		case lead != "":
-			ids = append([]string{lead}, riders...)
-		case linked[name] != "":
-			ids = []string{linked[name]}
+			ids = append([]string{lead}, rest...)
 		case local:
 			if id := match(name); id != "" {
 				ids = []string{id}
@@ -452,7 +464,7 @@ func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 		}
 	}
 
-	if b.originSHA != "" {
+	if dropOrigin {
 		if err := gitx.DeleteRemoteRef(ctx, j.in.main, b.name); err != nil {
 			j.say("origin/%s is gone but its local copy is not: %v", b.name, err)
 		}
@@ -520,14 +532,21 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 	for _, id := range ids {
 		plan := taskPlan(j.in.main, j.in.plansDir, id)
 
+		// a kept plan keeps its images too
 		switch {
 		case !exists(plan):
 		case len(left[id]) > 0:
 			j.say("kept the plan for %s: %s still uses it", id, strings.Join(left[id], ", "))
+
+			continue
 		case writtenAfter(plan, cleared[id]):
 			j.say("kept the plan for %s: it was written after its branch's work ended", id)
+
+			continue
 		case j.in.dry:
 			j.say("would archive %s", plan)
+
+			continue
 		default:
 			archived, _, err := archivePlan(j.in.main, j.in.main, j.in.plansDir, id)
 			if err != nil {

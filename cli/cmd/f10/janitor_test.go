@@ -258,7 +258,7 @@ func TestJanitorKeepsAnotherAuthorsOrigin(t *testing.T) {
 
 	out := fx.run(t)
 
-	if fx.f.called("gh api -X DELETE") || !fx.f.called("git branch -D GH-1/x") {
+	if fx.f.called("gh api -X DELETE") || fx.f.called("git update-ref -d") || !fx.f.called("git branch -D GH-1/x") {
 		t.Errorf("calls %q", fx.f.calls)
 	}
 
@@ -405,10 +405,40 @@ func TestJanitorKeepsAPlanWrittenAfterTheRequestEnded(t *testing.T) {
 		`"closedAt":"2026-01-01T00:00:00Z","author":{"login":"me"}}]`)
 	plan := fx.plan(t)
 
+	images := filepath.Join(fx.in.main, ".f10", "images", "GH-1")
+	if err := os.MkdirAll(images, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
 	out := fx.run(t)
 
 	if !fx.f.called("git branch -D GH-1/x") || !exists(plan) || !strings.Contains(out, "written after") {
 		t.Errorf("out = %q", out)
+	}
+
+	if !exists(images) {
+		t.Error("the kept plan lost its images")
+	}
+}
+
+// A bundle the config records, not the name, still archives every member.
+func TestJanitorReadsRecordedRiders(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
+	fx.request("GH-1/x", "MERGED", "abc", "me")
+	fx.f.script(linkedKeys, "branch.GH-1/x.f10-task GH-1\nbranch.GH-1/x.f10-tasks GH-2")
+
+	rider := filepath.Join(fx.in.plansDir, "GH-2.md")
+	if err := os.MkdirAll(fx.in.plansDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(rider, []byte("plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if out := fx.run(t); exists(rider) {
+		t.Errorf("rider's plan not archived:\n%s", out)
 	}
 }
 
@@ -438,7 +468,7 @@ func TestJanitorReadsOriginByStartsShapes(t *testing.T) {
 	fx.f.script(allHeads, heads("main"))
 	fx.f.script(lsHeads, "abc\trefs/heads/revert-GH-1\nabc\trefs/heads/feat/GH-2-x")
 
-	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") {
+	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") || fx.f.called("git config --get branch.") {
 		t.Errorf("out = %q, calls %q", out, fx.f.calls)
 	}
 }
