@@ -25,26 +25,19 @@ var (
 
 // The ship skill loads each flow entry at run time, named in project.md, so its
 // loads are prose, not calls: this mirrors skills/ship/SKILL.md Run points 1 and 3.
-// Every step outside nonFlowSteps can be a flow entry, so a new step is covered.
+// Every step file sits in exactly one of flowSteps and nonFlowSteps, so a new
+// step fails until its author says whether a flow can name it.
 var (
-	nonFlowSteps = []string{"brainstorm", "capture", "explain", "fetch", "plan", "standup"}
+	flowSteps = []string{
+		"catchup", "cleanup", "commit", "demo", "deploy", "implement", "judge", "pr", "push", "resolve", "review",
+	}
+	nonFlowSteps = []string{"brainstorm", "capture", "debug", "explain", "fetch", "plan", "standup"}
 	guardedSteps = []string{"implement", "pr", "judge"}
 )
 
-func pipelineSteps(steps []string) []string {
-	var pipeline []string
-	for _, s := range steps {
-		if !slices.Contains(nonFlowSteps, s) {
-			pipeline = append(pipeline, s)
-		}
-	}
-
-	return pipeline
-}
-
-func shipLoads(steps []string) [][]string {
+func shipLoads() [][]string {
 	loads := [][]string{{"capture", "fetch", "plan"}, {"fetch", "plan"}, {"review", "resolve"}}
-	for _, s := range pipelineSteps(steps) {
+	for _, s := range flowSteps {
 		// a review entry loads both, and resolve is never named
 		if s != "review" && s != "resolve" {
 			loads = append(loads, []string{s})
@@ -136,6 +129,18 @@ func TestStepReferences(t *testing.T) {
 		steps = append(steps, strings.TrimSuffix(filepath.Base(f), ".md"))
 	}
 
+	for _, s := range steps {
+		if slices.Contains(flowSteps, s) == slices.Contains(nonFlowSteps, s) {
+			t.Errorf("steps/%s.md: list it in exactly one of flowSteps and nonFlowSteps", s)
+		}
+	}
+
+	for _, s := range slices.Concat(flowSteps, nonFlowSteps) {
+		if !slices.Contains(steps, s) {
+			t.Errorf("%q is listed in steps_test.go but has no file in steps/", s)
+		}
+	}
+
 	skillFiles, err := filepath.Glob(filepath.Join(root, "skills", "*", "SKILL.md"))
 	if err != nil {
 		t.Fatalf("glob: %v", err)
@@ -157,7 +162,7 @@ func TestStepReferences(t *testing.T) {
 	const ship = "skills/ship/SKILL.md"
 
 	var sites []loadSite
-	for _, s := range shipLoads(steps) {
+	for _, s := range shipLoads() {
 		sites = append(sites, loadSite{where: ship + " (flow entry load)", steps: s})
 	}
 
@@ -172,7 +177,7 @@ func TestStepReferences(t *testing.T) {
 		}
 	}
 
-	for _, s := range shipLoads(steps) {
+	for _, s := range shipLoads() {
 		skillLoads[ship] = append(skillLoads[ship], s...)
 	}
 
@@ -213,7 +218,7 @@ func TestStepReferences(t *testing.T) {
 	for rel, loads := range skillLoads {
 		for _, l := range files[rel] {
 			for _, s := range boldSteps(l.text, steps) {
-				if rel == ship && slices.Contains(pipelineSteps(steps), s) {
+				if rel == ship && slices.Contains(flowSteps, s) {
 					continue
 				}
 
