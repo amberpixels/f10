@@ -57,10 +57,10 @@ Each skill is an **entry point** into the chain:
 | Skill | Runs | Stops at |
 |---|---|---|
 | `/f10:brainstorm <idea>` | brainstorm | a shape agreed in chat, or the decision not to build |
-| `/f10:judge <idea \| id \| PR \| commit> [--blind]` | judge | a verdict: proceed, proceed with changes, rethink, or stop |
+| `/f10:judge [<idea \| id \| PR \| commit>] [--blind]` | judge | a verdict: proceed, proceed with changes, rethink, or stop |
 | `/f10:capture <desc>` | capture | task created (id + url) |
-| `/f10:plan <id \| desc>` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
-| `/f10:ship <id \| plan.md \| desc>` | whatever's missing, then the flow | end of the declared flow (an open PR by default); or handed to the task's own agent |
+| `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
+| `/f10:ship [<id \| plan.md \| desc>]` | whatever's missing, then the flow | end of the declared flow (an open PR by default); or handed to the task's own agent |
 | `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose to plain rules, leftovers out of the code; each diff proven in scope, verify green, nothing committed |
 | `/f10:review <id \| PR \| this branch> [ci]` | review | a findings file from a reviewer that never saw your session, or read in from the CI review |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, fixes verified, asks in one questionnaire |
@@ -73,7 +73,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:board [<window>] [--state] [--remote] [-C <checkout>]` | nothing: it runs `f10 board` | what changed today (else the last working day), by group; with `--state`, every task's stage and next action, your own next moves offered one per line (the `next` group as one line for its first task), none run |
 | `/f10:start <id \| PR url \| #n> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--task <id>] [--model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent; a PR's branch picked up |
 | `/f10:drive <ids[:model] \| id -- id> [skills...] [--model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first; a parent id expands into the subtasks you pick; agents' questions relayed |
-| `/f10:finish <id> [--yes] [--merge \| --local]` | nothing: it runs `f10 finish` | PR merged (someone else's only when you say so), plan archived, workspace closed, worktree and branch gone, main pulled |
+| `/f10:finish [<id>] [--yes] [--merge \| --local]` | nothing: it runs `f10 finish` | PR merged (someone else's only when you say so), plan archived, workspace closed, worktree and branch gone, main pulled |
 
 ## Install
 

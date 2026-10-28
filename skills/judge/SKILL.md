@@ -1,8 +1,8 @@
 ---
 name: judge
-description: "f10 judge skill - a senior architect's verdict on an idea, a task, a plan or a PR: proceed (green), proceed with changes (yellow), rethink (orange), or stop (red). Use when the user says \"/f10:judge <idea | task-id | PR>\", asks to roast, sanity-check or challenge something, or doubts whether a change treats the cause or a symptom. Add --blind to judge in a fresh agent with no conversation context."
+description: "f10 judge skill - a senior architect's verdict on an idea, a task, a plan or a PR: proceed (green), proceed with changes (yellow), rethink (orange), or stop (red). Use when the user says \"/f10:judge [<idea | task-id | PR>]\", asks to roast, sanity-check or challenge something, or doubts whether a change treats the cause or a symptom. Add --blind to judge in a fresh agent with no conversation context."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, WebSearch, WebFetch
-argument-hint: "<idea | task-id | PR | this branch> [--blind]"
+argument-hint: "[<idea | task-id | PR | this branch>] [--blind]"
 ---
 
 # f10 · judge
@@ -18,7 +18,10 @@ argument-hint: "<idea | task-id | PR | this branch> [--blind]"
 - No argument:
   - A subject in this conversation: judge that.
     Say in one line which subject you took, then start.
-  - Nothing open: ask for the subject in one line and wait.
+  - Nothing open, on a branch other than the default branch: that branch against its base (the base `steps/review.md` names), when it has commits or uncommitted changes past it.
+    No change yet: the task `f10 task current` prints, judged as `task <id>`.
+    Say in one line which subject you took, then start.
+  - Otherwise: ask for the subject in one line and wait.
 
 **Run**
 1. Run `f10-load-project.sh judge` first, on every call of this skill.
