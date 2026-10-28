@@ -544,20 +544,13 @@ func TestDriveResumesAShipStopACatchupSettled(t *testing.T) {
 
 // Every other stop still halts on a rerun, its note and next printed and
 // nothing prompted: a branch catchup has not settled, a stop catchup does
-// not fix, or an entry the guard does not run before. A marked branch is
-// sent a catchup first, which halts on the same stop.
+// not fix, or an entry the guard does not run before.
 func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 	cases := map[string]struct {
 		status, leaf string
 		next         string
 		git          [2]string // a command the branch answers otherwise
 	}{
-		"marked, catchup first": {
-			"partial",
-			"pr",
-			catchupNext,
-			[2]string{"git config --get branch.GH-1." + cfgLanded, "main"},
-		},
 		"merge in progress": {"partial", "pr", catchupNext, [2]string{"git rev-parse -q --verify MERGE_HEAD", "abc"}},
 		"dirty tree":        {"partial", "pr", catchupNext, [2]string{"git status --porcelain", " M a.go"}},
 		"red verify":        {"failed", "implement", "fix the failing test, then rerun the drive", [2]string{}},
@@ -597,6 +590,135 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A ship whose catchup guard conflicted, marking the branch, gets one
+// catchup from the drive and resumes at the entry it stopped on, fresh or
+// on a rerun. A catchup that does not end clean, one that asks, and a
+// second conflict in the same drive each stop the task.
+func TestDriveSettlesAShipGuardConflict(t *testing.T) {
+	landed := "git config --get branch.GH-1." + cfgLanded
+	catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
+	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
+
+	cases := map[string]struct {
+		rerun bool
+		// after is what the catchup's turn leaves: the run, and the mark
+		after func(fx *driveFixture, t *testing.T)
+		// again is what the resumed ship's turn leaves
+		again    func(fx *driveFixture, t *testing.T)
+		code     int
+		want     []string
+		catchups int
+	}{
+		"settled": {
+			after: restored,
+			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
+			want:  []string{"the catchup guard conflicted, catching up", "the branch is settled: resume at pr", "GH-1:    done: ship"},
+		},
+		"rerun": {
+			rerun: true,
+			after: restored,
+			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
+			want:  []string{"the branch is settled: resume at pr", "GH-1:    done: ship"},
+		},
+		"unsettled": {
+			after: func(fx *driveFixture, t *testing.T) { fx.writeShipStop(t, "partial", "pr", 4, catchupNext) },
+			code:  exitHalted,
+			want:  []string{"halted at catchup: the catchup did not end clean", "next: settle it with /f10:catchup in"},
+		},
+		"asks": {
+			after: func(fx *driveFixture, t *testing.T) {
+				fx.writeRun(t, "blocked", "catchup", "", "1. Keep both renames? [both | ours]")
+			},
+			code: exitAsk,
+			want: []string{"GH-1 asks at catchup: 1. Keep both renames?"},
+		},
+		"conflicts again": {
+			after: restored,
+			again: func(fx *driveFixture, t *testing.T) {
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.f.script(landed, "main")
+			},
+			code: exitHalted,
+			want: []string{"GH-1 halted at ship: conflict with main", "next: " + catchupNext},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+			fx.f.script(catchup, "{}")
+			fx.f.script(resume, "{}")
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+			// the ship's turn, then the catchup's, then the resumed ship's
+			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
+			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle, idle, working, idle)
+			tick := 2
+
+			if tc.rerun {
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.f.script(landed, "main")
+				fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
+				tick = 0
+			} else {
+				ship := skillPrompt("ship", "GH-1", nil, shipFlow{}, false)
+				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+ship, "{}")
+				fx.onTick[2] = func() {
+					fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+					fx.f.script(landed, "main")
+				}
+			}
+
+			fx.onTick[tick+2] = func() { tc.after(fx, t) }
+			if tc.again != nil {
+				fx.onTick[tick+4] = func() { tc.again(fx, t) }
+			}
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if (tc.code == 0 && err != nil) || (tc.code != 0 && exitCode(err) != tc.code) {
+				t.Fatalf("err = %v, want exit %d\n%s", err, tc.code, out)
+			}
+
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("output lacks %q:\n%s", want, out)
+				}
+			}
+
+			if n := countCalls(fx.f.calls, catchup); n != 1 {
+				t.Errorf("catchup prompted %d times, want once: %q", n, fx.f.calls)
+			}
+
+			if tc.again == nil && fx.f.called(resume) {
+				t.Errorf("ship resumed on a catchup that did not end clean: %q", fx.f.calls)
+			}
+		})
+	}
+}
+
+// restored is what a clean driven catchup leaves: the mark cleared and the
+// ship stop it found written back.
+func restored(fx *driveFixture, t *testing.T) {
+	t.Helper()
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+	fx.f.script("git config --get branch.GH-1."+cfgLanded, "")
+}
+
+func countCalls(calls []string, call string) int {
+	n := 0
+
+	for _, c := range calls {
+		if c == call {
+			n++
+		}
+	}
+
+	return n
 }
 
 // An answer given to a settled catchup stop is still sent as the answer.

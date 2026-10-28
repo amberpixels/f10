@@ -74,12 +74,14 @@ It differs from the run above:
 - **Clean tree**: the ship skill commits the tree first where it has to; the guard never stashes.
 - **A conflict fails the run**: `git merge --abort` / `git rebase --abort`, so the branch is as it was, any mark kept, and `/f10:catchup` in the `next` row.
   No conflict is settled and nothing is asked.
+  Before failing, mark the branch for the base that conflicted: `git config branch.<branch>.f10-landed <default>` for the default branch, `git config branch.<branch>.f10-base-moved <the base ref's sha>` for an `f10-after-branch` base, so point 2 finds the same base.
+  `f10 drive` reads the mark, never the note, to send a catchup.
 - **Verify**, when commits came in, except before implement, whose own verify follows.
-  Red is a semantic conflict the guard leaves to `/f10:catchup`: `git reset --hard` to the sha read before integrating (the tree was clean), then fail as a conflict does.
+  Red is a semantic conflict the guard leaves to `/f10:catchup`: `git reset --hard` to the sha read before integrating (the tree was clean), then mark and fail as a conflict does.
 - **Marks**: `f10-landed` and `f10-base-moved` are unset once the integration is clean and verify, where it ran, is green.
 - **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 
-**Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, or when the branch conflicts with the default branch at finish): on entry, note the ship status (`f10-state.sh show`).
+**Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, when the branch conflicts with the default branch at finish, or when ship's guard marked it): on entry, note the ship status (`f10-state.sh show`).
 The ambiguity question is the run's one ask: `f10-state.sh ask "<the questions>"; f10-state.sh set ship blocked catchup`.
 A failure: `f10-state.sh set ship failed catchup` with a `note`.
 A clean end after either restores the noted status; a clean end that never stopped writes nothing.

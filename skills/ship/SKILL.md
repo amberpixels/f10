@@ -78,6 +78,7 @@ Catchup is never a flow entry.
 
 The guard runs under the entry it guards, in that entry's load (`catchup pr`) and badge.
 A failure is `set ship failed <entry>`, or `partial` once the run left something durable, the guard's own commit or an open PR (`conventions/failure.md` rule 7), its `state` row naming that commit and its `note` naming catchup and `/f10:catchup`.
+The guard marks the branch before failing (the **catchup** step), and `f10 drive` catches a marked branch up once by itself, then prompts ship again at this entry.
 A driven run's `next` is `run /f10:catchup --driven in the worktree, then rerun the drive`: the rerun prompts ship again at this entry.
 
 Run the flow's entries **in the declared order**, each from its own load.
