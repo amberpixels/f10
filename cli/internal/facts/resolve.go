@@ -180,6 +180,12 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 		})
 	}
 
+	// frontmatter only, off unless declared: an unattended catchup pushed
+	// with a lease is the riskiest thing the watcher does
+	e.settle("watch_catchup", fmSource("watch_catchup", fm.WatchCatchup), source{},
+		Fact{Key: "watch_catchup", Value: "off", Origin: OriginDefault})
+	e.WatchCatchup = fm.WatchCatchup == "on"
+
 	// frontmatter only: no prose ever declared it
 	if e.UpkeepPaths = fm.Standup.Upkeep; e.UpkeepPaths != nil {
 		e.Facts = append(e.Facts, Fact{

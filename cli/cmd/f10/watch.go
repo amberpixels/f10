@@ -53,7 +53,15 @@ const (
 	watchRefused  = "refused"  // the watcher's finish was refused
 	// the host did not answer for a task's request
 	watchUnanswered = "unanswered"
+	// a catchup the watcher sent, pushed, or did not end clean
+	watchCatchup = "catchup"
+	// behind its target, and the watcher cannot catch it up
+	watchBehind = "behind"
 )
+
+// watchClause tells a driven catchup the watcher sent it: nobody follows
+// up in its pane, so a failure leaves the branch as it was.
+const watchClause = "sent by the watcher: a failure aborts the merge or rebase, so the branch is as it was"
 
 func watchCommand() *cli.Command {
 	return &cli.Command{
@@ -62,7 +70,8 @@ func watchCommand() *cli.Command {
 			"their merged PRs, stalled agents and stopped runs",
 		Description: "Bare, it lists each task the last pass saw and what it reported. " +
 			"f10 start and f10 drive hand the project to the daemon, which runs a pass every few minutes; " +
-			"watch: finish (the default), report or off in project.md says what a pass may do.",
+			"watch: finish (the default), report or off in project.md says what a pass may do, " +
+			"and watch_catchup: on lets it catch an open PR up with its target through the task's agent.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "pass", Hidden: true, Usage: "run one pass over this project, as the daemon does"},
 		},
@@ -101,6 +110,7 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 
 	w := cmd.Writer
 	fmt.Fprintf(w, "watch    %s\n", t.eff.Watch)
+	fmt.Fprintf(w, "catchup  %s\n", onOff(t.eff.WatchCatchup))
 
 	if len(store) == 0 {
 		fmt.Fprintln(w, "nothing reported yet")
@@ -117,6 +127,10 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 
 	for _, id := range ids {
 		r := store[id]
+		if r.Kind == "" {
+			continue // only a catchup record, nothing told yet
+		}
+
 		fmt.Fprintf(w, "\n%s  %s, %s\n  %s\n", id, r.Kind, r.At.Local().Format(time.DateTime), r.Text)
 
 		if r.Ask != "" {
@@ -197,10 +211,14 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 		now:      time.Now,
 		out:      lineReporter{w: cmd.Writer},
 		warn:     func(line string) { fmt.Fprintln(cmd.Writer, line) },
+		catchup:  t.eff.WatchCatchup,
 	}
 
 	if b := reachableAgents(main); b != nil {
 		in.agents = b
+		in.prompt = func(ctx context.Context, task watchedTask, text string) error {
+			return promptAgent(ctx, task.path, task.id, "", text)
+		}
 	}
 
 	if in.mode == "finish" && in.jan.host != nil {
@@ -290,6 +308,17 @@ type watchInput struct {
 	finish func(context.Context, watchedTask) error
 	out    reporter
 	warn   func(string) // a line for the pass's output that is no report; nil drops it
+	// catchup is watch_catchup: on, a pass catching an open PR up with its
+	// target; prompt sends the catchup to a task's agent, nil with no
+	// backend to reach one
+	catchup bool
+	prompt  func(ctx context.Context, task watchedTask, text string) error
+}
+
+func (in watchInput) warnf(format string, args ...any) {
+	if in.warn != nil {
+		in.warn(fmt.Sprintf(format, args...))
+	}
 }
 
 // A watchedTask is what one pass knows about a task with a worktree.
@@ -306,6 +335,26 @@ type watchedTask struct {
 	agent    agentctl.Status // "" with no workspace, or no listing
 	listed   bool            // the workspaces were listed, so "" is no workspace
 	ws       string          // its workspace, for a message
+	// what a catchup needs, read after the pass's fetch under watch_catchup
+	fetched   bool     // origin was fetched and the fields below read
+	originSHA string   // origin's tip; "" when origin lacks the branch
+	target    prTarget // what git says its request targets
+	targetErr error    // the target, or origin's tip, could not be read
+	busy      string   // why its worktree cannot take a catchup, or ""
+}
+
+// A sentCatchup is the catchup the watcher sent for a task and has not
+// settled: a pass keeps nothing else between runs, so it lives on the
+// task's stored report.
+type sentCatchup struct {
+	Target string    `yaml:"target"` // the sha the branch was caught up to
+	Head   string    `yaml:"head"`   // the branch's tip when the catchup went out
+	Origin string    `yaml:"origin"` // origin's tip then: what the push after it leases against
+	Base   string    `yaml:"base"`   // the target's name in prose
+	At     time.Time `yaml:"at"`
+	// Failed is a catchup that did not end clean, told once; another goes
+	// out only when the target or the head moves
+	Failed bool `yaml:"failed,omitempty"`
 }
 
 // A watchReport is one thing a pass tells about a task.
@@ -321,6 +370,9 @@ type watchReport struct {
 	Key  string    `yaml:"key"`
 	Told []string  `yaml:"told,omitempty"`
 	At   time.Time `yaml:"at"`
+	// Catchup is the catchup the watcher sent and has not settled, kept on
+	// the stored report like Told
+	Catchup *sentCatchup `yaml:"catchup,omitempty"`
 }
 
 // watchToldMax bounds a task's told keys; the oldest go first.
@@ -359,6 +411,10 @@ func watchPass(ctx context.Context, in watchInput) (bool, error) {
 	store, err := loadWatchStore(in.root)
 	if err != nil {
 		return false, err
+	}
+
+	if in.catchup {
+		in.readTargets(ctx, tasks, store)
 	}
 
 	in.reconcile(ctx, tasks, store)
@@ -420,31 +476,17 @@ func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store m
 	for _, task := range tasks {
 		seen[task.id] = true
 
+		if in.catchup {
+			in.tell(store, task.id, now, in.catchupStep(ctx, task, store))
+		}
+
 		rep, act := decideWatch(task, in.mode, now)
 
 		if act && in.finish != nil {
 			rep = in.finishReport(ctx, task)
 		}
 
-		if rep == nil {
-			continue
-		}
-
-		rep.Task, rep.At = task.id, now
-
-		prev := store[task.id]
-		if prev.Key == rep.Key || slices.Contains(prev.Told, rep.Key) {
-			continue
-		}
-
-		in.out.report(*rep)
-
-		rep.Told = append(slices.Clone(prev.Told), rep.Key)
-		if len(rep.Told) > watchToldMax {
-			rep.Told = rep.Told[len(rep.Told)-watchToldMax:]
-		}
-
-		store[task.id] = *rep
+		in.tell(store, task.id, now, rep)
 	}
 
 	for id, r := range store {
@@ -452,6 +494,38 @@ func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store m
 			delete(store, id)
 		}
 	}
+}
+
+// tell reports rep about a task unless its fact was told already, and
+// stores it, the task's told keys and its catchup record carried over.
+func (in watchInput) tell(store map[string]watchReport, id string, now time.Time, rep *watchReport) {
+	if rep == nil {
+		return
+	}
+
+	rep.Task, rep.At = id, now
+
+	prev := store[id]
+	if prev.Key == rep.Key || slices.Contains(prev.Told, rep.Key) {
+		return
+	}
+
+	in.out.report(*rep)
+
+	rep.Told = append(slices.Clone(prev.Told), rep.Key)
+	if len(rep.Told) > watchToldMax {
+		rep.Told = rep.Told[len(rep.Told)-watchToldMax:]
+	}
+
+	rep.Catchup = prev.Catchup
+	store[id] = *rep
+}
+
+// setCatchup records, or with nil clears, a task's catchup in flight.
+func setCatchup(store map[string]watchReport, id string, rec *sentCatchup) {
+	r := store[id]
+	r.Catchup = rec
+	store[id] = r
 }
 
 // finishReport runs the watcher's finish of a merged task, as a report.
@@ -796,4 +870,328 @@ func saveWatchStore(root string, store map[string]watchReport) error {
 	}
 
 	return nil
+}
+
+func onOff(on bool) string {
+	if on {
+		return "on"
+	}
+
+	return "off"
+}
+
+// readTargets fetches origin once, when any task could be caught up or has
+// a catchup to settle, and reads what each needs: origin's tip, what its
+// request targets and whether its worktree is free. A failed fetch reads
+// nothing: a stale origin could hide a move, and a push lease needs the
+// current sha.
+func (in watchInput) readTargets(ctx context.Context, tasks []watchedTask, store map[string]watchReport) {
+	var want []int
+
+	for i, t := range tasks {
+		if t.owner != "" || t.off || t.hostErr != nil || !t.listed || t.agent == agentctl.StatusWorking ||
+			waitingOnAsk(t.run) {
+			continue
+		}
+
+		rec := store[t.id].Catchup
+		if rec == nil && (t.pr == nil || t.pr.Status != forge.Open) {
+			continue
+		}
+
+		want = append(want, i)
+	}
+
+	if len(want) == 0 {
+		return
+	}
+
+	if _, err := gitx.Exec(ctx, in.main, "fetch", "origin"); err != nil {
+		in.warnf("no catchup this pass, fetching origin: %v", err)
+
+		return
+	}
+
+	for _, i := range want {
+		t := &tasks[i]
+		t.fetched = true
+
+		t.originSHA, t.targetErr = gitx.Ref(ctx, in.main, "refs/remotes/origin/"+t.branch)
+		if t.targetErr != nil {
+			continue
+		}
+
+		t.target, t.targetErr = prTargetOf(ctx, in.main, t.branch)
+		t.busy = treeBusy(ctx, t.path)
+	}
+}
+
+// catchupStep is the watcher's part in keeping a task's open request
+// current: it settles a catchup it sent on an earlier pass, or sends one
+// when the request's target moved past the branch.
+func (in watchInput) catchupStep(ctx context.Context, task watchedTask, store map[string]watchReport) *watchReport {
+	if !task.fetched || task.agent == agentctl.StatusWorking || waitingOnAsk(task.run) {
+		return nil
+	}
+
+	if task.targetErr != nil {
+		in.warnf("%s skipped this pass, reading what %s targets: %v", task.id, task.branch, task.targetErr)
+
+		return nil
+	}
+
+	rec := store[task.id].Catchup
+	if rec != nil && !rec.Failed {
+		return in.settleCatchup(ctx, task, rec, store)
+	}
+
+	return in.sendCatchup(ctx, task, rec, store)
+}
+
+// settleCatchup reads from git how a sent catchup ended: clean, the branch
+// is pushed under the task's lease, against the origin tip the catchup
+// started from, so a commit pushed to the request meanwhile is never
+// overwritten; not clean with the agent idle, the failure is told once and
+// the branch left as it is, since an operation in progress there may be
+// someone's hand merge.
+func (in watchInput) settleCatchup(
+	ctx context.Context, task watchedTask, rec *sentCatchup, store map[string]watchReport,
+) *watchReport {
+	if task.pr == nil || task.pr.Status != forge.Open {
+		setCatchup(store, task.id, nil) // its request is gone: nothing to keep current
+
+		return nil
+	}
+
+	if reason := branchUnsettled(ctx, in.main, task.path, task.branch); reason != "" {
+		rec.Failed = true
+
+		return &watchReport{
+			Kind: watchCatchup,
+			Text: fmt.Sprintf("catching %s up with %s did not end clean: %s", task.branch, rec.Base, reason),
+			Next: "/f10:catchup in " + task.path,
+			Key:  watchCatchup + " failed " + rec.Target + " " + rec.Head,
+		}
+	}
+
+	lease, err := drives.AcquireAs(in.root, task.id, drives.Holder{Watch: true})
+
+	if held := (drives.HeldError{}); errors.As(err, &held) {
+		setCatchup(store, task.id, nil) // whoever holds it pushes
+
+		return nil
+	}
+
+	if err != nil {
+		return in.pushFailed(task, rec, err)
+	}
+
+	defer lease.Release()
+
+	// the agent and the tree, read again under the lease
+	if in.worktreeBusy(ctx, task) {
+		return nil
+	}
+
+	head, err := gitx.Ref(ctx, task.path, "HEAD")
+	if err != nil {
+		return in.pushFailed(task, rec, err)
+	}
+
+	if task.originSHA == "" || head == task.originSHA {
+		setCatchup(store, task.id, nil) // nothing to push, or nowhere to push it
+
+		return nil
+	}
+
+	if task.originSHA != rec.Origin {
+		// someone pushed to the request while the catchup ran: the branch
+		// here no longer carries it, so a push would drop their commits
+		rec.Failed, rec.Head = true, head
+
+		return &watchReport{
+			Kind: watchCatchup,
+			Text: fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed",
+				task.branch, rec.Base, task.branch),
+			Next: "bring origin/" + task.branch + " into " + task.path + ", then /f10:catchup there",
+			Key:  watchCatchup + " origin moved " + task.originSHA,
+		}
+	}
+
+	how, err := pushCaughtUp(ctx, task.path, task.branch, rec.Origin, rec.Base)
+	if err != nil {
+		return in.pushFailed(task, rec, err)
+	}
+
+	setCatchup(store, task.id, nil)
+
+	return &watchReport{
+		Kind: watchCatchup,
+		Text: fmt.Sprintf("%s caught up with %s, %s", task.branch, rec.Base, how),
+		Key:  watchCatchup + " pushed " + head,
+	}
+}
+
+// pushFailed is a caught-up branch the watcher could not push: told once per
+// cause, the record kept so the next pass tries again.
+func (in watchInput) pushFailed(task watchedTask, rec *sentCatchup, err error) *watchReport {
+	return &watchReport{
+		Kind: watchCatchup,
+		Text: fmt.Sprintf("%s caught up with %s, and pushing it failed: %v", task.branch, rec.Base, err),
+		Next: "push " + task.branch + " from " + task.path + ", with --force-with-lease after a rebase",
+		Key:  watchCatchup + " push failed " + rec.Target + " " + rec.Head,
+	}
+}
+
+// sendCatchup marks a branch whose open request fell behind its target and
+// prompts its agent with a driven catchup, under the task's lease, with an
+// idle agent and a clean tree; what it cannot act on is told once. failed,
+// the last catchup that did not end clean, blocks another until the target
+// or the head moves.
+func (in watchInput) sendCatchup(
+	ctx context.Context, task watchedTask, failed *sentCatchup, store map[string]watchReport,
+) *watchReport {
+	pr, target := task.pr, task.target
+	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || target.sha == "" {
+		return nil
+	}
+
+	if failed != nil && failed.Target == target.sha && failed.Head == task.localSHA {
+		return nil
+	}
+
+	// a stacked base read from its local branch only: its unpushed commits
+	// would ride into this request, so the catchup waits for its push
+	if target.key == cfgMoved {
+		on, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/remotes/origin/"+target.name)
+
+		switch {
+		case err != nil:
+			in.warnf("%s skipped this pass, reading origin/%s: %v", task.id, target.name, err)
+
+			return nil
+		case !on:
+			return nil
+		}
+	}
+
+	behind := func(reason, text string) *watchReport {
+		return &watchReport{
+			Kind: watchBehind,
+			Text: text,
+			Next: "/f10:catchup in " + task.path,
+			Key:  watchBehind + " " + target.sha + " " + reason,
+		}
+	}
+
+	// a request retargeted by hand: a catchup with git's base would carry
+	// another branch's commits into it
+	if base := strings.TrimPrefix(target.name, "origin/"); pr.Base != base {
+		return behind("retargeted", fmt.Sprintf("%s targets %s, not %s, which %s was started on: not caught up",
+			pr.URL, pr.Base, base, task.branch))
+	}
+
+	// the branch and its request must agree before either moves: a worktree
+	// behind origin would rebase a stale branch, one ahead of it is work the
+	// request has not seen
+	if task.localSHA != task.originSHA {
+		return behind("diverged", fmt.Sprintf("%s moved past %s, whose tip is not origin's: not caught up",
+			target.name, task.branch))
+	}
+
+	// a mark already on the branch (a finish that landed its base, a ship
+	// guard that stopped on a conflict, a catchup of the watcher's own that
+	// failed) is a catchup owed that nobody else will send: set again below
+	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+task.branch)
+
+	switch {
+	case err != nil:
+		in.warnf("%s skipped this pass, reading %s: %v", task.id, task.branch, err)
+
+		return nil
+	case has:
+		return nil
+	}
+
+	if task.ws == "" || in.prompt == nil {
+		return behind("no agent", fmt.Sprintf("%s moved past %s, and no agent is in its workspace to catch it up",
+			target.name, task.branch))
+	}
+
+	if task.busy != "" {
+		return nil // a later pass
+	}
+
+	lease, err := drives.AcquireAs(in.root, task.id, drives.Holder{Watch: true})
+	if err != nil {
+		if held := (drives.HeldError{}); !errors.As(err, &held) {
+			in.warnf("%s skipped this pass: %v", task.id, err)
+		}
+
+		return nil
+	}
+
+	defer lease.Release()
+
+	if in.worktreeBusy(ctx, task) {
+		return nil
+	}
+
+	head, err := gitx.Ref(ctx, task.path, "HEAD")
+	if err != nil {
+		in.warnf("%s skipped this pass, reading the head of %s: %v", task.id, task.branch, err)
+
+		return nil
+	}
+
+	mark := "branch." + task.branch + "." + target.key
+	if err := gitx.SetConfig(ctx, in.main, mark, target.value); err != nil {
+		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.id, task.branch, target.name, err)
+
+		return nil
+	}
+
+	if err := in.prompt(ctx, task, driven("/f10:catchup")+" && "+watchClause); err != nil {
+		_ = gitx.UnsetConfig(ctx, in.main, mark) // nobody will clear it
+
+		if errors.Is(err, agentctl.ErrAgentNotFound) {
+			return behind("no agent", fmt.Sprintf("%s moved past %s, and its agent was not found to catch it up",
+				target.name, task.branch))
+		}
+
+		return behind("prompt", fmt.Sprintf("%s moved past %s, and prompting its agent failed: %v",
+			target.name, task.branch, err))
+	}
+
+	setCatchup(store, task.id, &sentCatchup{
+		Target: target.sha, Head: head, Origin: task.originSHA, Base: target.name, At: in.now(),
+	})
+
+	return &watchReport{
+		Kind: watchCatchup,
+		Text: fmt.Sprintf("catching %s up with %s, which moved past it", task.branch, target.name),
+		Key:  watchCatchup + " sent " + target.sha + " " + head,
+	}
+}
+
+// waitingOnAsk reports a run stopped on a question for a person: its agent
+// is idle, but the next prompt it gets should be the answer, not a catchup.
+func waitingOnAsk(run *state.Run) bool { return run != nil && run.Ask != "" }
+
+// worktreeBusy reads again, under the lease, what the pass read before it:
+// an agent that started working, or a tree no longer clean, keeps the
+// watcher's hands off until the next pass.
+func (in watchInput) worktreeBusy(ctx context.Context, task watchedTask) bool {
+	if in.agents != nil {
+		wss, err := in.agents.Workspaces(ctx)
+		if err != nil {
+			return true
+		}
+
+		if ws := workspaceAt(wss, task.path); ws != nil && ws.Status == agentctl.StatusWorking {
+			return true
+		}
+	}
+
+	return treeBusy(ctx, task.path) != ""
 }
