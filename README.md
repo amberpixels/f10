@@ -17,7 +17,7 @@ A language-agnostic, composable task pipeline for Claude Code.
 
 f10 (f-ten) is a set of skills over one step chain.
 **capture** turns a freely written idea into a tracked task, **plan** turns the task into an architect-grade plan on disk, and **ship** turns the plan into code and, optionally, a release.
-The rest are optional: **brainstorm** before the chain, **judge** at any point, **review** and **resolve** before the PR, **demo** and **explain** after it, **catchup** whenever the base moved.
+The rest are optional: **brainstorm** before the chain, **debug** before it for a bug that arrives as an error, **judge** at any point, **review** and **resolve** before the PR, **demo** and **explain** after it, **catchup** whenever the base moved.
 
 No stack is hard-coded: the same commands drive a Go service, a Rails app, or a Terraform repo. f10 **infers** what it needs (the git remote gives `gh`/`glab`, build files give verify commands), or you **declare** it once in `.f10/instructions/`.
 
@@ -27,6 +27,8 @@ No stack is hard-coded: the same commands drive a Go service, a Rails app, or a 
 flowchart LR
     idea(["half-formed idea"]) -.-> brain[brainstorm]
     brain -.->|"a shape you agreed on"| desc
+    err(["error · stack trace"]) -.-> dbg[debug]
+    dbg -.->|"reproduced, cause confirmed"| capSt
     desc(["free-text description"]) --> capSt[capture]
     capSt -->|task id| fetch[fetch]
     fetch -->|investigation brief| plan[plan]
@@ -51,12 +53,13 @@ flowchart LR
 ```
 
 Solid arrows are the default flow.
-Dashed ones are optional: `brainstorm`, `judge`, `demo`, `explain` and `catchup` when you ask, the rest where a project declares them; ship also catches up on its own when the base moved.
+Dashed ones are optional: `brainstorm`, `debug`, `judge`, `demo`, `explain` and `catchup` when you ask, the rest where a project declares them; ship also catches up on its own when the base moved.
 Each skill is an **entry point** into the chain:
 
 | Skill | Runs | Stops at |
 |---|---|---|
 | `/f10:brainstorm <idea>` | brainstorm | a shape agreed in chat, or the decision not to build |
+| `/f10:debug <error \| trace \| desc>` | debug, capture, fetch, plan | plan file saved on the bug path; or what to collect next, and no task |
 | `/f10:judge [<idea \| id \| PR \| commit>] [--blind]` | judge | a verdict: proceed, proceed with changes, rethink, or stop |
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
@@ -94,6 +97,9 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 ```text
 /f10:brainstorm public API abuse - rate limiting, or per-tenant quotas?
 # → a discussion. Nothing written; ends in a shape, or in "we don't build this"
+
+/f10:debug panic: assignment to entry in nil map at cache.go:42
+# → reproduces and finds the cause first; only a confirmed bug becomes a task and a plan
 
 /f10:capture Add rate limiting to the public API
 # → creates the tracker task, replies with its id + url
@@ -216,8 +222,8 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,capture,plan,ship,judge,cleanup,review,resolve,demo,explain,catchup,standup}"]
-        gsteps["steps/{brainstorm,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,deploy,standup}.md"]
+        skills2["skills/{brainstorm,debug,capture,plan,ship,judge,cleanup,review,resolve,demo,explain,catchup,standup}"]
+        gsteps["steps/{brainstorm,debug,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,deploy,standup}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/{help,dry-run,driven,forward}.md"]
     end
