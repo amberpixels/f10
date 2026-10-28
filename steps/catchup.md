@@ -51,12 +51,12 @@ No conflict, or nothing to bring in, is a **correct run**.
    - **Never leave a marker** (`<<<<<<<`, `=======`, `>>>>>>>`), and never invent code beyond merge glue such as a combined import list.
    - **Genuine ambiguity** (both sides changed the same business logic incompatibly): collect every such file into **one** `AskUserQuestion`, per file what ours and theirs wanted, with options keep ours, keep theirs, a named reconciliation.
    - `git add` each file, confirm no conflict or marker remains (`git grep` over the staged files), then conclude.
-     Under a merge, `git commit -m "<subject>" -m "$trailers"` with the trailers `f10 trace trailers --step catchup` printed first (`steps/commit.md` point 2), never `git merge --continue`, so the merge commit carries them.
+     Under a merge, `git commit -m "<subject>" -m "$trailers"` with the trailers `f10 trace trailers --step catchup` printed first (`conventions/context.md` → Commits), never `git merge --continue`, so the merge commit carries them.
      Under a rebase, `git rebase --continue`, repeated for every conflicting commit; replayed commits keep their own messages.
    - A clean merge takes the same message through `git merge <base> -m "<subject>" -m "$trailers"`.
 
-5. **Verify** with `project.md → Verify` (none declared: detect as `steps/implement.md` does).
-   Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`steps/commit.md` point 2, `--step catchup`) or folded into its commit under a rebase, and re-verify.
+5. **Verify** with `project.md → Verify` (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands).
+   Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`conventions/context.md` → Commits, `--step catchup`) or folded into its commit under a rebase, and re-verify.
    Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set, before the report.
    `f10 drive` reads a mark still set as a catchup that did not finish, and halts the task.
 

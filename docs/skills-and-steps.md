@@ -49,6 +49,8 @@ A step never names the skill that runs it, except where its behavior differs by 
   The step says the action is outward-facing; `ship/SKILL.md` grants the push and the PR, `resolve/SKILL.md` asks before a `+reply`, and before landing fixes on an open PR unless driven.
 - **Logic two skills share goes in a mode** (`modes/forward.md`), not copied into both.
 - **A skill that needs part of another step's work** runs those points of that step and names where it differs (ship runs `steps/catchup.md` as a guard before implement, `pr` and a change judge, failing on a conflict).
+- **A skill or step that defers to another step** ("as `steps/X.md` point 2 says") loads that step in every caller, or inlines the few lines it needs; a rule several steps share goes in a convention (`conventions/context.md` → Commits).
+  `TestStepReferences` (`cli/internal/layout/steps_test.go`) fails on a followed step (a bold step name in a skill) or a deferred-to one (a `steps/X.md` mention followed by `point` or `points`, or after `as `) that a load of the caller does not name; other forms, such as `steps/X.md` → Section, go unchecked.
 
 ## Where a line belongs
 

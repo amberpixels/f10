@@ -111,6 +111,17 @@ Unless `project.md` says `public`:
 - The `Task:`, `Step:` and `Review:` trailers `f10 trace trailers` prints, and the `Task:` line `f10 finish` puts on a squash commit, are allowed: they name a task and a step, never f10, a plan or a findings file (`docs/traces.md`).
   They exist only with `traces: on`; the default, `off`, writes none.
 
+## Commits
+
+Every step that commits (commit, push, pr, resolve, judge, catchup, the ship skill's catchup guard) commits this way.
+
+- Small, conventional commits in the repo's style; no AI attribution lines; in stealth mode, no f10 traces in messages.
+- **Trailers**: the message ends in the lines `f10 trace trailers` prints, as its own last `-m` paragraph.
+  Run it first, on its own: `trailers="$(f10 trace trailers --step <step>)"`; a non-zero exit fails the step (`conventions/failure.md`), never a commit without its output.
+  Then `git commit -m "<subject>" [-m "<body>"] -m "$trailers"`.
+  With `traces: off` it prints nothing, and the message stays as it was (`docs/traces.md`).
+- `--step` names the step whose work the commit carries: `implement` for implemented code, the committing step for its own work (`resolve`, `judge`, `catchup`), with any extra flags its caller names.
+
 ## Task references
 
 Text that leaves the machine (PR/MR text and replies, commit messages, tracker task bodies) names a task other than its own by its title, and a url where the text renders one, not a bare id: `FT-70` does not autolink on GitHub, and a Jira, Linear or Notion id means nothing to a reader.
