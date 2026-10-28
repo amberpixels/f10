@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -33,8 +34,13 @@ func waitRows(t *testing.T, db string) []string {
 
 	var got []string
 
+	// nothing spooled, nothing to sync: the database is never created
+	if err := ledger.SyncAt(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err := os.Stat(db); err != nil {
-		return nil // nothing recorded opened no database
+		return nil
 	}
 
 	for _, e := range recorded(t, db, ledger.Filter{}) {

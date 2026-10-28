@@ -285,6 +285,8 @@ func readRoot(root string, l *Local) []string {
 
 // readLedger marks the tasks the ledger holds task_finished for.
 func readLedger(ctx context.Context, path, project string, l *Local) []string {
+	_ = ledger.SyncAt(ctx, path) // a failed replay still reads what the database holds
+
 	db, err := ledger.OpenRead(ctx, path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil

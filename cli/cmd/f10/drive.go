@@ -2181,7 +2181,7 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 	place := ledger.Where(ctx, dir)
 	e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, place.Branch
 
-	ledger.Record(ctx, ledger.BusyAsync, e)
+	ledger.Record(e)
 }
 
 // guardStop reports a ship stop shaped like the catchup guard's: failed
