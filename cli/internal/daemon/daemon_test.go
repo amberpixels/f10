@@ -160,6 +160,48 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 	waitExit(t, resume.Log)
 }
 
+// The other order: a resume sent while a drive started by its command line
+// has not reported its number attaches to it too.
+func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
+	serve(t, s)
+
+	root := t.TempDir()
+
+	rec := &drives.Record{Args: []string{"FT-1", "FT-2"}}
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := Call(t.Context(), s.Dir, Request{
+		Op:   OpRun,
+		Argv: []string{`sleep 0.5; echo 1 > "$F10_DRIVE_FILE"; sleep 0.3`},
+		Dir:  "/",
+		Root: root,
+		Key:  "FT-1 FT-2",
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resume, err := Call(t.Context(), s.Dir, Request{
+		Op:     OpRun,
+		Argv:   []string{"exit 1"},
+		Dir:    "/",
+		Root:   root,
+		Resume: rec.Number,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !resume.Attach || resume.Log != first.Log {
+		t.Errorf("resume got %+v, want to attach to %s", resume, first.Log)
+	}
+
+	waitExit(t, first.Log)
+}
+
 func TestServeExitsWhenIdle(t *testing.T) {
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell, Idle: 50 * time.Millisecond, Tick: 10 * time.Millisecond}
 	done := serve(t, s)

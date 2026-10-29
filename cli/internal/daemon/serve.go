@@ -275,9 +275,17 @@ func (s *Server) run(req Request) Reply {
 		return Reply{Error: "the daemon is stopping: run the command again"}
 	}
 
+	// a drive reports its number only once it has taken its answers, so a
+	// resume matches by its record's command line too, and its child is
+	// numbered at start
+	key := req.Key
+	if req.Resume > 0 {
+		key = cmp.Or(recordKey(req.Root, req.Resume), key)
+	}
+
 	for _, c := range s.runs {
 		if c.Root == req.Root &&
-			((req.Key != "" && strings.EqualFold(c.key, req.Key)) || (req.Resume > 0 && c.Drive == req.Resume)) {
+			((key != "" && strings.EqualFold(c.key, key)) || (req.Resume > 0 && c.Drive == req.Resume)) {
 			return Reply{Log: c.Log, Attach: true}
 		}
 	}
@@ -287,13 +295,9 @@ func (s *Server) run(req Request) Reply {
 		return Reply{Error: err.Error()}
 	}
 
-	c.key = req.Key
-
-	// a resume reports its number only after taking its answer: a rerun of
-	// its command before then attaches by the record it names
+	c.key = key
 	if req.Resume > 0 {
 		c.Drive = req.Resume
-		c.key = cmp.Or(recordKey(req.Root, req.Resume), c.key)
 	}
 
 	return Reply{Log: c.Log}
