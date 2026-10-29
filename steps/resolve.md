@@ -38,6 +38,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    No `latest:` line: nothing to resolve, a normal end.
    Blocks with a `verdict:` are done; none left (a clean file included) is a normal end, after points 10 and 11 when their conditions hold and the sha point 10 would mark carries no `review (local)` status yet.
 2. **Read what was asked**: the task and the plan.
+   A block with `tasks:` (the coherence lens) also reads those tasks' plans and `f10 lore show <id>`.
    The user's stated choice beats the reviewer.
 3. **Re-find each finding**, in file order, by file, title and summary (a `reviewed:` sha other than HEAD, or `dirty`, makes lines advisory).
    Code that no longer exists: `skip`, saying so.
@@ -45,6 +46,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    - **`fix`** - fix the problem the finding names, in house style; its proposed fix is a suggestion.
    - **`skip`** - with an argued `reason:` in a line or two, for the next round's reviewer.
      A finding that would undo what the task asked for is a skip citing the ask.
+     A block with `size: own task` is a skip whose `reason:` is `follow-up: <its title>`, unless the code shows the fix is small, then a `fix`.
    - **`ask`** - the user's call: a real fork, a finding disputing the task, a fix whose scope is not yours.
      Collected for point 7.
 
@@ -96,7 +98,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
     `--asks` counts the questions waiting on a person: findings parked for a remote answer (point 7) and a driven ask raised this run; an ask held for round two is open, not yet asked.
     In a driven run the call goes right before `f10-state.sh set ... blocked`, and the resolve that resumes on the answer passes both counts back down.
     Nothing with `traces: off` or without an open PR or MR; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
-12. **Report** per `conventions/report.md`: a `findings` row, a `commit` row when point 9 committed, a `status` row (the sha and its state) and a `comment` row (its url) when point 10 posted, a `settled` row (what `settle` printed) when the **CI review** section marked it, then the verdict counts, what the fixes changed, and which asks were answered.
+12. **Report** per `conventions/report.md`: a `findings` row, a `commit` row when point 9 committed, a `status` row (the sha and its state) and a `comment` row (its url) when point 10 posted, a `settled` row (what `settle` printed) when the **CI review** section marked it, then the verdict counts, what the fixes changed, which asks were answered, and each `follow-up:` title for the user to capture.
 
 **On failure:** red verify after a fix, a findings file naming a task this checkout lacks, or a malformed file: report and stop, keeping the verdicts written so far.
 A rejected push stops with the commits local; never force-push to clear it (`conventions/failure.md`).
