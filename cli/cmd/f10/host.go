@@ -159,7 +159,7 @@ func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (stri
 		created = "created " + at.UTC().Format(time.DateOnly)
 
 		// the comparison is made here so fetch reads it, never works it out
-		if d, err := facts.ParseStaleAfter(staleAfter); err == nil && time.Since(at) > d {
+		if staleAt(at, staleAfter, time.Now()) {
 			created += " (stale: older than " + staleAfter + ")"
 		}
 	}
@@ -180,6 +180,28 @@ func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (stri
 	}
 
 	return b.String(), iss, nil
+}
+
+// issueCreated is the issue's created date, zero when the host gives none.
+func (h host) issueCreated(ctx context.Context, number string) (time.Time, error) {
+	iss, err := h.issue(ctx, number, "createdAt")
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if err := iss.notPull(number); err != nil {
+		return time.Time{}, err
+	}
+
+	return cmp.Or(iss.CreatedAt, iss.CreatedAtGL), nil
+}
+
+// staleAt is task read's stale mark and task stale's age check in one place,
+// so the two never disagree; an undeclared or bad stale_after is never stale.
+func staleAt(created time.Time, staleAfter string, now time.Time) bool {
+	d, err := facts.ParseStaleAfter(staleAfter)
+
+	return err == nil && !created.IsZero() && now.Sub(created) > d
 }
 
 func (h host) issueURL(ctx context.Context, number string) (string, error) {

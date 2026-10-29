@@ -212,6 +212,7 @@ type verdictFile struct {
 	outcome judgeOutcome
 	judged  string // task or plan when its subject is one, else change
 	at      time.Time
+	path    string
 }
 
 // judgeFiles is the task's verdict files that parse, oldest first.
@@ -238,6 +239,7 @@ func judgeFiles(storageRoot, task string) []verdictFile {
 			outcome: judgeOutcome{Verdict: v.Verdict, Reason: v.Reason},
 			judged:  judged,
 			at:      modTime(path),
+			path:    path,
 		})
 	}
 

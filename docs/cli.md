@@ -44,6 +44,7 @@ f10 task read [id]       # the task as markdown; a bundle (id+id) reads every me
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
 f10 task report <id>...  # a report's facts block: one task's rows, else a row per task
+f10 task stale [id] [--created YYYY-MM-DD]   # fetch's stale check: fresh, judged <verdict file>, needs judge or undated
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
@@ -974,6 +975,21 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
 `children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, each task's url on a `url` line beneath it, and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
+
+## Stale
+
+`f10 task stale 71` answers the fetch step's check under `stale_after`, one line on stdout:
+
+| line | meaning |
+|---|---|
+| `fresh` | `stale_after` is not declared, or the task is younger than it; the tracker is not asked when it is not declared |
+| `judged <path>` | older, but a verdict file with subject `task <id>` reads `proceed` and was written within `stale_after`; the newest one is named |
+| `needs judge` | older, and no such verdict |
+| `undated` | no created date was found |
+
+`--created <YYYY-MM-DD>` passes the date the task's read showed, which spares a tracker call; without it the date comes from the host's issue, and on any other tracker the answer is `undated`.
+Verdict files are read from the storage root and, from a worktree that keeps its own `.f10`, from main's too.
+A bundle is checked on its lead.
 
 ## Children
 
