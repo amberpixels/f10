@@ -1,8 +1,8 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing only when an agent asks; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--model <model>]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing only when an agent asks; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "<id>... [--flow <name> | --local] [--model <model>]"
+argument-hint: "<id>[:profile]... [--flow <name> | --local] [--agent <profile> | --model <model>]"
 ---
 
 # f10 · drive
@@ -11,7 +11,8 @@ Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` d
 Each task runs the `default` flow, or the one `--flow <name>` or `--local` names (`f10 flow` lists them): `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the frontmatter's `drive_finish` is on; a spike is closed after ship either way (`f10 finish` closes it without a merge).
 A rerun keeps the flow a task's branch already records.
 No chain is typed after the ids: the flow says what runs.
-`--model` picks every agent's model, `<id>:<model>` one task's, which wins.
+`--agent` picks every agent's profile, `kind:model:effort` or a part of it, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model` is the model-only form.
+`<id>:<profile>` picks one task's, which wins.
 A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
 This skill expands parents, runs the command, relays its questions and prints its report; it runs no step.
 
@@ -24,7 +25,7 @@ This skill expands parents, runs the command, relays its questions and prints it
 A task id whose task has subtasks is never driven itself: the user picks which subtasks run, every time, with no silent default.
 
 1. **Find the parents, in one Bash call**: `f10 task children <id> --json` for each listed id; not a range's ends or flags.
-   Strip a `:model` suffix for the lookup and keep it.
+   Strip a `:profile` suffix (`:opus`, `:opus:high`) for the lookup and keep it.
    Exit 3 or `[]`: the id stays as given.
    Rows: the id is a parent; its unfinished rows are the candidates.
    A parent whose rows are all finished is dropped from the list with one line saying so.
@@ -40,7 +41,7 @@ A task id whose task has subtasks is never driven itself: the user picks which s
    Name each (`FT-75 is after FT-74, which you left out`) and ask once more, in one `AskUserQuestion`, a question per break: `[include FT-74 | drop FT-75]`.
    Apply the answers and check again; never fix a break silently.
    A base outside the siblings is not checked here: `f10 drive` refuses an unfinished one itself.
-5. **Build the arguments**: each parent replaced in place by its chosen subtasks, in the rows' order, each carrying the parent's `:model` suffix; other ids and flags as given.
+5. **Build the arguments**: each parent replaced in place by its chosen subtasks, in the rows' order, each carrying the parent's `:profile` suffix; other ids and flags as given.
    Nothing left to drive: say so in one line and stop.
 
 Run it **in the background** (`run_in_background`): a list can take hours, and the command's exit wakes this session.

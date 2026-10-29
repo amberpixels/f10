@@ -16,6 +16,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -54,6 +55,11 @@ func startCommand() *cli.Command {
 				Usage: "start the agent on `MODEL`: a family (opus, fable), a version (opus-5.5) or a full id; " +
 					"near misses are corrected, and a name that is no model falls back to claude's default",
 			},
+			&cli.StringFlag{
+				Name: "agent",
+				Usage: "start the agent on `PROFILE`, kind:model:effort (claude:opus:high), model:effort or either alone, " +
+					"laid over the agents map's default; --model is the model-only form",
+			},
 		},
 		Action:        runStart,
 		ShellComplete: completeFlow,
@@ -66,8 +72,6 @@ const (
 	modeDefault = ""
 	modePlan    = "plan"
 	modeDiscuss = "discuss"
-
-	agentKind = "claude"
 )
 
 const (
@@ -76,6 +80,7 @@ const (
 	cfgLanded      = ref.LandedKey
 	cfgMoved       = ref.MovedKey
 	cfgModel       = ref.ModelKey
+	cfgAgent       = ref.AgentKey
 	cfgTaskID      = ref.TaskKey
 	cfgRiders      = ref.RidersKey
 )
@@ -222,10 +227,19 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	var modelLine string
-	if in.model, modelLine = resolveModel(cmd.String("model"), claudeSettingsPath()); modelLine != "" {
-		in.notes = append([]string{modelLine}, in.notes...)
+	flag, err := profileFlag(cmd.String("agent"), cmd.String("model"))
+	if err != nil {
+		return err
 	}
+
+	layers, err := agentLayers(t.eff, flag)
+	if err != nil {
+		return err
+	}
+
+	resolved := layers.profileFor(facts.AgentKeyDefault, "")
+	in.profile, in.profileFlagged = resolved.Profile, flag != ""
+	in.notes = append(resolved.lines(claudeSettingsPath()), in.notes...)
 
 	in.progress = cmd.ErrWriter
 
@@ -380,10 +394,13 @@ type startInput struct {
 	plansDir string                                // the plans dir every checkout shares
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
-	model    string                                // the agent's --model, resolved, or "" for claude's default
-	progress io.Writer                             // where a wait in progress is reported, or nil for nowhere
-	pick     *pickup                               // the PR picked up, or nil for a task started by its id
-	note     string                                // the user's words after the id, for the agent before it waits, or ""
+	// profile is what the agent starts on, resolved; profileFlagged says a
+	// flag chose it, which wins over the profile the branch recorded
+	profile        agentctl.Profile
+	profileFlagged bool
+	progress       io.Writer // where a wait in progress is reported, or nil for nowhere
+	pick           *pickup   // the PR picked up, or nil for a task started by its id
+	note           string    // the user's words after the id, for the agent before it waits, or ""
 	// children is the task's subtasks, read to refuse a parent; nil skips the
 	// check (see checksParent)
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
@@ -458,6 +475,10 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 
 	if o.plan != "" {
 		rows = append(rows, fact{label: "plan", value: o.plan})
+	}
+
+	if o.fresh && !o.profile.IsDefault() {
+		rows = append(rows, fact{label: "agent", value: o.profile.Short()})
 	}
 
 	return writeReport(
@@ -612,6 +633,9 @@ type openedTask struct {
 	plan   string // the task's plan the worktree reads, or "" when none was saved or no agent was started
 	fresh  bool
 	notes  []string
+	// profile is what the agent was started on, when fresh; a report names
+	// it when it is not the kind's default
+	profile agentctl.Profile
 }
 
 // openTask runs everything start does short of the prompt. Every lookup
@@ -730,6 +754,8 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		return openedTask{}, err
 	}
 
+	profile := in.profile.Over(agentctl.Profile{})
+
 	if launch {
 		// the agent reads the plan in place: only a prompted agent is told of it
 		o.plan = planIf(taskPlan(path, in.plansDir, in.task.ID))
@@ -738,18 +764,31 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 			return openedTask{}, err
 		}
 
+		// a rerun keeps the profile the branch records, unless a flag chose one
+		if !in.profileFlagged {
+			recorded, err := recordedProfile(ctx, in.main, name)
+			if err != nil {
+				return openedTask{}, err
+			}
+
+			if !recorded.IsDefault() {
+				profile = recorded
+			}
+		}
+
 		if err := agents(path).StartAgent(
 			ctx,
 			ws,
 			agent,
-			agentKind,
-			agentArgs(in.model, in.plansDir, path),
+			profile.Kind,
+			agentArgs(profile, in.plansDir, path),
 			shellWait(in.progress, ws.Slot),
 		); err != nil {
 			return openedTask{}, err
 		}
 
 		o.fresh = true
+		o.profile = profile
 
 		// the flow is the branch's fact from here on: status lists its gates,
 		// and a rerun of drive keeps it
@@ -759,11 +798,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 			}
 		}
 
-		// the model is the branch's fact from here on, for a reader of the
-		// branch (f10 board); a failed write loses nothing the agent needs
-		if in.model != "" {
-			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgModel, in.model); err != nil {
-				notes = append(notes, "the model was not recorded on the branch: "+err.Error())
+		// the profile is the branch's fact from here on, for a rerun and a
+		// reader of the branch (f10 board); a failed write loses nothing
+		// the agent needs
+		if !profile.IsDefault() {
+			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgAgent, profile.String()); err != nil {
+				notes = append(notes, "the agent profile was not recorded on the branch: "+err.Error())
 			}
 		}
 	}
@@ -772,8 +812,8 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		notes = append(notes, note)
 	}
 
-	if !launch && in.model != "" {
-		notes = append(notes, "--model "+in.model+" ignored: no agent was started")
+	if !launch && !profile.IsDefault() {
+		notes = append(notes, "agent profile "+profile.Short()+" ignored: no agent was started")
 	}
 
 	o.notes = notes

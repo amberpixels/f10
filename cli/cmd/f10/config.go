@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -52,9 +54,35 @@ type view struct {
 	FlowByArea      map[string]string   `json:"flowByArea,omitempty"`
 	DriveFinish     bool                `json:"driveFinish"`
 	ReportBack      bool                `json:"reportBack"`
-	Facts           []facts.Fact        `json:"facts"` // every typed value with its origin
+	Agents          []agentEntry        `json:"agents,omitempty"` // the merged agents map, the user's file under the project's, each key with its origin
+	Facts           []facts.Fact        `json:"facts"`            // every typed value with its origin
 	Problems        []facts.Problem     `json:"problems,omitempty"`
 	Roots           []string            `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
+}
+
+// withAgents puts the merged agents map on the view: one row per key in
+// the facts table, in place of the project's single agents fact, so each
+// value shows its own origin, the user's file included. A user file the
+// vocabulary refuses is a problem, shown like a project.md one.
+func (v *view) withAgents(eff *facts.Effective) {
+	m, err := agentLayers(eff, "")
+	if err != nil {
+		v.Problems = append(v.Problems, facts.Problem{Error: true, Message: err.Error()})
+
+		return
+	}
+
+	if len(m) == 0 {
+		return
+	}
+
+	v.Facts = slices.DeleteFunc(slices.Clone(v.Facts), func(f facts.Fact) bool { return f.Key == "agents" })
+
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		e := m[key]
+		v.Agents = append(v.Agents, e)
+		v.Facts = append(v.Facts, facts.Fact{Key: "agents." + key, Value: e.Value, Origin: e.Origin})
+	}
 }
 
 func configCommand() *cli.Command {
@@ -115,6 +143,8 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Problems:        eff.Problems,
 		Roots:           projects.Roots(),
 	}
+
+	v.withAgents(eff)
 
 	if cmd.Bool("json") {
 		enc := json.NewEncoder(cmd.Writer)

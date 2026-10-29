@@ -35,6 +35,7 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 f10 init                 # register this checkout: write project.md from detection
 f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), and old keys into flows
 f10 config [--json]      # the effective configuration, with the origin of every value
+f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it
 f10 flow [--json]        # the declared flows, each with what selects it, and drive_finish
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
@@ -66,9 +67,9 @@ f10 standup mark --since <time> [--at <time>]      # record a standup as reporte
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 f10 stats [--since 30d] [<id>]   # active plan and implement minutes per task, with size and density; a median row
 
-f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
-f10 drive <id | id+id>[:model]... | <id> -- <id> [--flow <name> | --local] [--model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
+f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
@@ -117,6 +118,18 @@ A scoped problem (`herdr`, `statusline`) is printed but affects only what it nam
 | `detail` | the evidence, one line |
 | `remedy` | the command or file edit; empty unless `status` is `problem` |
 
+## Agents
+
+`f10 agents` prints the merged agents map, `~/.f10/agents.md` under the project's `agents:`, one key per line with its value and origin.
+`f10 agents <step>...` prints each step's resolved profile: `review: claude:opus:high  (model: default (declared (user, ~/.f10/agents.md)), effort: review (declared (main, frontmatter)))  Agent tool: model opus, effort high  - the blind reviewer, a subagent`.
+A step scoped by task kind (`plan.bug`) prints a line per kind unless `--kind` picks one.
+`--agent <profile>` lays a run's profile over `default` as `f10 start --agent` does, and `--json` emits the same lines.
+`f10-load-project.sh <step>...` prints this for the steps it loads, which is where a spawning step reads the Agent tool form.
+A key or a profile the vocabulary refuses fails the command naming the file, as a `project.md` fact does.
+
+**Your file**, `~/.f10/agents.md`, YAML frontmatter then free prose, holds the `agents:` map every project starts from (`docs/project-setup.md` → Agents).
+`F10_USER_DIR` names another directory than `~/.f10` for it and the other user files, which the eval runner uses to keep a measured run off your own map.
+
 ## Start
 
 `f10 start 42` is the three hand-offs of starting a task as one command.
@@ -147,7 +160,12 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - `--base <branch>` bases the branch on a git ref instead: the local branch, else the one on origin (`origin/main` typed as such is also accepted).
   It fails before creating anything when neither exists, and notes beneath the report when the base sits at the default branch's commit, since a base that changes nothing is otherwise invisible.
   Exclusive with `--after`
-- `--model <model>` starts the agent on that model, passed to claude as `--model`.
+- `--agent <profile>` starts the agent on that profile, `kind:model:effort` (`claude:opus:high`), `model:effort` or either alone, laid over the `default` the agents map resolves (your `~/.f10/agents.md`, then the project's `agents:`; `docs/project-setup.md` → Agents).
+  The kind's flags go on the agent's command line (`--model`, `--effort`).
+  The profile is recorded on the branch as `branch.<name>.f10-agent`, so a rerun on the branch starts its agent on it again unless a flag names another.
+  The report gains an `agent` row when the profile is not the kind's default.
+  `--model <model>` is the model-only form, exclusive with `--agent`, and reads a model only: a lone effort word is refused.
+  The model is passed to claude as `--model`.
   A family (`opus`, `fable`) passes as the alias; a family with a version is rebuilt into the full id (`opus5-5`, `Opus 5.5` and `opus-5.5` all become `claude-opus-5-5`); a full `claude-` id passes as typed.
   A family misspelt by up to two letters is corrected (`fabel` to `fable`) with a note.
   A name that is no family falls back to claude's own default (the `model` in `~/.claude/settings.json`) and the first line beneath the report is a `!!!` warning naming it.
@@ -366,6 +384,7 @@ FT-116  2 done · 1 halted · 1 reviewing
 ```
 
 A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking, `·` anything else), the id, the stage, the current or last step, and the PR with its state when it is not open.
+A task's run block gains an `agent` row, the profile its branch records (`opus:high`), when that is not the kind's default; `--json` carries it as `agent`.
 The title goes on the line beneath, cut to fit; the ask, the halt reason and what unblocks it (`next`) follow as labelled lines.
 A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
@@ -432,7 +451,7 @@ Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it aga
 `--foreground` runs the driver in this process, as the daemon itself runs each drive; it is for tests and debugging, and on a platform without unix sockets it is how every drive runs.
 
 **The record.**
-Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--resume` and `--foreground`), the tasks with their `:model`, the flow, the run-wide model, `drive_finish`, the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
+Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--resume` and `--foreground`), the tasks with their `:profile`, the flow, the run-wide profile, `drive_finish`, the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
 Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer` and `--every` beside it.
 An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
 The branch's `f10-drive`, `f10-chain` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
@@ -458,12 +477,13 @@ A cancelled record is never picked up again: the same command line starts a new 
    It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the frontmatter's `drive_finish` is off.
    A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
-   `--flow`, `--local`, `--model`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
+   `--flow`, `--local`, `--agent`, `--model`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
-   `--model` starts every agent on that model, read as start reads it; `<id>:<model>` starts one task's agent on its own, which wins (`42:sonnet 43 --model opus`).
-   Only a colon with no slash after it is read this way, so a url keeps its own.
-   A range takes the run-wide `--model` only.
-   Each model is read once, and any correction or `!!!` fallback is printed before the first task opens.
+   `--agent` starts every agent on that profile, read as start reads it, and `--model` is its model-only form; `<id>:<profile>` starts one task's agent on its own, which wins (`42:sonnet:low 43 --agent opus`).
+   The profile starts at the first colon with no slash after it, so a url keeps its own and `42:claude:opus:high` reads whole.
+   A range takes the run-wide `--agent` only.
+   Each profile is resolved once over the agents map, and any correction or `!!!` fallback is printed before the first task opens.
+   The open line names a task's profile when it is not the kind's default, and a rerun keeps the one its branch records unless a flag names another.
 2. **Validation, before anything is created or prompted.**
    Outside Herdr it refuses as start does.
    Every task is looked up on the tracker.

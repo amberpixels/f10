@@ -15,6 +15,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -27,15 +29,54 @@ const (
 	standupStateFile  = "standup.json" // the last reported standup; f10 writes it
 	standupConfigFile = "standup.md"   // the user's standup settings; f10 only reads it
 	boardConfigFile   = "board.md"     // the user's board settings; f10 only reads it
+	agentsConfigFile  = "agents.md"    // the user's default agent profiles; f10 only reads it
 )
 
+// userDirEnv names another directory than ~/.f10 for the user's files, so
+// a run that must not read them (the eval runner) points it elsewhere.
+const userDirEnv = "F10_USER_DIR"
+
 func userF10Dir() (string, error) {
+	if dir := strings.TrimSpace(os.Getenv(userDirEnv)); dir != "" {
+		return dir, nil
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("finding your home directory: %w", err)
 	}
 
 	return filepath.Join(home, ".f10"), nil
+}
+
+// agentsConfig is the frontmatter of ~/.f10/agents.md: the user's own
+// agents map, the first layer under every project's.
+type agentsConfig struct {
+	Agents map[string]string `yaml:"agents"`
+}
+
+// readAgentsConfig is the user's agents map, nil when the file or the key
+// is missing; a key or profile the vocabulary refuses is an error naming
+// the file, since a step must not spawn on a half-read map.
+func readAgentsConfig() (map[string]string, string, error) {
+	var cfg agentsConfig
+
+	path, err := readUserConfig(agentsConfigFile, &cfg)
+	if err != nil {
+		return nil, path, err
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(cfg.Agents)) {
+		if err := facts.CheckAgentKey(key, nil); err != nil {
+			return nil, path, fmt.Errorf("%s: %w", path, err)
+		}
+
+		if _, err := agentctl.ParseProfile(cfg.Agents[key]); err != nil {
+			return nil, path, fmt.Errorf("%s: agents.%s: %w", path, key, err)
+		}
+	}
+
+	return cfg.Agents, path, nil
 }
 
 // readLastStandup is nil when none was reported; a file that does not read

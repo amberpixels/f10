@@ -94,7 +94,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	}
 
 	pattern := `^branch\..*\.(` + strings.Join(
-		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.FinishKey},
+		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.AgentKey, ref.FinishKey},
 		"|",
 	) + `)$`
 
@@ -106,7 +106,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	for _, e := range entries {
 		rest := strings.TrimPrefix(e.Key, "branch.")
 
-		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.FinishKey} {
+		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.AgentKey, ref.FinishKey} {
 			name, ok := strings.CutSuffix(rest, "."+key)
 			if !ok {
 				continue
@@ -122,7 +122,13 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 			case ref.AfterKey:
 				b.After = e.Value
 			case ref.ModelKey:
-				b.Model = e.Value
+				// the record from before profiles; a profile on the same branch wins
+				if b.Model == "" {
+					b.Model = e.Value
+				}
+			case ref.AgentKey:
+				p := agentctl.ParseRecorded(e.Value)
+				b.Model, b.Agent = p.Model, p.Short()
 			case ref.FinishKey:
 				if d, ok := ref.ParseDriveFinish(e.Value); ok {
 					b.Finish = &d

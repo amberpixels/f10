@@ -229,8 +229,8 @@ func TestDriveParsesABundle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if strings.Join(a.tasks, " ") != "GH-1+GH-2 GH-3" || a.models[0] != "opus" {
-		t.Errorf("tasks %v models %v, want the bundle whole with its model", a.tasks, a.models)
+	if strings.Join(a.tasks, " ") != "GH-1+GH-2 GH-3" || a.profiles[0] != "opus" {
+		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.tasks, a.profiles)
 	}
 
 	in := &driveInput{args: driveArgs{tasks: []string{"GH-1+GH-2", "GH-5"}, span: true}}

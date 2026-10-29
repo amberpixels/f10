@@ -120,6 +120,8 @@ After each file, append its rules to `<scratchpad>/cleanup/inventory.md` under t
   Every backtick span, fenced code line, path, `--flag` and multi-digit number in the snapshot must appear somewhere in the changed files (searched as a union, so a rule moved to its canonical home passes).
   Tokens dropped on purpose (a stale example, a duplicate) go in `$SNAP/.dropped`, one per line, and in the report; restore anything else.
 - **Rules:** one fresh `general-purpose` subagent per run, or per about 15k words rewritten; never one per file, never a fork, so it judges blind.
+  The Agent tool call carries the `model` and `effort` the project load's `cleanup` profile line names in its `Agent tool:` part (`docs/project-setup.md` → Agents): the `cleanup.<kind>` line for the plan's `Kind` (absent meaning feature) when the load prints one, else the plain `cleanup` line.
+  A line with no `Agent tool:` part passes neither.
   Give it the inventory and the changed files; it marks each line `kept`, `changed` (quoting both) or `lost` and returns only the non-kept lines.
   Restore every `lost` line; fix or justify every `changed` one.
 

@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -136,5 +139,54 @@ func TestRenderHumanKeyValues(t *testing.T) {
 
 	if !strings.Contains(out, " - **Then** - tests\n") {
 		t.Errorf("mixed prose was not kept as written:\n%s", out)
+	}
+}
+
+// The merged agents map shows one row per key, the user's file under the
+// project's, each with its own origin, in place of the project's one fact.
+func TestConfigShowsAgentsPerKey(t *testing.T) {
+	user := t.TempDir()
+	t.Setenv(userDirEnv, user)
+
+	if err := os.WriteFile(filepath.Join(user, agentsConfigFile),
+		[]byte("---\nagents:\n  default: opus:high\n  review: opus:max\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	eff := &facts.Effective{
+		Agents:       map[string]string{"review": "sonnet:low"},
+		AgentsOrigin: map[string]string{"review": "declared (main, frontmatter)"},
+		Facts: []facts.Fact{
+			{Key: "agents", Value: "review: sonnet:low", Origin: "declared (main, frontmatter)"},
+		},
+	}
+
+	v := &view{Facts: eff.Facts}
+	v.withAgents(eff)
+
+	got := map[string]string{}
+	for _, f := range v.Facts {
+		got[f.Key] = f.Value + " @ " + f.Origin
+	}
+
+	want := map[string]string{
+		"agents.default": "opus:high @ declared (user, " + filepath.Join(user, agentsConfigFile) + ")",
+		"agents.review":  "sonnet:low @ declared (main, frontmatter)",
+	}
+
+	if !maps.Equal(got, want) || len(v.Agents) != 2 {
+		t.Errorf("facts %v, agents %v; want %v", got, v.Agents, want)
+	}
+
+	bad := []byte("---\nagents:\n  review: opus:huge\n---\n")
+	if err := os.WriteFile(filepath.Join(user, agentsConfigFile), bad, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	v = &view{}
+	v.withAgents(eff)
+
+	if len(v.Problems) != 1 || !strings.Contains(v.Problems[0].Message, "agents.review") {
+		t.Errorf("a refused user file is a problem: %+v", v.Problems)
 	}
 }

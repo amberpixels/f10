@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -62,7 +63,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		switch {
 		case slices.Contains(oldChainSkills, args[i]):
 			chain = append(chain, args[i])
-		case args[i] == "--answer" || args[i] == "--model" || args[i] == "--every" || args[i] == "--flow":
+		case args[i] == "--answer" || args[i] == "--model" || args[i] == "--agent" ||
+			args[i] == "--every" || args[i] == "--flow":
 			rest = append(rest, args[i], args[i+1])
 			i++
 		default:
@@ -141,13 +143,21 @@ func (fx *driveFixture) opens(id, ws, pane string) {
 	fx.opensOn(id, ws, pane, "")
 }
 
-// opensOn is opens with the agent started on model, "" for none.
-func (fx *driveFixture) opensOn(id, ws, pane, model string) {
+// opensOn is opens with the agent started on profile, as typed, "" for none.
+func (fx *driveFixture) opensOn(id, ws, pane, profile string) {
 	agent := agentOf(id)
 
+	var p agentctl.Profile
+
 	start := "herdr agent start " + agent + " --kind claude --pane " + pane
-	if model != "" {
-		start += " -- --model " + model
+	if profile != "" {
+		parsed, err := agentctl.ParseProfile(profile)
+		if err != nil {
+			fx.f.t.Fatal(err)
+		}
+
+		p, _, _ = parsed.Resolve()
+		start += " -- " + strings.Join(p.Args(), " ")
 	}
 
 	fx.f.script("wt switch --no-cd --yes --format json --create "+id, "{}")
@@ -155,8 +165,8 @@ func (fx *driveFixture) opensOn(id, ws, pane, model string) {
 		`{"result":{"workspace":{"workspace_id":"`+ws+`"},"root_pane":{"pane_id":"`+pane+`"},"already_open":false}}`)
 	fx.f.script(start, "{}")
 
-	if model != "" {
-		fx.f.script("git config branch."+id+"."+cfgModel+" "+model, "")
+	if profile != "" {
+		fx.f.script("git config branch."+id+"."+cfgAgent+" "+p.String(), "")
 	}
 }
 
@@ -328,11 +338,13 @@ func TestDriveMarksStarted(t *testing.T) {
 // name that is no model starts claude's default, said once at the top.
 func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 	cases := []struct {
-		name         string
-		args         []string
-		model1       string
-		model2       string
-		out, notWant string
+		name          string
+		args          []string
+		model1        string
+		model2        string
+		recorded      string // the profile GH-1's branch records
+		recordedModel string // the model GH-1's branch recorded before profiles
+		out, notWant  string
 	}{
 		{
 			name: "own and run-wide", args: []string{"GH-1:sonnet", "GH-2", "--model", "opus", "judge"},
@@ -347,6 +359,23 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 			args: []string{"GH-1", "GH-2", "--model", "xyz", "judge"},
 			out:  "!!! --model xyz is not a model name f10 recognizes: the agent starts on claude's default model instead",
 		},
+		{
+			name: "profiles", args: []string{"GH-1:opus:max", "GH-2", "--agent", "sonnet:low", "judge"},
+			model1: "opus:max", model2: "sonnet:low",
+			out: "GH-1: branch GH-1 at /code/repo.GH-1, workspace ws:GH-1 on opus:max",
+		},
+		{
+			name: "a rerun keeps the branch's record", args: []string{"GH-1", "GH-2", "judge"},
+			model1: "claude:haiku:low", recorded: "claude:haiku:low", out: "workspace ws:GH-1 on haiku:low",
+		},
+		{
+			name: "a flag wins over the record", args: []string{"GH-1", "GH-2", "--agent", "opus", "judge"},
+			model1: "opus", model2: "opus", recorded: "claude:haiku:low", notWant: "haiku",
+		},
+		{
+			name: "a model recorded before profiles", args: []string{"GH-1", "GH-2", "judge"},
+			model1: "opus", recordedModel: "opus", out: "workspace ws:GH-1 on opus",
+		},
 	}
 
 	for _, c := range cases {
@@ -359,6 +388,14 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 				porcelain("GH-1", "/code/repo.GH-1"),
 				porcelain("GH-1", "/code/repo.GH-1"),
 				porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
+			if c.recorded != "" {
+				fx.f.script("git config --get branch.GH-1."+cfgAgent, c.recorded)
+			}
+
+			if c.recordedModel != "" {
+				fx.f.script("git config --get branch.GH-1."+cfgModel, c.recordedModel)
+			}
+
 			fx.opensOn("GH-1", "ws:GH-1", "pane:1", c.model1)
 			fx.opensOn("GH-2", "ws:GH-2", "pane:2", c.model2)
 			fx.expects("GH-1", "judge")
@@ -1094,7 +1131,7 @@ func TestDriveTakesASavedPlanAsPlanned(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	// the shared storage root sits outside the worktree, so the agent may write there
-	addDir := " -- " + strings.Join(agentArgs("", fx.in.plansDir, "/code/repo.GH-1"), " ")
+	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.plansDir, "/code/repo.GH-1"), " ")
 	fx.f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:1"+addDir, "{}")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -1402,8 +1439,20 @@ func TestParseDriveArgs(t *testing.T) {
 			models: "|opus", every: defaultEvery,
 		},
 		{args: []string{"GH-1", "--", "GH-4"}, tasks: "GH-1 GH-4", span: true, models: "|", every: defaultEvery},
-		{args: []string{"GH-1:"}, wantErr: "names no model"},
-		{args: []string{"GH-1:opus", "--", "GH-4"}, wantErr: "run-wide --model"},
+		{
+			args: []string{
+				"GH-1:claude:opus:high", "--agent", "sonnet:low", "https://github.com/o/r/issues/2:opus:max",
+			},
+			tasks: "GH-1 https://github.com/o/r/issues/2", model: "sonnet:low",
+			models: "claude:opus:high|opus:max", every: defaultEvery,
+		},
+		{args: []string{"GH-1:"}, wantErr: "names no profile"},
+		{args: []string{"GH-1:opus", "--", "GH-4"}, wantErr: "run-wide --agent"},
+		{args: []string{"GH-1", "--agent", "opus", "--model", "fable"}, wantErr: "give one"},
+		{args: []string{"GH-1", "--model", "high"}, wantErr: "names an effort"},
+		{args: []string{"GH-1", "--model", "opus:high"}, wantErr: "a model alone"},
+		{args: []string{"GH-1:opus:huge"}, wantErr: "not an effort"},
+		{args: []string{"GH-1", "--agent", "opencode:opus:high"}, wantErr: "not an agent kind"},
 		{args: []string{"GH-1", "--model", "opus", "--model", "fable"}, wantErr: "given twice"},
 		{args: []string{"GH-1", "--model"}, wantErr: "needs a value"},
 		{args: []string{"GH-1", "judge", "GH-2"}, wantErr: "drive takes no chain"},
@@ -1435,8 +1484,8 @@ func TestParseDriveArgs(t *testing.T) {
 		}
 
 		if strings.Join(a.tasks, " ") != c.tasks || a.span != c.span || a.flow != c.flow ||
-			strings.Join(a.answers, "|") != c.answers || a.every != c.every || a.model != c.model ||
-			(c.models != "" && strings.Join(a.models, "|") != c.models) {
+			strings.Join(a.answers, "|") != c.answers || a.every != c.every || a.agent != c.model ||
+			(c.models != "" && strings.Join(a.profiles, "|") != c.models) {
 			t.Errorf("%q = %+v", c.args, a)
 		}
 	}
@@ -2381,7 +2430,7 @@ func TestDriveSaysAModelWasIgnored(t *testing.T) {
 		t.Fatalf("%v\n%s", err, fx.out.String())
 	}
 
-	if want := "--model opus ignored: no agent was started"; !strings.Contains(fx.out.String(), want) {
+	if want := "agent profile opus ignored: no agent was started"; !strings.Contains(fx.out.String(), want) {
 		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 	}
 
@@ -2796,7 +2845,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 		path := "/code/repo." + id
 		pairs = append(pairs, id, path)
 		fx.opens(id, "ws:"+id, fmt.Sprintf("pane:%d", i))
-		addDir := " -- " + strings.Join(agentArgs("", fx.in.plansDir, path), " ")
+		addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.plansDir, path), " ")
 		fx.f.script(fmt.Sprintf("herdr agent start %s --kind claude --pane pane:%d%s", agentOf(id), i, addDir), "{}")
 		fx.expects(id, "ship")
 	}

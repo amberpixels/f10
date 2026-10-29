@@ -84,6 +84,11 @@ type Effective struct {
 	WatchCatchup   bool                `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
 	ReportBack     bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
 	UpkeepPaths    []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	// Agents is agents: a step, `default` or `step.kind` to the profile it
+	// runs on, the layers merged key by key; AgentsOrigin names each key's
+	// layer. Nil when none is declared.
+	Agents       map[string]string `json:"agents,omitempty"`
+	AgentsOrigin map[string]string `json:"agentsOrigin,omitempty"`
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
