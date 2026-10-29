@@ -138,4 +138,10 @@ func TestAgentReference(t *testing.T) {
 			t.Errorf("f10 help --agent lists internal %q", p)
 		}
 	}
+
+	// a required flag stands outside the brackets, an alias beside its name
+	want := "f10 pr status [PR | task-id] --name --state --description|-m [--sha]"
+	if !lines[want] {
+		t.Errorf("f10 help --agent has no line %q", want)
+	}
 }

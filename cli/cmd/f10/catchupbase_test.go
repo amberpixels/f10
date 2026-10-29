@@ -322,12 +322,17 @@ func TestCatchupBaseCodeRow(t *testing.T) {
 	}
 }
 
-func TestCatchupBaseLandedWithoutOriginHead(t *testing.T) {
+// No origin/HEAD fails with its remedy, as pr base and the drive do, rather
+// than guess main on a repo whose default may be master.
+func TestCatchupBaseWithoutOriginHeadFails(t *testing.T) {
 	r := newCatchupRepo(t)
 	r.at(during, "config", "branch.FT-1/a."+cfgLanded, "main")
 	r.at(during, "remote", "set-head", "origin", "-d")
 
-	wantPlan(t, r.resolve(r.input("")), "main", foundLanded, methodRebase)
+	_, err := resolveCatchup(t.Context(), r.input(""))
+	if err == nil || !strings.Contains(err.Error(), "set-head origin -a") {
+		t.Errorf("err = %v, want the set-head remedy", err)
+	}
 }
 
 func TestCatchupBaseCommand(t *testing.T) {
@@ -348,7 +353,7 @@ func TestCatchupBaseCommand(t *testing.T) {
 
 		app := newApp()
 		app.Writer = &out
-		err := app.Run(t.Context(), append([]string{"f10", "-C", r.dir, "catchup", "base", "--no-fetch"}, args...))
+		err := app.Run(t.Context(), append([]string{"f10", "-C", r.dir, "pr", "catchup", "--no-fetch"}, args...))
 
 		return out.String(), err
 	}

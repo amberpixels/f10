@@ -34,10 +34,11 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 ```bash
 f10 init                 # register this checkout: write project.md from detection
 f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), and old keys into flows
-f10 config [--json]      # the effective configuration, with the origin of every value
+f10 config [verify] [--json]   # the effective configuration, with the origin of every value; verify: the one verify line the loader prints
 f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it
 f10 flow [--json]        # the declared flows, each with what selects it, and drive_finish
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
+f10 help [--all | --agent]   # the human commands; --all adds the plumbing the steps call; --agent prints one line per command for an agent's context
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
@@ -55,7 +56,7 @@ f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host'
 f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path)
 f10 demo open [id]       # the demo report, in the browser (--link writes the path)
-f10 pr open [n]          # the PR or MR, no number their list; gh or glab decided by the remote (--link, --print as for task)
+f10 pr open [n | id]     # the PR or MR: a number is one, a task id its open one, else its last; none, their list; gh or glab decided by the remote (--link, --print as for task)
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
@@ -63,6 +64,7 @@ f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay
 f10 pr comment [PR | id] [--reply-to URL [--quote T]] < text    # comment, or reply in a review's thread; prints the url, never posts the same text twice
 f10 pr status [PR | id] --name N --state S -m TEXT [--sha SHA]   # a commit status on the open PR's head; one set the same way is left alone
+f10 pr catchup [--guard implement|pr|judge] [--no-fetch]   # what a catchup of the current branch brings in: base, how found, method and why, the conflict mark
 f10 review pick [n] [--latest] [--json]               # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names
@@ -522,7 +524,7 @@ A cancelled record is never picked up again: the same command line starts a new 
 4. **Per task.**
    A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or its whole chain run).
    Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
-   `f10 catchup base` prints the same answer as its `code:` line, so ship's guard and the driver agree.
+   `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, since each agent is its own session.
@@ -645,6 +647,26 @@ Owning is the task's lease (**Drive**): a task a drive or a finish holds is neve
   A pass exits 7 when nothing is left to watch, which drops the project from the daemon's list.
 - **Telling.** A pass reports through its own output, one line per report, into the project's watch log; `f10 watch` prints the last report per task.
 - **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task, finishes it or catches it up. A mark git cannot read (a lock, a broken config) counts as handed back for that pass, with a line naming the branch and the error. `f10 watch on <id>` removes it. `f10 start` on a merged or closed PR sets the same mark on the branch it creates, since the PR landed before the branch existed. Typing in the task's own pane needs nothing: a working agent is never stalled.
+
+## PR catchup
+
+`f10 pr catchup` decides what a catchup of the current branch brings in and how, so the catchup step, ship's guard and the dry run read one answer; settling conflicts stays the step's.
+It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: value` lines, an empty value left out:
+
+| key | meaning |
+|---|---|
+| `branch` | the current branch |
+| `base`, `sha` | the ref to integrate and its sha |
+| `found` | `f10-landed`, `f10-after-branch`, `f10-after-branch gone` (its task finished: unset both after keys) or `default branch` |
+| `how` | how the base was found, in a sentence |
+| `method` | `merge`, `rebase`, `none` (the base is already in the branch) or `skip` (a guard with nothing to do) |
+| `why` | the frontmatter key that set the method (`catchup:`, `catchup_stacked:`), or that it is the default |
+| `mark` | the key and value a conflict sets (`f10-landed <default>`, `f10-base-moved <sha>`) |
+| `code` | for an `f10-after-branch` base: `yes`, or `none` when it has no commit of its own, merges not counted |
+
+`--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
+`f10 pr base` prints the same `found: f10-after-branch gone` line for a finished stacked base.
+No `origin/HEAD` fails with its remedy, as `pr base` and the drive do.
 
 ## Review
 
@@ -996,7 +1018,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
-`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, each task's url on a `url` line beneath it, and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, with no urls (they stay in `--json`), and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
 
 ## Stale
 

@@ -102,7 +102,20 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 		}
 
 		if found.name == "" {
-			return s, fmt.Errorf("%s has no branch here or on origin: start it first", r.ID)
+			// a finished task's branch is deleted; its last request still
+			// holds the change, which explain and judge read after the merge
+			p, err := lastPullOf(ctx, t, want)
+			if err != nil {
+				return s, err
+			}
+
+			if p.Number == 0 {
+				return s, fmt.Errorf("%s has no branch here or on origin and no PR: start it first", r.ID)
+			}
+
+			s.branch, s.remote, s.number, s.target = want, true, p.Number, p.Base
+
+			return s, nil
 		}
 
 		s.branch, s.remote = found.name, found.remote
@@ -187,6 +200,22 @@ func openPullOf(ctx context.Context, t *target, branch string) (forge.PR, error)
 	}
 
 	return forge.PR{}, nil
+}
+
+// lastPullOf is the newest request of any state whose head is branch, or 0;
+// a checkout with no host CLI has none.
+func lastPullOf(ctx context.Context, t *target, branch string) (forge.PR, error) {
+	h, err := t.host()
+	if err != nil {
+		return forge.PR{}, nil //nolint:nilerr // no host is no request
+	}
+
+	prs, err := h.PullsByHead(ctx, branch)
+	if err != nil || len(prs) == 0 {
+		return forge.PR{}, err
+	}
+
+	return prs[0], nil
 }
 
 // prBase is the branch the subject's request targets or would target. A

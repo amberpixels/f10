@@ -19,7 +19,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    `f10 pr base --origin` prints the branch the PR targets: the one `f10 start --after` recorded, else the default branch.
    `f10 pr create` opens against that same base, so a recorded one stacks the PR, and the base's `f10 finish` retargets it to the default branch.
    A non-zero exit is a base not on origin yet: stop and report (`conventions/failure.md`) with the branch named and `next: push the base task's branch`.
-   One exception: when it says the recorded base is gone (finished and deleted, so its code is in the default branch), `git config --unset` both keys and open against the default branch it printed.
+   One exception: a `found: f10-after-branch gone` line under the branch is a base finished and deleted, its code in the default branch: `git config --unset` both `f10-after` and `f10-after-branch`, and open against the default branch it printed.
 5. **Open it** via the project's PR adapter, a skill, else plain mechanics: commit, `git push -u origin <branch>`, then `f10 pr create --title … --body-file <file>`.
    `--label` and `--assignee` follow project.md; the draft goes in a temp file outside the repo.
    It prints the PR's url, refuses a branch origin does not hold at `HEAD`, and prints an already open PR's url rather than open a second.
@@ -32,7 +32,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
    - **Push first**: commit what the tree holds per the adapter (`conventions/context.md` → Commits, `--step implement`), then push, never forcing, so the description never covers code the PR lacks.
    - **Someone else's PR** (view's `mine:` anything but `yes`, `unknown` included): stop after the push and leave the title and body as they are.
-   - **Rewrite from scratch**: `git fetch origin <base>` for the PR's own base (view's `target` line), then draft title and body as point 5 would for a new PR, from `git diff origin/<base>...HEAD`, the task and the plan, never patching the old body ("also adds…").
+   - **Rewrite from scratch**: draft title and body as point 5 would for a new PR, from `f10 pr diff` (the change against the PR's own base, the tree just pushed), the task and the plan, never patching the old body ("also adds…").
      The title keeps its task id.
      Other tasks it names resolve through `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
    - **Owned sections**: a section the overlay names as maintained elsewhere (a screenshots section a script regenerates) is copied verbatim from the old body into its place in the new one; one the old body lacks stays out.

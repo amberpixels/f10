@@ -80,8 +80,8 @@ func TestPRBase(t *testing.T) {
 	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "gone")
 
 	out, errOut, err := runPR(t, dir, "base")
-	if err != nil || out != "main\n" || !strings.Contains(errOut, "base gone is gone locally and on origin") {
-		t.Errorf("gone: base = %q, %q, %v; want main and the gone base named", out, errOut, err)
+	if err != nil || out != "main\nfound: "+foundGone+"\n" || errOut != "" {
+		t.Errorf("gone: base = %q, %q, %v; want main and the typed found line, nothing on stderr", out, errOut, err)
 	}
 
 	git(t, dir, "config", "--unset", "branch.feat."+cfgAfterBranch)
@@ -179,6 +179,22 @@ func TestOpenPullOfSkipsClosed(t *testing.T) {
 
 	if p, err := openPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
 		t.Errorf("openPullOf = %d, %v; want 5", p.Number, err)
+	}
+}
+
+// A finished task's branch is gone, so its newest request, merged or not,
+// stands for the change.
+func TestLastPullOfTakesTheNewestAnyState(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh pr list --head REPO-7 --state all --json number,state,headRefName,headRefOid,baseRefName,url,"+
+		"author,createdAt,mergedAt,closedAt --limit 100",
+		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-01T00:00:00Z"},`+
+			`{"number":5,"state":"MERGED","baseRefName":"main","createdAt":"2026-10-02T00:00:00Z"}]`)
+
+	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+
+	if p, err := lastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
+		t.Errorf("lastPullOf = #%d on %q, %v; want #5 on main", p.Number, p.Base, err)
 	}
 }
 

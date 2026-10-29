@@ -150,29 +150,44 @@ func referenceLine(path string, c *cli.Command) string {
 
 	// an ArgsUsage that spells out its flags already says more than their names
 	if !strings.Contains(args, "--") {
-		if flags := flagNames(c); len(flags) > 0 {
-			parts = append(parts, "["+strings.Join(flags, " ")+"]")
+		required, optional := flagNames(c)
+		parts = append(parts, required...)
+
+		if len(optional) > 0 {
+			parts = append(parts, "["+strings.Join(optional, " ")+"]")
 		}
 	}
 
 	return strings.Join(parts, " ") + " - " + usage
 }
 
-func flagNames(c *cli.Command) []string {
-	var names []string
+// flagNames splits the visible flags into required and optional, each with
+// its aliases (--description|-m), so the reference spells a flag the way the
+// steps do and never brackets one a run cannot omit.
+func flagNames(c *cli.Command) ([]string, []string) {
+	var required, optional []string
 
 	for _, f := range c.Flags {
 		if v, ok := f.(cli.VisibleFlag); ok && !v.IsVisible() {
 			continue
 		}
 
-		name := f.Names()[0]
-		if len(name) == 1 {
-			names = append(names, "-"+name)
+		var names []string
+
+		for _, n := range f.Names() {
+			if len(n) == 1 {
+				names = append(names, "-"+n)
+			} else {
+				names = append(names, "--"+n)
+			}
+		}
+
+		if r, ok := f.(cli.RequiredFlag); ok && r.IsRequired() {
+			required = append(required, strings.Join(names, "|"))
 		} else {
-			names = append(names, "--"+name)
+			optional = append(optional, strings.Join(names, "|"))
 		}
 	}
 
-	return names
+	return required, optional
 }

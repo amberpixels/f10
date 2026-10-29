@@ -121,7 +121,7 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	return writeTree(cmd.Writer, rows, plain)
+	return writeTree(cmd.Writer, rows)
 }
 
 // openRows is rows without the finished ones, put in tree order again: a
@@ -274,9 +274,9 @@ func childTree(rows []childRow) []childRow {
 	return out
 }
 
-// writeTree prints the rows as the tree drive shows; plain adds each url on
-// a line beneath, for text relayed where a link does not survive.
-func writeTree(w io.Writer, rows []childRow, plain bool) error {
+// writeTree prints the rows as the tree drive shows, with no urls: a model
+// reads it, and one needing a url runs f10 task open --link, as for status.
+func writeTree(w io.Writer, rows []childRow) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no children")
 
@@ -300,12 +300,7 @@ func writeTree(w io.Writer, rows []childRow, plain bool) error {
 			cells = append(cells, tasktree.Cell{Text: "finished"})
 		}
 
-		node := tasktree.Node{Depth: r.Depth, Cells: cells}
-		if plain && r.URL != "" {
-			node.Notes = []tasktree.Note{{Label: "url", Text: r.URL, Whole: true}}
-		}
-
-		nodes[i] = node
+		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells}
 	}
 
 	return tasktree.Tree{}.Write(w, nodes)

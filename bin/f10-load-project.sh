@@ -348,8 +348,8 @@ case "$vline" in
   verify:*) printf '%s\n' "$vline" ;;
   *)
     echo "note: f10 config verify gave no verify line; settle verify from project.md and these probes"
-    { [ -f justfile ] || [ -f Justfile ]; } && echo "verify: justfile present (try: just lint / just test)"
-    [ -f Makefile ] && echo "verify: Makefile present"
+    { [ -f justfile ] || [ -f Justfile ]; } && echo "note: justfile present: read its recipes for lint and test"
+    [ -f Makefile ] && echo "note: Makefile present: read its targets for lint and test"
     ;;
 esac
 echo

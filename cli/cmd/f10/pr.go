@@ -24,8 +24,8 @@ func prCommand() *cli.Command {
 		Commands: []*cli.Command{
 			{
 				Name:      "open",
-				Usage:     "open the PR/MR in the browser; with no number, the PR/MR list",
-				ArgsUsage: "[number]",
+				Usage:     "open the PR/MR in the browser: a number is a PR/MR, a task id its PR/MR; with none, the list",
+				ArgsUsage: "[number | task-id]",
 				Flags:     []cli.Flag{linkFlag(), printFlag()},
 				Action:    runPROpen,
 			},
@@ -127,6 +127,7 @@ func prCommand() *cli.Command {
 				},
 				Action: runPRStatus,
 			},
+			prCatchupCommand(),
 		},
 	}
 }
@@ -146,8 +147,9 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 		fmt.Fprintf(cmd.ErrWriter, "f10: no PR read (%v), so the base is the recorded or default branch\n", s.lookupErr)
 	}
 
-	// the same base diff forks from, so a step reading both sees one answer
-	base, err := s.base(ctx, cmd.ErrWriter)
+	// the same base diff forks from, so a step reading both sees one answer;
+	// a gone recorded base is said below as a typed line, not a warning
+	base, err := s.base(ctx, io.Discard)
 	if err != nil {
 		return err
 	}
@@ -156,7 +158,21 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
 	}
 
-	_, err = fmt.Fprintln(cmd.Writer, base)
+	out := base + "\n"
+
+	if s.target == "" {
+		// the same found: value pr catchup prints, so both steps key off one word
+		after, sha, err := recordedBase(ctx, s.main, s.branch)
+		if err != nil {
+			return err
+		}
+
+		if after != "" && sha == "" {
+			out += "found: " + foundGone + "\n"
+		}
+	}
+
+	_, err = io.WriteString(cmd.Writer, out)
 
 	return err
 }
@@ -346,6 +362,21 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	number := cmd.Args().First()
+
+	// a bare number is a request; anything else names a task, whose open
+	// request opens, else its last one
+	if number != "" && pullNumberOf(number) == 0 {
+		s, err := resolvePRSubject(ctx, t, number)
+		if err != nil {
+			return err
+		}
+
+		if s.number == 0 {
+			return fmt.Errorf("%s has no PR: its branch %s was never opened as one", number, s.branch)
+		}
+
+		number = strconv.Itoa(s.number)
+	}
 
 	switch {
 	case number == "" && cmd.Bool("print"):

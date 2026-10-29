@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// The load prints the binary's verify line, and the old probe lines when the
-// binary is missing or too old to know `config verify`. PATH drops the
-// machine's f10, so the installed binary never answers.
+// The load prints the binary's verify line, and the probes as notes, never a
+// verify: line, when the binary is missing or too old to know `config verify`.
+// PATH drops the machine's f10, so the installed binary never answers.
 func TestLoadPrintsVerify(t *testing.T) {
 	script := scriptPath(t)
 
@@ -31,16 +31,17 @@ func TestLoadPrintsVerify(t *testing.T) {
 			stub: "#!/bin/sh\necho 'checkout root   /x'\necho 'Verify        absent    -'\n",
 			want: []string{
 				"note: f10 config verify gave no verify line",
-				"verify: justfile present (try: just lint / just test)",
+				"note: justfile present: read its recipes for lint and test",
 			},
-			not: []string{"checkout root   /x"},
+			not: []string{"verify: justfile present", "checkout root   /x"},
 		},
 		{
 			name: "no binary",
 			want: []string{
 				"note: f10 config verify gave no verify line",
-				"verify: justfile present (try: just lint / just test)",
+				"note: justfile present: read its recipes for lint and test",
 			},
+			not: []string{"verify: justfile present"},
 		},
 	}
 

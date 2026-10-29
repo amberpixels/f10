@@ -17,28 +17,22 @@ import (
 
 // The catchup step's base and method, decided here so the step, ship's
 // guard and the dry run read one answer; settling conflicts stays the step's.
-func catchupCommand() *cli.Command {
+// It sits under pr beside pr base, whose recorded base it shares.
+func prCatchupCommand() *cli.Command {
 	return &cli.Command{
 		Name:     "catchup",
 		Hidden:   true,
 		Category: plumbingCategory,
-		Usage:    "what a catchup brings in and how",
-		Commands: []*cli.Command{
-			{
-				Name:     "base",
-				Hidden:   true,
-				Category: plumbingCategory,
-				Usage:    "print the current branch's catchup base, how it was found, the method and why, and the mark a conflict sets",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:  "guard",
-						Usage: "decide as ship's guard before this entry: implement, pr or judge",
-					},
-					&cli.BoolFlag{Name: "no-fetch", Usage: "read the refs at hand instead of fetching origin first"},
-				},
-				Action: runCatchupBase,
+		Usage: "print what a catchup of the current branch brings in: the base, how it was found, " +
+			"the method and why, and the mark a conflict sets",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "guard",
+				Usage: "decide as ship's guard before this `ENTRY`: implement, pr or judge",
 			},
+			&cli.BoolFlag{Name: "no-fetch", Usage: "read the refs at hand instead of fetching origin first"},
 		},
+		Action: runCatchupBase,
 	}
 }
 
@@ -153,7 +147,12 @@ func resolveCatchup(ctx context.Context, in catchupInput) (catchupPlan, error) {
 	}
 
 	p := catchupPlan{branch: branch}
-	def := cmp.Or(strings.TrimPrefix(defaultBranch(ctx, in.main), "origin/"), "main")
+
+	// no silent "main": pr base and the drive fail the same way without it
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return catchupPlan{}, err
+	}
 
 	if in.guard != "" && branch == def {
 		p.skip("on the default branch")
@@ -294,12 +293,13 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 		return err
 	}
 
-	// only a local branch has a creation point to count from
-	if local != "" {
-		p.code = codeNone
-		if baseHasCode(ctx, main, after, def) {
-			p.code = codeYes
-		}
+	p.code = codeNone
+
+	switch {
+	case local != "" && baseHasCode(ctx, main, after, def):
+		p.code = codeYes
+	case local == "" && originBaseHasCode(ctx, main, after, def):
+		p.code = codeYes
 	}
 
 	switch {

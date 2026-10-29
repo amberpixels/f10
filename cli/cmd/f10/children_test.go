@@ -55,7 +55,7 @@ func TestChildTree(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeTree(&out, got[:5], false); err != nil {
+	if err := writeTree(&out, got[:5]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +72,7 @@ func TestChildTree(t *testing.T) {
 
 // --open drops the finished rows and re-trees the rest: a dependent of a
 // finished base moves up to its base's level instead of hanging under the
-// row before it. --plain puts each url on a line beneath its row.
+// row before it. Rows with urls print none.
 func TestOpenPlainTree(t *testing.T) {
 	rows := childTree(childRows(
 		[2]string{"FT-72", ""},
@@ -86,16 +86,14 @@ func TestOpenPlainTree(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeTree(&out, openRows(rows), true); err != nil {
+	if err := writeTree(&out, openRows(rows)); err != nil {
 		t.Fatal(err)
 	}
 
+	// urls stay in --json: the tree a model reads carries none
 	want := `FT-72  t72
-  url  https://tracker.example/72
 FT-74  t74  after FT-73
-│ url  https://tracker.example/74
 └─ FT-75  t75  after FT-74
-     url  https://tracker.example/75
 `
 	if out.String() != want {
 		t.Errorf("open plain tree =\n%s\nwant\n%s", out.String(), want)

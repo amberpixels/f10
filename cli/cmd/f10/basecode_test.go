@@ -26,3 +26,29 @@ func TestBaseHasCodeIgnoresMerges(t *testing.T) {
 		t.Error("a commit of its own did not count")
 	}
 }
+
+// A base only origin holds is read there by the same rule: its merge of its
+// own base is not code, a commit of its own is.
+func TestOriginBaseHasCode(t *testing.T) {
+	r := newCatchupRepo(t)
+
+	r.at(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
+	r.at(before, "config", "branch.FT-2/b."+cfgAfterBranch, "FT-1/a")
+	r.at(before, "checkout", "-q", "FT-1/a")
+	r.commit(during, "a2.go", "package main // a2\n", "a2")
+	r.at(during, "checkout", "-q", "FT-2/b")
+	r.at(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
+	r.at(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
+	r.at(during, "update-ref", "refs/remotes/origin/FT-1/a", "FT-1/a")
+
+	if originBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+		t.Error("origin's merge of its own base counted as code")
+	}
+
+	r.commit(during, "b.go", "package main // b2\n", "b")
+	r.at(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
+
+	if !originBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+		t.Error("origin's commit of its own did not count")
+	}
+}
