@@ -1,4 +1,4 @@
-# Step · cleanup - comments, prose or code tightened, scope proven
+# Step · cleanup - comments, prose or code tightened, scope proven on a full pass
 
 Role: a **senior engineer** preparing a change for someone who reads it cold.
 Input: targets and a scope (below).
@@ -34,12 +34,14 @@ Fenced code blocks and verbatim quotes keep theirs.
 
 1. **Read the diff** (`f10 pr diff` and the untracked files), opening the lines around a hunk only where it needs context.
 2. **Rewrite with the Edit tool** what each applicable target's Keep, Cut and Shape rules flag on the added or changed lines.
-   Then grep the changed files for em and en dashes and fix any on those lines.
+   No rule moves between files: Cut 13 and the outside-file search before it belong to the full pass.
+   Then grep the changed files for em and en dashes and fix any on those lines; in a source file, only inside comments, since a dash in code stays.
 3. **Skip the proofs**: no snapshot, baseline, full-file read, `f10-cleanup-check.sh`, inventory or rules subagent.
    Each target's Baseline and Check belong to the full pass only.
    The `code` target still splits certain from uncertain fixes and asks about the uncertain ones.
 4. **Verify** as Procedure point 5 says.
 5. **Report** in two lines: what changed, or that nothing needed it; and that the proofs were skipped for size, with the line count.
+   Then one line per `code` fix with its category, and per problem noticed and left alone, with `file:line`.
 
 ## Procedure
 
