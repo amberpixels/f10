@@ -41,12 +41,14 @@ type Observer interface {
 }
 
 // IssueCreated is a tracker issue opened with `gh issue create` or
-// `glab issue create`, seen by the url it printed.
+// `glab issue create`, seen by the url it printed, or with `f10 task create`,
+// seen by the id it printed.
 type IssueCreated struct {
 	Meta
 
-	Host string `json:"host"` // gh or glab
-	URL  string `json:"url"`
+	Host string `json:"host"` // gh, glab or f10
+	URL  string `json:"url,omitempty"`
+	ID   string `json:"id,omitempty"`
 }
 
 // PRCreated is a PR or MR opened with `gh pr create` or `glab mr create`.

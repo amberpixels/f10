@@ -16,6 +16,42 @@ import (
 // thread reply, a commit status. Comments go through the API, whose response
 // carries the url the CLIs' comment verbs do not reliably print.
 
+// A NewPull is a request to open: the branch, the branch it targets, and
+// what the CLIs set on it at creation.
+type NewPull struct {
+	Head, Base, Title, Body string
+	Labels, Assignees       []string
+	Draft                   bool
+}
+
+// CreatePull opens a request from a branch already on the remote, so neither
+// CLI stops to ask about pushing it.
+func (h Host) CreatePull(ctx context.Context, n NewPull) error {
+	args := h.Pick(
+		[]string{"pr", "create", "--head", n.Head, "--base", n.Base, "--title", n.Title, "--body", n.Body},
+		[]string{
+			"mr", "create", "--source-branch", n.Head, "--target-branch", n.Base,
+			"--title", n.Title, "--description", n.Body, "--no-editor", "--yes",
+		},
+	)
+
+	for _, l := range n.Labels {
+		args = append(args, "--label", l)
+	}
+
+	for _, a := range n.Assignees {
+		args = append(args, "--assignee", a)
+	}
+
+	if n.Draft {
+		args = append(args, "--draft")
+	}
+
+	_, err := h.Run(ctx, args...)
+
+	return err
+}
+
 // EditPull rewrites a request's title, its body, or both; "" leaves one as
 // it is. selector is what the CLI takes: a number or a branch.
 func (h Host) EditPull(ctx context.Context, selector, title, body string) error {

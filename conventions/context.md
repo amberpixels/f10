@@ -75,7 +75,7 @@ The full reference for humans is `docs/project-setup.md`.
 
 - **Project** - one line: what this is and its stack.
 - **Tracker** - kind and **task id format** in the frontmatter's `tracker:` (`ABC-####`, `GH-###`); under the heading, the **fetch** and **create** adapters, a skill or a CLI command (`gh issue view <n> --comments`, `gh issue create`), and an optional **parent** adapter that links a subtask to its parent (`steps/capture.md`).
-- **Hosting & PR** - how to open or refresh a PR/MR: a skill, or `gh pr create` / `glab mr create` and `gh pr edit` / `glab mr update` mechanics (branch naming, labels, assignee).
+- **Hosting & PR** - how to open or refresh a PR/MR: a skill, or the branch naming, labels and assignee `f10 pr create` and `f10 pr edit` follow.
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.
   The load prints it resolved as a `verify:` line every step runs from, a multi-line declaration indented beneath it: `declared (<layer>)`, `detected` (the justfile's or Makefile's `lint`, `test` and `check` entries found), `judgment` (a build file with none of them, or no build file: the stack's idiomatic commands, such as `go test ./...` and the linter the repo configures) or `absent`.

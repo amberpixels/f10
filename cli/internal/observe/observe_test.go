@@ -60,6 +60,9 @@ func TestFromBashCommandShapes(t *testing.T) {
 		{"gh issue view is not a create", "gh issue view 12", "https://github.com/acme/app/issues/12\n", nil},
 		{"glab pr is not glab's word", "glab pr create", "https://gitlab.com/acme/app/-/merge_requests/1\n", nil},
 		{"f10 without finish", "f10 status FT-12", "", nil},
+		{"f10 pr create", "f10 pr create --title T --body-file b.md", "https://github.com/acme/app/pull/4\n", []string{"pr_created"}},
+		{"f10 task create", "f10 task create --label bug < t.md", "FT-12\n", []string{"issue_created"}},
+		{"f10 task create that failed", "f10 task create < t.md", "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var kinds []string

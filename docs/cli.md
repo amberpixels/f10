@@ -48,7 +48,7 @@ f10 task stale [id] [--created YYYY-MM-DD]   # fetch's stale check: fresh, judge
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
-f10 task create [--status s] [--priority p] [--label l]... [--parent id] < task.md   # through the driver; prints the new id
+f10 task create [--status s] [--priority p] [--label l]... [--parent id] < task.md   # through the driver, else as a host issue; prints the new id
 f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--set k=v]...   # absolute values
 f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
@@ -59,6 +59,7 @@ f10 pr open [n]          # the PR or MR, no number their list; gh or glab decide
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
+f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay
 f10 pr comment [PR | id] [--reply-to URL [--quote T]] < text    # comment, or reply in a review's thread; prints the url, never posts the same text twice
 f10 pr status [PR | id] --name N --state S -m TEXT [--sha SHA]   # a commit status on the open PR's head; one set the same way is left alone
@@ -1026,11 +1027,12 @@ Exit 3 means the tracker has no parent link: a driver that declines the verb on 
 
 ## Create
 
-`f10 task create` creates a task through the driver's `create` verb ([driver contract](driver-contract.md#creating-a-task)).
+`f10 task create` creates a task through the driver's `create` verb ([driver contract](driver-contract.md#creating-a-task)), else, on a tracker that is the host's issues, as a GitHub or GitLab issue.
 It reads the task as markdown on stdin, `# <title>` on the first line, and prints the new id in the project's id format.
 The body's `After: <id>` line reaches the driver as a link to the base task, `After: [<id>: <title>](<url>)`, titled as `f10 task ref` would; a base it cannot title stays bare.
 `--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable) and `--parent` go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
-It exits **3** when no driver creates tasks here (none, or one declining `create`): the capture step then uses the project's Create adapter.
+On the host, `--status` takes only open, `--priority` becomes the label `tracker.priority` maps to it, and `--parent` links the new issue as a GitHub sub-issue; a link that fails is a warning, and the id still prints. GitLab nests tasks, not issues, under an issue, so there `--parent` always warns and the parent's body lists its subtasks.
+It exits **3** when neither creates tasks here (no driver, or one declining `create`, on a tracker that is not the host's): the capture step then uses the project's Create adapter.
 A failed create is never retried, and its error says the task may exist already.
 With `tracker.title` declared on the host's issues, the new issue's title is then written through it; a failure there is a warning naming `f10 task retitle`, since the task exists.
 

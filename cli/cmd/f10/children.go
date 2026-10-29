@@ -456,3 +456,27 @@ func (h host) childItems(ctx context.Context, number string) ([]rawChild, error)
 
 	return raw, nil
 }
+
+// linkParent puts child under parent, the write beside subIssues. GitHub
+// links by the child's database id, not its number. GitLab nests tasks, not
+// issues, under an issue, so an issue there takes no parent.
+func (h host) linkParent(ctx context.Context, parent, child string) error {
+	if h.GLab() {
+		return errGitLabNoIssueParent
+	}
+
+	var iss struct {
+		ID int64 `json:"id"`
+	}
+
+	if err := h.Decode(ctx, &iss, "api", "repos/{owner}/{repo}/issues/"+child); err != nil {
+		return err
+	}
+
+	_, err := h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
+		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10))
+
+	return err
+}
+
+var errGitLabNoIssueParent = errors.New("GitLab nests no issue under an issue; list the subtasks in the parent's body")

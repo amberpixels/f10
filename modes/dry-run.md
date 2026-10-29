@@ -4,7 +4,7 @@ Load as normal, read the argument as the skill's Arguments items do, and report 
 Execute nothing.
 
 **Reads stop at loading**: the instructions, `git worktree list`, and cheap checks (does `go.mod`, a `justfile`, a remote exist).
-Nothing is fetched (no `gh issue view`, no `f10 task read`), written or created.
+Nothing is fetched (no `f10 task read`, no fetch adapter), written or created.
 Every command a step would run is printed, quoted, not run.
 
 **Context** is `f10 config`, printed verbatim: where each fact came from, `declared` or `default`.

@@ -180,3 +180,19 @@ func TestSetStatusGLabSpellsFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreatePullSpellings(t *testing.T) {
+	n := NewPull{Head: "feat", Base: "main", Title: "T", Body: "B", Assignees: []string{"@me"}}
+
+	script(t, map[string]string{
+		"gh pr create --head feat --base main --title T --body B --assignee @me": "",
+		"glab mr create --source-branch feat --target-branch main --title T --description B --no-editor --yes " +
+			"--assignee @me": "",
+	})
+
+	for _, name := range []string{"gh", "glab"} {
+		if err := (Host{Name: name}).CreatePull(t.Context(), n); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

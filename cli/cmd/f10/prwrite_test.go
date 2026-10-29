@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -211,5 +213,59 @@ func TestRequireOpen(t *testing.T) {
 
 	if err := requireOpen(pull{State: "opened"}); err != nil {
 		t.Errorf("glab's opened: err = %v", err)
+	}
+}
+
+// create refuses before any host call when origin lacks the base or the
+// branch at HEAD, naming the push that fixes it.
+func TestPRCreateNeedsBothOnOrigin(t *testing.T) {
+	body := filepath.Join(t.TempDir(), "body.md")
+	if err := os.WriteFile(body, []byte("the body\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := prRepo(t)
+	git(t, dir, "switch", "-q", "-c", "base")
+	commitFile(t, dir, "base.txt")
+	git(t, dir, "switch", "-q", "-c", "feat")
+	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "base")
+
+	if _, _, err := runPR(t, dir, "create", "--title", "T", "--body-file", body); err == nil ||
+		!strings.Contains(err.Error(), "base base is not on origin") {
+		t.Errorf("unpushed base: err = %v", err)
+	}
+
+	git(t, dir, "push", "-q", "origin", "base")
+
+	if _, _, err := runPR(t, dir, "create", "--title", "T", "--body-file", body); err == nil ||
+		!strings.Contains(err.Error(), "git push -u origin feat") {
+		t.Errorf("unpushed head: err = %v", err)
+	}
+
+	git(t, dir, "push", "-q", "origin", "feat")
+	commitFile(t, dir, "feat.txt")
+
+	if _, _, err := runPR(t, dir, "create", "--title", "T", "--body-file", body); err == nil ||
+		!strings.Contains(err.Error(), "at HEAD") {
+		t.Errorf("head ahead of origin: err = %v", err)
+	}
+
+	if _, _, err := runPR(t, dir, "create", "--body-file", body); err == nil ||
+		!strings.Contains(err.Error(), "title") {
+		t.Errorf("no title: err = %v", err)
+	}
+}
+
+// The url comes from reading the new request back, not from create's output.
+func TestCreatePullReadsTheURLBack(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh pr create --head feat --base base --title T --body B --label x --draft", "noise\n")
+	f.script("gh pr view feat --json state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author",
+		`{"state":"OPEN","url":"https://gh/o/r/pull/9","number":9}`)
+
+	got, err := newHost("gh", t.TempDir()).createPull(t.Context(),
+		forge.NewPull{Head: "feat", Base: "base", Title: "T", Body: "B", Labels: []string{"x"}, Draft: true})
+	if err != nil || got != "https://gh/o/r/pull/9" {
+		t.Errorf("createPull = %q, %v", got, err)
 	}
 }

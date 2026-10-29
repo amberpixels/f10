@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -581,4 +582,105 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	fmt.Fprintf(cmd.ErrWriter, "f10: %s %d issue(s)\n", verb, len(changes))
 
 	return nil
+}
+
+// createsOnHost is a tracker on the host's issues with a host CLI to reach
+// them; without one, create answers exit 3 like a tracker f10 cannot reach.
+func (t *target) createsOnHost() bool {
+	if !t.hostIssues() {
+		return false
+	}
+
+	_, err := t.host()
+
+	return err == nil
+}
+
+// hostCreate makes the task an issue on the host. The parent link is a second
+// write, since it needs the new number; the issue exists by then, so a failed
+// link is a warning and never a reason to create it again.
+func hostCreate(
+	ctx context.Context, warnTo io.Writer, t *target, doc string, p props, parent string,
+) (ref.Ref, string, error) {
+	switch strings.ToLower(p.status) {
+	case "", "open", "opened":
+	default:
+		return ref.Ref{}, "", fmt.Errorf("status %q: a new issue is open", p.status)
+	}
+
+	labels := p.labels
+
+	if p.priority != "" {
+		label := priorityLabel(p.priority, t.eff.PriorityLabels)
+		if label == "" {
+			return ref.Ref{}, "", fmt.Errorf(
+				"priority %s: tracker.priority in project.md maps no label to it", p.priority)
+		}
+
+		labels = append(labels, label)
+	}
+
+	h, err := t.host()
+	if err != nil {
+		return ref.Ref{}, "", err
+	}
+
+	_, body, _ := strings.Cut(doc, "\n")
+
+	url, number, err := h.createIssue(ctx, taskTitle(doc), strings.TrimSpace(body), labels)
+	if err != nil {
+		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
+	}
+
+	r, err := t.reference(ctx, number)
+	if err != nil {
+		return ref.Ref{}, "", fmt.Errorf("%s: %w\n%s", url, err, mayExist)
+	}
+
+	if parent = strings.TrimSpace(parent); parent != "" {
+		if err := linkUnder(ctx, t, h, parent, number); err != nil {
+			fmt.Fprintf(warnTo, "f10: %s was created, but not linked under %s: %v; "+
+				"link it by hand, and `f10 task children %s` confirms it\n", r.ID, parent, err, parent)
+		}
+	}
+
+	return r, url, nil
+}
+
+func linkUnder(ctx context.Context, t *target, h host, parent, child string) error {
+	pr, err := t.reference(ctx, parent)
+	if err != nil {
+		return err
+	}
+
+	return h.linkParent(ctx, pr.Number, child)
+}
+
+var issueNumberRe = regexp.MustCompile(`/issues/(\d+)\b`)
+
+// createIssue returns the new issue's url and number, read from the url the
+// CLI prints: a list query afterwards could find another create's issue.
+func (h host) createIssue(ctx context.Context, title, body string, labels []string) (string, string, error) {
+	args := h.Pick(
+		[]string{"issue", "create", "--title", title, "--body", body},
+		[]string{"issue", "create", "--title", title, "--description", body, "--no-editor", "--yes"},
+	)
+
+	for _, l := range labels {
+		args = append(args, "--label", l)
+	}
+
+	out, err := h.Run(ctx, args...)
+	if err != nil {
+		return "", "", err
+	}
+
+	for _, line := range slices.Backward(strings.Split(strings.TrimSpace(out), "\n")) {
+		line = strings.TrimSpace(line)
+		if m := issueNumberRe.FindStringSubmatch(line); m != nil && strings.HasPrefix(line, "http") {
+			return line, m[1], nil
+		}
+	}
+
+	return "", "", fmt.Errorf("%s issue create printed no issue url: %q", h.Name, out)
 }
