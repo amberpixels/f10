@@ -86,6 +86,35 @@ project_prefix() {
   printf '%s' "$out" | grep -qE '^[A-Z][A-Z0-9]{1,9}$' && printf '%s\n' "$out"
 }
 
+# operation_line - one line above the catchup step when a merge or rebase is in progress, so the
+# step reads the tree's state before any of its rules. The other side is named only by a ref
+# pointing exactly at it (name-rev's `main~3` would misname the base). `git am` shares
+# rebase-apply/ but leaves no `rebasing` mark, so it is not a rebase.
+operation_line() {
+  local gitdir op sha name short n files
+  gitdir="$(git rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+  if [ -f "$gitdir/MERGE_HEAD" ]; then
+    op="merge with"
+    sha="$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null)"
+  elif [ -f "$gitdir/rebase-merge/onto" ]; then
+    op="rebase onto"
+    sha="$(cat "$gitdir/rebase-merge/onto")"
+  elif [ -f "$gitdir/rebase-apply/rebasing" ] && [ -f "$gitdir/rebase-apply/onto" ]; then
+    op="rebase onto"
+    sha="$(cat "$gitdir/rebase-apply/onto")"
+  else
+    return 0
+  fi
+  [ -n "$sha" ] || return 0
+  short="$(git rev-parse --short "$sha" 2>/dev/null || printf '%s' "${sha:0:7}")"
+  name="$(git for-each-ref --points-at "$sha" --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null | head -n 1)"
+  if [ -n "$name" ]; then name="$name ($short)"; else name="$short"; fi
+  n="$(git diff --name-only --diff-filter=U 2>/dev/null | grep -c .)"
+  files="files"
+  [ "$n" = 1 ] && files="file"
+  echo "in progress: $op $name, $n unmerged $files"
+}
+
 # --- locate the instructions layer(s): main's, a linked worktree's, or both ---
 # Anchored to `here`, the checkout root, so a run from a subdirectory sees what one from the top
 # does. Both in-tree layers load (main's, then the worktree's) unless the worktree replaces main.
@@ -252,6 +281,7 @@ echo
 print_step() {
   if [ -f "$root/steps/$1.md" ]; then
     echo "--- step: $1 (generic) ---"
+    [ "$1" = catchup ] && operation_line
     cat "$root/steps/$1.md"
     echo
   else

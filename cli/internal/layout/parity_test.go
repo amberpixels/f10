@@ -255,9 +255,9 @@ func mkRepo(t *testing.T) string {
 	t.Helper()
 
 	dir := canon(t.TempDir())
-	run(t, dir, "git", "init", "-q")
+	run(t, dir, "init", "-q")
 	run(t, dir,
-		"git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+		"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
 		"commit", "--allow-empty", "-q", "-m", "init")
 
 	return dir
@@ -267,7 +267,7 @@ func addWorktree(t *testing.T, mainRoot string) string {
 	t.Helper()
 
 	wt := filepath.Join(t.TempDir(), "wt")
-	run(t, mainRoot, "git", "worktree", "add", "-q", wt, "-b", "wt")
+	run(t, mainRoot, "worktree", "add", "-q", wt, "-b", "wt")
 
 	return canon(wt)
 }
@@ -299,13 +299,13 @@ func writeFile(t *testing.T, path, body string) {
 	}
 }
 
-func run(t *testing.T, dir, name string, args ...string) {
+func run(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, out)
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 }
