@@ -37,7 +37,7 @@ func statusCommand() *cli.Command {
 			&cli.BoolFlag{Name: "json", Usage: "emit the same runs as JSON"},
 			&cli.BoolFlag{
 				Name: "plain",
-				Usage: "print a parent's or a finished task's tree as plain text, without urls, " +
+				Usage: "print a parent's, a finished task's or the launched-here tree as plain text, without urls, " +
 					"cut to $COLUMNS (else 100), for a skill to relay",
 			},
 		},

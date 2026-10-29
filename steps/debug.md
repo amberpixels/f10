@@ -3,7 +3,7 @@
 Role: a **senior engineer** debugging a report before anyone writes a task for it.
 Input: an error, a stack trace, or a description of wrong behavior; no task exists yet.
 Output: a debug brief for the capture step, or a report of what was tried and what to collect next.
-Context: `project.md → Verify` (the commands that run the code).
+Context: the loader's `verify:` line (the commands that run the code).
 Badge: `f10-state.sh set capture running debug` on entry.
 
 **It never fixes the bug**: the fix goes through plan and ship, so the task and the plan carry the reproduction.

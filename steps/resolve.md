@@ -4,7 +4,7 @@ Role: a **senior engineer** triaging review findings.
 Input: the latest findings file under `<storage root>/reviews/<TASK-ID>/` with unsettled findings (shape in `steps/review.md`), plus the task text and the plan.
 Output: a verdict under every finding, verify green, and the fixes committed and pushed when the branch has an open PR or MR, else left in the working tree.
 No plan edit, and no new file but the one the **CI review** section reads in.
-Context: `project.md → Verify`; `project.md → Review` for who answers an `ask`.
+Context: the loader's `verify:` line; `project.md → Review` for who answers an `ask`.
 Badge: none; inside a ship pipeline the leaf stays `review`.
 
 Settle every file the same way, whoever wrote it: what the block says is wrong, where, and its fix.

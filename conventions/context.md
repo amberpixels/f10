@@ -59,7 +59,7 @@ If it is ever unavailable, the points below say what to do by hand:
    A contradiction you cannot resolve: say so rather than pick.
 4. **`instructions files:`** names every `.md` per layer; layer blocks and `absent:` cover only requested names.
    A flow entry with no generic step (like `e2e`) is a **project-defined step**: its `.f10/instructions/e2e.md` *is* the step.
-5. **Inferred defaults**, when `project.md` is absent or partial: the remote host gives `gh`/`glab`; the project name gives the task id prefix (`f10` is `F10`, `git-undo` is `GU`, `herdr` is `HER`); `go.mod` / `Gemfile` / `package.json` give stack and role; verify comes resolved (**Verify** below), and with no load, the justfile's or Makefile's lint and test entries, else the stack's idiomatic commands.
+5. **Inferred defaults**, when `project.md` is absent or partial: the remote host gives the PR/MR host, which the `f10 pr` and `f10 task` commands drive; the project name gives the task id prefix (`f10` is `F10`, `git-undo` is `GU`, `herdr` is `HER`); `go.mod` / `Gemfile` / `package.json` give stack and role; verify comes resolved (**Verify** below), and with no load, the justfile's or Makefile's lint and test entries, else the stack's idiomatic commands.
    State them once, the prefix included, and suggest `f10 init`, which writes `.f10/instructions/project.md` from the same probes.
    Never refuse to run for missing config.
 6. **Agent profiles**: a step that spawns a subagent (the review step's blind reviewer, `judge --blind`, cleanup's rules check) passes the Agent tool the `model` and `effort` its own profile line names in its `Agent tool:` part: the `<step>.<kind>` line for the plan's `Kind` (absent meaning feature) when the load prints one, else the plain `<step>` line.
