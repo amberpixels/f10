@@ -11,12 +11,13 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
    A base task, named by the steering (`f10 start --after`) or a body line `After: <id>`, goes into the brief: the plan step records it as the plan's **Depends on** line and designs against the base task's plan (its task, where the plan is not written yet), never this checkout, with no fallback for its absence.
    **A stale task** is judged before anything else, when the frontmatter declares `stale_after` (`10d`, `3w`) and this run will write a plan: the **plan** step follows, or a planless flow's brief becomes its inline plan.
    A ship run that reuses a saved plan skips it: look for the plan file first.
-   - **Age**: `f10 task read` decides it for GitHub and GitLab issues, `created <date> (stale: older than <stale_after>)` in its meta line; a `created` date without the mark is fresh.
-     Otherwise compare the created date the fetch adapter's output or a driver's doc shows against `date -u +%F`.
-     No created date in what was read: not judged, one line in the brief; never call the adapter again to find one.
-     Fresh: nothing to do.
-   - **Already judged**: a verdict file with `subject: task <id>` reading `proceed`, written within `stale_after` (its mtime), skips the judge, one line naming it; look under this run's `<storage root>/verdicts/<id>/` and, from a worktree whose loader notes it keeps its own `.f10`, the main checkout's.
-     Any other verdict, or an older proceed, is judged again.
+   - **Check**: `f10 task stale <id>` judges the age against `stale_after` and looks for a recent proceed verdict on the task, in every storage root that may hold one.
+     For a tracker that is not the host's issues, add `--created <YYYY-MM-DD>` with the created date the fetch adapter's output or the driver's doc showed; with none shown, call it without.
+     It prints one line:
+     `fresh`: nothing to do.
+     `undated`: not judged, one line in the brief; never call the adapter again to find a date.
+     `judged <path>`: skip the judge, one line naming the verdict file.
+     `needs judge`: go to **Judge**.
    - **Anyway**: the steering word `anyway` (`/f10:plan <id> anyway`, `/f10:ship <id> anyway`, or `f10 drive --answer <id> anyway` to a blocked driven run) is the user's override.
      Write it as a verdict file like any other (`subject: task <id>`, `verdict: proceed`, `reason: planned anyway by the user`, `run: before plan`, `decision: overridden`), so later runs skip the judge by the rule above, and say so in one line in the brief.
    - **Judge**: `f10-state.sh set plan running judge; f10-load-project.sh judge`, then run the **judge** step on the subject `task <id>` (its **Before planning** section).
