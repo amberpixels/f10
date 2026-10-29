@@ -121,7 +121,7 @@ Rethink becomes one ask (objections numbered, the judge's answer first, **block 
 Stop ends blocked.
 
 **After `pr`** (`implement → pr → review (local) → judge → pr`): the code is on an open PR, so each verdict ends on the PR.
-First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`); one closed or merged since `pr` ran fails the step (`conventions/failure.md`, badge `partial` on `judge`).
+First read the PR (`f10 pr view`); `no open PR` (closed or merged since `pr` ran) or `no PR read` fails the step (`conventions/failure.md`, badge `partial` on `judge`).
 
 - **Green, proceed** - leave the trace (below) and continue (`decision: continue`); the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.
@@ -144,11 +144,10 @@ The answer resumes at `judge`: refactor runs yellow, stop runs red.
 
 **The trace** after `pr`, when the frontmatter says `traces: on` and the branch has an open PR or MR; off, every route still runs and only the status and comment are skipped.
 
-- **Status** with context `judge` on the PR's head after this step's push (yellow: the pushed commit; green and red: `headRefOid`), the description under 140 characters: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='judge' -f description='<text>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='judge' -f description='<text>'`.
+- **Status** named `judge` on the PR's head after this step's push: `f10 pr status --name judge --state <success|failure> -m '<text>'`, with `--sha <the pushed commit>` after a yellow push; the command cuts the text to 140 characters.
   The descriptions: green `success` with the reason; yellow `success` with `proceed with changes: <n> changes`; red `failure` with `do not merge: <the reason>`, cut to fit.
   A driven orange ask sets `failure` with `rethink: waiting on a decision` before the run ends blocked; its settled color replaces that status.
-  Otherwise a sha already carrying a `judge` status with the same state and description is left alone, so a retry never posts twice.
-- **Comment** (`gh pr comment` / `glab mr note`), never while an orange ask waits.
+- **Comment** (`f10 pr comment`, the text on stdin), never while an orange ask waits.
   Green: one line, the verdict and its reason.
   Yellow: the verdict and its reason, a line per change, the commit's short sha.
   Red: "Do not merge", the reason, and the smallest thing that would change the verdict.
@@ -156,7 +155,7 @@ The answer resumes at `judge`: refactor runs yellow, stop runs red.
   A driven orange ask passes `--asks 1` beside its failure status, and the judge resuming on the answer passes `--asks 0` before its settled color's status.
   Nothing with `traces: off`; a non-zero exit is `partial`, never a failed step.
 - Both status and comment read as the user's own (`conventions/context.md`).
-  A failed post is `partial` (`conventions/failure.md` rule 7); before posting again, check the PR's comments for one already up.
+  A failed post is `partial` (`conventions/failure.md` rule 7); a retry is safe, since `f10 pr comment` and `f10 pr status` never post the same thing twice.
 - The report adds a `commit` row when yellow pushed, a `status` row (the sha and its state) and a `comment` row (its url) when posted.
 
 **On failure:** an unknown task id or an unreadable PR (`conventions/failure.md`).

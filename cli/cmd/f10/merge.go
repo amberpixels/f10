@@ -3,9 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -148,32 +146,7 @@ func (h host) pullBody(ctx context.Context, branch string) (string, error) {
 }
 
 func (h host) editPullBody(ctx context.Context, branch, body string) error {
-	if h.GLab() {
-		_, err := h.Run(ctx, "mr", "update", branch, "--description", body)
-
-		return err
-	}
-
-	f, err := os.CreateTemp("", "f10-pr-body-*.md")
-	if err != nil {
-		return fmt.Errorf("writing the PR body: %w", err)
-	}
-
-	defer os.Remove(f.Name())
-
-	if _, err := f.WriteString(body); err != nil {
-		_ = f.Close()
-
-		return fmt.Errorf("writing the PR body: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("writing the PR body: %w", err)
-	}
-
-	_, err = h.Run(ctx, "pr", "edit", branch, "--body-file", f.Name())
-
-	return err
+	return h.EditPull(ctx, branch, "", body)
 }
 
 // pickupFields is what a pickup reads of a request by number: the landed
