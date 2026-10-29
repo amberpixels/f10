@@ -31,7 +31,7 @@ func prCommand() *cli.Command {
 			},
 			{
 				Name:      "base",
-				Usage:     "the branch a change's PR/MR targets or would target: the stacked base, else the default branch",
+				Usage:     "the branch a change is based on: its open PR/MR's target, else the stacked base, else the default branch",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
 				Category:  plumbingCategory,
@@ -70,12 +70,17 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), false)
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), true)
 	if err != nil {
 		return err
 	}
 
-	base, err := prBase(ctx, cmd.ErrWriter, s.main, s.branch)
+	if s.lookupErr != nil {
+		fmt.Fprintf(cmd.ErrWriter, "f10: no PR read (%v), so the base is the recorded or default branch\n", s.lookupErr)
+	}
+
+	// the same base diff forks from, so a step reading both sees one answer
+	base, err := s.base(ctx, cmd.ErrWriter)
 	if err != nil {
 		return err
 	}

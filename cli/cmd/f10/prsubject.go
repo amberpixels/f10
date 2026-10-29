@@ -46,8 +46,8 @@ func pullNumberOf(token string) int {
 }
 
 // resolvePRSubject turns a PR, a task id or nothing (the current branch) into
-// a subject. withPull also looks the branch's open request up on the host;
-// base never asks for it, so it reads git alone.
+// a subject. withPull also looks the branch's open request up on the host,
+// whose target then wins over the base git records.
 func resolvePRSubject(ctx context.Context, t *target, token string, withPull bool) (prSubject, error) {
 	s := prSubject{main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)}
 	token = strings.TrimSpace(token)
