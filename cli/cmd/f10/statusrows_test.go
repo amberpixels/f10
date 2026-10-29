@@ -42,6 +42,11 @@ func TestStageOf(t *testing.T) {
 		{"planning", rowFacts{run: run("skipped", "running", "pending", "")}, stagePlanning, "plan"},
 		{"planned", rowFacts{run: run("skipped", "done", "pending", "")}, stagePlanned, "plan"},
 		{"waiting", rowFacts{after: "FT-1"}, stageWaiting, "after FT-1"},
+		{
+			"parked",
+			rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
+			stageWaiting, "on FT-1",
+		},
 		{"base done", rowFacts{after: "FT-1", baseDone: true}, stageNotStarted, ""},
 		{"nothing", rowFacts{}, stageNotStarted, ""},
 	} {

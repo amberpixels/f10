@@ -30,6 +30,7 @@ const (
 	gatePending = "pending"
 	gateRunning = "running"
 	gateQueued  = "queued"
+	gateWaiting = "waiting" // a driven ship parked on its base's code
 	gateDone    = "done"
 	gateSkipped = "skipped"
 	gateOpen    = "open"
@@ -135,7 +136,12 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 				isPR = true
 			}
 
-			gates = append(gates, gate{Step: e, State: steps[i]})
+			g := gate{Step: e, State: steps[i]}
+			if g.State == gateWaiting {
+				g.Action = "on " + in.run.Wait
+			}
+
+			gates = append(gates, g)
 		}
 	}
 
@@ -260,6 +266,8 @@ func (in gateInput) stepStates(entries []string, firstShip, shipLen int) []strin
 			s = gateSkipped
 		case k < at:
 			s = gateDone
+		case k == at && r.Wait != "" && state.Stopped(r.Ship):
+			s = gateWaiting
 		case k == at:
 			s = r.Ship
 		default:
@@ -798,6 +806,8 @@ func (g gate) stateText() string {
 		return g.State + " (" + g.Via + "): " + g.Action
 	case (g.State == gateRunning || g.State == gateQueued) && g.Via != "":
 		return g.State + " (" + g.Via + ")"
+	case g.State == gateWaiting && g.Action != "":
+		return g.State + " " + g.Action
 	case g.State == gateDone && g.Outcome != nil:
 		text := g.Outcome.Verdict
 		if g.Outcome.Reason != "" {

@@ -19,7 +19,7 @@ No conflict, or nothing to bring in, is a **correct run**.
    **Never stash**, never `--autostash` (the stash is shared across worktrees).
 
 2. **Find the base and the method**: `f10 catchup base`.
-   It fetches origin and prints `key: value` lines: `base` (the ref to integrate), `sha`, `found`, `how`, `method` (`merge`, `rebase` or `none`), `why`, and `mark` (the key and value a conflict sets).
+   It fetches origin and prints `key: value` lines: `base` (the ref to integrate), `sha`, `found`, `how`, `method` (`merge`, `rebase` or `none`), `why`, `mark` (the key and value a conflict sets), and for an `f10-after-branch` base held locally, `code` (`yes`, or `none` when the base branch has no commit of its own past its own base, merges not counted).
    The base is `f10-landed`'s default branch, else the `f10-after-branch` branch (local first), else the default branch.
    - `f10-landed` is set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch; it stays set until point 5 clears it.
    - `f10-base-moved` (set by `f10 drive` when the `f10-after-branch` base moved past this branch) changes nothing here; point 5 clears it.

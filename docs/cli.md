@@ -440,6 +440,7 @@ ship            running: review:local
 
 - **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`, else `default`), inside the chain `f10 drive` recorded on the branch (`branch.<name>.f10-chain`), which adds `finish`: a `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
 - **A plain step** is `done` before the step ship is on, that step takes the run's status (`running`, `blocked`, ...), the rest are `pending`; once ship is done, a step it never entered is `skipped`.
+  A driven ship parked on its base (`f10 state wait`) reads `waiting on <id>` at that step, and the parent's row `waiting` with step `on <id>`.
 - **Review** has a local and a remote half, each `pending`, `running` (its round, and `in ship`, `driven` or `manual`; `resolve running` while a resolve settles it, and in `review:local+ci` `round N in, waiting for the other half` once its own findings landed), `open` (`N open of M found`, or `open (not handled)` on the host), `settled` (`3 found (2 fixed, 1 skipped)`, `clean`), or `unknown`.
   A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote half's, and inside ship the half reads `resolve running` once a round lands after ship entered the review.
   The remote half is in the flow when an entry names a remote review (`review:ci`, or both halves in one `review:local+ci`, which shows both halves on the one review row), or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
@@ -462,7 +463,7 @@ A task whose checkout has its branch is read from there first, so only a task wi
 ## Drive
 
 `f10 drive 42 43` runs tasks through a flow from the main session.
-Each task waits for its one base to have a commit, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
+Each task waits for its one base to have code, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
 The driver is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
 The driver runs in the per-user [daemon](#daemon), not in the process that typed the command: that process prints the drive's log as it grows and exits with the drive's exit code, so closing or clearing the session that ran `/f10:drive` leaves the drive running.
 Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it again; rerunning the same command follows the drive already running instead of starting a second one.
@@ -517,7 +518,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
    A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or its whole chain run).
-   Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), so a lagging local default branch or a squash-merged grandparent never releases it early.
+   Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
+   `f10 catchup base` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, since each agent is its own session.
@@ -562,7 +564,10 @@ A cancelled record is never picked up again: the same command line starts a new 
    - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      At the end of that poll the driver prints every task's ask and the command that answers them all, and exits **4**.
      The other agents keep working in their own panes;
-   - **blocked without one** (a judge stop, a wait on a base with no code), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
+   - **blocked waiting on its base** (`f10 state wait`, a driven ship that found its base without code) - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
+     Once the base is released and its branch head has moved past the one the ship found, ship is sent again with `resume at implement`; the same head never sends it twice.
+     A wait on a base this drive does not run, or one already through, halts the task with the run's note;
+   - **blocked without one** (a judge stop), **failed** or **partial** - the task halts with the run's note and next, and so does every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
      Every other task runs on, and the driver exits **5** once nothing can move;
    - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting, usually a permission dialog in its pane; the task halts naming the workspace.
      Found at prompt time on an agent the driver did not start, the same halt also says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
@@ -573,7 +578,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
    Exit 6 is a drive stopped for a daemon upgrade; only the daemon and the command following it see it.
 
