@@ -53,6 +53,7 @@ func newApp() *cli.Command {
 			planCommand(),
 			demoCommand(),
 			prCommand(),
+			catchupCommand(),
 			reviewCommand(),
 			traceCommand(),
 			statusCommand(),

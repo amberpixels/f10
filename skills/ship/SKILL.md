@@ -68,12 +68,12 @@ The kind is known from the plan, or a planless run's inline plan, before the flo
 **The catchup guard** brings the base in before three kinds of entry, as the **catchup** step's **As a guard** says; under `catchup: off` it never integrates and its load leaves `catchup` out, but the question below for a base with no code still runs.
 Catchup is never a flow entry.
 
-- **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`).
+- **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`); `f10 catchup base --guard implement` prints `method: skip` otherwise.
   A base with no code yet (its branch still at the default branch's commit): before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
-- **Before every `pr` entry**, the first and each refresh: fetch and check ancestry first; only when the base moved, commit what the tree holds as the pr step would (`conventions/context.md` → Commits, `--step implement`) and integrate, so the push carries it.
-  An unmoved base leaves the commit to pr and its adapter.
+- **Before every `pr` entry**, the first and each refresh: `f10 catchup base --guard pr` first, which fetches and checks ancestry; only when its `method` is `merge` or `rebase`, commit what the tree holds as the pr step would (`conventions/context.md` → Commits, `--step implement`) and integrate, so the push carries it.
+  `skip` or `none` leaves the commit to pr and its adapter.
 - **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree (implement leaves its work uncommitted, so `implement judge pr` always has some), skip it in one line: that judge sees the branch on its old base, and a later `pr` entry's guard, when the flow has one, brings the base in before the code leaves.
   After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.
 

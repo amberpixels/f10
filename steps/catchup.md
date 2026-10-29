@@ -18,29 +18,19 @@ No conflict, or nothing to bring in, is a **correct run**.
    **No operation in progress**, a dirty tree: stop, name the dirty files one per line, touch nothing.
    **Never stash**, never `--autostash` (the stash is shared across worktrees).
 
-2. **Find the base**, in this order:
+2. **Find the base and the method**: `f10 catchup base`.
+   It fetches origin and prints `key: value` lines: `base` (the ref to integrate), `sha`, `found`, `how`, `method` (`merge`, `rebase` or `none`), `why`, and `mark` (the key and value a conflict sets).
+   The base is `f10-landed`'s default branch, else the `f10-after-branch` branch (local first), else the default branch.
+   - `f10-landed` is set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch; it stays set until point 5 clears it.
+   - `f10-base-moved` (set by `f10 drive` when the `f10-after-branch` base moved past this branch) changes nothing here; point 5 clears it.
+   - `found: f10-after-branch gone`: the base task was finished, so `git config --unset` both `f10-after` and `f10-after-branch`; the base printed is already the default branch.
 
-   ```
-   git config --get branch."$(git branch --show-current)".f10-landed
-   git config --get branch."$(git branch --show-current)".f10-after-branch
-   ```
+   Print its `how` line, before anything moves.
 
-   - `f10-landed` (set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch): `git fetch origin`; the base is `origin/<default>`, the default branch found as under **Nothing** below, or the local `<default>` when it contains `origin/<default>` (a finish merged a branch never pushed there).
-     It stays set until point 5 clears it.
-   - `f10-after-branch`: `git fetch origin`, then `refs/heads/<branch>`, else `origin/<branch>`.
-     `f10-base-moved` beside it (set by `f10 drive` when that branch moved past this one) changes nothing here; point 5 clears it.
-     If it exists nowhere, the base task was finished: `git config --unset` both `f10-after` and `f10-after-branch` and use the default branch.
-   - Nothing: the default branch, from `git symbolic-ref --quiet --short refs/remotes/origin/HEAD` without `origin/` (else `main`), as `origin/<default>` after the fetch, or the local branch without a remote.
-
-   Say in one line which base and how it was found, before anything moves.
-
-3. **Integrate.**
-   Strategy: `catchup: merge` or `catchup: rebase` in the frontmatter (or, from an older file, under Hosting & PR); absent, **rebase**.
-   `catchup: off` turns off only the guard ship runs (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, uses the default method (rebase, a stacked base as `catchup_stacked` says).
-   A base found through `f10-after-branch` (another task's branch) follows `catchup_stacked: merge | rebase` instead, **merge** when absent, since rebasing onto a branch that later rebases or squash-merges replays its old commits.
-   A branch already on origin whose ship stopped (`f10-state.sh show` reads ship `failed` or `partial`) is merged too: ship resumes after it, and its push never forces.
-   - base already an ancestor (`git merge-base --is-ancestor <base> HEAD`): nothing to bring in; clear the marks and write the signal as point 5 does, report and stop;
-   - merge: `git merge --no-edit <base>`; rebase: `git rebase <base>`.
+3. **Integrate** by the `method` line; `why` names the frontmatter key that set it (`catchup:`, or `catchup_stacked:` for an `f10-after-branch` base) or says it is the default.
+   `catchup: off` turns off only ship's guard (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, still integrates.
+   - `none`: the base is already in the branch, nothing to bring in; clear the marks and write the signal as point 5 does, report and stop;
+   - `merge`: `git merge --no-edit <base>`; `rebase`: `git rebase <base>`.
 
    Clean: point 5.
    Conflict: point 4.
@@ -72,20 +62,20 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows; for an operation that was already in progress, `base` is the other side the loader named.
    Then: commits brought in (by the user's merge or rebase, for an operation already in progress), each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
-   If the strategy was the default, name the `catchup: merge | rebase | off` frontmatter key as the way to declare it, `catchup_stacked: merge | rebase` for a base found through `f10-after-branch`.
+   If `why` says the method was the default, name the `catchup: merge | rebase | off` frontmatter key as the way to declare it, `catchup_stacked: merge | rebase` for a base found through `f10-after-branch`.
 
 **As a guard**: `/f10:ship` runs this before implement, each `pr` entry and a change judge (the ship skill says when), so the PR carries the moved base and a verdict is on code that merges.
 It differs from the run above:
 
-- **Nothing to do** under `catchup: off`, on the default branch itself, or when the base is already an ancestor after `git fetch origin`; that says nothing, and the ancestor case still clears the marks as point 3 does.
-- **Base**: point 2's order, the default branch when nothing is recorded.
-  Before `pr` and a change judge, every base is read from origin (`origin/<branch>` for an `f10-after-branch` base, `origin/<default>` otherwise), what the PR targets, so unpushed commits of another task never ride into this PR; before implement, point 2's local-first order stays.
-- **Method**: point 3's, except that this branch, once on origin (`origin/$(git branch --show-current)` after the fetch), is merged whatever `catchup:` or `catchup_stacked:` says, so the push after it never forces.
+- **Base and method**: `f10 catchup base --guard <entry>` (`implement`, `pr` or `judge`).
+  Before `pr` and a change judge it reads every base from origin, what the PR targets, so unpushed commits of another task never ride into this PR; before implement, point 2's local-first order stays, and nothing recorded is nothing to do.
+  This branch, once on origin, is merged whatever `catchup:` or `catchup_stacked:` says, so the push after it never forces.
+- **Nothing to do**: `method: skip` (`catchup: off`, the default branch itself, no recorded base before implement, a base not on origin yet before `pr`) says nothing; `method: none` (the base already an ancestor) says nothing and still clears the marks as point 3 does.
 - **Clean tree**: the ship skill commits the tree first where it has to; the guard never stashes.
 - **An operation already in progress** on entry (the loader's `in progress:` line) is the user's, not the guard's: fail the run before anything moves, never aborting it, with the operation and its other side in the `state` row and `/f10:catchup` in `next`.
 - **A conflict fails the run**: `git merge --abort` / `git rebase --abort`, so the branch is as it was, any mark kept, and `/f10:catchup` in the `next` row.
   No conflict is settled and nothing is asked.
-  Before failing, mark the branch for the base that conflicted: `git config branch.<branch>.f10-landed <default>` for the default branch, `git config branch.<branch>.f10-base-moved <the base ref's sha>` for an `f10-after-branch` base, so point 2 finds the same base.
+  Before failing, mark the branch with the `mark` line: `git config branch.<branch>.<key> <value>`, so point 2 finds the same base.
   `f10 drive` reads the mark, never the note, to send a catchup.
 - **Verify**, when commits came in, except before implement, whose own verify follows.
   Red is a semantic conflict the guard leaves to `/f10:catchup`: `git reset --hard` to the sha read before integrating (the tree was clean), then mark and fail as a conflict does.
