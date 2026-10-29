@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/drives"
 )
 
 // runDir is a short dir: a unix socket path has about 100 bytes, and the
@@ -113,6 +115,49 @@ func TestServeRunsAndAttaches(t *testing.T) {
 	if got := FindLog(s.Dir, "/r", 3); got != first.Log {
 		t.Errorf("FindLog = %q, want %q", got, first.Log)
 	}
+}
+
+// A resumed drive tells the daemon its number only once it has taken the
+// answer; a rerun of its command before then still attaches.
+func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
+	serve(t, s)
+
+	root := t.TempDir()
+
+	rec := &drives.Record{Args: []string{"FT-1", "FT-2"}}
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	resume, err := Call(t.Context(), s.Dir, Request{
+		Op:     OpRun,
+		Argv:   []string{`sleep 0.5; echo 1 > "$F10_DRIVE_FILE"; sleep 0.3`},
+		Dir:    "/",
+		Root:   root,
+		Resume: rec.Number,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{"FT-1 FT-2", "ft-1 ft-2"} {
+		rerun, err := Call(
+			t.Context(),
+			s.Dir,
+			Request{Op: OpRun, Argv: []string{"exit 1"}, Dir: "/", Root: root, Key: key},
+			0,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !rerun.Attach || rerun.Log != resume.Log {
+			t.Errorf("rerun with key %q got %+v, want to attach to %s", key, rerun, resume.Log)
+		}
+	}
+
+	waitExit(t, resume.Log)
 }
 
 func TestServeExitsWhenIdle(t *testing.T) {

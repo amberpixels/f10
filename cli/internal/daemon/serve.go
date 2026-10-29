@@ -276,7 +276,8 @@ func (s *Server) run(req Request) Reply {
 	}
 
 	for _, c := range s.runs {
-		if c.Root == req.Root && ((req.Key != "" && c.key == req.Key) || (req.Resume > 0 && c.Drive == req.Resume)) {
+		if c.Root == req.Root &&
+			((req.Key != "" && strings.EqualFold(c.key, req.Key)) || (req.Resume > 0 && c.Drive == req.Resume)) {
 			return Reply{Log: c.Log, Attach: true}
 		}
 	}
@@ -287,6 +288,13 @@ func (s *Server) run(req Request) Reply {
 	}
 
 	c.key = req.Key
+
+	// a resume reports its number only after taking its answer: a rerun of
+	// its command before then attaches by the record it names
+	if req.Resume > 0 {
+		c.Drive = req.Resume
+		c.key = cmp.Or(recordKey(req.Root, req.Resume), c.key)
+	}
 
 	return Reply{Log: c.Log}
 }
@@ -357,10 +365,7 @@ func (s *Server) awaitNumber(c *child, numberFile string) {
 // numbered records the drive number the child printed, and the record's
 // command line, so another client of the same drive attaches.
 func (s *Server) numbered(c *child, n int) {
-	key := ""
-	if rec, err := drives.Read(c.Root, n); err == nil {
-		key = strings.Join(rec.Args, " ")
-	}
+	key := recordKey(c.Root, n)
 
 	s.mu.Lock()
 	c.Drive = n
@@ -551,6 +556,17 @@ func (s *Server) resumeDrained() {
 			continue
 		}
 
-		c.Drive = d.Drive
+		c.Drive, c.key = d.Drive, recordKey(d.Root, d.Drive)
 	}
+}
+
+// recordKey is the command line record n was started with, the key a rerun
+// of it sends; "" when the record will not read.
+func recordKey(root string, n int) string {
+	rec, err := drives.Read(root, n)
+	if err != nil {
+		return ""
+	}
+
+	return strings.Join(rec.Args, " ")
 }
