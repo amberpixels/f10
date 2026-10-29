@@ -1001,6 +1001,11 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 			return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
 		}
 
+		// before the branch is deleted, the only time its tip is still known
+		if err := recordTip(ctx, dir, dependent, branch); err != nil {
+			return nil, err
+		}
+
 		for _, key := range []string{cfgAfter, cfgAfterBranch} {
 			if err := gitx.UnsetConfig(ctx, dir, section+key); err != nil {
 				return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)

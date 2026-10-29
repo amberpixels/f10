@@ -19,10 +19,11 @@ No conflict, or nothing to bring in, is a **correct run**.
    **Never stash**, never `--autostash` (the stash is shared across worktrees).
 
 2. **Find the base and the method**: `f10 pr catchup`.
-   It fetches origin and prints `key: value` lines: `base` (the ref to integrate), `sha`, `found`, `how`, `method` (`merge`, `rebase` or `none`), `why`, `mark` (the key and value a conflict sets), and for an `f10-after-branch` base, `code` (`yes`, or `none` when the base branch has no commit of its own past its own base, merges not counted).
+   It fetches origin and prints `key: value` lines: `base` (the ref to integrate), `sha`, `upstream` (with `method: onto` only: the base's old tip), `found`, `how`, `method` (`merge`, `rebase`, `onto` or `none`), `why`, `mark` (the key and value a conflict sets), and for an `f10-after-branch` base, `code` (`yes`, or `none` when the base branch has no commit of its own past its own base, merges not counted).
    The base is `f10-landed`'s default branch, else the `f10-after-branch` branch (local first), else the default branch.
    - `f10-landed` is set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch; it stays set until point 5 clears it.
    - `f10-base-moved` (set by `f10 drive` when the `f10-after-branch` base moved past this branch) changes nothing here; point 5 clears it.
+   - `f10-base-tip` (set by `f10 start --after` and `f10 finish`, refreshed by point 5) is the base commit the branch was last built on; when the branch holds it and the base no longer does (the base was squash-merged or rebased), the method is `onto`.
    - `found: f10-after-branch gone`: the base task was finished, so `git config --unset` both `f10-after` and `f10-after-branch`; the base printed is already the default branch.
 
    Print its `how` line, before anything moves.
@@ -30,14 +31,14 @@ No conflict, or nothing to bring in, is a **correct run**.
 3. **Integrate** by the `method` line; `why` names the frontmatter key that set it (`catchup:`, or `catchup_stacked:` for an `f10-after-branch` base) or says it is the default.
    `catchup: off` turns off only ship's guard (**As a guard**, below); a run asked for by name, or sent by `f10 drive`, still integrates.
    - `none`: the base is already in the branch, nothing to bring in; clear the marks and write the signal as point 5 does, report and stop;
-   - `merge`: `git merge --no-edit <base>`; `rebase`: `git rebase <base>`.
+   - `merge`: `git merge --no-edit <base>`; `rebase`: `git rebase <base>`; `onto`: `git rebase --onto <base> <upstream>`, which replays only the branch's own commits, never the base's old ones.
 
    Clean: point 5.
    Conflict: point 4.
    Never `-X ours`, `-X theirs` or `--skip`.
 
 4. **Settle each conflict, both sides kept**; take one side only where it supersedes the other, and say so.
-   - Under a merge, ours is the branch and theirs the base; under a rebase they are **swapped**.
+   - Under a merge, ours is the branch and theirs the base; under a rebase (`onto` included) they are **swapped**.
      Say which once, before touching a file.
    - Triage with `git diff --name-status --diff-filter=U`: `UU` is textual; `AA`, `DU`, `UD`, `AU`, `UA` are structural and get decided.
      Never hand-merge generated files (lock files, schema dumps, compiled assets): settle the source, then regenerate with the project's command, asking first if it is slow or has side effects.
@@ -55,13 +56,13 @@ No conflict, or nothing to bring in, is a **correct run**.
 
 5. **Verify** with the load's `verify:` line (`conventions/context.md` → Verify).
    Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`conventions/context.md` → Commits, `--step catchup`) or folded into its commit under a rebase, and re-verify.
-   Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set, then `f10-state.sh done catchup`, both before the report.
+   Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set; set `.f10-base-tip` to the `sha` row when `found` is `f10-after-branch`, else unset it (the base is the default branch now); then `f10-state.sh done catchup`, all before the report.
    For an operation already in progress on entry, a mark is unset only when the operation's other side is the marked base (`f10-landed`: the default branch's tip, local or `origin/`; `f10-base-moved`: the sha it holds, or a commit containing it); otherwise it stays set, since the drive reads a cleared mark as that base brought in, and the report names it.
    The signal is the catchup's end for `f10 drive`: an idle agent without it is halted after a minute, and a signal beside a mark still set halts the task too.
    Every run writes it, by hand included.
 
 6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows; for an operation that was already in progress, `base` is the other side the loader named.
-   Then: commits brought in (by the user's merge or rebase, for an operation already in progress), each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
+   Then: commits brought in (by the user's merge or rebase, for an operation already in progress), each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase or `onto` that the next push needs `--force-with-lease`, not run here.
    If `why` says the method was the default, name the `catchup: merge | rebase | off` frontmatter key as the way to declare it, `catchup_stacked: merge | rebase` for a base found through `f10-after-branch`.
 
 **As a guard**: `/f10:ship` runs this before implement, each `pr` entry and a change judge (the ship skill says when), so the PR carries the moved base and a verdict is on code that merges.
@@ -80,7 +81,7 @@ It differs from the run above:
   `f10 drive` reads the mark, never the note, to send a catchup.
 - **Verify**, when commits came in, except before implement, whose own verify follows.
   Red is a semantic conflict the guard leaves to `/f10:catchup`: `git reset --hard` to the sha read before integrating (the tree was clean), then mark and fail as a conflict does.
-- **Marks**: `f10-landed` and `f10-base-moved` are unset once the integration is clean and verify, where it ran, is green.
+- **Marks**: `f10-landed` and `f10-base-moved` are unset, and `f10-base-tip` set or unset as point 5 says, once the integration is clean and verify, where it ran, is green.
   No `done catchup` signal: ship's phase reports for the guard.
 - **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 

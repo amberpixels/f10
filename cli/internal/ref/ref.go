@@ -38,12 +38,15 @@ const RidersKey = "f10-tasks"
 // What `f10 start --after` records beside TaskKey. Finish swaps the After
 // keys for LandedKey so the next step brings the default branch in first;
 // MovedKey is drive's note that the base's head moved past the dependent,
-// for the next catchup, which clears both.
+// for the next catchup, which clears both. TipKey is the base commit the
+// dependent was last built on: a catchup rebases onto from it once the
+// base's history is rewritten (squash-merged or rebased).
 const (
 	AfterKey       = "f10-after"
 	AfterBranchKey = "f10-after-branch"
 	LandedKey      = "f10-landed"
 	MovedKey       = "f10-base-moved"
+	TipKey         = "f10-base-tip"
 )
 
 // ModelKey is the model older starts recorded; AgentKey is the whole profile

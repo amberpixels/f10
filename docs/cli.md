@@ -233,6 +233,7 @@ A conflict there stops ship, marks the branch for the base that conflicted (`f10
 Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
 The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
+It also records the base commit each dependent was built on, so the dependent's catchup drops the base's pre-squash commits (`f10 pr catchup`, `method: onto`).
 
 It runs inside a Herdr session only.
 Outside one it stops before touching anything and points at https://herdr.dev.
@@ -657,14 +658,18 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 |---|---|
 | `branch` | the current branch |
 | `base`, `sha` | the ref to integrate and its sha |
+| `upstream` | with `method: onto` only: the base's old tip, from `branch.<name>.f10-base-tip` |
 | `found` | `f10-landed`, `f10-after-branch`, `f10-after-branch gone` (its task finished: unset both after keys) or `default branch` |
 | `how` | how the base was found, in a sentence |
-| `method` | `merge`, `rebase`, `none` (the base is already in the branch) or `skip` (a guard with nothing to do) |
+| `method` | `merge`, `rebase`, `onto` (the base's history was rewritten: `git rebase --onto <base> <upstream>`), `none` (the base is already in the branch) or `skip` (a guard with nothing to do) |
 | `why` | the frontmatter key that set the method (`catchup:`, `catchup_stacked:`), or that it is the default |
 | `mark` | the key and value a conflict sets (`f10-landed <default>`, `f10-base-moved <sha>`) |
 | `code` | for an `f10-after-branch` base: `yes`, or `none` when it has no commit of its own, merges not counted |
 
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
+A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
+`onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
+`f10 start --after` records the tip, `f10 finish` records it again for each dependent before deleting the base branch, and the catchup step refreshes it once green.
 `f10 pr base` prints the same `found: f10-after-branch gone` line for a finished stacked base.
 No `origin/HEAD` fails with its remedy, as `pr base` and the drive do.
 

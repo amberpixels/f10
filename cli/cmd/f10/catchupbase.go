@@ -55,12 +55,15 @@ const (
 const (
 	methodMerge  = "merge"
 	methodRebase = "rebase"
+	methodOnto   = "onto"
 	methodNone   = "none"
 	methodSkip   = "skip"
 )
 
 type catchupPlan struct {
 	branch, base, sha, found, how, method, why, mark string
+	// upstream is the base's old tip that onto rebases from
+	upstream string
 	// code says whether a recorded base branch has commits of its own: ship
 	// waits on one with none, by the rule the drive releases dependents on
 	code string
@@ -186,9 +189,38 @@ func resolveCatchup(ctx context.Context, in catchupInput) (catchupPlan, error) {
 		return catchupPlan{}, fmt.Errorf("reading origin/%s: %w", branch, err)
 	}
 
-	p.method, p.why = in.method(onOrigin != "", p.found == foundAfter)
+	rewritten, err := baseRewritten(ctx, in, p)
+	if err != nil {
+		return catchupPlan{}, err
+	}
+
+	p.method, p.why = in.method(onOrigin != "", p.found == foundAfter, rewritten)
+	if p.method == methodOnto {
+		p.upstream = rewritten
+	}
 
 	return p, nil
+}
+
+// baseRewritten is the recorded base tip when the branch holds it and the
+// base no longer does (squash-merged or rebased), else "".
+func baseRewritten(ctx context.Context, in catchupInput, p catchupPlan) (string, error) {
+	tip, err := gitx.Config(ctx, in.main, "branch."+p.branch+"."+cfgTip)
+	if err != nil || tip == "" {
+		return "", err
+	}
+
+	held, err := gitx.IsAncestor(ctx, in.dir, tip, "HEAD")
+	if err != nil || !held {
+		return "", err
+	}
+
+	kept, err := gitx.IsAncestor(ctx, in.dir, tip, p.sha)
+	if err != nil || kept {
+		return "", err
+	}
+
+	return tip, nil
 }
 
 func (p *catchupPlan) skip(why string) {
@@ -319,10 +351,15 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 	return nil
 }
 
-func (in catchupInput) method(onOrigin, stacked bool) (string, string) {
+// rewritten is the base's old tip when its history was rewritten: onto
+// drops the old commits the new base holds in another shape.
+func (in catchupInput) method(onOrigin, stacked bool, rewritten string) (string, string) {
 	switch {
 	case in.guard != "" && onOrigin:
 		return methodMerge, "the branch is on origin, so the push after it never forces"
+	case rewritten != "":
+		return methodOnto, "base rewritten since " + short(rewritten) + ": its old commits are dropped, " +
+			"and the next push needs --force-with-lease when the branch is on origin"
 	case onOrigin && in.shipStopped:
 		return methodMerge, "the branch is on origin and its ship stopped: ship resumes after it, and its push never forces"
 	case stacked && in.stackedDefault:
@@ -346,6 +383,7 @@ func (p *catchupPlan) write(w io.Writer) error {
 		{"branch", p.branch},
 		{"base", p.base},
 		{"sha", p.sha},
+		{"upstream", p.upstream},
 		{"found", p.found},
 		{"how", p.how},
 		{"method", p.method},

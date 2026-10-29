@@ -79,6 +79,7 @@ const (
 	cfgAfterBranch = ref.AfterBranchKey
 	cfgLanded      = ref.LandedKey
 	cfgMoved       = ref.MovedKey
+	cfgTip         = ref.TipKey
 	cfgModel       = ref.ModelKey
 	cfgAgent       = ref.AgentKey
 	cfgTaskID      = ref.TaskKey
@@ -1082,6 +1083,30 @@ func recordDependency(ctx context.Context, dir, branch string, dep *dependency) 
 
 	if err := gitx.SetConfig(ctx, dir, section+cfgAfterBranch, dep.branch); err != nil {
 		return fmt.Errorf("recording the dependency on %s: %w", dep.task, err)
+	}
+
+	return recordTip(ctx, dir, branch, dep.branch)
+}
+
+// recordTip records the base commit branch is built on, so a catchup after
+// the base's history is rewritten replays only branch's own commits. A base
+// found nowhere keeps the tip recorded before.
+func recordTip(ctx context.Context, dir, branch, base string) error {
+	for _, ref := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
+		tip, err := gitx.MergeBase(ctx, dir, "refs/heads/"+branch, ref)
+
+		switch {
+		case gitx.UnknownObject(err):
+			continue
+		case err != nil || tip == "":
+			return err
+		}
+
+		if err := gitx.SetConfig(ctx, dir, "branch."+branch+"."+cfgTip, tip); err != nil {
+			return fmt.Errorf("recording %s's base tip on %s: %w", branch, base, err)
+		}
+
+		return nil
 	}
 
 	return nil
