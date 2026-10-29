@@ -79,7 +79,7 @@ f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... 
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
-f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
+f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
 f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
@@ -228,7 +228,7 @@ The bundle's base is the one `After:` its members name outside it; a line naming
 Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
-Before implement, where a base is recorded on the branch, and unless `catchup: off`, ship's catchup guard brings the base in by the method `f10 pr catchup` prints: `merge`, `rebase`, or `onto` for a base that was squash-merged or rebased, which replays only the branch's own commits. A recorded base whose branch has no code yet gets one question instead, wait or proceed on the plan's assumption; a driven run waits.
+Before implement, where a base is recorded on the branch, ship's catchup guard brings the base in by the method `f10 pr catchup` prints, unless `catchup: off`: `merge`, `rebase`, or `onto` for a base that was squash-merged or rebased, which replays only the branch's own commits. A recorded base whose branch has no code yet gets one question instead, wait or proceed on the plan's assumption, even under `catchup: off`; a driven run waits.
 A conflict there stops ship, marks the branch for the base that conflicted (`f10-landed`, or `f10-base-moved` for a recorded base), and hands off to `/f10:catchup`, which settles it with both sides kept.
 Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`; once the branch is on origin these are merges, so the push never forces.
 The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.

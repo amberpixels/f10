@@ -462,10 +462,10 @@ So the plan and ship skills first hand off with `f10 forward`:
 
 ```bash
 f10 forward 1042 "/f10:ship 1042"      # the command goes to 1042's agent, marked --driven
-f10 forward 1042 "1. proceed 2. keep ours"  # an answer to the question that agent stopped on
 ```
 
 It resolves task, branch, worktree, workspace and agent, submits the text as the agent's next prompt, and prints three rows (task, workspace, sent); this session's badge does not move.
+An answer to the question that agent stopped on goes through the asks inbox instead: `f10 asks answer 1042 1=proceed 2="keep ours"`.
 A task whose branch is checked out here, or nowhere, exits 3 and the skill runs locally.
 An agent idle while its run says running waits on something f10 cannot see, such as a permission dialog: forward names the workspace and sends nothing.
 Judge, demo and explain are never forwarded; they read another worktree's branch fine and write nothing.
