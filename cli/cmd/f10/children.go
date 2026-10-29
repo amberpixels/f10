@@ -456,3 +456,93 @@ func (h host) childItems(ctx context.Context, number string) ([]rawChild, error)
 
 	return raw, nil
 }
+
+// linkParent puts child under parent, the write beside subIssues and
+// childItems. GitHub links by the child's database id, not its number.
+func (h host) linkParent(ctx context.Context, parent, child string) error {
+	if h.GLab() {
+		return h.linkWorkItem(ctx, parent, child)
+	}
+
+	var iss struct {
+		ID int64 `json:"id"`
+	}
+
+	if err := h.Decode(ctx, &iss, "api", "repos/{owner}/{repo}/issues/"+child); err != nil {
+		return err
+	}
+
+	_, err := h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
+		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10))
+
+	return err
+}
+
+const workItemIDQuery = `query($path: ID!, $iid: String!) {
+  project(fullPath: $path) { workItems(iid: $iid) { nodes { id } } }
+}`
+
+const workItemParentMutation = `mutation($id: WorkItemID!, $parent: WorkItemID!) {
+  workItemUpdate(input: {id: $id, hierarchyWidget: {parentId: $parent}}) { errors }
+}`
+
+// linkWorkItem sets the child's parent in GitLab's work-item hierarchy, the
+// only place childItems finds it.
+func (h host) linkWorkItem(ctx context.Context, parent, child string) error {
+	var repo struct {
+		Path string `json:"path_with_namespace"`
+	}
+
+	if err := h.Decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
+		return err
+	}
+
+	ids := map[string]string{}
+
+	for _, iid := range []string{parent, child} {
+		var payload struct {
+			Data struct {
+				Project struct {
+					WorkItems struct {
+						Nodes []struct {
+							ID string `json:"id"`
+						} `json:"nodes"`
+					} `json:"workItems"`
+				} `json:"project"`
+			} `json:"data"`
+		}
+
+		err := h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+workItemIDQuery,
+			"-f", "path="+repo.Path, "-f", "iid="+iid)
+		if err != nil {
+			return err
+		}
+
+		nodes := payload.Data.Project.WorkItems.Nodes
+		if len(nodes) == 0 {
+			return fmt.Errorf("no work item #%s in %s", iid, repo.Path)
+		}
+
+		ids[iid] = nodes[0].ID
+	}
+
+	var out struct {
+		Data struct {
+			WorkItemUpdate struct {
+				Errors []string `json:"errors"`
+			} `json:"workItemUpdate"`
+		} `json:"data"`
+	}
+
+	err := h.Decode(ctx, &out, "api", "graphql", "-f", "query="+workItemParentMutation,
+		"-f", "id="+ids[child], "-f", "parent="+ids[parent])
+	if err != nil {
+		return err
+	}
+
+	if errs := out.Data.WorkItemUpdate.Errors; len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+
+	return nil
+}

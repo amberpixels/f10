@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 func runWrite(t *testing.T, repo, stdin string, args ...string) (string, string, error) {
@@ -207,5 +209,92 @@ func TestHostUpdate(t *testing.T) {
 		if err := newHost("gh", "").update(t.Context(), "7", p, priorities); err == nil {
 			t.Errorf("%+v: accepted", p)
 		}
+	}
+}
+
+// With no driver, a host tracker creates an issue: the labels and the
+// priority's label in the create, the number read from the printed url,
+// then the parent link by the child's database id.
+func TestHostCreate(t *testing.T) {
+	f := newFakes(t)
+	tg := childTarget(t, "gh")
+	tg.eff.PriorityLabels = map[string]string{"p1": "high"}
+
+	f.script("gh issue create --title Add it --body the body --label draft --label p1",
+		"Creating issue in o/r\n\nhttps://github.com/o/r/issues/12\n")
+	f.script("gh api repos/{owner}/{repo}/issues/12", `{"id":555,"number":12}`)
+	f.script("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555", `{}`)
+
+	var warn bytes.Buffer
+
+	r, url, err := hostCreate(t.Context(), &warn, tg, "# Add it\n\nthe body\n",
+		props{priority: "high", labels: []string{"draft"}}, "FT-7")
+	if err != nil || r.ID != "FT-12" || url != "https://github.com/o/r/issues/12" || warn.Len() > 0 {
+		t.Errorf("hostCreate = %+v, %q, %v, %q", r, url, err, warn.String())
+	}
+
+	if !f.called("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555") {
+		t.Error("the subtask was not linked")
+	}
+}
+
+// The issue exists once created, so a failed parent link is a warning with
+// the id still returned, never an error that invites a second create.
+func TestHostCreateLinkFailureWarns(t *testing.T) {
+	f := newFakes(t)
+	tg := childTarget(t, "gh")
+
+	f.script("gh issue create --title A --body ", "https://github.com/o/r/issues/12\n")
+	f.fail("gh api repos/{owner}/{repo}/issues/12", shell.Result{Code: 1, Stderr: "HTTP 502"})
+
+	var warn bytes.Buffer
+
+	r, _, err := hostCreate(t.Context(), &warn, tg, "# A\n", props{}, "FT-7")
+	if err != nil || r.ID != "FT-12" || !strings.Contains(warn.String(), "not linked under FT-7") {
+		t.Errorf("hostCreate = %+v, %v, %q; want the id and a warning", r, err, warn.String())
+	}
+}
+
+// A closed status or an unmapped priority is refused before anything is
+// created; a create printing no issue url may still have made one.
+func TestHostCreateRefusals(t *testing.T) {
+	f := newFakes(t)
+	tg := childTarget(t, "gh")
+
+	for _, p := range []props{{status: "closed"}, {priority: "urgent"}} {
+		if _, _, err := hostCreate(t.Context(), &bytes.Buffer{}, tg, "# A\n", p, ""); err == nil {
+			t.Errorf("%+v: no error", p)
+		}
+	}
+
+	if f.called("gh issue create") {
+		t.Error("an issue was created for refused input")
+	}
+
+	f.script("gh issue create --title A --body ", "done\n")
+
+	if _, _, err := hostCreate(t.Context(), &bytes.Buffer{}, tg, "# A\n", props{}, ""); err == nil ||
+		!strings.Contains(err.Error(), mayExist) {
+		t.Errorf("no url printed: err = %v, want the may-exist warning", err)
+	}
+}
+
+// GitLab links in the work-item hierarchy, by global ids read per iid.
+func TestLinkWorkItem(t *testing.T) {
+	f := newFakes(t)
+
+	f.script("glab repo view -F json", `{"path_with_namespace":"g/r"}`)
+
+	for iid, gid := range map[string]string{"7": "gid://gitlab/WorkItem/70", "12": "gid://gitlab/WorkItem/120"} {
+		f.script("glab api graphql -f query="+workItemIDQuery+" -f path=g/r -f iid="+iid,
+			`{"data":{"project":{"workItems":{"nodes":[{"id":"`+gid+`"}]}}}}`)
+	}
+
+	mutation := "glab api graphql -f query=" + workItemParentMutation +
+		" -f id=gid://gitlab/WorkItem/120 -f parent=gid://gitlab/WorkItem/70"
+	f.script(mutation, `{"data":{"workItemUpdate":{"errors":[]}}}`)
+
+	if err := newHost("glab", "").linkParent(t.Context(), "7", "12"); err != nil || !f.called(mutation) {
+		t.Errorf("linkParent = %v", err)
 	}
 }

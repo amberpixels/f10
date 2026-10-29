@@ -31,10 +31,7 @@ var allowNotCommand = map[string]string{
 	"steps/review.md: f10 never performs it": "prose: what a manual pick name means",
 }
 
-const (
-	adapterExample = "an example of a project adapter, which stays"
-	movesToBinary  = "FT-254: moves into an f10 command"
-)
+const adapterExample = "an example of a project adapter, which stays"
 
 // hostCLIAllowlist is every raw gh or glab call the prose may make, keyed
 // `file: gh pr diff`. An entry whose call left the prose fails too, so the
@@ -42,18 +39,6 @@ const (
 var hostCLIAllowlist = map[string]string{
 	"conventions/context.md: gh issue create": adapterExample,
 	"conventions/context.md: gh issue view":   adapterExample,
-	"conventions/context.md: gh pr create":    adapterExample,
-	"conventions/context.md: gh pr edit":      adapterExample,
-	"conventions/context.md: glab mr create":  adapterExample,
-	"conventions/context.md: glab mr update":  adapterExample,
-	"modes/dry-run.md: gh issue view":         adapterExample,
-	"steps/fetch.md: gh issue view":           adapterExample,
-	"steps/capture.md: gh api repos":          movesToBinary,
-	"steps/capture.md: gh issue create":       movesToBinary,
-	"steps/capture.md: glab api":              movesToBinary,
-	"steps/capture.md: glab issue create":     movesToBinary,
-	"steps/pr.md: gh pr create":               movesToBinary,
-	"steps/pr.md: glab mr create":             movesToBinary,
 }
 
 type codeText struct {

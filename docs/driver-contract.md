@@ -132,7 +132,7 @@ Code `3` is a normal answer, not an error.
 A driver may implement `read` without `search`, and f10 falls back to the host's issues rather than failing; a driver without `branch` gets the default `<ID>/<slug>` branch name.
 On a tracker that is not the host's issues (Notion, Jira), a declined `read`, `url`, `index`, `list` or `search` has no fallback: f10 fails, naming your driver, the verb and the command that needs it.
 A declined `branch` there names the branch by the bare id, and a declined `children` reads as no parent link.
-A declined `create`, on any tracker, makes `f10 task create` exit 3 too, and the capture step creates the task through the Create adapter in `project.md`, as it does for a project with no driver.
+A declined `create` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task create` exits 3, and the capture step creates the task through the Create adapter in `project.md`, as it does for a project with no driver.
 A declined `comment` or `update` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task comment` and `f10 task update` exit 3, and a ship run puts its shipment in the final report alone.
 Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 

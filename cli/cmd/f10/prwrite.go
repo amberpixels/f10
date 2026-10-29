@@ -74,23 +74,9 @@ func runPREdit(ctx context.Context, cmd *cli.Command) error {
 	var body string
 
 	if file != "" {
-		var (
-			in  []byte
-			err error
-		)
-
-		if file == "-" {
-			in, err = io.ReadAll(cmd.Reader)
-		} else {
-			in, err = os.ReadFile(filepath.Clean(file))
-		}
-
-		if err != nil {
-			return fmt.Errorf("reading the body: %w", err)
-		}
-
-		if body = strings.TrimSpace(string(in)); body == "" {
-			return fmt.Errorf("the body in %s is empty", file)
+		var err error
+		if body, err = readBody(cmd, file); err != nil {
+			return err
 		}
 	}
 
@@ -100,6 +86,118 @@ func runPREdit(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return h.EditPull(ctx, p.id(), title, body)
+}
+
+// readBody reads a PR body from file, - meaning stdin; an empty one is
+// refused, since it would blank the description.
+func readBody(cmd *cli.Command, file string) (string, error) {
+	var (
+		in  []byte
+		err error
+	)
+
+	if file == "-" {
+		in, err = io.ReadAll(cmd.Reader)
+	} else {
+		in, err = os.ReadFile(filepath.Clean(file))
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("reading the body: %w", err)
+	}
+
+	body := strings.TrimSpace(string(in))
+	if body == "" {
+		return "", fmt.Errorf("the body in %s is empty", file)
+	}
+
+	return body, nil
+}
+
+// runPRCreate opens the branch checked out here against the base pr base
+// prints, so the two never disagree. An open request is printed instead, so
+// a retried step never opens two.
+func runPRCreate(ctx context.Context, cmd *cli.Command) error {
+	body, err := readBody(cmd, cmd.String("body-file"))
+	if err != nil {
+		return err
+	}
+
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	s, err := resolvePRSubject(ctx, t, "")
+	if err != nil {
+		return err
+	}
+
+	if s.lookupErr != nil {
+		return fmt.Errorf("could not tell whether %s has an open PR: %w", s.branch, s.lookupErr)
+	}
+
+	if s.number > 0 {
+		h, err := t.host()
+		if err != nil {
+			return err
+		}
+
+		p, err := h.pullNumber(ctx, strconv.Itoa(s.number))
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(cmd.ErrWriter, "f10: already open for %s, nothing created\n", s.branch)
+		_, err = fmt.Fprintln(cmd.Writer, p.url())
+
+		return err
+	}
+
+	base, err := s.base(ctx, cmd.ErrWriter)
+	if err != nil {
+		return err
+	}
+
+	if refSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
+		return fmt.Errorf("the base %s is not on origin: push it first", base)
+	}
+
+	if head := refSHA(ctx, t.lay.CheckoutRoot, "HEAD"); refSHA(ctx, s.main, "refs/remotes/origin/"+s.branch) != head {
+		return fmt.Errorf("origin does not have %s at HEAD: run `git push -u origin %s` first", s.branch, s.branch)
+	}
+
+	h, err := t.host()
+	if err != nil {
+		return err
+	}
+
+	url, err := h.createPull(ctx, forge.NewPull{
+		Head: s.branch, Base: base, Title: cmd.String("title"), Body: body,
+		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, url)
+
+	return err
+}
+
+// createPull reads the url back from the host, since neither CLI prints it in
+// a form worth parsing.
+func (h host) createPull(ctx context.Context, n forge.NewPull) (string, error) {
+	if err := h.CreatePull(ctx, n); err != nil {
+		return "", err
+	}
+
+	p, err := h.pull(ctx, n.Head)
+	if err != nil {
+		return "", fmt.Errorf("opened, but reading it back failed: %w", err)
+	}
+
+	return p.url(), nil
 }
 
 func runPRComment(ctx context.Context, cmd *cli.Command) error {
