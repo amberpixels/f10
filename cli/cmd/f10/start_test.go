@@ -52,6 +52,8 @@ func newFakes(t *testing.T) *fakes {
 	f.absent = []string{
 		linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
 		"git rev-list --ancestry-path --merges",
+		// no base tip is recorded until a test says so
+		"git merge-base refs/heads/",
 	}
 
 	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, projectOf
@@ -992,6 +994,8 @@ func TestStartWithGitAlone(t *testing.T) {
 	f.script(shaMain, "bbb")
 	f.script(cfgTask, "")
 	f.script(cfgBranch, "")
+	f.script("git merge-base refs/heads/GH-1 refs/heads/GH-7/base", "ccc")
+	f.script("git config branch.GH-1."+cfgTip+" ccc", "")
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
@@ -1016,7 +1020,7 @@ func TestStartWithGitAlone(t *testing.T) {
 		t.Error("the flow was not recorded on the branch")
 	}
 
-	if !f.called(cfgTask) || !f.called(cfgBranch) {
+	if !f.called(cfgTask) || !f.called(cfgBranch) || !f.called("git config branch.GH-1."+cfgTip+" ccc") {
 		t.Errorf("the dependency was not recorded: %v", f.calls)
 	}
 

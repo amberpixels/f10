@@ -71,7 +71,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	notes = appendNote(notes, note)
 
-	released, err := releaseDependents(ctx, in.main, name, def)
+	released, err := releaseDependents(ctx, in.main, name, def, true)
 	if err != nil {
 		return err
 	}

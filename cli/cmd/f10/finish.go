@@ -356,7 +356,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			kept = keptName(ctx, in.main, name, in.task.Members())
 		}
 
-		released, err := releaseDependents(ctx, in.main, name, def)
+		released, err := releaseDependents(ctx, in.main, name, def, false)
 		if err != nil {
 			return err
 		}
@@ -443,7 +443,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			recordSize(ctx, in.main, name, in.task.ID, size)
 		}
 
-		released, err := releaseDependents(ctx, in.main, name, def)
+		released, err := releaseDependents(ctx, in.main, name, def, true)
 		if err != nil {
 			return err
 		}
@@ -979,8 +979,9 @@ func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 
 // releaseDependents clears other branches' `start --after` dependency on the
 // finished one and marks them landed: their pr must target the default
-// branch now, and their next ship or catchup must bring it in first.
-func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, error) {
+// branch now, and their next ship or catchup must bring it in first. merged
+// says the finished branch's code reached the default branch.
+func releaseDependents(ctx context.Context, dir, branch, def string, merged bool) ([]string, error) {
 	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
 	if err != nil {
 		return nil, fmt.Errorf("reading which branches depend on %s: %w", branch, err)
@@ -1001,6 +1002,10 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 			return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
 		}
 
+		if err := releaseTip(ctx, dir, dependent, branch, merged); err != nil {
+			return nil, err
+		}
+
 		for _, key := range []string{cfgAfter, cfgAfterBranch} {
 			if err := gitx.UnsetConfig(ctx, dir, section+key); err != nil {
 				return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
@@ -1016,6 +1021,28 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 	}
 
 	return notes, nil
+}
+
+// releaseTip records the dependent's base tip before the branch is deleted,
+// the last time it can be read. A base that never merged (a closed spike)
+// leaves none: an onto from it would drop the base's code from the dependent.
+func releaseTip(ctx context.Context, dir, dependent, branch string, merged bool) error {
+	if merged {
+		return recordTip(ctx, dir, dependent, branch)
+	}
+
+	key := "branch." + dependent + "." + cfgTip
+
+	tip, err := gitx.Config(ctx, dir, key)
+	if err != nil || tip == "" {
+		return err
+	}
+
+	if err := gitx.UnsetConfig(ctx, dir, key); err != nil {
+		return fmt.Errorf("clearing %s's base tip on %s: %w", dependent, branch, err)
+	}
+
+	return nil
 }
 
 // archivePlan moves the plan into the shared archive. A missing plan is a

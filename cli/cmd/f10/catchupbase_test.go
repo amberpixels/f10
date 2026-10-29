@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -373,5 +374,190 @@ func TestCatchupBaseCommand(t *testing.T) {
 
 	if _, err := run("--guard", "bogus"); err == nil || !strings.Contains(err.Error(), "want implement, pr or judge") {
 		t.Errorf("--guard bogus: %v", err)
+	}
+}
+
+// newStackedRepo is FT-1/a built on FT-2/b, which has a commit of its own,
+// with the base tip start records.
+func newStackedRepo(t *testing.T) (gitRepo, string) {
+	t.Helper()
+
+	r := newCatchupRepo(t)
+	r.at(during, "checkout", "-q", "-b", "FT-2/b", "main")
+	r.commit(during, "help.go", "package main // help\n", "help")
+	r.at(during, "checkout", "-q", "-B", "FT-1/a", "FT-2/b")
+	r.commit(during, "a.go", "package main // a\n", "a")
+	r.at(during, "config", "branch.FT-1/a."+cfgAfter, "FT-2")
+	r.at(during, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+
+	tip := r.sha("FT-2/b")
+	r.at(during, "config", "branch.FT-1/a."+cfgTip, tip)
+
+	return r, tip
+}
+
+// A base whose history was rewritten under the branch is rebased onto from
+// its old tip, so its old commits never come back as conflicts.
+func TestCatchupBaseRewritten(t *testing.T) {
+	r, tip := newStackedRepo(t)
+
+	// FT-2/b rebased onto origin/main, which moved on
+	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
+	r.commit(later, "help.go", "package main // help, rebased\n", "help")
+	r.at(later, "checkout", "-q", "FT-1/a")
+
+	for _, guard := range []string{"", "implement"} {
+		p := r.resolve(r.input(guard))
+		wantPlan(t, p, "FT-2/b", foundAfter, methodOnto)
+
+		if p.upstream != tip {
+			t.Errorf("guard %q: upstream %q, want the old tip %s", guard, p.upstream, tip)
+		}
+	}
+
+	// the guard before pr keeps a branch on origin merging, so its push never forces
+	r.at(later, "push", "-q", "-u", "origin", "FT-1/a", "FT-2/b")
+
+	if p := r.resolve(r.input("pr")); p.method != methodMerge || p.upstream != "" {
+		t.Errorf("pr guard on origin: method %q upstream %q, want merge and none", p.method, p.upstream)
+	}
+}
+
+func TestCatchupBaseSquashLanded(t *testing.T) {
+	r, tip := newStackedRepo(t)
+
+	// FT-2/b squash-merged into main, then finished
+	r.at(later, "checkout", "-q", "main")
+	r.at(later, "merge", "-q", "--ff-only", "origin/main")
+	r.at(later, "merge", "-q", "--squash", "FT-2/b")
+	r.at(later, "commit", "-q", "-m", "FT-2 squashed")
+	r.at(later, "push", "-q", "origin", "main")
+	r.at(later, "checkout", "-q", "FT-1/a")
+	r.at(later, "config", "--unset", "branch.FT-1/a."+cfgAfterBranch)
+	r.at(later, "config", "branch.FT-1/a."+cfgLanded, "main")
+
+	p := r.resolve(r.input(""))
+	wantPlan(t, p, "main", foundLanded, methodOnto)
+
+	if p.upstream != tip {
+		t.Errorf("upstream %q, want the old tip %s", p.upstream, tip)
+	}
+}
+
+func TestCatchupBaseTipNotRewritten(t *testing.T) {
+	r, _ := newStackedRepo(t)
+
+	// the base only moved on: today's method
+	r.at(later, "checkout", "-q", "FT-2/b")
+	r.commit(later, "b2.go", "package main // b2\n", "b2")
+	r.at(later, "checkout", "-q", "FT-1/a")
+
+	if p := r.resolve(r.input("")); p.method != methodMerge || p.upstream != "" {
+		t.Errorf("moved on: method %q upstream %q, want merge and none", p.method, p.upstream)
+	}
+
+	// a tip the branch does not hold is stale: ignored
+	r.at(later, "checkout", "-q", "-b", "elsewhere", "origin/main")
+	r.commit(later, "x.go", "package main // x\n", "x")
+	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
+	r.commit(later, "help.go", "package main // help, rebased\n", "help")
+	r.at(later, "checkout", "-q", "FT-1/a")
+	r.at(later, "config", "branch.FT-1/a."+cfgTip, r.sha("elsewhere"))
+
+	if p := r.resolve(r.input("")); p.method == methodOnto {
+		t.Errorf("stale tip: method %q, want today's", p.method)
+	}
+}
+
+func TestCatchupBaseOutputUpstream(t *testing.T) {
+	var b strings.Builder
+
+	p := catchupPlan{branch: "FT-1/a", base: "FT-2/b", sha: "abc", upstream: "old", method: methodOnto}
+	if err := p.write(&b); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "branch: FT-1/a\nbase: FT-2/b\nsha: abc\nupstream: old\nmethod: onto\n"
+	if b.String() != want {
+		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
+	}
+}
+
+// Releasing a dependent records its base tip before the base branch goes, so
+// its catchup can drop the squashed commits.
+func TestReleaseDependentsRecordsTip(t *testing.T) {
+	r, tip := newStackedRepo(t)
+	r.at(later, "config", "--unset", "branch.FT-1/a."+cfgTip)
+
+	if _, err := releaseDependents(t.Context(), r.dir, "FT-2/b", "main", true); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := r.at(later, "config", "branch.FT-1/a."+cfgTip); got != tip {
+		t.Errorf("tip %q, want %s", got, tip)
+	}
+}
+
+// onto outranks every non-guard row: a stopped ship's catchup is the one the
+// drive sends after a guard conflict, and a merge there conflicts again.
+func TestCatchupBaseRewrittenOutranks(t *testing.T) {
+	r, _ := newStackedRepo(t)
+	r.at(later, "push", "-q", "-u", "origin", "FT-1/a")
+	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
+	r.commit(later, "help.go", "package main // help, rebased\n", "help")
+	r.at(later, "checkout", "-q", "FT-1/a")
+
+	stopped := r.input("")
+	stopped.shipStopped = true
+
+	if p := r.resolve(stopped); p.method != methodOnto {
+		t.Errorf("stopped ship on origin: method %q (%s), want onto", p.method, p.why)
+	}
+
+	declared := r.input("")
+	declared.stacked, declared.stackedDefault = "merge", false
+
+	p := r.resolve(declared)
+	if p.method != methodOnto || !strings.Contains(p.why, "overrides catchup_stacked: merge") {
+		t.Errorf("declared merge: method %q why %q, want onto naming the override", p.method, p.why)
+	}
+}
+
+// A spike closed without merging never reached main: its dependent keeps no
+// tip, so its catchup keeps the spike's code.
+func TestReleaseDependentsSpikeClearsTip(t *testing.T) {
+	r, _ := newStackedRepo(t)
+
+	if _, err := releaseDependents(t.Context(), r.dir, "FT-2/b", "main", false); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := gitx.Config(t.Context(), r.dir, "branch.FT-1/a."+cfgTip); err != nil || got != "" {
+		t.Errorf("tip %q (%v) after a spike closed, want none", got, err)
+	}
+
+	if p := r.resolve(r.input("")); p.method == methodOnto {
+		t.Errorf("method %q after a spike closed, want today's", p.method)
+	}
+}
+
+// A local base behind origin's never hides the newer tip the branch holds.
+func TestRecordTipTakesTheNewerBase(t *testing.T) {
+	r, _ := newStackedRepo(t)
+
+	r.at(later, "checkout", "-q", "FT-2/b")
+	r.commit(later, "b2.go", "package main // b2\n", "b2")
+	r.at(later, "push", "-q", "-u", "origin", "FT-2/b")
+	newer := r.sha("FT-2/b")
+	r.at(later, "checkout", "-q", "FT-1/a")
+	r.at(later, "branch", "-f", "FT-2/b", "FT-2/b~1")
+	r.at(later, "merge", "-q", "--no-edit", "origin/FT-2/b")
+
+	if err := recordTip(t.Context(), r.dir, "FT-1/a", "FT-2/b"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := r.at(later, "config", "branch.FT-1/a."+cfgTip); got != newer {
+		t.Errorf("tip %q, want origin's %s", got, newer)
 	}
 }
