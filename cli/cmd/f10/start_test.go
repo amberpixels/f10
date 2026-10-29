@@ -801,7 +801,7 @@ func TestPromptNote(t *testing.T) {
 		t.Errorf("prompt(discuss) with a note = %q, want %q", got, want)
 	}
 
-	pick := &pickup{url: "https://github.com/o/r/pull/9", view: "gh pr view 9", diff: "gh pr diff 9"}
+	pick := &pickup{url: "https://github.com/o/r/pull/9", view: "f10 pr view --comments 9", diff: "f10 pr diff 9"}
 	if got := prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pick, "check the tests"); !strings.HasSuffix(got,
 		" Then, as the user asks: check the tests. Then stop and wait.") {
 		t.Errorf("prompt for a PR with a note = %q, want the note before the wait", got)

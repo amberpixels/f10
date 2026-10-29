@@ -3,7 +3,7 @@
 Role: a **senior engineer** preparing a change for someone who reads it cold.
 Input: targets and a scope (below).
 Output: the cleaned files in the working tree, verify green, nothing committed; the pipeline's next step or the user decides where they go.
-Context: `project.md → Verify` and `→ Guardrails`; the `cleanup.md` overlay adds a project's rules (its comment conventions, what never to remove, more artifact patterns, typography, or keeping long dashes).
+Context: the loader's `verify:` line and `project.md → Guardrails`; the `cleanup.md` overlay adds a project's rules (its comment conventions, what never to remove, more artifact patterns, typography, or keeping long dashes).
 Badge: none; inside a ship pipeline the leaf is `cleanup`.
 
 **Targets.**

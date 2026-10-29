@@ -66,7 +66,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
 | `/f10:ship [<id \| plan.md \| desc>]` | whatever's missing, then the flow | end of the declared flow (an open PR by default); or handed to the task's own agent |
 | `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose to plain rules, leftovers out of the code; each diff proven in scope (a small one gets a light pass without proofs), verify green, nothing committed |
-| `/f10:review <id \| PR \| this branch> [ci]` | review | a findings file from a reviewer that never saw your session, or read in from the CI review |
+| `/f10:review <id \| PR \| this branch> [ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, or read in from the CI review; `since` checks how the tasks since a ref (the last tag by default) fit together, against their plans and lore |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, fixes verified, asks in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | a change: what it was and is now; a thing: what it is |
@@ -295,11 +295,11 @@ Bare `f10 status` reads the current task the way `f10 status <id>` does, gates i
 In the main checkout, where the branch names no task, a session that ran `f10 start` or `f10 drive` gets a `launched here` tree first: a row per task it started or drove that is still live, nested under its `After:` base as a parent's subtasks are, finished ones and done or cancelled drives left out, `--json` printing task rows.
 With no task to name, a terminal lists this repo's live runs (`--all` for every session on the machine, `--json` for scripts).
 A named task makes `--json` take the shape `f10 status <id>` prints: a run list, the fallback object, or task rows.
-Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens, unless the `launched here` tree holds a question a driven agent waits on, which goes to the model to ask and forward.
+Inside a session, `! f10 status` has the session id already; `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens, unless the `launched here` tree holds a question a driven agent waits on, which goes to the model to ask and answer.
 
 `f10 status 1042` reads another run: the one in the worktree that has the task's branch.
 An agent there runs **driven** ([modes/driven.md](modes/driven.md)): instead of asking in a pane nobody watches, it writes its questions to run state as one `ask` row and stops blocked.
-`/f10:status 1042` puts them to you and sends the answers back through `f10 forward`.
+`/f10:status 1042` puts them to you and writes the answers through `f10 asks answer`, which sends them to that agent.
 
 <details>
 <summary>Why circles-by-fill, and the three Nerd Font exceptions</summary>
@@ -462,10 +462,10 @@ So the plan and ship skills first hand off with `f10 forward`:
 
 ```bash
 f10 forward 1042 "/f10:ship 1042"      # the command goes to 1042's agent, marked --driven
-f10 forward 1042 "1. proceed 2. keep ours"  # an answer to the question that agent stopped on
 ```
 
 It resolves task, branch, worktree, workspace and agent, submits the text as the agent's next prompt, and prints three rows (task, workspace, sent); this session's badge does not move.
+An answer to the question that agent stopped on goes through the asks inbox instead: `f10 asks answer 1042 1=proceed 2="keep ours"`.
 A task whose branch is checked out here, or nowhere, exits 3 and the skill runs locally.
 An agent idle while its run says running waits on something f10 cannot see, such as a permission dialog: forward names the workspace and sends nothing.
 Judge, demo and explain are never forwarded; they read another worktree's branch fine and write nothing.

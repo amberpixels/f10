@@ -28,16 +28,17 @@ This skill runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
    Put it to the user in **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the choices, the first as recommended.
-   Then send the answers back as the agent's next prompt, numbered as the ask was:
+   Then write the answers through the asks inbox, numbered as the ask was, each answer the option's text, quoted:
 
    ```
-   f10 forward <task-id> "1. <answer> 2. <answer>"
+   f10 asks answer <task-id> --by skill 1=<answer> 2=<answer>
    ```
 
-   Print forward's block (task, workspace, sent) in a fenced `yaml` block and stop.
+   Print one line saying where the answer went, as the command printed it (sent to the agent, a drive resumed), and stop.
+   An `already answered ...` refusal is a normal end: name who answered.
    The agent resumes in its own tab; this session's badge stays as it is.
 3. **A parent, or the session's launches, prints a tree**, a row per child, instead of a block.
-   An `asking` child carries its question, whole, on an `ask` line under its row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and forward each child its own answers (`f10 forward <child-id> "1. <answer>"`), one forward per child in one message.
+   An `asking` child carries its question, whole, on an `ask` line under its row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and answer each child's ask with its own answers (`f10 asks answer <child-id> --by skill 1=<answer>`), one command per child in one Bash call.
    No `asking` child: the tree is the whole answer.
    Stop.
 4. No `ask` row: the status is the whole answer.

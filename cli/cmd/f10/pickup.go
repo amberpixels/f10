@@ -24,7 +24,7 @@ type pickup struct {
 	number string
 	url    string
 	branch string // the request's head, as the host names it
-	view   string // the request with its comments, in the host CLI's spelling
+	view   string // the f10 command that reads the request with its comments
 	diff   string
 	// sha is where a merged or closed request is checked out, "" for an open
 	// one; state says which it is, for the prompt and the report; headRef is
@@ -114,19 +114,15 @@ func refusePull(p pull) error {
 	return nil
 }
 
+// pickupOf reads the request through f10 pr, which reads one in any state on
+// either host, so the prompt is the same text on GitHub and GitLab.
 func (h host) pickupOf(number string, p pull) *pickup {
-	cmd := func(verb string, tail ...string) string {
-		args := h.Pick([]string{"pr", verb, number}, []string{"mr", verb, number})
-
-		return strings.Join(append(append([]string{h.Name}, args...), tail...), " ")
-	}
-
 	pick := &pickup{
 		number: number,
 		url:    p.url(),
 		branch: p.head(),
-		view:   cmd("view", "--comments"),
-		diff:   cmd("diff"),
+		view:   "f10 pr view --comments " + number,
+		diff:   "f10 pr diff " + number,
 	}
 
 	switch p.status() {
