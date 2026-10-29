@@ -1,6 +1,6 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing only when an agent asks; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "<id>[:profile]... [--flow <name> | --local]"
 ---
@@ -55,7 +55,7 @@ f10 drive <arguments>
    When it exits, read its output and act on the exit code.
 2. **Exit 0**: every task went through its flow.
    Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
-3. **Exit 4**: one or more agents asked; each ask waits in the asks inbox, so it can also be answered in the agent's pane, with `f10 asks` or from another session.
+3. **Exit 4**: one or more agents asked, and the other tasks went as far as they can; each ask waits in the asks inbox from the moment it was asked, so it can also be answered in the agent's pane, with `f10 asks` or from another session.
    Follow `${CLAUDE_PLUGIN_ROOT}/skills/asks/SKILL.md` for this drive's asking tasks: the questions in one `AskUserQuestion`, then `f10 asks answer`, which resumes the drive through the daemon.
    Then rerun the same arguments in the background to follow the resumed drive, and act on its exit as above; an ask already answered elsewhere resumes the drive the same way.
 4. **Exit 5**: a task halted; the lines beneath the report say which and why.

@@ -37,7 +37,7 @@ import (
 func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
-		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping when an agent asks",
+		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
 		ArgsUsage: "<id>[:profile]... | <id> -- <id>  [--flow NAME | --local] " +
 			"[--agent PROFILE | --model MODEL] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
 			"   f10 drive --resume N [--answer [ID=]TEXT ...] | list [--all] | cancel N",
@@ -863,20 +863,19 @@ func (in *driveInput) profileFlagged(i int) bool {
 	return in.args.agent != "" || i >= 0 && i < len(in.args.profiles) && in.args.profiles[i] != ""
 }
 
-// stopping reports whether the drive ends: a task asks, which only a human
-// can answer, or no task is active, so nothing can change.
+// stopping reports whether the drive ends: no task is active, or one asks
+// and every active task is held on a base. An ask does not stop the rest,
+// so a guard stop elsewhere still gets its catchup while the ask waits.
 func stopping(runs []*driveRun) bool {
-	active := false
+	asked, active, moving := false, false, false
 
 	for _, r := range runs {
-		if r.end != nil && r.end.code == exitAsk {
-			return true
-		}
-
+		asked = asked || r.end != nil && r.end.code == exitAsk
 		active = active || r.active()
+		moving = moving || r.active() && !r.parked && !r.waiting
 	}
 
-	return !active
+	return !active || asked && !moving
 }
 
 // startRunnable walks runs in graph order, so a base released earlier in
@@ -2631,7 +2630,11 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	in.saveTask(r, func(t *drives.Task) {
 		t.Skill, t.Outcome = "", &drives.Outcome{Row: res.row, Code: res.code}
 	})
-	in.unlease(r, in.runs)
+	// an asking task stays leased until the drive exits, since the drive
+	// runs on and resumes for its answer; another drive must not claim it
+	if res.code != exitAsk {
+		in.unlease(r, in.runs)
+	}
 
 	if res.code == exitAsk && res.ask != "" {
 		in.raise(ctx, r, strings.TrimPrefix(res.row, "asked at "), res.ask)
