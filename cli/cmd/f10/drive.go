@@ -595,7 +595,10 @@ type driveRun struct {
 	sentAt    time.Time
 	begun     bool
 	idleSince time.Time
-	end       *driveResult
+	// attached is set when the drive found the turn already running, so the
+	// skill it reports, not the one the drive meant to send, says how it ended
+	attached bool
+	end      *driveResult
 	// freshAt is when this drive started the agent: run state older than it
 	// was written by an agent that is gone, and is not read
 	freshAt time.Time
@@ -2179,7 +2182,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	}
 
 	run = r.current(run)
-	r.skill, r.sentAt, r.begun, r.idleSince = skill, in.now(), false, time.Time{}
+	r.skill, r.sentAt, r.begun, r.idleSince, r.attached = skill, in.now(), false, time.Time{}, false
 
 	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
 
@@ -2188,7 +2191,12 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 	switch {
 	case ws.Status == agentctl.StatusWorking:
-		r.begun = true
+		r.begun, r.attached = true, true
+
+		// the turn began at its prompt: a catchup may have reported before now
+		if p, ok := state.LastPrompt(in.stateDir, r.o.path); ok && !p.At.After(r.sentAt) {
+			r.sentAt = p.At.Truncate(time.Second)
+		}
 
 		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
 	case answered:
@@ -2464,6 +2472,13 @@ func (in *driveInput) poll(
 	}
 
 	r.begun = true
+
+	// catchup has no phase, so only its done signal names the turn as one
+	if r.attached && skill != "catchup" && run != nil && run.Done == "catchup" && run.DoneAt.After(since) {
+		fmt.Fprintf(w, "%s %s: the turn was a catchup\n", id, skill)
+
+		r.skill, skill = "catchup", "catchup"
+	}
 
 	if recent && stoppedRun(run) {
 		switch {
