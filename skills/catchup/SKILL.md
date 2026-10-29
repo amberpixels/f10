@@ -16,7 +16,7 @@ Running this skill authorizes the merge commit or rebased commits it produces, n
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs, and the step settles every conflict itself instead of asking (its Driven paragraph).
 - `<steering>`: how to settle the run ("take theirs for the lockfile", "ask me before touching the migration").
   The subject is always the branch checked out here.
-- No argument: catch the branch checked out here up with its base.
+- No argument: catch the branch checked out here up with its base; a merge or rebase already in progress is settled in place instead, nothing fetched, its other side the base.
 
 **Run**
 1. Run `f10-load-project.sh catchup` first, on every call of this skill.

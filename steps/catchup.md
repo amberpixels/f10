@@ -10,9 +10,13 @@ Badge: none, and it never retires or overwrites a badge a ship run left; `f10-st
 No conflict, or nothing to bring in, is a **correct run**.
 
 1. **Preconditions.**
-   A dirty tree: stop, name the dirty files one per line, touch nothing.
+   **Already in progress**: the loader's `in progress:` line above this step is the user's hand merge, settled in place.
+   Without the line, `MERGE_HEAD` under `git rev-parse --git-dir` is a merge, `rebase-merge/` or `rebase-apply/rebasing` a rebase.
+   Its other side is the base; ours and theirs are point 4's for the operation.
+   Skip the fetch, the base lookup (point 2), the integration (point 3) and the dirty-tree stop below: name the operation and its other side in one line, then go to point 4 and point 5, whose marks rule reads the other side.
+   Under a rebase, `git rebase --continue` carries on through the remaining commits as point 4 says.
+   **No operation in progress**, a dirty tree: stop, name the dirty files one per line, touch nothing.
    **Never stash**, never `--autostash` (the stash is shared across worktrees).
-   A merge or rebase **already in progress with conflicts** (`MERGE_HEAD`: merge; `rebase-merge` or `rebase-apply` under the git dir: rebase) is the user's hand merge: name it and go to point 4.
 
 2. **Find the base**, in this order:
 
@@ -62,11 +66,12 @@ No conflict, or nothing to bring in, is a **correct run**.
 5. **Verify** with `project.md → Verify` (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands).
    Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`conventions/context.md` → Commits, `--step catchup`) or folded into its commit under a rebase, and re-verify.
    Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set, then `f10-state.sh done catchup`, both before the report.
+   For an operation already in progress on entry, a mark is unset only when the operation's other side is the marked base (`f10-landed`: the default branch's tip, local or `origin/`; `f10-base-moved`: the sha it holds, or a commit containing it); otherwise it stays set, since the drive reads a cleared mark as that base brought in, and the report names it.
    The signal is the catchup's end for `f10 drive`: an idle agent without it is one that stopped without reporting, halted after a minute; a signal beside a mark still set is a catchup that did not end clean, and halts the task too.
    Every run writes it, by hand included: outside a drive it is read by nobody.
 
-6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows.
-   Then: commits brought in, each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
+6. **Report** per `conventions/report.md`: `branch`, `base`, and `commit` (new HEAD) rows; for an operation that was already in progress, `base` is the other side the loader named.
+   Then: commits brought in (by the user's merge or rebase, for an operation already in progress), each file's resolution (kept both / merged intent / took one side, because / regenerated / asked), verify green, and after a rebase that the next push needs `--force-with-lease`, not run here.
    If the strategy was the default, name the `catchup: merge | rebase | off` frontmatter key as the way to declare it, `catchup_stacked: merge | rebase` for a base found through `f10-after-branch`.
 
 **As a guard**: `/f10:ship` runs this before implement, each `pr` entry and a change judge (the ship skill says when), so the PR carries the moved base and a verdict is on code that merges.
@@ -77,6 +82,7 @@ It differs from the run above:
   Before `pr` and a change judge, every base is read from origin (`origin/<branch>` for an `f10-after-branch` base, `origin/<default>` otherwise), what the PR targets, so unpushed commits of another task never ride into this PR; before implement, point 2's local-first order stays.
 - **Method**: point 3's, except that this branch, once on origin (`origin/$(git branch --show-current)` after the fetch), is merged whatever `catchup:` or `catchup_stacked:` says, so the push after it never forces.
 - **Clean tree**: the ship skill commits the tree first where it has to; the guard never stashes.
+- **An operation already in progress** on entry (the loader's `in progress:` line) is the user's, not the guard's: fail the run before anything moves, never aborting it, with the operation and its other side in the `state` row and `/f10:catchup` in `next`.
 - **A conflict fails the run**: `git merge --abort` / `git rebase --abort`, so the branch is as it was, any mark kept, and `/f10:catchup` in the `next` row.
   No conflict is settled and nothing is asked.
   Before failing, mark the branch for the base that conflicted: `git config branch.<branch>.f10-landed <default>` for the default branch, `git config branch.<branch>.f10-base-moved <the base ref's sha>` for an `f10-after-branch` base, so point 2 finds the same base.
@@ -88,7 +94,7 @@ It differs from the run above:
 - **Report**: one line in the ship run naming the base, the commits brought in and the method; a merge commit carries `--step catchup` trailers as point 4 says.
 
 **Driven** (`modes/driven.md`; `f10 drive` sends it when a dependent's base finished or its base branch moved, when the branch its open PR targets moved past it, when the branch conflicts with the default branch at finish, or when ship's guard marked it; the watcher sends it, under `watch_catchup: on`, when the branch's open PR fell behind its target and no drive owns the task): on entry, note the ship status (`f10-state.sh show`).
-The method is point 3's.
+The method is point 3's; a drive and the watcher start from a clean tree, so a driven run never meets an operation already in progress.
 The sender, the drive or the watcher, pushes the branch itself once this run ends clean, with a lease after a rebase, so the open PR carries it before the next skill or pass.
 Nobody is at the keyboard, so the run never asks: no `AskUserQuestion`, no `f10-state.sh ask`.
 Nobody wakes an idle agent either: verify runs in the foreground or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
@@ -113,3 +119,4 @@ Run by hand, without `--driven`, point 4 asks exactly as written.
 
 **On failure:** no ref for the base, the operation cannot start, or verify stays red.
 Abort (`git merge --abort` / `git rebase --abort`) only if nothing is settled yet; otherwise keep the resolutions and report which operation is in progress and which files are settled and staged.
+An operation already in progress on entry is the user's: never abort it; it stays in progress, what was settled stays staged, and the report names it.
