@@ -1041,6 +1041,107 @@ func TestDriveWaitsOnACatchupThatHasNotReported(t *testing.T) {
 	}
 }
 
+// A turn the drive attached to is read by what it reported, not by the skill
+// the drive meant to send: a catchup that ended clean, before or after the
+// attach, resumes ship at the stopped entry, and an attached ship stays a ship.
+func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
+	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 7) --driven"
+	working, idle := listing("GH-1", "working"), listing("GH-1", "idle")
+
+	cases := map[string]struct {
+		before   bool // the catchup reported before the drive attached
+		stale    bool // a catchup reported before the attached turn's prompt
+		ship     bool // the attached turn was a ship, which reports done
+		unclean  bool // the catchup left a dirty tree
+		want     []string
+		resumed  bool
+		haltCode bool
+	}{
+		"reports after the attach": {want: []string{"GH-1 catchup: done", "GH-1:    done: ship"}, resumed: true},
+		"reported before the attach": {
+			before: true, want: []string{"GH-1 catchup: done", "GH-1:    done: ship"}, resumed: true,
+		},
+		"not clean": {
+			unclean: true, want: []string{"GH-1 halted at catchup: the catchup did not end clean"}, haltCode: true,
+		},
+		"a ship turn": {ship: true, want: []string{"GH-1 ship: done", "GH-1:    done: ship"}},
+		"a ship turn after a catchup": {
+			stale: true, ship: true, want: []string{"GH-1 ship: done", "GH-1:    done: ship"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+			fx.f.script(resume, "{}")
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+			if tc.unclean {
+				fx.f.script("git status --porcelain", " M a.go")
+			}
+
+			// the turn's prompt came before this drive
+			mark := fx.clock.Add(-time.Minute)
+			if err := state.MarkPrompt(fx.in.stateDir, "s-GH-1", "/code/repo.GH-1", mark); err != nil {
+				t.Fatal(err)
+			}
+
+			fx.writeShipStop(t, "partial", "pr", 7, catchupNext)
+
+			switch {
+			case tc.before:
+				fx.reports(t, fx.clock.Add(-30*time.Second))
+			case tc.stale:
+				fx.reports(t, mark.Add(-30*time.Second))
+			}
+
+			// the attach, the turn, its end; then the look before the resumed
+			// ship, its turn and its end
+			fx.f.script(wsList, unopened, working, working, idle, idle, working, idle)
+			fx.onTick[2] = func() {
+				switch {
+				case tc.ship:
+					fx.writeRun(t, "done", "", "", "")
+
+					if tc.stale {
+						fx.reports(t, mark.Add(-30*time.Second))
+					}
+				case !tc.before:
+					fx.writeShipStop(t, "partial", "pr", 7, catchupNext)
+					fx.reports(t, fx.clock)
+				}
+			}
+			fx.onTick[4] = func() { fx.writeRun(t, "done", "", "", "") }
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if !strings.Contains(out, "GH-1 ship: attached to the turn in progress") {
+				t.Errorf("the drive did not attach:\n%s", out)
+			}
+
+			if tc.haltCode != (exitCode(err) == exitHalted) || !tc.haltCode && err != nil {
+				t.Errorf("err = %v\n%s", err, out)
+			}
+
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("output lacks %q:\n%s", want, out)
+				}
+			}
+
+			if tc.ship && strings.Contains(out, "the turn was a catchup") {
+				t.Errorf("a ship turn was read as a catchup:\n%s", out)
+			}
+
+			if tc.resumed != fx.f.called(resume) {
+				t.Errorf("ship resumed = %v, want %v: %q\n%s", !tc.resumed, tc.resumed, fx.f.calls, out)
+			}
+		})
+	}
+}
+
 // A catchup's agent idle past the grace with no report halts the task as a
 // ship turn would: stopped without reporting, the workspace named, the
 // halt in the ledger.

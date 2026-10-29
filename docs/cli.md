@@ -594,6 +594,7 @@ An answer sent closes the task's ask in the inbox. An answer the inbox already h
 A drive whose task was answered after it last looked, while it still held its lease, resumes itself once it has stopped: `f10 asks resume` waits for its process to end, then has the daemon run `--resume <n>`.
 `f10 drive cancel <n>` closes the drive's open asks.
 An agent found mid-turn is attached to rather than prompted again.
+The turn is read by what it reports: one that turns out to be a catchup is followed like a catchup the drive sent, so a clean one resumes ship at the entry its stop names.
 A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
