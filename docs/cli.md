@@ -987,7 +987,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 | `needs judge` | older, and no such verdict |
 | `undated` | no created date was found |
 
-The created date comes from the host's issue; for a driver's tracker, `--created <YYYY-MM-DD>` passes the date its `read` doc showed, and without it the answer is `undated`.
+`--created <YYYY-MM-DD>` passes the date the task's read showed, which spares a tracker call; without it the date comes from the host's issue, and on any other tracker the answer is `undated`.
 Verdict files are read from the storage root and, from a worktree that keeps its own `.f10`, from main's too.
 A bundle is checked on its lead.
 

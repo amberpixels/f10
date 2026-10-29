@@ -7,6 +7,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 func TestStaleAt(t *testing.T) {
@@ -166,5 +170,43 @@ func TestTaskStaleCommand(t *testing.T) {
 	if got := run("3w", "--created", "2020-01-01"); !strings.HasPrefix(got, staleJudged+" ") ||
 		!strings.HasSuffix(got, filepath.Join("verdicts", "DM-5", "1.md")) {
 		t.Errorf("judged = %q", got)
+	}
+}
+
+// A bare call asks the host's issues for the date, a driver beside them
+// included; a failing host is the plain error, never a refetch hint.
+func TestTaskStaleCreatedAt(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh issue view 14 --json createdAt,url",
+		`{"createdAt":"2026-09-20T23:30:00Z","url":"https://github.com/o/r/issues/14"}`)
+	f.fail("gh issue view 15 --json createdAt,url", shell.Result{Code: 1, Stderr: "rate limited"})
+
+	tg := childTarget(t, "gh")
+
+	at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, "")
+	if err != nil || at.Format(time.DateOnly) != "2026-09-20" {
+		t.Errorf("host date = %v, %v", at, err)
+	}
+
+	_, err = tg.createdAt(t.Context(), ref.Ref{ID: "FT-15", Number: "15"}, "")
+	if err == nil || !strings.Contains(err.Error(), "rate limited") || strings.Contains(err.Error(), "fetch adapter") {
+		t.Errorf("failing host = %v, want gh's error alone", err)
+	}
+
+	at, err = tg.createdAt(t.Context(), ref.Ref{ID: "FT-16", Number: "16"}, "2020-01-02")
+	if err != nil || at.Format(time.DateOnly) != "2020-01-02" {
+		t.Errorf("--created = %v, %v; want no host call", at, err)
+	}
+
+	if _, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-16", Number: "16"}, "2020-13-01"); err == nil ||
+		!strings.Contains(err.Error(), "YYYY-MM-DD") {
+		t.Errorf("bad --created = %v", err)
+	}
+
+	tg.eff.TrackerKind = "Jira"
+	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: "declared"})
+
+	if at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, ""); err != nil || !at.IsZero() {
+		t.Errorf("non-host tracker = %v, %v; want undated", at, err)
 	}
 }

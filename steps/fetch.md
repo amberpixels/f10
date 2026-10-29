@@ -11,8 +11,10 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
    A base task, named by the steering (`f10 start --after`) or a body line `After: <id>`, goes into the brief: the plan step records it as the plan's **Depends on** line and designs against the base task's plan (its task, where the plan is not written yet), never this checkout, with no fallback for its absence.
    **A stale task** is judged before anything else, when the frontmatter declares `stale_after` (`10d`, `3w`) and this run will write a plan: the **plan** step follows, or a planless flow's brief becomes its inline plan.
    A ship run that reuses a saved plan skips it: look for the plan file first.
-   - **Check**: `f10 task stale <id>` judges the age against `stale_after` and looks for a recent proceed verdict on the task, in every storage root that may hold one.
-     For a tracker that is not the host's issues, add `--created <YYYY-MM-DD>` with the created date the fetch adapter's output or the driver's doc showed; with none shown, call it without.
+   - **Check**: `f10 task stale <id> --created <YYYY-MM-DD>` judges the age against `stale_after` and looks for a recent proceed verdict on the task, in every storage root that may hold one.
+     `--created` is the created date what was read showed: `f10 task read`'s `created` meta line, or the driver's doc or the fetch adapter's output; with none shown, leave the flag out.
+     A bundle is checked on its lead, whose id keys the plan and the verdicts.
+     A non-zero exit is `undated`, said in one line with its error.
      It prints one line:
      `fresh`: nothing to do.
      `undated`: not judged, one line in the brief; never call the adapter again to find a date.

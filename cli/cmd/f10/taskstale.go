@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -44,8 +43,8 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	roots := []string{t.lay.StorageRoot}
-	if t.lay.LegacyStorage && t.lay.MainRoot != "" {
-		roots = append(roots, filepath.Join(t.lay.MainRoot, ".f10"))
+	if shared := t.sharedRoot(); shared != t.lay.StorageRoot {
+		roots = append(roots, shared)
 	}
 
 	_, err = fmt.Fprintln(cmd.Writer, staleness(created, t.eff.StaleAfter, time.Now(), roots, r.ID))
@@ -53,8 +52,8 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// createdAt reads the date from the host's issues only: a driver's doc shows
-// it in any form, so the agent that read it passes it as --created.
+// createdAt prefers --created, the date the agent already read; a bare call
+// asks the host's issues, and any other tracker has no date f10 can parse.
 func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Time, error) {
 	if flag != "" {
 		at, err := time.Parse(time.DateOnly, flag)
@@ -65,7 +64,7 @@ func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Ti
 		return at, nil
 	}
 
-	if !t.hostIssues() || t.driver() != nil {
+	if !t.hostIssues() {
 		return time.Time{}, nil
 	}
 
@@ -74,12 +73,7 @@ func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Ti
 		return time.Time{}, err
 	}
 
-	at, err := h.issueCreated(ctx, r.Number)
-	if err != nil {
-		return time.Time{}, fetchFallback(err)
-	}
-
-	return at, nil
+	return h.issueCreated(ctx, r.Number)
 }
 
 // staleness is the line task stale prints. A proceed on the task within
