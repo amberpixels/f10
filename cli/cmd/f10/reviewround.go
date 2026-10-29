@@ -63,7 +63,7 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 func reviewsKey(ctx context.Context, t *target, explicit string) (string, error) {
 	r, err := t.reference(ctx, explicit)
 	if err == nil {
-		return r.ID, nil
+		return r.Head().ID, nil
 	}
 
 	if !errors.Is(err, ref.ErrNoReference) {
