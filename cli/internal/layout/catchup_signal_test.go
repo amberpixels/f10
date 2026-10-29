@@ -58,7 +58,7 @@ func TestCatchupInProgressLine(t *testing.T) {
 	})
 
 	t.Run("rebase", func(t *testing.T) {
-		mustFail(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "rebase", "other")
+		mustFail(t, repo, "rebase", "other")
 		defer gitc("rebase", "--abort")
 
 		assertLineUnderStep(t, loadOut(t, script, repo, home, "catchup"), want("rebase onto"))
@@ -150,7 +150,10 @@ func loadOut(t *testing.T, script, dir, home string, steps ...string) string {
 func gitOut(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 
-	cmd := exec.Command("git", args...)
+	// a merge with no committer identity, as on CI, refuses before it starts
+	cmd := exec.Command("git", append([]string{
+		"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+	}, args...)...)
 	cmd.Dir = dir
 
 	out, err := cmd.Output()
@@ -166,7 +169,10 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 func mustFail(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command("git", args...)
+	// a merge with no committer identity, as on CI, refuses before it starts
+	cmd := exec.Command("git", append([]string{
+		"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+	}, args...)...)
 	cmd.Dir = dir
 
 	if out, err := cmd.CombinedOutput(); err == nil {
