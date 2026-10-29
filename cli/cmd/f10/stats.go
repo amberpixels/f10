@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -20,13 +21,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
-// The stats verb is active plan and implement time per task: every wait on
-// the user is out, tool run time stays in. Density is implement minutes per
-// 100 changed lines; a task from before waits were recorded has no numbers.
+// The stats verb is active time per task and step: every wait on the user is
+// out, tool run time stays in. Density is implement minutes per 100 changed
+// lines; a task from before waits were recorded has no numbers.
 func statsCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",
-		Usage:     "active plan and implement minutes per task, with size and density",
+		Usage:     "active minutes per task by step group, with size and density; a task id adds its steps",
 		ArgsUsage: "[<task-id>]",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "since", Value: "30d", Usage: "only tasks active in the last `N`d or Nw"},
@@ -64,26 +65,69 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return writeStats(cmd.Writer, statRows(events, strings.TrimSpace(cmd.Args().First()), time.Now().Add(-since)))
+	task := strings.TrimSpace(cmd.Args().First())
+	rows := statRows(events, task, time.Now().Add(-since))
+
+	if err := writeStats(cmd.Writer, rows); err != nil || task == "" || len(rows) == 0 {
+		return err
+	}
+
+	fmt.Fprintln(cmd.Writer)
+
+	return writeSteps(cmd.Writer, rows[0])
 }
 
-// statRow is one task's numbers; a nil is a value never recorded.
+// statRow is one task's numbers; a step absent, or a nil, was never recorded.
 type statRow struct {
-	task      string
-	plan      *time.Duration
-	implement *time.Duration
-	lines     *int
-	md        int
-	latest    time.Time
+	task   string
+	steps  map[string]time.Duration
+	lines  *int
+	md     int
+	latest time.Time
+}
+
+// The table's step groups: the review loop, and every other named step.
+var reviewLoop = []string{timing.Review, timing.Resolve, timing.Judge}
+
+// group sums the steps the column holds; nil when none was recorded.
+func (r statRow) group(column string) *time.Duration {
+	var (
+		sum   time.Duration
+		found bool
+	)
+
+	for step, d := range r.steps {
+		if stepColumn(step) == column {
+			sum, found = sum+d, true
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	return &sum
+}
+
+func stepColumn(step string) string {
+	switch {
+	case step == timing.Plan, step == timing.Implement, step == timing.Glue:
+		return step
+	case slices.Contains(reviewLoop, step):
+		return "review"
+	}
+
+	return "deliver"
 }
 
 // density is implement minutes per 100 changed lines, when both exist.
 func (r statRow) density() *float64 {
-	if r.implement == nil || r.lines == nil || *r.lines == 0 {
+	impl := r.group(timing.Implement)
+	if impl == nil || r.lines == nil || *r.lines == 0 {
 		return nil
 	}
 
-	d := r.implement.Minutes() * 100 / float64(*r.lines)
+	d := impl.Minutes() * 100 / float64(*r.lines)
 
 	return &d
 }
@@ -107,25 +151,17 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 		return r
 	}
 
-	add := func(sum **time.Duration, d time.Duration) {
-		if *sum == nil {
-			*sum = new(time.Duration)
-		}
-
-		**sum += d
-	}
-
 	for _, w := range timing.Windows(events) {
 		if w.Task == "" {
 			continue
 		}
 
 		r := row(w.Task, w.To)
-		if w.Step == timing.Plan {
-			add(&r.plan, w.Active)
-		} else {
-			add(&r.implement, w.Active)
+		if r.steps == nil {
+			r.steps = map[string]time.Duration{}
 		}
+
+		r.steps[w.Step] += w.Active
 	}
 
 	// the latest size stands: a rerun of finish records again
@@ -163,7 +199,7 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 
 func writeStats(w io.Writer, rows []statRow) error {
 	if len(rows) == 0 {
-		_, err := fmt.Fprintln(w, "no plan or implement time recorded")
+		_, err := fmt.Fprintln(w, "no active time recorded")
 
 		return err
 	}
@@ -174,18 +210,26 @@ func writeStats(w io.Writer, rows []statRow) error {
 		fmt.Fprintln(tw, strings.Join(cells, "\t")+"\t")
 	}
 
-	line("task", "plan", "implement", "size", "density")
+	columns := []string{timing.Plan, timing.Implement, "review", "deliver", timing.Glue}
+	line(append(append([]string{"task"}, columns...), "size", "density")...)
 
-	var plans, impls, sizes, densities []float64
+	var sizes, densities []float64
+
+	medians := make([][]float64, len(columns))
 
 	for _, r := range rows {
+		cells := []string{r.task}
+		for i, c := range columns {
+			cells = append(cells, minutes(r.group(c), &medians[i]))
+		}
+
 		size := "-"
 		if r.lines != nil {
 			size = fmt.Sprintf("%d (%d%% md)", *r.lines, percent(r.md, *r.lines))
 			sizes = append(sizes, float64(*r.lines))
 		}
 
-		line(r.task, minutes(r.plan, &plans), minutes(r.implement, &impls), size, ratio(r.density(), &densities))
+		line(append(cells, size, ratio(r.density(), &densities))...)
 	}
 
 	size := "-"
@@ -193,7 +237,52 @@ func writeStats(w io.Writer, rows []statRow) error {
 		size = fmt.Sprintf("%.0f", m)
 	}
 
-	line("median", medianMinutes(plans), medianMinutes(impls), size, medianMinutes(densities))
+	cells := []string{"median"}
+	for _, vs := range medians {
+		cells = append(cells, medianMinutes(vs))
+	}
+
+	line(append(cells, size, medianMinutes(densities))...)
+
+	return tw.Flush()
+}
+
+// stepOrder is the breakdown's order: the default flow's, other steps
+// alphabetically after it, glue last.
+var stepOrder = []string{
+	timing.Plan, timing.Judge, timing.Implement, timing.Cleanup, timing.PR, timing.Review, timing.Resolve,
+}
+
+// writeSteps is one task's active time per step, with a total.
+func writeSteps(w io.Writer, r statRow) error {
+	steps := slices.Collect(maps.Keys(r.steps))
+	slices.SortFunc(steps, func(a, b string) int {
+		rank := func(s string) int {
+			if i := slices.Index(stepOrder, s); i >= 0 {
+				return i
+			}
+
+			if s == timing.Glue {
+				return len(stepOrder) + 1
+			}
+
+			return len(stepOrder)
+		}
+
+		return cmp.Or(cmp.Compare(rank(a), rank(b)), strings.Compare(a, b))
+	})
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
+	fmt.Fprintln(tw, "step\tactive\t")
+
+	var total time.Duration
+
+	for _, s := range steps {
+		total += r.steps[s]
+		fmt.Fprintf(tw, "%s\t%s\t\n", s, fmtMinutes(r.steps[s].Minutes()))
+	}
+
+	fmt.Fprintf(tw, "total\t%s\t\n", fmtMinutes(total.Minutes()))
 
 	return tw.Flush()
 }

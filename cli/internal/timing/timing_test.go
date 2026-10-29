@@ -1,6 +1,7 @@
 package timing
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -62,6 +63,7 @@ func TestWindows(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		events []ledger.Event
+		steps  []string // the steps compared; none is plan and implement
 		want   []got
 	}{
 		{
@@ -184,13 +186,118 @@ func TestWindows(t *testing.T) {
 			),
 			want: []got{{"implement", 6}},
 		},
+		{
+			name: "every flow entry is a window under its step's name",
+			events: join(
+				run(0, "ship"),
+				claim(1, "ship", "running", "judge"),
+				claim(2, "ship", "running", "implement"),
+				claim(10, "ship", "running", "cleanup:comments"),
+				claim(12, "ship", "running", "pr"),
+				claim(15, "ship", "running", "judge"),
+				claim(18, "ship", "running", "deploy:staging"),
+				claim(20, "ship", "done"),
+			),
+			steps: []string{Judge, Implement, Cleanup, PR, "deploy"},
+			want:  []got{{"judge", 1}, {"implement", 8}, {"cleanup", 2}, {"pr", 3}, {"judge", 3}, {"deploy", 2}},
+		},
+		{
+			name: "a review entry splits into review and resolve at the findings file",
+			events: join(
+				run(0, "ship"),
+				claim(0, "ship", "running", "review:local"),
+				ev(6, ledger.ReviewRoundOpened, "FT-1", ledger.Payload{"round": "1"}),
+				claim(7, "ship", "running", "review:local"),
+				wait(8, 9, "question"),
+				ev(10, ledger.ReviewRoundOpened, "FT-1", ledger.Payload{"round": "2"}),
+				claim(14, "ship", "running", "judge"),
+				claim(15, "ship", "done"),
+			),
+			steps: []string{Review, Resolve},
+			want:  []got{{"review", 6}, {"resolve", 7}},
+		},
+		{
+			name: "a review entry with no findings file stays review",
+			events: join(
+				run(0, "ship"),
+				claim(0, "ship", "running", "review:ci"),
+				claim(4, "ship", "running", "pr"),
+				claim(5, "ship", "done"),
+			),
+			steps: []string{Review, Resolve},
+			want:  []got{{"review", 4}},
+		},
+		{
+			name: "glue is the run outside its steps, to the turn after it is done",
+			events: join(
+				run(0, "ship"),
+				claim(2, "ship", "running", "implement"),
+				claim(10, "ship", "running", "pr"),
+				wait(10.5, 11.5, "permission"),
+				claim(14, "ship", "running", "pr"), // resent: no gap
+				claim(15, "ship", "done"),
+				ev(18, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(30, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+			),
+			steps: []string{Glue},
+			want:  []got{{"glue", 5}},
+		},
+		{
+			name: "a plan run's glue is its hand-off, up to the chained ship",
+			events: join(
+				run(0, "plan"),
+				ev(8, ledger.PlanSaved, "FT-1", nil),
+				run(9, "ship"),
+				claim(10, "ship", "running", "implement"),
+				claim(20, "ship", "done"),
+				ev(21, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(22, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+			),
+			steps: []string{Glue},
+			want:  []got{{"glue", 1}, {"glue", 2}},
+		},
+		{
+			name: "a driven run blocked and resumed is two glue segments",
+			events: join(
+				run(0, "ship"),
+				claim(1, "ship", "running", "judge"),
+				claim(3, "ship", "blocked", "judge"),
+				ev(4, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(40, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				claim(41, "ship", "running", "judge"),
+				claim(45, "ship", "running", "implement"),
+				claim(50, "ship", "done"),
+				ev(52, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(53, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+			),
+			steps: []string{Glue},
+			want:  []got{{"glue", 2}, {"glue", 2}},
+		},
+		{
+			name: "a run that never stops has no glue, though its turns end",
+			events: join(
+				run(0, "ship"),
+				claim(1, "ship", "running", "implement"),
+				wait(5, 6, "turn"),
+			),
+			steps: []string{Glue},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// the turn the run ended on: every session since the release has one
 			ws := Windows(join(tc.events, wait(100, 101, "turn")))
 
+			steps := tc.steps
+			if steps == nil {
+				steps = []string{Plan, Implement}
+			}
+
 			var have []got
 			for _, w := range ws {
+				if !slices.Contains(steps, w.Step) {
+					continue
+				}
+
 				have = append(have, got{w.Step, w.Active.Minutes()})
 
 				if w.Task != "FT-1" {

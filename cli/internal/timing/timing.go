@@ -6,16 +6,23 @@ package timing
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The steps windows are measured for.
+// The steps named here; any other flow entry is measured under its own name.
 const (
 	Plan      = "plan"
 	Implement = "implement"
+	Review    = "review"
+	Resolve   = "resolve"
+	Judge     = "judge"
+	PR        = "pr"
+	Cleanup   = "cleanup"
+	Glue      = "glue" // a run's time outside every step
 )
 
 // Window is one stretch of a step in one session.
@@ -49,10 +56,11 @@ func Claim(e ledger.Event) (string, string, string) {
 	return words[0], words[1], words[2]
 }
 
-// Windows is every bounded plan and implement window, oldest first by end. A
-// plan run counts to the plan it saves; a ship step from the claim entering
+// Windows is every bounded step window and glue window, oldest first by end.
+// A plan run counts to the plan it saves; a ship step from the claim entering
 // it to the claim leaving it (next step, stop, backstop, next run). A plan
-// claimed `prior` or `skipped` was never planned here.
+// claimed `prior` or `skipped` was never planned here. Glue is a run's
+// segments minus every step window inside them.
 func Windows(events []ledger.Event) []Window {
 	var out []Window
 
@@ -63,8 +71,20 @@ func Windows(events []ledger.Event) []Window {
 			continue
 		}
 
-		for _, w := range windows(evs) {
+		steps := windows(evs)
+		busy := slices.Clone(waits)
+
+		for _, w := range steps {
+			busy = append(busy, span{w.From, w.To})
+
 			if active, ok := activeTime(w.From, w.To, waits); ok {
+				w.Active = active
+				out = append(out, w)
+			}
+		}
+
+		for _, w := range segments(evs) {
+			if active, ok := activeTime(w.From, w.To, busy); ok {
 				w.Active = active
 				out = append(out, w)
 			}
@@ -105,6 +125,8 @@ func windows(evs []ledger.Event) []Window {
 	var (
 		out     []Window
 		step    *Window // the ship step open now
+		entry   string  // the flow entry step was claimed as
+		split   bool    // the review entry open now reached its resolve
 		planRun *Window // a /f10:plan run not yet saved
 		inShip  bool
 	)
@@ -148,6 +170,12 @@ func windows(evs []ledger.Event) []Window {
 				end(planRun, e)
 				planRun = nil
 			}
+		case ledger.ReviewRoundOpened:
+			// review ends at the findings file; resolve settles it under the same entry
+			if step != nil && step.Step == Review && !split {
+				end(step, e)
+				step, split = open(e, Resolve), true
+			}
 		case ledger.SessionStopped:
 			if e.Payload.Val["backstop"] == true {
 				leave(e)
@@ -161,21 +189,96 @@ func windows(evs []ledger.Event) []Window {
 
 			switch {
 			case phase == "plan" && status == "running" && step == nil:
-				step = open(e, Plan)
+				step, entry = open(e, Plan), Plan
 			case phase == "plan" && (status == "prior" || status == "skipped") && step != nil && step.Step == Plan:
 				step = nil
 			case phase == "ship" && status == "running":
-				if step != nil && step.Step == leaf {
+				if step != nil && entry == leaf {
 					continue // the badge resent, or a driven run resuming its own step
 				}
 
 				leave(e)
 
-				if leaf == Plan || leaf == Implement {
-					step = open(e, leaf)
+				if leaf != "" {
+					// `review:local` is review, `cleanup:comments` cleanup
+					name, _, _ := strings.Cut(leaf, ":")
+					step, entry, split = open(e, name), leaf, false
 				}
 			case phase == "ship" && slices.Contains([]string{"done", "failed", "partial", "blocked"}, status):
 				leave(e)
+			}
+		}
+	}
+
+	return out
+}
+
+// segments is every closed stretch of a plan or ship run, as glue windows. It
+// closes at the first turn end after the run's last row, so the report after
+// it counts too, else at the next run or a backstop.
+func segments(evs []ledger.Event) []Window {
+	var (
+		out  []Window
+		seg  *Window
+		last string // the skill of the session's last run
+		over bool   // the run wrote its last row; its turn ending closes it
+	)
+
+	closeAt := func(e ledger.Event) {
+		if seg != nil {
+			seg.To = e.At
+			out = append(out, *seg)
+			seg = nil
+		}
+	}
+
+	openAt := func(e ledger.Event) {
+		seg, over = &Window{Task: e.Task, Session: e.Session, Step: Glue, From: e.At}, false
+	}
+
+	for _, e := range evs {
+		if seg != nil && e.Task != "" {
+			seg.Task = e.Task
+		}
+
+		switch e.Kind {
+		case ledger.RunStarted:
+			skill, _ := e.Payload.Val["skill"].(string)
+			if !slices.Contains(state.Phases, skill) {
+				continue
+			}
+
+			closeAt(e)
+
+			last = skill
+			if skill == "plan" || skill == "ship" {
+				openAt(e)
+			}
+		case ledger.PlanSaved:
+			over = over || seg != nil && last == "plan"
+		case ledger.WaitStarted:
+			if over && e.Payload.Val["reason"] == "turn" {
+				closeAt(e)
+			}
+		case ledger.SessionStopped:
+			if e.Payload.Val["backstop"] == true {
+				closeAt(e)
+			}
+		case ledger.StateSet:
+			if last != "ship" {
+				continue
+			}
+
+			phase, status, _ := Claim(e)
+
+			switch {
+			case phase != "ship":
+			case status == "running" && seg == nil:
+				openAt(e)
+			case status == "running":
+				over = false
+			case slices.Contains([]string{"done", "failed", "partial", "blocked"}, status):
+				over = seg != nil
 			}
 		}
 	}
