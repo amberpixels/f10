@@ -199,6 +199,29 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 		t.Errorf("resume got %+v, want to attach to %s", resume, first.Log)
 	}
 
+	// a cancelled record with the same command line names another drive
+	cancelled := time.Now()
+	old := &drives.Record{Args: rec.Args, Cancelled: &cancelled}
+
+	if err := drives.Create(root, old); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := Call(t.Context(), s.Dir, Request{
+		Op:     OpRun,
+		Argv:   []string{"exit 1"},
+		Dir:    "/",
+		Root:   root,
+		Resume: old.Number,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if stale.Attach {
+		t.Errorf("a resume of cancelled drive %d attached to %s", old.Number, stale.Log)
+	}
+
 	waitExit(t, first.Log)
 }
 

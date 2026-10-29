@@ -280,7 +280,7 @@ func (s *Server) run(req Request) Reply {
 	// numbered at start
 	key := req.Key
 	if req.Resume > 0 {
-		key = cmp.Or(recordKey(req.Root, req.Resume), key)
+		key = cmp.Or(liveRecordKey(req.Root, req.Resume), key)
 	}
 
 	for _, c := range s.runs {
@@ -569,6 +569,17 @@ func (s *Server) resumeDrained() {
 func recordKey(root string, n int) string {
 	rec, err := drives.Read(root, n)
 	if err != nil {
+		return ""
+	}
+
+	return strings.Join(rec.Args, " ")
+}
+
+// liveRecordKey is recordKey for a record still running: a cancelled or done
+// one shares its command line with a newer drive it must not attach to.
+func liveRecordKey(root string, n int) string {
+	rec, err := drives.Read(root, n)
+	if err != nil || rec.Cancelled != nil || rec.Done() {
 		return ""
 	}
 
