@@ -25,6 +25,8 @@ import (
 func forwardCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "forward",
+		Hidden:    true,
+		Category:  plumbingCategory,
 		Usage:     "hand a command to the agent working on a task in another worktree",
 		ArgsUsage: "<task-id>[-suffix] <text...>",
 		Action:    runForward,

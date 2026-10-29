@@ -8,6 +8,8 @@
 #
 # One line, not the conventions themselves: Claude Code caps one hook's context at 10,000 characters and
 # the conventions are over twice that.
+# The line also names `f10 help --agent`, the command reference, as a call of its own: appended to the
+# conventions it would push one Bash output past Claude Code's 30,000-character cap.
 #
 # Whether the session holds them is a marker beside the run state, `<session>.conventions`.
 # The binary's seed and clear never touch it (a new run is not a new context); its prune and
@@ -25,7 +27,7 @@ state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
 skills="brainstorm capture catchup cleanup debug demo explain judge plan resolve review ship standup"
 
 # shellcheck disable=SC2016 # the backticks are markdown for the model, not a command
-line='This context does not hold the f10 conventions: run `f10-load-conventions.sh` before anything else.'
+line='This context does not hold the f10 conventions: run `f10-load-conventions.sh`, then `f10 help --agent` in a call of its own, before anything else.'
 
 json=""
 json_get() { # json_get <key> [<parent object>], jq where it exists, sed otherwise

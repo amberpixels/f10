@@ -22,8 +22,10 @@ import (
 // carries no switch.
 func traceCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "trace",
-		Usage: "the trailers a step's commit carries, rendered from the project's traces switch",
+		Name:     "trace",
+		Hidden:   true,
+		Category: plumbingCategory,
+		Usage:    "the trailers a step's commit carries, rendered from the project's traces switch",
 		Commands: []*cli.Command{
 			{
 				Name:  "trailers",
