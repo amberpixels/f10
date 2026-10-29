@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -2102,8 +2103,9 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git fetch origin", "")
 			// origin's copy of the branch before the catchup, then what the push left
 			fx.f.script("git rev-parse -q --verify origin/GH-1", "old", tc.head)
-			// read before and after the push's fetch, then what the push left
-			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "old", "old", tc.head)
+			// read before and after the fetch when the catchup goes out, then
+			// before and after the push's fetch, then what the push left
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "old", "old", "old", "old", tc.head)
 			fx.f.fail("git merge-tree --write-tree origin/main old", shell.Result{Code: 1})
 			fx.f.script("git config branch.GH-1."+cfgLanded+" main", "")
 			// before the catchup, the switch that sends it, after it, before
@@ -2234,22 +2236,29 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 		marked   bool   // the branch is marked already
 		fetch    shell.Result
 		pushFail bool
+		moved    bool   // someone pushed to the branch while the catchup ran
 		mark     string // the mark the boundary sets
-		fetches  int    // git fetch origin calls: the boundary before ship, once more after a catchup, the push, finish
+		fetches  int    // git fetch origin calls: the boundary before ship, the catchup's send, after it, the push, finish
 		halt     string
+		next     string // the halt's next line, "next: rerun the drive" when ""
 	}{
-		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 4},
+		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 5},
 		"never pushed":           {fetches: 1},
 		"already an ancestor":    {pushed: "p1", ancestor: true, fetches: 2},
-		"already marked":         {pushed: "p1", marked: true, fetches: 4},
+		"already marked":         {pushed: "p1", marked: true, fetches: 5},
 		"fetch fails":            {pushed: "p1", fetch: shell.Result{Code: 128, Stderr: "no route"}, fetches: 2},
-		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved, fetches: 4},
+		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved, fetches: 5},
 		"an unlisted base moved, not on origin": {
-			pushed: "p1", after: "GH-9", unpushed: true, mark: moved, fetches: 4,
+			pushed: "p1", after: "GH-9", unpushed: true, mark: moved, fetches: 5,
 		},
 		"push rejected": {
-			pushed: "p1", mark: landed, pushFail: true, fetches: 2,
+			pushed: "p1", mark: landed, pushFail: true, fetches: 3,
 			halt: "GH-1 halted at catchup: pushing GH-1, caught up with origin/main: ",
+		},
+		"origin moved during the catchup": {
+			pushed: "p1", mark: landed, moved: true, fetches: 3,
+			halt: "GH-1 halted at catchup: GH-1 caught up with origin/main, and origin/GH-1 moved meanwhile",
+			next: "next: bring origin/GH-1 into /code/repo.GH-1, then /f10:catchup there",
 		},
 	}
 
@@ -2342,7 +2351,13 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			// its end, where finish runs
 			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
 			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
-			fx.onTick[2] = func() { fx.reports(t, fx.clock) } // the catchup reports as its turn ends
+			fx.onTick[2] = func() { // the catchup reports as its turn ends
+				if tc.moved {
+					fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p2")
+				}
+
+				fx.reports(t, fx.clock)
+			}
 
 			err := fx.drive(t)
 			out := fx.out.String()
@@ -2352,8 +2367,10 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			if tc.halt != "" {
+				next := cmp.Or(tc.next, "next: rerun the drive")
 				if exitCode(err) != exitHalted || !strings.Contains(out, tc.halt) ||
-					!strings.Contains(out, "next: rerun the drive") || fx.f.called("finish GH-1") {
+					!strings.Contains(out, next) || fx.f.called("finish GH-1") ||
+					(tc.moved && fx.f.called("git push")) {
 					t.Fatalf("err = %v\n%s", err, out)
 				}
 
@@ -3574,5 +3591,76 @@ func TestDriveHaltsAShipWaitingOnABaseOutsideIt(t *testing.T) {
 		"GH-2 halted at ship: waiting on GH-1: its branch has no code yet",
 	) {
 		t.Errorf("output = %s", out)
+	}
+}
+
+// The push after a catchup leases against origin's copy when the catchup went
+// out and refuses once origin moved since. With no record held (a resumed
+// drive, or a skill sent after the catchup) only a fast-forward goes out.
+func TestDrivePushesACaughtUpBranchOnlyOverWhatTheCatchupSaw(t *testing.T) {
+	cases := map[string]struct {
+		held        bool   // no skill went out since the catchup
+		pushed      string // origin's copy of the branch at the push
+		fastForward bool   // HEAD holds origin's copy: the catchup merged
+		push        string // the push expected, "" for none
+		next        string // the halt's next line when refused
+	}{
+		"origin held": {
+			held: true, pushed: "p1",
+			push: "git push --force-with-lease=refs/heads/GH-1:p1 origin HEAD:refs/heads/GH-1",
+		},
+		"origin moved": {
+			held: true, pushed: "p2",
+			next: "next: bring origin/GH-1 into /code/repo.GH-1, then /f10:catchup there, then rerun the drive",
+		},
+		"no record, rebased": {
+			pushed: "p2",
+			next:   "next: check origin/GH-1 holds nothing /code/repo.GH-1 lacks",
+		},
+		"no record, merged": {
+			pushed: "p2", fastForward: true, push: "git push origin HEAD:refs/heads/GH-1",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "finish")
+			ancestor := shell.Result{Code: 1}
+			if tc.fastForward {
+				ancestor = shell.Result{}
+			}
+
+			fx.f.fail("git merge-base --is-ancestor "+tc.pushed+" HEAD", ancestor)
+
+			if tc.push != "" {
+				fx.f.script(tc.push, "")
+			}
+
+			r := &driveRun{
+				o:           openedTask{branch: "GH-1", path: "/code/repo.GH-1"},
+				lastCatchup: &catchupSent{base: "origin/main", pushed: "p1", held: tc.held},
+			}
+
+			err := fx.in.pushCaughtUp(context.Background(), io.Discard, r, "finish", tc.pushed, "origin/main")
+
+			if tc.push != "" {
+				if err != nil || !fx.f.called(tc.push) {
+					t.Fatalf("err = %v, want %q: %q", err, tc.push, fx.f.calls)
+				}
+			} else {
+				if !errors.As(err, new(originMovedError)) || fx.f.called("git push") {
+					t.Fatalf("err = %v, want refused with no push: %q", err, fx.f.calls)
+				}
+
+				res := pushHalted("GH-1", "finish", err)
+				if !slices.ContainsFunc(res.lines, func(l string) bool { return strings.HasPrefix(l, tc.next) }) {
+					t.Errorf("halt lines = %q, want one starting %q", res.lines, tc.next)
+				}
+			}
+
+			if r.lastCatchup.held {
+				t.Error("the record still holds after a push used it")
+			}
+		})
 	}
 }

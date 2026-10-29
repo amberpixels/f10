@@ -602,9 +602,15 @@ func (r *driveRun) active() bool { return r.opened && r.end == nil }
 
 // catchupSent is what the branch looked like when a catchup went out, for
 // the progress check a later conflict runs; a field left "" compares to
-// nothing, and origin is "" when the target is recorded nowhere.
+// nothing, and origin, the target's remote-tracking ref, is "" when the
+// target is recorded nowhere.
 type catchupSent struct {
 	target, head, way, base, origin string
+	// pushed is origin's copy of the branch itself then, what the push after
+	// the catchup leases against; held is false once a push or a later skill
+	// made it stale
+	pushed string
+	held   bool
 }
 
 // halts says why a conflict after this catchup halts the task, or "" when
@@ -1676,9 +1682,38 @@ func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string
 		return err
 	}
 
-	r.lastCatchup = &catchupSent{target: target, head: head, way: conflictWay(conflicts), base: base, origin: origin}
+	pushed, err := in.originTip(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	r.lastCatchup = &catchupSent{
+		target: target, head: head, way: conflictWay(conflicts), base: base, origin: origin,
+		pushed: pushed, held: true,
+	}
 
 	return nil
+}
+
+// originTip is origin's copy of the branch, fetched first when origin has
+// it, since a mark set earlier may follow no fetch at all.
+func (in *driveInput) originTip(ctx context.Context, r *driveRun) (string, error) {
+	tracking := "refs/remotes/origin/" + r.o.branch
+
+	pushed, err := gitx.Ref(ctx, r.o.path, tracking)
+	if err != nil || pushed == "" {
+		return pushed, err
+	}
+
+	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+		return "", fmt.Errorf("fetching origin before catching %s up: %w", r.o.branch, err)
+	}
+
+	if pushed, err = gitx.Ref(ctx, r.o.path, tracking); err != nil {
+		return "", fmt.Errorf("reading origin/%s: %w", r.o.branch, err)
+	}
+
+	return pushed, nil
 }
 
 // targetOrigin is the remote-tracking ref of what a mark's catchup brings
@@ -1923,7 +1958,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 
 	if caughtUp {
 		if err := in.pushCaughtUp(ctx, w, r, "finish", pushed, base); err != nil {
-			res := halted(id, "finish", err.Error())
+			res := pushHalted(id, "finish", err)
 
 			return &res
 		}
@@ -1957,8 +1992,32 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 }
 
 // pushCaughtUp pushes plain when the catchup merged, so origin's copy is an
-// ancestor, and with a lease against pushed when it rebased.
+// ancestor, and with a lease against pushed when it rebased. Pushed must be
+// origin's sha when the catchup went out: a commit pushed while it ran is not
+// on a rebased branch, and a lease read after would let the push drop it.
+// With no such record (a resumed drive, a rerun) only a plain push goes out.
 func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun, skill, pushed, base string) error {
+	refused := originMovedError{branch: r.o.branch, base: base, path: r.o.path}
+
+	if c := r.lastCatchup; c != nil && c.held {
+		c.held = false
+
+		if pushed != c.pushed {
+			return refused
+		}
+	} else {
+		fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
+		if err != nil {
+			return err
+		}
+
+		if !fastForward {
+			refused.unseen = true
+
+			return refused
+		}
+	}
+
 	how, err := pushCaughtUp(ctx, r.o.path, r.o.branch, pushed, base)
 	if err != nil {
 		return err
@@ -1967,6 +2026,43 @@ func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun
 	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", r.task.ref.ID, skill, r.o.branch, base, how)
 
 	return nil
+}
+
+// originMovedError refuses a force-push that could drop commits pushed to
+// the branch while its catchup ran: origin moved, or, unseen, nothing
+// recorded what origin held when the catchup went out.
+type originMovedError struct {
+	branch, base, path string
+	unseen             bool
+}
+
+func (e originMovedError) Error() string {
+	if e.unseen {
+		return fmt.Sprintf("%s caught up with %s, not pushed: the drive did not read origin/%s when the catchup "+
+			"went out, so a force-push could drop commits pushed since", e.branch, e.base, e.branch)
+	}
+
+	return fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed", e.branch, e.base, e.branch)
+}
+
+// pushHalted halts on a failed push, saying how to bring in what origin
+// gained when that is the cause.
+func pushHalted(id, skill string, err error) driveResult {
+	res := halted(id, skill, err.Error())
+
+	moved := originMovedError{}
+
+	switch {
+	case !errors.As(err, &moved):
+	case moved.unseen:
+		res.lines = append(res.lines, "next: check origin/"+moved.branch+" holds nothing "+moved.path+
+			" lacks, push it with --force-with-lease yourself, then rerun the drive")
+	default:
+		res.lines = append(res.lines, "next: bring origin/"+moved.branch+" into "+moved.path+
+			", then /f10:catchup there, then rerun the drive")
+	}
+
+	return res
 }
 
 // pushCatchup pushes a branch origin has once a catchup ended clean, so its
@@ -1991,7 +2087,7 @@ func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun)
 		return nil
 	}
 
-	// fetched first, so the lease is origin's current sha, not a stale ref
+	// fetched first, so a push made while the catchup ran shows here
 	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
 		return halt(err)
 	}
@@ -2029,6 +2125,12 @@ func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun)
 	}
 
 	if err := in.pushCaughtUp(ctx, w, r, "catchup", pushed, base); err != nil {
+		if errors.As(err, new(originMovedError)) {
+			res := pushHalted(id, "catchup", err)
+
+			return &res
+		}
+
 		return halt(err)
 	}
 
@@ -2191,6 +2293,11 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 	run = r.current(run)
 	r.skill, r.sentAt, r.begun, r.idleSince, r.attached = skill, in.now(), false, time.Time{}, false
+
+	// a skill after the catchup may push the branch itself
+	if c := r.lastCatchup; c != nil && skill != "catchup" {
+		c.held = false
+	}
 
 	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
 
