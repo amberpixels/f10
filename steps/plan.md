@@ -13,6 +13,17 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    Where the frontmatter declares `flow_by_area`, an **Areas** line follows: the areas the fetch brief settled, in the map's words, for `/f10:ship` to pick the flow from when it runs on the plan alone.
    If the steering names a base task (`f10 start --after`) or the task body ends in an `After:` line, a **Depends on** line follows: the task id and its plan's path.
    A bundle adds a **Bundle** line (`Bundle: ABC-1+ABC-2`) and a `## Riders` section listing each rider's acceptance criteria under its id; the stages cover every member.
+   A **Size** line follows: the size below and its reason in a clause (`Size: small - one cause at <file:line>, one area`).
+
+   **Size the plan by what the implementer needs to design**, as capture sizes a task body:
+   - **small** - every condition holds: the cause or the one place to change is already named (a feature's in its task; a bug's or a refactor's in the task's _Root cause_, this run's debug brief, or one `file:line` the fetch brief traced); one area; no decision another competent engineer would take the other way; no gap.
+     The plan is the fixed lines above, the brief in a few lines, one stage naming the change, its files and its test, then `## Consequences - none` and `## Gaps - none`.
+     A bug's `## Reproduction` shrinks to the root cause at `file:line`, expected against actual, and the failing test.
+   - **normal** - any small condition missed, doubt counting as a miss: the full shape below.
+   - **large** - a bundle, a cross-cutting change, or a boundary worth fencing: normal's shape, the stages fencing the boundary.
+   A spike is never small: its `## Question` needs the decision and the evidence.
+   A plan is not resized once saved; a decision implement meets goes in its hand-off, as for any plan.
+
    The kind opens the plan, before the stages:
    - **bug** - a `## Reproduction` section: the steps or input, expected, actual, the root cause at `file:line`, and the test that will fail before the fix.
      The first stage writes that test.
@@ -37,7 +48,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
      A signature or one-line pseudocode sketch at most, only when words leave the intent unclear.
    - **No effort estimates.**
    - **No process boilerplate** (deployment checklists, rollout or monitoring sections, speculative feature flags) unless the task calls for it, said in one line.
-   - **A handful of stages**; at eight, collapse.
+   - **A handful of stages**, one on a small plan; at eight, collapse.
      Real tradeoffs, not filler risk tables.
 3. **Save the plan: it is the deliverable.**
    `Write` it to **`<storage root>/plans/<TASK-ID>.md`**, the root verbatim from `storage root:`, `<TASK-ID>` the exact tracker id (a bundle's lead), uppercased (e.g. `<storage root>/plans/ABC-2049.md`), or a short kebab slug without one.
@@ -56,6 +67,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
      A failing `lore add` is one line in the hand-off, never a failed step; a plan with no task id writes none.
 4. **Hand off.**
    Confirm the file exists, present the plan, and report per `conventions/report.md`: `task`, `title`, `url` if the tracker gave one, `plan`.
+   The prose under the facts block names the size and its reason in one line.
    Offer to fill open gaps (`conventions/gaps.md`).
 
 **On failure:** the file cannot be written (other than read-only mode): put the full plan in the message with the path it was meant for.
