@@ -52,7 +52,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    - **`+note`** - a code comment at the finding's spot ("someone could say X here, we do Y because"), giving the domain reason, never that a reviewer asked (stealth mode, `conventions/context.md`).
    - **`+reply`** - sends `reason:` to the reviewer.
      On a local block it stays in the file.
-     A remote reply posts on the PR or MR (`gh pr comment` / `glab mr note`): on the `review:` url's thread for an inline review, else a comment quoting the finding's title.
+     A remote reply posts on the PR or MR with `f10 pr comment --reply-to <the review: url> --quote <the finding's title>`, the reply on stdin: in that review's thread when it has one, else a top-level comment headed by the quoted title.
      Outward-facing, under the run's authorization, and read as the user's own: no f10, no round, no findings file.
      Another task it names is a link with its title (`conventions/context.md` → Task references).
      **A remote bot's skip replies by default**, its blocks only (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread.
@@ -74,7 +74,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    A block with no `lore:` line (a round from before lore) writes nothing; a failing `lore add` is one line in the report, never a failed step.
    Never edit the reviewer's text, the `lore:` line above aside.
 9. **Land the fixes on an open PR or MR.**
-   When a `fix` changed code and the branch has an open PR or MR (`gh pr view --json state` / `glab mr view`), commit the fixes per `conventions/context.md` → Commits and push them to that branch, never forcing.
+   When a `fix` changed code and the branch has an open PR or MR (`f10 pr view`), commit the fixes per `conventions/context.md` → Commits and push them to that branch, never forcing.
    The trailers are `f10 trace trailers --step resolve --round <n> --fixed <n> --skipped <n>`: `--round` is this file's round, `--fixed` and `--skipped` count the verdicts in it at the time of the commit, an open `ask` in neither; in round two the counts cover both files, as point 10's comment does.
    Outward-facing, under the run's authorization.
    With `traces: on`, the message's body lists the findings it fixed by title, then the skipped ones, each with its reason written for a reader of the PR; an answered `ask` sits under the verdict it became.
@@ -83,14 +83,14 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
     The trace follows point 9's choice: fixes not pushed, nothing posted.
     In a file both halves wrote, the status's counts and the comment cover the local blocks; the remote ones are answered on their own thread by `+reply` and the settled mark.
     In round two the counts and the comment cover both files, each finding at its last verdict, round one's skip reasons included.
-    - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean and is the PR's head (`gh pr view --json headRefOid` / `glab mr view`); any other sha gets no status, and the report says why: `gh api repos/{owner}/{repo}/statuses/<sha> -f state=<success|failure> -f context='review (local)' -f description='<counts>'`, or `glab api projects/:id/statuses/<sha> -X POST -f state=<success|failed> -f name='review (local)' -f description='<counts>'`.
+    - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean: `f10 pr status --name 'review (local)' --state <success|failure> --sha <that sha> -m '<counts>'`, which refuses a sha that is neither the PR's head nor a push on top of it; a refused or unclean sha gets no status, and the report says why.
       Failure while a finding's last verdict is `ask` (parked per point 7, or a driven ask pending), else success.
       The description is counts only, under 140 characters: `3 found, 2 fixed, 1 skipped`, `1 waiting` added when one is, `nothing found` for a clean round.
-    - **Comment** (`gh pr comment` / `glab mr note`) when the entry found anything, and no `ask` is waiting: a line per finding by title with its verdict in plain words, each skip's reason, and the fix commit's short sha when one was pushed.
+    - **Comment** (`f10 pr comment`, the text on stdin) when the entry found anything, and no `ask` is waiting: a line per finding by title with its verdict in plain words, each skip's reason, and the fix commit's short sha when one was pushed.
       A clean entry gets the status alone.
       A run stopping on a waiting `ask` sets the failure status and posts no comment; the resolve that settles the ask sets the status again and posts the comment.
     - Both read as the user's own: findings by title, never an id, a round or the findings file (`conventions/context.md`).
-      A failed post after a pushed fix is `partial` (`conventions/failure.md` rule 7); before posting again, check the PR's comments for one already up.
+      A failed post after a pushed fix is `partial` (`conventions/failure.md` rule 7); a retry is safe, since `f10 pr comment` and `f10 pr status` never post the same thing twice.
 11. **Rewrite the state block** (`docs/traces.md`), every resolve, with the verdicts written and any fix pushed: `f10 trace state --step resolve --round <n> --open <n> --asks <n>`.
     `--open` counts the findings whose last verdict is missing or `ask`, both files in round two.
     `--asks` counts the questions waiting on a person: findings parked for a remote answer (point 7) and a driven ask raised this run; an ask held for round two is open, not yet asked.

@@ -60,6 +60,58 @@ func prCommand() *cli.Command {
 				Flags:     []cli.Flag{&cli.BoolFlag{Name: "comments", Usage: "add the PR/MR's comments"}},
 				Action:    runPRView,
 			},
+			{
+				Name:      "edit",
+				Usage:     "rewrite an open PR/MR's title, its body, or both; base, labels and assignees stay",
+				ArgsUsage: "[PR | task-id]",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "title", Usage: "the new `TITLE`"},
+					&cli.StringFlag{Name: "body-file", Usage: "the new body from `FILE`; - reads stdin"},
+				},
+				Action: runPREdit,
+			},
+			{
+				Name: "comment",
+				Usage: "post the markdown on stdin as a comment on an open PR/MR and print its url; " +
+					"one already posted with that text is not posted again",
+				ArgsUsage: "[PR | task-id]",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "reply-to",
+						Usage: "reply in the thread this review or comment `URL` names, else comment at the top level",
+					},
+					&cli.StringFlag{
+						Name:  "quote",
+						Usage: "a line of `TEXT` quoted above a reply that fell back to the top level",
+					},
+				},
+				Action: runPRComment,
+			},
+			{
+				Name: "status",
+				Usage: "set a named commit status on an open PR/MR's head; one already set the same way " +
+					"is left alone",
+				ArgsUsage: "[PR | task-id]",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "name", Usage: "the status `NAME` (GitHub's context)", Required: true},
+					&cli.StringFlag{Name: "state", Usage: "`success` or failure", Required: true},
+					&cli.StringFlag{
+						Name: "description", Aliases: []string{"m"}, Required: true,
+						Usage: "the `TEXT`, cut to 140 characters",
+					},
+					&cli.StringFlag{
+						Name:  "sha",
+						Usage: "refuse unless the head is this `SHA` or this SHA is a push on top of it",
+					},
+				},
+				Action: runPRStatus,
+			},
 		},
 	}
 }
@@ -70,7 +122,7 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), true)
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
@@ -102,7 +154,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), true)
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
@@ -180,7 +232,7 @@ func patchFiles(patch string) string {
 }
 
 // viewFields is what view reads of a request by number.
-const viewFields = "number,url,state,title,body,author,headRefName,baseRefName"
+const viewFields = "number,url,state,title,body,author,headRefName,headRefOid,baseRefName"
 
 func runPRView(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
@@ -188,7 +240,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), true)
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
@@ -236,8 +288,12 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		sigil = "!"
 	}
 
-	fmt.Fprintf(&b, "pr: %s%s\nurl: %s\nstate: %s\ntarget: %s\nauthor: %s\ntitle: %s\n",
-		sigil, p.id(), p.url(), p.status(), p.base(), p.author(), p.Title)
+	fmt.Fprintf(&b, "pr: %s%s\nurl: %s\nstate: %s\nhead: %s\ntarget: %s\nauthor: %s\n",
+		sigil, p.id(), p.url(), p.status(), p.headSHA(), p.base(), p.author())
+
+	b.WriteString(mineLine(ctx, cmd.ErrWriter, h, p))
+
+	fmt.Fprintf(&b, "title: %s\n", p.Title)
 
 	if body := strings.TrimSpace(p.body()); body != "" {
 		fmt.Fprintf(&b, "\n## Description\n\n%s\n", body)
