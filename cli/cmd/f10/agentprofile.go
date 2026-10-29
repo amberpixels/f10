@@ -74,15 +74,25 @@ func agentLayers(eff *facts.Effective, flag string) (agentMap, error) {
 const agentKeyFlag = "--agent"
 
 // with is m with a run's profile on top: the flag, a drive task's own
-// suffix, or the branch's record. The last one given wins whole.
+// suffix, or the branch's record. A later one lays over an earlier one
+// segment by segment, so `FT-1:low --agent sonnet` runs sonnet at low.
 func (m agentMap) with(value, origin string) agentMap {
-	if strings.TrimSpace(value) == "" {
+	if value = strings.TrimSpace(value); value == "" {
 		return m
 	}
 
 	out := maps.Clone(m)
 	if out == nil {
 		out = agentMap{}
+	}
+
+	if prior, ok := out[agentKeyFlag]; ok {
+		over, errOver := agentctl.ParseProfile(value)
+		under, errUnder := agentctl.ParseProfile(prior.Value)
+
+		if errOver == nil && errUnder == nil {
+			value, origin = over.Over(under).Short(), origin+" over "+prior.Origin
+		}
 	}
 
 	out[agentKeyFlag] = agentEntry{Key: agentKeyFlag, Value: value, Origin: origin}

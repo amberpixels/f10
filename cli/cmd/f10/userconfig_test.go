@@ -240,3 +240,18 @@ func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 		t.Errorf("stored %+v, %v: reading a report must store nothing", last, err)
 	}
 }
+
+// The run's key is a command line's alone: a user file declaring it is refused.
+func TestUserAgentsRefusesTheFlagKey(t *testing.T) {
+	user := t.TempDir()
+	t.Setenv(userDirEnv, user)
+
+	file := []byte("---\nagents:\n  --agent: opus\n---\n")
+	if err := os.WriteFile(filepath.Join(user, agentsConfigFile), file, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := readAgentsConfig(); err == nil || !strings.Contains(err.Error(), "agents.--agent") {
+		t.Errorf("err = %v", err)
+	}
+}

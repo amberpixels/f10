@@ -24,7 +24,8 @@ func CheckAgentKey(key string, steps []string) error {
 	switch {
 	case key == AgentKeyDefault:
 		return nil
-	case step == "" || scoped && kind == "":
+	case step == "" || scoped && kind == "" || strings.HasPrefix(key, "-"):
+		// a key starting with - is a run's flag, which only a command line gives
 		return fmt.Errorf("agents.%s: a key is default, a step, or step.kind", key)
 	case scoped && !slices.Contains(TaskKinds, kind):
 		return fmt.Errorf("agents.%s: %s is not a task kind (%s)", key, kind, strings.Join(TaskKinds, ", "))

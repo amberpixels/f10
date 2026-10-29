@@ -232,10 +232,11 @@ func TestFlagOverlaysTheMapsDefault(t *testing.T) {
 		}
 	}
 
-	// the last profile laid on wins whole: a task's own suffix over the run's flag
-	own := m.with("low", agentFlagOrigin).with("haiku", "<id>:haiku")
-	if r := own.profileFor("default", ""); r.Profile.String() != "claude:haiku:high" {
-		t.Errorf("a task's own profile over the flag: %q", r.Profile)
+	// a task's own suffix lays over the run's flag segment by segment
+	own := m.with("sonnet", agentFlagOrigin).with("low", "<id>:low")
+	if r := own.profileFor("default", ""); r.Profile.String() != "claude:sonnet:low" ||
+		r.Sources["effort"] != agentKeyFlag+" (<id>:low over --agent)" {
+		t.Errorf("a task's own profile over the flag: %q from %v", r.Profile, r.Sources)
 	}
 }
 

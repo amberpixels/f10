@@ -766,6 +766,7 @@ func TestAgents(t *testing.T) {
 		{"agents:\n  implement.huge: opus\n", "huge is not a task kind (feature, bug, refactor, spike)"},
 		{"agents:\n  implement: opus:huge\n", "agents.implement: \"opus:huge\": huge is not an effort claude knows"},
 		{"agents:\n  implement: opencode:opus:high\n", "opencode is not an agent kind"},
+		{"agents:\n  --agent: opus:high\n", "agents.--agent: a key is default, a step, or step.kind"},
 	} {
 		if eff := buildWith(t, "---\n"+c.block+"---\n", ""); !strings.Contains(eff.Errors(), c.want) {
 			t.Errorf("%q: errors %q, want %q", c.block, eff.Errors(), c.want)
