@@ -583,7 +583,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver was drained for an upgrade), `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
    Exit 6 is a drive stopped for a daemon upgrade; only the daemon and the command following it see it.
 

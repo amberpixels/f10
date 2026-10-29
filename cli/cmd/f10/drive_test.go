@@ -829,6 +829,35 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	}
 }
 
+// An ask ends the drive only once every active task is held on a base, or
+// none is active; a held task with no ask anywhere keeps it polling.
+func TestStoppingOnAnAsk(t *testing.T) {
+	asked := func() *driveRun { return &driveRun{opened: true, end: &driveResult{code: exitAsk}} }
+	moving := func() *driveRun { return &driveRun{opened: true} }
+	parked := func() *driveRun { return &driveRun{opened: true, parked: true} }
+	waiting := func() *driveRun { return &driveRun{opened: true, waiting: true} }
+
+	cases := map[string]struct {
+		runs []*driveRun
+		want bool
+	}{
+		"asked, another moving":  {[]*driveRun{asked(), moving()}, false},
+		"asked, another parked":  {[]*driveRun{asked(), parked()}, true},
+		"asked, another waiting": {[]*driveRun{asked(), waiting()}, true},
+		"asked, nothing active":  {[]*driveRun{asked()}, true},
+		"no ask, one parked":     {[]*driveRun{parked()}, false},
+		"no ask, one moving":     {[]*driveRun{moving()}, false},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := stopping(tc.runs); got != tc.want {
+				t.Errorf("stopping = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // An ask in one task does not end the drive while another can move: a ship
 // the catchup guard stopped gets its catchup and its resume, under either
 // mark, and the drive exits on the ask once the rest is through.

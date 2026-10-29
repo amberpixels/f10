@@ -2630,7 +2630,11 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	in.saveTask(r, func(t *drives.Task) {
 		t.Skill, t.Outcome = "", &drives.Outcome{Row: res.row, Code: res.code}
 	})
-	in.unlease(r, in.runs)
+	// an asking task stays leased until the drive exits, since the drive
+	// runs on and resumes for its answer; another drive must not claim it
+	if res.code != exitAsk {
+		in.unlease(r, in.runs)
+	}
 
 	if res.code == exitAsk && res.ask != "" {
 		in.raise(ctx, r, strings.TrimPrefix(res.row, "asked at "), res.ask)
