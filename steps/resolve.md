@@ -34,8 +34,8 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
 
 1. **Find the file.**
    A task id or PR whose branch is not current: one line naming the worktree that holds it (`git worktree list`), or that none does; a normal end.
-   The directory is named as `steps/review.md` names it: the task id (explicit, else `f10 task read` with no argument, else a PR's head branch via the host CLI), or the branch name with `/` as `-`.
-   Take the highest `<round>.md`.
+   `f10 review round [<task-id>]` (a PR's task id from its head branch via the host CLI) prints the file as `latest:`; its exit 3 declines a new round, not this one.
+   No `latest:` line: nothing to resolve, a normal end.
    Blocks with a `verdict:` are done; none left (a clean file included) is a normal end, after points 10 and 11 when their conditions hold and the sha point 10 would mark carries no `review (local)` status yet.
 2. **Read what was asked**: the task and the plan.
    The user's stated choice beats the reviewer.

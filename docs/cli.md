@@ -59,6 +59,7 @@ f10 review pick [n] [--latest] [--json]               # the latest unhandled rem
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
+f10 review round [task-id] [--json]                   # the findings directory, its latest round and the next, or the decline (exit 3)
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
 f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, task rows under --json), else this session's, every live one, or a row per child of a parent
@@ -657,6 +658,12 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
   Already settled is confirmed; a check run has no marker; no `settled` declared is a refusal naming the fact.
 
 Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's notes, discussions and pipeline jobs.
+
+`f10 review round` is the one local verb: it reads the storage root's findings files, needs no remote review declared, and writes nothing.
+The directory is `reviews/<task id>` (a bundle's lead), else `reviews/<branch>` with `/` as `-` for work no task names.
+It prints `dir:`, `latest:` (the highest round's file, absent with none), and the next round's `round:` and `path:`.
+Two cases decline, exit 3, with a `decline:` line and the findings behind it instead of the next round: `1.md` holding a finding without a verdict, and `2.md` present, the last round, naming each finding whose latest block is an `ask` or still waits for a verdict.
+`--json` emits the same.
 
 ## Standup
 
