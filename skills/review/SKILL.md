@@ -1,8 +1,8 @@
 ---
 name: review
-description: "f10 review skill - a blind local review of a change into a findings file; with ci, reads in the remote review on the PR or MR. Use when the user says \"/f10:review <task-id | PR | this branch> [ci]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, or wants the CI review's findings read in. Settling the findings is /f10:resolve."
+description: "f10 review skill - a blind local review of a change into a findings file; with ci, reads in the remote review on the PR or MR; with since, a coherence pass over the tasks shipped since a ref. Use when the user says \"/f10:review <task-id | PR | this branch> [ci]\" or \"/f10:review since [<ref>]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, wants the CI review's findings read in, or wants to check how recent tasks fit together. Settling the findings is /f10:resolve."
 allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion, Skill
-argument-hint: "<task-id | PR | this branch> [ci]"
+argument-hint: "<task-id | PR | this branch> [ci] | since [<ref>]"
 ---
 
 # f10 · review
@@ -16,6 +16,7 @@ Running `/f10:review ci` authorizes the `f10 review ack` and `f10 review trigger
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - `ci`: strip it and run the step's remote half; standalone, it reads the latest CI review in, triggers a new one, or hands it to `/f10:resolve <id> ci`.
+- `since [<ref>]`: strip it and run the step's **coherence lens** over the tasks in `<ref>..HEAD`, the ref defaulting to the last tag; it does not combine with `ci`, whose review is about one PR's diff.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here** paragraph reads it.
 - No argument: the current branch against its base.
   Say in one line which branch and base you took, then start.
