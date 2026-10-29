@@ -323,6 +323,16 @@ type foundBranch struct {
 // Several is an error, since a suffix exists to say which; a suffix skips
 // the link, naming an attempt by its branch name.
 func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBranch, error) {
+	return existingBranchIn(ctx, dir, want, id, suffix, "refs/heads/", "refs/remotes/origin/")
+}
+
+// localBranch is existingBranch over this checkout's branches alone, for a
+// landed pickup, which never tracks origin's copy of a branch.
+func localBranch(ctx context.Context, dir, want, id string) (foundBranch, error) {
+	return existingBranchIn(ctx, dir, want, id, "", "refs/heads/")
+}
+
+func existingBranchIn(ctx context.Context, dir, want, id, suffix string, roots ...string) (foundBranch, error) {
 	if suffix == "" {
 		linked, err := linkedBranches(ctx, dir, id)
 		if err != nil {
@@ -339,7 +349,7 @@ func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBra
 		}
 	}
 
-	for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
+	for _, root := range roots {
 		refs, err := branchesFor(ctx, dir, root, id, suffix)
 		if err != nil {
 			return foundBranch{}, err

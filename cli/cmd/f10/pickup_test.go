@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
@@ -110,8 +111,43 @@ func TestRefusePull(t *testing.T) {
 	merged := open
 	merged.State = "MERGED"
 
-	if err := refusePull(merged); err == nil {
-		t.Error("a merged PR was not refused")
+	if err := refusePull(merged); err == nil || !strings.Contains(err.Error(), "no merge commit") {
+		t.Errorf("a merged PR with no merge commit = %v, want it refused for that", err)
+	}
+
+	merged.MergeCommit.OID = "abc"
+
+	if err := refusePull(merged); err != nil {
+		t.Errorf("a merged PR was refused: %v", err)
+	}
+
+	closed := open
+	closed.State = "CLOSED"
+
+	if err := refusePull(closed); err == nil || !strings.Contains(err.Error(), "no head commit") {
+		t.Errorf("a closed PR with no head commit = %v, want it refused for that", err)
+	}
+
+	closed.HeadRefOID = "def"
+
+	if err := refusePull(closed); err != nil {
+		t.Errorf("a closed PR was refused: %v", err)
+	}
+
+	headless := open
+	headless.HeadRefName = ""
+
+	if err := refusePull(headless); err == nil {
+		t.Error("an open PR with no head branch was not refused")
+	}
+
+	for _, state := range []string{"", "DRAFT"} {
+		unknown := merged
+		unknown.State = state
+
+		if err := refusePull(unknown); err == nil || !strings.Contains(err.Error(), "open, merged and closed") {
+			t.Errorf("a PR in state %q = %v, want it refused", state, err)
+		}
 	}
 }
 
@@ -132,6 +168,90 @@ func TestPickupOf(t *testing.T) {
 	gl := newHost("glab", "").pickupOf("7", pull{WebURL: "https://gl/mr/7", SourceBranch: "b"})
 	if gl.view != "glab mr view 7 --comments" || gl.diff != "glab mr diff 7" || gl.branch != "b" {
 		t.Errorf("pickupOf on glab = %+v", gl)
+	}
+
+	if got := newHost("gh", "").pickupOf("30", mergedPull()); *got != *pickMerged {
+		t.Errorf("pickupOf on a merged PR = %+v, want %+v", got, pickMerged)
+	}
+
+	closed := p
+	closed.State, closed.HeadRefOID = "CLOSED", "def4567"
+	closed.ClosedAt = time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+
+	got := newHost("gh", "").pickupOf("30", closed)
+	if got.sha != "def4567" || got.headRef != "refs/pull/30/head" ||
+		got.state != "closed without a merge on 2026-10-13" {
+		t.Errorf("pickupOf on a closed PR = %+v", got)
+	}
+
+	// glab names nobody for a squash it did itself, and keeps its MR heads under its own ref
+	glMerged := pull{WebURL: "https://gl/mr/7", SourceBranch: "b", State: "merged", SquashCommitSHA: "aaa"}
+	got = newHost("glab", "").pickupOf("7", glMerged)
+	if got.sha != "aaa" || got.state != "merged" || got.headRef != "" {
+		t.Errorf("pickupOf on a merged MR = %+v", got)
+	}
+
+	glClosed := pull{WebURL: "https://gl/mr/7", SourceBranch: "b", State: "closed", SHA: "bbb"}
+	got = newHost("glab", "").pickupOf("7", glClosed)
+	if got.sha != "bbb" || got.headRef != "refs/merge-requests/7/head" {
+		t.Errorf("pickupOf on a closed MR = %+v", got)
+	}
+}
+
+// mergedPull is pickGH's PR merged by alice, as gh answers for it.
+func mergedPull() pull {
+	p := pull{URL: pickGH.url, HeadRefName: pickGH.branch, State: "MERGED", HeadRefOID: "def4567"}
+	p.MergeCommit.OID = "abc1234abc"
+	p.MergedBy.Login = "alice"
+	p.MergedAt = time.Date(2026, 10, 12, 15, 0, 0, 0, time.UTC)
+
+	return p
+}
+
+var pickMerged = &pickup{
+	number: "30",
+	url:    pickGH.url,
+	branch: pickGH.branch,
+	view:   pickGH.view,
+	diff:   pickGH.diff,
+	sha:    "abc1234abc",
+	state:  "merged by alice on 2026-10-12",
+}
+
+// A landed PR's commit is fetched before its worktree: a closed PR's head
+// through the host's ref, and one origin does not hold fails naming it.
+func TestFetchPickup(t *testing.T) {
+	f := newFakes(t)
+	f.script("git fetch origin", "")
+	f.script("git fetch origin refs/pull/30/head", "")
+	f.script("git rev-parse --verify --quiet def4567^{commit}", "def4567")
+
+	closed := *pickMerged
+	closed.sha, closed.state, closed.headRef = "def4567", "closed without a merge", "refs/pull/30/head"
+
+	if err := fetchPickup(t.Context(), "/code/repo", &closed); err != nil {
+		t.Fatal(err)
+	}
+
+	if !f.called("git fetch origin refs/pull/30/head") {
+		t.Errorf("the closed PR's head was not fetched: %v", f.calls)
+	}
+
+	f = newFakes(t)
+	f.script("git fetch origin", "")
+	f.fail("git rev-parse --verify --quiet abc1234abc^{commit}", missing)
+
+	err := fetchPickup(t.Context(), "/code/repo", pickMerged)
+	if err == nil || !strings.Contains(err.Error(), "abc1234abc") || !strings.Contains(err.Error(), "merged by alice") {
+		t.Errorf("a merge commit origin lacks = %v, want it named", err)
+	}
+
+	if f.called("git fetch origin refs/pull") {
+		t.Errorf("a merged PR fetched a pull ref: %v", f.calls)
+	}
+
+	if err := fetchPickup(t.Context(), "/code/repo", pickGH); err != nil {
+		t.Errorf("an open PR's fetch: %v", err)
 	}
 }
 
@@ -169,6 +289,29 @@ func TestPromptForAPickup(t *testing.T) {
 		"/p/GH-1.md",
 	) {
 		t.Errorf("prompt for a PR with a plan = %q, want the plan named", got)
+	}
+
+	got := prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pickMerged, "")
+	if !strings.Contains(got, "that the PR is merged by alice on 2026-10-12 and what its diff does") ||
+		strings.Contains(got, "open threads") {
+		t.Errorf("prompt for a merged PR = %q, want its state named before the diff", got)
+	}
+}
+
+// --plan on a landed PR is refused: going on from it is a task of its own.
+func TestRefuseLandedPlan(t *testing.T) {
+	err := refuseLandedPlan(modePlan, pickMerged)
+	if err == nil || !strings.Contains(err.Error(), "merged by alice") {
+		t.Errorf("--plan on a merged PR = %v, want a refusal naming its state", err)
+	}
+
+	for _, c := range []struct {
+		mode string
+		pick *pickup
+	}{{modeDefault, pickMerged}, {modeDiscuss, pickMerged}, {modePlan, pickGH}, {modePlan, nil}} {
+		if err := refuseLandedPlan(c.mode, c.pick); err != nil {
+			t.Errorf("refuseLandedPlan(%q, %v) = %v, want nil", c.mode, c.pick, err)
+		}
 	}
 }
 
@@ -234,6 +377,88 @@ func TestStartPicksUpAPR(t *testing.T) {
 	}
 
 	for _, want := range []string{"pr:", pickGH.url, "branch:", "alice/fix-login", "tracking origin/alice/fix-login"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A merged PR is checked out at its merge commit on the task's own branch,
+// tracking nothing: origin's branches are never looked at, the branch is
+// handed back from the watcher, and the agent is told the PR's state.
+func TestStartPicksUpAMergedPR(t *testing.T) {
+	const wt = "/code/repo.GH-1-fix-login"
+
+	f := newFakes(t)
+	f.script(refsLocal, "")
+	f.script(worktrees, porcelain(), porcelain("GH-1/fix-login", wt))
+	f.script("git worktree add -b GH-1/fix-login "+wt+" abc1234abc", "")
+	f.script("git config branch.GH-1/fix-login.f10-task GH-1", "")
+	f.script("git config branch.GH-1/fix-login.f10-watch false", "")
+	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/fix-login", opened)
+	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
+	f.script(
+		"herdr agent prompt "+agentctl.AgentName("GH-1", "", wt)+" "+
+			prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pickMerged, ""),
+		"{}",
+	)
+
+	var out bytes.Buffer
+
+	in := startInput{main: "/code/repo", task: gh1, pick: pickMerged, title: titled("Fix login", nil)}
+	if err := start(t.Context(), &out, in); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, never := range []string{"git branch --track", "git merge-base", "git symbolic-ref", refsOrigin} {
+		if f.called(never) {
+			t.Errorf("a merged PR ran %q: %v", never, f.calls)
+		}
+	}
+
+	if !f.called("git config branch.GH-1/fix-login.f10-watch false") {
+		t.Errorf("the branch was not handed back from the watcher: %v", f.calls)
+	}
+
+	for _, want := range []string{
+		"pr:", pickGH.url, "branch:", "GH-1/fix-login",
+		"merged by alice on 2026-10-12: GH-1/fix-login is local only at abc1234",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A branch the task already has here is reused as it is, the landed
+// commit noted as ignored, and left watched: its own work may be live.
+func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
+	const wt = "/code/repo.GH-1-fix-login"
+
+	f := newFakes(t)
+	f.script(linkedKeys, "branch.GH-1/fix-login.f10-task GH-1")
+	f.script(worktrees, porcelain("GH-1/fix-login", wt))
+	f.script("git config branch.GH-1/fix-login.f10-task GH-1", "")
+	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/fix-login", opened)
+	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
+	f.script(
+		"herdr agent prompt "+agentctl.AgentName("GH-1", "", wt)+" "+
+			prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pickMerged, ""),
+		"{}",
+	)
+
+	var out bytes.Buffer
+
+	in := startInput{main: "/code/repo", task: gh1, pick: pickMerged, title: titled("Fix login", nil)}
+	if err := start(t.Context(), &out, in); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.called("git worktree add") || f.called("git config branch.GH-1/fix-login.f10-watch") {
+		t.Errorf("the task's own worktree was not reused as it is: %v", f.calls)
+	}
+
+	for _, want := range []string{"reused the existing worktree", "landed commit ignored", "stays watched"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}
