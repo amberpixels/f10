@@ -95,7 +95,7 @@ const (
 )
 
 // oldChainSkills are chain words typed after the ids, refused with a pointer
-// at the flow, which is what names the chain now.
+// at the flow, which names the chain.
 var oldChainSkills = []string{"plan", "judge", "ship", "review", "resolve", "finish"}
 
 func driveChain(fl shipFlow, finish bool) []string {

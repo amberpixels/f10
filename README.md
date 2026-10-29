@@ -19,7 +19,8 @@ f10 (f-ten) is a set of skills over one step chain.
 **capture** turns a freely written idea into a tracked task, **plan** turns the task into an architect-grade plan on disk, and **ship** turns the plan into code and, optionally, a release.
 The rest are optional: **brainstorm** before the chain, **debug** before it for a bug that arrives as an error, **judge** at any point, **review** and **resolve** before the PR, **demo** and **explain** after it, **catchup** whenever the base moved.
 
-No stack is hard-coded: the same commands drive a Go service, a Rails app, or a Terraform repo. f10 **infers** what it needs (the git remote gives `gh`/`glab`, build files give verify commands), or you **declare** it once in `.f10/instructions/`.
+No stack is hard-coded: the same commands drive a Go service, a Rails app, or a Terraform repo.
+f10 **infers** what it needs (the git remote gives `gh`/`glab`, build files give verify commands), or you **declare** it once in `.f10/instructions/`.
 
 ## Pipeline
 
@@ -97,7 +98,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 
 ```text
 /f10:brainstorm public API abuse - rate limiting, or per-tenant quotas?
-# → a discussion. Nothing written; ends in a shape, or in "we don't build this"
+# → a discussion that writes nothing and ends in a shape, or in "we don't build this"
 
 /f10:debug panic: assignment to entry in nil map at cache.go:42
 # → reproduces and finds the cause first; only a confirmed bug becomes a task and a plan
@@ -121,7 +122,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
 # → fix, skip or ask per finding; fixes verified; every ask in one questionnaire at the end
 
 /f10:explain
-# → what this branch was and what it is now, in a few lines. Nothing run, nothing written
+# → what this branch was and what it is now, in a few lines; runs and writes nothing
 
 /f10:explain grace period
 # → what a grace period is, the way a peer who wrote it would tell you: three or four sentences from the code
@@ -152,7 +153,8 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   A project adds categories under `project.md → Review`, each with a source-of-truth file, plus what never to flag.
   `resolve` gives each finding `fix`, `skip` or `ask` (`+note` for a code comment, `+reply` to answer the reviewer), re-verifies, and puts every `ask` to you in one questionnaire.
   Your stated choice beats the reviewer.
-  One round is the default: a second runs only when round one fixed six or more findings, when `project.md → Review` says `Rounds: 2`, or when you ask for it. It reports on every prior finding first; there is no third, and what is still open goes to you.
+  One round is the default: a second runs only when round one fixed six or more findings, when `project.md → Review` says `Rounds: 2`, or when you ask for it.
+  It reports on every prior finding first; there is no third, and what is still open goes to you.
   A `review` entry in a ship pipeline runs both halves.
 - **Demo** - *what was built*, before you merge code you did not write: what changed in plain words, then a **demo script** it runs for screenshots and a local `report.html`, or (`--hands-on`) seeds the state and hands you the running app.
   The executor is declared, never guessed: a project without a `demo` overlay gets one proposed from its e2e config, dev-server recipe, seed task and test user, written to `.f10/instructions/demo.md`, along with where reports go: a local file, a private published page, or both (`--publish` / `--local` per run).
@@ -210,7 +212,8 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   A linked worktree's instructions layer on main's unless they declare `layering: replaces`.
 - **Role** - a base role per step, which a project can replace always or by area (`= senior marketing analyst` on report work), plus added roles, always or by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
   Fetch settles the areas and the base role; the plan file records the roles for ship ([Roles](docs/project-setup.md#roles)).
-- **Adapter** - how a capability ("fetch a task", "open a PR", "verify") binds per project: a skill or a CLI command. f10 names the capability; the project supplies the adapter.
+- **Adapter** - how a capability ("fetch a task", "open a PR", "verify") binds per project: a skill or a CLI command.
+  f10 names the capability; the project supplies the adapter.
 - **Review** - local (pre-PR) or CI/human (post-PR), placed or omitted per pipeline; no review entry means ship stops at the PR.
   A remote review is four facts under `project.md → Review` (who posts it, where it arrives, what triggers it, what marks it done and handled), plus the mark a settled review gets, inferred by `f10 init` from a Claude Code review workflow and acted on by `f10 review pick|wait|ack|settle|trigger`; `/f10:review <id> ci` reads the latest one in, triggers a new one or hands it to `/f10:resolve <id> ci`, which reads it in, settles it and marks it.
   A declared human reviewer answers asks on a remote review; a local round's asks come to you.
@@ -311,7 +314,8 @@ Elsewhere each degrades to one tofu cell, and the circles still read.
 
 ### Wiring it up
 
-Claude Code applies only `agent` and `subagentStatusLine` from a plugin's settings, so a plugin cannot ship a `statusLine`; add this to `~/.claude/settings.json` yourself. f10 re-points `~/.claude/f10/statusline` at its current install every session start, so the path survives plugin updates:
+Claude Code applies only `agent` and `subagentStatusLine` from a plugin's settings, so a plugin cannot ship a `statusLine`; add this to `~/.claude/settings.json` yourself.
+f10 re-points `~/.claude/f10/statusline` at its current install every session start, so the path survives plugin updates:
 
 ```sh
 input=$(cat)                                                             # you already do this
@@ -414,7 +418,8 @@ export F10_ROOTS=~/code/github.com/*/*       # opt in, and names work too
 f10 -C r3 task read 12
 ```
 
-`read` pages through `$PAGER` on a terminal and writes raw markdown into a pipe, so `f10 task read | glow` works. Into a pipe it also downloads the images the task links and names their local paths at the end, so an agent reads files rather than urls that expire.
+`read` pages through `$PAGER` on a terminal and writes raw markdown into a pipe, so `f10 task read | glow` works.
+Into a pipe it also downloads the images the task links and names their local paths at the end, so an agent reads files rather than urls that expire.
 
 Notion, Jira or any tracker without a CLI goes through an executable at `.f10/driver` ([the driver contract](docs/driver-contract.md)); f10 specifies the contract, not the driver.
 For Notion, [f10-drivers](https://github.com/amberpixels/f10-drivers) is a ready driver: a one-line shim and a `driver.toml`.

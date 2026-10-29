@@ -1717,7 +1717,7 @@ func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 
 // A parent with unfinished subtasks is refused with exitParent, reading no
 // more than whether the task has a branch; a started task, one whose subtasks
-// are all finished and one with none start as before.
+// are all finished and one with none start.
 func TestStartRefusesAParent(t *testing.T) {
 	kidsOf := func(rows []childRow, err error, asked *bool) func(context.Context, ref.Ref) ([]childRow, error) {
 		return func(context.Context, ref.Ref) ([]childRow, error) {

@@ -80,7 +80,7 @@ func readAgentsConfig() (map[string]string, string, error) {
 }
 
 // readLastStandup is nil when none was reported; a file that does not read
-// is an error, since dropping it would quietly move the period.
+// is an error, since dropping it would silently move the period.
 func readLastStandup() (*standup.Last, error) {
 	dir, err := userF10Dir()
 	if err != nil {

@@ -281,7 +281,7 @@ func TestJanitorKeepsAStackedBase(t *testing.T) {
 	}
 }
 
-// An open request, even past a newer closed one, keeps the branch quietly.
+// An open request, even past a newer closed one, keeps the branch without a line.
 func TestJanitorKeepsAnOpenRequest(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})

@@ -306,7 +306,7 @@ func TestSettleAndRankPriorities(t *testing.T) {
 }
 
 // Into a pipe the rows are JSON, the priority present only where a row has
-// one, so a project with nothing declared sees today's bytes.
+// one, so a project with nothing declared sees no priority key.
 func TestWriteRowsJSONPriority(t *testing.T) {
 	var out bytes.Buffer
 	if err := writeRows(

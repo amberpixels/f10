@@ -260,7 +260,7 @@ func (t *target) outOfTree() bool {
 	return len(t.lay.Layers) == 1 && t.lay.Layers[0].Label == "out-of-tree"
 }
 
-// follow acts on a url: drivers return addresses, f10 is what acts on them.
+// follow acts on a url a driver returned; drivers only return addresses.
 func follow(ctx context.Context, w io.Writer, dir, url string, linkOnly bool) error {
 	if linkOnly {
 		_, err := fmt.Fprintln(w, url)

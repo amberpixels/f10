@@ -32,7 +32,7 @@ Context: `project.md` guardrails and Verify.
    Run the verify commands in project.md's Verify section, keeping its "never run X" rules.
    None declared: a `justfile` means `just lint` / `just test`; a `Makefile`, its standard targets; else the stack's idiomatic verify commands (`go test ./...` + the linter the repo configures, etc.).
    Fix what you broke; a spike records red verify in its report instead (point 1).
-   **The one skip: a tree that did not move.**
+   **Skip it only for a tree that did not move.**
    If *this session* already ran these same commands green and nothing has touched the working tree since, say so and move on.
 3. **Note the decisions** (`docs/lore.md`), with a task id, once verify is green.
    A decision is a fork the plan's stages left open, where another competent engineer could have gone the other way and the choice shapes code someone will edit.

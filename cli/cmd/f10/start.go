@@ -543,7 +543,7 @@ func checksParent(mode string, pick *pickup) bool {
 
 // refuseStartParent stops a parent with unfinished subtasks before anything
 // is created, since its agent would ship the whole umbrella on one branch.
-// A task with a branch was started already and reopens as before.
+// A task with a branch was started already and reopens.
 func refuseStartParent(ctx context.Context, in startInput) error {
 	if in.children == nil {
 		return nil

@@ -44,4 +44,4 @@ Context: `project.md → Hosting & PR` (the PR adapter).
 7. **Never merge** unless project.md explicitly says otherwise.
 8. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab) carrying the url, then one line saying whether the PR was opened, refreshed, or only pushed to.
 
-**On failure:** the PR adapter errors: report whether the branch was pushed (`conventions/failure.md`); a refresh that fails after its push leaves the commits on the PR under a stale description, said so.
+**On failure:** the PR adapter errors: report whether the branch was pushed (`conventions/failure.md`); a refresh that fails after its push leaves the commits on the PR under a stale description, and the report says so.

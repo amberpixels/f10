@@ -1452,7 +1452,7 @@ func TestFinishRefusesSomeoneElsesPR(t *testing.T) {
 	}
 }
 
-// One's own PR merges as before, whatever case the host spells the login in.
+// One's own PR merges, whatever case the host spells the login in.
 func TestFinishMergesOwnPR(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
@@ -1726,8 +1726,8 @@ func TestFinishLandsANeverPushedBranchOnOriginsHead(t *testing.T) {
 	}
 }
 
-// --local merges nothing, so a branch with no PR stays the old refusal, and
-// so does one tracking an upstream origin lacks, which may be a request the
+// --local merges nothing, so a branch with no PR is still refused, and so
+// is one tracking an upstream origin lacks, which may be a request the
 // host merged and no longer lists by branch.
 func TestFinishKeepsTheRefusalWhenNeverPushedIsNotProven(t *testing.T) {
 	fx := newFinishFixture(t)

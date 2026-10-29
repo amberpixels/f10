@@ -24,7 +24,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
      Stages are experiments, each naming the evidence it produces, not features to build.
      Consequences states what the likely recommendation would commit the project to.
 
-   Then ordered **stages**, the critical files each touches, data/migration work, tests to add or adjust, key tradeoffs and alternatives.
+   Then ordered **stages**, the critical files each touches, data/migration work, tests to add or adjust, the main tradeoffs and alternatives.
    Then a **`## Consequences` section**, a few lines of prose, in the ADR sense: what the chosen design makes easier, what it makes harder, the constraint it now depends on, and what to revisit under which condition.
    For a bug, also the related failures this fix leaves uncovered, when there are any.
    No trade-off worth naming: `## Consequences - none`.

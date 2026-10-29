@@ -88,7 +88,7 @@ Say each thing once, plainly, where it applies.
 
 Baseline: word count per file.
 Instruction prose (skills, prompts, steps, conventions) can usually lose 40 to 50%; READMEs and docs keep their reasons and examples, and 20 to 30% is normal.
-These are guides, not gates.
+They are targets; falling short does not fail the pass.
 
 Before editing, list the rules stated in more than one file, find copies outside the scope with a repo-wide grep on a distinctive phrase, and give each rule one canonical home: the file that owns the concept.
 Snapshot every outside file you will edit.
@@ -109,7 +109,7 @@ Snapshot every outside file you will edit.
 
 **Shape**
 - Sentences under 25 words.
-- Explain fully what needs explaining, then stop: a rule the reader can no longer apply is a loss, not a cut.
+- Keep enough of each explanation that the reader can still apply the rule, then stop.
 - The file's wrap width and list style; no reflow of paragraphs you did not change.
 
 **Inventory as you go.**

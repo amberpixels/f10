@@ -1,6 +1,6 @@
 ---
 name: demo
-description: "f10 demo skill - see what a shipped change actually does, before you merge it. Use when the user says \"/f10:demo <PR | task-id | this branch>\", asks to be shown what a feature does, wants screenshots or a before/after of a change, or wants a short scenario to click through themselves. --hands-on hands over the script and a running app instead of screenshots; --publish or --local override where the report goes."
+description: "f10 demo skill - see what a shipped change does, before you merge it. Use when the user says \"/f10:demo <PR | task-id | this branch>\", asks to be shown what a feature does, wants screenshots or a before/after of a change, or wants a short scenario to click through themselves. --hands-on hands over the script and a running app instead of screenshots; --publish or --local override where the report goes."
 argument-hint: "<PR | task-id | this branch> [--hands-on]"
 # no allowed-tools on purpose: the executor is whatever the demo overlay binds (a browser MCP server, a project skill, a plain command), and a fixed list would disable it
 ---

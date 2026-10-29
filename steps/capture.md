@@ -21,9 +21,9 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
      A small body carries no note; `fetch` derives the areas from the code.
    - **From a debug brief**: at least **normal**, with _Reproduction_ (steps or input, expected, actual) and _Root cause_ (the `file:line` and its evidence) sections from the brief, and a title naming the defect, not the fix.
    - **Altitude: write for the engineer who will pick this up, not a stranger to the codebase.**
-     - **A snippet only when the shape *is* the ask** (a required output format, a wire payload); otherwise name the file and say what is wrong with it.
-     - **Repro detail stops at what reproduces it**, not the session that found it.
-     - **No effort estimates.**
+     - A snippet only when the shape *is* the ask (a required output format, a wire payload); otherwise name the file and say what is wrong with it.
+     - Repro detail stops at what reproduces it, not the session that found it.
+     - No effort estimates.
    - **A dependency is a fixed last line.**
      When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line, in the shape `conventions/context.md` → Task references fixes.
      `f10 task create` rewrites the id as a link itself; a task the create adapter takes on a GFM renderer (GitHub, GitLab) gets `After: <the line f10 task ref <id> --md prints>`, bare when ref prints it bare; any other renderer keeps the bare id.

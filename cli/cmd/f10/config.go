@@ -581,7 +581,7 @@ func termWidth(w io.Writer) int {
 }
 
 // styleOrigin keeps detection, declaration and defaults tellable apart at a
-// glance; that column is the whole point.
+// glance in the origin column.
 func styleOrigin(origin string) lipgloss.Style {
 	switch {
 	case origin == facts.OriginDetected:

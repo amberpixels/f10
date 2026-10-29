@@ -277,8 +277,7 @@ func extension(declared string, body []byte, raw string) (string, error) {
 }
 
 // Footer is what follows the document: a line naming each local path, and
-// a line naming each image that failed with its reason. No results, no
-// footer.
+// a line naming each image that failed with its reason; "" for no results.
 func Footer(results []Result) string {
 	var paths, failed []string
 

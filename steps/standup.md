@@ -19,7 +19,7 @@ All of it is read as instructions; there is no template.
 - **A Deliver adapter** is a skill, an MCP tool or a CLI command that creates a draft of the report (a Gmail draft to a given address, say).
   None picked: the report is printed and nothing else.
 
-**The binary decides, the step renders.**
+**`f10 standup` builds the report; this step only renders it.**
 Grouping, states, work against upkeep and the days all come from `f10 standup --json` (schema in `docs/cli.md` § Standup).
 Never re-read git or the host to second-guess them, nor as a fallback when the command fails.
 
@@ -46,7 +46,7 @@ Never re-read git or the host to second-guess them, nor as a fallback when the c
      With more than one project, the section's lines go under each project's `name`, in the JSON's order; a project with several `repos` names each PR's `repo` beside its number.
      In each, for the tasks whose `days` carry that date:
      - a task whose class that day is `work`: one line, its id linked to the tracker, its title, then its PRs linked in the JSON's order (chain order).
-       A task with `riders` is a bundle: its riders follow the title as `with FT-12, FT-13`, each linked;
+       A task with `riders` is a bundle: its riders follow the title as `with FT-12, FT-13`, each linked.
        Its `state` goes on its last work day's line only: it is where the task ended the period, not where it stood each day;
      - every task whose class that day is `upkeep`: one line for all of them, such as `kept up to date: FT-12, FT-14 (in review)`.
        A task with no work day in the period carries its `state` in parentheses here, on its last day;

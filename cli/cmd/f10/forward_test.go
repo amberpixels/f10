@@ -254,7 +254,7 @@ func TestForwardSendsToAnIdleAgentThatIsBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// and an idle agent with no live run at all is simply idle
+	// and an idle agent with no live run at all is idle
 	fx = newForwardFixture(t)
 	fx.f.script(wsList, fx.workspaces("idle"))
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+fwdText+" --driven", "{}")

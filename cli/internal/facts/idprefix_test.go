@@ -9,7 +9,7 @@ func TestIDPrefix(t *testing.T) {
 		want     string
 	}{
 		{
-			// how a project.md actually writes it: the placeholders sit
+			// how a real project.md writes it: the placeholders sit
 			// inside backticks and bold, so nothing word-like follows them
 			name:     "placeholder format in markup",
 			declared: "Notion. Task id format: **`ABC-####`** (uppercase - plans go to `.f10/plans/ABC-####.md`).",

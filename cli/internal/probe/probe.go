@@ -1,6 +1,6 @@
 // Package probe runs the deterministic detection probes bin/f10-load-project.sh
 // runs: host and CLI routing, stack and verify markers, existing plans. Each
-// answer carries its evidence; the provenance column is the binary's point.
+// answer carries the evidence that produced it.
 package probe
 
 import (

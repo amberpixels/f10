@@ -382,7 +382,7 @@ func TestGolden(t *testing.T) {
 	}
 }
 
-// The order a change is actually written in: the decision first, anchored
+// The order a change is written in: the decision first, anchored
 // at the HEAD before the code, then the code in a commit with no trailer.
 func TestWhyFallbackFindsEntryWrittenBeforeItsCode(t *testing.T) {
 	r := newRepo(t)
