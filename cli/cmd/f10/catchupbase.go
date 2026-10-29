@@ -336,7 +336,7 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 
 	moved := ""
 	if !fromOrigin {
-		if moved, err = movedMark(ctx, main, p.branch); err != nil {
+		if moved, err = movedMark(ctx, main, p.branch, after); err != nil {
 			return err
 		}
 	}
@@ -363,9 +363,10 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 	return nil
 }
 
-// movedMark is the commit f10-base-moved names on branch, "" when unset; a
-// mark naming no commit here fails rather than falling back to a branch tip.
-func movedMark(ctx context.Context, main, branch string) (string, error) {
+// movedMark is the commit f10-base-moved names on branch, "" when unset. A
+// mark naming no commit, or one the base no longer reaches (rewritten since),
+// fails rather than falling back to a branch tip or bringing in old commits.
+func movedMark(ctx context.Context, main, branch, after string) (string, error) {
 	key := "branch." + branch + "." + cfgMoved
 
 	moved, err := gitx.Config(ctx, main, key)
@@ -383,7 +384,19 @@ func movedMark(ctx context.Context, main, branch string) (string, error) {
 			cfgMoved, moved, key)
 	}
 
-	return sha, nil
+	for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
+		held, err := gitx.IsAncestor(ctx, main, sha, ref)
+		if err != nil {
+			return "", fmt.Errorf("checking whether %s holds the %s mark: %w", after, cfgMoved, err)
+		}
+
+		if held {
+			return sha, nil
+		}
+	}
+
+	return "", fmt.Errorf("%s names %s, which %s no longer holds: unset %s to catch up with the base branch",
+		cfgMoved, short(sha), after, key)
 }
 
 // rewritten is the base's old tip when its history was rewritten: onto

@@ -203,6 +203,19 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 		t.Errorf("method %q mark %q, want none and no mark", p.method, p.mark)
 	}
 
+	// a base rewritten since the mark no longer holds it: its old commits stay out
+	r.at(later, "checkout", "-q", "FT-2/b")
+	r.commit(later, "base.go", "package main // base, dropped\n", "base, dropped")
+	dropped := r.sha("HEAD")
+	r.at(later, "reset", "-q", "--hard", "HEAD~1")
+	r.at(later, "checkout", "-q", "FT-1/a")
+	r.at(later, "config", "branch.FT-1/a."+cfgMoved, dropped)
+
+	_, err := resolveCatchup(t.Context(), r.input(""))
+	if err == nil || !strings.Contains(err.Error(), "no longer holds") {
+		t.Errorf("a mark the base no longer holds: err %v, want it refused", err)
+	}
+
 	r.at(later, "config", "branch.FT-1/a."+cfgMoved, strings.Repeat("0", len(marked)))
 
 	if _, err := resolveCatchup(t.Context(), r.input("")); err == nil || !strings.Contains(err.Error(), cfgMoved) {
