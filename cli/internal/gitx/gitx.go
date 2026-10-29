@@ -249,7 +249,7 @@ func IsAncestor(ctx context.Context, dir, commit, ref string) (bool, error) {
 	switch {
 	case err == nil:
 		return true, nil
-	case absent(err) || unknownObject(err):
+	case absent(err) || UnknownObject(err):
 		return false, nil
 	default:
 		return false, err
@@ -263,10 +263,42 @@ func quiet(err error) bool {
 	return ok && exit.Stderr == ""
 }
 
-func unknownObject(err error) bool {
+// UnknownObject reports git refusing a sha the clone does not have.
+func UnknownObject(err error) bool {
 	exit, ok := errors.AsType[*ExitError](err)
 
-	return ok && (strings.Contains(exit.Stderr, "Not a valid") || strings.Contains(exit.Stderr, "bad object"))
+	return ok && (strings.Contains(exit.Stderr, "Not a valid") || strings.Contains(exit.Stderr, "bad object") ||
+		strings.Contains(exit.Stderr, "unknown commit"))
+}
+
+// A Cherry is a commit whose patch another ref lacks, as `git cherry` lists it.
+type Cherry struct {
+	SHA, Subject string
+}
+
+// Unlanded lists the commits on head beyond limit whose patch upstream lacks,
+// oldest first. `git cherry` matches by patch id, so a change that landed by
+// squash or rebase is found, and skips merge commits; a head behind limit has
+// none. A limit the clone lacks is an UnknownObject error.
+func Unlanded(ctx context.Context, dir, upstream, head, limit string) ([]Cherry, error) {
+	out, err := Exec(ctx, dir, "cherry", "-v", upstream, head, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	var cs []Cherry
+
+	for line := range strings.SplitSeq(out, "\n") {
+		mark, rest, _ := strings.Cut(line, " ")
+		if mark != "+" {
+			continue
+		}
+
+		sha, subject, _ := strings.Cut(rest, " ")
+		cs = append(cs, Cherry{SHA: sha, Subject: subject})
+	}
+
+	return cs, nil
 }
 
 // MergesCleanly tries the merge in memory, nothing checked out or written.
@@ -416,6 +448,14 @@ func PullFF(ctx context.Context, dir string) error {
 // checked out and refuses anything else.
 func FetchInto(ctx context.Context, dir, branch string) error {
 	_, err := Exec(ctx, dir, "fetch", "origin", branch+":"+branch)
+
+	return err
+}
+
+// FetchCommit brings one commit over from origin by sha: a request's head
+// after its branch was deleted there, which GitHub and GitLab still serve.
+func FetchCommit(ctx context.Context, dir, sha string) error {
+	_, err := Exec(ctx, dir, "fetch", "--quiet", "origin", sha)
 
 	return err
 }

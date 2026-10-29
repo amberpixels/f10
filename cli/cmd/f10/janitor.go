@@ -365,11 +365,19 @@ func (j *sweeper) request(ctx context.Context, b staleBranch) (*forge.PR, error)
 
 // keep is why a branch whose request merged or closed stays, or "".
 func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
-	switch {
-	case b.localSHA != "" && b.localSHA != p.HeadSHA:
-		return "its tip is not " + p.URL + "'s head, so it has commits the request lacks"
-	case b.originSHA != "" && b.originSHA != p.HeadSHA:
-		return "origin's tip is not " + p.URL + "'s head"
+	for _, tip := range []struct{ sha, whose string }{{b.localSHA, "its"}, {b.originSHA, "origin's"}} {
+		if tip.sha == "" || tip.sha == p.HeadSHA {
+			continue
+		}
+
+		lost, err := j.unlanded(ctx, tip.sha, p)
+		if err != nil {
+			return fmt.Sprintf("reading what %s tip has beyond %s's head failed: %v", tip.whose, p.URL, err)
+		}
+
+		if len(lost) > 0 {
+			return tip.whose + " " + describeLost(lost) + " never reached " + p.URL
+		}
 	}
 
 	stacked, err := j.in.host.stackedPulls(ctx, b.name)
@@ -393,6 +401,48 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 	}
 
 	return ""
+}
+
+// unlanded is what tip has beyond the request's head that the default branch
+// lacks too: a commit made after the last push, which the merge left behind.
+// A tip that only merged main in, or one behind a head a colleague pushed, has
+// none. A head the clone never saw (its branch deleted on origin after
+// someone else's push) is fetched by sha first.
+func (j *sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx.Cherry, error) {
+	def := "refs/heads/" + j.def
+
+	lost, err := gitx.Unlanded(ctx, j.in.main, def, tip, p.HeadSHA)
+	if err == nil || !gitx.UnknownObject(err) {
+		return lost, err
+	}
+
+	if err := gitx.FetchCommit(ctx, j.in.main, p.HeadSHA); err != nil {
+		return nil, fmt.Errorf("fetching its head %s: %w", abbrev(p.HeadSHA), err)
+	}
+
+	return gitx.Unlanded(ctx, j.in.main, def, tip, p.HeadSHA)
+}
+
+// describeLost names the oldest lost commit, and counts the rest.
+func describeLost(lost []gitx.Cherry) string {
+	first := fmt.Sprintf("%q (%s)", lost[0].Subject, abbrev(lost[0].SHA))
+
+	switch len(lost) {
+	case 1:
+		return first
+	case 2:
+		return first + " and 1 more commit"
+	default:
+		return fmt.Sprintf("%s and %d more commits", first, len(lost)-1)
+	}
+}
+
+func abbrev(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+
+	return sha
 }
 
 // sweepUnpushed removes a branch finish would read as never pushed once its

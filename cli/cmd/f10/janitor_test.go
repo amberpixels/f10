@@ -177,22 +177,93 @@ func TestJanitorSkipsAHeldBranch(t *testing.T) {
 }
 
 // Commits past the request's head, locally or on origin, keep the branch.
+// A tip past the request's head with a commit main lacks by patch: the
+// merge left it behind, and the line names it, whichever copy has it.
 func TestJanitorKeepsABranchAheadOfItsRequest(t *testing.T) {
-	for _, tips := range [][2]string{{"new", "abc"}, {"abc", "new"}} {
+	for _, c := range []struct {
+		tips  [2]string
+		lost  string
+		wants string
+	}{
+		{[2]string{"new", "abc"}, "+ f00ba4deadbeef address ai feedback", `its "address ai feedback" (f00ba4d) never reached https://gh/pr/9`},
+		{[2]string{"abc", "new"}, "+ f00ba4deadbeef fix", `origin's "fix" (f00ba4d) never reached https://gh/pr/9`},
+		{[2]string{"new", "new"}, "- 111 merged\n+ 222 one\n+ 333 two", `its "one" (222) and 1 more commit never reached`},
+		{[2]string{"new", ""}, "+ 1 a\n+ 2 b\n+ 3 c", `its "a" (1) and 2 more commits never reached`},
+	} {
 		fx := newJanitorFixture(t)
-		fx.branches(t, [3]string{"GH-1/x", tips[0], tips[1]})
+		fx.branches(t, [3]string{"GH-1/x", c.tips[0], c.tips[1]})
 		fx.request("GH-1/x", "MERGED", "abc", "me")
+		fx.f.script(cherry("new"), c.lost)
 		fx.plan(t)
 
 		out := fx.run(t)
 
-		if fx.f.called("git branch -D") || fx.f.called("gh api -X DELETE") || !strings.Contains(out, "kept GH-1/x") {
-			t.Errorf("tips %v: out = %q", tips, out)
+		if fx.f.called("git branch -D") || fx.f.called("gh api -X DELETE") ||
+			!strings.Contains(out, "kept GH-1/x: "+c.wants) {
+			t.Errorf("tips %v: out = %q", c.tips, out)
 		}
 
 		if !exists(filepath.Join(fx.in.plansDir, "GH-1.md")) {
-			t.Errorf("tips %v: plan moved", tips)
+			t.Errorf("tips %v: plan moved", c.tips)
 		}
+	}
+}
+
+func cherry(tip string) string {
+	return "git cherry -v refs/heads/main " + tip + " abc"
+}
+
+// A tip past the request's head whose every commit main has by patch (a
+// catchup never pushed, a follow-up that landed another way) lost nothing
+// at the merge, and so goes.
+func TestJanitorRemovesABranchWhoseExtraCommitsLanded(t *testing.T) {
+	for _, tips := range [][2]string{{"new", "abc"}, {"abc", "new"}, {"new", "new"}} {
+		fx := newJanitorFixture(t)
+		fx.branches(t, [3]string{"GH-1/x", tips[0], tips[1]})
+		fx.request("GH-1/x", "MERGED", "abc", "me")
+		fx.f.script(cherry("new"), "- 111 merged in")
+
+		out := fx.run(t)
+
+		if !fx.f.called("git branch -D GH-1/x") || !fx.f.called("gh api -X DELETE") ||
+			!strings.Contains(out, "removed GH-1/x") {
+			t.Errorf("tips %v: out = %q", tips, out)
+		}
+	}
+}
+
+// A head the clone never fetched (a colleague's push, the branch deleted on
+// origin since) is fetched by sha and then read; a fetch that fails keeps
+// the branch with a line.
+func TestJanitorFetchesARequestHeadTheCloneLacks(t *testing.T) {
+	unknown := shell.Result{Code: 128, Stderr: "fatal: unknown commit abc"}
+
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "old", "old"})
+	fx.request("GH-1/x", "MERGED", "abc", "me")
+	fx.f.answers[cherry("old")] = []shell.Result{unknown, {}}
+	fx.f.script("git fetch --quiet origin abc", "")
+
+	out := fx.run(t)
+
+	if !fx.f.called("git fetch --quiet origin abc") || !strings.Contains(out, "removed GH-1/x") {
+		t.Errorf("out = %q", out)
+	}
+
+	fx = newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "old", ""})
+	fx.request("GH-1/x", "MERGED", "abc", "me")
+	fx.f.fail(cherry("old"), unknown)
+	fx.f.fail("git fetch --quiet origin abc", shell.Result{Code: 128, Stderr: "fatal: couldn't find remote ref abc"})
+
+	out = fx.run(t)
+
+	if fx.f.called("git branch -D") ||
+		!strings.Contains(
+			out,
+			"kept GH-1/x: reading what its tip has beyond https://gh/pr/9's head failed: fetching its head abc: ",
+		) {
+		t.Errorf("out = %q", out)
 	}
 }
 

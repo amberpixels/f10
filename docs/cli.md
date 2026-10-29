@@ -321,7 +321,8 @@ Other branches and the default branch are never touched, and neither is a branch
 For each remaining branch the host lists its requests (`gh pr list --head` / the GitLab MR API by source branch), and the branch goes only when all of these hold:
 
 - no request for it is open, and the newest one is merged, or closed without a merge, an abandoned task;
-- its tip, locally and on origin, is the request's head sha, so no commit the request lacks is lost;
+- its tip, locally and on origin, is the request's head sha, or has nothing beyond it that the default branch lacks by patch (`git cherry`, which skips merge commits), so a tip that merged main in, a follow-up that landed another way, or a tip behind a head a colleague pushed is clean, while a commit made after the last push keeps the branch, with the line naming it.
+  A head the clone never fetched is fetched by sha first;
 - no open request is based on it (`gh pr list --base` / `glab mr list --target-branch`), since deleting a stacked PR's base closes it on the host;
 - for a closed request, no local branch was started `--after` it.
 
