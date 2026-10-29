@@ -230,6 +230,28 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 	}
 }
 
+// A started task's branch names its base over what its drive recorded,
+// as drive itself reads it.
+func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.worktree(t, "DM-7", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.worktree(t, "DM-4", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	git(t, fx.repo, "config", "branch.DM-4/work."+cfgAfter, "DM-3")
+
+	fx.drive(t, func(r *drives.Record) { r.Tasks[2].After = "DM-7" }, "DM-3", "DM-7", "DM-4")
+
+	rows := fx.rows(t)
+	if got, want := rowIDs(rows), "DM-3:implementing DM-4:planned DM-7:implementing"; got != want {
+		t.Fatalf("rows = %s, want %s", got, want)
+	}
+
+	if rows[1].After != "DM-3" || rows[1].Depth != 1 {
+		t.Errorf("DM-4 is not under its branch's base DM-3: %+v", rows[1])
+	}
+}
+
 // A base that finished holds nothing back: its dependent reads by its own
 // run, at the top level.
 func TestBareStatusIgnoresAFinishedBase(t *testing.T) {

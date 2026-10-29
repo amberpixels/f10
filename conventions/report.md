@@ -35,7 +35,7 @@ plan:    .f10/plans/GH-2.md
 
 **Several tasks** from one run drop the `task` and `url` rows for one row per task: print `f10 task report <ids>` verbatim, in the fenced `yaml` block, ids in `After:` order and a task outside the chain last.
 Titles go in the prose beneath.
-A parent and its subtasks are `f10 status <parent> --plain`, in a plain fenced block: the tree carries each title, so nothing goes beneath it.
+A parent and its subtasks are `f10 task report <parent> <subtask ids>` for the urls, then `f10 status <parent> --plain` in a plain fenced block: that tree carries each title and no url, so nothing goes beneath it.
 Never draw the rows or the glyphs by hand, and never turn them into a table.
 
 ```yaml
