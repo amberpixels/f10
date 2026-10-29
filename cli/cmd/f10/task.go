@@ -71,7 +71,9 @@ func taskCommand() *cli.Command {
 				Action:    runTaskReport,
 			},
 			{
-				Name: "stale",
+				Name:     "stale",
+				Hidden:   true,
+				Category: plumbingCategory,
 				Usage: "print fetch's stale check against stale_after: fresh, judged <verdict file>, needs judge, " +
 					"or undated",
 				ArgsUsage: "[task-id]",
