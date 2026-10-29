@@ -669,7 +669,7 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
 `onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
-`f10 start --after` records the tip, `f10 finish` records it again for each dependent before deleting the base branch, and the catchup step refreshes it once green.
+`f10 start --after` records the tip, `f10 finish` records it again for each dependent before deleting the base branch (a spike closed without merging clears it instead), and the catchup step refreshes it once green.
 `f10 pr base` prints the same `found: f10-after-branch gone` line for a finished stacked base.
 No `origin/HEAD` fails with its remedy, as `pr base` and the drive do.
 

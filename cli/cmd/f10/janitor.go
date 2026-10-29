@@ -507,7 +507,7 @@ func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 	}
 
 	if p != nil && p.Status == forge.Merged {
-		released, err := releaseDependents(ctx, j.in.main, b.name, j.def)
+		released, err := releaseDependents(ctx, j.in.main, b.name, j.def, true)
 		if err != nil {
 			j.say("kept %s: %v", b.name, err)
 

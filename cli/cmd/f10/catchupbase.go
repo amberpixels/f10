@@ -358,8 +358,7 @@ func (in catchupInput) method(onOrigin, stacked bool, rewritten string) (string,
 	case in.guard != "" && onOrigin:
 		return methodMerge, "the branch is on origin, so the push after it never forces"
 	case rewritten != "":
-		return methodOnto, "base rewritten since " + short(rewritten) + ": its old commits are dropped, " +
-			"and the next push needs --force-with-lease when the branch is on origin"
+		return methodOnto, in.ontoWhy(stacked, rewritten)
 	case onOrigin && in.shipStopped:
 		return methodMerge, "the branch is on origin and its ship stopped: ship resumes after it, and its push never forces"
 	case stacked && in.stackedDefault:
@@ -374,6 +373,21 @@ func (in catchupInput) method(onOrigin, stacked bool, rewritten string) (string,
 	}
 
 	return in.catchup, "catchup: " + in.catchup
+}
+
+// ontoWhy names the declared key onto overrides, so the report can say so.
+func (in catchupInput) ontoWhy(stacked bool, rewritten string) string {
+	why := "base rewritten since " + short(rewritten) + ": its old commits are dropped, " +
+		"and the next push needs --force-with-lease when the branch is on origin"
+
+	switch {
+	case stacked && !in.stackedDefault:
+		why += "; overrides catchup_stacked: " + in.stacked
+	case !stacked && !in.catchupDefault:
+		why += "; overrides catchup: " + in.catchup
+	}
+
+	return why
 }
 
 func (p *catchupPlan) write(w io.Writer) error {
