@@ -10,7 +10,7 @@ Badge: none; inside a ship pipeline the leaf is `review` for both halves.
 **Only the change checked out here.**
 The argument names the task; the change reviewed is always the current branch against its base.
 A task id (the project's id format, an id, or a tracker url): the task (`f10 task read <id>`).
-A PR / MR (number, url, or "this branch"): its head branch via the host CLI, and the task the branch name points to.
+A PR / MR (number, url, or "this branch"): its head branch and task are the `branch:` and `task:` lines `f10 pr view <PR>` prints.
 A task id or a PR whose branch is not current: decline in one line naming the worktree that holds it (`git worktree list`), or that none does; a normal end.
 
 ## The findings file
@@ -68,8 +68,8 @@ reason: the Rounds section now declines on an unsettled round one
 
 ## The base and the diff
 
-Base: the branch `git config --get branch."$(git branch --show-current)".f10-after-branch` records (a stacked task), else the default branch `origin/HEAD` points to, local-first.
-Diff: `git diff $(git merge-base <base> HEAD)` plus every file `git ls-files --others --exclude-standard` lists.
+Base: `f10 pr base`, the branch `f10 start --after` recorded (a stacked task), else the default branch.
+Diff: `f10 pr diff`, the working tree against where the branch left its base, plus every file `git ls-files --others --exclude-standard` lists.
 Read untracked text files under a few hundred KB whole; anything larger or binary (a `Binary files differ` line) goes unread, listed as one tests-and-docs finding ("not reviewed: `<path>`, `<size>`, untracked").
 Read the full diff every round.
 

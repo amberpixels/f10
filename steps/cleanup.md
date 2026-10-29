@@ -15,7 +15,7 @@ Bug hunting is not a target: it stays with review.
 
 **Scope.**
 - A path, glob or file list: those files in full; a directory means its files recursively.
-- None: the current branch's change against its base (the branch `f10 start --after` recorded, else the default branch), working tree and untracked files included.
+- None: the current branch's change against its base, `f10 pr diff` (`--name-only` for the files), working tree included, plus the untracked files `git ls-files --others --exclude-standard` lists.
   Only lines the branch added or changed are rewritten; older content in the same files stays as it was.
 
 Skip generated, vendored, fixture and lock files, changelogs and verbatim quotes.

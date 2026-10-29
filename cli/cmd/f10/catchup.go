@@ -18,21 +18,13 @@ type prTarget struct {
 }
 
 func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
-	after, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAfterBranch)
+	after, sha, err := recordedBase(ctx, main, branch)
 	if err != nil {
 		return prTarget{}, err
 	}
 
 	if after != "" {
-		sha := ""
-
-		for _, ref := range []string{"refs/remotes/origin/" + after, "refs/heads/" + after} {
-			if sha, err = gitx.Ref(ctx, main, ref); err != nil || sha != "" {
-				break
-			}
-		}
-
-		return prTarget{sha: sha, name: after, key: cfgMoved, value: sha}, err
+		return prTarget{sha: sha, name: after, key: cfgMoved, value: sha}, nil
 	}
 
 	// the default branch resolves as the catchup will read it, so the mark
@@ -45,6 +37,24 @@ func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
 	def, err := localDefault(ctx, main)
 
 	return prTarget{sha: sha, name: name, key: cfgLanded, value: def}, err
+}
+
+// recordedBase is the f10-after-branch base start recorded on branch, and
+// its sha, origin's copy first; sha is "" for a base found nowhere.
+func recordedBase(ctx context.Context, main, branch string) (string, string, error) {
+	after, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAfterBranch)
+	if err != nil || after == "" {
+		return "", "", err
+	}
+
+	for _, ref := range []string{"refs/remotes/origin/" + after, "refs/heads/" + after} {
+		sha, err := gitx.Ref(ctx, main, ref)
+		if err != nil || sha != "" {
+			return after, sha, err
+		}
+	}
+
+	return after, "", nil
 }
 
 // defaultTarget is the default branch's sha as the catchup step reads it for

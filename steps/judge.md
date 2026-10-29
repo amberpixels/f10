@@ -11,7 +11,7 @@ Name a bug only where it changes the verdict.
 1. **Gather the subject.**
    Free text: as written.
    A task id: `f10 task read <id>`, plus `f10 plan read <id>` where a plan exists.
-   A PR number, url, or the current branch: diff and description via the host CLI (`gh pr diff` / `gh pr view --comments`, `glab mr diff` / `glab mr view`), or `git diff <base>...HEAD` without a PR, plus the task and plan the branch name points to.
+   A PR number, url, or the current branch: `f10 pr diff [<PR>]` and `f10 pr view --comments [<PR>]` (the branch against its base when it has no PR), plus the task the view's `task:` line names and its plan.
    A sha, a range, or "last N commits": `git show <sha>` / `git diff <range>`, plus the task and plan the messages or branch point to; count commits with `git log --oneline` (`HEAD~N` skips merged branches).
    No argument: what this conversation is about; say in one line which subject you took before judging it.
    Whatever the subject, a plan's `## Consequences` are costs it already accepts: weigh them in point 5; a cost it leaves out, or `- none` on a design with an evident one, is a defect where it changes the verdict.

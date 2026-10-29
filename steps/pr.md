@@ -16,9 +16,10 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    Only an open PR counts (`OPEN`, `opened` on GitLab): one merged or closed, or none, means open a new one (points 4 and 5); an open one means refresh it (point 6).
    In a ship flow the catchup guard (`steps/catchup.md` → **As a guard**) integrates the base before this step, unless `catchup: off`; this step never integrates it.
 4. **A recorded dependency sets the base.**
-   Where `f10 start --after` recorded one on the branch (`git config --get branch."$(git branch --show-current)".f10-after-branch`), the PR targets that branch (`gh pr create --base <branch>` / `glab mr create --target-branch <branch>`): it is stacked, and the base's `f10 finish` retargets it to the default branch.
-   The base must already be on origin; when it is not, stop and report (`conventions/failure.md`) with the branch named and `next: push the base task's branch`.
-   One exception: a base that exists neither locally nor on origin was finished and deleted, so its code is in the default branch: `git config --unset` both keys and open against the default branch.
+   `f10 pr base --origin` prints the branch the PR targets: the one `f10 start --after` recorded, else the default branch.
+   A recorded one is passed on (`gh pr create --base <branch>` / `glab mr create --target-branch <branch>`): the PR is stacked, and the base's `f10 finish` retargets it to the default branch.
+   A non-zero exit is a base not on origin yet: stop and report (`conventions/failure.md`) with the branch named and `next: push the base task's branch`.
+   One exception: when it says the recorded base is gone (finished and deleted, so its code is in the default branch), `git config --unset` both keys and open against the default branch it printed.
 5. **Open it** via the project's PR adapter: a skill, or plain `gh pr create` / `glab mr create` mechanics (commit, branch, push, labels/assignee per project.md).
    A commit made here follows `conventions/context.md` → Commits, `--step implement`; in stealth mode, no f10 traces in the branch name, commits, or PR text.
    Another task named in the PR text is a link with its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
