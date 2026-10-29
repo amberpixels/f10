@@ -65,6 +65,17 @@ func taskCommand() *cli.Command {
 				Action:    runTaskReport,
 			},
 			{
+				Name: "stale",
+				Usage: "print fetch's stale check against stale_after: fresh, judged <verdict file>, needs judge, " +
+					"or undated",
+				ArgsUsage: "[task-id]",
+				Flags: []cli.Flag{&cli.StringFlag{
+					Name:  "created",
+					Usage: "the task's created date as `YYYY-MM-DD`, for a tracker the host's issues do not answer",
+				}},
+				Action: runTaskStale,
+			},
+			{
 				Name:      "open",
 				Usage:     "open the task in the browser; with no task id, the task list",
 				ArgsUsage: "[task-id]",
