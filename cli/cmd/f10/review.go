@@ -18,8 +18,10 @@ import (
 // configuration; only ack, settle and trigger write to the host.
 func reviewCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "review",
-		Usage: "read, await or acknowledge the remote review of a branch's PR or MR",
+		Name:     "review",
+		Hidden:   true,
+		Category: plumbingCategory,
+		Usage:    "read, await or acknowledge the remote review of a branch's PR or MR",
 		Commands: []*cli.Command{
 			{
 				Name:      "pick",

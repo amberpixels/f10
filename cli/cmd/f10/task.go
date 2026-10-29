@@ -41,13 +41,17 @@ func taskCommand() *cli.Command {
 				Action: runTaskRead,
 			},
 			{
-				Name: "current",
+				Name:     "current",
+				Hidden:   true,
+				Category: plumbingCategory,
 				Usage: "print the task the branch names, else the one this session's run records " +
 					"(exit 1: none)",
 				Action: runTaskCurrent,
 			},
 			{
-				Name: "ref",
+				Name:     "ref",
+				Hidden:   true,
+				Category: plumbingCategory,
 				Usage: "print each task as `<id> (<title>)`, or a markdown link with --md, from the titles f10 " +
 					"already read; an unknown id prints bare",
 				ArgsUsage: "<task-id>...",
@@ -58,7 +62,9 @@ func taskCommand() *cli.Command {
 				Action: runTaskRef,
 			},
 			{
-				Name: "report",
+				Name:     "report",
+				Hidden:   true,
+				Category: plumbingCategory,
 				Usage: "print a report's facts block for the tasks: one task's task, title and url rows, else a row " +
 					"per task; from the titles f10 already read",
 				ArgsUsage: "<task-id>...",
@@ -90,6 +96,8 @@ func taskCommand() *cli.Command {
 			},
 			{
 				Name:      "children",
+				Hidden:    true,
+				Category:  plumbingCategory,
 				Usage:     "list the task's open subtasks in After: order (exit 3: the tracker has no parent link)",
 				ArgsUsage: "[task-id]",
 				Flags: []cli.Flag{

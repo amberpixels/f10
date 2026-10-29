@@ -4,7 +4,8 @@
 // handing a url to a browser or a file to an editor; init, start, forward,
 // drive, standup mark and finish act. A verb means one thing under every noun
 // (`read` writes content, `open` follows an address) and the matrix stays
-// sparse rather than redefining one to fill a hole.
+// sparse rather than redefining one to fill a hole. `f10 --help` shows the
+// human verbs; the verbs the steps call are Hidden under plumbingCategory.
 package main
 
 import (
@@ -70,6 +71,7 @@ func newApp() *cli.Command {
 			ledgerCommand(),
 			statsCommand(),
 			loreCommand(),
+			helpCommand(),
 		},
 	}
 }
