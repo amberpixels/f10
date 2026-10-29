@@ -65,6 +65,10 @@ func defaultTarget(ctx context.Context, main string) (string, string, error) {
 		return "", "", err
 	}
 
+	return defaultTargetOf(ctx, main, def)
+}
+
+func defaultTargetOf(ctx context.Context, main, def string) (string, string, error) {
 	local, err := gitx.Ref(ctx, main, "refs/heads/"+def)
 	if err != nil {
 		return "", "", fmt.Errorf("reading %s: %w", def, err)
