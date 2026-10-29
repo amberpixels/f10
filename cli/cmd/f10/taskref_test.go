@@ -228,33 +228,3 @@ esac
 		t.Errorf("several tasks = %q, want %q", out, want)
 	}
 }
-
-// --children hangs the parent's subtasks under it on tree lines, in After:
-// order.
-func TestTaskReportChildren(t *testing.T) {
-	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
-
-	repo := createRepo(t, `case "$1 $2" in
-"read 71") echo "# FT-71: Parent" ;;
-"url 71") echo https://tracker.example/71 ;;
-"children 71") echo '[
-  {"id":"72","title":"one","url":"https://tracker.example/72","state":"open"},
-  {"id":"73","title":"two","url":"https://tracker.example/73","state":"open","after":"72"},
-  {"id":"74","title":"three","url":"https://tracker.example/74","state":"open"}]' ;;
-*) echo "no task $2" >&2; exit 1 ;;
-esac
-`)
-
-	out, _, err := runWrite(t, repo, "", "report", "--children", "FT-71")
-	if err != nil {
-		t.Fatalf("report: %v", err)
-	}
-
-	want := "FT-71:        ↗ https://tracker.example/71\n" +
-		"├─ FT-72:     ↗ https://tracker.example/72\n" +
-		"│  └─ FT-73:  ↗ https://tracker.example/73\n" +
-		"└─ FT-74:     ↗ https://tracker.example/74\n"
-	if out != want {
-		t.Errorf("children =\n%s\nwant\n%s", out, want)
-	}
-}

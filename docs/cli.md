@@ -43,7 +43,7 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
-f10 task report <id>... [--children]   # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
+f10 task report <id>...  # a report's facts block: one task's rows, else a row per task
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
@@ -1020,16 +1020,8 @@ An id the tracker does not know, or a tracker that fails, prints bare with a not
 `f10 task report` prints the facts block a skill's report opens with (`conventions/report.md`), from the same titles and urls as `task ref`.
 One id prints its `task`, `title` and `url` rows.
 Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
-`--children` takes one parent and hangs the subtasks `f10 task children` lists (closed ones left out) under it, in that order, on box-drawing lines:
-
-```
-FT-71:        ↗ https://github.com/amberpixels/f10/issues/71
-├─ FT-72:     ↗ https://github.com/amberpixels/f10/issues/72
-│  └─ FT-73:  ↗ https://github.com/amberpixels/f10/issues/73
-└─ FT-74:     ↗ https://github.com/amberpixels/f10/issues/74
-```
-
-A task with no url known prints bare, a tracker with no parent link prints the parent alone with a note on stderr, and the exit is 0 either way.
+A task with no url known prints bare, and the exit is 0.
+A parent and its subtasks report through `f10 status <parent> --plain`, whose tree carries the titles.
 
 ## Comment and update
 

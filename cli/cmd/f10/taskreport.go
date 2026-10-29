@@ -22,11 +22,6 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("report needs a task id")
 	}
 
-	children := cmd.Bool("children")
-	if children && len(tokens) > 1 {
-		return errors.New("report --children takes one parent id")
-	}
-
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
@@ -42,51 +37,24 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 
 	known := t.taskRefs(ctx, refs, true, false, cmd.ErrWriter)
 
-	var nodes []tasktree.Node
+	if len(tokens) == 1 {
+		return writeTaskFacts(cmd, tokens[0], refs[0].ID, known[refs[0].ID])
+	}
 
-	if children {
-		if refs[0].ID == "" {
-			return writeTaskFacts(cmd, tokens[0], "", ledger.TaskRef{})
-		}
-
-		kids, err := t.tracker().children(ctx, refs[0])
-		switch {
-		case errors.Is(err, errNoParentLink):
-			fmt.Fprintf(cmd.ErrWriter, "f10: %s: %v: no subtasks to list\n", refs[0].ID, err)
-		case err != nil:
-			return err
-		}
-
-		if len(kids) == 0 {
-			return writeTaskFacts(cmd, tokens[0], refs[0].ID, known[refs[0].ID])
-		}
-
-		nodes = append(nodes, reportNode(tokens[0], refs[0].ID, known[refs[0].ID].URL, 0))
-
-		for _, k := range kids {
-			nodes = append(nodes, reportNode(k.ID, k.ID, k.URL, k.Depth+1))
-		}
-
-		t.rememberRefs(ctx, childRefs(kids)...)
-	} else {
-		if len(tokens) == 1 {
-			return writeTaskFacts(cmd, tokens[0], refs[0].ID, known[refs[0].ID])
-		}
-
-		for i, token := range tokens {
-			nodes = append(nodes, reportNode(token, refs[i].ID, known[refs[i].ID].URL, 0))
-		}
+	nodes := make([]tasktree.Node, len(tokens))
+	for i, token := range tokens {
+		nodes[i] = reportNode(token, refs[i].ID, known[refs[i].ID].URL)
 	}
 
 	return tasktree.Tree{Align: true}.Write(cmd.Writer, nodes)
 }
 
-func reportNode(token, id, url string, depth int) tasktree.Node {
+func reportNode(token, id, url string) tasktree.Node {
 	if id == "" || url == "" {
-		return tasktree.Node{Depth: depth, Cells: []tasktree.Cell{{Text: cmp.Or(id, token)}}}
+		return tasktree.Node{Cells: []tasktree.Cell{{Text: cmp.Or(id, token)}}}
 	}
 
-	return tasktree.Node{Depth: depth, Cells: []tasktree.Cell{{Text: id + ":"}, {Text: "↗ " + url}}}
+	return tasktree.Node{Cells: []tasktree.Cell{{Text: id + ":"}, {Text: "↗ " + url}}}
 }
 
 func writeTaskFacts(cmd *cli.Command, token, id string, k ledger.TaskRef) error {
