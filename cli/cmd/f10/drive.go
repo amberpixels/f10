@@ -494,7 +494,6 @@ type driveInput struct {
 	layers   agentMap                            // the user's and the project's agents map; nil for none
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
-	// pr: "", or the answer merge or local; progress names each action finish takes
 	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
 	stateDir string
 	session  string // the session that typed the command, inherited through the daemon's environment
