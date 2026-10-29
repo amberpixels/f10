@@ -309,11 +309,12 @@ func TestCatchupBaseCodeRow(t *testing.T) {
 		t.Errorf("own commit: code %q, want %q", p.code, codeYes)
 	}
 
-	// the default branch and a landed base print no row: their code is in it
+	// a catchup by name prints the row too
 	if p := r.resolve(r.input("")); p.code == "" {
 		t.Error("a recorded base printed no code row")
 	}
 
+	// a landed base prints none: its code is in the default branch
 	r.at(during, "config", "branch.FT-3/c."+cfgLanded, "main")
 
 	if p := r.resolve(r.input("")); p.code != "" {

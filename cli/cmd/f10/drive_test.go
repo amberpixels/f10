@@ -3122,14 +3122,17 @@ func (fx *driveFixture) writeWait(t *testing.T) {
 
 // A ship that stops on a base without code parks in the drive with no ask,
 // the base runs on, and ship goes again at implement once the base commits.
+// The base here lost its only commit (a reset) between release and the park.
 func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 	fx := chained(t, "GH-1", "GH-2", "ship")
+	// GH-2's open and first send, the park, a poll still empty, then code
+	fx.f.script("git rev-list --count --no-merges refs/heads/GH-1 --not refs/heads/main", "1", "1", "0", "0", "1")
 	fx.expects("GH-1", "ship")
 	fx.expects("GH-2", "ship")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
 		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at implement"), "{}")
-	// the head GH-2's ship found empty, the same one poll after, then a commit
-	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1", "a1", "a2")
+	// the head the park read, then the commit that releases it
+	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1", "a2")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
@@ -3140,13 +3143,13 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 		unopened, all("idle", "GH-1", "GH-2"),
 		all("working", "GH-1", "GH-2"),
 		listing("GH-1", "working", "GH-2", "idle"), // GH-2 parks
-		listing("GH-1", "working", "GH-2", "idle"), // GH-1's head unmoved
+		listing("GH-1", "working", "GH-2", "idle"), // GH-1 still without code
 		listing("GH-1", "working", "GH-2", "idle"), // GH-1 committed
 		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
 		all("working", "GH-1", "GH-2"),
 		all("idle", "GH-1", "GH-2"))
 	fx.onTick[2] = func() { fx.writeWait(t) }
-	fx.onTick[6] = func() {
+	fx.onTick[5] = func() {
 		fx.writeRunFor(t, "GH-1", "done", "", "", "")
 		fx.writeRunFor(t, "GH-2", "done", "", "", "")
 	}
@@ -3162,7 +3165,12 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 	}, "herdr agent prompt")
 
 	out := fx.out.String()
-	for _, want := range []string{"GH-2 ship: waiting on GH-1 for code", "GH-1:    done: ship", "GH-2:    done: ship"} {
+	for _, want := range []string{
+		"GH-2 ship: waiting on GH-1 for code",
+		"GH-2 ship: its base has code now: resume at implement",
+		"GH-1:    done: ship",
+		"GH-2:    done: ship",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -3170,6 +3178,68 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 
 	if entries, _ := os.ReadDir(fx.in.asksDir); len(entries) > 0 {
 		t.Errorf("a parked ship raised an ask: %v", entries)
+	}
+}
+
+// A base that committed between the ship's look and the drive's read of its
+// stop gets ship sent again at once, not parked until a second commit; the
+// same head stopping it twice parks it, so the two never loop.
+func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "ship")
+	fx.expects("GH-1", "ship")
+	fx.expects("GH-2", "ship")
+	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
+		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at implement"), "{}")
+	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1")
+	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
+	fx.f.script("git status --porcelain", "")
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"),
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // GH-2's stop
+		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // the same head stops it again
+		all("idle", "GH-1", "GH-2"))
+	fx.onTick[2] = func() { fx.writeWait(t) }
+	fx.onTick[4] = func() { fx.writeWait(t) }
+	// GH-1 halts, which ends the parked GH-2 at its next boundary
+	fx.onTick[5] = func() { fx.writeRunFor(t, "GH-1", "blocked", "judge", "stop: duplicate of GH-9", "") }
+
+	if err := fx.drive(t); exitCode(err) != exitHalted {
+		t.Fatalf("err = %v\n%s", err, fx.out.String())
+	}
+
+	out := fx.out.String()
+	if !strings.Contains(out, "GH-2 ship: its base has code now: resume at implement") {
+		t.Errorf("ship was not sent again at once:\n%s", out)
+	}
+
+	if strings.Count(out, "resume at implement") != 1 || !strings.Contains(out, "GH-2 ship: waiting on GH-1 for code") {
+		t.Errorf("the same head should park the second stop, not resend:\n%s", out)
+	}
+}
+
+// A parked task gets no moved mark: the catchup it would send meets a ship
+// stop it cannot resume, and ship's own guard brings the base in anyway.
+func TestDriveMarksNoParkedTask(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{opened: true, parked: true, base: b, o: openedTask{branch: "GH-2"}}
+
+	if err := fx.in.markMoved(t.Context(), io.Discard, []*driveRun{b, r}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if fx.f.called("git rev-parse -q --verify refs/heads/GH-1") {
+		t.Errorf("a parked task was checked for a moved base: %q", fx.f.calls)
+	}
+
+	if !heldStop(&state.Run{Ship: "blocked", Leaf: "implement", Wait: "GH-1"}) {
+		t.Error("a catchup does not hold a parked ship's stop")
 	}
 }
 

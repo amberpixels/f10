@@ -69,7 +69,7 @@ The kind is known from the plan, or a planless run's inline plan, before the flo
 Catchup is never a flow entry.
 
 - **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`); `f10 catchup base --guard implement` prints `method: skip` otherwise.
-  A base with no code yet is the guard's `code: none` line, the rule `f10 drive` releases dependents by: before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
+  A base with no code yet is the guard's `code: none` line, the rule `f10 drive` releases dependents by; a base held only on origin prints no `code` line, and has no code when its branch is still at the default branch's commit. Before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
   **Driven**, nothing is asked and ship never proceeds: `f10-state.sh set ship blocked implement; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch has no code yet" "rerun ship once <base-id> commits; f10 drive does it by itself"`, then the report.

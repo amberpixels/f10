@@ -611,6 +611,9 @@ type driveRun struct {
 	// a commit after it sends ship again, never the same empty base.
 	parked     bool
 	parkedHead string
+	// waitHead is the base head the last park read, so a base that
+	// committed before the drive saw the stop is sent once, never looped
+	waitHead string
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -938,7 +941,8 @@ func createdAt(ctx context.Context, dir, branch string) string {
 func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveRun, wss []agentctl.Workspace) error {
 	for _, r := range runs {
 		b := r.base
-		if !r.active() || r.skill == "catchup" || b == nil || !b.opened {
+		// a parked ship's own guard brings the base in when it resumes
+		if !r.active() || r.parked || r.skill == "catchup" || b == nil || !b.opened {
 			continue
 		}
 
@@ -1819,23 +1823,30 @@ func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
 }
 
 // park holds a ship that stopped on a base without code until the base
-// commits, or says why nothing in this drive ever will.
-func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *state.Run) *driveResult {
+// commits, or ends it when nothing in this drive ever will. A base that
+// committed between the ship's look and this read gets ship sent at once.
+func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *state.Run) error {
 	b := r.base
 	if b == nil || b.through() {
-		res := in.verdict(r.task, r.skill, run)
+		in.end(ctx, w, r, in.verdict(r.task, r.skill, run))
 
-		return &res
+		return nil
 	}
 
-	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
-	if err != nil {
-		res := halted(r.task.ref.ID, r.skill, "reading "+b.task.ref.ID+"'s branch: "+err.Error())
+	head, why := in.baseHead(ctx, b)
+	if why != "" {
+		in.end(ctx, w, r, halted(r.task.ref.ID, r.skill, why))
 
-		return &res
+		return nil
 	}
 
-	r.parked, r.parkedHead = true, cmp.Or(head, "none")
+	if head != r.waitHead && in.released(ctx, b) {
+		r.waitHead = head
+
+		return in.next(ctx, w, r)
+	}
+
+	r.parked, r.parkedHead, r.waitHead = true, head, head
 
 	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", r.task.ref.ID, b.task.ref.ID)
 
@@ -2188,7 +2199,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
 		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", id, skill)
-	case run != nil && skill == "catchup" && guardStop(run):
+	case run != nil && skill == "catchup" && heldStop(run):
 		// the ship stop is the one this catchup settles
 		return in.prompt(ctx, w, r, ws, skill, "")
 	case run != nil && stoppedRun(run):
@@ -2458,12 +2469,8 @@ func (in *driveInput) poll(
 	if recent && stoppedRun(run) {
 		switch {
 		case skill == "ship" && run.Wait != "":
-			if res := in.park(ctx, w, r, run); res != nil {
-				in.end(ctx, w, r, *res)
-			}
-
-			return nil
-		case skill == "catchup" && guardStop(run):
+			return in.park(ctx, w, r, run)
+		case skill == "catchup" && heldStop(run):
 			// a catchup that stopped and then ended clean restores the stop it
 			// found, so git says how it ended
 		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
@@ -2686,6 +2693,21 @@ func guardStop(run *state.Run) bool {
 
 	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(guardedSteps, step)
 }
+
+// baseHead is the base branch's head, "none" for no branch, or why git
+// could not read it.
+func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string) {
+	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
+	if err != nil {
+		return "", "reading " + b.task.ref.ID + "'s branch: " + err.Error()
+	}
+
+	return cmp.Or(head, "none"), ""
+}
+
+// heldStop is a ship stop a catchup leaves in place: the guard's, or a
+// ship parked on its base, which resumes once the catchup ends clean.
+func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
 
 func stoppedRun(r *state.Run) bool {
 	return slices.ContainsFunc(state.Phases, func(p string) bool { return state.Stopped(r.Status(p)) })
