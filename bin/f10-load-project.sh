@@ -107,7 +107,8 @@ operation_line() {
   fi
   [ -n "$sha" ] || return 0
   short="$(git rev-parse --short "$sha" 2>/dev/null || printf '%s' "${sha:0:7}")"
-  name="$(git for-each-ref --points-at "$sha" --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null | head -n 1)"
+  # a symref (origin/HEAD) sorts before the branch it points at and shortens to the bare remote
+  name="$(git for-each-ref --points-at "$sha" --format='%(if)%(symref)%(then)%(else)%(refname:short)%(end)' refs/heads refs/remotes 2>/dev/null | grep -m1 .)"
   if [ -n "$name" ]; then name="$name ($short)"; else name="$short"; fi
   n="$(git diff --name-only --diff-filter=U 2>/dev/null | grep -c .)"
   files="files"

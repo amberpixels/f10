@@ -63,6 +63,31 @@ func TestCatchupInProgressLine(t *testing.T) {
 
 		assertLineUnderStep(t, loadOut(t, script, repo, home, "catchup"), want("rebase onto"))
 	})
+
+	// A pull into conflicts merges a remote-tracking branch; origin/HEAD points
+	// at the same commit and must not be the name printed.
+	t.Run("merge with a remote-tracking branch", func(t *testing.T) {
+		branch := gitOut(t, repo, "branch", "--show-current")
+		clone := canon(filepath.Join(t.TempDir(), "clone"))
+		run(t, filepath.Dir(clone), "clone", "-q", repo, clone)
+		cloneGit := func(args ...string) {
+			t.Helper()
+			run(t, clone, append([]string{
+				"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+			}, args...)...)
+		}
+
+		writeFile(t, file, "upstream\n")
+		gitc("commit", "-q", "-am", "upstream")
+		writeFile(t, filepath.Join(clone, "a.txt"), "clone\n")
+		cloneGit("commit", "-q", "-am", "clone")
+		cloneGit("fetch", "-q")
+		mustFail(t, clone, "merge", "origin/"+branch)
+
+		upstream := gitOut(t, repo, "rev-parse", "--short", branch)
+		assertLineUnderStep(t, loadOut(t, script, clone, home, "catchup"),
+			"in progress: merge with origin/"+branch+" ("+upstream+"), 1 unmerged file")
+	})
 }
 
 // hasLine says whether any whole line of out opens with prefix: the step's
