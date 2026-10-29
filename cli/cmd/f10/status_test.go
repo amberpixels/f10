@@ -167,7 +167,11 @@ func TestRenderRunKeepsTheAsk(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	renderRun(&out, own[0], nil, true, time.Now(), 0)
+	renderRun(&out, own[0], nil, true, "opus:high", time.Now(), 0)
+
+	if !strings.Contains(out.String(), "opus:high") {
+		t.Errorf("output lacks the agent row:\n%s", out.String())
+	}
 
 	if !strings.Contains(out.String(), "1. Keep it?") {
 		t.Errorf("output lacks the ask:\n%s", out.String())

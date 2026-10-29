@@ -91,6 +91,9 @@ Name a bug only where it changes the verdict.
 
 **Blind** (`--blind`): for work this session produced.
 Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`), follow this step except point 8, write no file, and return the verdict and its argument.
+The Agent tool call carries the `model` and `effort` the project load's `judge` profile line names in its `Agent tool:` part (`docs/project-setup.md` → Agents).
+A line with no `Agent tool:` part passes neither.
+A judge in a flow runs inline, on the task agent's profile.
 Relay its verdict unchanged; you may dispute it in one line.
 The agent writes nothing: you write the verdict file with `blind: yes`, your dispute, if any, under `## Argument`.
 

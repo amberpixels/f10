@@ -507,7 +507,7 @@ func TestRenderGates(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	renderRun(&out, r, gates, false, time.Now(), 0)
+	renderRun(&out, r, gates, false, "", time.Now(), 0)
 
 	for _, want := range []string{
 		"ship            running: review (local)\n",

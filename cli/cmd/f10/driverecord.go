@@ -82,18 +82,18 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 			Created:     in.now(),
 			Args:        recordArgs(in.argv),
 			Flow:        in.args.flow,
-			Model:       in.args.model,
+			Agent:       in.args.agent,
 			DriveFinish: slices.Contains(in.chain, "finish"),
 			Session:     in.session,
 		}
 
 		for i, t := range tasks {
-			model := ""
-			if i < len(in.args.models) {
-				model = in.args.models[i]
+			profile := ""
+			if i < len(in.args.profiles) {
+				profile = in.args.profiles[i]
 			}
 
-			in.rec.Tasks = append(in.rec.Tasks, drives.Task{ID: t.ref.Label() + suffixOf(t.suffix), Model: model})
+			in.rec.Tasks = append(in.rec.Tasks, drives.Task{ID: t.ref.Label() + suffixOf(t.suffix), Agent: profile})
 		}
 
 		if err := drives.Create(in.root, in.rec); err != nil {

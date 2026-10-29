@@ -1,41 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-
-	"github.com/amberpixels/f10/cli/internal/model"
+	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
-
-// resolveModel turns --model as typed into what the agent starts on, and
-// the line to print about it, if any. A name that is no model falls back
-// to claude's own default rather than refuse: the caller wanted the task
-// started, and a bad model would only fail at the agent's first prompt.
-func resolveModel(raw, settings string) (string, string) {
-	if strings.TrimSpace(raw) == "" {
-		return "", ""
-	}
-
-	value, note, ok := model.Resolve(raw)
-	if ok {
-		return value, note
-	}
-
-	fallback := "claude's default model"
-	if d := claudeDefaultModel(settings); d != "" {
-		fallback = d + " (your claude default)"
-	}
-
-	warning := "!!! --model " + strings.TrimSpace(raw) +
-		" is not a model name f10 recognizes: the agent starts on " + fallback + " instead"
-
-	return "", lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3")).Render(warning)
-}
 
 // claudeSettingsPath is the user's claude settings file, under
 // CLAUDE_CONFIG_DIR when set.
@@ -77,25 +52,17 @@ func claudeDefaultModel(path string) string {
 	return strings.TrimSpace(settings.Model)
 }
 
-// modelArgs is the agent's command line for a resolved model.
-func modelArgs(m string) []string {
-	if m == "" {
-		return nil
-	}
-
-	return []string{"--model", m}
-}
-
 // taskFileDirs are the storage root's dirs an agent writes task files to.
 // Instructions and the driver stay out: a worktree's agent never edits
 // what every checkout's next run loads.
 var taskFileDirs = []string{"plans", "reviews", "verdicts", "spikes", "lore", "images"}
 
-// agentArgs is the agent's command line: the model, and each task-file dir
-// of the storage root when that root sits outside the worktree, so writing
-// plans and findings there asks no permission.
-func agentArgs(m, plansDir, worktree string) []string {
-	args := modelArgs(m)
+// agentArgs is the agent's command line: the profile's flags through its
+// kind, and each task-file dir of the storage root when that root sits
+// outside the worktree, so writing plans and findings there asks no
+// permission.
+func agentArgs(p agentctl.Profile, plansDir, worktree string) []string {
+	args := p.Args()
 	if !outsideWorktree(plansDir, worktree) {
 		return args
 	}
@@ -105,6 +72,26 @@ func agentArgs(m, plansDir, worktree string) []string {
 	}
 
 	return args
+}
+
+// recordedProfile is the profile a branch records, from f10-agent, else
+// the model alone an older branch recorded under f10-model; the zero
+// profile when it records neither.
+func recordedProfile(ctx context.Context, main, branch string) (agentctl.Profile, error) {
+	for _, key := range []string{cfgAgent, cfgModel} {
+		v, err := gitx.Config(ctx, main, "branch."+branch+"."+key)
+		if err != nil {
+			return agentctl.Profile{}, fmt.Errorf("reading the recorded agent profile: %w", err)
+		}
+
+		if v != "" {
+			p, _, _ := agentctl.ParseRecorded(v).Resolve()
+
+			return p, nil
+		}
+	}
+
+	return agentctl.Profile{}, nil
 }
 
 // makeStorageDirs creates the task-file dirs agentArgs names, since claude

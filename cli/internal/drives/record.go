@@ -23,7 +23,8 @@ type Record struct {
 	Args        []string   `yaml:"args"` // the command line, --answer, --every and --foreground dropped
 	Tasks       []Task     `yaml:"tasks"`
 	Flow        string     `yaml:"flow,omitempty"`
-	Model       string     `yaml:"model,omitempty"` // the run-wide --model as typed
+	Agent       string     `yaml:"agent,omitempty"` // the run-wide --agent (or --model) as typed
+	Model       string     `yaml:"model,omitempty"` // the run-wide --model of a record from before profiles, read only
 	DriveFinish bool       `yaml:"drive_finish"`
 	Cancelled   *time.Time `yaml:"cancelled,omitempty"`
 	Session     string     `yaml:"session,omitempty"` // the session that created it, "" from a plain terminal
@@ -35,7 +36,8 @@ type Record struct {
 // A Task is one task of a drive, as typed, and where it stands.
 type Task struct {
 	ID      string   `yaml:"id"`              // as typed, a suffix included
-	Model   string   `yaml:"model,omitempty"` // its own :model as typed
+	Agent   string   `yaml:"agent,omitempty"` // its own :profile as typed
+	Model   string   `yaml:"model,omitempty"` // its own :model from before profiles, read only
 	Skill   string   `yaml:"skill,omitempty"` // in flight, "" for none
 	Outcome *Outcome `yaml:"outcome,omitempty"`
 }

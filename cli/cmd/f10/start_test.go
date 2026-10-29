@@ -118,6 +118,13 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
+		// no branch records an agent profile, nor a model from before profiles,
+		// until a test says so
+		if strings.HasPrefix(key, "git config --get branch.") &&
+			(strings.HasSuffix(key, "."+cfgAgent) || strings.HasSuffix(key, "."+cfgModel)) {
+			return shell.Result{}
+		}
+
 		// start and drive record the flow on every branch they open, and
 		// none records one until a test says so
 		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+cfgFlow) {
@@ -1122,7 +1129,7 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 	}
 
 	f := afterFixture(t, "/code/repo.GH-7-base", "ccc")
-	addDir := " -- " + strings.Join(agentArgs("", plans, "/code/repo.GH-1"), " ")
+	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, plans, "/code/repo.GH-1"), " ")
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7"+addDir, "{}")
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
@@ -1609,7 +1616,7 @@ func TestStartReadsMainsPlanInPlace(t *testing.T) {
 	f.script(worktrees, porcelain("GH-1", wt))
 	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
 	f.script("herdr agent start "+agent+" --kind claude --pane pane:7 -- "+
-		strings.Join(agentArgs("", plans, wt), " "), "{}")
+		strings.Join(agentArgs(agentctl.Profile{}, plans, wt), " "), "{}")
 	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, src, nil, ""), "{}")
 
 	var out bytes.Buffer

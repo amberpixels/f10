@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 )
 
 // A Scenario is one evals/scenarios/<name>/scenario.json: a fixture repo
@@ -29,6 +31,7 @@ type Scenario struct {
 	Verify      []string `json:"verify"`
 	Accept      []Accept `json:"accept"`
 	Checks      []string `json:"checks"`
+	Agents      []string `json:"agents"` // the profiles the scenario runs on, one run each; none is one run on the kind's default
 
 	env []string // the run's environment, so a check that runs f10 reads the run's state
 	f10 string   // this checkout's bin/f10, the binary the run itself used
@@ -45,6 +48,7 @@ type Accept struct {
 // A Report is one scenario's run.
 type Report struct {
 	Scenario   string    `json:"scenario"`
+	Agent      string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
 	Version    string    `json:"version"`
 	Commit     string    `json:"commit"`
 	At         time.Time `json:"at"`
@@ -60,6 +64,7 @@ type options struct {
 	only       string
 	permission string
 	budget     string
+	agent      string
 	keep       bool
 }
 
@@ -71,6 +76,8 @@ func main() {
 	flag.StringVar(&o.permission, "permission-mode", "acceptEdits",
 		"claude's --permission-mode for the run; a driven ship runs commands, which acceptEdits may refuse")
 	flag.StringVar(&o.budget, "max-budget-usd", "5", "claude's --max-budget-usd per scenario")
+	flag.StringVar(&o.agent, "agent", "",
+		"run every scenario on this agent `profile` (kind:model:effort, or a part), not the ones it lists")
 	flag.BoolVar(&o.keep, "keep", false, "keep each scenario's temp dir and print its path")
 	flag.Parse()
 
@@ -99,29 +106,38 @@ func run(ctx context.Context, o options) error {
 	}
 
 	version, commit := pluginVersion(root), gitOut(ctx, root, "rev-parse", "--short", "HEAD")
-	failed := 0
+	failed, runs := 0, 0
 
 	for _, s := range scenarios {
 		s.f10 = f10
-		rep := runScenario(ctx, root, s, o)
-		rep.Version, rep.Commit = version, commit
 
-		path := filepath.Join(root, "evals", "reports", version, s.Name+".json")
-		if err := writeReport(path, rep); err != nil {
+		profiles, err := profilesFor(s, o.agent)
+		if err != nil {
 			return err
 		}
 
-		status := "pass"
-		if !rep.Pass {
-			status, failed = "FAIL", failed+1
-		}
+		for _, p := range profiles {
+			runs++
+			rep := runScenario(ctx, root, s, o, p)
+			rep.Version, rep.Commit = version, commit
 
-		fmt.Printf("%-24s %s  $%.2f  %s  %s\n", s.Name, status, rep.CostUSD,
-			time.Duration(rep.DurationMS)*time.Millisecond, path)
+			path := filepath.Join(root, "evals", "reports", version, reportName(s.Name, p))
+			if err := writeReport(path, rep); err != nil {
+				return err
+			}
+
+			status := "pass"
+			if !rep.Pass {
+				status, failed = "FAIL", failed+1
+			}
+
+			fmt.Printf("%-24s %-16s %s  $%.2f  %s  %s\n", s.Name, p.Short(), status, rep.CostUSD,
+				time.Duration(rep.DurationMS)*time.Millisecond, path)
+		}
 	}
 
 	if failed > 0 {
-		return fmt.Errorf("%d of %d scenarios failed", failed, len(scenarios))
+		return fmt.Errorf("%d of %d runs failed", failed, runs)
 	}
 
 	return nil
@@ -170,8 +186,8 @@ func loadScenarios(dir, only string) ([]Scenario, error) {
 // f10's ledger, run state, asks and daemon dirs all point inside that dir,
 // so the nested run never reaches the user's own; the repo has no origin,
 // so nothing can be pushed.
-func runScenario(ctx context.Context, root string, s Scenario, o options) Report {
-	rep := Report{Scenario: s.Name, At: time.Now().UTC()}
+func runScenario(ctx context.Context, root string, s Scenario, o options, p agentctl.Profile) Report {
+	rep := Report{Scenario: s.Name, Agent: p.Short(), At: time.Now().UTC()}
 
 	tmp, err := os.MkdirTemp("", "f10eval-"+s.Name+"-")
 	if err != nil {
@@ -193,15 +209,10 @@ func runScenario(ctx context.Context, root string, s Scenario, o options) Report
 		return rep
 	}
 
-	s.env = append(os.Environ(),
-		"F10_LEDGER="+filepath.Join(tmp, "f10.db"),
-		"F10_STATE_DIR="+filepath.Join(tmp, "state"),
-		"F10_ASKS_DIR="+filepath.Join(tmp, "asks"),
-		"F10_RUN_DIR="+filepath.Join(tmp, "run"),
-	)
+	s.env = runEnv(os.Environ(), tmp)
 
-	cmd := exec.CommandContext(ctx, "claude", "-p", "--plugin-dir", root, "--output-format", "json",
-		"--permission-mode", o.permission, "--max-budget-usd", o.budget, s.Prompt)
+	args := claudeArgs(root, o, s.Prompt, p)
+	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir, cmd.Env = dir, s.env
 
 	out, err := cmd.Output()
@@ -316,4 +327,81 @@ func gitOut(ctx context.Context, dir string, args ...string) string {
 	}
 
 	return strings.TrimSpace(string(out))
+}
+
+// profilesFor is the profiles a scenario runs on: the flag's alone, else
+// each the scenario lists, else one run on the kind's default. Each is
+// resolved here, so a misspelt family is corrected before the spend.
+func profilesFor(s Scenario, only string) ([]agentctl.Profile, error) {
+	raws := s.Agents
+	if only != "" {
+		raws = []string{only}
+	}
+
+	if len(raws) == 0 {
+		raws = []string{""}
+	}
+
+	var out []agentctl.Profile
+
+	for _, raw := range raws {
+		parsed, err := agentctl.ParseProfile(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%s: agent %w", s.Name, err)
+		}
+
+		p, _, ok := parsed.Resolve()
+		if !ok {
+			return nil, fmt.Errorf("%s: agent %q names no model claude knows", s.Name, raw)
+		}
+
+		out = append(out, p)
+	}
+
+	return out, nil
+}
+
+// reportName is the report file for one run: the scenario's name, and the
+// profile with its colons as hyphens when it is not the kind's default, so
+// two profiles of one scenario sit side by side under one version.
+func reportName(scenario string, p agentctl.Profile) string {
+	if p.IsDefault() {
+		return scenario + ".json"
+	}
+
+	return scenario + "." + strings.ReplaceAll(p.Short(), ":", "-") + ".json"
+}
+
+// claudeArgs is the command line for one run: the profile's flags through
+// its kind, beside the prompt mode, the plugin and the budget.
+func claudeArgs(root string, o options, prompt string, p agentctl.Profile) []string {
+	args := []string{
+		"-p", "--plugin-dir", root, "--output-format", "json",
+		"--permission-mode", o.permission, "--max-budget-usd", o.budget,
+	}
+	args = append(args, p.Args()...)
+
+	return append(args, prompt)
+}
+
+// runEnv is the run's environment: f10's ledger, run state, asks, daemon
+// and user dirs all inside tmp, so the nested run never reaches the user's
+// own, its agents map included; and no CLAUDECODE marker, so a run started
+// from inside a session is not refused as nested.
+func runEnv(environ []string, tmp string) []string {
+	env := make([]string, 0, len(environ)+5)
+
+	for _, kv := range environ {
+		if !strings.HasPrefix(kv, "CLAUDECODE=") {
+			env = append(env, kv)
+		}
+	}
+
+	return append(env,
+		"F10_LEDGER="+filepath.Join(tmp, "f10.db"),
+		"F10_STATE_DIR="+filepath.Join(tmp, "state"),
+		"F10_ASKS_DIR="+filepath.Join(tmp, "asks"),
+		"F10_RUN_DIR="+filepath.Join(tmp, "run"),
+		"F10_USER_DIR="+filepath.Join(tmp, "user"),
+	)
 }

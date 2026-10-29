@@ -293,6 +293,20 @@ else
   echo
 fi
 
+# --- the agent profile each requested step runs on: the binary resolves the user's file, the
+# project's map and the flows (facts, never this script); a step that spawns a subagent passes
+# its line's Agent tool form, and every other step reads that it runs inline ---
+if [ -n "$steps" ]; then
+  echo "--- agent profiles (f10 agents; a step with a kind-scoped key prints a line per kind) ---"
+  if command -v f10 >/dev/null 2>&1; then
+    # shellcheck disable=SC2086 # the steps are separate words on purpose
+    f10 agents $steps 2>&1 || echo "note: f10 agents failed (above); every step runs on the kind's default"
+  else
+    echo "note: f10 is not on PATH; every step runs on the kind's default (claude, no flag passed)"
+  fi
+  echo
+fi
+
 echo "--- inferred signals (deterministic; use only where project.md is silent) ---"
 origin="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "${origin:-}" ]; then

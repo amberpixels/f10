@@ -22,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -52,8 +53,8 @@ func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
 		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping when an agent asks",
-		ArgsUsage: "<id>[:model]... | <id> -- <id>  [--flow NAME | --local] " +
-			"[--model MODEL] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
+		ArgsUsage: "<id>[:profile]... | <id> -- <id>  [--flow NAME | --local] " +
+			"[--agent PROFILE | --model MODEL] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
 			"   f10 drive --resume N [--answer [ID=]TEXT ...] | list [--all] | cancel N",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
@@ -61,7 +62,8 @@ func driveCommand() *cli.Command {
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
 			"every task whose base branch has a commit runs at once, its finish waits for the base's, " +
 			"and a halt stops only its dependents.\n" +
-			"--model starts every agent on MODEL; <id>:<model> starts one task's agent on its own, which wins.\n" +
+			"--agent starts every agent on PROFILE (kind:model:effort, or a part), laid over the agents map's default; " +
+			"--model is the model-only form; <id>:<profile> starts one task's agent on its own, which wins.\n" +
 			"Each drive keeps a record under the storage root, picked up by the same command or --resume N, " +
 			"and holds a lease on each task: a task another drive holds is skipped, and f10 finish refuses it. " +
 			"list shows the drives; cancel N stops one from prompting further.\n" +
@@ -199,6 +201,11 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 	chain := driveChain(fl, t.eff.DriveFinish)
 
+	layers, err := agentLayers(t.eff, "")
+	if err != nil {
+		return err
+	}
+
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 	drv := t.driver()
 	h, hostErr := t.host()
@@ -219,6 +226,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		resolve:  func(name string) (shipFlow, error) { return resolveShipFlow(t.eff, name) },
 		plansDir: t.sharedPlansDir(),
 		settings: claudeSettingsPath(),
+		layers:   layers,
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		started:  startedMove(t),
 		record:   recordAt,
@@ -272,18 +280,19 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 // driveArgs is the command line, parsed by hand so `--` survives.
 type driveArgs struct {
-	tasks   []string // as typed, any :model cut off; with span, the two ends of a range
-	models  []string // each task's :model as typed, indexed like tasks, "" for none
-	model   string   // --model as typed: every task's model unless its own names one
-	span    bool
-	flow    string   // --flow, or local for --local; "" for default
-	answers []string // each --answer as typed: `GH-1=text` for one task, or bare text
-	every   time.Duration
-	resume  int  // --resume: the record to pick up
-	fore    bool // --foreground: run the loop in this process, not the daemon
-	list    bool // `drive list`
-	all     bool // `drive list --all`
-	cancel  int  // `drive cancel <n>`
+	tasks    []string // as typed, any :profile cut off; with span, the two ends of a range
+	profiles []string // each task's :profile as typed, indexed like tasks, "" for none
+	agent    string   // --agent as typed, or --model as a model-only profile: every task's unless its own names one
+	model    string   // --model as typed, kept apart so both flags on one line are refused
+	span     bool
+	flow     string   // --flow, or local for --local; "" for default
+	answers  []string // each --answer as typed: `GH-1=text` for one task, or bare text
+	every    time.Duration
+	resume   int  // --resume: the record to pick up
+	fore     bool // --foreground: run the loop in this process, not the daemon
+	list     bool // `drive list`
+	all      bool // `drive list --all`
+	cancel   int  // `drive cancel <n>`
 }
 
 // parseDriveArgs reads tasks, with --model, --answer, --every, --flow and
@@ -311,7 +320,8 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		tok := strings.TrimSpace(args[i])
 
 		name, value, inline := strings.Cut(tok, "=")
-		if name == "--model" || name == "--answer" || name == "--every" || name == "--flow" || name == "--resume" {
+		if name == "--model" || name == "--agent" || name == "--answer" || name == "--every" || name == "--flow" ||
+			name == "--resume" {
 			if !inline {
 				rest := args[i+1:]
 				if len(rest) == 0 {
@@ -355,22 +365,39 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
 			return driveArgs{}, fmt.Errorf(
-				"unknown flag %s: drive takes --flow, --local, --model, --answer, --every, --resume and --foreground",
+				"unknown flag %s: drive takes --flow, --local, --agent, --model, --answer, --every, --resume and --foreground",
 				tok,
 			)
 		default:
-			task, m, err := splitModel(tok)
+			task, p, err := splitProfile(tok)
 			if err != nil {
 				return driveArgs{}, err
 			}
 
-			a.tasks, a.models = append(a.tasks, task), append(a.models, m)
+			a.tasks, a.profiles = append(a.tasks, task), append(a.profiles, p)
+		}
+	}
+
+	flag, err := profileFlag(a.agent, a.model)
+	if err != nil {
+		return driveArgs{}, err
+	}
+
+	a.agent, a.model = flag, ""
+
+	if _, err := agentctl.ParseProfile(a.agent); err != nil {
+		return driveArgs{}, fmt.Errorf("--agent %w", err)
+	}
+
+	for i, p := range a.profiles {
+		if _, err := agentctl.ParseProfile(p); err != nil {
+			return driveArgs{}, fmt.Errorf("%s:%s: %w", a.tasks[i], p, err)
 		}
 	}
 
 	switch {
-	case a.resume > 0 && (len(a.tasks) > 0 || a.flow != "" || a.model != ""):
-		return driveArgs{}, fmt.Errorf("--resume %d runs the drive's own tasks, flow and models: "+
+	case a.resume > 0 && (len(a.tasks) > 0 || a.flow != "" || a.agent != ""):
+		return driveArgs{}, fmt.Errorf("--resume %d runs the drive's own tasks, flow and agent profiles: "+
 			"it takes only --answer and --every", a.resume)
 	case a.resume > 0:
 		return a, nil
@@ -378,8 +405,8 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		return driveArgs{}, errors.New("drive needs the tasks: GH-12 GH-15, or a range GH-12 -- GH-15")
 	case a.span && len(a.tasks) != 2:
 		return driveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")
-	case a.span && slices.ContainsFunc(a.models, func(m string) bool { return m != "" }):
-		return driveArgs{}, errors.New("a range takes the run-wide --model, not one on its ends")
+	case a.span && slices.ContainsFunc(a.profiles, func(p string) bool { return p != "" }):
+		return driveArgs{}, errors.New("a range takes the run-wide --agent, not a profile on its ends")
 	}
 
 	return a, nil
@@ -399,6 +426,16 @@ func (a *driveArgs) set(name, value string) error {
 
 		if a.model = strings.TrimSpace(value); a.model == "" {
 			return errors.New("--model needs a value")
+		}
+
+		return nil
+	case "--agent":
+		if a.agent != "" {
+			return errors.New("--agent is given twice: one run-wide profile, and <id>:<profile> for a task's own")
+		}
+
+		if a.agent = strings.TrimSpace(value); a.agent == "" {
+			return errors.New("--agent needs a value")
 		}
 
 		return nil
@@ -458,20 +495,23 @@ func driveNumber(s string) (int, error) {
 	return n, nil
 }
 
-// splitModel cuts a task token's :model off. Only the last colon counts,
-// and only when what follows has no slash, so a url's scheme and port stay
-// part of the task.
-func splitModel(tok string) (string, string, error) {
-	i := strings.LastIndex(tok, ":")
-	if i < 0 || strings.Contains(tok[i+1:], "/") {
-		return tok, "", nil
+// splitProfile cuts a task token's :profile off: the first colon whose
+// remainder holds no slash, so `FT-1:claude:opus:high` splits after the
+// id, and a url's scheme and port stay part of the task.
+func splitProfile(tok string) (string, string, error) {
+	for i := range len(tok) {
+		if tok[i] != ':' || strings.Contains(tok[i+1:], "/") {
+			continue
+		}
+
+		if tok[i+1:] == "" {
+			return "", "", fmt.Errorf("%s names no profile after the colon: GH-12:opus", tok)
+		}
+
+		return tok[:i], tok[i+1:], nil
 	}
 
-	if tok[i+1:] == "" {
-		return "", "", fmt.Errorf("%s names no model after the colon: GH-12:opus", tok)
-	}
-
-	return tok[:i], tok[i+1:], nil
+	return tok, "", nil
 }
 
 func isArrow(tok string) bool {
@@ -492,6 +532,7 @@ type driveInput struct {
 	resolve  func(name string) (shipFlow, error) // a declared flow by name
 	plansDir string                              // the plans dir every checkout shares
 	settings string                              // claude's settings file, which names the model a bad --model falls back to
+	layers   agentMap                            // the user's and the project's agents map; nil for none
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	// pr: "", or the answer merge or local; progress names each action finish takes
@@ -504,9 +545,9 @@ type driveInput struct {
 	// record puts an event in the ledger, placed in dir; nil records nothing
 	record func(ctx context.Context, dir string, e ledger.Event)
 
-	answer  string            // a bare --answer, until the first task stopped on a question takes it
-	answers map[string]string // --answer ID=text, by task id, until that task takes it
-	models  map[string]string // each model as typed, resolved; "" for claude's default
+	answer   string                      // a bare --answer, until the first task stopped on a question takes it
+	answers  map[string]string           // --answer ID=text, by task id, until that task takes it
+	profiles map[string]agentctl.Profile // each profile as typed, resolved over the layers; "" is the map's default
 
 	rec    *drives.Record           // this drive's record; nil with no root
 	own    *drives.Lease            // the drive's own lease, held while it runs
@@ -534,10 +575,11 @@ type driveTask struct {
 	ref      ref.Ref
 	suffix   string
 	info     taskInfo
-	model    string // the agent's --model, resolved, or "" for claude's default
-	branch   string // the task's local branch, or "" before it started
-	after    string // the base the body's After: line names, as an id
-	base     string // the base the drive waits for: the branch's record, else after
+	profile  agentctl.Profile // what the agent starts on, resolved
+	flagged  bool             // the command line chose it, over the branch's record
+	branch   string           // the task's local branch, or "" before it started
+	after    string           // the base the body's After: line names, as an id
+	base     string           // the base the drive waits for: the branch's record, else after
 	finished bool
 }
 
@@ -661,7 +703,7 @@ func (r *driveRun) through() bool { return r.end != nil && r.end.code == 0 }
 // graph passed validation.
 func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	in.out, in.leases = w, map[string]*drives.Lease{}
-	in.resolveModels(w)
+	in.resolveProfiles(w)
 
 	tasks, notes, err := in.resolveTasks(ctx)
 	if err != nil {
@@ -805,33 +847,44 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	return in.report(w, runs, append(notes, in.inboxNotes...))
 }
 
-// resolveModels resolves every model the command line names, once each,
-// and prints what it corrected or fell back on before anything opens.
-func (in *driveInput) resolveModels(w io.Writer) {
-	in.models = map[string]string{}
+// resolveProfiles resolves every profile the command line names, once
+// each, over the layers (the run-wide flag, then a task's own, each as the
+// map's default), and prints what it corrected or fell back on before
+// anything opens. The map's own default is resolved under "".
+func (in *driveInput) resolveProfiles(w io.Writer) {
+	in.profiles = map[string]agentctl.Profile{}
 
-	for _, raw := range append([]string{in.args.model}, in.args.models...) {
-		if _, done := in.models[raw]; done || raw == "" {
+	base := in.layers.with(in.args.agent, agentFlagOrigin)
+
+	for _, raw := range append([]string{""}, in.args.profiles...) {
+		if _, done := in.profiles[raw]; done {
 			continue
 		}
 
-		m, line := resolveModel(raw, in.settings)
-		in.models[raw] = m
+		r := base.with(raw, "<id>:"+raw).profileFor(facts.AgentKeyDefault, "")
+		in.profiles[raw] = r.Profile
 
-		if line != "" {
+		for _, line := range r.lines(in.settings) {
 			fmt.Fprintln(w, line)
 		}
 	}
 }
 
-// modelFor is the resolved model of the task listed at i: its own, else
-// the run-wide one. A range's tasks have no index of their own, i < 0.
-func (in *driveInput) modelFor(i int) string {
-	if i >= 0 && i < len(in.args.models) && in.args.models[i] != "" {
-		return in.models[in.args.models[i]]
+// profileFor is the resolved profile of the task listed at i: its own,
+// else the run-wide one over the map's default. A range's tasks have no
+// index of their own, i < 0.
+func (in *driveInput) profileFor(i int) agentctl.Profile {
+	if i >= 0 && i < len(in.args.profiles) && in.args.profiles[i] != "" {
+		return in.profiles[in.args.profiles[i]]
 	}
 
-	return in.models[in.args.model]
+	return in.profiles[""]
+}
+
+// profileFlagged says the command line chose the task's profile, so a
+// rerun does not keep the one its branch recorded.
+func (in *driveInput) profileFlagged(i int) bool {
+	return in.args.agent != "" || i >= 0 && i < len(in.args.profiles) && in.args.profiles[i] != ""
 }
 
 // stopping reports whether the drive ends: a task asks, which only a human
@@ -1235,7 +1288,10 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return fmt.Errorf("%s is a pull request, not a task", r.ID)
 		}
 
-		task := driveTask{ref: r, suffix: suffix, info: info, model: in.modelFor(listed)}
+		task := driveTask{
+			ref: r, suffix: suffix, info: info,
+			profile: in.profileFor(listed), flagged: in.profileFlagged(listed),
+		}
 
 		line, err := bundleAfter(ctx, in.tracker, r, info.body)
 		if err != nil {
@@ -1433,22 +1489,23 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	o, err := openTask(ctx, startInput{
-		main:     in.main,
-		driver:   in.driver,
-		task:     task.ref,
-		suffix:   task.suffix,
-		after:    after,
-		plansDir: in.plansDir,
-		title:    title,
-		model:    task.model,
-		progress: w,
-		flowKept: true,
+		main:           in.main,
+		driver:         in.driver,
+		task:           task.ref,
+		suffix:         task.suffix,
+		after:          after,
+		plansDir:       in.plansDir,
+		title:          title,
+		profile:        task.profile,
+		profileFlagged: task.flagged,
+		progress:       w,
+		flowKept:       true,
 	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s\n", task.ref.ID, o.branch, o.path, o.ws.ID)
+	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s%s\n", task.ref.ID, o.branch, o.path, o.ws.ID, onProfile(o))
 
 	if o.fresh {
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
@@ -2855,4 +2912,14 @@ func sharedMember(a, b ref.Ref) string {
 	}
 
 	return b.ID
+}
+
+// onProfile is the open line's tail naming the profile a fresh agent
+// started on, "" for the kind's default or an agent left as it was.
+func onProfile(o openedTask) string {
+	if !o.fresh || o.profile.IsDefault() {
+		return ""
+	}
+
+	return " on " + o.profile.Short()
 }
