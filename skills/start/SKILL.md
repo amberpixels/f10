@@ -16,6 +16,7 @@ The per-user f10 daemon then watches the task while no drive owns it: a merged P
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `<task-id>`: the task to start; `ABC-1+ABC-2` starts a **bundle**, several tasks on one branch, one worktree, one agent and one PR, keyed on the lead (the first id), which any member's id reopens.
 - `<PR url>` or `#n`: pick that PR up; its branch is checked out tracking origin's and linked to its task, and the agent summarises it and waits.
+  A merged or closed PR is picked up the same way, for a post-merge review: checked out at the commit it landed as, on a local-only branch named for the task, the agent told the PR's state; `--plan` is refused on it.
 - `--plan`: stop after the plan.
 - `--local` / `--flow <name>`: the `local` flow, or any declared one (`f10 flow` lists them), instead of `default`.
 - `--discuss`: the agent is prompted without `--driven`; it summarises the task and waits.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 )
@@ -30,6 +31,8 @@ type pull struct {
 	SquashCommitSHA     string `json:"squash_commit_sha"`
 	HeadRefName         string `json:"headRefName"`
 	SourceBranch        string `json:"source_branch"`
+	HeadRefOID          string `json:"headRefOid"`
+	SHA                 string `json:"sha"`
 	Title               string `json:"title"`
 	Body                string `json:"body"`
 	Description         string `json:"description"`
@@ -37,33 +40,51 @@ type pull struct {
 	SourceProjectID     int    `json:"source_project_id"`
 	TargetProjectID     int    `json:"target_project_id"`
 
-	Author struct {
-		Login    string `json:"login"`
-		Username string `json:"username"`
-	} `json:"author"`
+	MergedAt   time.Time `json:"mergedAt"`
+	MergedAtGL time.Time `json:"merged_at"`
+	ClosedAt   time.Time `json:"closedAt"`
+	ClosedAtGL time.Time `json:"closed_at"`
+
+	Author   pullUser `json:"author"`
+	MergedBy pullUser `json:"mergedBy"`
+	MergedGL pullUser `json:"merged_by"`
 
 	MergeCommit struct {
 		OID string `json:"oid"`
 	} `json:"mergeCommit"`
 }
 
-// The two states finish acts on; any other is a refusal quoting the state.
+// A pullUser is a person as either CLI names one: gh by login, glab by username.
+type pullUser struct {
+	Login    string `json:"login"`
+	Username string `json:"username"`
+}
+
+func (u pullUser) name() string { return cmp.Or(u.Login, u.Username) }
+
+// The states finish and a pickup act on; any other is a refusal quoting the state.
 const (
 	pullOpen   = forge.Open
 	pullMerged = forge.Merged
+	pullClosed = forge.Closed
 )
 
-func (p pull) url() string  { return cmp.Or(p.URL, p.WebURL) }
-func (p pull) base() string { return cmp.Or(p.BaseRefName, p.TargetBranch) }
-func (p pull) sha() string  { return cmp.Or(p.MergeCommit.OID, p.SquashCommitSHA, p.MergeCommitSHA) }
-func (p pull) head() string { return cmp.Or(p.HeadRefName, p.SourceBranch) }
-func (p pull) body() string { return cmp.Or(p.Body, p.Description) }
+func (p pull) url() string     { return cmp.Or(p.URL, p.WebURL) }
+func (p pull) base() string    { return cmp.Or(p.BaseRefName, p.TargetBranch) }
+func (p pull) sha() string     { return cmp.Or(p.MergeCommit.OID, p.SquashCommitSHA, p.MergeCommitSHA) }
+func (p pull) head() string    { return cmp.Or(p.HeadRefName, p.SourceBranch) }
+func (p pull) headSHA() string { return cmp.Or(p.HeadRefOID, p.SHA) }
+func (p pull) body() string    { return cmp.Or(p.Body, p.Description) }
+
+func (p pull) mergedAt() time.Time { return cmp.Or(p.MergedAt, p.MergedAtGL) }
+func (p pull) closedAt() time.Time { return cmp.Or(p.ClosedAt, p.ClosedAtGL) }
+func (p pull) mergedBy() string    { return cmp.Or(p.MergedBy.name(), p.MergedGL.name()) }
 
 // id is the request's number as the host CLI takes it: gh's number, glab's iid.
 func (p pull) id() string { return strconv.Itoa(cmp.Or(p.Number, p.IID)) }
 
-// author is who opened the request: gh names it login, glab username.
-func (p pull) author() string { return cmp.Or(p.Author.Login, p.Author.Username) }
+// author is who opened the request.
+func (p pull) author() string { return p.Author.name() }
 
 // fork reports whether the request's branch lives in another repository,
 // which origin does not have.
@@ -155,11 +176,16 @@ func (h host) editPullBody(ctx context.Context, branch, body string) error {
 	return err
 }
 
+// pickupFields is what a pickup reads of a request by number: the landed
+// commit and who merged it serve a merged or closed one.
+const pickupFields = "state,url,number,title,body,author,headRefName,headRefOid,isCrossRepository," +
+	"mergeCommit,mergedAt,mergedBy,closedAt"
+
 func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 	var p pull
 
 	err := h.Decode(ctx, &p, h.Pick(
-		[]string{"pr", "view", number, "--json", "state,url,number,title,body,author,headRefName,isCrossRepository"},
+		[]string{"pr", "view", number, "--json", pickupFields},
 		[]string{"mr", "view", number, "-F", "json"},
 	)...)
 

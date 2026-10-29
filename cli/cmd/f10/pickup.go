@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -12,7 +13,9 @@ import (
 
 // Picking up someone else's PR: nothing is local, so start checks the branch
 // out tracking origin's and links it to its task in local config, since the
-// branch's name need not carry the id.
+// branch's name need not carry the id. A merged or closed request has no
+// branch worth tracking: its worktree is made at the commit it landed as, on
+// a branch named for the task, for a post-merge review.
 
 // exitNoTask: the start skill asks for the id and reruns with --task.
 const exitNoTask = 3
@@ -20,10 +23,19 @@ const exitNoTask = 3
 type pickup struct {
 	number string
 	url    string
-	branch string
+	branch string // the request's head, as the host names it
 	view   string // the request with its comments, in the host CLI's spelling
 	diff   string
+	// sha is where a merged or closed request is checked out, "" for an open
+	// one; state says which it is, for the prompt and the report; headRef is
+	// the host's ref for a closed request's head, which no branch holds
+	sha     string
+	state   string
+	headRef string
 }
+
+// landed reports a request that merged or closed, checked out at sha.
+func (p *pickup) landed() bool { return p.sha != "" }
 
 // pullPathRE matches GitHub's `/pull/12` and GitLab's `/-/merge_requests/12`.
 var pullPathRE = regexp.MustCompile(`/(?:pull|merge_requests)/(\d+)(?:[/?#]|$)`)
@@ -89,10 +101,14 @@ func refusePull(p pull) error {
 	switch {
 	case p.fork():
 		return fmt.Errorf("%s comes from a fork: PRs from forks are not supported yet", p.url())
-	case p.status() != pullOpen:
-		return fmt.Errorf("%s is %s: start picks up open PRs only", p.url(), p.status())
-	case p.head() == "":
+	case p.status() == pullOpen && p.head() == "":
 		return fmt.Errorf("%s has no head branch in the host's answer", p.url())
+	case p.status() == pullMerged && p.sha() == "":
+		return fmt.Errorf("%s is merged, but the host names no merge commit to check out", p.url())
+	case p.status() == pullClosed && p.headSHA() == "":
+		return fmt.Errorf("%s is closed, but the host names no head commit to check out", p.url())
+	case p.status() != pullOpen && p.status() != pullMerged && p.status() != pullClosed:
+		return fmt.Errorf("%s is %q: start picks up open, merged and closed PRs", p.url(), p.status())
 	}
 
 	return nil
@@ -105,13 +121,49 @@ func (h host) pickupOf(number string, p pull) *pickup {
 		return strings.Join(append(append([]string{h.Name}, args...), tail...), " ")
 	}
 
-	return &pickup{
+	pick := &pickup{
 		number: number,
 		url:    p.url(),
 		branch: p.head(),
 		view:   cmd("view", "--comments"),
 		diff:   cmd("diff"),
 	}
+
+	switch p.status() {
+	case pullMerged:
+		pick.sha, pick.state = p.sha(), landedState(p)
+	case pullClosed:
+		pick.sha, pick.state = p.headSHA(), landedState(p)
+		pick.headRef = h.Pick([]string{"refs/pull/" + number + "/head"}, []string{"refs/merge-requests/" + number + "/head"})[0]
+	}
+
+	return pick
+}
+
+// landedState is how a merged or closed request is named to the agent and
+// in the report: who merged it and when, or that it closed unmerged.
+func landedState(p pull) string {
+	switch p.status() {
+	case pullMerged:
+		state := "merged"
+		if by := p.mergedBy(); by != "" {
+			state += " by " + by
+		}
+
+		return state + onDay(p.mergedAt())
+	case pullClosed:
+		return "closed without a merge" + onDay(p.closedAt())
+	}
+
+	return ""
+}
+
+func onDay(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+
+	return " on " + t.UTC().Format(time.DateOnly)
 }
 
 // syncPickup fast-forwards a local branch start found only when it is behind
@@ -145,10 +197,22 @@ func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (stri
 	return fmt.Sprintf("fast-forwarded %s to origin/%s", branch, branch), nil
 }
 
-// fetchPickup: a handover has not fetched the request's branch yet.
+// fetchPickup: a handover has not fetched the request's branch yet. A landed
+// request's commit must be here before its worktree is made, and a closed
+// request's head comes only through the host's own ref for it.
 func fetchPickup(ctx context.Context, main string, pick *pickup) error {
 	if err := gitx.Fetch(ctx, main); err != nil {
 		return fmt.Errorf("fetching %s for %s: %w", pick.branch, pick.url, err)
+	}
+
+	if pick.headRef != "" {
+		if err := gitx.FetchRef(ctx, main, pick.headRef); err != nil {
+			return fmt.Errorf("fetching %s for %s: %w", pick.headRef, pick.url, err)
+		}
+	}
+
+	if pick.landed() && refSHA(ctx, main, pick.sha+"^{commit}") == "" {
+		return fmt.Errorf("%s is %s at %s, which origin does not hold after a fetch", pick.url, pick.state, pick.sha)
 	}
 
 	return nil

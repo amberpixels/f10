@@ -187,7 +187,15 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   The agent is prompted plain text, with no `--driven` marker: it reads the task, `gh pr view <n> --comments` and `gh pr diff <n>`, summarises the task, the PR's state and its diff, and waits.
   `--plan` prompts the plan instead, with the PR's diff as the starting point; nothing ships a picked-up PR unread.
   The report gains a `pr` row.
-  A PR from a fork, a PR no longer open, `--local`, `--after` and `--base` are refused before anything is created
+  A PR from a fork, `--local`, `--after` and `--base` are refused before anything is created.
+  A **merged or closed** PR is picked up too, for a post-merge review.
+  Its branch is usually gone from the host, so the worktree is created at the commit it landed as: the merge or squash commit, or the head of a PR closed unmerged, fetched through `refs/pull/<n>/head` or `refs/merge-requests/<n>/head`.
+  The branch is local, named for the task as a task start names it, and tracks nothing: origin's branches are not looked at, so a stale copy of the PR's branch there is left alone, and a branch the task already has here is reused as it is, at its own tip.
+  A branch this start made is handed back from the watcher at once (`branch.<name>.f10-watch=false`, **Watch** below), so the merge is never reported as news; `f10 watch on <id>` undoes that, and a reused branch keeps its watch.
+  The agent is told the PR's state (merged by whom and when, or closed without a merge) before the diff, and the report says the branch is local only.
+  `--plan` is refused: going on from a landed PR is a task of its own, started by its id.
+  `/f10:finish --local` removes the worktree.
+  A landed commit origin does not hold after the fetch (its base branch deleted since) fails the start, naming the sha
 - every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link and the `f10-tasks` riders first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`, `<id>+...`), then, for local branches only, to the id past a prefix (`feat/<id>-...`), as `f10 task read` reads a branch; a task read with no id in a picked-up worktree finds its task through the same link.
   With no local branch, start also finds the one task branch on origin (`refs/remotes/origin/`) and creates the local branch tracking it rather than a second branch from main.
   It reads what the last fetch saw; for a branch pushed since, run `git fetch` or pass the PR link
@@ -619,7 +627,7 @@ Owning is the task's lease (**Drive**): a task a drive or a finish holds is neve
   Each fact is told once: `watch.yaml` in the storage root keeps the last report per task and every fact told for it (the PR's state, the run's update time), so a fact is never repeated, even after another, and a newer one is told. Under `watch: finish` the janitor then runs if it is due; under `report` it never runs from a pass, since it deletes branches.
   A pass exits 7 when nothing is left to watch, which drops the project from the daemon's list.
 - **Telling.** A pass reports through its own output, one line per report, into the project's watch log; `f10 watch` prints the last report per task.
-- **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task, finishes it or catches it up. A mark git cannot read (a lock, a broken config) counts as handed back for that pass, with a line naming the branch and the error. `f10 watch on <id>` removes it. Typing in the task's own pane needs nothing: a working agent is never stalled.
+- **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task, finishes it or catches it up. A mark git cannot read (a lock, a broken config) counts as handed back for that pass, with a line naming the branch and the error. `f10 watch on <id>` removes it. `f10 start` on a merged or closed PR sets the same mark on the branch it creates, since the PR landed before the branch existed. Typing in the task's own pane needs nothing: a working agent is never stalled.
 
 ## Review
 
