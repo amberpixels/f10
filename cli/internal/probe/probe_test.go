@@ -110,16 +110,22 @@ func TestVerifySignals(t *testing.T) {
 			stack: goMod,
 			want: []Signal{
 				{
-					Value:    "the justfile has no lint or test entry: pick the ones that lint and test",
+					Value:    "the justfile has no lint, test or check recipe: pick the ones that lint and test",
 					Evidence: "justfile",
 					Judgment: true,
 				},
 			},
 		},
 		{
+			name:  "justfile check recipe counts as lint",
+			files: map[string]string{"justfile": "test:\n    go test\ncheck:\n    golangci-lint run\n"},
+			want:  []Signal{{Value: "just test / just check", Evidence: "justfile"}},
+		},
+		{
 			name: "Makefile targets, several on one line",
 			files: map[string]string{
-				"Makefile": ".PHONY: test check\nCC := gcc\nURL = http://x\ntest check: deps\n\tgo test\n",
+				"Makefile": ".PHONY: test check\nCC := gcc\nURL = http://x\n" +
+					"TAG ?= lint:latest\nX += lint:y\nY != echo lint:z\ntest check: deps\n\tgo test\n",
 			},
 			want: []Signal{{Value: "make test / make check", Evidence: "Makefile"}},
 		},

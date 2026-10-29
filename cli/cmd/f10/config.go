@@ -16,7 +16,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/mdline"
-	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/projects"
 )
 
@@ -118,7 +117,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 			)
 		}
 
-		_, err := io.WriteString(cmd.Writer, verifyLine(fieldNamed(eff.Fields, "Verify"), pb))
+		_, err := io.WriteString(cmd.Writer, verifyLine(fieldNamed(eff.Fields, "Verify")))
 
 		return err
 	}
@@ -191,7 +190,7 @@ func fieldNamed(fields []facts.Field, name string) facts.Field {
 
 // verifyLine is the verify the steps run, resolved once: its origin, the
 // file it came from, then the commands or the judgment left to the model.
-func verifyLine(f facts.Field, pb *probe.Probes) string {
+func verifyLine(f facts.Field) string {
 	body := strings.TrimSpace(f.Value)
 
 	switch {
@@ -208,21 +207,7 @@ func verifyLine(f facts.Field, pb *probe.Probes) string {
 
 		return b.String()
 	case f.Origin == facts.OriginDetected || f.Origin == facts.OriginJudgment:
-		picked, judgment := probe.VerifyPicked(pb.Verify)
-		values := make([]string, 0, len(picked))
-		evidence := make([]string, 0, len(picked))
-
-		for _, s := range picked {
-			values = append(values, s.Value)
-			evidence = append(evidence, s.Evidence)
-		}
-
-		sep := " / "
-		if judgment {
-			sep = "; "
-		}
-
-		return "verify: " + f.Origin + " (" + strings.Join(evidence, ", ") + ")  " + strings.Join(values, sep) + "\n"
+		return "verify: " + f.Origin + " (" + f.Source + ")  " + body + "\n"
 	default:
 		return "verify: absent  nothing declared or detected: find the commands the repo uses, and suggest declaring them under Verify in project.md\n"
 	}

@@ -355,14 +355,7 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 			Source: pb.CLI.Evidence,
 		}
 	case "Verify":
-		picked, judgment := probe.VerifyPicked(pb.Verify)
-		f := detectedList(name, picked)
-
-		if judgment {
-			f.Origin = OriginJudgment
-		}
-
-		return f
+		return verifyField(name, pb.Verify)
 	case "Visibility":
 		return Field{Name: name, Value: "stealth", Origin: OriginDefault}
 	case "Storage":
@@ -377,6 +370,35 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 	default: // Roles, Guardrails: nothing infers them
 		return Field{Name: name, Origin: OriginAbsent}
 	}
+}
+
+// verifyField is verify resolved once, for `f10 config` and the project load
+// alike: the commands as Value, the files that named them as Source.
+func verifyField(name string, signals []probe.Signal) Field {
+	picked, judgment := probe.VerifyPicked(signals)
+	if len(picked) == 0 {
+		return Field{Name: name, Origin: OriginAbsent}
+	}
+
+	values := make([]string, 0, len(picked))
+	evidence := make([]string, 0, len(picked))
+
+	for _, s := range picked {
+		values = append(values, s.Value)
+		evidence = append(evidence, s.Evidence)
+	}
+
+	f := Field{
+		Name:   name,
+		Value:  strings.Join(values, " / "),
+		Origin: OriginDetected,
+		Source: strings.Join(evidence, ", "),
+	}
+	if judgment {
+		f.Value, f.Origin = strings.Join(values, "; "), OriginJudgment
+	}
+
+	return f
 }
 
 func detectedList(name string, signals []probe.Signal) Field {

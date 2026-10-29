@@ -78,8 +78,9 @@ The full reference for humans is `docs/project-setup.md`.
 - **Hosting & PR** - how to open or refresh a PR/MR: a skill, or `gh pr create` / `glab mr create` and `gh pr edit` / `glab mr update` mechanics (branch naming, labels, assignee).
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.
-  The load prints it resolved, one `verify:` line every step runs from: `declared (<layer>)`, `detected` (the justfile or Makefile entries found), `judgment` (none found: the stack's idiomatic commands, such as `go test ./...` and the linter the repo configures) or `absent`.
+  The load prints it resolved as a `verify:` line every step runs from, a multi-line declaration indented beneath it: `declared (<layer>)`, `detected` (the justfile's or Makefile's `lint`, `test` and `check` entries found), `judgment` (a build file with none of them, or no build file: the stack's idiomatic commands, such as `go test ./...` and the linter the repo configures) or `absent`.
   Run what it names, keeping the declaration's "never run X" rules; a `judgment` or `absent` line is yours to settle, the commands you chose named in the report.
+  A `note:` in place of a resolved line (no binary, or one too old) means settling it by hand, as point 5 of **Reading the project load** says.
 - **Roles** - **Always** for every run, **Conditional** when the task touches a named area.
   A bullet `+ <role>` adds a role on top of the base role ("+ senior UI/UX engineer on user-facing UI"); `= <role>` sets the base role, replacing the step's `Role:` line.
   A step list scopes either (`plan, judge: = senior marketing analyst`); none means every step.

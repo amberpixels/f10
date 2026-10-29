@@ -211,11 +211,12 @@ func verifySignals(root string, stack []Signal) []Signal {
 	for _, b := range []struct {
 		files   []string
 		tool    string
+		noun    string
 		targets []string
 		names   func(string) []string
 	}{
-		{files: []string{"justfile", "Justfile"}, tool: "just", targets: []string{"lint", "test"}, names: justRecipes},
-		{files: []string{"Makefile"}, tool: "make", targets: []string{"lint", "test", "check"}, names: makeTargets},
+		{files: []string{"justfile", "Justfile"}, tool: "just", noun: "recipe", targets: []string{"lint", "test", "check"}, names: justRecipes},
+		{files: []string{"Makefile"}, tool: "make", noun: "target", targets: []string{"lint", "test", "check"}, names: makeTargets},
 	} {
 		for _, f := range b.files {
 			data, err := os.ReadFile(filepath.Join(root, f))
@@ -234,9 +235,10 @@ func verifySignals(root string, stack []Signal) []Signal {
 			}
 
 			if len(cmds) == 0 {
-				entries := strings.Join(b.targets, " or ")
+				last := len(b.targets) - 1
+				entries := strings.Join(b.targets[:last], ", ") + " or " + b.targets[last]
 				out = append(out, Signal{
-					Value:    "the " + f + " has no " + entries + " entry: pick the ones that lint and test",
+					Value:    "the " + f + " has no " + entries + " " + b.noun + ": pick the ones that lint and test",
 					Evidence: f,
 					Judgment: true,
 				})
@@ -334,9 +336,10 @@ func ruleHeads(src string) []string {
 		head, rest, ok := strings.Cut(line, ":")
 		f := strings.Fields(head)
 
-		// `x := y` and `X = a:b`; a just parameter default (`arg="x"`) is kept
+		// `x := y`, `X = a:b`, `X ?= a:b` (`+=`, `!=`); a just parameter
+		// default (`arg="x"`) does not end in `=`, so it is kept
 		if !ok || len(f) == 0 || strings.HasPrefix(rest, "=") || strings.Contains(f[0], "=") ||
-			(len(f) > 1 && strings.HasPrefix(f[1], "=")) {
+			(len(f) > 1 && (strings.HasPrefix(f[1], "=") || strings.HasSuffix(f[1], "="))) {
 			continue
 		}
 

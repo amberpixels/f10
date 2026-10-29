@@ -258,7 +258,7 @@ func TestVerifyLine(t *testing.T) {
 			pb := &probe.Probes{Verify: tc.signals}
 			eff := facts.Build(lay, pb)
 
-			if got := verifyLine(fieldNamed(eff.Fields, "Verify"), pb); got != tc.want {
+			if got := verifyLine(fieldNamed(eff.Fields, "Verify")); got != tc.want {
 				t.Errorf("verifyLine = %q, want %q", got, tc.want)
 			}
 		})
