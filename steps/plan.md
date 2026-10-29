@@ -18,11 +18,11 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    **Size the plan by what the implementer needs to design**, as capture sizes a task body:
    - **small** - every condition holds: the cause or the one place to change is already named (a feature's in its task; a bug's or a refactor's in the task's _Root cause_, this run's debug brief, or one `file:line` the fetch brief traced); one area; no decision another competent engineer would take the other way; no gap.
      The plan is the fixed lines above, the brief in a few lines, one stage naming the change, its files and its test, then `## Consequences - none` and `## Gaps - none`.
-     A bug's `## Reproduction` shrinks to the root cause at `file:line`, expected against actual, and the failing test.
+     A bug's `## Reproduction` shrinks to the root cause at `file:line`, expected against actual, and the failing test; a refactor's `## Invariant` stays as written.
    - **normal** - any small condition missed, doubt counting as a miss: the full shape below.
    - **large** - a bundle, a cross-cutting change, or a boundary worth fencing: normal's shape, the stages fencing the boundary.
-   A spike is never small: its `## Question` needs the decision and the evidence.
-   A plan is not resized once saved; a decision implement meets goes in its hand-off, as for any plan.
+   A spike is never small: its `## Question` needs the decision and the evidence; nor is a refactor whose coverage is missing, since its characterization tests are a stage of their own.
+   A saved plan is resized only by a judge's change folded into it, which rewrites the `Size:` line and writes normal's sections; a decision implement meets goes in its hand-off, as for any plan.
 
    The kind opens the plan, before the stages:
    - **bug** - a `## Reproduction` section: the steps or input, expected, actual, the root cause at `file:line`, and the test that will fail before the fix.
