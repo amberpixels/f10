@@ -44,6 +44,7 @@ func TestStateCommand(t *testing.T) {
 		// free prose: a leading dash and a help word are text, not flags
 		{"note", "push rejected", "-f was needed"},
 		{"ask", "--help\n1. retry? [no | yes]"},
+		{"wait", "GH-6"},
 	} {
 		if out, code := runState(t, args...); code != 0 {
 			t.Fatalf("%q: exit %d\n%s", args, code, out)
@@ -56,8 +57,17 @@ func TestStateCommand(t *testing.T) {
 	}
 
 	if r.Task != "GH-7" || r.Ship != "blocked" || r.Leaf != "judge" || r.Next != "-f was needed" ||
-		r.Ask != "--help 1. retry? [no | yes]" {
+		r.Ask != "--help 1. retry? [no | yes]" || r.Wait != "GH-6" {
 		t.Errorf("state %+v", r)
+	}
+
+	// running clears the wait with the ask, so a resumed ship carries neither
+	if out, code := runState(t, "set", "ship", "running", "implement"); code != 0 {
+		t.Fatalf("running: exit %d\n%s", code, out)
+	}
+
+	if r, err = state.Load(state.Path(dir, "s1")); err != nil || r.Wait != "" || r.Ask != "" {
+		t.Errorf("after running: %+v, %v", r, err)
 	}
 
 	// a typo exits 2 and names itself, so step prose cannot hide it

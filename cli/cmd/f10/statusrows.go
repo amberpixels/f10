@@ -83,6 +83,8 @@ func stageOf(f rowFacts) (string, string) {
 		return stageAsking, cmp.Or(r.Leaf, furthestPhase(r))
 	case f.halt != nil:
 		return stageHalted, f.halt.skill
+	case r != nil && r.Wait != "" && stoppedRun(r):
+		return stageWaiting, "on " + r.Wait
 	case r != nil && stoppedRun(r):
 		return stageHalted, cmp.Or(r.Leaf, furthestPhase(r))
 	case r == nil && f.after != "" && !f.baseDone:

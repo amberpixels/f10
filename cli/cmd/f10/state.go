@@ -46,6 +46,8 @@ func stateCommand() *cli.Command {
 				func(r *state.Run, a cli.Args) error { return r.SetNote(a.Get(0), a.Get(1)) }),
 			verb("ask", "<text>", "the question a driven run stopped on, options included",
 				func(r *state.Run, a cli.Args) error { return r.SetAsk(a.Get(0)) }),
+			verb("wait", "<base-task>", "the base task a driven ship stopped for, its branch without code yet",
+				func(r *state.Run, a cli.Args) error { return r.SetWait(a.Get(0)) }),
 			verb("done", "<step>", "record that a step with no phase of its own (catchup) reported",
 				func(r *state.Run, a cli.Args) error { return r.SetDone(a.Get(0), time.Now()) }),
 			verb("final", "<step>", "declare the ship pipeline's last step",
@@ -144,7 +146,7 @@ func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, 
 	}
 
 	for key, v := range map[string]string{
-		"leaf": r.Leaf, "final": r.Final, "note": r.Note, "next": r.Next, "ask": r.Ask, "done": r.Done,
+		"leaf": r.Leaf, "final": r.Final, "note": r.Note, "next": r.Next, "ask": r.Ask, "wait": r.Wait, "done": r.Done,
 	} {
 		if v != "" {
 			payload[key] = v

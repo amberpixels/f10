@@ -94,6 +94,11 @@ func (r *Run) Save(dir string, now time.Time) error {
 		signal = [][2]string{{"done", r.Done}, {"done_at", unixText(r.DoneAt)}}
 	}
 
+	// so is a wait, which only a driven ship on an empty base writes
+	if r.Wait != "" {
+		signal = append([][2]string{{"wait", r.Wait}}, signal...)
+	}
+
 	for _, kv := range slices.Concat([][2]string{
 		{"task", r.Task},
 		{"url", r.URL},
@@ -235,7 +240,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 
 	switch {
 	case status == "running":
-		r.Leaf, r.Note, r.Next, r.Ask = leaf, "", "", ""
+		r.Leaf, r.Note, r.Next, r.Ask, r.Wait = leaf, "", "", "", ""
 		r.Done, r.DoneAt = "", time.Time{}
 	case Stopped(status):
 		if leaf != "" {
@@ -319,6 +324,18 @@ func (r *Run) SetAsk(text string) error {
 	}
 
 	r.Ask = oneLine(text)
+
+	return nil
+}
+
+// SetWait records the base task a driven ship stopped for, its branch
+// without code yet. Not an ask: no one is asked, and a drive waits on it.
+func (r *Run) SetWait(task string) error {
+	if task == "" {
+		return usagef("wait needs the base task")
+	}
+
+	r.Wait = oneLine(task)
 
 	return nil
 }
@@ -478,7 +495,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	}
 
 	r.Skill = skill
-	r.Leaf, r.Final, r.Note, r.Next, r.Ask = "", "", "", "", ""
+	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait = "", "", "", "", "", ""
 	r.Done, r.DoneAt = "", time.Time{}
 	r.Pipeline, r.At = nil, 0
 	r.Ship = "pending"
@@ -564,7 +581,7 @@ func (r *Run) Show(w io.Writer, now time.Time) {
 		row(p, Glyph(r.Status(p))+" "+r.PhaseText(p))
 	}
 
-	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"final", r.Final}} {
+	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}, {"final", r.Final}} {
 		if kv[1] != "" {
 			row(kv[0], kv[1])
 		}

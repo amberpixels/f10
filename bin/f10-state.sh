@@ -19,6 +19,7 @@
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
 #   f10-state.sh ask <text>             the question a driven run stopped on, options included
+#   f10-state.sh wait <base-task>       the base a driven ship stopped for, its branch without code yet
 #   f10-state.sh done <step>            a step with no phase (catchup) reported; f10 drive reads it as its end
 #   f10-state.sh final <step>           declare the ship pipeline's last step
 #   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
@@ -284,7 +285,7 @@ cmd_doctor() {
 [ "${0##*/}" = "statusline" ] && set -- render "$@"
 
 case "${1:-}" in
-  set | task | note | ask | done | final | pipeline | show | clear | prune) forward "$@" ;;
+  set | task | note | ask | wait | done | final | pipeline | show | clear | prune) forward "$@" ;;
   render)
     shift
     render "${1:-}"
@@ -298,6 +299,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   task <id> [<url>]        record the task this run is about
   note <reason> [<next>]   why a run stopped, and what unblocks it
   ask <text>               the question a driven run stopped on, options included
+  wait <base-task>         the base a driven ship stopped for, its branch without code yet
   done <step>              a step with no phase (catchup) reported; f10 drive reads it as its end
   final <step>             declare the ship pipeline's last step
   pipeline <step>...       declare the ship pipeline's steps, the last one final

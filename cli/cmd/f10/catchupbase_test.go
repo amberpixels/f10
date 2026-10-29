@@ -254,12 +254,13 @@ func TestCatchupBaseOutput(t *testing.T) {
 		how:    "h",
 		method: methodRebase,
 		why:    "w",
+		code:   codeNone,
 	}
 	if err := p.write(&b); err != nil {
 		t.Fatal(err)
 	}
 
-	want := "branch: FT-1/a\nbase: origin/main\nsha: abc\nfound: default branch\nhow: h\nmethod: rebase\nwhy: w\n"
+	want := "branch: FT-1/a\nbase: origin/main\nsha: abc\nfound: default branch\nhow: h\nmethod: rebase\nwhy: w\ncode: none\n"
 	if b.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
 	}
@@ -276,8 +277,47 @@ func TestCatchupGuardOffStillPrintsTheBase(t *testing.T) {
 	p := r.resolve(in)
 	wantPlan(t, p, "FT-2/b", foundAfter, methodSkip)
 
-	if p.sha != r.sha("FT-2/b") || p.mark != "" {
-		t.Errorf("sha %q mark %q", p.sha, p.mark)
+	if p.sha != r.sha("FT-2/b") || p.mark != "" || p.code != codeNone {
+		t.Errorf("sha %q mark %q code %q", p.sha, p.mark, p.code)
+	}
+}
+
+// The code row reads the base branch by the drive's rule: a merge of the
+// base's own base is no code, a commit of its own is.
+func TestCatchupBaseCodeRow(t *testing.T) {
+	r := newCatchupRepo(t)
+	r.at(during, "branch", "FT-2/b", "FT-1/a")
+	r.at(during, "config", "branch.FT-2/b."+cfgAfterBranch, "FT-1/a")
+	r.at(during, "checkout", "-q", "-b", "FT-3/c", "FT-2/b")
+	r.at(during, "config", "branch.FT-3/c."+cfgAfterBranch, "FT-2/b")
+
+	r.at(during, "checkout", "-q", "FT-1/a")
+	r.commit(during, "a2.go", "package main // a2\n", "a2")
+	r.at(during, "checkout", "-q", "FT-2/b")
+	r.at(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
+	r.at(during, "checkout", "-q", "FT-3/c")
+
+	if p := r.resolve(r.input("implement")); p.found != foundAfter || p.code != codeNone {
+		t.Errorf("merge only: found %q code %q, want %q %q", p.found, p.code, foundAfter, codeNone)
+	}
+
+	r.at(during, "checkout", "-q", "FT-2/b")
+	r.commit(during, "b2.go", "package main // b2\n", "b2")
+	r.at(during, "checkout", "-q", "FT-3/c")
+
+	if p := r.resolve(r.input("implement")); p.code != codeYes {
+		t.Errorf("own commit: code %q, want %q", p.code, codeYes)
+	}
+
+	// the default branch and a landed base print no row: their code is in it
+	if p := r.resolve(r.input("")); p.code == "" {
+		t.Error("a recorded base printed no code row")
+	}
+
+	r.at(during, "config", "branch.FT-3/c."+cfgLanded, "main")
+
+	if p := r.resolve(r.input("")); p.code != "" {
+		t.Errorf("landed: code %q, want none printed", p.code)
 	}
 }
 

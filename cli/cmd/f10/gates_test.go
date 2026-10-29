@@ -102,6 +102,23 @@ func TestGatesDuringShip(t *testing.T) {
 	checkTexts(t, gates, map[string]string{"review": "local: resolve running (in ship)"})
 }
 
+// A driven ship parked on its base's code shows the wait at the entry that
+// found it empty, not a stop.
+func TestGatesParkedOnTheBase(t *testing.T) {
+	run := &state.Run{
+		Session:  "s1",
+		Task:     "FT-2",
+		Ship:     "blocked",
+		Leaf:     "implement",
+		Wait:     "FT-1",
+		Pipeline: gatePipeline,
+	}
+
+	gates := taskGates(context.Background(), gateInput{task: "FT-2", run: run, now: time.Unix(1_800_000_000, 0)})
+
+	checkTexts(t, gates, map[string]string{"implement": "waiting on FT-1", "cleanup": "pending"})
+}
+
 // One review:local+ci entry is the one review gate with both halves, each
 // moving from review to resolve once its own findings land.
 func TestGatesBothHalvesInOneEntry(t *testing.T) {

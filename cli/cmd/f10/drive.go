@@ -606,6 +606,11 @@ type driveRun struct {
 	// waiting is set while finish waits for the base to be through: no turn
 	// is in flight, so the poll only asks next again
 	waiting bool
+	// parked is set while a chain skill waits for its base's code, the same
+	// way. parkedHead is the base's head when a ship parked itself, so only
+	// a commit after it sends ship again, never the same empty base.
+	parked     bool
+	parkedHead string
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -895,10 +900,8 @@ func (in *driveInput) startRunnable(ctx context.Context, w io.Writer, runs []*dr
 	return nil
 }
 
-// released: a base lets its dependents start once through, or once it has a
-// commit of its own, which only a commit or pr step makes with verify green.
-// Counting from the creation commit keeps a squashed grandparent's commits
-// out; local refs, so a branch never pushed counts.
+// released: a base lets its dependents start once through, or once it has
+// code of its own, which only a commit or pr step makes with verify green.
 func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 	if b.through() {
 		return true
@@ -913,37 +916,7 @@ func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 		return false
 	}
 
-	args := []string{"rev-list", "--count", "refs/heads/" + b.o.branch, "--not", "refs/heads/" + def}
-
-	// a ref git cannot read would drop out of the --not list and count the
-	// base's own base as its commits, so it releases nobody this poll
-	fork, err := gitx.Config(ctx, in.main, "branch."+b.o.branch+"."+cfgAfterBranch)
-	if err != nil {
-		return false
-	}
-
-	for _, r := range []string{"refs/remotes/origin/" + def, "refs/heads/" + fork} {
-		if strings.HasSuffix(r, "/") {
-			continue
-		}
-
-		sha, err := gitx.Ref(ctx, in.main, r)
-		if err != nil {
-			return false
-		}
-
-		if sha != "" {
-			args = append(args, r)
-		}
-	}
-
-	if created := createdAt(ctx, in.main, b.o.branch); created != "" {
-		args = append(args, created)
-	}
-
-	n := gitx.Out(ctx, in.main, args...)
-
-	return n != "" && n != "0"
+	return baseHasCode(ctx, in.main, b.o.branch, def)
 }
 
 // createdAt is the commit branch was created at, from its oldest reflog
@@ -1139,6 +1112,8 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 
 			halted[id] = r.end.code == exitHalted
 			code = max(code, r.end.code)
+		case r.active() && r.parked:
+			rows = append(rows, fact{label: id, value: "waiting on " + r.base.task.ref.ID})
 		case r.active() && r.waiting:
 			rows = append(rows, fact{label: id, value: "waiting for " + r.base.task.ref.ID})
 		case r.active():
@@ -1616,6 +1591,18 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
+	if skill != "finish" && r.base != nil && !in.baseReady(ctx, r) {
+		if !r.parked {
+			fmt.Fprintf(w, "%s %s: waiting on %s for code\n", r.task.ref.ID, skill, r.base.task.ref.ID)
+		}
+
+		r.parked = true
+
+		return nil
+	}
+
+	r.parked, r.parkedHead = false, ""
+
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
 			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", r.task.ref.ID, r.base.task.ref.ID)
@@ -1811,6 +1798,46 @@ func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) error {
 	if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgChain, strings.Join(r.chain, " ")); err != nil {
 		return fmt.Errorf("recording the chain: %w", err)
 	}
+
+	return nil
+}
+
+// baseReady reports the base's code there for a chain skill: released, and
+// for a ship that parked itself, moved past the head it found empty.
+func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
+	if !in.released(ctx, r.base) {
+		return false
+	}
+
+	if r.parkedHead == "" || r.base.through() {
+		return true
+	}
+
+	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+r.base.o.branch)
+
+	return err == nil && head != "" && head != r.parkedHead
+}
+
+// park holds a ship that stopped on a base without code until the base
+// commits, or says why nothing in this drive ever will.
+func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *state.Run) *driveResult {
+	b := r.base
+	if b == nil || b.through() {
+		res := in.verdict(r.task, r.skill, run)
+
+		return &res
+	}
+
+	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
+	if err != nil {
+		res := halted(r.task.ref.ID, r.skill, "reading "+b.task.ref.ID+"'s branch: "+err.Error())
+
+		return &res
+	}
+
+	r.parked, r.parkedHead = true, cmp.Or(head, "none")
+
+	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", r.task.ref.ID, b.task.ref.ID)
 
 	return nil
 }
@@ -2170,7 +2197,12 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			// a catchup clears a mark but restores the ship stop it noted, so
 			// git, not the note, says whether that stop still holds
 			if at := resumeAt(skill, run); at != "" && in.unsettled(ctx, r) == "" {
-				fmt.Fprintf(w, "%s %s: stopped for a catchup, the branch is settled: %s\n", id, skill, at)
+				why := "stopped for a catchup, the branch is settled"
+				if run.Wait != "" {
+					why = "its base has code now"
+				}
+
+				fmt.Fprintf(w, "%s %s: %s: %s\n", id, skill, why, at)
 
 				return in.prompt(ctx, w, r, ws, skill, at)
 			}
@@ -2237,8 +2269,9 @@ func (in *driveInput) prompt(
 }
 
 // resumeAt is the steering that resumes a ship the catchup guard stopped,
-// naming its place when the flow names the entry twice; a failed catchup
-// keeps the place of the entry it guarded, which is where ship resumes.
+// or one parked on its base, naming its place when the flow names the entry
+// twice; a failed catchup keeps the place of the entry it guarded, which is
+// where ship resumes.
 func resumeAt(skill string, run *state.Run) string {
 	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
 		return ""
@@ -2247,6 +2280,8 @@ func resumeAt(skill string, run *state.Run) string {
 	entry := run.Leaf
 
 	switch {
+	case run.Wait != "":
+		// a ship parked on its base resumes at the entry that found it empty
 	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
 		entry = run.Pipeline[run.At-1]
 	case !strings.Contains(run.Next, "/f10:catchup"):
@@ -2358,7 +2393,7 @@ func (in *driveInput) poll(
 ) error {
 	id, skill := r.task.ref.ID, r.skill
 
-	if r.waiting {
+	if r.waiting || r.parked {
 		return in.next(ctx, w, r)
 	}
 
@@ -2422,6 +2457,12 @@ func (in *driveInput) poll(
 
 	if recent && stoppedRun(run) {
 		switch {
+		case skill == "ship" && run.Wait != "":
+			if res := in.park(ctx, w, r, run); res != nil {
+				in.end(ctx, w, r, *res)
+			}
+
+			return nil
 		case skill == "catchup" && guardStop(run):
 			// a catchup that stopped and then ended clean restores the stop it
 			// found, so git says how it ended

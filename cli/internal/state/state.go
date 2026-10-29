@@ -52,6 +52,9 @@ type Run struct {
 	Note     string   `json:"note,omitempty"` // why the run stopped
 	Next     string   `json:"next,omitempty"` // what unblocks it
 	Ask      string   `json:"ask,omitempty"`  // the question a driven run stopped on, options included
+	// Wait is the base task a driven ship stopped for, its branch without
+	// code yet: a drive parks the task and sends ship again once it has some
+	Wait string `json:"wait,omitempty"`
 	// Done is the phaseless step (catchup) whose report is out, DoneAt when;
 	// a reader compares DoneAt, since any later write moves Updated alone
 	Done    string    `json:"done,omitempty"`
@@ -158,6 +161,8 @@ func Load(path string) (*Run, error) {
 			r.Next = value
 		case "ask":
 			r.Ask = value
+		case "wait":
+			r.Wait = value
 		case "done":
 			r.Done = value
 		case "done_at":

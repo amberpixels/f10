@@ -50,6 +50,12 @@ const (
 	foundDefault = "default branch"
 )
 
+// The code row's values.
+const (
+	codeYes  = "yes"
+	codeNone = "none"
+)
+
 // Methods besides merge and rebase: none has nothing to bring in, skip is a
 // guard with nothing to do.
 const (
@@ -61,6 +67,9 @@ const (
 
 type catchupPlan struct {
 	branch, base, sha, found, how, method, why, mark string
+	// code says whether a recorded base branch has commits of its own: ship
+	// waits on one with none, by the rule the drive releases dependents on
+	code string
 }
 
 type catchupInput struct {
@@ -222,7 +231,7 @@ func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string)
 
 	switch {
 	case after != "" && sha != "":
-		return p.afterBase(ctx, in.main, after, fromOrigin)
+		return p.afterBase(ctx, in.main, after, def, fromOrigin)
 	case after != "":
 		p.found = foundGone
 		p.how = "f10-after-branch " + after + " exists nowhere: its task finished, so the default branch"
@@ -272,7 +281,7 @@ func (p *catchupPlan) originBase(ctx context.Context, main, name, how string) er
 
 // afterBase is the recorded branch, local first: a catchup by name takes the
 // base task's newest work, pushed or not.
-func (p *catchupPlan) afterBase(ctx context.Context, main, after string, fromOrigin bool) error {
+func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fromOrigin bool) error {
 	p.found = foundAfter
 
 	remote, err := gitx.Ref(ctx, main, "refs/remotes/origin/"+after)
@@ -283,6 +292,14 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after string, fromOri
 	local, err := gitx.Ref(ctx, main, "refs/heads/"+after)
 	if err != nil {
 		return err
+	}
+
+	// only a local branch has a creation point to count from
+	if local != "" {
+		p.code = codeNone
+		if baseHasCode(ctx, main, after, def) {
+			p.code = codeYes
+		}
 	}
 
 	switch {
@@ -334,6 +351,7 @@ func (p *catchupPlan) write(w io.Writer) error {
 		{"method", p.method},
 		{"why", p.why},
 		{"mark", p.mark},
+		{"code", p.code},
 	} {
 		if row[1] != "" {
 			fmt.Fprintf(&b, "%s: %s\n", row[0], row[1])
