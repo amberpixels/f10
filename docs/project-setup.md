@@ -76,6 +76,7 @@ Go service for invoices.
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
+| `agents` | a map from `default`, a step some flow names, or `step.kind` (`plan.bug`) to the agent profile it runs on, `kind:model:effort` or a part of it ([Agents](#agents)) | none: every step on the kind's own default |
 
 An unknown key or a value outside its vocabulary stops every `f10` command except `f10 config`, which shows each fact with where it came from, and `f10 init`.
 
@@ -257,6 +258,46 @@ With the map declared and no flow named, `f10 start` and `f10 drive` send `/f10:
 The keys flows replaces still read, converted with a warning: `pipelines` (each becomes a flow led by `plan`), `planless` (those flows drop `plan`), `pipeline_by_area` (read as `flow_by_area`) and `drive_chain` (its `judge` before `ship` goes after `plan` in `default`, its `review` after `ship` is appended to `default` unless that already reviews, and a trailing `finish` turns `drive_finish` on).
 The old entry form `review (local)` reads as `review:local`, with a warning.
 `f10 init --migrate` rewrites all of them in the frontmatter, keeping key order and comments.
+
+## Agents
+
+A step runs on an **agent profile**: `kind:model:effort`, such as `claude:opus:high`.
+The kind is the agent backend (`claude`, the only one), and it owns the vocabulary.
+For `claude`, a model is a family (`opus`, `sonnet`, `haiku`, `fable`), a family with a version, or a full `claude-` id, a misspelt family corrected as `--model` corrects it; the effort words are `low`, `medium`, `high`, `xhigh` and `max`.
+A profile is validated against its kind, never against a fixed list, so a later backend adds a kind and its vocabulary and changes nothing in the map.
+The kind may be left out and is `claude`: `opus:medium` and `sonnet` alone are profiles too, and a lone effort word (`low`) sets the effort alone.
+A segment a profile leaves out comes from the layer below.
+A profile with every segment left is the kind's own default, and no flag is passed.
+
+```yaml
+agents:
+  default: opus:high
+  implement: opus:medium
+  cleanup: sonnet:low
+  commit: sonnet:low
+  pr: sonnet:low
+  review: opus:high
+  judge: opus:high
+  plan.bug: opus:medium
+```
+
+Two layers of the same map merge **key by key**, the later winning: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), then the project's `agents:` (main's and a worktree's layers merged key by key too).
+A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, `f10 drive --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
+So `--agent low` over `default: opus:high` runs on `opus:low`, and the flag is recorded on the branch, where `f10 agents` reads it back for a spawning step's line.
+A key is `default` or a step some declared flow names (the default flow included); a misspelt step is refused, as is a profile the kind refuses.
+`f10 agents` prints the merged map with each value's origin, and `f10 agents <step>...` each step's resolved profile with the key and layer behind each segment.
+`f10 config` lists the map as `agents.<key>` rows.
+
+What reaches where is explicit, and `f10 agents` prints it per step:
+
+- the task's agent (`f10 start`, `f10 drive`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the drive's open line and `f10 status` name it when it is not the kind's default;
+- a step that spawns a subagent passes its own key's profile to the Agent tool: the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check.
+  The project load (`f10-load-project.sh <step>`) prints each requested step's line, with the model family and effort word in the form the Agent tool takes;
+- every other step runs inline, on the task agent's profile.
+  Its key is accepted so a map can be written once, and `f10 agents` says no lever reaches it yet: `implement`, `plan`, `commit`, `pr`, a judge in a flow, both halves of a review's resolve.
+
+An agent never types `/effort` or `/model`: in a session those save the choice as your own default in Claude Code's user settings.
+The eval runner takes `-agent <profile>` and a scenario lists the profiles it measures ([docs/evals.md](evals.md)).
 
 ## Priority
 

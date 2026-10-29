@@ -65,6 +65,7 @@ func newApp() *cli.Command {
 		Commands: []*cli.Command{
 			initCommand(),
 			configCommand(),
+			agentsCommand(),
 			flowCommand(),
 			doctorCommand(),
 			taskCommand(),

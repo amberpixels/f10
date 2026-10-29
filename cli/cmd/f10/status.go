@@ -147,7 +147,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	return writeRuns(cmd, runs, make([][]gate, len(runs)), showRoot, now)
+	return writeRuns(cmd, runs, make([][]gate, len(runs)), showRoot, "", now)
 }
 
 // sessionTaskID is the task the session's run names, "" for none.
@@ -230,15 +230,16 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 		return true, nil
 	}
 
-	return true, writeRuns(cmd, runs, runGates(ctx, t, *in, runs), true, now)
+	return true, writeRuns(cmd, runs, runGates(ctx, t, *in, runs), true, in.agent, now)
 }
 
 // writeRuns prints runs, each with its gates, or encodes them under --json.
-func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot bool, now time.Time) error {
+// agent is the profile the task's branch records, "" for the kind's default.
+func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot bool, agent string, now time.Time) error {
 	if cmd.Bool("json") {
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
-			out[i] = runJSON{Run: r, Gates: gates[i]}
+			out[i] = runJSON{Run: r, Agent: agent, Gates: gates[i]}
 		}
 
 		return encodeJSON(cmd.Writer, out)
@@ -251,7 +252,7 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot boo
 			fmt.Fprintln(cmd.Writer)
 		}
 
-		renderRun(cmd.Writer, r, gates[i], showRoot, now, limit)
+		renderRun(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
 	}
 
 	return nil
@@ -266,6 +267,7 @@ type taskStatusInput struct {
 	root   string // the checkout holding branch
 	plan   string // where the task's plan would be
 	host   *host  // nil without a host CLI: no PR row
+	agent  string // the profile the branch records, as typed; "" for the kind's default
 }
 
 // taskRoute is what `status <id>` can report on a task, read lazily.
@@ -341,6 +343,11 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 	if h, err := t.host(); err == nil {
 		h = h.at(path)
 		in.host = &h
+	}
+
+	// a branch with no record, or one unreadable, shows no agent row
+	if p, err := recordedProfile(ctx, main, name); err == nil && !p.IsDefault() {
+		in.agent = p.Short()
 	}
 
 	return in, nil
@@ -517,6 +524,7 @@ func canonPath(p string) string {
 type runJSON struct {
 	*state.Run
 
+	Agent string `json:"agent,omitempty"`
 	Gates []gate `json:"gates,omitempty"`
 }
 
@@ -552,12 +560,16 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 // order `f10 state show` prints the same facts, the task's gates under
 // ship when it has them. The root row appears only when listing: for
 // one session it is the directory you are in.
-func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, now time.Time, limit int) {
+func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
 	headerRow(w, "task", valueOr(r.Task), limit, plain)
 	headerRow(w, "url", valueOr(r.URL), limit, plain)
+
+	if agent != "" {
+		headerRow(w, "agent", agent, limit, faint)
+	}
 
 	if showRoot {
 		headerRow(w, "root", valueOr(r.Root), limit, faint)

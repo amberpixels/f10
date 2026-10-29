@@ -14,6 +14,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -49,6 +50,7 @@ type Declared struct {
 	ReportBack     string            `yaml:"report_back,omitempty"`
 	Review         ReviewDecl        `yaml:"review,omitempty"`
 	Standup        StandupDecl       `yaml:"standup,omitempty"`
+	Agents         map[string]string `yaml:"agents,omitempty"` // a step, `default` or `step.kind` to the agent profile it runs on
 
 	// The keys flows replaces, read and converted with a warning.
 	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
@@ -304,6 +306,14 @@ func (d Declared) check() []string {
 		}
 	}
 
+	// the values here; the keys are checked against the merged flows once
+	// those are resolved (agents.go)
+	for _, key := range slices.Sorted(maps.Keys(d.Agents)) {
+		if _, err := agentctl.ParseProfile(d.Agents[key]); err != nil {
+			bad = append(bad, fmt.Sprintf("agents.%s: %v", key, err))
+		}
+	}
+
 	for _, name := range d.Planless {
 		if _, ok := d.Pipelines[name]; !ok {
 			bad = append(bad, fmt.Sprintf("planless: %q names no pipeline", name))
@@ -444,4 +454,15 @@ func (l *layered) merge(d Declared, label string) {
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
+
+	// the agents map merges key by key: a worktree tuning one step keeps
+	// main's others, and each key remembers the layer that set it
+	for key, value := range d.Agents {
+		if l.Agents == nil {
+			l.Agents = map[string]string{}
+		}
+
+		l.Agents[key] = value
+		l.origin["agents."+key] = label
+	}
 }

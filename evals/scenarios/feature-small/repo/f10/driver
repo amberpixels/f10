@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Eval fixture driver: serves tasks from tasks/T-<n>.md, offline. Verbs the
+# Eval fixture driver: serves tasks from tasks/EV-<n>.md, offline. Verbs the
 # run does not need exit 3, the contract's "not implemented".
 set -euo pipefail
 
 verb="${1:-}"
 n="${2:-}"
-file="tasks/T-${n}.md"
+file="tasks/EV-${n}.md"
 
 case "$verb" in
   read)

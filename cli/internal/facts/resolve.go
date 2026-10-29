@@ -201,6 +201,7 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 	// after review: converting the old drive chain asks whether a remote
 	// reviewer is declared
 	e.resolveFlows(fm, declared)
+	e.resolveAgents(fm)
 
 	// one warning per file and kind, naming every fact it concerns
 	for file, keys := range groupByFile(e.proseRead) {

@@ -2,6 +2,7 @@ package facts
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -725,5 +726,59 @@ func TestLoreGate(t *testing.T) {
 	bad := buildWith(t, "---\nlore_gate: off\n---\n", "")
 	if !strings.Contains(bad.Errors(), "lore_gate") {
 		t.Errorf("errors = %q", bad.Errors())
+	}
+}
+
+func TestAgents(t *testing.T) {
+	eff := buildWith(t, "---\nflows:\n  default: plan judge implement cleanup pr review:local judge pr\n"+
+		"agents:\n  default: opus:high\n  review: opus:high\n  cleanup: sonnet:low\n  plan.bug: opus:medium\n---\n",
+		"---\nagents:\n  cleanup: haiku:low\n  judge: opus:max\n---\n")
+	if eff.Errors() != "" {
+		t.Fatalf("errors: %s", eff.Errors())
+	}
+
+	want := map[string]string{
+		"default": "opus:high", "review": "opus:high", "cleanup": "haiku:low",
+		"plan.bug": "opus:medium", "judge": "opus:max",
+	}
+	if !maps.Equal(eff.Agents, want) {
+		t.Errorf("agents %v, want %v", eff.Agents, want)
+	}
+
+	for key, origin := range map[string]string{
+		"default": "declared (main, frontmatter)",
+		"cleanup": "declared (worktree, frontmatter)",
+		"judge":   "declared (worktree, frontmatter)",
+	} {
+		if eff.AgentsOrigin[key] != origin {
+			t.Errorf("agents.%s origin %q, want %q", key, eff.AgentsOrigin[key], origin)
+		}
+	}
+
+	if f := factFor(t, eff, "agents"); f.Origin != "declared (main + worktree, frontmatter)" ||
+		!strings.Contains(f.Value, "cleanup: haiku:low") {
+		t.Errorf("agents fact %+v", f)
+	}
+
+	for _, c := range []struct{ block, want string }{
+		{"agents:\n  reveiw: opus:high\n", "agents.reveiw: no flow has a reveiw entry"},
+		{"agents:\n  plan.feature.x: opus\n", "agents.plan.feature.x: feature.x is not a task kind"},
+		{"agents:\n  implement.huge: opus\n", "huge is not a task kind (feature, bug, refactor, spike)"},
+		{"agents:\n  implement: opus:huge\n", "agents.implement: \"opus:huge\": huge is not an effort claude knows"},
+		{"agents:\n  implement: opencode:opus:high\n", "opencode is not an agent kind"},
+		{"agents:\n  --agent: opus:high\n", "agents.--agent: a key is default, a step, or step.kind"},
+	} {
+		if eff := buildWith(t, "---\n"+c.block+"---\n", ""); !strings.Contains(eff.Errors(), c.want) {
+			t.Errorf("%q: errors %q, want %q", c.block, eff.Errors(), c.want)
+		}
+	}
+
+	flowSteps := "---\nagents:\n  pr: sonnet:low\n  implement.bug: opus:medium\n---\n"
+	if eff := buildWith(t, flowSteps, ""); eff.Errors() != "" {
+		t.Errorf("the default flow's steps are keys: %s", eff.Errors())
+	}
+
+	if eff := buildWith(t, "---\nvisibility: public\n---\n", ""); eff.Agents != nil {
+		t.Errorf("no map declared leaves agents nil: %v", eff.Agents)
 	}
 }

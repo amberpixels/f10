@@ -1,4 +1,4 @@
-# T-1: Add a --shout flag to greet
+# EV-1: Add a --shout flag to greet
 
 OPEN · created 2026-10-28
 

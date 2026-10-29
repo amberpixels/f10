@@ -54,10 +54,14 @@ const (
 	MovedKey       = "f10-base-moved"
 )
 
-// ModelKey records the model `f10 start --model` gave the branch's agent,
-// for a reader of the branch; absent for claude's default and on branches
-// started before it was written.
-const ModelKey = "f10-model"
+// ModelKey recorded the model `f10 start --model` gave the branch's agent
+// before profiles; AgentKey records the whole profile (kind:model:effort)
+// a start or drive gave it, read back on a rerun, for a reader of the
+// branch. Both absent for the kind's default.
+const (
+	ModelKey = "f10-model"
+	AgentKey = "f10-agent"
+)
 
 // Separator joins a bundle's ids where they are typed and in its branch
 // name: `ABC-1+ABC-2`, the lead first.

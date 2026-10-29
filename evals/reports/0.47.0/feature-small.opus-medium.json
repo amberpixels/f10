@@ -1,0 +1,36 @@
+{
+  "scenario": "feature-small",
+  "agent": "opus:medium",
+  "version": "0.47.0",
+  "commit": "b0a2e87-dirty",
+  "at": "2026-10-29T09:30:52.353742Z",
+  "pass": true,
+  "checks": [
+    {
+      "name": "plan",
+      "pass": true
+    },
+    {
+      "name": "intent",
+      "pass": true
+    },
+    {
+      "name": "verify",
+      "pass": true
+    },
+    {
+      "name": "accept",
+      "pass": true
+    },
+    {
+      "name": "commit",
+      "pass": true
+    },
+    {
+      "name": "lore",
+      "pass": true
+    }
+  ],
+  "cost_usd": 0.7171672,
+  "duration_ms": 64987
+}

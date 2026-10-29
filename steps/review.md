@@ -80,6 +80,8 @@ Read the full diff every round.
 
 The main agent gathers the checkout root, base ref and sha, the diff command, the task id and text (`f10 task read <id>`), the round number, the prior round's path, the output path, the lesson overrides implement's hand-off noted in this run (lesson id, path and why; none when it noted none, or the review runs standalone), and the review roles: its base role where Roles replaces it, and the added roles, from the sources `conventions/context.md` → Roles ranks (the plan's `Roles` line first).
 It spawns **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with those facts and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh review`) and follow this section.
+The Agent tool call carries the `model` and `effort` the project load's `review` profile line names in its `Agent tool:` part (`docs/project-setup.md` → Agents): the `review.<kind>` line for the plan's `Kind` (absent meaning feature) when the load prints one, else the plain `review` line.
+A line with no `Agent tool:` part passes neither, and the tool's own defaults apply.
 The reviewer writes the file and returns a one-paragraph summary: verdict and count per category.
 The main agent checks the header (and, in round two, a status for every prior id) and relays the summary unchanged.
 
