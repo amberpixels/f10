@@ -153,6 +153,63 @@ func TestCatchupBaseRecordedBranch(t *testing.T) {
 	wantPlan(t, r.resolve(r.input("pr")), "", foundAfter, methodSkip)
 }
 
+// The drive and the watcher check the sha f10-base-moved names against
+// origin, so the catchup integrates that sha, never a newer local tip.
+func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
+	r := newCatchupRepo(t)
+
+	r.at(during, "checkout", "-q", "-b", "FT-2/b", "origin/main")
+	r.commit(during, "base.go", "package main // base\n", "base")
+	r.at(during, "push", "-q", "-u", "origin", "FT-2/b")
+	r.commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
+	r.at(later, "checkout", "-q", "FT-1/a")
+	r.at(later, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+
+	pushed := r.sha("origin/FT-2/b")
+	r.at(later, "config", "branch.FT-1/a."+cfgMoved, pushed)
+
+	for _, guard := range []string{"", "implement"} {
+		p := r.resolve(r.input(guard))
+		wantPlan(t, p, pushed, foundAfter, methodMerge)
+
+		if !strings.HasPrefix(p.how, cfgMoved+": "+short(pushed)) {
+			t.Errorf("guard %q: how %q, want it to name the mark", guard, p.how)
+		}
+
+		if p.sha != pushed || p.mark != cfgMoved+" "+pushed || p.code != codeYes {
+			t.Errorf("guard %q: sha %q mark %q code %q, want the marked sha %s", guard, p.sha, p.mark, p.code, pushed)
+		}
+	}
+
+	// the PR's target stays origin's, whatever the mark says
+	wantPlan(t, r.resolve(r.input("pr")), "origin/FT-2/b", foundAfter, methodMerge)
+
+	// the drive marks a local head; a later local commit stays out
+	marked := r.sha("FT-2/b")
+	r.at(later, "config", "branch.FT-1/a."+cfgMoved, marked)
+	r.at(later, "checkout", "-q", "FT-2/b")
+	r.commit(later, "base.go", "package main // base, after the mark\n", "base, after the mark")
+	r.at(later, "checkout", "-q", "FT-1/a")
+
+	if p := r.resolve(r.input("")); p.sha != marked {
+		t.Errorf("sha %q, want the marked local head %s", p.sha, marked)
+	}
+
+	// a marked sha already in the branch is nothing to bring in
+	r.at(later, "merge", "-q", "--no-edit", marked)
+
+	p := r.resolve(r.input(""))
+	if p.method != methodNone || p.mark != "" {
+		t.Errorf("method %q mark %q, want none and no mark", p.method, p.mark)
+	}
+
+	r.at(later, "config", "branch.FT-1/a."+cfgMoved, strings.Repeat("0", len(marked)))
+
+	if _, err := resolveCatchup(t.Context(), r.input("")); err == nil || !strings.Contains(err.Error(), cfgMoved) {
+		t.Errorf("a mark naming no commit: err %v, want one naming %s", err, cfgMoved)
+	}
+}
+
 func TestCatchupBaseRecordedBranchGone(t *testing.T) {
 	r := newCatchupRepo(t)
 	r.at(during, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-9/gone")
