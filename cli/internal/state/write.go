@@ -19,9 +19,8 @@ import (
 // Statuses a phase can hold, in the order the usage text lists them.
 var Statuses = []string{"pending", "running", "done", "failed", "partial", "skipped", "prior", "blocked"}
 
-// A UsageError is a malformed call: an unknown phase or status, a missing
-// argument. It is a typo in step prose, so the command exits 2 rather than
-// leave the badge frozen without a word.
+// A UsageError is a typo in step prose (an unknown phase or status, a missing
+// argument), so the command exits 2 rather than leave the badge frozen.
 type UsageError struct{ msg string }
 
 func (e *UsageError) Error() string { return e.msg }
@@ -67,10 +66,9 @@ var fallbackRoot = func() string {
 	return wd
 }
 
-// Save writes the run in the format the status line's bash renderer reads,
-// key for key, through a temp file so the polling renderer never sees a torn
-// file. Every value is flattened to one line: a newline would start a new
-// key.
+// Save writes the run as the status line's bash renderer reads it, through a
+// temp file so the polling renderer never sees a torn file; values are
+// flattened to one line, since a newline would start a new key.
 func (r *Run) Save(dir string, now time.Time) error {
 	if dir == "" || r.Session == "" {
 		return errors.New("state: no directory or session to save to")
@@ -133,7 +131,6 @@ func (r *Run) Save(dir string, now time.Time) error {
 	return nil
 }
 
-// unixText is a time as the file holds it, "" for the zero time.
 func unixText(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -170,9 +167,8 @@ func RootOf(cwd string) string {
 // render nothing. Sessions end without notice, so every file outlives its run.
 const pruneAge = 7 * 24 * time.Hour
 
-// Prune drops the per-session files of long-dead sessions: run state, the
-// conventions marker f10-inject.sh writes, the session start mark, and the
-// session's launches.
+// Prune drops the per-session files of long-dead sessions; .conventions is
+// the marker f10-inject.sh writes.
 func Prune(dir string, now time.Time) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -206,10 +202,9 @@ func (r *Run) setStatus(phase, status string) {
 	}
 }
 
-// backfill retires the pending phases before the one being entered: a run
-// from a task id never captures, one from a plan file never plans, and their
-// leading circles would never fill. `skipped` means "nobody said"; positive
-// evidence of earlier work (a task id, a saved plan) upgrades to `prior`.
+// backfill retires the pending phases before the one entered, or a run from a
+// task id or a plan file would never fill its leading circles. `skipped` means
+// nobody said; evidence of earlier work (a task id, a saved plan) is `prior`.
 func (r *Run) backfill(phase string) {
 	if phase == "plan" || phase == "ship" {
 		if r.Capture == "pending" {
@@ -222,10 +217,10 @@ func (r *Run) backfill(phase string) {
 	}
 }
 
-// Set records a phase's status. A stop state keeps the leaf (the argument,
-// else the last running one): "blocked at judge" is the answer to "ship
-// blocked". A phase running again retires the old note, question and done
-// signal; a stop keeps the signal a driven catchup wrote before restoring it.
+// Set records a phase's status. A stop keeps the leaf, the argument else the
+// last running one, since "blocked at judge" is the answer to "ship blocked";
+// running again retires the note, question and done signal, which a stop
+// keeps for the driven catchup that wrote it before restoring.
 func (r *Run) Set(phase, status, leaf string) error {
 	if !slices.Contains(Phases, phase) {
 		return usagef("unknown phase '%s' (want: %s)", phase, strings.Join(Phases, " "))
@@ -261,10 +256,9 @@ func (r *Run) Set(phase, status, leaf string) error {
 	return nil
 }
 
-// place is where leaf sits in the pipeline, counted from 1: where the run
-// already is, else the next entry by that name, else the first. A leaf the
-// pipeline does not name (catchup's guard stopping) keeps the place, so the
-// judge resumed after it is still the second one.
+// place is leaf's place in the pipeline from 1: where the run is, else the
+// next entry by that name, else the first. An unnamed leaf (catchup's guard
+// stopping) keeps the place, so a judge resumed after it is still the second.
 func (r *Run) place(leaf string) int {
 	if leaf == "" {
 		return 0
@@ -329,10 +323,9 @@ func (r *Run) SetAsk(text string) error {
 	return nil
 }
 
-// SetDone records that a step with no phase of its own (catchup) has
-// reported, at now. The drive reads it as the step's end; an idle agent
-// without it is a turn that stopped without reporting. It touches no phase,
-// so the badge a ship run left stands.
+// SetDone records that a phaseless step (catchup) reported at now: the drive
+// reads it as the step's end, and an idle agent without it stopped without
+// reporting. It touches no phase, so the badge a ship run left stands.
 func (r *Run) SetDone(step string, now time.Time) error {
 	if step == "" {
 		return usagef("done needs the step that reported")
@@ -384,11 +377,10 @@ func (r *Run) PlanWritten(task string) {
 	r.Leaf, r.At = "", 0
 }
 
-// Backstop is the Stop hook's promotion, for the most-dropped call: the final
-// `set ship done` after the PR and report. Stop states are left alone.
-// Single-turn capture and plan promote; ship spans many turns, so it promotes
-// only on the declared final step, or when no final or leaf is known
-// (overstating is the cheaper error). It reports whether anything changed.
+// Backstop is the Stop hook's promotion of a running phase, for the most
+// dropped call: the final `set ship done`. Ship spans many turns, so it
+// promotes only on the declared final step, or with no final or leaf known,
+// overstating being the cheaper error. True when anything changed.
 func (r *Run) Backstop() bool {
 	changed := false
 
@@ -420,10 +412,9 @@ func tokens(args string) []string {
 
 func isURL(t string) bool { return strings.HasPrefix(t, "http://") || strings.HasPrefix(t, "https://") }
 
-// isDescription says whether the argument reads as a description, so the run
-// will capture. A first token that is a task id, plan path or url is a
-// reference whatever follows, since the model appends context to skill args.
-// Otherwise one token is a reference and a sentence a description.
+// isDescription reads a first token that is an id, plan path or url as a
+// reference whatever follows, since the model appends context to skill args;
+// otherwise one token is a reference and a sentence a description.
 func isDescription(args string) bool {
 	toks := tokens(args)
 	if len(toks) == 0 {
@@ -438,9 +429,7 @@ func isDescription(args string) bool {
 	return len(toks) > 1
 }
 
-// refTaskOf is the task the argument's first token names: a task id as is, a
-// bundle by its lead, a plan path by basename. Empty for a url, a
-// description or nothing.
+// refTaskOf is the task the first token names, a bundle by its lead.
 func refTaskOf(args string) string {
 	toks := tokens(args)
 	if len(toks) == 0 {
@@ -467,18 +456,16 @@ func createsTask(skill string) bool {
 	return skill == "capture" || skill == "debug"
 }
 
-// Seed begins a run for a skill invocation and resets the phases, except a
-// chain over one task (plan, then ship) whose argument names the task already
-// held: that carries settled phases forward, or ship would show this
-// session's plan as `skipped`. It reports false for --help, which runs
-// nothing, so the badge keeps the last real run.
+// Seed begins a run for a skill invocation. A chain over the task already held
+// (plan, then ship) carries settled phases forward, or ship would show this
+// session's plan as `skipped`; --help runs nothing and reports false, so the
+// badge keeps the last real run.
 func (r *Run) Seed(skill, args, cwd string) bool {
 	if slices.Contains(strings.Fields(args), "--help") {
 		return false
 	}
 
-	// a leading pipeline name (`ship local: ABC-1042`) picks the pipeline,
-	// not the task: the reference or description is what follows it
+	// a leading pipeline name (`ship local: ABC-1042`) is not the reference
 	if m := pipelineWord.FindStringSubmatch(args); m != nil {
 		args = m[1]
 	}
@@ -496,8 +483,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	r.Pipeline, r.At = nil, 0
 	r.Ship = "pending"
 
-	// the checkout root, so a terminal with no session id can still find its
-	// runs; outside git the cwd is the root
+	// so a terminal with no session id can still find its runs
 	if cwd != "" {
 		r.Root = RootOf(cwd)
 	}
@@ -514,16 +500,15 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	} else {
 		r.Task, r.URL, r.Capture, r.Plan = "", "", "pending", "pending"
 
-		// a full id names the task before fetch reports it, so the board
-		// ties the run to its row from the start; a bare number waits for
-		// fetch, which knows the project's prefix
+		// a full id ties the run to its board row before fetch reports; a
+		// bare number waits for fetch, which knows the prefix
 		if ref := refTaskOf(args); !createsTask(skill) && idToken.MatchString(ref) {
 			r.Task = strings.ToUpper(ref)
 		}
 	}
 
-	// open the first phase here, where the argument is: a description routes
-	// plan and ship through capture; a reference sends plan to fetch
+	// the first phase opens here, where the argument is: a description
+	// captures first
 	switch skill {
 	case "capture", "debug":
 		r.Capture = "running"

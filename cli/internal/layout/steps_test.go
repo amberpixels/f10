@@ -11,9 +11,8 @@ import (
 )
 
 // A run reads only the steps f10-load-project.sh prints, so a step a skill
-// follows, or one a step defers to ("as steps/commit.md point 2 says"), runs
-// without its text unless every load of the caller names it too. This pins
-// skills/ and steps/ to their load calls.
+// follows or defers to runs without its text unless every load of the caller
+// names it too. This pins skills/ and steps/ to their load calls.
 
 var (
 	// a load call naming steps; `<step>` placeholders and --overlays print no step
@@ -23,10 +22,9 @@ var (
 	pointRe    = regexp.MustCompile(`^\s*points?\b`)
 )
 
-// The ship skill loads each flow entry at run time, named in project.md, so its
-// loads are prose, not calls: this mirrors skills/ship/SKILL.md Run points 1 and 3.
-// Every step file sits in exactly one of flowSteps and nonFlowSteps, so a new
-// step fails until its author says whether a flow can name it.
+// Ship loads flow entries at run time, so shipLoads mirrors skills/ship/
+// SKILL.md Run points 1 and 3. Every step sits in exactly one of flowSteps
+// and nonFlowSteps, so a new one fails until its author says which.
 var (
 	flowSteps = []string{
 		"catchup", "cleanup", "commit", "demo", "deploy", "implement", "judge", "pr", "push", "resolve", "review",
@@ -62,7 +60,6 @@ type mdLine struct {
 	text  string
 }
 
-// loadCalls returns the step names of each load call on a line.
 func loadCalls(line string) [][]string {
 	var calls [][]string
 	for _, m := range loadCallRe.FindAllStringSubmatch(line, -1) {

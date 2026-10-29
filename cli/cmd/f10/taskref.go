@@ -77,13 +77,12 @@ func cleanTitle(id, title string) string {
 	return title
 }
 
-// docTitle is the title on a task document's first line, `# <title>`.
 func docTitle(id, doc string) string {
 	return cleanTitle(id, taskTitle(strings.TrimLeft(doc, " \t\r\n")))
 }
 
-// driverTitle is the title on a driver document's heading, with any prefix
-// tracker.title wrote taken off, as the host's titles are.
+// driverTitle strips the prefix tracker.title wrote, as the host's titles
+// come stripped.
 func (t *target) driverTitle(r ref.Ref, doc string) string {
 	return cleanTitle(r.ID, t.eff.TitleTemplate.Strip(docTitle(r.ID, doc), r.ID, r.Number))
 }
@@ -132,8 +131,6 @@ func runTaskRef(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// refLine is one task as `ref` prints it: `<id> (<title>)`, or the link
-// with md, else the id bare, else the token as typed when it named no task.
 func refLine(token, id string, k ledger.TaskRef, md bool) string {
 	switch {
 	case id == "":
@@ -147,10 +144,9 @@ func refLine(token, id string, k ledger.TaskRef, md bool) string {
 	return id + " (" + k.Title + ")"
 }
 
-// taskRefs is the title and url of each task in refs, by id: from the
-// ledger, else one tracker call per task, whose answers the ledger keeps.
-// A task with md needs a url too; fresh asks the tracker for every task.
-// A tracker that cannot answer leaves the task out, with a note on warn.
+// taskRefs asks the tracker only for a task the ledger lacks (or lacks a
+// url for, with md), or for every task with fresh; a tracker that cannot
+// answer leaves the task out, with a note on warn.
 func (t *target) taskRefs(
 	ctx context.Context,
 	refs []ref.Ref,
@@ -198,9 +194,6 @@ func (t *target) taskRefs(
 	return known
 }
 
-// lookupRef asks the tracker for one task's title and url: the driver's
-// `read` and `url`, else the host's issue.
-//
 //nolint:lostfield // a lookup by id, not a conversion
 func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) {
 	if d := t.driver(); d != nil {
@@ -244,9 +237,9 @@ func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, erro
 	return ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, h.title(iss.Title, r.Number)), URL: iss.url()}, nil
 }
 
-// linkBodyAfter turns the body's bare `After: <id>` line into a link titled
-// with the base task, so a reader on the tracker sees what it waits for.
-// A base f10 cannot title stays bare: create never fails over a link.
+// linkBodyAfter links the body's `After: <id>` line to the base task, so a
+// tracker reader sees what it waits for; a base f10 cannot title stays
+// bare, since create never fails over a link.
 func (t *target) linkBodyAfter(ctx context.Context, doc string, warn io.Writer) string {
 	id := afterIn(doc)
 	if id == "" {

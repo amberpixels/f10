@@ -29,8 +29,6 @@ func ownDir(dir string) error {
 // logAge is how long a finished drive's log is kept.
 const logAge = 7 * 24 * time.Hour
 
-// pruneLogs drops finished drive logs older than logAge, their exit files,
-// and their lines in the index.
 func pruneLogs(dir string, now time.Time) {
 	logs := logsDir(dir)
 

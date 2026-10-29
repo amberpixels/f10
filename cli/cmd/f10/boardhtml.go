@@ -11,20 +11,17 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 )
 
-// board.html is the static report: markup, styles and the renderer in one
-// file, with one placeholder where the Board JSON goes. The page draws the
-// JSON at open time and decides no stage; nothing is fetched.
+// board.html is the static report, one file with a placeholder for the
+// Board JSON; the page decides no stage and fetches nothing.
 //
 //go:embed board.html
 var boardHTMLPage string
 
-// boardPlaceholder stands where the JSON goes, inside the page's data
-// script tag; it cannot occur in HTML by accident.
+// boardPlaceholder cannot occur in HTML by accident.
 const boardPlaceholder = "__BOARD_JSON__"
 
-// renderBoardHTML writes the page with the board embedded. The encoder
-// escapes `<`, `>` and `&`, so a title holding `</script>` cannot end the
-// data tag early; no template engine is needed.
+// renderBoardHTML needs no template engine: the encoder escapes `<`, `>`
+// and `&`, so a title holding `</script>` cannot end the data tag early.
 func renderBoardHTML(w io.Writer, b lookaround.Board) error {
 	var buf bytes.Buffer
 

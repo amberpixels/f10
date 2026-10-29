@@ -1,13 +1,7 @@
-// Package standup groups one person's activity in a checkout by task: the
-// commits they authored and the PRs or MRs they opened, reviewed or merged,
-// collected by `f10 standup` from git and the host CLI. Group and Merge are
-// pure functions, so the same history gives the same report byte for byte:
-// Group reads one repository, Merge joins repositories on one tracker by
-// task id.
-//
-// The JSON shape (Standup) is a contract for the /f10:standup skill and
-// outside consumers, documented in docs/cli.md. A breaking change bumps
-// Schema.
+// Package standup groups one person's activity in a checkout by task, for
+// `f10 standup`. Group and Merge are pure, so the same history gives the same
+// report byte for byte. The JSON shape (Standup) is a contract documented in
+// docs/cli.md; a breaking change bumps Schema.
 package standup
 
 import (
@@ -23,9 +17,8 @@ import (
 // Schema is the version of the report's JSON shape.
 const Schema = 2
 
-// Where a PR or a task ended the period, least advanced first. Closed is a
-// PR closed unmerged; it never decides a task's state while anything else
-// does.
+// Where a PR or a task ended the period, least advanced first; Closed never
+// decides a task's state while anything else does.
 const (
 	StateStarted    = "started"
 	StateInProgress = "in progress"
@@ -41,7 +34,6 @@ const (
 	HostClosed = "closed"
 )
 
-// What the user did to someone else's PR.
 const (
 	ActionReviewed = "reviewed"
 	ActionMerged   = "merged"
@@ -64,8 +56,7 @@ type Commit struct {
 	ParentCI  *CI    `json:"-"` // nil unless asked and the host had checks
 }
 
-// A Review is one review event on a PR: a submitted review, an approval or
-// a comment, by anyone. Group keeps the user's.
+// A Review is one review event on a PR, by anyone; Group keeps the user's.
 type Review struct {
 	Author string
 	At     time.Time
@@ -179,8 +170,7 @@ type ReviewedPR struct {
 	Days    []string `json:"days"` // local dates of the actions; the command sets it
 }
 
-// Report is the activity in one repository, before Merge joins it to the
-// others on its tracker.
+// Report is the activity in one repository, before Merge.
 type Report struct {
 	Since    time.Time
 	Repo     string
@@ -222,10 +212,9 @@ func Group(in Input) Report {
 		commits[i].Repo = in.Repo
 	}
 
-	// a commit belongs to the PR whose commit list or merge commit names it;
-	// a commit on the default branch to the merged PR listing its author date
-	// and subject, which is what a rebase merge keeps; else to an open PR
-	// whose head is the branch it was reached from
+	// a rebase merge keeps only author date and subject, so a default-branch
+	// commit matches a merged PR's by those; a commit the host does not list
+	// yet matches an open PR by head branch
 	attached := make([][]Commit, len(own))
 	bySHA := map[string]int{}
 	rebased := map[string]int{}
@@ -366,7 +355,6 @@ func landedKey(at time.Time, subject string) string {
 	return at.UTC().Format(time.RFC3339) + "\x00" + subject
 }
 
-// splitPRs dedupes by number and splits the user's own PRs from others'.
 func splitPRs(prs []HostPR, login string) ([]HostPR, []HostPR) {
 	sorted := slices.Clone(prs)
 	slices.SortStableFunc(sorted, func(a, b HostPR) int { return a.Number - b.Number })
@@ -385,9 +373,8 @@ func splitPRs(prs []HostPR, login string) ([]HostPR, []HostPR) {
 	return own, foreign
 }
 
-// periodCommits keeps the commits authored in the period, sorted. Git's
-// --since reads the committer date, which a rebase or a merge replay moves
-// to today; the author date is when the work was done.
+// periodCommits filters by author date: git's --since reads the committer
+// date, which a rebase or a merge replay moves to today.
 func periodCommits(commits []Commit, since time.Time) []Commit {
 	var out []Commit
 
@@ -408,8 +395,6 @@ func periodCommits(commits []Commit, since time.Time) []Commit {
 	return out
 }
 
-// periodPushes keeps the force-pushes made in the period, classified and
-// sorted.
 func periodPushes(pushes []ForcePush, since time.Time) []ForcePush {
 	out := []ForcePush{}
 
@@ -430,17 +415,15 @@ func periodPushes(pushes []ForcePush, since time.Time) []ForcePush {
 	return out
 }
 
-// inPeriod is an own PR the user did something with: opened or merged in
-// the period, or carrying a commit or a force-push of theirs from it. A
-// rebase keeps author dates, so a rebase-only day shows as a force-push
-// alone.
+// inPeriod is a PR the user touched in the period; a rebase keeps author
+// dates, so a rebase-only day shows as a force-push alone.
 func inPeriod(p HostPR, since time.Time, active bool) bool {
 	return active || !p.CreatedAt.Before(since) || (!p.MergedAt.IsZero() && !p.MergedAt.Before(since))
 }
 
-// chainBases maps each PR to the PR whose head is its base. The base f10
-// recorded wins over the host's, which the base's finish retargets to the
-// default branch.
+// chainBases maps each PR to the PR whose head is its base; the base f10
+// recorded wins, since the base's finish retargets the host's to the default
+// branch.
 func chainBases(own []HostPR, bases map[string]string, def string) map[int]int {
 	byHead := map[string]int{}
 
@@ -465,8 +448,8 @@ func chainBases(own []HostPR, bases map[string]string, def string) map[int]int {
 	return out
 }
 
-// chainOrder lists a task's PRs root first, each followed by the PRs
-// chained under it; siblings and roots by number.
+// chainOrder lists a task's PRs root first, children under each, siblings by
+// number.
 func chainOrder(prs []PR) []PR {
 	in := map[int]bool{}
 	for _, p := range prs {
@@ -537,9 +520,9 @@ func prState(p HostPR) string {
 
 var rank = map[string]int{StateStarted: 0, StateInProgress: 1, StateInReview: 2}
 
-// taskState is the least advanced unfinished item: an open PR, or a commit
-// on a branch other than the default with no PR. With nothing unfinished
-// the task shipped if a PR merged or a commit landed on the default branch.
+// taskState is the least advanced unfinished item, a PR-less branch commit
+// counting as in progress; shipped when nothing is unfinished and something
+// landed.
 func taskState(t Task, def string) string {
 	state, shipped := "", false
 
@@ -577,7 +560,6 @@ func taskState(t Task, def string) string {
 	}
 }
 
-// reviewed is the others' PRs the user reviewed or merged in the period.
 func reviewed(prs []HostPR, login string, since time.Time) []ReviewedPR {
 	out := []ReviewedPR{}
 	if login == "" {
@@ -614,7 +596,6 @@ func reviewed(prs []HostPR, login string, since time.Time) []ReviewedPR {
 	return out
 }
 
-// compareIDs orders task ids by prefix, then by number.
 func compareIDs(a, b string) int {
 	pa, na := splitID(a)
 	pb, nb := splitID(b)
@@ -641,8 +622,6 @@ func nonNil[T any](s []T) []T {
 	return s
 }
 
-// addRiders records the riders a bundle's branch name spells beside its
-// lead, `ABC-1+ABC-2/slug`, once each.
 func (t *Task) addRiders(prefix, branch string) {
 	members := ref.Members(prefix, branch)
 	if len(members) < 2 || members[0] != t.ID {

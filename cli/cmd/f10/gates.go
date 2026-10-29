@@ -20,11 +20,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// A task's gates are every step its flow declares, with the state each is
-// in: ship's recorded entries, else the flow its branch records, merged
-// with the chain drive runs it through, progress read from the ledger,
-// outcomes from lore or the findings and verdict files, and the remote
-// review from the host.
+// A task's gates are every step its flow declares with its state, read from
+// the ledger, lore or the findings and verdict files, and the host.
 
 // Gate states. A plain step also takes a run's stop status (failed,
 // blocked, partial) on the step it stopped at.
@@ -53,8 +50,7 @@ const (
 // half is unknown and the rest of the status still prints.
 var remoteTimeout = 5 * time.Second
 
-// A gate is one row of a task's flow: a plain step, its review (local and
-// remote halves) or a judge.
+// A gate is one row of a task's flow: a plain step, its review or a judge.
 type gate struct {
 	Step    string        `json:"step"`
 	State   string        `json:"state,omitempty"`  // plain steps and judges
@@ -66,7 +62,6 @@ type gate struct {
 	Remote  *reviewHalf   `json:"remote,omitempty"`
 }
 
-// A reviewHalf is the local or the remote review of a task.
 type reviewHalf struct {
 	State  string        `json:"state"`
 	Via    string        `json:"via,omitempty"`
@@ -75,13 +70,11 @@ type reviewHalf struct {
 	Rounds []reviewRound `json:"rounds,omitempty"`
 }
 
-// remoteState is what the host says about the newest remote review.
 type remoteState struct {
 	found, done, handled, settled bool
 	err                           error
 }
 
-// gateInput is everything a task's gates are read from.
 type gateInput struct {
 	task, branch, checkout string
 
@@ -129,8 +122,6 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 				gates = append(gates, gate{Step: "review"})
 			}
 		case "judge":
-			// before implement it judges the plan, a judge the drive chain ran
-			// before ship included
 			judged := facts.JudgeKind(entries, i)
 
 			if _, ok := judges[judged]; !ok {
@@ -196,10 +187,9 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	return gates
 }
 
-// flow is the entries the task runs through, in order, the index of ship's
-// first one (len when the chain runs no ship) and how many are ship's.
-// plan and resolve are not gates: the plan phase row shows the one, a
-// review gate folds in the other.
+// flow is the entries the task runs through, the index of ship's first one
+// and how many are ship's. plan and resolve are no gates: the plan phase row
+// shows the one, a review gate folds in the other.
 func (in gateInput) flow() ([]string, int, int) {
 	pipeline := in.pipeline
 	if in.run != nil && len(in.run.Pipeline) > 0 {
@@ -232,10 +222,8 @@ func (in gateInput) flow() ([]string, int, int) {
 	return entries, firstShip, shipLen
 }
 
-// stepStates is each entry's state as a plain step. Ship's entries follow
-// the claims its session made: every step before the one it is on is
-// done, that one has the run's status, the rest are pending. The chain's
-// own entries follow what drive recorded on the branch.
+// stepStates follows the claims ship's session made: steps before the one
+// it is on are done, that one has the run's status, the rest are pending.
 func (in gateInput) stepStates(entries []string, firstShip, shipLen int) []string {
 	states := make([]string, len(entries))
 	for i := range states {
@@ -284,8 +272,6 @@ func (in gateInput) stepStates(entries []string, firstShip, shipLen int) []strin
 	return states
 }
 
-// chainStates marks the chain's own entries done up to the last skill
-// drive recorded.
 func (in gateInput) chainStates(entries, states []string, shipLen int) {
 	last := slices.Index(in.chain, in.driven)
 	if last < 0 {
@@ -312,8 +298,6 @@ func (in gateInput) chainStates(entries, states []string, shipLen int) {
 	}
 }
 
-// finishGate is the chain's finish: drive's record turns a pending one
-// queued or running, as the record says, once ship is done.
 func (in gateInput) finishGate(st string) gate {
 	g := gate{Step: "finish", State: st}
 	if st != gatePending || in.finish.State == "" || !in.shipDone() {
@@ -330,7 +314,6 @@ func (in gateInput) finishGate(st string) gate {
 	return g
 }
 
-// shipDone reports ship through: its run says so, or drive recorded it.
 func (in gateInput) shipDone() bool {
 	if in.run != nil && in.run.Ship == "done" {
 		return true
@@ -341,7 +324,6 @@ func (in gateInput) shipDone() bool {
 	return ship >= 0 && last >= ship
 }
 
-// half builds the local or the remote review, nil when the flow has none.
 func (in gateInput) half(entries, steps []string, remote, inFlow bool) *reviewHalf {
 	h := in.readHalf(entries, steps, remote)
 
@@ -418,7 +400,6 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 	return h
 }
 
-// hostHalf folds the host's word on the remote review into the half.
 func (in gateInput) hostHalf(ctx context.Context, h *reviewHalf) {
 	rs := in.remote(ctx)
 
@@ -439,8 +420,6 @@ func (in gateInput) hostHalf(ctx context.Context, h *reviewHalf) {
 	}
 }
 
-// judge fills a judge gate: running in ship, or started outside it, else
-// its newest verdict.
 func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
 	out, last := in.outcomes.changeJudge, in.outcomes.changeAt
 	if judged == "plan" {
@@ -480,9 +459,8 @@ func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
 	}
 }
 
-// taskJudge is the judge fetch runs on a task older than stale_after:
-// running or stopped while the plan phase is on it, else its newest
-// verdict, and not shown at all before either.
+// taskJudge is the judge fetch runs on a task older than stale_after, shown
+// only once it ran or the plan phase is on it.
 func (in gateInput) taskJudge() (gate, bool) {
 	g := gate{Step: "judge", Judged: "task"}
 
@@ -498,7 +476,6 @@ func (in gateInput) taskJudge() (gate, bool) {
 	return g, true
 }
 
-// claimedAt is when the session last claimed ship running step.
 func (in gateInput) claimedAt(session, step string) time.Time {
 	var at time.Time
 
@@ -516,20 +493,16 @@ func (in gateInput) claimedAt(session, step string) time.Time {
 	return at
 }
 
-// startMark is a skill call outside ship, tied to the task.
 type startMark struct {
 	at      time.Time
 	session string
 	via     string
 }
 
-// started is the newest call of skill on the task's branch or checkout
-// after since, not made by a ship run, and still running: its session
-// neither stopped nor started another skill since, and it is younger than
-// the state TTL, since the Stop hook writes no stop for a session that ran
-// no phase. A review's `ci` argument makes it the remote half's. The hook
-// writes run_started before any fetch, with no task, so the branch and the
-// checkout tie it to the task.
+// started is the newest call of skill on the task's branch or checkout after
+// since, not a ship run's, whose session has not stopped or moved on and is
+// younger than the state TTL, since Stop writes no stop for a session that
+// ran no phase; `ci` makes a review the remote half's.
 func (in gateInput) started(skill string, remote bool, since time.Time) *startMark {
 	var (
 		mark *startMark
@@ -588,7 +561,8 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 	return mark
 }
 
-// onTask is a hook's row on the task's branch or in its checkout.
+// onTask: the hook writes run_started before any fetch, with no task, so the
+// branch and the checkout tie a row to the task.
 func (in gateInput) onTask(e ledger.Event) bool {
 	return (in.branch != "" && e.Branch == in.branch) ||
 		(in.checkout != "" && e.Checkout != "" && canonPath(e.Checkout) == canonPath(in.checkout))
@@ -657,7 +631,6 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 // current is lore's counts answering for a half: as new as the newest
 // findings file (lore keeps whole seconds) and holding every finding the
 // files raised, so a lore write that failed leaves the files the answer.
-// No file at all leaves lore alone.
 func current(fromLore []reviewRound, raised int, loreAt, fileAt time.Time) bool {
 	switch {
 	case fromLore == nil:
@@ -690,8 +663,6 @@ func roundsFromLore(counts, files []reviewRound) []reviewRound {
 	return []reviewRound{r}
 }
 
-// loreOutcomes counts the effective findings by source and keeps the
-// newest verdict of each kind.
 func loreOutcomes(entries []lore.Entry) outcomes {
 	var (
 		o                      outcomes
@@ -761,8 +732,6 @@ func firstErrLine(err error) string {
 	return firstLine(err.Error())
 }
 
-// gateLines is the gates as label and value, the step names indented
-// under ship.
 func gateLines(gates []gate) [][2]string {
 	out := make([][2]string, len(gates))
 
@@ -773,8 +742,7 @@ func gateLines(gates []gate) [][2]string {
 	return out
 }
 
-// style is the badge status whose palette the gate prints in: an open
-// review reads as partial, an unknown one as blocked.
+// style is the badge status whose palette the gate prints in.
 func (g gate) style() string {
 	states := []string{g.State}
 	if g.Local != nil || g.Remote != nil {
@@ -803,7 +771,6 @@ func (g gate) style() string {
 	return "pending"
 }
 
-// text is the gate's state as a reader takes it in.
 func (g gate) text() string {
 	switch {
 	case g.Local != nil || g.Remote != nil:
@@ -882,9 +849,7 @@ func (h *reviewHalf) text() string {
 	return h.State
 }
 
-// compactGates is the parent rows' gate column: `L 3/4 · R open · J
-// proceed`, `-` for a gate not in the flow, `…` running, `?` unknown; a
-// stale task's judge is `TJ`.
+// compactGates is the parent rows' gate column.
 func compactGates(gates []gate) string {
 	var parts []string
 
@@ -957,8 +922,7 @@ func (h *reviewHalf) compact() string {
 	return h.State
 }
 
-// gateSource binds what every task's gates read alike: the ledger, the
-// project's facts, the lore store and the host.
+// gateSource is what every task's gates read alike.
 type gateSource struct {
 	events []ledger.Event
 	main   string // where the branch config lives
@@ -983,8 +947,6 @@ func (src gateSource) storageFor(ctx context.Context, root string, run *state.Ru
 	return finishedStorage(src.shared, run.Root)
 }
 
-// gatesOf reads one task's gates. root is the checkout holding branch, ""
-// when none does; storage is where its findings and verdicts are.
 func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage string, run *state.Run) []gate {
 	in := gateInput{
 		task:       id,
@@ -1033,8 +995,6 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	return taskGates(ctx, in)
 }
 
-// readRemote asks the host about the newest remote review on the branch's
-// request, within remoteTimeout. No request yet is nothing found.
 func readRemote(ctx context.Context, h host, f facts.Review, branch string) remoteState {
 	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
 	defer cancel()

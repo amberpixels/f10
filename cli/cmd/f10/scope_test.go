@@ -13,7 +13,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// scopeRepo is a checkout with one empty commit, named name under parent.
 func scopeRepo(t *testing.T, parent, name string) string {
 	t.Helper()
 
@@ -175,8 +174,6 @@ func TestStandupAllNeedsRoots(t *testing.T) {
 	}
 }
 
-// declareTracker writes a project.md declaring kind and the ACME id format,
-// and commits work on task ACME-1.
 func declareTracker(t *testing.T, dir, kind string) {
 	t.Helper()
 

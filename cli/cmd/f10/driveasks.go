@@ -34,11 +34,9 @@ func (in *driveInput) raise(ctx context.Context, r *driveRun, skill, text string
 	}, in.now(), in.notify)
 }
 
-// takeInbox takes the answers the inbox holds for this drive's tasks. One
-// the agent already heard (typed in its pane, or sent to it) makes the next
-// send follow that turn; any other joins the answers, and so the record,
-// as an --answer would. The inbox's answer came first, so an --answer for
-// the same task goes unused.
+// takeInbox: an answer the agent already heard makes the next send follow
+// that turn; any other joins the answers as an --answer would. The inbox's
+// answer came first, so an --answer for the same task goes unused.
 func (in *driveInput) takeInbox(tasks []driveTask) {
 	in.answeredIn = map[string]time.Time{}
 
@@ -81,9 +79,8 @@ func (in *driveInput) taken(key string) {
 	}
 }
 
-// claimSent closes a task's open ask with the answer this drive sends, so
-// every other way in shows it answered. An ask already closed, by the inbox
-// answer this drive took, stays as it is.
+// claimSent closes the task's open ask with the answer this drive sends, so
+// every other way in shows it answered.
 func (in *driveInput) claimSent(r *driveRun, answer string) {
 	if in.asksDir == "" {
 		return
@@ -95,9 +92,8 @@ func (in *driveInput) claimSent(r *driveRun, answer string) {
 	}
 }
 
-// resumeAnswered starts this drive again when one of its tasks' asks was
-// answered after it last looked: the answer's claimer saw the drive's lease
-// held and left it here. A cancelled or drained drive starts nothing.
+// resumeAnswered starts this drive again for an ask answered after it last
+// looked: the answer's claimer saw the drive's lease held and left it here.
 func (in *driveInput) resumeAnswered(ctx context.Context, tasks []driveTask) {
 	if in.rec == nil || in.asksDir == "" || in.resume == nil || in.draining.Load() || in.rec.Cancelled != nil {
 		return
@@ -122,9 +118,8 @@ func (in *driveInput) resumeAnswered(ctx context.Context, tasks []driveTask) {
 	}
 }
 
-// resumeSelf has the daemon start drive n again once this process is
-// gone, since the daemon attaches a resume to a drive still running. A
-// drive in the foreground names the command instead.
+// resumeSelf has the daemon start drive n once this process is gone, since
+// the daemon attaches a resume to a drive still running.
 func (in *driveInput) resumeSelf(_ context.Context, n int) error {
 	if os.Getenv(daemon.NumberFileEnv) == "" {
 		fmt.Fprintf(in.out, "  f10 drive --resume %d takes the answer\n", n)

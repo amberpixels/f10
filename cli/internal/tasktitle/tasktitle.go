@@ -1,6 +1,6 @@
-// Package tasktitle is tracker.title: the template a task's title is
-// written through on the tracker (`{id}: {title}`), and the strip that
-// takes a leading id back off, so f10's own output never shows it twice.
+// Package tasktitle is tracker.title: the template a task's title is written
+// through on the tracker, and the strip that takes a leading id back off so
+// f10's own output never shows it twice.
 package tasktitle
 
 import (
@@ -11,8 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-// Template is a declared tracker.title; the zero value is none, which
-// renders and strips nothing.
+// Template is a declared tracker.title; the zero value changes nothing.
 type Template string
 
 var placeholder = regexp.MustCompile(`\{[^{}]*\}`)
@@ -49,10 +48,9 @@ func (t Template) Render(id, n, title string) string {
 	return strings.NewReplacer("{id}", id, "{n}", n, "{title}", title).Replace(string(t))
 }
 
-// Strip takes a leading id, and the punctuation and whitespace after it, off
-// title. It strips only when the template opens with {id}, {n} or #{n}: an id
-// inside a title is never a prefix f10 wrote. A title that is the id alone
-// stays whole.
+// Strip takes a leading id and the punctuation after it off title, only when
+// the template opens with {id}, {n} or #{n}: an id inside a title is never a
+// prefix f10 wrote. A title that is the id alone stays whole.
 func (t Template) Strip(title, id, n string) string {
 	var tokens []string
 

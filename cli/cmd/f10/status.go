@@ -24,17 +24,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The status noun reads what the badge reads, and says the rest: which
-// step a run stopped on, why, and what unblocks it. With no id, the task
-// this session's run records, else the branch's, stands in for one; in a
-// checkout naming no task, what the session started or drove that is still
-// live comes first, as one tree. Naming none, the answer is the session's
-// run, or from a plain terminal this repo's live runs, and --all every live
-// run on the machine. A task id names another run: the task's own, reported
-// from the checkout that has
-// the task's branch, which is how a session reads the question a driven
-// agent stopped on. With no run of its own, the task gets what is durable:
-// its plan file and its PR.
+// The status noun reads what the badge reads and says the rest: which step
+// a run stopped on, why, and what unblocks it. A task's run is read from the
+// checkout holding its branch, so a session can relay a driven agent's ask.
 func statusCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
@@ -75,11 +67,9 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// a bare call reads the current task the way `status <id>` does, the
-	// session run's before the checkout's (the reverse of ref.Lookup's
-	// cascade: the run is what status reports); a guess that cannot be read
-	// only loses the guess. A checkout naming no task, the main one, lists
-	// what this session launched first: the session run's task would hide it
+	// the session run's task before the checkout's, the reverse of ref.Lookup,
+	// since the run is what status reports; in a checkout naming no task the
+	// launches come first, as the session run's task would hide them
 	if !all {
 		if t, err := targetFor(ctx, cmd); err == nil && !t.scoped {
 			here := checkoutTaskID(ctx, t)
@@ -258,8 +248,7 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot boo
 }
 
 // taskStatusInput is what `status <id>` knows about a task before reading
-// any run: the checkout holding its branch, where the agent working on it
-// reports, and where its durable facts are looked up when no run is its own.
+// any run.
 type taskStatusInput struct {
 	id     string
 	branch string
@@ -346,12 +335,9 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 	return in, nil
 }
 
-// taskRuns splits runs from the task's checkout into the task's own and
-// the rest. Every skill call reseeds its session's run, so the agent in a
-// task's worktree may be on another task by now. An empty task counts as
-// the task's only when the run was seeded from a reference, before fetch
-// names it: capture `pending`, or `skipped` once fetch opens the plan phase.
-// Capturing, or planning from a description, is about some other task.
+// taskRuns splits the checkout's runs into the task's own and the rest,
+// since every skill call reseeds its run and the agent may be on another
+// task by now; an empty task is the task's only while fetch has not named it.
 func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	var own, others []*state.Run
 
@@ -369,8 +355,7 @@ func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 }
 
 // fallback is what `status <id>` reports for a task no live run is about:
-// the runs in its checkout, which are on something else, then its plan file
-// and its PR, each only where it exists.
+// the runs in its checkout, which are on something else, then what is durable.
 type fallback struct {
 	Task    string       `json:"task"`
 	Root    string       `json:"root"`
@@ -548,10 +533,9 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 	return src
 }
 
-// renderRun prints one run as the label/value block config uses, in the
-// order `f10 state show` prints the same facts, the task's gates under
-// ship when it has them. The root row appears only when listing: for
-// one session it is the directory you are in.
+// renderRun prints one run in the order `f10 state show` prints the same
+// facts. The root row appears only when listing: for one session it is the
+// directory you are in.
 func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)

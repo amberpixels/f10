@@ -17,17 +17,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// Upkeep classification checked on real histories: each fixture under
-// testdata/standup is every git and host call `f10 standup` made in a real
-// checkout, with its answer, and the class each item of the report must
-// get. Replaying a fixture runs the real collectors and Group over it.
-//
-// Record a new one, then check every class in its expect map by hand:
+// Each fixture under testdata/standup is every git and host call `f10 standup`
+// made in a real checkout, with its answer and the class each item must get;
+// replaying one runs the real collectors and Group over it. Record a new one
+// from a public amberpixels checkout, never a private one, then check its
+// expect map by hand:
 //
 //	F10_STANDUP_RECORD='<checkout>|<since, RFC 3339>|<name>|<id prefix>' \
 //	  go test ./cmd/f10 -run TestRecordStandupFixture
-//
-// Record only from public amberpixels repositories.
 
 type standupFixture struct {
 	Since  time.Time              `json:"since"`
@@ -37,7 +34,6 @@ type standupFixture struct {
 	Expect map[string]string      `json:"expect"` // item to "work" or "upkeep <reason>"
 }
 
-// fixtureCall is one recorded answer, as shell.Result carries it.
 type fixtureCall struct {
 	Stdout string `json:"stdout"`
 	Stderr string `json:"stderr,omitempty"`
@@ -85,8 +81,8 @@ func TestStandupFixtures(t *testing.T) {
 	}
 }
 
-// TestRecordStandupFixture writes a fixture from a real checkout, with
-// expect filled from what the code says today: a draft to check by hand.
+// TestRecordStandupFixture fills expect from what the code says today: a
+// draft to check by hand.
 func TestRecordStandupFixture(t *testing.T) {
 	spec := os.Getenv("F10_STANDUP_RECORD")
 	if spec == "" {
@@ -144,9 +140,8 @@ func TestRecordStandupFixture(t *testing.T) {
 	}
 }
 
-// classes runs the standup over dir and names the class of every item in
-// the report: a commit by its sha, a force-push by "push <after>", a task
-// by "task <id>".
+// classes keys every item of the report: a commit by sha, a force-push by
+// "push <after>", a task by "task <id>".
 func classes(t *testing.T, fx standupFixture, dir string) map[string]string {
 	t.Helper()
 

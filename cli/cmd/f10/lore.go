@@ -19,11 +19,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 )
 
-// The lore noun: a change's intent, decisions, findings, verdicts and
-// lessons as entry files, and the two questions they answer, why a line is
-// the way it is and what to know before editing a file. docs/lore.md is the
-// spec; internal/lore holds all of it, and this file only resolves the root
-// and the paths and hands them over.
+// The lore noun only resolves the root and the paths and hands over to
+// internal/lore; docs/lore.md is the spec.
 func loreCommand() *cli.Command {
 	jsonFlag := func() cli.Flag { return &cli.BoolFlag{Name: "json", Usage: "emit JSON"} }
 
@@ -116,7 +113,6 @@ func loreCommand() *cli.Command {
 	}
 }
 
-// loreEnv is the store and the paths a lore verb works with.
 type loreEnv struct {
 	store *lore.Store
 	cwd   string
@@ -162,8 +158,6 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 	}, nil
 }
 
-// loreRootFor is the project's lore root as project.md's lore key picks it:
-// committed beside the code, else the local one every checkout shares.
 func loreRootFor(t *target) string {
 	if t.eff.Lore == "committed" {
 		return filepath.Join(t.lay.CheckoutRoot, ".lore")
@@ -172,10 +166,9 @@ func loreRootFor(t *target) string {
 	return localLoreRoot(t.lay)
 }
 
-// loreNote is finish's one line on what the change left in lore: the intent,
-// the decisions and the lessons, each named when missing, so a change that
-// reached finish without a ship run shows it there. "" when lore cannot be
-// read: finish never fails on it.
+// loreNote names each missing kind, so a change that reached finish without a
+// ship run shows it; "" when lore cannot be read, since finish never fails
+// on it.
 func loreNote(store *lore.Store, change string) string {
 	entries, err := store.Effective(change)
 
@@ -210,9 +203,8 @@ func loreNote(store *lore.Store, change string) string {
 	return "lore: " + strings.Join(parts, ", ")
 }
 
-// localLoreRoot is the lore root every checkout of the project shares: the
-// storage root's, or main's for a worktree that keeps its own .f10 from
-// before storage moved there.
+// localLoreRoot is shared by every checkout: main's, when a worktree still
+// keeps its own .f10.
 func localLoreRoot(lay *layout.Layout) string {
 	if lay.LegacyStorage && lay.MainRoot != "" {
 		return filepath.Join(lay.MainRoot, ".f10", "lore")
@@ -221,8 +213,7 @@ func localLoreRoot(lay *layout.Layout) string {
 	return filepath.Join(lay.StorageRoot, "lore")
 }
 
-// repoPath turns a path given on the command line, relative to the cwd,
-// into the repo-relative, slash-separated form anchors use.
+// repoPath is the repo-relative, slash-separated form anchors use.
 func (l *loreEnv) repoPath(p string) (string, error) {
 	abs := p
 	if !filepath.IsAbs(abs) {
@@ -358,8 +349,8 @@ func loreBody(cmd *cli.Command) (string, error) {
 	return string(data), nil
 }
 
-// loreAgent is the agent fields from flags, else the environment; none
-// when neither names a model or a session.
+// loreAgent is nil when neither flags nor environment name a model or a
+// session.
 func loreAgent(cmd *cli.Command) *lore.Agent {
 	pick := func(flag, env string) string {
 		if v := cmd.String(flag); v != "" {

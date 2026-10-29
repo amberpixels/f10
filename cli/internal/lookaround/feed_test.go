@@ -257,11 +257,8 @@ func TestDeriveFeedRelated(t *testing.T) {
 	}
 }
 
-// A task's requests make one row however they relate: two overlapping
-// and both merged, one replacing another closed in the window, one
-// following up a request merged long ago, a part merged beside a later
-// one still open. Only a request closed with nothing after it or open
-// keeps abandoned.
+// A task's requests make one row however they relate; only a request
+// closed with nothing after it keeps abandoned.
 func TestDeriveFeedOneRowPerTask(t *testing.T) {
 	merged := func(n int, head string, created, at time.Time) forge.Touched {
 		r := touched(n, "FT-0: part", head, forge.Merged, created, forge.Event{Kind: forge.EventMerged, At: at})

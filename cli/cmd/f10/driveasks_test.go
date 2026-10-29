@@ -43,7 +43,7 @@ func (fx *driveFixture) asking(t *testing.T) {
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 }
 
-// resumed scripts a rerun finding GH-1 stopped on its question.
+// resumedOnAsk scripts a rerun finding GH-1 stopped on its question.
 func (fx *driveFixture) resumedOnAsk(t *testing.T) {
 	fx.adoptsGH1()
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")

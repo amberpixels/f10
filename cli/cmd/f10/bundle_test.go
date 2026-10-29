@@ -18,7 +18,6 @@ var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bund
 
 var refsRider = riderKey("refs/heads/", "GH-2")
 
-// riderKey is the for-each-ref call that looks for every branch a rider is on.
 func riderKey(root, id string) string {
 	patterns := append(taskRefs(root, id), riderRefs(root, id)...)
 

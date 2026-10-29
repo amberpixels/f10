@@ -19,11 +19,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
-// A parent's subtasks, as capture links them: GitHub sub-issues, GitLab
-// work-item children, or a driver's `children` verb. Drive expands a parent
-// into these, so the rows carry what choosing among them needs: the After:
-// base, the draft label, and whether each is finished the way drive
-// decides it.
+// A parent's subtasks, as capture links them. Drive expands a parent into
+// these, so the rows carry what choosing among them needs.
 
 // exitNoParentLink is `task children`'s "the tracker has no parent link":
 // a normal answer the drive skill reads as "drive the id as given".
@@ -33,12 +30,10 @@ const exitNoParentLink = 3
 // start skill turns it into "drive them, or start one".
 const exitParent = 6
 
-// errNoParentLink is a tracker that cannot link a subtask to its parent.
 var errNoParentLink = errors.New("the tracker has no parent link")
 
-// openSubtasks is the ids of a task's unfinished subtasks, in tree order:
-// the check start and drive make before a task runs as one of its own. A
-// tracker with no parent link has none.
+// openSubtasks is the check start and drive make before a task runs as one
+// of its own.
 func openSubtasks(ctx context.Context, tr tracker, r ref.Ref) ([]string, error) {
 	if tr.children == nil {
 		return nil, nil
@@ -80,8 +75,6 @@ type childRow struct {
 	suffix string // a launched start's worktree suffix: the checkout read is that one
 }
 
-// A rawChild is a subtask as its source returns it, before f10 reads its
-// body, its branch and its plan archive.
 type rawChild struct {
 	ID     string   `json:"id"`
 	Title  string   `json:"title"`
@@ -137,9 +130,8 @@ func openRows(rows []childRow) []childRow {
 	return childTree(slices.DeleteFunc(slices.Clone(rows), func(r childRow) bool { return r.Finished }))
 }
 
-// rawChildren asks the driver's `children`, else the host. A driver that
-// declines the verb and a tracker no host CLI reaches both have no parent
-// link to read.
+// rawChildren asks the driver's `children`, else the host; a driver that
+// declines on a tracker no host CLI reaches has no parent link to read.
 func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, error) {
 	if d := t.driver(); d != nil {
 		out, err := d.Run(ctx, driver.VerbChildren, task.Number)
@@ -173,9 +165,6 @@ func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, err
 	return h.subIssues(ctx, task.Number)
 }
 
-// shapeChildren drops closed rows unless keepClosed, resolves each id and
-// After: base to the project's format, marks the finished ones and puts them
-// in tree order. A kept closed row is finished.
 func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild, keepClosed bool) ([]childRow, error) {
 	rows := []childRow{}
 
@@ -231,10 +220,9 @@ func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild,
 	return childTree(rows), nil
 }
 
-// childTree orders rows so each follows its After: base when that base is a
-// sibling, one level deeper; siblings at one level go by number. Rows caught
-// in a cycle come out at the top level, so the listing stays readable and
-// drive refuses the cycle itself.
+// childTree orders rows under their After: base, siblings by number. Rows
+// caught in a cycle come out at the top level, so the listing stays
+// readable and drive refuses the cycle itself.
 func childTree(rows []childRow) []childRow {
 	sorted := slices.Clone(rows)
 	slices.SortFunc(sorted, func(a, b childRow) int { return cmp.Compare(a.number, b.number) })
@@ -285,10 +273,8 @@ func childTree(rows []childRow) []childRow {
 	return out
 }
 
-// writeTree prints the rows as the tree drive shows: box lines down each
-// After: chain, the base named beside each dependent, and draft marked.
-// plain adds each task's url on a line beneath, for text relayed where a
-// link does not survive.
+// writeTree prints the rows as the tree drive shows; plain adds each url on
+// a line beneath, for text relayed where a link does not survive.
 func writeTree(w io.Writer, rows []childRow, plain bool) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no children")
@@ -390,9 +376,8 @@ const childItemsQuery = `query($path: ID!, $iid: String!) {
   }
 }`
 
-// childItems reads a GitLab issue's work-item children. A GitLab without
-// work items answers the query with an unknown-field error, which is a
-// tracker with no parent link rather than a failure.
+// childItems reads a GitLab issue's work-item children; a GitLab without
+// work items answers an unknown-field error, which is no parent link.
 func (h host) childItems(ctx context.Context, number string) ([]rawChild, error) {
 	var repo struct {
 		Path string `json:"path_with_namespace"`

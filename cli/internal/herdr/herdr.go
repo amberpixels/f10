@@ -1,8 +1,6 @@
-// Package herdr is the binary's door to Herdr, the terminal multiplexer
-// `f10 start` opens a task's worktree in, `f10 forward` reaches its agent
-// through and `f10 finish` closes it from. Every call goes through the herdr
-// CLI as JSON, and the ids the next call needs are read from the answer
-// rather than predicted.
+// Package herdr is the binary's door to Herdr, the terminal multiplexer f10
+// opens task worktrees in. Every call goes through the herdr CLI as JSON, and
+// the ids the next call needs are read from the answer rather than predicted.
 package herdr
 
 import (
@@ -87,9 +85,9 @@ type Workspace struct {
 }
 
 // OpenWorktree turns the checkout at path into a workspace labelled label,
-// or returns the one already showing it. dir is the main checkout, passed as
-// --cwd: without it Herdr takes the repo from the focused workspace, and
-// refuses when that one shows a linked worktree.
+// or returns the one already showing it. The main checkout goes as --cwd:
+// without it Herdr takes the repo from the focused workspace and refuses
+// when that one shows a linked worktree.
 func OpenWorktree(ctx context.Context, dir, path, label string) (Workspace, error) {
 	res, err := call(ctx, dir, "worktree", "open", "--cwd", dir, "--path", path, "--label", label)
 	if err != nil {
@@ -112,12 +110,10 @@ func OpenWorktree(ctx context.Context, dir, path, label string) (Workspace, erro
 	return ws, nil
 }
 
-// StartAgent launches an agent of kind in pane under name, with args on
-// the agent's own command line. A pane whose shell is still running its rc
-// files answers busy, so that one refusal is retried until StartDeadline; past it, herdr's error stands. While it
-// waits, waiting (when not nil) hears how long it has waited: on the first
-// busy answer, then within StartReport of the last. Once started,
-// waiting for the agent to be ready for input is herdr's wait, not ours.
+// StartAgent launches an agent of kind in pane under name, args on its own
+// command line. A pane still running its shell's rc files answers busy, so
+// that refusal alone is retried until StartDeadline; waiting (when not nil)
+// hears how long it has, on the first busy answer then within StartReport.
 func StartAgent(
 	ctx context.Context,
 	dir, name, kind, pane string,
@@ -141,7 +137,7 @@ func StartAgent(
 		}
 
 		// report a poll early: the sleep and the herdr call both overrun, and
-		// only a herdr call slower than a poll can still push a gap past StartReport
+		// only a herdr call slower than a poll can push a gap past StartReport
 		if waiting != nil && (reported.IsZero() || time.Since(reported)+2*StartPoll > StartReport) {
 			reported = time.Now()
 			waiting(reported.Sub(begun))

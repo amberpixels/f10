@@ -1,7 +1,5 @@
-// Package daemon runs drives for one user, outside any session: `f10 drive`
-// starts the daemon when none listens, hands it the command line, and tails
-// the drive's log. Each drive is its own child process,
-// `f10 drive --foreground`, run in the client's directory with the client's
+// Package daemon runs drives for one user, outside any session. Each drive is
+// its own `f10 drive --foreground` child in the client's directory and
 // environment, so leases and crash recovery stay the drive's own.
 package daemon
 
@@ -128,7 +126,7 @@ type Reply struct {
 	Version  string    `json:"version,omitempty"`
 	PID      int       `json:"pid,omitempty"`
 	Started  time.Time `json:"started,omitzero"`
-	Log      string    `json:"log,omitempty"`     // run, logs: the drive's log; watch: the project's pass log
+	Log      string    `json:"log,omitempty"`     // run: the drive's log; watch: the project's pass log
 	Attach   bool      `json:"attach,omitempty"`  // run: the log is a drive already running
 	Runs     []Run     `json:"runs,omitempty"`    // status
 	Watches  []Watch   `json:"watches,omitempty"` // status

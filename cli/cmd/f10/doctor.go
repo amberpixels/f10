@@ -71,8 +71,6 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// renderDoctor prints one row per check and, under each problem, the
-// remedy to run.
 func renderDoctor(w io.Writer, results []doctor.Result) {
 	faint := lipgloss.NewStyle().Faint(true)
 

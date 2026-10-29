@@ -8,8 +8,7 @@ import (
 
 // FromMoves reads the `mv` commands in a Bash call for plans moved into
 // plans/archive/, counted only when the archived file exists afterwards.
-// Relative paths resolve against cwd; storageRoot is matched as in
-// FromWrite. Meta is left for the caller to Stamp.
+// Relative paths resolve against cwd; storageRoot is matched as in FromWrite.
 func FromMoves(command, cwd, storageRoot string) []Observation {
 	var obs []Observation
 

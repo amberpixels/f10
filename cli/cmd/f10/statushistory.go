@@ -34,8 +34,7 @@ type judgeOutcome struct {
 
 // fileOutcomes reads the task's findings and verdict files: a round is the
 // remote half's when its reviewer is not local (a file both halves wrote
-// counts once for each), a verdict the task judge's when its subject is the
-// task, the plan judge's when it is a plan.
+// counts once each), and a verdict goes by its subject: task, plan or change.
 func fileOutcomes(storageRoot, task string) outcomes {
 	var o outcomes
 
@@ -82,12 +81,9 @@ func finishedStorage(shared, checkout string) string {
 	return ""
 }
 
-// shipSteps is the steps the session's last ship run up to until entered,
-// in order: each `set ship running <step>` claim after the ship skill
-// started. Only a phase skill begins a run; one a step calls mid-pipeline
-// (resolve, catchup) does not end it. A step claimed again right after itself is one entry (a resent
-// badge, a driven run resuming); one that comes back after another step is
-// listed again.
+// shipSteps is the steps the session's last ship run claimed before until.
+// Only a phase skill begins a run, so resolve or catchup mid-pipeline does
+// not end it; a step claimed again right after itself is one entry.
 func shipSteps(events []ledger.Event, session string, until time.Time) []string {
 	var steps []string
 

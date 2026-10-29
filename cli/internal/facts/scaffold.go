@@ -8,15 +8,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
-// The write half of the contract. Scaffold renders detection as a declared
-// project.md: the facts the binary acts on as frontmatter, the rest as
-// prose, so a value `detected` this run reads `declared` the next. Every
-// value uses the vocabulary the readers key on, so the file never parses
-// back weaker than the detection it replaced.
+// The write half of the contract: Scaffold renders detection as a declared
+// project.md, so a value `detected` this run reads `declared` the next, in
+// the vocabulary the readers key on so it never parses back weaker.
 
-// A Draft is one rendered project.md: the markdown, the frontmatter keys and
-// prose sections it carries, and the sections left out because nothing
-// detected them.
+// A Draft is one rendered project.md, with what it carries and the sections
+// nothing detected.
 type Draft struct {
 	Markdown string
 	Keys     []string
@@ -61,9 +58,8 @@ func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) (*Draft, err
 		}
 	}
 
-	// the title heading carries no body on purpose: prose under it would
-	// open a section the contract does not know, and parseFile keeps those
-	// as unrecognized rather than dropping them
+	// the title heading carries no body: prose under it would open a section
+	// the contract does not know, kept as unrecognized
 	b := &strings.Builder{}
 	b.WriteString(block)
 	b.WriteString("# " + lay.Project + " · f10 project instructions\n")
@@ -90,9 +86,8 @@ func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) (*Draft, err
 	return d, nil
 }
 
-// stackBody is the Project section: the stack the markers named, and not a
-// word more. What the project *is* is the one fact no probe reaches, so
-// init leaves that half to a human rather than guessing it.
+// stackBody is the stack the markers named and not a word more: what the
+// project *is* is the one fact no probe reaches, so init leaves it to a human.
 func stackBody(pb *probe.Probes) string {
 	if len(pb.Stack) == 0 {
 		return ""
@@ -133,9 +128,8 @@ func hostingBody(pb *probe.Probes) string {
 	}
 }
 
-// verifyBody writes the commands themselves, without the evidence that
-// found them: a marker file is provenance, which is `f10 config`'s column,
-// not a declared fact.
+// verifyBody writes the commands without the evidence that found them: a
+// marker file is provenance, `f10 config`'s column, not a declared fact.
 func verifyBody(pb *probe.Probes) string {
 	var commands []string
 

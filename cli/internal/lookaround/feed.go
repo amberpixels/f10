@@ -12,11 +12,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
-// DeriveFeed turns facts into the feed over the window: one row per task
-// whose requests had activity there, one per such request naming no task,
-// each in the one group its activity reads as by the rules docs/board.md
-// lists, one per task created there, and the open requests with none
-// counted in the quiet line. Like Derive it reads no clock and does no I/O.
+// DeriveFeed is the feed from facts over the window: a row per task or
+// taskless request with activity there, grouped by the first matching rule
+// in docs/board.md, a row per task created there, and the quiet count.
 func DeriveFeed(f Facts, now time.Time, w Window) Board {
 	b := Board{
 		Version:     Version,
@@ -63,10 +61,9 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 				continue
 			}
 
-			// an open request with no row is quiet: touched before this
-			// window (read from the earliest span the default may show), or
-			// in it only by what the feed does not group (a comment, a
-			// label, a commit dated before the window)
+			// an open request with no row is quiet: touched before this window
+			// (the facts start at the earliest span the default may show), or
+			// in it only by what the feed does not group (a comment, a label)
 			if t.Status == forge.Open && !t.CreatedAt.After(windowEnd(w, now)) {
 				b.Feed.Quiet.Count++
 				if b.Feed.Quiet.Oldest.IsZero() || t.CreatedAt.Before(b.Feed.Quiet.Oldest) {
@@ -137,10 +134,9 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 	return b
 }
 
-// ChooseWindow is the default's span: today when the facts give today's
-// feed a row, else the last working day, marked as the fallback. Activity
-// that makes no row (a review comment) keeps the fallback. The facts are
-// read from the last working day's start, so one collection answers both.
+// ChooseWindow is the default's span: today when the facts give today a
+// row, else the last working day marked as the fallback. The facts are read
+// from the last working day's start, so one collection answers both.
 func ChooseWindow(today, lastWorkday Window, facts ...Facts) Window {
 	for _, f := range facts {
 		if len(DeriveFeed(f, today.End, today).Feed.Rows) > 0 {
@@ -165,10 +161,8 @@ func windowEnd(w Window, now time.Time) time.Time {
 	return w.End
 }
 
-// feedRow is one touched request's row, or false when nothing it did
-// falls in the window (a comment, a label, or activity outside it). The
-// first rule that matches decides the group: finished, started,
-// reviewed, updated.
+// feedRow is one touched request's row, false when nothing it did falls in
+// the window; the first matching rule groups it.
 func feedRow(f Facts, t forge.Touched, w Window, tasks map[string]*Task) (FeedRow, bool) {
 	pr := feedPR(t)
 
@@ -314,8 +308,6 @@ func stepOf(message string) string {
 	return p.Step
 }
 
-// updateSummary is what an update did, counted: commits, merges from the
-// base, force pushes, and the step the trailers name.
 func updateSummary(commits, merges, pushes int, base string, steps []string) string {
 	var parts []string
 
@@ -350,12 +342,9 @@ type requestRow struct {
 	t   forge.Touched
 }
 
-// taskRow folds a task's request rows into one: the latest-opened
-// request leads, giving the row its group, request and summary, and every
-// other request of the task opened before it is listed by how it relates
-// (relationOf), the summary saying so and naming a part merged in the
-// window. A closed lead with a request opened after it or still open is
-// not abandoned.
+// taskRow folds a task's request rows into one led by the latest-opened
+// request, the earlier ones listed by relationOf. A closed lead with a
+// request opened after it, or still open, is not abandoned.
 //
 //nolint:lostfield // a fold of the request rows, not a conversion
 func taskRow(f Facts, reqs []requestRow) FeedRow {
@@ -441,10 +430,8 @@ func taskRow(f Facts, reqs []requestRow) FeedRow {
 	return r
 }
 
-// relationOf is how an earlier request relates to a later one of its
-// task: replaced when it closed unmerged, a follow-up's base when it
-// merged before the later one opened (or at an unknown time), else a
-// part, the two overlapping.
+// relationOf is replaced for an earlier request closed unmerged, follow-up
+// for one merged before the later opened (or at an unknown time), else part.
 func relationOf(earlier PR, later forge.Touched) string {
 	switch {
 	case earlier.Status == forge.Closed:
@@ -456,9 +443,7 @@ func relationOf(earlier PR, later forge.Touched) string {
 	}
 }
 
-// taskRequests is every request of the task, in the window or found by
-// the earlier search, each matched against the id by its branch or title,
-// in the order they opened.
+// taskRequests is every request naming the task, in the order they opened.
 func taskRequests(f Facts, id string) []PR {
 	var out []PR
 
@@ -489,9 +474,8 @@ func taskRequests(f Facts, id string) []PR {
 	return out
 }
 
-// Plural is n and word, the word in its plural past one: "-sh" takes
-// "es" ("2 force pushes"). Every renderer counting a word goes through
-// it.
+// Plural is n and word, pluralised past one ("-sh" takes "es"). Every
+// renderer counting a word goes through it.
 func Plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word

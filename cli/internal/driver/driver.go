@@ -1,16 +1,6 @@
-// Package driver runs a project's tracker driver: an executable at
-// .f10/driver satisfying the verb contract in docs/driver-contract.md.
-//
-// f10 specifies that contract and implements none of it. What a driver
-// talks to - Notion, Jira, a wiki, a spreadsheet - is the project's
-// business, and so is the language it is written in. The one thing f10
-// fixes is the shape of the conversation: a verb, an argument, data on
-// stdout, and a reserved exit code for a verb the driver does not offer.
-//
-// Read verbs return data and change nothing; write verbs change the
-// tracker and only the tracker. Neither acts on the local machine: f10 opens
-// every url and creates every branch, which is what lets `open` mean the
-// same thing for a task as for a pull request, where no driver is involved.
+// Package driver runs the executable at .f10/driver, a project's tracker
+// driver per docs/driver-contract.md. It touches only its tracker: f10 opens
+// urls and creates branches, so `open` means the same with or without one.
 package driver
 
 import (
@@ -37,8 +27,8 @@ const (
 	VerbIndex    = "index"    // stdout: one url, the task list; no argument
 	VerbList     = "list"     // stdout: JSON rows, the first page of open tasks; no argument
 
-	// VerbCreate is the first write verb: stdin is the task as markdown,
-	// `# <title>` first; stdout is the new task's id.
+	// VerbCreate makes a task: stdin is the task as markdown, `# <title>`
+	// first; stdout is the new task's id.
 	VerbCreate = "create"
 
 	// VerbComment adds a comment to a task: stdin is the comment as
@@ -50,14 +40,12 @@ const (
 	VerbUpdate = "update"
 )
 
-// Priorities is the contract's ordered priority vocabulary, most urgent
-// first. A search or list row may carry one as its `priority`; a driver maps
-// its tracker's own values onto these, and a row without one has no priority.
+// Priorities is the contract's priority vocabulary, most urgent first; a
+// driver maps its tracker's values onto it, and a row without one has none.
 var Priorities = []string{"urgent", "high", "medium", "low"}
 
-// PriorityRank places a row's priority value in Priorities, case and
-// surrounding space ignored: its index and true, or -1 and false for a value
-// outside the vocabulary.
+// PriorityRank is value's index in Priorities, case and surrounding space
+// ignored; -1 and false outside the vocabulary.
 func PriorityRank(value string) (int, bool) {
 	i := slices.Index(Priorities, strings.ToLower(strings.TrimSpace(value)))
 
@@ -69,8 +57,7 @@ func PriorityRank(value string) (int, bool) {
 // answer, not a failure, so a driver can offer `read` without `search`.
 const ExitUnsupported = 3
 
-// ErrUnsupported reports the reserved exit code back to the caller, which
-// then falls back or explains, rather than failing the command.
+// ErrUnsupported is ExitUnsupported as an error; callers fall back, never fail.
 var ErrUnsupported = errors.New("driver does not implement this verb")
 
 // DefaultTimeout bounds one verb when a Driver sets no Timeout.
@@ -87,9 +74,7 @@ type Driver struct {
 	Timeout time.Duration // one verb's limit; zero is DefaultTimeout
 }
 
-// Find returns the driver for a storage root, or nil when the project has
-// none - the ordinary case, which callers answer by falling back to the
-// host's issues.
+// Find is the storage root's driver, nil when the project has none.
 func Find(storageRoot, dir string) *Driver {
 	path := filepath.Join(storageRoot, "driver")
 
@@ -101,10 +86,9 @@ func Find(storageRoot, dir string) *Driver {
 	return &Driver{Path: path, Dir: dir}
 }
 
-// Run invokes one verb and returns its stdout. The reserved code becomes
-// ErrUnsupported; any other non-zero exit is a failure carrying the
-// driver's own stderr verbatim, because the driver knows why it failed and
-// f10 does not.
+// Run invokes one verb and returns its stdout. The reserved code is
+// ErrUnsupported; any other non-zero exit carries the driver's stderr
+// verbatim, since only the driver knows why it failed.
 func (d *Driver) Run(ctx context.Context, verb string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, d.limit())
 	defer cancel()
@@ -125,10 +109,9 @@ func (d *Driver) Run(ctx context.Context, verb string, args ...string) (string, 
 	return res.Stdout, nil
 }
 
-// RunInput invokes a write verb with input on its stdin and returns its
-// stdout and, on success, its stderr: a warning about a property the
-// tracker has no field for. It is never retried, because a failed write
-// may still have changed the tracker, a timed-out one too.
+// RunInput invokes a write verb with input on stdin and returns its stdout
+// and stderr, a warning about a property the tracker lacks. Never retried:
+// a failed or timed-out write may still have changed the tracker.
 func (d *Driver) RunInput(ctx context.Context, input, verb string, args ...string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, d.limit())
 	defer cancel()
@@ -168,8 +151,6 @@ func (d *Driver) timedOut(ctx context.Context, verb string, res shell.Result, er
 	return fmt.Errorf("%s %s: %w within %s", filepath.Base(d.Path), verb, ErrTimeout, d.limit())
 }
 
-// classify reads an exit code per the contract: nil for 0, ErrUnsupported
-// for the reserved code, the driver's stderr for anything else.
 func (d *Driver) classify(verb string, res shell.Result) error {
 	switch res.Code {
 	case 0:

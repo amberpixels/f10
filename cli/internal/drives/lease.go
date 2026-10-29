@@ -1,7 +1,6 @@
 // Package drives keeps `f10 drive` durable: a record per drive under the
-// storage root, and a lease per task that one process holds while it acts
-// on the task, so two drives, or a drive and `f10 finish`, never act on the
-// same task at once.
+// storage root, and a lease per task, so two drives, or a drive and
+// `f10 finish`, never act on one task at once.
 package drives
 
 import (
@@ -160,8 +159,7 @@ func Probe(root, key string) (Holder, bool) {
 	return Holder{}, false
 }
 
-// readHolder reads `pid=<n> [drive=<n>] [watch=1]` from a lock file; zero values for
-// anything unreadable.
+// readHolder parses a lock file; zero values for anything unreadable.
 func readHolder(path string) Holder {
 	b, err := os.ReadFile(path)
 	if err != nil {

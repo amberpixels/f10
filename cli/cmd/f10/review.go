@@ -13,18 +13,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
-// The review noun: the remote review declared in the Review section of
-// project.md, read off the branch's pull or merge request. `pick` returns the
-// latest review nobody handled (or with --latest the latest at all), `wait`
-// polls it to done within a budget, `ack` leaves the handled marker, `settle`
-// the settled one, `trigger` performs the declared manual trigger. The
-// section's four facts (who, where it arrives, what triggers it, what
-// signals done and marks it handled) and the optional settled mark are the
-// whole configuration.
-//
-// Only ack, settle and trigger write to the host. trigger performs a manual
-// how that reads as a comment or a review request; any other is a human's
-// action, and pick says so when nothing is there.
+// The review noun reads the declared remote review off the branch's request.
+// The Review section's four facts and the optional settled mark are the whole
+// configuration; only ack, settle and trigger write to the host.
 func reviewCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "review",
@@ -96,9 +87,7 @@ func jsonFlag() cli.Flag {
 	return &cli.BoolFlag{Name: "json", Usage: "emit the review as JSON instead of markdown"}
 }
 
-// remoteReviewer binds the target's declared facts and host for one verb,
-// or refuses: no remote reviewer declared, a fact the parser could not
-// read, or no host CLI. Each refusal names what to fix.
+// remoteReviewer refuses before any host call, each refusal naming what to fix.
 func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
@@ -137,8 +126,7 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 	return newReviewer(ctx, h, f, cmd.Args().First())
 }
 
-// settledConflict refuses a settled mark the host could not tell apart from
-// the handled one.
+// settledConflict refuses a settled mark the host could not tell from handled.
 func settledConflict(f facts.Review) error {
 	switch {
 	case f.Settled == "":
@@ -170,8 +158,6 @@ func runReviewPick(ctx context.Context, cmd *cli.Command) error {
 	return writeReview(ctx, cmd, rv, r)
 }
 
-// runReviewWait polls pick until the review it returns is done, then
-// writes it.
 func runReviewWait(ctx context.Context, cmd *cli.Command) error {
 	rv, err := remoteReviewer(ctx, cmd)
 	if err != nil {
@@ -186,10 +172,9 @@ func runReviewWait(ctx context.Context, cmd *cli.Command) error {
 	return writeReview(ctx, cmd, rv, r)
 }
 
-// awaitReview polls pick every `every` until it returns a done review or
-// the budget runs out. Anything short of done - nothing posted yet, a review
-// still running, one not updated after since, a transient host error - is
-// "not yet", and the last reason is quoted when the budget expires.
+// awaitReview reads everything short of done (nothing posted, still running,
+// not updated after since, a transient host error) as "not yet", quoting the
+// last reason when the budget expires.
 func awaitReview(
 	ctx context.Context,
 	rv *reviewer,
@@ -240,8 +225,6 @@ func awaitReview(
 	}
 }
 
-// runReviewTrigger performs the manual trigger and prints what it did, the
-// url, and the time `wait --since` takes.
 func runReviewTrigger(ctx context.Context, cmd *cli.Command) error {
 	rv, err := remoteReviewer(ctx, cmd)
 	if err != nil {
@@ -304,8 +287,6 @@ func runReviewSettle(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// writeReview emits the review the way the reader asked: JSON for a
-// program, the markdown document otherwise.
 func writeReview(ctx context.Context, cmd *cli.Command, rv *reviewer, r remoteReview) error {
 	if cmd.Bool("json") {
 		enc := json.NewEncoder(cmd.Writer)
@@ -321,9 +302,6 @@ func writeReview(ctx context.Context, cmd *cli.Command, rv *reviewer, r remoteRe
 	return writeDoc(ctx, cmd.Writer, rv.h.Dir, reviewDoc(r))
 }
 
-// reviewDoc is the review as a markdown document: who and where in the
-// title, the facts a findings file needs on one line, then the body as the
-// reviewer wrote it.
 func reviewDoc(r remoteReview) string {
 	var b strings.Builder
 

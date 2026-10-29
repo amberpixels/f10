@@ -150,11 +150,9 @@ func Collect(ctx context.Context, in Inputs) Facts {
 	return f
 }
 
-// Unreachable is the board of a project no collector could run for: a
-// checkout whose instructions do not read, or a repository with no host
-// CLI. Every source carries the error, so a reader of several boards sees
-// the project failed rather than empty; a project with no checkout keeps
-// its local source skipped, as a remote read does.
+// Unreachable is the board of a project no collector could run for. Every
+// source carries the error, so a reader of several boards sees the project
+// failed rather than empty; a project with no checkout keeps local skipped.
 func Unreachable(p Project, err error, now time.Time, w Window, view string) Board {
 	b := Board{
 		Version: Version, GeneratedAt: now, View: view, Project: p, Window: w, Rows: []Row{},

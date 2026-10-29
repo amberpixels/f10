@@ -199,9 +199,8 @@ func TestPipelineRoundTrip(t *testing.T) {
 	}
 }
 
-// A step the pipeline names twice is told apart by its place: the walk of
-// the default flow puts the second judge at 6, a resumed judge stays put,
-// the place survives a save, and an undeclared leaf keeps it.
+// A step the pipeline names twice is told apart by its place: a resumed judge
+// stays put, the place survives a save, and an undeclared leaf keeps it.
 func TestLeafPlace(t *testing.T) {
 	dir := t.TempDir()
 	r := Fresh("at")
@@ -279,9 +278,8 @@ func TestLeafPlace(t *testing.T) {
 	}
 }
 
-// Show and `f10 status` print the same facts: every label Show prints must
-// come back with the same value from the Run, so a field added to one fails
-// here until the other carries it too.
+// Show and `f10 status` print the same facts: a field added to one fails here
+// until the other carries it too.
 func TestShowParity(t *testing.T) {
 	r := Fresh("parity")
 
@@ -355,9 +353,8 @@ func TestShowParity(t *testing.T) {
 	}
 }
 
-// The status line runs bin/f10-state.sh render, a bash reader of the file
-// this package writes. Each status must draw its own glyph, and a stopped
-// run its step, exactly as the bash writer's files drew them.
+// bin/f10-state.sh render, the status line's bash reader, must draw the file
+// this package writes exactly as it drew the bash writer's.
 func TestRenderParity(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash script")
@@ -501,10 +498,9 @@ func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
 	}
 }
 
-// f10-inject.sh tells the model to run f10-load-conventions.sh, gated by a per-session
-// marker. This pins the gate: a session's first skill is told, a later prompt
-// is not, --help and the step-less skills never are, and a compaction tells
-// again only where the session had them.
+// f10-inject.sh tells the model to run f10-load-conventions.sh once per
+// session: the first skill is told, later prompts, --help and step-less
+// skills are not, and a compaction tells again only where the session had them.
 func TestInject(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash script")
@@ -567,12 +563,10 @@ func TestInject(t *testing.T) {
 		return `{"session_id":"` + sid + `","hook_event_name":"SessionStart","source":"` + source + `"}`
 	}
 
-	// the first skill of a session is told to run f10-load-conventions.sh
 	if got := inject(typed("s1", "p1", "f10:plan", "GH-1")); !strings.Contains(got, "f10-load-conventions.sh") {
 		t.Errorf("first skill: got %q, want a line naming f10-load-conventions.sh", got)
 	}
 
-	// a later prompt in the same session, typed or model-invoked: the session holds them
 	if got := inject(typed("s1", "p2", "f10:ship", "GH-1")); got != "" {
 		t.Error("second prompt: injected again")
 	}
@@ -607,7 +601,6 @@ func TestInject(t *testing.T) {
 		}
 	}
 
-	// the model-invoked path injects for a session's first skill too
 	if got := inject(called("s3", "p1", "plan", "GH-1")); got == "" {
 		t.Error("first skill via Skill: not injected")
 	}
@@ -658,7 +651,6 @@ func TestSeedRecordsTheTask(t *testing.T) {
 				t.Errorf("Task = %q, want %q", r.Task, tc.want)
 			}
 
-			// a reference never opens capture
 			if tc.want != "" && r.Capture == "running" {
 				t.Errorf("Capture = running for a reference")
 			}

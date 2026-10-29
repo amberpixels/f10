@@ -8,7 +8,6 @@ import (
 	"testing"
 )
 
-// repoInput is input for one repository on a tracker.
 func repoInput(repo, key, def string, commits []Commit, prs []HostPR) Input {
 	in := input(commits, prs)
 	in.Repo, in.Project, in.DefaultBranch = repo, repo, def

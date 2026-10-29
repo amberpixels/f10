@@ -15,11 +15,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// Derive turns facts into the board: one row per task or taskless
-// request, its stage decided by the rules docs/board.md lists in order,
-// the first that matches winning, and each rule naming where its evidence
-// came from. It reads no clock and does no I/O: now and since are the
-// board's.
+// Derive is the board from facts: one row per task or taskless request,
+// staged by the first matching rule in docs/board.md, each naming its
+// evidence. No clock and no I/O: now and since are the board's.
 func Derive(f Facts, now, since time.Time) Board {
 	b := Board{
 		Version:     Version,
@@ -86,8 +84,6 @@ type row struct {
 	dropped  bool
 }
 
-// gather builds the rows: one per tracker task, then one per request,
-// joined to its task where it names one, then the local facts on each.
 func gather(f Facts, since time.Time) []*row {
 	var rows []*row
 
@@ -165,9 +161,8 @@ func gather(f Facts, since time.Time) []*row {
 	return rows
 }
 
-// membersOf is the tasks a request names, lead first: a bundle spelled
-// in its head branch, else the one its branch, its title, the state block
-// (riders included) or the first trailer names.
+// membersOf is the tasks a request names, lead first, from its most
+// explicit source: the head branch, the title, the state block, a trailer.
 func membersOf(prefix string, p PR) []string {
 	if members := ref.Members(prefix, p.Head); members != nil {
 		return members
@@ -194,15 +189,11 @@ func membersOf(prefix string, p PR) []string {
 	return nil
 }
 
-// local attaches this machine's facts to the rows they name: a branch
-// by the tasks it is linked to or spells, a run by its task and the
-// riders sharing its branch, plans, findings, verdicts and the ledger by
-// id.
+// local attaches this machine's facts to the rows they name.
 func local(f Facts, find func(string) *row, all func() []*row) {
 	l := f.Local
 
-	// one branch per task, chosen the same way every run: the one with a
-	// worktree, then the one linked by config, then the last by name
+	// one branch per task, picked by rank so every run picks the same one
 	type candidate struct {
 		name     string
 		branch   Branch
@@ -311,7 +302,6 @@ func local(f Facts, find func(string) *row, all func() []*row) {
 	}
 }
 
-// fill copies the request's facts onto the row and finds its base.
 func (r *row) fill() {
 	if p := r.pr; p != nil {
 		r.Where.PR = &PRRef{
@@ -367,8 +357,6 @@ func (r *row) fill() {
 		r.Who.Assignees = append([]string{r.Task.Assignee}, r.Who.Assignees...)
 	}
 
-	// the committers are whoever wrote the row's commits, from the request
-	// where its commits were read and from the worktree past its base
 	if r.pr != nil {
 		for _, c := range r.pr.Commits {
 			r.commit(c.Email)
@@ -391,7 +379,6 @@ func (r *row) fill() {
 	}
 }
 
-// commit adds one author email to the row's committers, once.
 func (r *row) commit(email string) {
 	if email == "" ||
 		slices.ContainsFunc(r.Who.Committers, func(e string) bool { return strings.EqualFold(e, email) }) {
@@ -401,12 +388,8 @@ func (r *row) commit(email string) {
 	r.Who.Committers = append(r.Who.Committers, email)
 }
 
-// person names who the row groups under: the tracker's assignee, else the
-// request's author, else the first committer, each mapped to a declared
-// person where one claims that identity, else spelled as the source gave
-// it. A host login claims the assignee too, since a tracker that is the
-// host's issues names its assignees by login. With no map a tracker name
-// and a host login stay two names.
+// person fills Who.Person. A host login claims the assignee too, since a
+// tracker that is the host's issues names its assignees by login.
 func (r *row) person(people []Person) {
 	assignee := ""
 	if r.Task != nil {
@@ -416,8 +399,6 @@ func (r *row) person(people []Person) {
 	r.Who.Person = personOf(people, assignee, r.Who.Author, r.Who.Committers)
 }
 
-// personOf is the one name a row groups under, by the rules row.person
-// gives.
 func personOf(people []Person, assignee, author string, committers []string) string {
 	committer := ""
 	if len(committers) > 0 {
@@ -461,7 +442,6 @@ func rank(worktree, linked bool) int {
 	return n
 }
 
-// ridersOf is the rows riding on lead's branch.
 func ridersOf(rows []*row, lead string) []*row {
 	var out []*row
 
@@ -474,8 +454,7 @@ func ridersOf(rows []*row, lead string) []*row {
 	return out
 }
 
-// touch moves the row's last activity forward, in UTC, so a board reads
-// the same in every zone.
+// touch keeps LastActivity in UTC so a board reads the same in every zone.
 func (r *row) touch(times ...time.Time) {
 	for _, t := range times {
 		if t.After(r.LastActivity) {
@@ -484,7 +463,6 @@ func (r *row) touch(times ...time.Time) {
 	}
 }
 
-// live reports a run still reporting on the task.
 func (r *row) live() bool { return r.run != nil }
 
 func (r *row) running() bool {
@@ -495,12 +473,10 @@ func (r *row) stopped() bool {
 	return r.live() && (state.Stopped(r.run.Ship) || state.Stopped(r.run.Plan) || state.Stopped(r.run.Capture))
 }
 
-// tracked is a task the tracker lists as open.
 func (r *row) tracked() bool { return r.Task != nil && !closed(r.Task.Status) }
 
 func (r *row) open() bool { return r.pr != nil && r.pr.Status == forge.Open }
 
-// counts is what the state block says, where the row has one.
 type counts struct {
 	Step              string
 	Round, Open, Asks int
@@ -649,8 +625,6 @@ func blockInReview(r *row) bool {
 	return ok && r.open() && reviewStep(b.Step) && b.Open > 0
 }
 
-// closed reads a tracker status as closed: the host's words and the
-// usual tracker ones.
 func closed(status string) bool {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "closed", "done", "merged", "resolved", "completed", "cancelled", "canceled":

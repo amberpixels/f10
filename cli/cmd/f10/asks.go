@@ -27,15 +27,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// asksConfigFile holds the user's ask settings, beside standup.md and
-// board.md; f10 only reads it.
+// asksConfigFile is the user's ask settings in ~/.f10; f10 only reads it.
 const asksConfigFile = "asks.md"
 
 // notifyTimeout bounds a notify command: a hung notifier never holds an
 // agent's ask or a drive's tick for long.
 const notifyTimeout = 10 * time.Second
 
-// recentAnswered is how far back `f10 asks list` shows answered asks.
 const recentAnswered = 24 * time.Hour
 
 func asksCommand() *cli.Command {
@@ -96,7 +94,6 @@ func runAsks(ctx context.Context, cmd *cli.Command) error {
 	return runAsksList(ctx, cmd)
 }
 
-// askView is an ask as `f10 asks list --json` prints it.
 type askView struct {
 	Key        string          `json:"key"`
 	Task       string          `json:"task"`
@@ -112,7 +109,6 @@ type askView struct {
 	AnsweredAt *time.Time      `json:"answered_at,omitempty"`
 }
 
-// askList is what `f10 asks list --json` prints.
 type askList struct {
 	Open     []askView `json:"open"`
 	Answered []askView `json:"answered"`
@@ -271,7 +267,6 @@ func findOpen(dir, token string) (asks.Ask, error) {
 	return asks.Ask{}, fmt.Errorf("%s asks in several projects: name one, %s", task, strings.Join(names, " or "))
 }
 
-// answersFor resolves `N=VALUE` arguments against a's questions.
 func answersFor(a asks.Ask, values []string) (string, error) {
 	given := map[int]string{}
 
@@ -328,10 +323,9 @@ func liveDeliver() deliverer {
 	}
 }
 
-// deliver moves a claimed answer to where it acts, and says where. A
-// drive's ask goes to its drive, which takes it on the next start; a
-// running drive takes it as it exits, so nothing runs twice. Any other ask
-// is sent to its agent, unless typed in the pane already.
+// deliver moves a claimed answer to where it acts. A drive's ask goes to its
+// drive, a running one taking it as it exits so nothing runs twice; any
+// other is sent to its agent, unless typed in the pane already.
 func (d deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.Ask) error {
 	switch {
 	case a.Drive > 0 && d.live(a):
@@ -397,8 +391,6 @@ func answerAsk(ctx context.Context, w io.Writer, dir, token string, values []str
 	return d.deliver(ctx, w, dir, claimed)
 }
 
-// walkAsks prompts for each open ask in turn, one line per question, Enter
-// taking the default and s skipping the ask.
 func walkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d deliverer) error {
 	open, err := asks.Open(dir)
 	if err != nil {
@@ -526,8 +518,6 @@ func runAsksResume(ctx context.Context, cmd *cli.Command) error {
 	return liveDeliver().deliver(ctx, cmd.Writer, dir, *a)
 }
 
-// resumeAskDrive asks the daemon to resume a's drive from its main
-// checkout, with this process's allowlisted environment.
 func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 	n := strconv.Itoa(a.Drive)
 
@@ -601,7 +591,6 @@ type asksConfig struct {
 	Notify string `yaml:"notify"`
 }
 
-// notifyAsk runs the user's notify command for a, else the desktop's.
 func notifyAsk(ctx context.Context, a asks.Ask) error {
 	var cfg asksConfig
 	if _, err := readUserConfig(asksConfigFile, &cfg); err != nil {
@@ -628,11 +617,9 @@ func notifyAsk(ctx context.Context, a asks.Ask) error {
 	return nil
 }
 
-// notifyArgv is the command to run for a, and the environment it adds:
-// the configured one through sh, else osascript on macOS or notify-send
-// where it is installed. A placeholder becomes a shell variable, never the
-// agent's text itself, so a question holding `$(...)` or a backtick is
-// printed, not run, however the template quotes it.
+// notifyArgv is the command run for a, and its environment. A placeholder
+// becomes a shell variable, never the agent's text, so a question holding
+// `$(...)` or a backtick is printed, not run, however the template quotes it.
 func notifyArgv(notify string, a asks.Ask, goos string, look func(string) (string, error)) ([]string, []string) {
 	question := a.Text
 	if len(a.Questions) > 0 {
@@ -701,8 +688,7 @@ func askFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 	}, true
 }
 
-// sharedRootOf is the storage root every checkout of the project shares,
-// as target.sharedRoot reads it.
+// sharedRootOf is target.sharedRoot for a layout alone.
 func sharedRootOf(lay *layout.Layout) string {
 	if lay.LegacyStorage && lay.MainRoot != "" {
 		return filepath.Join(lay.MainRoot, ".f10")

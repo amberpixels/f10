@@ -11,9 +11,8 @@ import (
 const inRepoStorage = "/.f10/"
 
 // FromWrite reads one file written with Write or Edit. storageRoot is the
-// checkout's resolved storage root, in-repo or out-of-tree; empty falls back
-// to the `.f10/` the path itself holds. Plan archives are moves, not new
-// plans, and are not matched. Meta is left for the caller to Stamp.
+// resolved storage root; empty falls back to the `.f10/` the path holds.
+// Plan archives are moves, not new plans, and are not matched.
 func FromWrite(path, storageRoot string) Observation {
 	for _, root := range storageRoots(path, storageRoot) {
 		rel, ok := strings.CutPrefix(filepath.Clean(path), root+string(filepath.Separator))

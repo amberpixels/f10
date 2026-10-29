@@ -9,11 +9,6 @@ import (
 	"testing"
 )
 
-// The parity suite pins this package to bin/f10-load-project.sh, the semantics
-// oracle. Every fixture runs both and compares the script's header lines
-// with the Go layout, so a semantic change to either side fails here
-// until both move.
-
 type scriptFacts struct {
 	checkoutRoot string
 	source       string

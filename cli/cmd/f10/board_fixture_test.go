@@ -19,22 +19,15 @@ import (
 )
 
 // The board checked on recorded runs: each fixture under testdata/board is
-// every git and host call the collectors make, with its answer, the
-// tracker's rows where a driver gives them, this machine's run state and
-// storage files, and beside it the Board JSON out (<name>.board.json). A
-// feed fixture names its window as the argument would, "" for the
-// default, and its span is cut by years at the fixture's now; a call the
-// fixture does not record fails it, so a feed reading per request fails.
-// `{root}` in a call, an answer or a path stands for the main checkout,
-// which the test creates under a temp dir. F10_UPDATE=1 rewrites the
-// boards; read the diff before keeping one.
+// every git and host call the collectors make with its answer, plus this
+// machine's state, beside the Board JSON out. A call the fixture does not
+// record fails it, so a feed reading per request fails. `{root}` stands for
+// the main checkout. F10_UPDATE=1 rewrites the boards; read the diff first.
 //
-// Record the calls of a new one from a real checkout, then fill in the
-// local state by hand:
+// Record a new one's calls from a public amberpixels checkout, never a
+// private one, then fill in the local state by hand:
 //
 //	F10_BOARD_RECORD='<checkout>|<name>|<id prefix>' go test ./cmd/f10 -run TestRecordBoardFixture
-//
-// Record only from public amberpixels repositories.
 type boardFixture struct {
 	Now    time.Time              `json:"now"`
 	Since  time.Time              `json:"since"`            // the state view's done window
@@ -107,8 +100,6 @@ func readBoardFixture(t *testing.T, path string) boardFixture {
 	return fx
 }
 
-// runBoardFixture lays the fixture out under a temp root, scripts its
-// calls and runs the real collectors and derive over it.
 func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	t.Helper()
 
@@ -237,9 +228,6 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 
 func sub2(s, root string) string { return strings.ReplaceAll(s, root, "{root}") }
 
-// TestRecordBoardFixture records the git and host calls of a board over a
-// real checkout. The local state (runs, files) is not recorded: fill it in
-// by hand where the fixture needs it.
 func TestRecordBoardFixture(t *testing.T) {
 	spec := os.Getenv("F10_BOARD_RECORD")
 	if spec == "" {

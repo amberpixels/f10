@@ -47,11 +47,9 @@ func (b Backend) Workspaces(ctx context.Context) ([]agentctl.Workspace, error) {
 	return wss, nil
 }
 
-// Open adopts a workspace Herdr already shows on the checkout rather than
-// opening another, since `worktree open` can answer with a second one
-// beside it: the first with an agent in a pane wins, else the first. Any
-// other is named in a note, never closed, since its panes may hold the
-// user's own work.
+// Open adopts a workspace Herdr already shows on the checkout (one with an
+// agent in a pane, else the first), since `worktree open` can answer with a
+// second one; others are noted, not closed: their panes may be the user's.
 func (b Backend) Open(ctx context.Context, path, label string) (agentctl.Opened, []string, error) {
 	listed, err := Workspaces(ctx, b.Dir)
 	if err != nil {

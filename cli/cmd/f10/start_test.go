@@ -24,11 +24,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// A fakes stands in for git, wt, herdr and the driver: every call is
-// recorded, every answer is scripted, and nothing is executed. The key is
-// the program name and its arguments joined by spaces. A key scripted with
-// several answers hands them out in order and repeats the last, which is
-// how a listing changes once something was created.
+// A fakes stands in for git, wt, herdr and the driver: every call recorded,
+// every answer scripted, nothing executed. A key scripted with several
+// answers hands them out in order, repeating the last, so a listing changes.
 type fakes struct {
 	// mu guards calls and answers: the board's collectors call concurrently
 	mu      sync.Mutex
@@ -49,8 +47,8 @@ func newFakes(t *testing.T) *fakes {
 	f.script("herdr workspace list", `{"result":{"workspaces":[]}}`)
 	// no local branch carries a task id past a prefix until a test says so
 	f.script(allHeads, "")
-	// no branch is linked to a task, and origin has no task branch, until a test says so
-	// and finish measures an empty branch, so it records no size
+	// no branch is linked to a task, origin has no task branch, and finish
+	// measures an empty branch (so records no size), until a test says so
 	f.absent = []string{
 		linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
 		"git rev-list --ancestry-path --merges",
@@ -975,10 +973,9 @@ func TestStartMarksStarted(t *testing.T) {
 	}
 }
 
-// Without worktrunk, git creates the worktree at the sibling path, and
-// --after swaps the default base for the task's branch and records the
-// dependency. The base task has no checkout here, so the prompt names it
-// without a plan path and the report says why.
+// Without worktrunk, git creates the worktree at the sibling path; --after
+// swaps the base and records the dependency, and a base with no checkout
+// here is named without a plan path, the report saying why.
 func TestStartWithGitAlone(t *testing.T) {
 	f := newFakes(t)
 	f.script(refsLocal, "")
@@ -1282,10 +1279,9 @@ func TestStartRefusesMissingBase(t *testing.T) {
 	}
 }
 
-// A second run for the same task opens the worktree that exists and does
-// not fail: Herdr already shows it, so its root pane is not at a prompt and
-// no agent is started or prompted. --after is noted as ignored for the base
-// since the branch keeps it, and the dependency is recorded all the same.
+// A second run for the same task opens the worktree that exists: Herdr
+// already shows it, so no agent is started or prompted. --after is noted as
+// ignored for the base, which the branch keeps, and the dependency recorded.
 func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 	f := newFakes(t)
 	f.has["wt"] = true

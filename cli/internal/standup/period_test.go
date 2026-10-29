@@ -10,7 +10,6 @@ import (
 // lands on the next local day.
 var kyiv = time.FixedZone("EEST", 3*60*60)
 
-// local is an hour of a 2026 day in kyiv.
 func local(m time.Month, d, h int) time.Time { return time.Date(2026, m, d, h, 0, 0, 0, kyiv) }
 
 // 2026-10-12 is a Monday.

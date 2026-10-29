@@ -87,13 +87,11 @@ func ghStackOf(branch string) string {
 	return "gh pr list --base " + branch + " --state open --limit 1000 --json number,url,headRefName"
 }
 
-// request scripts the one request whose head is branch.
 func (fx *janitorFixture) request(branch, state, sha, author string) {
 	fx.f.script(ghHeadOf(branch), `[{"number":9,"state":"`+state+`","url":"https://gh/pr/9","headRefName":"`+
 		branch+`","headRefOid":"`+sha+`","author":{"login":"`+author+`"}}]`)
 }
 
-// plan writes GH-1's plan and returns its path.
 func (fx *janitorFixture) plan(t *testing.T) string {
 	t.Helper()
 

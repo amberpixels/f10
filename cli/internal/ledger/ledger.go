@@ -1,12 +1,7 @@
-// Package ledger is f10's local record of what runs did: one append-only
-// events table in ~/.f10/f10.db, outside every repo, so stealth is
-// unaffected. Hooks write what they observe, `f10 state` what the model
-// claims, and artifacts (plans, findings) what they hold. Beside it,
-// task_refs keeps each task's last-read title and url, overwritten in place.
-//
-// A ledger write never fails its caller: hooks and `f10 state` append their
-// rows to a spool file beside the database, which SessionStart, Stop and
-// every reader replay into it.
+// Package ledger is f10's local record of what runs did: an append-only
+// events table in ~/.f10/f10.db, outside every repo so stealth is unaffected,
+// and task_refs, overwritten in place. A write never fails its caller: rows
+// go to a spool beside the database, replayed in by the next opener.
 package ledger
 
 import (

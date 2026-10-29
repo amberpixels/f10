@@ -52,10 +52,8 @@ func launchStatus(ctx context.Context, cmd *cli.Command, t *target, sid string) 
 	return true, writeTaskRows(cmd, rows, launchesHead)
 }
 
-// launchKids is the session's launches as rows to read, in launch order: a
-// start's task, a drive's tasks unless it is done or cancelled, then the
-// session run's own task when no launch names it. Each task shows once, and
-// a finished one not at all.
+// launchKids is the session's launches as rows, in launch order, then the
+// session run's own task when no launch names it; a finished task is left out.
 func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []childRow {
 	launches, err := state.Launches(state.Dir(), sid)
 	if err != nil {

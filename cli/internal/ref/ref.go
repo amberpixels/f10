@@ -1,12 +1,7 @@
-// Package ref looks up which task a lookaround command is about. Every noun
-// takes the same optional reference and falls back the same way, so the
-// cascade lives here once: an explicit id, then the id in the current branch
-// name, then the task this session's run state records.
-//
-// The prefix that makes a branch searchable comes from facts - the task id
-// format a project declares, or the one its name derives. Without a prefix
-// only an explicit reference is accepted, because no rule can tell a task
-// number in a branch name from any other number.
+// Package ref looks up which task a lookaround command is about, one cascade
+// for every noun: an explicit id, then the branch name, then this session's
+// run state. Without a prefix from facts only an explicit reference is taken,
+// since no rule can tell a task number in a branch name from any other number.
 package ref
 
 import (
@@ -24,29 +19,26 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// Where a looked-up reference came from. Reported so an error, or a caller
-// that wants to say "GH-22, from the branch", can name it.
+// Where a looked-up reference came from, so an error or a caller can name it.
 const (
 	OriginExplicit = "explicit"
 	OriginBranch   = "branch"
 	OriginSession  = "session"
 )
 
-// TaskKey is the local config key, under `branch.<name>.`, that links a
-// branch to its task: start writes it on a branch picked up from a PR,
-// whose name need not carry the id, and on a bundle's branch, for its lead.
+// TaskKey is the local config key under `branch.<name>.` linking a branch to
+// its task: a branch picked up from a PR need not carry the id in its name,
+// and a bundle's branch links its lead.
 const TaskKey = "f10-task"
 
 // RidersKey is the key, beside TaskKey, that lists a bundle's riders,
 // space-separated: the tasks one branch ships beside its lead.
 const RidersKey = "f10-tasks"
 
-// The keys `f10 start --after` writes beside TaskKey: the base task's id
-// and its bare branch name. Once the base merges, finish clears both and
-// sets LandedKey to the base's id, so the next step brings the default
-// branch in first. MovedKey is `f10 drive`'s: the base branch's head when
-// it moved past the dependent, so the dependent catches up with it next;
-// catchup clears it, as it clears LandedKey.
+// What `f10 start --after` records beside TaskKey. Finish swaps the After
+// keys for LandedKey so the next step brings the default branch in first;
+// MovedKey is drive's note that the base's head moved past the dependent,
+// for the next catchup, which clears both.
 const (
 	AfterKey       = "f10-after"
 	AfterBranchKey = "f10-after-branch"
@@ -54,19 +46,16 @@ const (
 	MovedKey       = "f10-base-moved"
 )
 
-// ModelKey records the model `f10 start --model` gave the branch's agent,
-// for a reader of the branch; absent for claude's default and on branches
-// started before it was written.
+// ModelKey is the model `f10 start --model` gave the branch's agent; absent
+// for claude's default.
 const ModelKey = "f10-model"
 
-// Separator joins a bundle's ids where they are typed and in its branch
-// name: `ABC-1+ABC-2`, the lead first.
+// Separator joins a bundle's ids, `ABC-1+ABC-2`, lead first.
 const Separator = "+"
 
 // ErrNoReference means the cascade ran out. It is wrapped with what each
-// tier actually had to offer, because "none found" alone sends a reader
-// looking in the wrong place - most often at a session tier that was never
-// available to them.
+// tier had to offer: "none found" alone sends a reader to the wrong tier,
+// most often a session tier a human's prompt never had.
 var ErrNoReference = errors.New("no task reference given")
 
 // A Ref is one looked-up task reference.
@@ -74,8 +63,7 @@ type Ref struct {
 	ID     string // "GH-22": the prefix and number in the project's format
 	Number string // "22": what a host CLI wants
 	Origin string
-	// Bundle is every id of the bundle the task belongs to, lead first, or
-	// nil for a task that ships alone
+	// Bundle is the bundle's every id, lead first; nil for a task shipping alone
 	Bundle []string
 }
 
@@ -103,7 +91,6 @@ func (r Ref) MemberRefs() []Ref {
 	return refs
 }
 
-// numberOf is the number a parsed id ends in: "22" for GH-22 and for 22.
 func numberOf(id string) string {
 	return id[strings.LastIndexByte(id, '-')+1:]
 }
@@ -140,14 +127,10 @@ type Lookup struct {
 	NoSession bool
 }
 
-// Find walks the cascade. An empty explicit reference falls through to
-// the branch and then to the session; a non-empty one that does not parse
-// is an error rather than a fallthrough, because a typo'd id should say so
-// instead of quietly opening whatever the branch happens to name.
-//
-// Any member of a bundle comes back with the whole bundle: a `+`-joined
-// token as the lead, a single id as itself, so reading a rider still reads
-// the rider and Head finds the branch.
+// Find walks the cascade. An explicit reference that does not parse is an
+// error, not a fallthrough, since a typo'd id should say so instead of opening
+// whatever the branch names; any bundle member comes back with the whole
+// bundle, so reading a rider reads the rider and Head finds the branch.
 func (r Lookup) Find(ctx context.Context, explicit string) (Ref, error) {
 	if strings.TrimSpace(explicit) != "" {
 		if !isURL(explicit) && strings.Contains(explicit, Separator) {
@@ -241,9 +224,7 @@ func (r Lookup) bundleOf(ctx context.Context, id string) ([]string, error) {
 	return nil, nil
 }
 
-// exhausted explains which tier came up empty and why. The session tier is
-// the one worth naming out loud: it keys on an agent session's id, so at a
-// human's prompt it is not empty, it is absent.
+// exhausted wraps ErrNoReference with what each tier had to offer.
 func (r Lookup) exhausted(ctx context.Context) error {
 	var why []string
 
@@ -262,16 +243,14 @@ func (r Lookup) exhausted(ctx context.Context) error {
 	return fmt.Errorf("%w (%s)", ErrNoReference, strings.Join(why, "; "))
 }
 
-// numberRE is the reference shapes a user types: a bare number, a `#123`,
-// or a prefixed id in any case. A url is accepted too - its last path
-// segment is held to the same shape, so an issue link pasted from the
-// browser (`.../issues/42`, `.../browse/ABC-7`) is as good as the id it
-// ends in.
+// numberRE is a typed reference: a bare number, `#123`, a prefixed id in any
+// case. A url's last path segment is held to the same shape, so a pasted
+// issue link is as good as the id it ends in.
 var numberRE = regexp.MustCompile(`^(?:([A-Za-z][A-Za-z0-9]*)-)?#?(\d+)$`)
 
-// suffixRE is the salted shape `f10 start` takes: a reference glued to a
-// word by `-` or `_` (`1454-attempt2`, `GH-1_v2`). The word salts the
-// branch so a second worktree for one task can live beside the first.
+// suffixRE is a reference salted with a word (`1454-attempt2`, `GH-1_v2`):
+// `f10 start` salts the branch so a second worktree for one task can live
+// beside the first.
 var suffixRE = regexp.MustCompile(`^((?:[A-Za-z][A-Za-z0-9]*-)?#?\d+)[-_]([A-Za-z0-9][A-Za-z0-9_-]*)$`)
 
 // SplitSuffix separates a salted reference into the reference and its
@@ -293,8 +272,6 @@ func isURL(token string) bool {
 	return strings.Contains(token, "://")
 }
 
-// lastSegment is where a url carries its reference: the final path
-// segment, query and fragment dropped.
 func lastSegment(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -330,8 +307,6 @@ func (r Lookup) parse(token, origin string) (Ref, error) {
 	return Ref{ID: id, Number: m[2], Origin: origin}, nil
 }
 
-// bundled parses token and attaches its bundle: members when the caller
-// already knows them, else the bundle local config records it in.
 func (r Lookup) bundled(ctx context.Context, token, origin string, members []string) (Ref, error) {
 	got, err := r.parse(token, origin)
 	if err != nil {
@@ -349,16 +324,10 @@ func (r Lookup) bundled(ctx context.Context, token, origin string, members []str
 	return got, nil
 }
 
-// fromBranch pulls the task id out of the current branch name, with its
-// bundle when the branch ships one. Real branch names carry the id in any
-// position and any case - `ABC-2049/dark-mode`, `feature/abc-123-fix-bug` -
-// so the prefix is anchored on a non-word boundary rather than on the start
-// of the string. A branch picked up from a PR may carry no id at all, so
-// the task its local config links it to (`branch.<name>.f10-task`) is read
-// first, and the riders recorded beside it.
-//
-// An unreadable link is an error, not a fall back to the name: a bundle's
-// branch read without its link would answer for the lead alone.
+// fromBranch reads the link local config holds before the branch name, since
+// a branch picked up from a PR may carry no id. An unreadable link is an
+// error, not a fall back to the name: a bundle's branch read without it would
+// answer for the lead alone.
 func (r Lookup) fromBranch(ctx context.Context) (string, []string, error) {
 	branch := gitx.Out(ctx, r.Dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if branch == "" {
@@ -428,9 +397,9 @@ func Members(prefix, branch string) []string {
 	return members
 }
 
-// Match is the task id in text: a branch name, a PR title, a commit
-// subject. It is fromBranch minus git, so standup reads titles and subjects
-// by the same rule and a test needs no checkout.
+// Match is the task id in text (a branch name, a PR title, a commit subject),
+// anchored on a non-word boundary rather than the start since the id sits in
+// any position and case (`feature/abc-123-fix-bug`).
 func Match(prefix, text string) string {
 	return Matcher(prefix)(text)
 }
@@ -453,7 +422,6 @@ func Matcher(prefix string) func(text string) string {
 	}
 }
 
-// sessionTask reads the task id the run state records for this session.
 func sessionTask() string {
 	sid := state.Session()
 	if sid == "" {

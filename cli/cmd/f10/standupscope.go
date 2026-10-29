@@ -10,11 +10,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// standupTracker is where the target's task ids live and the project its
-// report goes under. A host's issues belong to the repository: GH-12 in two
-// repositories is two issues, so each is its own project. Any other tracker
-// is shared by declaration, keyed by its kind and prefix, so repositories
-// on one Jira or Linear project merge their tasks.
+// standupTracker keys where the target's task ids live. A host's issues
+// belong to the repository (GH-12 in two repositories is two issues), so
+// each is its own project; any other tracker is shared by kind and prefix.
 func (t *target) standupTracker() (standup.Tracker, string) {
 	tr := standup.Tracker{Kind: t.eff.TrackerKind, Prefix: t.eff.IDPrefix}
 

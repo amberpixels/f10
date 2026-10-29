@@ -22,8 +22,6 @@ type Check struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// checks maps a scenario's check names to what they assert. dir is the
-// fixture's repo after the run.
 var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"plan":     checkPlan,
 	"intent":   checkIntent,
@@ -39,8 +37,6 @@ func result(name string, problems []string) Check {
 	return Check{Name: name, Pass: len(problems) == 0, Detail: strings.Join(problems, "; ")}
 }
 
-// checkPlan: the plan file exists with its Roles line, a stage, and the
-// Consequences and Gaps sections.
 func checkPlan(_ context.Context, dir string, s Scenario) Check {
 	body, err := os.ReadFile(filepath.Join(dir, ".f10", "plans", s.Task+".md"))
 	if err != nil {
@@ -65,7 +61,6 @@ func checkPlan(_ context.Context, dir string, s Scenario) Check {
 	return result("plan", problems)
 }
 
-// checkVerify: every verify command the scenario names passes on the result.
 func checkVerify(ctx context.Context, dir string, s Scenario) Check {
 	var problems []string
 
@@ -81,8 +76,8 @@ func checkVerify(ctx context.Context, dir string, s Scenario) Check {
 	return result("verify", problems)
 }
 
-// checkAccept: every acceptance command prints what it must. Verify alone
-// passes on an untouched fixture; this is what proves the feature exists.
+// checkAccept proves the feature exists: verify alone passes on an untouched
+// fixture.
 func checkAccept(ctx context.Context, dir string, s Scenario) Check {
 	problems := []string{}
 	if len(s.Accept) == 0 {
@@ -102,7 +97,6 @@ func checkAccept(ctx context.Context, dir string, s Scenario) Check {
 	return result("accept", problems)
 }
 
-// checkCommit: the flow left a commit past the fixture's initial one.
 func checkCommit(ctx context.Context, dir string, _ Scenario) Check {
 	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-list", "--all", "--count").Output()
 	if err != nil {
@@ -119,8 +113,6 @@ func checkCommit(ctx context.Context, dir string, _ Scenario) Check {
 
 var whereRE = regexp.MustCompile(`^where:\s*(\S+?):(\d+)`)
 
-// checkFindings: every review finding's where: line names a file that
-// exists and a line it has.
 func checkFindings(_ context.Context, dir string, s Scenario) Check {
 	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "reviews", s.Task, "*.md"))
 	if len(files) == 0 {
@@ -148,7 +140,6 @@ func checkFindings(_ context.Context, dir string, s Scenario) Check {
 
 var verdicts = []string{"proceed", "proceed with changes", "rethink", "stop"}
 
-// checkVerdict: judge wrote a verdict file with a verdict the hook parses.
 func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "verdicts", s.Task, "*.md"))
 	if len(files) == 0 {
@@ -174,8 +165,7 @@ func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 	return result("verdict", problems)
 }
 
-// checkIntent: plan wrote the change's intent, the lore entry show and why
-// print first. Presence is the check; the schema is checkLore's.
+// checkIntent checks presence only; the schema is checkLore's.
 func checkIntent(_ context.Context, dir string, s Scenario) Check {
 	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "lore", s.Task, "*-intent.md"))
 	if len(files) == 0 {
@@ -185,7 +175,6 @@ func checkIntent(_ context.Context, dir string, s Scenario) Check {
 	return result("intent", nil)
 }
 
-// checkLore: the change's lore entries pass f10's own schema lint.
 func checkLore(ctx context.Context, dir string, s Scenario) Check {
 	f10 := cmp.Or(s.f10, "f10")
 	cmd := exec.CommandContext(ctx, f10, "-C", dir, "lore", "validate", s.Task)

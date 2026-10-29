@@ -12,10 +12,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/model"
 )
 
-// resolveModel turns --model as typed into what the agent starts on, and
-// the line to print about it, if any. A name that is no model falls back
-// to claude's own default rather than refuse: the caller wanted the task
-// started, and a bad model would only fail at the agent's first prompt.
+// resolveModel turns --model as typed into what the agent starts on, and a
+// line to print about it. A name that is no model falls back to claude's
+// default rather than refuse: a bad model would only fail at the first prompt.
 func resolveModel(raw, settings string) (string, string) {
 	if strings.TrimSpace(raw) == "" {
 		return "", ""

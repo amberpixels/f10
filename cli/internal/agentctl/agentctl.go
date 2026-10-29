@@ -1,8 +1,6 @@
-// Package agentctl is what `f10 start`, `drive`, `finish` and `forward` ask
-// of whatever hosts a task's agent: a workspace per checkout, an agent
-// started and prompted in it, and whether that agent is working. Herdr is
-// the first backend; a backend owns its own layout (panes, sessions), so
-// none of it shows here.
+// Package agentctl is what start, drive, finish and forward ask of whatever
+// hosts a task's agent. Herdr is the first backend; a backend owns its own
+// layout (panes, sessions), so none of it shows here.
 package agentctl
 
 import (
@@ -14,13 +12,13 @@ import (
 	"time"
 )
 
-// ErrAgentNotFound matches, under errors.Is, a backend's answer that no
-// live agent goes by the name asked for.
+// ErrAgentNotFound matches, under errors.Is, a backend's answer that no live
+// agent goes by that name.
 var ErrAgentNotFound = errors.New("agent not found")
 
-// A Status is a workspace's agent as the backend reports it. The constants
-// are the values f10 acts on; a backend passes any other word through, so a
-// reader such as the board shows what the backend said.
+// A Status is a workspace's agent as the backend reports it; the constants
+// are the values f10 acts on, and any other word passes through for a
+// reader to show.
 type Status string
 
 const (
@@ -29,8 +27,7 @@ const (
 	StatusDone    Status = "done" // idle since a turn nobody has looked at yet
 )
 
-// A Workspace is one workspace as a listing reports it. Path is the
-// checkout it shows, or "" for one with no checkout.
+// A Workspace is one as a listing reports it; Path is "" with no checkout.
 type Workspace struct {
 	ID      string
 	Label   string
@@ -89,10 +86,10 @@ type Backend interface {
 	Close(ctx context.Context, id string) error
 }
 
-// AgentName names a task's agent. Herdr's live agent names share one
-// namespace across every project, capped at 32 characters, so the bare
-// name is cut to leave room for a short hash of the worktree path: the same
-// id in two checkouts never collides.
+// AgentName cuts the bare name to leave room for a short hash of the
+// worktree path: Herdr's live agent names share one namespace across every
+// project, capped at 32 characters, and the same id in two checkouts must
+// not collide.
 func AgentName(id, suffix, path string) string {
 	sum := sha256.Sum256([]byte(path))
 	base := BareAgentName(id, suffix)
@@ -100,9 +97,8 @@ func AgentName(id, suffix, path string) string {
 	return base[:min(len(base), 25)] + "-" + hex.EncodeToString(sum[:3])
 }
 
-// BareAgentName is the id lowercased, with the suffix so two attempts on
-// one task can both run: the whole name of an agent started before names
-// carried the path hash.
+// BareAgentName takes the suffix so two attempts on one task can both run;
+// an agent started before names carried the path hash still answers to it.
 func BareAgentName(id, suffix string) string {
 	name := strings.ToLower(id)
 	if suffix != "" {

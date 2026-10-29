@@ -30,7 +30,6 @@ func runDir(t *testing.T) string {
 // shell runs a drive's first argument as a shell script.
 func shell(argv []string) (string, []string) { return "/bin/sh", []string{"-c", argv[0]} }
 
-// serve runs s until the test ends, and waits for it to listen.
 func serve(t *testing.T, s *Server) <-chan error {
 	t.Helper()
 

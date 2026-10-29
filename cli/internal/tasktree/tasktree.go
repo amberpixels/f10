@@ -1,7 +1,6 @@
-// Package tasktree draws every task tree f10 prints: a row per task on
-// box-drawing lines down each After: chain, and under a row its title and
-// labelled notes. Skills relay this output verbatim instead of drawing the
-// glyphs themselves, so a tree reads the same wherever it is shown.
+// Package tasktree draws every task tree f10 prints. Skills relay this output
+// verbatim instead of drawing the glyphs themselves, so a tree reads the same
+// wherever it is shown.
 package tasktree
 
 import (
@@ -12,9 +11,8 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
-// A Cell is one column of a row. Text is what is measured and padded;
-// Render, when set, is what prints in its place (color, a link), so escape
-// sequences never count as columns.
+// A Cell is one column of a row: Text is measured and padded, Render prints
+// in its place, so escape sequences never count as columns.
 type Cell struct {
 	Text   string
 	Render func(text string) string
@@ -174,8 +172,6 @@ func (t Tree) Write(w io.Writer, nodes []Node) error {
 	return nil
 }
 
-// columns is each column's width under Align, the first measured with its
-// lead; nil when the tree does not align.
 func (t Tree) columns(nodes []Node, leads []string) []int {
 	if !t.Align {
 		return nil
@@ -238,8 +234,6 @@ func (c Cell) render() string {
 	return c.Render(c.Text)
 }
 
-// cut is s cut to what is left of the width from column at, an ellipsis
-// marking the cut; it keeps at least ten columns.
 func (t Tree) cut(s string, at int) string {
 	if t.Width <= 0 {
 		return s

@@ -1,8 +1,6 @@
-// Package findings reads a review's findings file, the shape steps/review.md
-// fixes: a header of `key: value` lines, a `## Categories` list with a count
-// per category, and a block per finding under `## Prior round` and
-// `## Findings`, each a `### <id> <title>` heading with `key: value` lines,
-// the `verdict:` and `reason:` that resolve appends among them.
+// Package findings reads a review's findings file in the shape
+// steps/review.md fixes: a `key: value` header, a categories list, and a
+// block per finding with the verdict and reason resolve appends.
 package findings
 
 import (

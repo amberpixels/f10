@@ -1,10 +1,7 @@
 // Package timing turns ledger events into the active time a run spent in a
-// step: a window between two step boundaries, minus every wait on the user
-// inside it. Tool run time stays in; only the user's time comes out.
-//
-// It reads, never writes, and never reports a wall duration: a window it
-// cannot bound, or one a wait with no end runs into, yields nothing rather
-// than a guess.
+// step: the window between two step boundaries, minus every wait on the user
+// inside it. It never reports a wall duration: a window it cannot bound, or
+// one an unended wait runs into, yields nothing rather than a guess.
 package timing
 
 import (
@@ -52,20 +49,15 @@ func Claim(e ledger.Event) (string, string, string) {
 	return words[0], words[1], words[2]
 }
 
-// Windows is every bounded plan and implement window in events, oldest
-// first by end, each with its active time.
-//
-// A `/f10:plan` run counts from its start to the plan it saves. Inside
-// `/f10:ship` a step counts from the claim that enters it to the claim that
-// leaves it: the next step, a stop status, the Stop backstop, or the next
-// run. A plan claimed `prior` or `skipped` was never planned here. Only a
-// session that recorded a wait counts.
+// Windows is every bounded plan and implement window, oldest first by end. A
+// plan run counts to the plan it saves; a ship step from the claim entering
+// it to the claim leaving it (next step, stop, backstop, next run). A plan
+// claimed `prior` or `skipped` was never planned here.
 func Windows(events []ledger.Event) []Window {
 	var out []Window
 
 	for _, evs := range bySession(events) {
-		// a session from before waits were recorded has none, not even the
-		// turn its run ended on: its windows would be wall time
+		// a session with no wait at all would measure wall time
 		waits := waitSpans(evs)
 		if len(waits) == 0 {
 			continue
@@ -109,7 +101,6 @@ func bySession(events []ledger.Event) [][]ledger.Event {
 	return out
 }
 
-// windows walks one session's events into its step windows.
 func windows(evs []ledger.Event) []Window {
 	var (
 		out     []Window
@@ -192,16 +183,10 @@ func windows(evs []ledger.Event) []Window {
 	return out
 }
 
-// waitSpans pairs each wait's start with its end. The hook ends a wait
-// before it opens the next, so a start followed by another start lost its
-// end: it ends there. One with neither after it has no end.
-//
-// A turn also ends at the first row only a working turn writes: Stop and
-// the next prompt are both async hooks, and a prompt hook that ran before
-// Stop wrote its marker leaves the turn open into the work that followed.
-// Only a claim or a run's start counts: both are written while the turn
-// runs, where an observed row from the last turn's async PostToolUse can
-// land after Stop.
+// waitSpans pairs each wait with its end; a start followed by a start lost
+// its end and ends there. A turn also ends at the next claim or run start,
+// since Stop and the next prompt are async hooks: a prompt hook racing Stop
+// would leave the turn open, and an observed row can land after Stop.
 func waitSpans(evs []ledger.Event) []span {
 	var out []span
 

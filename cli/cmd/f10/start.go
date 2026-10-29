@@ -21,14 +21,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The start verb is the one that leaves the checkout: a branch, a
-// worktree beside the main checkout, a Herdr workspace showing it, and a
-// claude agent in that workspace already prompted with the task. It
-// replaces three hand-offs across three tools, each a place to lose the
-// branch suffix, the base branch or the "keep it local" words.
-//
-// Herdr is a hard dependency: outside it the command refuses before
-// touching anything rather than degrade to claude in the current terminal.
+// The start verb replaces three hand-offs across three tools, each a place
+// to lose the suffix, the base or the "keep it local" words. Outside Herdr
+// it refuses before touching anything rather than degrade to a plain claude.
 func startCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "start",
@@ -65,10 +60,8 @@ func startCommand() *cli.Command {
 	}
 }
 
-// The prompt per mode. The default is the whole flow with every gap on
-// its default, through the flow --flow or --local names; --plan stops
-// after the plan; --discuss stops after the fetch, for a task the user
-// talks through in the agent's own pane.
+// --plan stops after the plan; --discuss after the fetch, for a task the
+// user talks through in the agent's own pane.
 const (
 	modeDefault = ""
 	modePlan    = "plan"
@@ -77,21 +70,14 @@ const (
 	agentKind = "claude"
 )
 
-// The keys --after writes under `branch.<name>.` in the local git config:
-// the base task's id and its bare branch name, which ship and the pr step
-// read with `git config --get`. Once the base merges, finish clears both and
-// sets f10-landed to the base's id, so ship and catchup bring the default
-// branch in before anything else runs, then clear the mark.
 const (
 	cfgAfter       = ref.AfterKey
 	cfgAfterBranch = ref.AfterBranchKey
 	cfgLanded      = ref.LandedKey
 	cfgMoved       = ref.MovedKey
 	cfgModel       = ref.ModelKey
-	// cfgTaskID links a branch whose name need not carry the id to its task
-	cfgTaskID = ref.TaskKey
-	// cfgRiders lists a bundle's riders beside the lead cfgTaskID names
-	cfgRiders = ref.RidersKey
+	cfgTaskID      = ref.TaskKey
+	cfgRiders      = ref.RidersKey
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
@@ -220,7 +206,6 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	switch {
 	case pick != nil:
-		// the branch and its base are the PR's
 		if err := fetchPickup(ctx, in.main, pick); err != nil {
 			return err
 		}
@@ -232,7 +217,6 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 		in.after = afterRef.Head().ID
 	case base == "":
-		// no flag names a base: the body's After: line may
 		if in.after, in.notes, err = afterFromBody(ctx, t.tracker(), in.main, r); err != nil {
 			return err
 		}
@@ -249,8 +233,8 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// what a bare status in this session's checkout lists; the task is
-	// already open, so a failed write is a line, not a failed start
+	// the task is already open, so a failed launch record is a line, not a
+	// failed start
 	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
 	if err := state.AppendLaunch(state.Dir(), state.Session(), launch); err != nil {
 		fmt.Fprintf(cmd.ErrWriter, "f10: recording the launch: %v\n", err)
@@ -264,8 +248,8 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// pickupFor is the PR the start argument names, or nil when it names a
-// task. A bare #n that the host knows as no PR is a task id, as before.
+// pickupFor is the PR the start argument names, or nil for a task id; a
+// bare #n the host knows as no PR is a task id.
 func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, error) {
 	number, probe := pullToken(token)
 	if number == "" {
@@ -496,9 +480,8 @@ func startedMove(t *target) func(context.Context, ref.Ref) error {
 	}
 }
 
-// markStarted moves every member of a freshly started task to its started
-// status. The worktree is the result, so a failure is a note, never a
-// refusal.
+// markStarted moves every member to its started status. The worktree is
+// the result, so a failure is a note, never a refusal.
 func markStarted(ctx context.Context, started func(context.Context, ref.Ref) error, task ref.Ref) []string {
 	if started == nil {
 		return nil
@@ -523,10 +506,8 @@ func checksParent(mode string, pick *pickup) bool {
 }
 
 // refuseStartParent stops a parent with unfinished subtasks before anything
-// is created, since its agent would ship the whole umbrella on one branch;
-// in a bundle, every member is checked. A task with a branch was started
-// already and reopens as before, as drive never treats a started task as a
-// parent.
+// is created, since its agent would ship the whole umbrella on one branch.
+// A task with a branch was started already and reopens as before.
 func refuseStartParent(ctx context.Context, in startInput) error {
 	if in.children == nil {
 		return nil
@@ -552,13 +533,9 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 	return nil
 }
 
-// settleBundle checks the bundle against the branch start found, before
-// anything is created, and returns the task with the riders that branch
-// ships. A task alone takes the riders of the bundle branch it leads, which
-// a branch fetched from origin carries in its name only. It refuses what
-// would split a task across two branches: a rider another branch already
-// ships, or a branch that exists with other riders than the ones typed,
-// since riders are fixed at start.
+// settleBundle refuses what would split a task across two branches, a rider
+// another branch ships or a branch reopened with other riders than typed,
+// since riders are fixed at start; a task alone takes its branch's riders.
 func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
 	if existing != "" {
 		lead, riders, err := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
@@ -624,10 +601,8 @@ func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
 	return nil
 }
 
-// An openedTask is what openTask leaves behind: the branch, its worktree,
-// the workspace showing it, the dependency recorded, the plan the worktree
-// holds, and whether the agent in it was started by this call and so waits
-// for its first prompt.
+// An openedTask is what openTask leaves behind; fresh says this call started
+// the agent, which so waits for its first prompt.
 type openedTask struct {
 	task   ref.Ref // the task, with the riders its branch ships
 	branch string
@@ -639,11 +614,9 @@ type openedTask struct {
 	notes  []string
 }
 
-// openTask runs everything start does short of the prompt: branch name,
-// base, existing branch, worktree, dependency, workspace, agent. Every
-// lookup that can refuse runs before the first thing is created, and the
-// first thing created is the worktree. Both start and drive adopt main's
-// plan; drive prompts the agent itself, one skill at a time.
+// openTask runs everything start does short of the prompt. Every lookup
+// that can refuse runs before the first thing is created, the worktree;
+// drive adopts main's plan too but prompts the agent itself, skill by skill.
 func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	settled, err := branchFor(ctx, in)
 	if err != nil {
@@ -721,9 +694,8 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		}
 	}
 
-	// the dependency is a fact about the branch, recorded once the branch
-	// exists - whether this run made it or found it, since a branch started
-	// without --after can still be stacked by running start again with it
+	// the dependency is recorded once the branch exists, made or found: a
+	// branch started without --after can still be stacked by a second start
 	if dep != nil {
 		if err := recordDependency(ctx, in.main, name, dep); err != nil {
 			return openedTask{}, err
@@ -809,9 +781,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	return o, nil
 }
 
-// A settledBranch is what start knows before creating anything: the name
-// it would give, why that name is the bare id, the base, the dependency,
-// and the branch the task already has.
+// A settledBranch is what start knows before creating anything.
 type settledBranch struct {
 	name     string
 	slugNote string
@@ -861,11 +831,9 @@ func shellWait(w io.Writer, pane string) func(waited, limit time.Duration) {
 	}
 }
 
-// needsAgent decides whether the workspace gets an agent started in its
-// root pane. A fresh one always does. One Herdr already showed keeps the
-// agent in that pane, whatever its name; with none, as after a start that
-// failed on a busy pane, an idle shell gets one and anything else the user
-// runs there is left alone.
+// needsAgent decides whether the workspace gets an agent in its root pane:
+// one Herdr already showed keeps its agent whatever its name, and with none
+// (a start that failed on a busy pane) only an idle shell gets one.
 func needsAgent(ctx context.Context, dir string, ws agentctl.Opened) (bool, string, error) {
 	if !ws.AlreadyOpen {
 		return true, "", nil
@@ -948,10 +916,9 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 	return fmt.Sprintf("%s %s is at the same commit as the default branch %s", base.flag, base.ref, def)
 }
 
-// locatePlan finds the base task's plan: in the plans dir every checkout
-// shares, else in the base's worktree when that keeps its own .f10 from
-// before storage moved to main's. The notes name what was not found, so a
-// prompt that cannot cite the plan is explained beneath the report.
+// locatePlan finds the base task's plan in the shared plans dir, else in the
+// base's worktree when that still keeps its own .f10. The notes name what
+// was not found, so a prompt that cannot cite the plan is explained.
 func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string {
 	var candidates []string
 	if plansDir != "" {
@@ -1021,14 +988,10 @@ func promptAgent(ctx context.Context, path, id, suffix, text string) error {
 	return err
 }
 
-// prompt is what the agent is told: the skills, the dependency where the
-// task has one, and the driven marker. A saved plan, or a flow with no
-// plan entry, turns plan-then-ship into ship alone, told the flow by
-// name unless it is default; --plan still plans, and the plan step
-// archives the saved one. Driven mode takes every gap on its default and the fetch step carries
-// the dependency's contract, so the prompt states neither. A picked-up PR is
-// summarised and discussed, or planned from its diff with --plan: never
-// shipped unread. A note goes only to the prompts that stop and wait.
+// prompt is what the agent is told. A saved plan, or a flow with no plan
+// entry, turns plan-then-ship into ship alone. Driven mode takes every gap
+// on its default and fetch carries the dependency's contract, so the prompt
+// states neither; a picked-up PR is never shipped unread.
 func prompt(mode string, fl shipFlow, id string, dep *dependency, plan string, pick *pickup, note string) string {
 	switch {
 	case pick != nil && mode == modePlan:
@@ -1059,11 +1022,9 @@ func prompt(mode string, fl shipFlow, id string, dep *dependency, plan string, p
 	return driven(p)
 }
 
-// discussPrompt fetches the task and stops. It is plain text with no driven
-// marker: the user talks to this agent in its own pane, and its questions
-// belong there. Comments and images come with `f10 task read`'s output and the
-// fetch-adapter fallback with its error, so the prompt names neither. The
-// user's note runs after the summary and before the wait.
+// discussPrompt fetches the task and stops. It carries no driven marker:
+// the user talks to this agent in its pane, and its questions belong there.
+// `f10 task read` brings comments and images, so the prompt names neither.
 func discussPrompt(id string, dep *dependency, plan, note string) string {
 	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines.", id)
 

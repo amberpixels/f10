@@ -40,10 +40,9 @@ var (
 	bareURL = regexp.MustCompile(`https?://[^\s<>()"'\[\]]+`)
 )
 
-// publicClient refuses urls whose host resolves to a loopback, link-local
-// or unspecified address: local services and cloud metadata. The check is
-// on the url's host, never the dialed address, which is the proxy when one
-// is set; private ranges stay allowed for self-hosted trackers.
+// publicClient refuses a url whose host resolves to a loopback, link-local
+// or unspecified address (local services, cloud metadata). Private ranges
+// stay allowed for self-hosted trackers; the dialed address may be a proxy.
 var publicClient = &http.Client{
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
@@ -145,19 +144,17 @@ type Result struct {
 	Err  error
 }
 
-// A Downloader fetches images. Authorize, when set, may add credentials to
-// each first request; the client decides what survives a redirect. A nil
-// Client refuses local addresses, since the urls come from task text
-// anyone may have written.
+// A Downloader fetches images. Authorize may add credentials to each first
+// request; the client decides what survives a redirect. A nil Client refuses
+// local addresses, since the urls come from task text anyone may have written.
 type Downloader struct {
 	Client    *http.Client
 	Authorize func(*http.Request)
 }
 
-// Download fetches up to maxImages urls into dir, named 1.<ext>, 2.<ext>,
-// ... in link order; the rest fail as over the limit. The set lands in a
-// sibling first and replaces dir whole, so a concurrent read of the same
-// task never sees a half-written or emptied dir.
+// Download fetches up to maxImages urls into dir, numbered in link order; the
+// rest fail as over the limit. The set lands in a sibling and replaces dir
+// whole, so a concurrent read never sees a half-written or emptied dir.
 func (d Downloader) Download(ctx context.Context, dir string, urls []string) ([]Result, error) {
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", filepath.Dir(dir), err)

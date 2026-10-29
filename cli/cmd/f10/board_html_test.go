@@ -16,17 +16,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 )
 
-// The HTML report checked on the recorded boards: the JSON it embeds is
-// the board it was given, the page reaches for nothing outside itself,
-// and its renderer reduces the board to the same lines the terminal draws.
-// The last check runs the page's script under node and skips without it.
+// The HTML report checked on the recorded boards: the embedded JSON is the
+// board given, the page reaches for nothing outside itself, and its renderer
+// matches the terminal's lines (run under node, skipped without it).
 
-// boardDataOpen opens the page's data tag; the JSON sits between it and
-// the next closing script tag.
 const boardDataOpen = `<script type="application/json" id="board">`
 
-// htmlBoards is every recorded board, plus one with nothing to show and
-// one with the shapes the recorded ones lack.
+// htmlBoards is every recorded board plus the shapes they lack.
 func htmlBoards(t *testing.T) map[string]lookaround.Board {
 	t.Helper()
 
@@ -165,7 +161,6 @@ func renderPage(t *testing.T, b lookaround.Board) string {
 	return buf.String()
 }
 
-// embeddedJSON cuts the board out of a rendered page.
 func embeddedJSON(t *testing.T, page string) string {
 	t.Helper()
 
@@ -249,7 +244,6 @@ func TestBoardHTMLStandsAlone(t *testing.T) {
 	}
 }
 
-// scriptBody is the renderer, cut out of the page for node to run.
 func scriptBody(t *testing.T) string {
 	t.Helper()
 
@@ -266,15 +260,11 @@ func scriptBody(t *testing.T) string {
 	return body
 }
 
-// A rendered is one board through the page's script under node: its
-// model, and the markup render() made of it.
 type rendered struct {
 	Model boardModel `json:"model"`
 	HTML  string     `json:"html"`
 }
 
-// renderUnderNode runs the page's script on every board and returns what
-// it drew; it skips the test where node is absent.
 func renderUnderNode(t *testing.T) map[string]rendered {
 	t.Helper()
 

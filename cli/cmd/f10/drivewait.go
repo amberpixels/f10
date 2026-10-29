@@ -15,12 +15,9 @@ import (
 // a prompt mark or a cancel is seen within it.
 var wakeStep = time.Second
 
-// wake waits up to d, and returns sooner once the drive's record, or a
-// per-session file about one of its worktrees (a run file, a prompt mark,
-// an open wait), is written after the wait began. Other sessions' writes
-// to the shared state dir do not wake it. A stat a second of a few dozen
-// small files costs nothing, and sees in-place writes a directory watch
-// misses.
+// wake returns before d once the drive's record or a per-session file about
+// one of its worktrees is written. A stat a second of a few dozen small
+// files costs nothing, and sees in-place writes a directory watch misses.
 func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
 	start := time.Now()
 	deadline := start.Add(d)
@@ -54,8 +51,6 @@ func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// written reports the file record, or a file in dir about one of roots,
-// modified after since.
 func written(dir, record string, roots []string, since time.Time) bool {
 	if record != "" {
 		if fi, err := os.Stat(record); err == nil && fi.ModTime().After(since) {

@@ -1,12 +1,7 @@
-// Package state owns the run state: one small `key value` file per session
-// under ~/.claude/f10/state, keyed by session rather than by repo because two
-// sessions over one checkout are two runs.
-//
-// This package is the only writer (`f10 state`, `f10 hook`) and holds the
-// rules. The status line's renderer, `bin/f10-state.sh render`, is the other
-// reader: it runs on every refresh, so it stays bash and reads the same
-// format with the same tolerances - unknown keys ignored, a non-numeric
-// timestamp read as stale. The render parity test pins that.
+// Package state owns the run state: one `key value` file per session, keyed
+// by session rather than by repo because two sessions over one checkout are
+// two runs. The status line's renderer, `bin/f10-state.sh render`, reads the
+// same format in bash on every refresh; the render parity test pins the two.
 package state
 
 import (
@@ -23,8 +18,7 @@ import (
 	"time"
 )
 
-// DefaultTTL is how long a run counts as live with nothing reporting: the
-// point past which the badge stops rendering.
+// DefaultTTL is how long a run counts as live with nothing reporting.
 const DefaultTTL = 24 * time.Hour
 
 const (
@@ -38,9 +32,7 @@ const (
 // Phases in the order the badge draws them.
 var Phases = []string{"capture", "plan", "ship"}
 
-// A Run is one session's state file, read back. Every phase holds one of
-// the Statuses: pending, running, done, failed, partial, skipped,
-// prior, blocked.
+// A Run is one session's state file, read back; each phase holds a Statuses.
 type Run struct {
 	Session string `json:"session"`
 	Task    string `json:"task,omitempty"`
@@ -60,9 +52,8 @@ type Run struct {
 	Note     string   `json:"note,omitempty"` // why the run stopped
 	Next     string   `json:"next,omitempty"` // what unblocks it
 	Ask      string   `json:"ask,omitempty"`  // the question a driven run stopped on, options included
-	// Done is the step with no phase of its own (catchup) whose report is
-	// out, and DoneAt when it said so: a reader compares DoneAt against the
-	// prompt it sent, since a later write to this file moves Updated alone
+	// Done is the phaseless step (catchup) whose report is out, DoneAt when;
+	// a reader compares DoneAt, since any later write moves Updated alone
 	Done    string    `json:"done,omitempty"`
 	DoneAt  time.Time `json:"done_at,omitzero"`
 	Updated time.Time `json:"updated"`
@@ -93,30 +84,27 @@ func TTL() time.Duration {
 	return DefaultTTL
 }
 
-// Session is the session this process runs in: the explicit override, then
-// the id Claude Code exports into every Bash tool call. Empty from a plain
-// terminal. A hook names its session in the payload instead.
+// Session is the override, else the id Claude Code exports into every Bash
+// tool call; empty from a plain terminal. A hook names its session in the
+// payload instead.
 func Session() string {
 	return cmp.Or(os.Getenv(sessionEnv), os.Getenv(claudeSessionEnv))
 }
 
 var unsafe = regexp.MustCompile(`[^A-Za-z0-9._-]`)
 
-// Path is the state file for a session: the id sanitized, since it names a
-// file, the way the renderer sanitizes it.
+// Path sanitizes the session id as the renderer does, since it names a file.
 func Path(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+fileExt)
 }
 
-// StartedPath is the mark a session's start leaves beside its state file:
-// when the session loaded the plugin, for doctor to compare with the
-// install's update time.
+// StartedPath marks when the session loaded the plugin, for doctor to compare
+// with the install's update time.
 func StartedPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".started")
 }
 
-// WaitPath is the wait a session has open, beside its state file: what the
-// run waits on and since when, until the hook that ends it.
+// WaitPath is the wait a session has open: what on and since when.
 func WaitPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".wait")
 }
@@ -267,10 +255,9 @@ func Stopped(status string) bool {
 	return status == "failed" || status == "partial" || status == "blocked"
 }
 
-// PhaseText is the status with its step attached where one is known and
-// belongs to that status: `running: implement`, `blocked at judge`. The
-// leaf is a pipeline step, so only ship carries one, but for the judge
-// fetch runs on a stale task before plan.
+// PhaseText is the status with its step where one belongs to it: `running:
+// implement`, `blocked at judge`. The leaf is a pipeline step, so only ship
+// carries one, except plan's judge, which fetch runs before planning.
 func (r *Run) PhaseText(phase string) string {
 	status := r.Status(phase)
 

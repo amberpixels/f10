@@ -33,14 +33,10 @@ type Record struct {
 	Entries []Entry `json:"entries"` // decisions, findings and lessons on the line
 }
 
-// Why answers for line of path, both repo-relative: blame the line, follow
-// the commit's Change: trailers (else Task:) to their changes, and keep the
-// entries anchored on the line. A commit with no trailer, or whose changes
-// hold nothing, falls back to entries anchored at the blamed commit on the
-// same path. The line is the working tree's, or the file's at rev: a
-// reviewer asks about a line the diff rewrote at the base, where the
-// answer is the earlier change and not this one. Nothing found is
-// ErrNoRecord.
+// Why is the lore on line of path: entries anchored there in the changes the
+// blamed commit's Change: (else Task:) trailers name, else entries anchored at
+// that commit on the path; none is ErrNoRecord. rev blames the file as that
+// revision had it, so a rewritten line answers with the change that wrote it.
 func (s *Store) Why(ctx context.Context, path string, line int, rev string) (*WhyResult, error) {
 	commit, err := s.Git.BlameLine(ctx, path, line, rev)
 	if err != nil {

@@ -1,10 +1,6 @@
-// Package lookaround collects facts about one project and derives what
-// changed in a window (the feed) or where each of its tasks stands (the
-// state). Collectors (host, tracker, local) fetch and interpret nothing;
-// DeriveFeed and Derive are pure functions, facts in, rows out, and the
-// only places a group or a stage is decided; the Board is the JSON every
-// renderer reads, docs/board.md its spec and docs/board.schema.json its
-// schema.
+// Package lookaround collects facts about one project and derives the feed
+// (what changed in a window) or the state (where each task stands). Only
+// Derive and DeriveFeed decide a stage or a group; docs/board.md is the spec.
 package lookaround
 
 import (
@@ -16,8 +12,7 @@ import (
 // field's meaning bumps it with the spec.
 const Version = 4
 
-// The two views a board is: what changed in the window, and where every
-// task stands.
+// The two views a board is.
 const (
 	ViewFeed  = "feed"
 	ViewState = "state"
@@ -185,9 +180,8 @@ type Who struct {
 	Assignees   []string `json:"assignees,omitempty"`
 	Reviewers   []string `json:"reviewers,omitempty"`  // requested and not yet heard from
 	Committers  []string `json:"committers,omitempty"` // the author emails on the row's commits
-	// Person is the one name the row groups under: the tracker assignee's,
-	// else the author's, else the first committer's, each through the
-	// people map where one matches, else as the source spelled it.
+	// Person is the one name the row groups under: the assignee, else the
+	// author, else the first committer, through the people map where it matches.
 	Person string `json:"person,omitempty"`
 }
 

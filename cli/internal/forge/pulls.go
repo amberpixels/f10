@@ -13,10 +13,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// The pull requests a host lists, read into one shape for both CLIs. Heavy
-// fields are asked for only where used: commit lists for the requests a
-// reader wants trailers or activity from, reviews and notes where someone's
-// part in a review matters.
+// The pull requests a host lists, in one shape for both CLIs. Heavy fields
+// (commits, reviews, notes) are asked for only where a reader uses them.
 
 // PRLimit caps each gh search. Reaching it is an error rather than a
 // report silently missing the rest.
@@ -595,10 +593,9 @@ func (h Host) listMRs(ctx context.Context, q url.Values) ([]PR, error) {
 	return out, nil
 }
 
-// standupMRs is Pulls on GitLab: the MR list API filters by author,
-// reviewer and update time where glab mr list cannot. A reviewer's part is
-// read from the MR's notes: an approval leaves a system note, a comment a
-// plain one, and both carry the time the list's reviewers field lacks.
+// standupMRs is Pulls on GitLab: the MR list API filters by author, reviewer
+// and update time where glab mr list cannot. A reviewer's part comes from the
+// notes, which carry the time the list's reviewers field lacks.
 func (h Host) standupMRs(ctx context.Context, login string, since time.Time) ([]PR, error) {
 	list := func(filter string) ([]PR, error) {
 		q := url.Values{"state": {"all"}, "updated_after": {since.UTC().Format(time.RFC3339)}, "per_page": {"100"}}

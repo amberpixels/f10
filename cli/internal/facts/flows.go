@@ -10,10 +10,9 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// A flow is every step a task runs through, in order: `plan`, when it leads,
-// runs only for a task with no plan file, and /f10:ship runs the entries
-// after it. An entry is a step or `step:arg` (`review:local`,
-// `cleanup:comments,prose`, `deploy:staging`), one shell word each.
+// A flow is every step a task runs through: a leading `plan` runs only for a
+// task with no plan file, and /f10:ship runs the entries after it. An entry
+// is a step or `step:arg`, one shell word each.
 
 // DefaultFlow is the flow a project that declares none runs.
 const DefaultFlow = "plan implement pr"
@@ -22,10 +21,9 @@ const DefaultFlow = "plan implement pr"
 // none, folded into the default flow when old keys are converted.
 const legacyDriveChain = "plan judge ship review resolve finish"
 
-// Flow is one declared flow's entries, as written: a YAML list, or one
-// string split on whitespace and arrows, never on commas, which an
-// entry's argument may hold. The old `review (local)` form stays one
-// entry here; normalizeEntry turns it into `review:local`.
+// Flow is one declared flow's entries as written: a list, or one string
+// split on whitespace and arrows, never on commas, which an argument may
+// hold. The old `review (local)` form stays one entry until normalizeEntry.
 type Flow []string
 
 // UnmarshalYAML accepts a sequence of entries or one string.
@@ -209,9 +207,8 @@ func anyHalf(arg string) bool {
 }
 
 // checkRemoteHalves warns about a CI half that cannot run: no remote
-// reviewer declared, or no pr or push before it for a review to arrive on.
-// Warnings, not errors: a legacy drive chain converts to a trailing
-// review:ci on a default that may open no PR.
+// reviewer, or no pr or push before it. Warnings, since a legacy drive chain
+// converts to a trailing review:ci on a default that may open no PR.
 func (e *Effective) checkRemoteHalves() {
 	for _, name := range e.FlowNames() {
 		published := false
@@ -240,10 +237,8 @@ func (e *Effective) checkRemoteHalves() {
 }
 
 // legacyFlows converts the old keys: each pipeline becomes a flow, led by
-// plan unless it was planless. The drive chain folds into default only,
-// since only drive ran it: a judge before ship goes after plan, a review
-// after ship is appended unless the pipeline already reviews, and a
-// trailing finish turns drive_finish on.
+// plan unless planless. The drive chain folds into default alone, since only
+// drive ran it; a trailing finish turns drive_finish on.
 func legacyFlows(pipes map[string][]string, planless, chain []string, remote bool) (map[string][]string, bool) {
 	flows := map[string][]string{}
 

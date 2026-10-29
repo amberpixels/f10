@@ -19,16 +19,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The forward verb hands a command to the agent already working on a task.
-// A `/f10:ship` typed outside the task's `f10 start` worktree would run on
-// the wrong branch, without the plan, so the skills call this first: it
-// resolves task to branch, branch to worktree, worktree to Herdr workspace
-// and workspace to the agent start named, and submits the text as that
-// agent's next prompt. It returns at submission; the outcome lands in that tab.
-//
-// Three outcomes, told apart by exit code so a skill can branch on one
-// call: 0, forwarded, with the report; 3, the task is here (or has no
-// worktree), run it locally; anything else, a failure.
+// The forward verb hands a command to the agent already working on a task:
+// a `/f10:ship` typed outside the task's worktree would run on the wrong
+// branch, without the plan, so the skills call this first.
 func forwardCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "forward",
@@ -42,9 +35,8 @@ func forwardCommand() *cli.Command {
 // checkout" - the driver contract's code for declining, read the same way.
 const exitHere = 3
 
-// drivenMarker is the token a skill reads as "this run is driven from
-// another session": no interactive question, every ask through run state
-// (modes/driven.md). It travels anywhere in the argument, like --dry-run.
+// drivenMarker tells a skill the run is driven from another session: no
+// interactive question, every ask through run state (modes/driven.md).
 const drivenMarker = "--driven"
 
 func runForward(ctx context.Context, cmd *cli.Command) error {
@@ -107,9 +99,7 @@ type forwardInput struct {
 	since    time.Time // runs last updated before it are not read: the agent that wrote them is gone
 }
 
-// forward runs the flow: branch and checkout, the here-check, Herdr, the
-// workspace, the idle check, the prompt, the report. Every refusal comes
-// before the one thing that leaves this process.
+// forward: every refusal comes before the one thing that leaves this process.
 func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 	name, path, err := taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
 	if err != nil {
@@ -152,8 +142,6 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 	}, nil)
 }
 
-// hereReason says why the command runs locally rather than being forwarded,
-// or "" when another checkout holds the task's branch.
 func hereReason(in forwardInput, name, path string) string {
 	switch {
 	case name == "":
@@ -167,11 +155,9 @@ func hereReason(in forwardInput, name, path string) string {
 	return ""
 }
 
-// refuseStalled stops a forward to an agent that is idle while the run it
-// reports still says running: it is sitting on something f10 cannot see - a
-// Claude Code permission dialog, a question asked outside driven mode - and a
-// prompt submitted behind that would wait with it. A blocked run with an idle
-// agent is the driven state this verb exists for, and is sent to.
+// refuseStalled stops a forward to an agent idle while its run says running:
+// it sits on something f10 cannot see (a permission dialog, a question asked
+// outside driven mode), and a prompt behind that would wait with it.
 func refuseStalled(in forwardInput, ws *agentctl.Workspace, agent, root string) error {
 	if ws.Status != agentctl.StatusIdle {
 		return nil
@@ -202,9 +188,8 @@ func refuseStalled(in forwardInput, ws *agentctl.Workspace, agent, root string) 
 	return nil
 }
 
-// driven marks an f10 command as sent from outside, so the agent knows it
-// is driven from its first turn. Plain text - an answer, a steering note -
-// is sent as it is: the agent it reaches already knows.
+// driven marks an f10 command as sent from outside; plain text (an answer, a
+// steering note) goes as it is, since the agent it reaches already knows.
 func driven(text string) string {
 	if !strings.HasPrefix(text, "/f10:") || slices.Contains(strings.Fields(text), drivenMarker) {
 		return text

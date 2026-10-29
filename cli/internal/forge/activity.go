@@ -54,11 +54,9 @@ type Activity struct {
 	QuietOldest time.Time // the oldest quiet request's creation time
 }
 
-// ActivityQuery is the GraphQL a GitHub feed reads: every request updated
-// since the window's start with its timeline since then, and the open
-// requests nobody touched, counted, the oldest first. gh pages it on the
-// main search's cursor; a timeline keeps its newest 100 events, which a
-// request rarely passes within a window.
+// ActivityQuery is the GraphQL a GitHub feed reads: requests updated since
+// the window's start with their timeline, and the quiet open ones counted.
+// A timeline keeps its newest 100 events, which a request rarely passes.
 const ActivityQuery = `query($q: String!, $quiet: String!, $since: DateTime!, $endCursor: String) {
   search(query: $q, type: ISSUE, first: 50, after: $endCursor) {
     pageInfo { hasNextPage endCursor }
@@ -84,9 +82,7 @@ const ActivityQuery = `query($q: String!, $quiet: String!, $since: DateTime!, $e
 }`
 
 // Activity reads what the repository did since since: one paged query on
-// GitHub; on GitLab one list of the merge requests updated since, then
-// the commits, notes and versions of those alone, and one list of the
-// open ones nobody touched.
+// GitHub, on GitLab a list of the updated merge requests read one by one.
 func (h Host) Activity(ctx context.Context, since time.Time) (Activity, error) {
 	if h.GLab() {
 		return h.mrActivity(ctx, since)
@@ -330,12 +326,9 @@ func (h Host) mrTouched(ctx context.Context, p PR, since time.Time) (Touched, er
 	return t, nil
 }
 
-// mrRewrites is the force push among a merge request's versions since
-// the time, read from GitLab alone: the version whose head is among the
-// request's commits while the one before it is not replaced history. An
-// earlier rewrite leaves no trace in today's commits, so at most the
-// latest one counts. The local clone is never asked, since the feed
-// fetches nothing and may run with no checkout.
+// mrRewrites is the latest force push among a merge request's versions: a
+// version whose head is among the request's commits while the one before it
+// is not. The clone is never asked, since the feed may run with no checkout.
 func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits []PRCommit) ([]Event, error) {
 	type version struct {
 		Head      string    `json:"head_commit_sha"`
@@ -368,12 +361,9 @@ func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits 
 	return out, nil
 }
 
-// EarlierRequests is every request whose title or branch may name each
-// id, read to tell a task's first request from a follow-up: one GraphQL
-// call on GitHub for every id at once, a search on the text and one on
-// the head branch per id; on GitLab, whose search reads titles alone, one
-// list per id, a few at a time. The caller matches each request's branch
-// and title against the id; the searches only narrow.
+// EarlierRequests is every request that may name each id, to tell a task's
+// first request from a follow-up: one GraphQL call for every id on GitHub,
+// one list per id on GitLab. The searches only narrow; the caller matches.
 func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]PR, error) {
 	out := map[string][]PR{}
 	if len(ids) == 0 {

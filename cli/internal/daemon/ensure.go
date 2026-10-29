@@ -33,9 +33,8 @@ type Ensurer struct {
 }
 
 // Ensure returns a daemon listening, starting one when none does. Only a
-// strictly newer client replaces a running daemon, draining it first, so
-// two versions never take turns. Two clients at once get one daemon: the
-// start lease, then the daemon's own.
+// strictly newer client replaces a running one, so two versions never take
+// turns; the start lease keeps two clients at once to one daemon.
 func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 	if e.StartWait == 0 {
 		e.StartWait = 5 * time.Second
@@ -68,9 +67,8 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 	return Reply{}, errors.New("the f10 daemon kept changing while this client started: run the command again")
 }
 
-// settle uses a running daemon this client keeps, else waits out one that
-// is stopping or drains one this client replaces; done is false when a
-// daemon must be started.
+// settle keeps, waits out or drains the daemon running; done is false when
+// this client must start one.
 func (e *Ensurer) settle(ctx context.Context) (Reply, bool, error) {
 	rep, err := e.hello(ctx)
 
@@ -78,7 +76,6 @@ func (e *Ensurer) settle(ctx context.Context) (Reply, bool, error) {
 
 	switch {
 	case (err == nil && rep.Stopping) || (err != nil && held):
-		// a daemon draining its drives: let it finish, then start anew
 		return Reply{}, false, e.gone(ctx)
 	case err == nil && e.keeps(rep):
 		if rep.Version != e.Version && !e.Follow && e.Kept != nil {
@@ -190,8 +187,6 @@ func (e *Ensurer) awaitAny(ctx context.Context) (Reply, bool) {
 	return Reply{}, false
 }
 
-// keeps reports a running daemon this client uses as it is: following,
-// the same version, or one this client is not newer than.
 func (e *Ensurer) keeps(rep Reply) bool {
 	return e.Follow || rep.Version == e.Version || !Newer(e.Version, rep.Version)
 }

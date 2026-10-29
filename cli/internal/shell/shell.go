@@ -1,10 +1,7 @@
 // Package shell is the binary's door to every external command that is not
-// git: a tracker CLI, a project's driver, a pager, an editor, the OS
-// opener. gitx stays separate because its reads mirror bin/f10-load-project.sh's git
-// calls; this is everything that script never runs.
-//
-// Both entry points are variables so tests can substitute them - nothing
-// here should launch a browser or block on a pager during `go test`.
+// git; gitx stays separate because its reads mirror bin/f10-load-project.sh.
+// Every entry point is a variable so tests can substitute it: nothing here
+// should launch a browser or block on a pager under `go test`.
 package shell
 
 import (
@@ -24,16 +21,14 @@ type Result struct {
 	Code   int
 }
 
-// Capture runs name in dir and collects its output. A non-zero exit is a
-// Result, not an error: the driver contract reserves an exit code with a
-// meaning, so classifying codes belongs to the caller. Only a command that
-// could not start at all is an error here.
+// Capture runs name in dir. A non-zero exit is a Result, not an error, since
+// the driver contract reserves an exit code with a meaning and classifying
+// codes belongs to the caller; only a command that could not start is an error.
 var Capture = func(ctx context.Context, dir, name string, args ...string) (Result, error) {
 	return run(ctx, dir, nil, name, args...)
 }
 
-// CaptureInput is Capture with input on the command's stdin: a driver's
-// write verb reads the task it creates from there.
+// CaptureInput is Capture with input on stdin, for a driver's write verbs.
 var CaptureInput = func(ctx context.Context, dir, input, name string, args ...string) (Result, error) {
 	return run(ctx, dir, strings.NewReader(input), name, args...)
 }
@@ -83,9 +78,8 @@ var Passthrough = func(ctx context.Context, dir, name string, args ...string) er
 	return cmd.Run()
 }
 
-// Pipe runs name with input on its stdin and this process's terminal on
-// its output - what a pager needs, and the one case where f10 both holds
-// the text and wants someone else to display it.
+// Pipe runs name with input on its stdin and the terminal on its output: what
+// a pager needs.
 var Pipe = func(ctx context.Context, dir, input, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
@@ -103,7 +97,6 @@ var Has = func(name string) bool {
 }
 
 // Opener is the OS's "open this thing" command, or "" where there is none.
-// A url and a file both go through it.
 func Opener() string {
 	for _, c := range []string{"open", "xdg-open"} {
 		if Has(c) {
@@ -114,9 +107,8 @@ func Opener() string {
 	return ""
 }
 
-// Editor is the editor to hand a local file to: the usual two variables,
-// then the OS opener. Values carry arguments ("code -w"), so callers split
-// on fields rather than exec'ing the string.
+// Editor is VISUAL, EDITOR, then the OS opener, split on fields since values
+// carry arguments ("code -w").
 func Editor() []string {
 	for _, key := range []string{"VISUAL", "EDITOR"} {
 		if v := strings.Fields(os.Getenv(key)); len(v) > 0 {

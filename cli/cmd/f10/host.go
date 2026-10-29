@@ -16,9 +16,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
-// A host is the forge binding with the nouns only this command acts on:
-// issues here, requests in merge.go, reviews in reviewhost.go. The reads
-// standup and the board share live on forge.Host itself.
+// A host is the forge binding with the nouns only this command acts on; the
+// reads standup and the board share live on forge.Host itself.
 type host struct {
 	forge.Host
 
@@ -28,14 +27,12 @@ type host struct {
 
 func newHost(name, dir string) host { return host{Name: name, Dir: dir} }
 
-// at is the same host answering from another checkout of the repo.
 func (h host) at(dir string) host {
 	h.Host = h.At(dir)
 
 	return h
 }
 
-// taskID is the issue's task id in the project's format.
 func (h host) taskID(number string) string {
 	if h.prefix == "" {
 		return number
@@ -44,18 +41,12 @@ func (h host) taskID(number string) string {
 	return h.prefix + "-" + number
 }
 
-// title is the issue's title with the prefix tracker.title wrote taken off.
 func (h host) title(raw, number string) string {
 	return h.titles.Strip(raw, h.taskID(number), number)
 }
 
-// The host-issues fallback: what `task` does in a project with no driver,
-// so a repo tracking its work as issues on its own host needs no .f10/ at
-// all. A driver is for a tracker no host CLI can reach.
-//
-// Both CLIs are asked for JSON and the answer is composed into markdown
-// here, so a driver's `read` and this fallback hand `writeDoc` the same
-// kind of document.
+// The host-issues fallback is `task` with no driver, so a repo tracking its
+// work as issues on its own host needs no .f10/ at all.
 
 // issue is the union of the two CLIs' issue shapes, tagged for both.
 type issue struct {
@@ -119,7 +110,6 @@ func (i issue) pull() bool {
 	return strings.Contains(i.URL, "/pull/") || strings.Contains(i.WebURL, "/merge_requests/")
 }
 
-// notPull refuses a pull request where an issue was asked for.
 func (i issue) notPull(number string) error {
 	if i.pull() {
 		return fmt.Errorf("#%s is a pull request, not an issue", number)
@@ -128,13 +118,11 @@ func (i issue) notPull(number string) error {
 	return nil
 }
 
-// gh numbers issues, glab gives them an iid; whichever came back is the one
-// this issue has.
+// ident is gh's number or glab's iid, whichever came back.
 func (i issue) ident() string { return strconv.Itoa(cmp.Or(i.Number, i.IID)) }
 
-// issue reads one issue. gh is asked for the named fields and the url,
-// which tells a pull request apart; glab has no field selection and answers
-// with the whole issue.
+// issue always asks gh for the url too, since it tells a pull request apart;
+// glab has no field selection.
 func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 	var iss issue
 
@@ -150,9 +138,6 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 	return iss, err
 }
 
-// issueDoc is the issue as the markdown document `task read` prints, and
-// the issue it was read from. staleAfter is the project's stale_after, ""
-// for none.
 func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (string, issue, error) {
 	iss, err := h.issue(ctx, number, "number,title,state,labels,createdAt,url,body,comments")
 	if err != nil {
@@ -237,12 +222,10 @@ func (h host) repoURL(ctx context.Context) (string, error) {
 	return strings.TrimSuffix(url, "/"), nil
 }
 
-// issuesURL is the repository's issue list.
 func (h host) issuesURL(ctx context.Context) (string, error) {
 	return h.repoPage(ctx, "/issues", "/-/issues")
 }
 
-// pullsURL is the repository's pull or merge request list.
 func (h host) pullsURL(ctx context.Context) (string, error) {
 	return h.repoPage(ctx, "/pulls", "/-/merge_requests")
 }
@@ -281,10 +264,6 @@ func (h host) issueTitle(ctx context.Context, number string) (string, error) {
 // issuePage is the first page `task open --print` and `task search` show.
 const issuePage = 30
 
-// listIssues lists up to limit open issues matching query, or the first
-// of them for "", as task rows: ids carry prefix when the project has one,
-// and priorities, the lower-cased label to level index, ranks them; nil
-// ranks none. A row keeps the id its body's After: line names.
 func (h host) listIssues(
 	ctx context.Context, query, prefix string, priorities map[string]string, limit int,
 ) ([]row, error) {

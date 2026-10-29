@@ -12,9 +12,7 @@ import (
 )
 
 // The demo noun: no driver and no network behind it, like plan. A report is
-// named after its task as a plan is, so one reference reaches both, but it
-// is HTML: it opens in the browser, and there is no `read`, since markup
-// printed to a terminal serves no one.
+// HTML, so it opens in the browser and there is no `read`.
 func demoCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "demo",
@@ -51,10 +49,8 @@ func runDemoOpen(ctx context.Context, cmd *cli.Command) error {
 	return shell.Passthrough(ctx, t.dir, opener, path)
 }
 
-// demoReport looks up the reference and names the report written for it. A
-// missing file is an error naming the path, for the reason planFile gives:
-// falling back to whatever else the directory holds is how a reader ends up
-// reading another task's demo.
+// demoReport refuses a missing file rather than falling back to whatever
+// else the directory holds, which is how a reader opens another task's demo.
 func demoReport(ctx context.Context, cmd *cli.Command) (*target, string, error) {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {

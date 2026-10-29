@@ -44,9 +44,8 @@ func golden(t *testing.T, name string, tree Tree, nodes []Node) {
 	}
 }
 
-// A parent with nested After: chains three deep, a halted child with its
-// halt and next, an asking child, an unrelated task last, and a title cut
-// at the width.
+// Chains three deep, a halted child, an asking child whose ask stays whole,
+// an unrelated task last, and a title cut at the width.
 func TestParent(t *testing.T) {
 	golden(t, "parent", Tree{Head: "FT-209  4 done · 2 halted · 1 asking", Align: true, Width: 80}, []Node{
 		{Cells: cells("✓ FT-206", "done", "finish", "#208"), Title: "Show who runs a driven finish"},

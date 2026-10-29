@@ -335,9 +335,7 @@ func TestReviewTracesIsDeprecatedTraces(t *testing.T) {
 	}
 }
 
-// tracker.priority maps host labels onto the contract's levels: a string or
-// a list per level, indexed case-insensitively, shown in vocabulary order
-// with its origin. A level outside the vocabulary or a label under two
+// tracker.priority: a level outside the vocabulary or a label under two
 // levels is an error; an empty level is not.
 func TestTrackerPriority(t *testing.T) {
 	eff := buildWith(t, "---\ntracker:\n  kind: github\n  id: FT-###\n  priority:\n"+

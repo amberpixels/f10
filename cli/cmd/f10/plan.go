@@ -11,9 +11,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// The plan noun: the one with no driver, no network and no host CLI behind
-// it. A plan is a markdown file named after its task, so the same reference
-// that reaches a task reaches the plan written for it.
+// A plan is a markdown file named after its task, so the reference that
+// reaches a task reaches its plan; no driver, network or host CLI behind it.
 func planCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "plan",
@@ -70,9 +69,8 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 	return shell.Passthrough(ctx, t.dir, editor[0], append(editor[1:], path)...)
 }
 
-// planFile looks up the reference and names the plan file for it. A missing
-// file is an error naming the path: falling back to some other plan is how a
-// run ends up reading the wrong task's work.
+// planFile never falls back to another plan: that is how a run ends up
+// reading the wrong task's work.
 func planFile(ctx context.Context, cmd *cli.Command) (*target, string, error) {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {

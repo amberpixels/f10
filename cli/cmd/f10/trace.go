@@ -16,14 +16,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
-// The trace noun: what a step leaves on the host for a reader of the
-// history, rendered by the binary so the steps never hand-write the format.
-// `trailers` prints the Task:, Step: and Review: lines a commit message
-// ends in; a step appends them as the last -m paragraph of its git commit.
-// `state` rewrites the hidden state block in the branch's open PR body, or
-// puts it into a drafted body the step is about to write. With traces off
-// both do nothing and exit 0, so every step calls them the same way and
-// the prose carries no switch.
+// The trace noun renders what a step leaves on the host for a reader of the
+// history, so no step hand-writes the format. With traces off both verbs do
+// nothing and exit 0, so every step calls them the same way and the prose
+// carries no switch.
 func traceCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "trace",
@@ -113,11 +109,9 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// traceTasks is every member of the task a trace names: --task, else the
-// branch's task and riders. The lookup itself, not target.reference: under
-// -C the branch is the one -C points at, which is what a step working
-// there wants; and never the session's task, since a branch naming no task
-// carries none. That case is nil and one stderr line ending in alone.
+// traceTasks uses the lookup itself, not target.reference: under -C the
+// branch is the one -C points at, and never the session's task, since a
+// branch naming no task carries none; that case is nil and a stderr line.
 func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) ([]string, error) {
 	r, err := ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir, NoSession: true}.Find(ctx, cmd.String("task"))
 
@@ -133,14 +127,10 @@ func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) 
 	}
 }
 
-// runTraceState rewrites the block in the branch's open PR body, or puts
-// it into --body-file. No PR yet, one no longer open, or one someone else
-// opened is a note and exit 0, so every step calls it the same way and
-// nothing about the PR has to be checked by hand first: an edited
-// description is the author's, where a status or a comment reads as the
-// user's own on any PR. With traces off nothing is written, but a draft
-// still takes over the block the body already holds, as it is: the switch
-// turned off must not make the next refresh drop the last state.
+// runTraceState: no PR yet, one no longer open, or one someone else opened
+// is a note and exit 0, so every step calls it the same way; an edited
+// description is the author's. With traces off a draft still takes over the
+// block the body holds, so the switch turned off never drops the last state.
 func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
@@ -225,9 +215,8 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	return h.editPullBody(ctx, branch, out)
 }
 
-// putStateInFile writes the block into the drafted body at file, its
-// counts carried from the body the host holds, so a step that rewrites
-// the description from scratch never has to copy the block by hand.
+// putStateInFile carries the counts from the body the host holds, so a step
+// rewriting the description from scratch never copies the block by hand.
 func putStateInFile(file, hostBody string, u trace.Update) error {
 	file = filepath.Clean(file)
 
@@ -246,8 +235,6 @@ func putStateInFile(file, hostBody string, u trace.Update) error {
 	return os.WriteFile(file, []byte(out), 0o600) //nolint:gosec // the step's own draft, named on the command line
 }
 
-// carryStateToFile copies the block hostBody holds into the draft at file
-// as it is, for a refresh with traces off.
 func carryStateToFile(file, hostBody string) error {
 	file = filepath.Clean(file)
 
@@ -276,7 +263,6 @@ func countFlag(cmd *cli.Command, name string) *int {
 	return &n
 }
 
-// branchAfter is the base task `f10 start --after` recorded on branch, or "".
 func branchAfter(ctx context.Context, dir, branch string) string {
 	return gitx.Out(ctx, dir, "config", "--get", "branch."+branch+"."+cfgAfter)
 }

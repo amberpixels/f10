@@ -13,20 +13,16 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// branchSize is what a task changed: lines added plus deleted against the
-// base the branch forked from, lockfiles, generated code and snapshots
-// left out.
+// branchSize is what a task changed, lockfiles, generated code and
+// snapshots left out.
 type branchSize struct {
 	lines, md, files int
 	base             string
 }
 
-// measureBranch reads the branch's size before it lands: a local merge or
-// rebase moves the merge base to the branch's tip, after which the diff
-// reads zero. A stacked branch measures against its base branch, else the
-// default branch's copy the merge goes into. A PR the host already merged
-// with a merge commit reads zero the same way, so it is measured from that
-// commit's first parent. False when no base resolves.
+// measureBranch reads the size before the branch lands, since landing moves
+// the merge base to the tip and the diff reads zero; a PR the host already
+// merged with a merge commit measures from that commit's first parent.
 func measureBranch(ctx context.Context, dir, branch, def string, local bool) (branchSize, bool) {
 	bases := []string{"origin/" + def}
 	if local {

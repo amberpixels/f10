@@ -40,15 +40,12 @@ type watchedProject struct {
 
 func watchPath(dir string) string { return filepath.Join(dir, "watch.json") }
 
-// watchFailMax is how many passes in a row may fail before the project
-// is dropped: about half an hour at the default interval.
 const watchFailMax = 10
 
 // watchLogMax caps a project's watch log: a pass appends a few lines every
 // few minutes for as long as the project has tasks.
 const watchLogMax = 1 << 20
 
-// watchLog is a project's pass log, named by its storage root.
 func watchLog(dir, root string) string {
 	sum := sha256.Sum256([]byte(root))
 
@@ -87,8 +84,6 @@ func (s *Server) watch(req Request) Reply {
 	return Reply{Log: w.Log}
 }
 
-// passDue starts a pass for every project whose last one is WatchEvery old
-// and not running.
 func (s *Server) passDue(now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -104,8 +99,8 @@ func (s *Server) passDue(now time.Time) {
 	}
 }
 
-// startPass runs one `watch --pass` in w's checkout with its env; the
-// caller holds mu. A failure to start is logged and retried next tick.
+// startPass runs one pass; the caller holds mu. A failed start is retried
+// next tick.
 func (s *Server) startPass(w *watcher) {
 	if w.cmd != nil {
 		return
@@ -190,8 +185,7 @@ func (s *Server) reapPass(w *watcher, cmd *exec.Cmd, done chan struct{}, f *os.F
 	close(done)
 }
 
-// failed counts a failed pass and drops the project after watchFailMax
-// in a row, or at once when its checkout is gone; the caller holds mu.
+// failed counts a failed pass, dropping w once hopeless; the caller holds mu.
 func (s *Server) failed(w *watcher) {
 	w.fails++
 
@@ -262,8 +256,6 @@ func (s *Server) watchList() []Watch {
 	return out
 }
 
-// endPasses waits for the passes running, up to deadline or a stop --now,
-// then stops what is left.
 func (s *Server) endPasses(deadline <-chan time.Time) {
 	s.mu.Lock()
 

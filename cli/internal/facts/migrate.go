@@ -45,9 +45,8 @@ func isEmpty(d Declared) bool {
 		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
 }
 
-// A Migration is what `f10 init --migrate` makes of one project.md: the
-// file with its facts in a frontmatter block on top, and the prose each
-// moved fact came from, for the user to delete.
+// A Migration is what `f10 init --migrate` makes of one project.md, with
+// the prose each moved fact came from, for the user to delete.
 type Migration struct {
 	Content    string
 	Moved      []string // the frontmatter keys written
@@ -75,14 +74,9 @@ func renameTraces(data, block []byte) (*Migration, error) {
 	return &Migration{Content: string(content), Moved: []string{"traces"}}, nil
 }
 
-// Migrate reads the facts one project.md declares in prose, with the same
-// readers the fallback uses, and puts them in a frontmatter block above the
-// untouched file. Only what the file declares moves: defaults and
-// detection stay out, so the block says no more than the prose did. A file
-// that already has a block gets its old keys rewritten: pipelines,
-// planless, pipeline_by_area and drive_chain into flows, old-form entries
-// into the colon form, review_traces into traces; and every prose fact the
-// block does not declare yet added to it.
+// Migrate moves the facts a project.md declares in prose into a frontmatter
+// block, defaults and detection left out so the block says no more than the
+// prose did; under an existing block, old keys are rewritten and gaps filled.
 func Migrate(data []byte, path string) (*Migration, error) {
 	if block, body, ok := frontmatter.Split(data); ok {
 		return migrateBlock(data, block, body, path)
@@ -250,10 +244,9 @@ func migrateBlock(data, block, body []byte, path string) (*Migration, error) {
 	return lifted, nil
 }
 
-// liftProse adds every prose fact the block does not declare to the end of
-// it, tracker keys inside its tracker mapping. A fact both declare is left
-// as it is: config already warns when they agree and errors when they do
-// not. The block is edited as a node, so key order and comments stay.
+// liftProse appends every prose fact the block lacks, tracker keys inside
+// its mapping, editing the block as a node so key order and comments stay. A
+// fact both declare is left alone: config already warns or errors on it.
 func liftProse(data []byte, path string) (*Migration, error) {
 	block, body, _ := frontmatter.Split(data)
 
@@ -336,8 +329,7 @@ func liftProse(data []byte, path string) (*Migration, error) {
 	return m, nil
 }
 
-// mappingAt is the mapping under key in root: the existing one, a new one
-// in place of a null value, or a new one at the end.
+// mappingAt is the mapping under key in root, made when missing or null.
 func mappingAt(root *yaml.Node, key string) *yaml.Node {
 	m := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 
@@ -360,7 +352,6 @@ func mappingAt(root *yaml.Node, key string) *yaml.Node {
 	return m
 }
 
-// firstLayering is the value of a Layering section or line.
 func firstLayering(text string) string {
 	for line := range strings.SplitSeq(text, "\n") {
 		if line = strings.ToLower(line); strings.Contains(line, "replaces") {
@@ -438,10 +429,8 @@ func convertLegacy(pipes map[string][]string, planless, chain []string, remote b
 }
 
 // migrateFlows rewrites the old flow keys inside an existing block, and
-// review_traces with them. The block is edited as a YAML node, so key
-// order and comments stay; indentation comes back as the encoder's two
-// spaces. Nothing to rewrite but review_traces, or nothing at all, is
-// ErrHasFrontmatter, and renameTraces keeps that case byte for byte.
+// review_traces with them, as a YAML node so key order and comments stay;
+// with only review_traces to rename it defers to renameTraces, byte for byte.
 func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 	d, err := decodeDeclared(block)
 	if err != nil {

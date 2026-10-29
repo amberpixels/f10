@@ -22,10 +22,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
-// The task noun goes through the project's driver when it has one, and
-// through the host's issues when it does not - so a repo with no .f10/ at
-// all still answers, and a repo whose tracker has no CLI answers the same
-// way once it drops in a driver.
+// The task noun goes through the project's driver, else the host's issues:
+// a repo with no .f10/ at all still answers, and one whose tracker has no
+// CLI answers the same way once it drops in a driver.
 func taskCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "task",
@@ -162,7 +161,6 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		return fetchFallback(err)
 	}
 
-	// a typed bundle reads every member, lead first; an id alone reads itself
 	members := []ref.Ref{r}
 	if strings.Contains(token, ref.Separator) {
 		members = r.MemberRefs()
@@ -213,9 +211,7 @@ func fetchFallback(err error) error {
 		"(project.md, Tracker)", err)
 }
 
-// readDoc is the task as markdown: the driver's `read`, else the host's
-// issue with its comments. The title it read, and the url where the host
-// gave one, go to the ledger's task refs.
+// readDoc feeds the ledger's task refs, so a later ref costs no tracker call.
 func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if d := t.driver(); d != nil {
 		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
@@ -247,9 +243,8 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	return doc, err
 }
 
-// oneIDHeading collapses a driver document's `# <id>: <id>: <title>`
-// heading, the id the driver adds over the one tracker.title wrote, to one
-// id; any other heading stays as the driver wrote it.
+// oneIDHeading collapses `# <id>: <id>: <title>`, the id a driver adds over
+// the one tracker.title wrote, to one id.
 func oneIDHeading(doc string, r ref.Ref, titles tasktitle.Template) string {
 	first, rest, _ := strings.Cut(doc, "\n")
 
@@ -270,8 +265,7 @@ func oneIDHeading(doc string, r ref.Ref, titles tasktitle.Template) string {
 	return first + "\n" + rest
 }
 
-// withImages downloads every image doc links into dir and ends doc with
-// the footer naming them; a doc with no images comes back as it was. A dir
+// withImages ends doc with a footer naming its downloaded images. A dir
 // that cannot be written fails every image, never the read.
 func withImages(ctx context.Context, doc, dir string, d images.Downloader) string {
 	links := images.Links(doc)
@@ -290,9 +284,8 @@ func withImages(ctx context.Context, doc, dir string, d images.Downloader) strin
 	return strings.TrimRight(doc, "\n") + "\n\n" + images.Footer(results)
 }
 
-// imagesDir is where a task's images land: <storage root>/images/<ID>.
-// In-repo storage under stealth keeps .f10/ in info/exclude first, since
-// a read may be the first thing to create it.
+// imagesDir puts .f10/ into info/exclude first under stealth, since a read
+// may be the first thing to create it.
 func (t *target) imagesDir(ctx context.Context, id string) string {
 	if !t.outOfTree() && t.eff.Visibility == "stealth" {
 		_, _ = excludeF10(ctx, t.lay.CheckoutRoot)
@@ -301,10 +294,9 @@ func (t *target) imagesDir(ctx context.Context, id string) string {
 	return filepath.Join(t.lay.StorageRoot, "images", strings.ToUpper(id))
 }
 
-// githubAuth adds the gh token to image requests for GitHub's own hosts,
-// where a private repo's attachments sit; nothing else ever sees it. The
-// token is read once, on the first such request, and a failed read leaves
-// the request bare, so its error names the image.
+// githubAuth sends the gh token only to GitHub's own hosts over https,
+// where a private repo's attachments sit. It is read once; a failed read
+// leaves the request bare, so its error names the image.
 func githubAuth(ctx context.Context, t *target) func(*http.Request) {
 	h, err := t.host()
 	if err != nil || h.GLab() {
@@ -391,8 +383,6 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 	return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("link"))
 }
 
-// taskListURL is the tracker's task list: the driver's index when it has
-// one, else the host's issues page.
 func taskListURL(ctx context.Context, t *target) (string, error) {
 	if d := t.driver(); d != nil {
 		url, err := d.Run(ctx, driver.VerbIndex)
@@ -413,8 +403,6 @@ func taskListURL(ctx context.Context, t *target) (string, error) {
 	return h.issuesURL(ctx)
 }
 
-// writeTaskList is `task open --print` with no id: the first page of open
-// tasks, priorities settled (warnings to warn) and ranked, written to w.
 func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
 	rows, err := taskRows(ctx, t, issuePage)
 	if err != nil {
@@ -424,8 +412,6 @@ func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
 	return writeRows(w, rankRows(settlePriorities(rows, warn)), "no open tasks")
 }
 
-// taskRows is the tracker's open tasks: the driver's list when it has one,
-// else up to limit of the host's open issues.
 func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
 	if d := t.driver(); d != nil {
 		out, err := d.Run(ctx, driver.VerbList)
@@ -477,25 +463,22 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 	return writeRows(cmd.Writer, settlePriorities(rows, cmd.ErrWriter), "no matches")
 }
 
-// A row is what a search returns: the four fields f10 relies on, plus an
-// optional priority from the contract's vocabulary. A driver may carry more,
-// and f10 neither requires nor reads them.
+// A row holds the fields f10 relies on; a driver may carry more, which f10
+// neither requires nor reads.
 type row struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Status   string `json:"status,omitempty"`
-	URL      string `json:"url,omitempty"`
-	Priority string `json:"priority,omitempty"`
-	After    string `json:"after,omitempty"`    // the base its body's After: line names, where the source gives one
-	Body     string `json:"body,omitempty"`     // read for its After: line; never printed
-	Assignee string `json:"assignee,omitempty"` // the tracker's assignee, where the source gives one
-	// Created is when the tracker created the task, where the source says.
-	Created time.Time `json:"created,omitzero"`
+	ID       string    `json:"id"`
+	Title    string    `json:"title"`
+	Status   string    `json:"status,omitempty"`
+	URL      string    `json:"url,omitempty"`
+	Priority string    `json:"priority,omitempty"`
+	After    string    `json:"after,omitempty"`    // the base its body's After: line names, where the source gives one
+	Body     string    `json:"body,omitempty"`     // read for its After: line; never printed
+	Assignee string    `json:"assignee,omitempty"` // the tracker's assignee, where the source gives one
+	Created  time.Time `json:"created,omitzero"`
 }
 
-// settlePriorities keeps each row's priority in its canonical form and
-// clears one outside the vocabulary, warning once per distinct value: a
-// driver emitting its tracker's own word does so on every row of the page.
+// settlePriorities warns once per distinct unknown value: a driver emitting
+// its tracker's own word does so on every row of the page.
 func settlePriorities(rows []row, warn io.Writer) []row {
 	var (
 		unknown []string
@@ -529,8 +512,7 @@ func settlePriorities(rows []row, warn io.Writer) []row {
 	return rows
 }
 
-// rankRows orders rows by priority, most urgent first and unranked last,
-// keeping the tracker's order inside a level.
+// rankRows is stable, so the tracker's order holds inside a level.
 func rankRows(rows []row) []row {
 	rank := func(r row) int {
 		if i, ok := driver.PriorityRank(r.Priority); ok {
@@ -576,8 +558,7 @@ func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
 	return rows, err
 }
 
-// stripTitles takes the prefix tracker.title wrote off each driver row's
-// title; the host's rows come stripped from listIssues.
+// stripTitles is for driver rows; the host's come stripped from listIssues.
 func stripTitles(rows []row, titles tasktitle.Template) []row {
 	for i, r := range rows {
 		n := strings.TrimPrefix(r.ID[strings.LastIndexByte(r.ID, '-')+1:], "#")
@@ -587,10 +568,9 @@ func stripTitles(rows []row, titles tasktitle.Template) []row {
 	return rows
 }
 
-// writeRows applies the same rule reading a task does: a terminal gets a
-// table, anything else gets the JSON. f10 prints rows and never picks a
-// winner among them - choosing is fzf's job in a shell and the agent's in a
-// turn, and a picker here would be wrong for one of the two.
+// writeRows applies the rule reading a task does: a terminal gets a table,
+// anything else the JSON. f10 never picks a winner among rows: choosing is
+// fzf's job in a shell and the agent's in a turn.
 func writeRows(w io.Writer, rows []row, none string) error {
 	if !isTerminal(w) {
 		for i := range rows {
@@ -630,7 +610,6 @@ func writeRows(w io.Writer, rows []row, none string) error {
 		id := hyperlink(r.URL, r.ID) + strings.Repeat(" ", idW-len(r.ID))
 		title := hyperlink(r.URL, r.Title)
 
-		// the priority column exists only when a row carries one
 		priority := ""
 		if priorityW > 0 {
 			priority = fmt.Sprintf("%-*s  ", priorityW, r.Priority)
@@ -644,8 +623,7 @@ func writeRows(w io.Writer, rows []row, none string) error {
 	return nil
 }
 
-// hyperlink wraps text in an OSC 8 link to url, which a terminal shows as
-// text alone and one without support ignores; no url leaves text plain.
+// hyperlink is an OSC 8 link, which a terminal without support shows as text.
 func hyperlink(url, text string) string {
 	if url == "" {
 		return text
@@ -736,9 +714,9 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// retitleAfter writes tracker.title onto an issue a driver just wrote, on
-// the host's issues: a driver has no title verb. The driver's write stands,
-// so a failure here is a warning.
+// retitleAfter writes tracker.title onto an issue a driver just wrote, since
+// a driver has no title verb; the driver's write stands, so a failure is a
+// warning.
 func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, verb string) {
 	if t.eff.TitleTemplate == "" || !t.hostIssues() {
 		return
@@ -750,8 +728,6 @@ func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, v
 	}
 }
 
-// retitleOne writes tracker.title onto one issue through the host, when
-// its title is not written through it yet.
 func retitleOne(ctx context.Context, t *target, number string) error {
 	h, err := t.host()
 	if err != nil {
@@ -766,7 +742,6 @@ func retitleOne(ctx context.Context, t *target, number string) error {
 	return h.setTitle(ctx, number, changes[0].to)
 }
 
-// taskTitle is the title on doc's first line, `# <title>`, or "".
 func taskTitle(doc string) string {
 	line, _, _ := strings.Cut(doc, "\n")
 
@@ -778,9 +753,8 @@ func taskTitle(doc string) string {
 	return strings.TrimSpace(title)
 }
 
-// createArgs are create's flags for the driver: only the properties the
-// caller set, priority in its canonical form, and the parent and the body's
-// After: base as numbers, as every verb's argument is.
+// createArgs passes the parent and the body's After: base as numbers, as
+// every driver verb's argument is.
 func createArgs(ctx context.Context, t *target, cmd *cli.Command, doc string) ([]string, error) {
 	props, err := readProps(cmd)
 	if err != nil {

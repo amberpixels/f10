@@ -14,17 +14,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
-// A dependency before git: a task that has not started has no branch and
-// no git config to read, so the base it waits for is a fixed line in its
-// body, `After: GH-12`, the same word as start's flag. Capture writes it,
-// fetch reads it, start takes it as the default --after and drive checks it
-// against the list before prompting anything. Git config stays the
-// per-branch copy once the branch exists.
+// A dependency before git: an unstarted task has no branch and no git config
+// to read, so its base is a body line, `After: GH-12`, the same word as
+// start's flag; git config holds the per-branch copy once the branch exists.
 
-// afterIn is the id the body's After: line names, or "". The line starts
-// at column 0 and names one id, bare or as a link to the task
-// (`After: [GH-12: Add the index](https://...)`); emphasis or code marks
-// around either part (`**After:** GH-12`) do not change it.
+// afterIn is the id the body's After: line names, or "": bare or as a link
+// to the task, with emphasis or code marks around either part ignored.
 func afterIn(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
 		if id := afterID(line); id != "" {
@@ -49,9 +44,8 @@ func afterID(line string) string {
 
 	id := mdline.Bare(value)
 
-	// a link's id is its text up to the title: the url is never read, so a
-	// moved task still names its base. Nothing may follow the link, as
-	// nothing may follow a bare id.
+	// the link's text, never its url, names the id, so a moved task still
+	// names its base
 	if text, ok := strings.CutPrefix(id, "["); ok && strings.Contains(text, "](") {
 		text, url, _ := strings.Cut(text, "](")
 		if !strings.HasSuffix(url, ")") || strings.ContainsAny(url, " \t") {
@@ -195,8 +189,6 @@ func finishedTask(info taskInfo, archive []string, id string, hasBranch bool) bo
 	return false
 }
 
-// hasTaskBranch reports whether the task has a branch: linked to it, or
-// named for it locally or on origin.
 func hasTaskBranch(ctx context.Context, dir, id string) (bool, error) {
 	linked, err := linkedBranches(ctx, dir, id)
 	if err != nil {
@@ -221,10 +213,9 @@ func hasTaskBranch(ctx context.Context, dir, id string) (bool, error) {
 	return false, nil
 }
 
-// bodyAfter turns the body's After: line into the base start uses when no
-// flag names one. A base with a branch is the dependency; a finished base
-// has its code in the default branch already; anything else would base the
-// work on code that does not exist, and is refused before anything is made.
+// bodyAfter is the base the body's After: line gives start when no flag
+// names one. A base with a branch is the dependency, a finished one is in
+// the default branch already; anything else is refused before anything is made.
 func bodyAfter(ctx context.Context, tr tracker, main string, task ref.Ref, body string) (string, string, error) {
 	line, err := bundleAfter(ctx, tr, task, body)
 	if err != nil || line == "" {
@@ -262,9 +253,8 @@ func bodyAfter(ctx context.Context, tr tracker, main string, task ref.Ref, body 
 }
 
 // bundleAfter is the After: line a task answers to: its body's, or for a
-// bundle, the one base its members' bodies name outside the bundle. A line
-// naming another member orders work inside the one branch, so it is
-// dropped; two different bases cannot both be the branch's.
+// bundle the one base its members name outside the bundle. A line naming
+// another member orders work inside the branch; two bases cannot both be it.
 func bundleAfter(ctx context.Context, tr tracker, task ref.Ref, body string) (string, error) {
 	if len(task.Riders()) == 0 {
 		return afterIn(body), nil

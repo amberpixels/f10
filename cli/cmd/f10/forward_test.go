@@ -52,8 +52,6 @@ func newForwardFixture(t *testing.T) *forwardFixture {
 	return fx
 }
 
-// workspaces lists main's workspace and the task's, with the agent status
-// Herdr reports for the task's.
 func (fx *forwardFixture) workspaces(agent string) string {
 	return `{"result":{"workspaces":[` +
 		`{"workspace_id":"ws:1","label":"repo","focused":true,"worktree":{"checkout_path":"` + fwdMain + `"}},` +
@@ -61,8 +59,6 @@ func (fx *forwardFixture) workspaces(agent string) string {
 		`]}}`
 }
 
-// run writes a live run for the worktree into the state dir, in the
-// script's own shape.
 func (fx *forwardFixture) run(t *testing.T, ship, leaf string) {
 	t.Helper()
 
@@ -84,7 +80,6 @@ func (fx *forwardFixture) forward(t *testing.T) (string, error) {
 	return out.String(), err
 }
 
-// exitCode is the code an error asks the process to exit with, or -1.
 func exitCode(err error) int {
 	if coder, ok := errors.AsType[cli.ExitCoder](err); ok {
 		return coder.ExitCode()
@@ -93,9 +88,7 @@ func exitCode(err error) int {
 	return -1
 }
 
-// The happy path: the branch is in the worktree, Herdr shows it, the agent
-// is working, the text goes to the agent start named with the marker added,
-// and the report carries the three rows.
+// The happy path: the text reaches the agent start named, marked driven.
 func TestForwardSubmitsToTheTasksAgent(t *testing.T) {
 	fx := newForwardFixture(t)
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+fwdText+" --driven", "{}")

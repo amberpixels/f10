@@ -360,10 +360,8 @@ func TestUnsetConfig(t *testing.T) {
 	}
 }
 
-// Conflicts reads the conflicted stages from merge-tree's stdout on exit 1,
-// one Conflict per path sorted by path, each stage's blob in place and ""
-// for a side that lacks the path; a clean merge is nil, and a loud exit is
-// an error.
+// Conflicts reads merge-tree's stage lines on exit 1 into one Conflict per
+// path; a clean merge is nil, and a loud exit is an error.
 func TestConflictsNamesThePathsAndTheirBlobs(t *testing.T) {
 	prev := Exec
 	Exec = func(_ context.Context, _ string, args ...string) (string, error) {

@@ -5,10 +5,9 @@ import (
 	"strings"
 )
 
-// FinishKey is `f10 drive`'s record, beside TaskKey, of where its finish
-// of the branch stands: queued or running, then what it is doing. Finish
-// removes it with the branch and drive clears it on any other end; whether
-// the drive still runs is its task's lease, never this record.
+// FinishKey is `f10 drive`'s record, beside TaskKey, of where its finish of
+// the branch stands. Whether the drive still runs is its task's lease, never
+// this record: finish removes it with the branch, drive clears it on any end.
 const FinishKey = "f10-finish"
 
 // The states a DriveFinish records.
@@ -32,8 +31,7 @@ func (d DriveFinish) Format() string {
 	return d.State + ": " + d.Action
 }
 
-// Running reports finish itself at work, not queued behind ship, a base
-// or a catchup.
+// Running reports finish itself at work, not queued behind ship or a base.
 func (d DriveFinish) Running() bool {
 	return d.State == FinishRunning
 }

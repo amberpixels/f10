@@ -7,14 +7,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// A catchup as seen from outside the agent that runs it, shared by f10
-// drive and the watcher: what a branch's pull request targets, whether a
-// catchup ended clean, and the push after one.
+// A catchup as seen from outside the agent that runs it, shared by drive
+// and the watcher.
 
-// prTarget is what a task's pull request targets and the mark that sends
-// a catchup for it: origin's copy of the branch f10-after-branch records,
-// which the stacked PR targets, else its local copy, else the default
-// branch as defaultTarget resolves it. sha is "" for a base found nowhere.
+// prTarget is what a task's PR targets and the mark that sends a catchup for
+// it: origin's copy of the f10-after-branch base, else its local copy, else
+// the default branch. sha is "" for a base found nowhere.
 type prTarget struct {
 	sha, name, key, value string
 }
@@ -49,9 +47,8 @@ func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
 	return prTarget{sha: sha, name: name, key: cfgLanded, value: def}, err
 }
 
-// defaultTarget is the default branch's sha as the catchup step reads it
-// for f10-landed, and its name for prose: the local branch when it holds
-// origin's, else origin's, else the local one.
+// defaultTarget is the default branch's sha as the catchup step reads it for
+// f10-landed: the local branch when it holds origin's, else origin's.
 func defaultTarget(ctx context.Context, main string) (string, string, error) {
 	def, err := localDefault(ctx, main)
 	if err != nil {
@@ -89,8 +86,6 @@ func defaultTarget(ctx context.Context, main string) (string, string, error) {
 	return remote, "origin/" + def, nil
 }
 
-// markOn is the catchup mark a branch carries, f10-landed before
-// f10-base-moved, or "" for none.
 func markOn(ctx context.Context, main, branch string) (string, error) {
 	for _, key := range []string{cfgLanded, cfgMoved} {
 		v, err := gitx.Config(ctx, main, "branch."+branch+"."+key)
@@ -106,10 +101,8 @@ func markOn(ctx context.Context, main, branch string) (string, error) {
 	return "", nil
 }
 
-// branchUnsettled says why a catchup of branch, checked out at dir, did not
-// bring it up to date, or "" when it did. Whether a catchup that reported
-// ended clean is read from git: the mark gone, which catchup clears only
-// once verify is green, no merge or rebase left open, and a clean tree.
+// branchUnsettled says why a catchup did not bring branch up to date, or "".
+// Read from git, since catchup clears the mark only once verify is green.
 func branchUnsettled(ctx context.Context, main, dir, branch string) string {
 	key, err := markOn(ctx, main, branch)
 
@@ -123,8 +116,6 @@ func branchUnsettled(ctx context.Context, main, dir, branch string) string {
 	return treeBusy(ctx, dir)
 }
 
-// treeBusy says why the checkout at dir cannot take a catchup, or "": a
-// merge or rebase in progress, or uncommitted paths.
 func treeBusy(ctx context.Context, dir string) string {
 	for _, head := range []struct{ ref, what string }{{"MERGE_HEAD", "merge"}, {"REBASE_HEAD", "rebase"}} {
 		sha, err := gitx.Ref(ctx, dir, head.ref)
@@ -149,10 +140,8 @@ func treeBusy(ctx context.Context, dir string) string {
 	return ""
 }
 
-// pushCaughtUp pushes the caught-up branch at dir over origin's copy at
-// pushed: plain when the catchup merged, so origin's copy is an ancestor,
-// with a lease against that sha when it rebased. It returns how the push
-// went, for prose; base names the target in the error.
+// pushCaughtUp pushes plain when the catchup merged, so origin's copy is an
+// ancestor, and with a lease against the pushed sha when it rebased.
 func pushCaughtUp(ctx context.Context, dir, branch, pushed, base string) (string, error) {
 	fastForward, err := gitx.IsAncestor(ctx, dir, pushed, "HEAD")
 	if err != nil {

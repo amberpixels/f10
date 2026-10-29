@@ -1,7 +1,6 @@
 // Package asks keeps the questions driven agents stop on in one per-user
-// inbox, so the user is told about them and can answer from anywhere. An
-// ask is a file: open while it waits, moved to answered/ by the first
-// answer from any way in.
+// inbox, so the user can answer from anywhere. An ask is a file: open while
+// it waits, moved to answered/ by the first answer from any way in.
 package asks
 
 import (
@@ -30,9 +29,8 @@ type Ask struct {
 	Answer     string    `yaml:"answer,omitempty"` // what the agent, or finish, receives
 	By         string    `yaml:"by,omitempty"`     // which way in answered it
 	AnsweredAt time.Time `yaml:"answered_at,omitempty"`
-	// DeliveredAt is when the answer reached the agent: at once when typed
-	// in its pane or prompted by the answering command, else when a drive
-	// sends it
+	// DeliveredAt is when the answer reached the agent: at once when typed in
+	// its pane or prompted by the answering command, else when a drive sends it
 	DeliveredAt time.Time `yaml:"delivered_at,omitempty"`
 	// TakenAt is when a drive acted on the answer, so no later run of it
 	// acts again
@@ -64,16 +62,13 @@ func (q Question) Default() string {
 	return ""
 }
 
-// numbered finds the start of each `N. ` question, at the text's start or
-// after a space.
 var numbered = regexp.MustCompile(`(?:^|\s)(\d+)\.\s`)
 
-// options is a question's trailing bracketed choice list.
 var options = regexp.MustCompile(`\[([^\[\]]*\|[^\[\]]*|[^\[\]|]+)\]\s*$`)
 
-// Parse splits `1. Reuse the plan? [reuse | re-plan] 2. ...` into
-// questions. Text that is not numbered from 1 is one free-text question, so
-// an odd ask still reaches the user whole.
+// Parse splits `1. Reuse the plan? [reuse | re-plan] 2. ...` into questions;
+// text not numbered from 1 is one free-text question, so an odd ask still
+// reaches the user whole.
 func Parse(text string) []Question {
 	text = strings.TrimSpace(text)
 
@@ -126,9 +121,9 @@ func question(n int, body string) Question {
 	return q
 }
 
-// Resolve maps value to one of q's options: its letter (`b`), its number
-// (`2`) or its text. Free text answers only a question without options, so
-// a typo never picks a choice.
+// Resolve maps value to an option by letter (`b`), number (`2`) or text;
+// free text answers only a question without options, so a typo never picks
+// a choice.
 func Resolve(q Question, value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

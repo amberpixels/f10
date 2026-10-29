@@ -10,18 +10,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
-// Picking up a PR someone else opened: the task is in the tracker, the
-// branch and the request are on the remote, and nothing is local. start
-// takes the request's link or number, checks its branch out tracking
-// origin's, and links the branch to its task in local config, since the
+// Picking up someone else's PR: nothing is local, so start checks the branch
+// out tracking origin's and links it to its task in local config, since the
 // branch's name need not carry the id.
 
-// exitNoTask is start's exit when a picked-up request names no task: the
-// start skill asks for the id and reruns with --task.
+// exitNoTask: the start skill asks for the id and reruns with --task.
 const exitNoTask = 3
 
-// A pickup is the request start picked up: its number as the host CLI
-// takes it, its url, its head branch, and the commands that show it.
 type pickup struct {
 	number string
 	url    string
@@ -30,14 +25,11 @@ type pickup struct {
 	diff   string
 }
 
-// pullPathRE is where a request's number sits in its url: GitHub's
-// `/pull/12`, GitLab's `/-/merge_requests/12`.
+// pullPathRE matches GitHub's `/pull/12` and GitLab's `/-/merge_requests/12`.
 var pullPathRE = regexp.MustCompile(`/(?:pull|merge_requests)/(\d+)(?:[/?#]|$)`)
 
-// pullToken is the request number a start argument names, if any: a
-// request url or GitLab's `!12` name one for sure; a bare `#12` may name a
-// request or a task, so probe says to ask the host before taking it (only
-// GitHub, whose issues and PRs share one counter, can answer).
+// pullToken's probe is true for a bare `#12`, which may name a task instead:
+// ask the host before taking it (GitHub's issues and PRs share one counter).
 func pullToken(token string) (string, bool) {
 	switch {
 	case strings.Contains(token, "://"):
@@ -55,15 +47,12 @@ func digits(s string) bool {
 	return s != "" && strings.Trim(s, "0123456789") == ""
 }
 
-// closingRE is a closing keyword and the issue it names, as both hosts read
-// them in a request's body: `Closes #12`, `fixes: https://…/issues/12`.
+// closingRE reads `Closes #12` and `fixes: https://…/issues/12` as both hosts do.
 var closingRE = regexp.MustCompile(
 	`(?i)(?:^|[^a-z0-9])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(#\d+|https?://\S+?/issues/\d+)`)
 
-// pickupTask is the task id a request names, or "": a closing keyword's
-// issue where the tracker is the host's issues, else an id in the project's
-// format in the body, the title or the branch name, in that order. An issue
-// url counts only when it is this repository's.
+// pickupTask prefers a closing keyword's issue (this repository's only) on a
+// host-issues tracker, else an id in the body, title or branch, in that order.
 func pickupTask(prefix string, hostIssues bool, p pull) string {
 	if hostIssues && prefix != "" {
 		repo := p.url()
@@ -96,8 +85,6 @@ func pickupTask(prefix string, hostIssues bool, p pull) string {
 	return ""
 }
 
-// refusePull stops a request start cannot pick up: one from a fork, whose
-// branch origin does not have, and one no longer open.
 func refusePull(p pull) error {
 	switch {
 	case p.fork():
@@ -111,8 +98,6 @@ func refusePull(p pull) error {
 	return nil
 }
 
-// pickupOf is what start keeps of a request it picks up, with the commands
-// the agent reads it by.
 func (h host) pickupOf(number string, p pull) *pickup {
 	cmd := func(verb string, tail ...string) string {
 		args := h.Pick([]string{"pr", verb, number}, []string{"mr", verb, number})
@@ -129,9 +114,8 @@ func (h host) pickupOf(number string, p pull) *pickup {
 	}
 }
 
-// syncPickup brings a picked-up PR's local branch, which start found
-// already there, to the PR's head on origin: moved when it is behind and
-// checked out nowhere, else a note saying how it differs.
+// syncPickup fast-forwards a local branch start found only when it is behind
+// and checked out nowhere; otherwise a note says how it differs.
 func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
 	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
 
@@ -161,8 +145,7 @@ func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (stri
 	return fmt.Sprintf("fast-forwarded %s to origin/%s", branch, branch), nil
 }
 
-// fetchPickup brings the request's branch into origin's refs, which a
-// handover has not fetched yet.
+// fetchPickup: a handover has not fetched the request's branch yet.
 func fetchPickup(ctx context.Context, main string, pick *pickup) error {
 	if err := gitx.Fetch(ctx, main); err != nil {
 		return fmt.Errorf("fetching %s for %s: %w", pick.branch, pick.url, err)

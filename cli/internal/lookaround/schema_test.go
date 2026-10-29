@@ -10,10 +10,9 @@ import (
 	"testing"
 )
 
-// docs/board.schema.json and the Go types agree both ways: every field a
-// type marshals is a property of its $defs entry, and every property is a
-// field. No validator library: the walk checks names, the fixtures the
-// values.
+// docs/board.schema.json and the Go types agree both ways: every marshalled
+// field is a property of its $defs entry and every property a field. No
+// validator library: the walk checks names, the fixtures the values.
 type schemaDoc struct {
 	Defs map[string]struct {
 		Properties           map[string]json.RawMessage `json:"properties"`

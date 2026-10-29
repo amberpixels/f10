@@ -1,10 +1,6 @@
-// Package observe turns what a hook sees - a Bash command and its output, a
-// file written - into typed facts about a run: an issue or PR opened, a
-// commit, a push, a step loaded, a plan or findings file saved.
-//
-// It only recognises; it never acts. Observers do: the badge reads a few of
-// these to settle what the model would otherwise have to report, and the
-// ledger persists all of them.
+// Package observe turns what a hook sees (a Bash command and its output, a
+// file written) into typed facts about a run. It only recognises; observers
+// act on them: the badge settles what the model would otherwise report.
 package observe
 
 import (
@@ -29,7 +25,7 @@ type Observation interface {
 	meta() *Meta
 }
 
-// Stamp fills an observation's Meta.
+// Stamp fills an observation's Meta, which the From* readers leave empty.
 func Stamp(o Observation, session, cwd string, at time.Time) {
 	m := o.meta()
 	m.Session, m.Cwd, m.At = session, cwd, at

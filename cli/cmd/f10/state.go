@@ -14,11 +14,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The state noun writes the run state the status-line badge renders. Steps
-// reach it through bin/f10-state.sh, the name their prose types. The badge
-// is cosmetic, so no session or an unwritable directory is a silent no-op;
-// only a malformed call exits 2, since staying silent would freeze the badge
-// over a typo.
+// The state noun writes the run state the badge renders. The badge is
+// cosmetic, so no session or an unwritable directory is a silent no-op; a
+// malformed call exits 2, since silence would freeze the badge over a typo.
 func stateCommand() *cli.Command {
 	verb := func(name, args, usage string, apply func(r *state.Run, a cli.Args) error) *cli.Command {
 		kind := "state_" + name

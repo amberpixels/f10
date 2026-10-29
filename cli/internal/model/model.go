@@ -1,7 +1,6 @@
-// Package model reads a claude model name as a person or an agent typed
-// it: a family, a family and a version, or a full id. Only the families
-// are known here; versions change too often for f10 to keep a list, so a
-// wrong version on a real family is passed on for claude to refuse.
+// Package model reads a claude model name as typed: a family, a family and a
+// version, or a full id. Only the families are known here; versions change
+// too often to keep a list, so a wrong one is passed on for claude to refuse.
 package model
 
 import (
@@ -55,9 +54,8 @@ func Resolve(raw string) (string, string, bool) {
 	return value, note, true
 }
 
-// split cuts a name into its one run of letters and its runs of digits:
-// `opus5-5`, `opus 5.5` and `opus-5.5` all give opus and [5 5]. A second
-// run of letters, or any other character, is not a model name.
+// split cuts a name into its one run of letters and its runs of digits; a
+// second run of letters, or any other character, is not a model name.
 func split(s string) (string, []string, bool) {
 	var (
 		word    string

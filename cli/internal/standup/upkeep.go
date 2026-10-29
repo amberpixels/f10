@@ -7,11 +7,10 @@ import (
 	"time"
 )
 
-// Upkeep is activity that keeps a branch current rather than moving its
-// task: catching up with the base, a rebase, regenerated files, a small
-// test fix after red CI. Each rule reads facts git or the host recorded,
-// never a subject line, and anything the rules cannot settle is work:
-// hiding a real change costs more than listing a small one.
+// Upkeep is activity that keeps a branch current rather than moving its task.
+// Each rule reads facts git or the host recorded, never a subject line, and
+// anything the rules cannot settle is work: hiding a real change costs more
+// than listing a small one.
 
 // The class of one item of activity, and of a task as a whole.
 const (
@@ -39,17 +38,14 @@ type File struct {
 	Generated bool // marked linguist-generated, or carrying Go's generated header
 }
 
-// CI is how the checks on a commit ended: red when any failed, and when
-// the last failure finished.
+// CI is how the checks on a commit ended, and when the last failure finished.
 type CI struct {
 	Red bool
 	At  time.Time
 }
 
-// A ForcePush is one force-push the user made to their own PR.
-// SamePatches is whether the commits before and after carry the same
-// patches; nil is unknown, when either side is not in the local object
-// store.
+// A ForcePush is one force-push to the user's own PR. SamePatches is nil when
+// either side is not in the local object store.
 type ForcePush struct {
 	At          time.Time `json:"at"`
 	Before      string    `json:"before"`
@@ -59,10 +55,9 @@ type ForcePush struct {
 	SamePatches *bool     `json:"-"`
 }
 
-// upkeepGlobs are the paths a commit can touch and stay upkeep: lockfiles,
-// generated code by its conventional names, and snapshot fixtures. A
-// manifest (go.mod, package.json) is not here: a dependency bump next to
-// code is not clearly upkeep.
+// upkeepGlobs are the paths a commit can touch and stay upkeep. A manifest
+// (go.mod, package.json) is not here: a dependency bump next to code is not
+// clearly upkeep.
 var upkeepGlobs = []string{
 	"go.sum", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock",
 	"Gemfile.lock", "Cargo.lock", "poetry.lock", "uv.lock", "Pipfile.lock", "composer.lock", "mix.lock",
@@ -77,7 +72,6 @@ var testGlobs = []string{
 	"**/spec/**", "**/test/**", "**/tests/**", "**/__tests__/**", "**/testdata/**",
 }
 
-// classifyCommit is the class of one of the user's commits, and why.
 func classifyCommit(c Commit, extra []string) (string, string) {
 	if len(c.Parents) > 1 {
 		if c.BaseMerge {
@@ -125,7 +119,6 @@ func upkeepFiles(files []File, extra []string) bool {
 	return true
 }
 
-// ciFixShape is a small change to test files only.
 func ciFixShape(c Commit) bool {
 	if len(c.Files) == 0 {
 		return false
@@ -144,9 +137,8 @@ func ciFixShape(c Commit) bool {
 	return lines <= ciFixLines
 }
 
-// taskClass is upkeep when the task's activity from from until to (zero:
-// no end) holds an upkeep item and no work item. Opening or merging a PR is
-// work.
+// taskClass is upkeep when the activity in the window holds an upkeep item
+// and no work item; opening or merging a PR is work.
 func taskClass(t Task, from, to time.Time) string {
 	upkeep := false
 	in := func(at time.Time) bool { return inWindow(at, from, to) }
@@ -196,8 +188,8 @@ func taskClass(t Task, from, to time.Time) string {
 	return ClassUpkeep
 }
 
-// UpkeepPath reports whether a path is a lockfile, generated code or a
-// snapshot: a change nobody wrote by hand.
+// UpkeepPath reports a path nobody writes by hand: a lockfile, generated
+// code or a snapshot.
 func UpkeepPath(p string) bool { return matchAny(upkeepGlobs, p) }
 
 func matchAny(globs []string, p string) bool {
@@ -210,9 +202,8 @@ func matchAny(globs []string, p string) bool {
 	return false
 }
 
-// Glob matches a slash-separated path the way .gitignore reads a pattern:
-// one without a slash matches the base name in any directory, one with a
-// slash the whole path, and a `**` segment any number of directories.
+// Glob matches the way .gitignore reads a pattern: no slash matches the base
+// name anywhere, a slash the whole path, `**` any number of directories.
 func Glob(pattern, p string) bool {
 	if !strings.Contains(pattern, "/") {
 		ok, _ := path.Match(pattern, path.Base(p))

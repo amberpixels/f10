@@ -377,8 +377,7 @@ func (row *taskRow) finish(f rowFacts) {
 	}
 }
 
-// rowStageStyle colors a status row's stage by how much it needs you: red stopped, yellow
-// building, orange under review, blue planning, green done, faint idle.
+// rowStageStyle colors a stage by how much it needs you.
 func rowStageStyle(stage string) lipgloss.Style {
 	s := lipgloss.NewStyle()
 
@@ -402,9 +401,8 @@ func rowStageStyle(stage string) lipgloss.Style {
 	}
 }
 
-// rowView is how task rows print: on a terminal in color with the ids and
-// PRs linked, else as text, which plain gives a url line and a width so a
-// skill can relay it where a terminal link does not survive.
+// rowView is how task rows print; plain adds a url line and a width, so a
+// skill can relay the tree where a terminal link does not survive.
 type rowView struct {
 	parent string // the parent's id, heading its children; "" for a task alone
 	width  int    // 0: no limit
@@ -418,10 +416,7 @@ var stageOrder = []string{
 	stageResolving, stageJudging, stagePlanning, stagePlanned, stageWaiting, stageNotStarted,
 }
 
-// renderRows prints the rows as a task tree: a parent's heading with a
-// count per stage, then a row per task with its title on the line beneath
-// and the ask, the halt reason, what unblocks it or a finished task's gates
-// under that.
+// renderRows prints the rows as a task tree under the parent's heading.
 func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no children")

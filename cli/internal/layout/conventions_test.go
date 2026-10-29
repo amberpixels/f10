@@ -49,10 +49,9 @@ func TestConventionsListMatchesDir(t *testing.T) {
 	}
 }
 
-// f10-inject.sh tells the model to run f10-load-conventions.sh: on a session's first f10
-// skill, typed or model-invoked, and after compaction. This pins its wiring:
-// one synchronous entry on each of those events, since an async one would
-// arrive a turn late.
+// f10-inject.sh must run on a session's first f10 skill, typed or
+// model-invoked, and after compaction: one synchronous entry per event, since
+// an async one would arrive a turn late.
 func TestInjectHooks(t *testing.T) {
 	bin := filepath.Dir(scriptPath(t))
 
