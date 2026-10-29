@@ -15,7 +15,7 @@ argument-hint: "[comments|prose|code] [<path>...]"
 - `comments`, `prose`, `code`: the targets to run, one or more; none named runs the ones that apply.
 - `<path>`: a path, glob or file list, cleaned in full.
 - No path: the current branch's change against its base.
-  Say in one line which branch, base and targets you took, then start.
+  Say in one line which branch, base and targets you took, and which pass the line count chose, then start.
 
 **Run**
 1. Run `f10-load-project.sh cleanup` first, on every call of this skill.
