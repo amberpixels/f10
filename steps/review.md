@@ -18,8 +18,7 @@ A task id or a PR whose branch is not current: decline in one line naming the wo
 **Path.**
 `<storage root>/reviews/<TASK-ID>/<round>.md`, root verbatim from `storage root:`.
 `1.md`, then `2.md`; there is no third.
-Create the directory if missing.
-With no task id (free-text planless work, a branch naming no task), use the branch name with `/` as `-`; resolve finds the directory by this naming alone.
+`f10 review round` prints the directory (`dir:`, the task id, else the branch name), the latest round's file (`latest:`) and the next round's number and file (`round:`, `path:`); create the directory if missing.
 
 **Shape**, the same whoever reviewed:
 
@@ -76,7 +75,7 @@ Read the full diff every round.
 
 ## The blind reviewer
 
-The main agent gathers the checkout root, base ref and sha, the diff command, the task id and text (`f10 task read <id>`), the round number, the prior round's path, the output path, the lesson overrides implement's hand-off noted in this run (lesson id, path and why; none when it noted none, or the review runs standalone), and the review roles: its base role where Roles replaces it, and the added roles, from the sources `conventions/context.md` → Roles ranks (the plan's `Roles` line first).
+The main agent gathers the checkout root, base ref and sha, the diff command, the task id and text (`f10 task read <id>`), the round number, the prior round's path and the output path (`f10 review round`: `round:`, `latest:`, `path:`), the lesson overrides implement's hand-off noted in this run (lesson id, path and why; none when it noted none, or the review runs standalone), and the review roles: its base role where Roles replaces it, and the added roles, from the sources `conventions/context.md` → Roles ranks (the plan's `Roles` line first).
 It spawns **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with those facts and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh review`) and follow this section.
 The Agent tool call carries the `model` and `effort` the load's `review` profile line names (`conventions/context.md` → Agent profiles).
 The reviewer writes the file and returns a one-paragraph summary: verdict and count per category.
@@ -122,10 +121,8 @@ Round two runs only when `project.md → Review` says `Rounds: 2`, or when round
 Otherwise never run, suggest or offer a second round: a resolve with every finding settled and verify green ends the review.
 A user who asks for round two by name gets it.
 
-Round = files present + 1.
-When `1.md` holds findings with no `verdict:`, **decline** in one line pointing at `/f10:resolve`: a round two then could only say `still open`.
-With `2.md` present, decline the same way, naming the findings whose last verdict is `ask` or whose last status is `still open` or `explanation disputed`.
-Both declines are a normal end.
+`f10 review round` exiting 3 is a **decline**: round one still holds findings without a verdict (a round two then could only say `still open`), or round two exists.
+Print its `decline:` line and the findings it names, a normal end.
 Never delete or rewrite a round.
 
 **Inside a ship pipeline** a `review` entry runs this step, then `steps/resolve.md`: `review` and `review:local` the blind reviewer, `review:ci` the remote review, `review:local+ci` **both halves** (below), each settled by one resolve.
@@ -200,7 +197,7 @@ Without them this half **fails**: there is nothing to wait for.
    - **Trigger and wait**: `f10 review trigger` prints a time, what it did and the url; then `f10 review wait --since <that time> --budget 8m`, once more if it expires, then fail, and points 3 and 4 on the review it returns; point 2 does not apply, since postdating the trigger proves it new.
      A refused trigger (automatic only, or a how it cannot read): print the refusal in one line, name the declared words when there are any, and stop, a normal end.
 2. **Already written?**
-   A picked sha equal to the previous round's `reviewed:` is already written: say so in one line and stop, a normal end.
+   A picked sha equal to the `reviewed:` of the `latest:` file `f10 review round` prints is already written: say so in one line and stop, a normal end.
    This rule holds for every arrival kind, a check run included; pick's `stale` only orders the standalone question.
 3. **Shape it into the findings file**: one block per finding, `where:` from its `path:line`, `category:` mapped to the core or project categories, its fix in the detail; nothing raised is `clean`.
    `reviewed:` is pick's sha, `reviewer:` the declared identity, `review:` the picked url, `revision:` pick's revision.
