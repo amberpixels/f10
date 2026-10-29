@@ -275,8 +275,17 @@ func (s *Server) run(req Request) Reply {
 		return Reply{Error: "the daemon is stopping: run the command again"}
 	}
 
+	// a drive reports its number only once it has taken its answers, so a
+	// resume matches by its record's command line too, and its child is
+	// numbered at start
+	key := req.Key
+	if req.Resume > 0 {
+		key = cmp.Or(liveRecordKey(req.Root, req.Resume), key)
+	}
+
 	for _, c := range s.runs {
-		if c.Root == req.Root && ((req.Key != "" && c.key == req.Key) || (req.Resume > 0 && c.Drive == req.Resume)) {
+		if c.Root == req.Root &&
+			((key != "" && strings.EqualFold(c.key, key)) || (req.Resume > 0 && c.Drive == req.Resume)) {
 			return Reply{Log: c.Log, Attach: true}
 		}
 	}
@@ -286,7 +295,10 @@ func (s *Server) run(req Request) Reply {
 		return Reply{Error: err.Error()}
 	}
 
-	c.key = req.Key
+	c.key = key
+	if req.Resume > 0 {
+		c.Drive = req.Resume
+	}
 
 	return Reply{Log: c.Log}
 }
@@ -357,10 +369,7 @@ func (s *Server) awaitNumber(c *child, numberFile string) {
 // numbered records the drive number the child printed, and the record's
 // command line, so another client of the same drive attaches.
 func (s *Server) numbered(c *child, n int) {
-	key := ""
-	if rec, err := drives.Read(c.Root, n); err == nil {
-		key = strings.Join(rec.Args, " ")
-	}
+	key := recordKey(c.Root, n)
 
 	s.mu.Lock()
 	c.Drive = n
@@ -551,6 +560,28 @@ func (s *Server) resumeDrained() {
 			continue
 		}
 
-		c.Drive = d.Drive
+		c.Drive, c.key = d.Drive, recordKey(d.Root, d.Drive)
 	}
+}
+
+// recordKey is the command line record n was started with, the key a rerun
+// of it sends; "" when the record will not read.
+func recordKey(root string, n int) string {
+	rec, err := drives.Read(root, n)
+	if err != nil {
+		return ""
+	}
+
+	return strings.Join(rec.Args, " ")
+}
+
+// liveRecordKey is recordKey for a record still running: a cancelled or done
+// one shares its command line with a newer drive it must not attach to.
+func liveRecordKey(root string, n int) string {
+	rec, err := drives.Read(root, n)
+	if err != nil || rec.Cancelled != nil || rec.Done() {
+		return ""
+	}
+
+	return strings.Join(rec.Args, " ")
 }
