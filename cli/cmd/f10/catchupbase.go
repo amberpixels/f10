@@ -211,13 +211,13 @@ func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string)
 		return nil
 	}
 
-	after, found, err := recordedBase(ctx, in.main, p.branch)
+	after, sha, err := recordedBase(ctx, in.main, p.branch)
 	if err != nil {
 		return err
 	}
 
 	switch {
-	case after != "" && found:
+	case after != "" && sha != "":
 		return p.afterBase(ctx, in.main, after, fromOrigin)
 	case after != "":
 		p.found = foundGone
@@ -231,7 +231,7 @@ func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string)
 
 	p.mark = cfgLanded + " " + def
 
-	sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
+	sha, err = gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
 	if err != nil || sha != "" {
 		p.base, p.sha = "origin/"+def, sha
 		return err
@@ -339,26 +339,4 @@ func (p *catchupPlan) write(w io.Writer) error {
 	_, err := io.WriteString(w, b.String())
 
 	return err
-}
-
-// recordedBase is the f10-after-branch name and whether it exists, locally
-// or on origin; a recorded base found nowhere was finished and deleted.
-func recordedBase(ctx context.Context, main, branch string) (string, bool, error) {
-	after, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAfterBranch)
-	if err != nil || after == "" {
-		return "", false, err
-	}
-
-	for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
-		sha, err := gitx.Ref(ctx, main, ref)
-		if err != nil {
-			return after, false, err
-		}
-
-		if sha != "" {
-			return after, true, nil
-		}
-	}
-
-	return after, false, nil
 }

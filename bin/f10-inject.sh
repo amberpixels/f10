@@ -6,7 +6,6 @@
 # SessionStart with source `compact` in a session that had them, since compaction drops the text.
 # The model cannot judge that itself: after compaction the summary remembers the load, not the text.
 #
-# The load also prints the command reference (`f10 help --agent`), so it arrives on the same triggers.
 # One line, not the conventions themselves: Claude Code caps one hook's context at 10,000 characters and
 # the conventions are over twice that.
 # The line also names `f10 help --agent`, the command reference, as a call of its own: appended to the
