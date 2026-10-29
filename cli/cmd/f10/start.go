@@ -686,8 +686,6 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		notes = append(notes, settled.slugNote)
 	}
 
-	notes = appendNote(notes, settled.staleNote)
-
 	wts, err := gitx.Worktrees(ctx, in.main)
 	if err != nil {
 		return openedTask{}, err
@@ -750,7 +748,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	}
 
 	if in.pick != nil && in.pick.landed() {
-		notes = append(notes, handBackLanded(ctx, in, name, existing.name == "")...)
+		notes = append(notes, landedNotes(ctx, in, name, existing.name == "")...)
 	}
 
 	if len(in.task.Riders()) > 0 {
@@ -844,12 +842,11 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 // A settledBranch is what start knows before creating anything.
 type settledBranch struct {
-	name      string
-	slugNote  string
-	staleNote string // a landed PR's branch on origin, left alone
-	base      baseRef
-	dep       *dependency
-	existing  foundBranch
+	name     string
+	slugNote string
+	base     baseRef
+	dep      *dependency
+	existing foundBranch
 }
 
 // branchFor settles the branch before anything is created. An open PR's
@@ -885,54 +882,49 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 }
 
 // landedBranchFor names a merged or closed PR's branch as a task start
-// would, so worktree, workspace and agent name follow one rule. A branch the
-// task has locally is reused as it is; origin's copy of the PR's branch is
-// stale since it landed and is left alone. The base carries no sha: the
-// landed commit at the default branch's tip is nothing to note.
+// would, so worktree, workspace and agent name follow one rule. Only this
+// checkout's branches count: origin's copy of the PR's branch is stale since
+// it landed, and a branch the task has here is reused as it is. The base
+// carries no sha: the landed commit at the default branch's tip is nothing
+// to note.
 func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) {
 	name, slugNote, err := branchName(ctx, in.driver, in.task, "", in.title)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	existing, err := existingBranch(ctx, in.main, name, in.task.ID, "")
+	existing, err := localBranch(ctx, in.main, name, in.task.ID)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	settled := settledBranch{
+	return settledBranch{
 		name:     name,
 		slugNote: slugNote,
 		base:     baseRef{ref: in.pick.sha, flag: in.pick.url + "'s landed commit"},
 		existing: existing,
-	}
-
-	if existing.remote {
-		settled.staleNote = fmt.Sprintf("origin/%s is left alone: %s landed past it", existing.name, in.pick.url)
-		settled.existing = foundBranch{}
-	}
-
-	return settled, nil
+	}, nil
 }
 
-// handBackLanded marks a landed pickup's branch as `f10 watch off` does,
-// before the daemon's first pass: the PR merged before the branch existed,
-// and a pass would report that as news every time. A failed write is a note,
+// landedNotes hands a branch this start made back from the watcher, as
+// `f10 watch off` does: the PR landed before the branch existed, and a pass
+// would report that as news every time. A branch the task already had keeps
+// its watch, since its own work may still be live. A failed write is a note,
 // since the worktree is the result.
-func handBackLanded(ctx context.Context, in startInput, name string, created bool) []string {
+func landedNotes(ctx context.Context, in startInput, name string, created bool) []string {
+	if !created {
+		return []string{fmt.Sprintf("%s is %s: %s is reused at its own tip and stays watched",
+			in.pick.url, in.pick.state, name)}
+	}
+
 	var notes []string
 
 	if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgWatch, "false"); err != nil {
 		notes = append(notes, "the watcher was not told to leave "+name+" alone: "+err.Error())
 	}
 
-	where := name + " is local only"
-	if created {
-		where += " at " + shortSHA(in.pick.sha)
-	}
-
-	return append(notes, fmt.Sprintf("%s is %s: %s, and the watcher leaves it alone (f10 watch on %s undoes that)",
-		in.pick.url, in.pick.state, where, in.task.ID))
+	return append(notes, fmt.Sprintf("%s is %s: %s is local only at %s, and the watcher leaves it alone "+
+		"(f10 watch on %s undoes that)", in.pick.url, in.pick.state, name, shortSHA(in.pick.sha), in.task.ID))
 }
 
 // shortSHA is the seven characters a reader recognises a commit by.

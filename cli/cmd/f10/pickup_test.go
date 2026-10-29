@@ -140,6 +140,15 @@ func TestRefusePull(t *testing.T) {
 	if err := refusePull(headless); err == nil {
 		t.Error("an open PR with no head branch was not refused")
 	}
+
+	for _, state := range []string{"", "DRAFT"} {
+		unknown := merged
+		unknown.State = state
+
+		if err := refusePull(unknown); err == nil || !strings.Contains(err.Error(), "open, merged and closed") {
+			t.Errorf("a PR in state %q = %v, want it refused", state, err)
+		}
+	}
 }
 
 var pickGH = &pickup{
@@ -228,6 +237,8 @@ func TestFetchPickup(t *testing.T) {
 		t.Errorf("the closed PR's head was not fetched: %v", f.calls)
 	}
 
+	f = newFakes(t)
+	f.script("git fetch origin", "")
 	f.fail("git rev-parse --verify --quiet abc1234abc^{commit}", missing)
 
 	err := fetchPickup(t.Context(), "/code/repo", pickMerged)
@@ -235,7 +246,7 @@ func TestFetchPickup(t *testing.T) {
 		t.Errorf("a merge commit origin lacks = %v, want it named", err)
 	}
 
-	if f.called("git fetch origin refs/pull") && !f.called("git fetch origin refs/pull/30/head") {
+	if f.called("git fetch origin refs/pull") {
 		t.Errorf("a merged PR fetched a pull ref: %v", f.calls)
 	}
 
@@ -373,15 +384,13 @@ func TestStartPicksUpAPR(t *testing.T) {
 }
 
 // A merged PR is checked out at its merge commit on the task's own branch,
-// tracking nothing: origin's stale copy of the PR's branch is left alone,
-// the branch is handed back from the watcher, and the agent is told the
-// PR's state.
+// tracking nothing: origin's branches are never looked at, the branch is
+// handed back from the watcher, and the agent is told the PR's state.
 func TestStartPicksUpAMergedPR(t *testing.T) {
 	const wt = "/code/repo.GH-1-fix-login"
 
 	f := newFakes(t)
 	f.script(refsLocal, "")
-	f.script(refsOrigin, "refs/remotes/origin/GH-1/fix-login\n")
 	f.script(worktrees, porcelain(), porcelain("GH-1/fix-login", wt))
 	f.script("git worktree add -b GH-1/fix-login "+wt+" abc1234abc", "")
 	f.script("git config branch.GH-1/fix-login.f10-task GH-1", "")
@@ -401,7 +410,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, never := range []string{"git branch --track", "git merge-base", "git symbolic-ref"} {
+	for _, never := range []string{"git branch --track", "git merge-base", "git symbolic-ref", refsOrigin} {
 		if f.called(never) {
 			t.Errorf("a merged PR ran %q: %v", never, f.calls)
 		}
@@ -414,7 +423,6 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 	for _, want := range []string{
 		"pr:", pickGH.url, "branch:", "GH-1/fix-login",
 		"merged by alice on 2026-10-12: GH-1/fix-login is local only at abc1234",
-		"origin/GH-1/fix-login is left alone",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
@@ -423,7 +431,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 }
 
 // A branch the task already has here is reused as it is, the landed
-// commit noted as ignored, and still handed back from the watcher.
+// commit noted as ignored, and left watched: its own work may be live.
 func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 	const wt = "/code/repo.GH-1-fix-login"
 
@@ -431,7 +439,6 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 	f.script(linkedKeys, "branch.GH-1/fix-login.f10-task GH-1")
 	f.script(worktrees, porcelain("GH-1/fix-login", wt))
 	f.script("git config branch.GH-1/fix-login.f10-task GH-1", "")
-	f.script("git config branch.GH-1/fix-login.f10-watch false", "")
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/fix-login", opened)
 	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
@@ -447,11 +454,11 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if f.called("git worktree add") {
-		t.Errorf("the task's own worktree was not reused: %v", f.calls)
+	if f.called("git worktree add") || f.called("git config branch.GH-1/fix-login.f10-watch") {
+		t.Errorf("the task's own worktree was not reused as it is: %v", f.calls)
 	}
 
-	for _, want := range []string{"reused the existing worktree", "landed commit ignored", "is local only, and"} {
+	for _, want := range []string{"reused the existing worktree", "landed commit ignored", "stays watched"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}

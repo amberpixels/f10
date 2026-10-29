@@ -107,6 +107,8 @@ func refusePull(p pull) error {
 		return fmt.Errorf("%s is merged, but the host names no merge commit to check out", p.url())
 	case p.status() == pullClosed && p.headSHA() == "":
 		return fmt.Errorf("%s is closed, but the host names no head commit to check out", p.url())
+	case p.status() != pullOpen && p.status() != pullMerged && p.status() != pullClosed:
+		return fmt.Errorf("%s is %q: start picks up open, merged and closed PRs", p.url(), p.status())
 	}
 
 	return nil

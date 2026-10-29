@@ -190,8 +190,8 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   A PR from a fork, `--local`, `--after` and `--base` are refused before anything is created.
   A **merged or closed** PR is picked up too, for a post-merge review.
   Its branch is usually gone from the host, so the worktree is created at the commit it landed as: the merge or squash commit, or the head of a PR closed unmerged, fetched through `refs/pull/<n>/head` or `refs/merge-requests/<n>/head`.
-  The branch is local, named for the task as a task start names it, and tracks nothing: origin's stale copy of the PR's branch is left alone and noted, and a branch the task already has here is reused as it is.
-  It is handed back from the watcher at once (`branch.<name>.f10-watch=false`, **Watch** below), so the merge is never reported as news; `f10 watch on <id>` undoes that.
+  The branch is local, named for the task as a task start names it, and tracks nothing: origin's branches are not looked at, so a stale copy of the PR's branch there is left alone, and a branch the task already has here is reused as it is, at its own tip.
+  A branch this start made is handed back from the watcher at once (`branch.<name>.f10-watch=false`, **Watch** below), so the merge is never reported as news; `f10 watch on <id>` undoes that, and a reused branch keeps its watch.
   The agent is told the PR's state (merged by whom and when, or closed without a merge) before the diff, and the report says the branch is local only.
   `--plan` is refused: going on from a landed PR is a task of its own, started by its id.
   `/f10:finish --local` removes the worktree.
