@@ -44,8 +44,10 @@ func standupCommand() *cli.Command {
 		Action: runStandup,
 		Commands: []*cli.Command{
 			{
-				Name:  "mark",
-				Usage: "record a standup as reported: the next period starts when this one ended",
+				Name:     "mark",
+				Hidden:   true,
+				Category: plumbingCategory,
+				Usage:    "record a standup as reported: the next period starts when this one ended",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "since",

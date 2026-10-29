@@ -36,6 +36,8 @@ func loreCommand() *cli.Command {
 		Commands: []*cli.Command{
 			{
 				Name:      "add",
+				Hidden:    true,
+				Category:  plumbingCategory,
 				Usage:     "write one entry and print its id",
 				ArgsUsage: "<intent|decision|finding|verdict|lesson>",
 				// a rejected option's reason is prose, and prose has commas:
@@ -99,12 +101,16 @@ func loreCommand() *cli.Command {
 			},
 			{
 				Name:      "check",
+				Hidden:    true,
+				Category:  plumbingCategory,
 				Usage:     "exit 1 naming each reason when the change has no intent, no passing verdict, or an open blocker or major finding",
 				ArgsUsage: "<change>",
 				Action:    runLoreCheck,
 			},
 			{
 				Name:      "validate",
+				Hidden:    true,
+				Category:  plumbingCategory,
 				Usage:     "lint every entry of the change, or of every change, against the schema",
 				ArgsUsage: "[<change>]",
 				Action:    runLoreValidate,
