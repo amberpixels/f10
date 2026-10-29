@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "f10 plan skill - produce a senior-architect implementation plan for a task: fetches or creates the task, investigates the code, writes a staged plan, then stops before implementing. Use when the user says \"/f10:plan [<task-id | description>]\"."
+description: "f10 plan skill - produce a senior-architect implementation plan for a task: fetches or creates the task, investigates the code, writes a plan sized to the task (small, normal or large), then stops before implementing. Use when the user says \"/f10:plan [<task-id | description>]\"."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ExitPlanMode
 argument-hint: "[<task-id | free-text description>]"
 ---

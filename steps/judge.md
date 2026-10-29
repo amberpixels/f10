@@ -16,6 +16,7 @@ Name a bug only where it changes the verdict.
    No argument: what this conversation is about; say in one line which subject you took before judging it.
    Whatever the subject, a plan's `## Consequences` are costs it already accepts: weigh them in point 5; a cost it leaves out, or `- none` on a design with an evident one, is a defect where it changes the verdict.
    A plan saved before the section existed has none: read its costs from the stages, never count the absence against it.
+   A `Size: small` plan's one stage and `- none` sections are its shape, not omissions; one hiding a real decision is sized wrong, and resizing it to normal is a change the verdict names, whatever its color.
 2. **Restate the problem, then find it in the code** with a few targeted `Read`/`Grep` calls in one message.
    Where the stated problem and the real one differ, build the judgment on that.
 3. **Symptom or cause.**

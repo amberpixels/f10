@@ -195,6 +195,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   The storage root is anchored to the checkout root, whatever the launch directory.
   A plan only in chat is a failed run; superseded plans are archived, never edited.
   It closes with **Consequences** (what the chosen design costs and when to revisit it), then **Gaps**.
+  Its `Size:` line says small, normal or large, by what the implementer must design: a small plan is one stage, with Consequences and Gaps as `- none` one-liners.
 - **Findings file** - `<storage root>/reviews/<TASK-ID>/<round>.md`, from review to resolve: the reviewed sha, then one block per finding (title, summary, file and line, category, a concrete fix).
   Resolve appends verdicts and never edits the reviewer's text.
   Two rounds at most; they stay in the checkout's `.f10/`, since `f10 finish` archives only the plan.
