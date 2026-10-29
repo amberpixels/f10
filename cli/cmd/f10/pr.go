@@ -79,10 +79,16 @@ func prCommand() *cli.Command {
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
 				Category:  plumbingCategory,
-				Flags: []cli.Flag{&cli.StringFlag{
-					Name:  "reply-to",
-					Usage: "reply in the thread this review or comment `URL` names, else comment at the top level",
-				}},
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "reply-to",
+						Usage: "reply in the thread this review or comment `URL` names, else comment at the top level",
+					},
+					&cli.StringFlag{
+						Name:  "quote",
+						Usage: "a line of `TEXT` quoted above a reply that fell back to the top level",
+					},
+				},
 				Action: runPRComment,
 			},
 			{
@@ -99,7 +105,10 @@ func prCommand() *cli.Command {
 						Name: "description", Aliases: []string{"m"}, Required: true,
 						Usage: "the `TEXT`, cut to 140 characters",
 					},
-					&cli.StringFlag{Name: "sha", Usage: "refuse unless the head is this `SHA`"},
+					&cli.StringFlag{
+						Name:  "sha",
+						Usage: "refuse unless the head is this `SHA` or this SHA is a push on top of it",
+					},
 				},
 				Action: runPRStatus,
 			},
@@ -282,12 +291,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 	fmt.Fprintf(&b, "pr: %s%s\nurl: %s\nstate: %s\nhead: %s\ntarget: %s\nauthor: %s\n",
 		sigil, p.id(), p.url(), p.status(), p.headSHA(), p.base(), p.author())
 
-	// a failed login read costs the line, not the view: explain and demo need none of it
-	if login, err := h.Login(ctx); err != nil {
-		fmt.Fprintf(cmd.ErrWriter, "f10: no mine line: %v\n", err)
-	} else {
-		fmt.Fprintf(&b, "mine: %s\n", yesNo(strings.EqualFold(p.author(), login)))
-	}
+	b.WriteString(mineLine(ctx, cmd.ErrWriter, h, p))
 
 	fmt.Fprintf(&b, "title: %s\n", p.Title)
 

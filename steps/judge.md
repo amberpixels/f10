@@ -121,7 +121,7 @@ Rethink becomes one ask (objections numbered, the judge's answer first, **block 
 Stop ends blocked.
 
 **After `pr`** (`implement → pr → review (local) → judge → pr`): the code is on an open PR, so each verdict ends on the PR.
-First read the PR (`f10 pr view`); `no open PR`, one closed or merged since `pr` ran, fails the step (`conventions/failure.md`, badge `partial` on `judge`).
+First read the PR (`f10 pr view`); `no open PR` (closed or merged since `pr` ran) or `no PR read` fails the step (`conventions/failure.md`, badge `partial` on `judge`).
 
 - **Green, proceed** - leave the trace (below) and continue (`decision: continue`); the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.

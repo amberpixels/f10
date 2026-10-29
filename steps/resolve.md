@@ -52,7 +52,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    - **`+note`** - a code comment at the finding's spot ("someone could say X here, we do Y because"), giving the domain reason, never that a reviewer asked (stealth mode, `conventions/context.md`).
    - **`+reply`** - sends `reason:` to the reviewer.
      On a local block it stays in the file.
-     A remote reply posts on the PR or MR with `f10 pr comment --reply-to <the review: url>`, the reply on stdin: in that review's thread when it has one; where the command says it fell back to a top-level comment, the reply quotes the finding's title.
+     A remote reply posts on the PR or MR with `f10 pr comment --reply-to <the review: url> --quote <the finding's title>`, the reply on stdin: in that review's thread when it has one, else a top-level comment headed by the quoted title.
      Outward-facing, under the run's authorization, and read as the user's own: no f10, no round, no findings file.
      Another task it names is a link with its title (`conventions/context.md` → Task references).
      **A remote bot's skip replies by default**, its blocks only (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread.
@@ -83,7 +83,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
     The trace follows point 9's choice: fixes not pushed, nothing posted.
     In a file both halves wrote, the status's counts and the comment cover the local blocks; the remote ones are answered on their own thread by `+reply` and the settled mark.
     In round two the counts and the comment cover both files, each finding at its last verdict, round one's skip reasons included.
-    - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean: `f10 pr status --name 'review (local)' --state <success|failure> --sha <that sha> -m '<counts>'`, which refuses a sha that is not the PR's head; a refused or unclean sha gets no status, and the report says why.
+    - **Status** on the fix commit when point 9 pushed one directly on top of a clean `reviewed:` sha, else on the `reviewed:` sha when it is clean: `f10 pr status --name 'review (local)' --state <success|failure> --sha <that sha> -m '<counts>'`, which refuses a sha that is neither the PR's head nor a push on top of it; a refused or unclean sha gets no status, and the report says why.
       Failure while a finding's last verdict is `ask` (parked per point 7, or a driven ask pending), else success.
       The description is counts only, under 140 characters: `3 found, 2 fixed, 1 skipped`, `1 waiting` added when one is, `nothing found` for a clean round.
     - **Comment** (`f10 pr comment`, the text on stdin) when the entry found anything, and no `ask` is waiting: a line per finding by title with its verdict in plain words, each skip's reason, and the fix commit's short sha when one was pushed.

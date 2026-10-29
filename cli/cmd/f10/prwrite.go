@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // statusLimit is the longest description a commit status takes.
@@ -49,11 +50,19 @@ func openPull(ctx context.Context, cmd *cli.Command) (host, pull, error) {
 		return host{}, pull{}, err
 	}
 
-	if p.status() != pullOpen {
-		return host{}, pull{}, fmt.Errorf("%s is %s: nothing written", p.url(), p.status())
+	if err := requireOpen(p); err != nil {
+		return host{}, pull{}, err
 	}
 
 	return h, p, nil
+}
+
+func requireOpen(p pull) error {
+	if p.status() != pullOpen {
+		return fmt.Errorf("%s is %s: nothing written", p.url(), p.status())
+	}
+
+	return nil
 }
 
 func runPREdit(ctx context.Context, cmd *cli.Command) error {
@@ -109,7 +118,7 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	url, err := commentOnce(ctx, cmd.ErrWriter, h, p, cmd.String("reply-to"), body)
+	url, err := commentOnce(ctx, cmd.ErrWriter, h, p, cmd.String("reply-to"), cmd.String("quote"), body)
 	if err != nil {
 		return err
 	}
@@ -120,8 +129,9 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 }
 
 // commentOnce never posts the same text twice where it lands: a retry after
-// a post whose answer was lost finds it and returns its url instead.
-func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, body string) (string, error) {
+// a post whose answer was lost finds it and returns its url instead. quote
+// heads a reply that fell back to the top level, which no thread places.
+func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, quote, body string) (string, error) {
 	number, _ := strconv.Atoi(p.id())
 
 	var thread string
@@ -134,6 +144,10 @@ func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, b
 		switch {
 		case errors.Is(err, forge.ErrNoThread):
 			fmt.Fprintf(warn, "f10: %s names no thread: commenting at the top level\n", replyTo)
+
+			if quote != "" {
+				body = "> " + quote + "\n\n" + body
+			}
 		case err != nil:
 			return "", err
 		}
@@ -197,7 +211,18 @@ func statusOnce(ctx context.Context, warn io.Writer, h host, p pull, sha string,
 	}
 
 	if sha != "" && !strings.HasPrefix(head, sha) {
-		return "", fmt.Errorf("head is %s, not %s: no status set", short(head), sha)
+		// the host moves a PR's head a moment after a push lands, so a sha
+		// built on the head it reports is that push, not a stale commit
+		full, err := gitx.Exec(ctx, h.Dir, "rev-parse", "--verify", sha+"^{commit}")
+		if err != nil {
+			return "", fmt.Errorf("head is %s, not %s: no status set", short(head), sha)
+		}
+
+		if ahead, err := gitx.IsAncestor(ctx, h.Dir, head, full); err != nil || !ahead {
+			return "", fmt.Errorf("head is %s, not %s: no status set", short(head), sha)
+		}
+
+		head = full
 	}
 
 	line := fmt.Sprintf("%s %s %s", short(head), s.Name, s.State)
@@ -224,10 +249,20 @@ func short(sha string) string {
 	return sha
 }
 
-func yesNo(b bool) string {
-	if b {
-		return "yes"
-	}
+// mineLine says whether the signed-in user opened p. A failed login read is
+// unknown, never no, so a step guarding someone else's PR stops on it; the
+// view itself goes on, since explain and demo need none of it.
+func mineLine(ctx context.Context, warn io.Writer, h host, p pull) string {
+	login, err := h.Login(ctx)
 
-	return "no"
+	switch {
+	case err != nil:
+		fmt.Fprintf(warn, "f10: who is signed in is unknown: %v\n", err)
+
+		return "mine: unknown\n"
+	case strings.EqualFold(p.author(), login):
+		return "mine: yes\n"
+	default:
+		return "mine: no\n"
+	}
 }

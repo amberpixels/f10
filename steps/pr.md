@@ -13,6 +13,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    A branch this step creates for a task id is linked to it, `git config branch.<name>.f10-task <id>`, so `f10 start`, `f10 finish`, `--after` and `f10 drive` find it whatever its shape.
 3. **Open or refresh.**
    `f10 pr view` on the current branch: only an open PR counts, so `no open PR` (none, or one merged or closed) means open a new one (points 4 and 5), and an open one means refresh it (point 6).
+   `no PR read` is a host that did not answer: the step fails (`conventions/failure.md`), never opening a second PR.
    In a ship flow the catchup guard (`steps/catchup.md` → **As a guard**) integrates the base before this step, unless `catchup: off`; this step never integrates it.
 4. **A recorded dependency sets the base.**
    `f10 pr base --origin` prints the branch the PR targets: the one `f10 start --after` recorded, else the default branch.
@@ -28,7 +29,7 @@ Context: `project.md → Hosting & PR` (the PR adapter).
    Once it is open, `f10 trace state --step pr` writes the hidden state block into its body (`docs/traces.md`): nothing with `traces: off`, and a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
 6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
    - **Push first**: commit what the tree holds per the adapter (`conventions/context.md` → Commits, `--step implement`), then push, never forcing, so the description never covers code the PR lacks.
-   - **Someone else's PR** (view's `mine: no`): stop after the push and leave the title and body as they are.
+   - **Someone else's PR** (view's `mine:` anything but `yes`, `unknown` included): stop after the push and leave the title and body as they are.
    - **Rewrite from scratch**: `git fetch origin <base>` for the PR's own base (view's `target` line), then draft title and body as point 5 would for a new PR, from `git diff origin/<base>...HEAD`, the task and the plan, never patching the old body ("also adds…").
      The title keeps its task id.
      Other tasks it names resolve through `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
