@@ -4,10 +4,14 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -16,7 +20,7 @@ import (
 func prCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "pr",
-		Usage: "open a pull or merge request, or their list",
+		Usage: "open a pull or merge request, or their list; read a change's base, diff and description",
 		Commands: []*cli.Command{
 			{
 				Name:      "open",
@@ -25,8 +29,233 @@ func prCommand() *cli.Command {
 				Flags:     []cli.Flag{linkFlag(), printFlag()},
 				Action:    runPROpen,
 			},
+			{
+				Name:      "base",
+				Usage:     "the branch a change's PR/MR targets or would target: the stacked base, else the default branch",
+				ArgsUsage: "[PR | task-id]",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Flags: []cli.Flag{&cli.BoolFlag{
+					Name:  "origin",
+					Usage: "fail when origin does not have the base, which a PR cannot target",
+				}},
+				Action: runPRBase,
+			},
+			{
+				Name: "diff",
+				Usage: "a change against its base: the working tree for the branch checked out here, " +
+					"else its open PR/MR's diff, else the branch's commits",
+				ArgsUsage: "[PR | task-id]",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Flags:     []cli.Flag{&cli.BoolFlag{Name: "name-only", Usage: "list the changed files only"}},
+				Action:    runPRDiff,
+			},
+			{
+				Name:      "view",
+				Usage:     "a change's branch, base, task and open PR/MR with its description",
+				ArgsUsage: "[PR | task-id]",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Flags:     []cli.Flag{&cli.BoolFlag{Name: "comments", Usage: "add the PR/MR's comments"}},
+				Action:    runPRView,
+			},
 		},
 	}
+}
+
+func runPRBase(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), false)
+	if err != nil {
+		return err
+	}
+
+	base, err := prBase(ctx, cmd.ErrWriter, s.main, s.branch)
+	if err != nil {
+		return err
+	}
+
+	if cmd.Bool("origin") && refSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
+		return fmt.Errorf("the base %s is not on origin: push it first", base)
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, base)
+
+	return err
+}
+
+// runPRDiff reads the checkout's own state where it can: a branch checked out
+// here is diffed with its uncommitted work, which no pushed PR holds.
+func runPRDiff(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), true)
+	if err != nil {
+		return err
+	}
+
+	if s.lookupErr != nil {
+		fmt.Fprintf(cmd.ErrWriter, "f10: no PR read (%v), so the base is the recorded or default branch\n", s.lookupErr)
+	}
+
+	var out string
+
+	if s.number > 0 && !s.here {
+		h, err := t.host()
+		if err != nil {
+			return err
+		}
+
+		if out, err = h.PullDiff(ctx, s.number); err != nil {
+			return err
+		}
+
+		if cmd.Bool("name-only") {
+			out = patchFiles(out)
+		}
+	} else {
+		base, err := s.base(ctx, cmd.ErrWriter)
+		if err != nil {
+			return err
+		}
+
+		dir := cmp.Or(s.path, s.main)
+
+		from, err := forkPoint(ctx, dir, s.headRef(), base)
+		if err != nil {
+			return err
+		}
+
+		args := []string{"diff"}
+		if cmd.Bool("name-only") {
+			args = append(args, "--name-only")
+		}
+
+		args = append(args, from)
+		if !s.here {
+			args = append(args, s.headRef())
+		}
+
+		if out, err = gitx.Exec(ctx, dir, args...); err != nil {
+			return err
+		}
+	}
+
+	if out == "" {
+		return nil
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, out)
+
+	return err
+}
+
+// patchFiles is the paths a unified diff touches, for a host diff with no
+// --name-only of its own.
+func patchFiles(patch string) string {
+	var files []string
+
+	for line := range strings.SplitSeq(patch, "\n") {
+		if rest, ok := strings.CutPrefix(line, "diff --git "); ok {
+			if _, b, ok := strings.Cut(rest, " b/"); ok {
+				files = append(files, b)
+			}
+		}
+	}
+
+	return strings.Join(files, "\n")
+}
+
+// viewFields is what view reads of a request by number.
+const viewFields = "number,url,state,title,body,author,headRefName,baseRefName"
+
+func runPRView(ctx context.Context, cmd *cli.Command) error {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	s, err := resolvePRSubject(ctx, t, cmd.Args().First(), true)
+	if err != nil {
+		return err
+	}
+
+	base, err := s.base(ctx, cmd.ErrWriter)
+	if err != nil {
+		return err
+	}
+
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "branch: %s\nbase: %s\n", s.branch, base)
+
+	if s.task != nil {
+		fmt.Fprintf(&b, "task: %s\n", s.task.Label())
+	}
+
+	if s.lookupErr != nil {
+		fmt.Fprintf(&b, "\nno PR read for %s: %v\n", s.branch, s.lookupErr)
+		_, err = io.WriteString(cmd.Writer, b.String())
+
+		return err
+	}
+
+	if s.number == 0 {
+		fmt.Fprintf(&b, "\nno open PR for %s\n", s.branch)
+		_, err = io.WriteString(cmd.Writer, b.String())
+
+		return err
+	}
+
+	h, err := t.host()
+	if err != nil {
+		return err
+	}
+
+	var p pull
+	if err := h.Decode(ctx, &p, h.prArgs(strconv.Itoa(s.number), h.Pick(
+		[]string{"--json", viewFields}, []string{"-F", "json"})...)...); err != nil {
+		return err
+	}
+
+	sigil := "#"
+	if h.GLab() {
+		sigil = "!"
+	}
+
+	fmt.Fprintf(&b, "pr: %s%s\nurl: %s\nstate: %s\ntarget: %s\nauthor: %s\ntitle: %s\n",
+		sigil, p.id(), p.url(), p.status(), p.base(), p.author(), p.Title)
+
+	if body := strings.TrimSpace(p.body()); body != "" {
+		fmt.Fprintf(&b, "\n## Description\n\n%s\n", body)
+	}
+
+	if cmd.Bool("comments") {
+		comments, err := h.PullComments(ctx, s.number)
+		if err != nil {
+			return err
+		}
+
+		if len(comments) > 0 {
+			b.WriteString("\n## Comments\n")
+		}
+
+		for _, c := range comments {
+			fmt.Fprintf(&b, "\n**%s** (%s):\n\n%s\n", c.Author, c.At.Format(time.DateOnly), strings.TrimSpace(c.Body))
+		}
+	}
+
+	_, err = io.WriteString(cmd.Writer, b.String())
+
+	return err
 }
 
 func runPROpen(ctx context.Context, cmd *cli.Command) error {

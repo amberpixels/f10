@@ -81,6 +81,14 @@ func reviewCommand() *cli.Command {
 				},
 				Action: runReviewSettle,
 			},
+			{
+				Name: "round",
+				Usage: "print the task's findings directory, its latest round and the next one, or why none is " +
+					"allowed (exit 3)",
+				ArgsUsage: "[task-id]",
+				Flags:     []cli.Flag{&cli.BoolFlag{Name: "json", Usage: "emit the rounds as JSON"}},
+				Action:    runReviewRound,
+			},
 		},
 	}
 }

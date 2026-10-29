@@ -15,7 +15,7 @@ Bug hunting is not a target: it stays with review.
 
 **Scope.**
 - A path, glob or file list: those files in full; a directory means its files recursively.
-- None: the current branch's change against its base (the branch `f10 start --after` recorded, else the default branch), working tree and untracked files included.
+- None: the current branch's change against its base, `f10 pr diff` (`--name-only` for the files), working tree included, plus the untracked files `git ls-files --others --exclude-standard` lists.
   Only lines the branch added or changed are rewritten; older content in the same files stays as it was.
 
 Skip generated, vendored, fixture and lock files, changelogs and verbatim quotes.
@@ -44,7 +44,7 @@ Fenced code blocks and verbatim quotes keep theirs.
    The dash rule and any house-style typography rule apply to every changed line.
 4. **Prove the scope** with the target's check below and report its output.
    A change the check flags is reverted, unless it is an allowed exception the target names.
-5. **Verify** per `project.md → Verify` (implement's skip for an unmoved tree holds).
+5. **Verify** per the load's `verify:` line (implement's skip for an unmoved tree holds).
    Red: revert the hunk that broke it when it is identifiable, re-verify, and fail if still red.
 6. **Report** per `conventions/report.md`, prose per target: the baseline and final numbers, the kinds of change with one before/after example each, every exception the check allowed and why, problems noticed and left alone with `file:line` (each a candidate task), and the checks' output.
 

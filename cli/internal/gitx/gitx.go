@@ -264,6 +264,13 @@ func IsAncestor(ctx context.Context, dir, commit, ref string) (bool, error) {
 	}
 }
 
+// MergeBase is the best common ancestor of a and b, or "" when they share none.
+func MergeBase(ctx context.Context, dir, a, b string) (string, error) {
+	sha, _, err := Read(ctx, dir, "merge-base", a, b)
+
+	return sha, err
+}
+
 // quiet reports a git exit with nothing on stderr.
 func quiet(err error) bool {
 	exit, ok := errors.AsType[*ExitError](err)

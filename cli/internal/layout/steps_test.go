@@ -296,3 +296,31 @@ func TestStepReferenceExtractors(t *testing.T) {
 		}
 	}
 }
+
+// The binary resolves verify and the load prints it, so the fallback ladder
+// stays out of the prose a run reads, where copies drift apart.
+func TestNoVerifyLadderInProse(t *testing.T) {
+	root := filepath.Join(filepath.Dir(scriptPath(t)), "..")
+
+	for _, dir := range []string{"steps", "skills", "conventions", "modes"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
+				return err
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			if strings.Contains(string(data), "a `justfile` means") {
+				t.Errorf("%s repeats the verify fallback: read the load's `verify:` line instead", path)
+			}
+
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", dir, err)
+		}
+	}
+}

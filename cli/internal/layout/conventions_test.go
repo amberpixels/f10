@@ -49,6 +49,21 @@ func TestConventionsListMatchesDir(t *testing.T) {
 	}
 }
 
+// Claude Code drops the middle of a Bash output past 30,000 characters, with
+// no warning, so the conventions must fit one call with room to grow.
+func TestConventionsFitOneOutput(t *testing.T) {
+	const budget = 29000
+
+	out, err := exec.Command(filepath.Join(filepath.Dir(scriptPath(t)), "f10-load-conventions.sh")).Output()
+	if err != nil {
+		t.Fatalf("f10-load-conventions.sh: %v", err)
+	}
+
+	if n := len([]rune(string(out))); n > budget {
+		t.Errorf("f10-load-conventions.sh prints %d characters, over the %d budget", n, budget)
+	}
+}
+
 // f10-inject.sh must run on a session's first f10 skill, typed or
 // model-invoked, and after compaction: one synchronous entry per event, since
 // an async one would arrive a turn late.

@@ -17,12 +17,12 @@ Words around the subject ("very short", "is it just a day off?") are framing to 
 ## A change: what was it, what is it now
 
 1. **Gather the diff.**
-   No argument: the current branch against its base, found with `git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|origin/||'`.
-   A PR/MR: diff and description via `gh pr diff` / `gh pr view --comments` or `glab mr diff` / `glab mr view`, plus the task and plan the branch name points to.
-   A task id: `f10 task read <id>`, its `<storage root>/plans/<TASK-ID>.md` where one exists, and its branch or PR.
+   No argument: the current branch against its base (a stacked task's base branch, else the default branch), `f10 pr diff` and `f10 pr view --comments`.
+   A PR/MR: the same two with its number or url, plus the task the view's `task:` line names and its plan.
+   A task id: `f10 task read <id>`, its `<storage root>/plans/<TASK-ID>.md` where one exists, and `f10 pr diff <id>` / `f10 pr view --comments <id>`.
    A sha or range: `git show` / `git diff`.
    `local`, `staged`, `uncommitted`: `git diff` and `git diff --staged`.
-   A branch with no commits against its base falls through to the working tree.
+   On the branch checked out here, `f10 pr diff` holds the working tree too, so a branch with no commits yet shows its uncommitted work.
 2. **The `-` lines are the old behaviour** (a removed validation, a deleted method, a dropped default).
    The task and commit messages say what was *intended*; where they disagree with the diff, follow the diff and say so.
 3. **Every item's lead names both sides.**

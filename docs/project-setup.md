@@ -85,7 +85,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Project | one line: what this is, and the stack | detected from build files |
 | Tracker | the fetch and create adapters, and a parent adapter linking a subtask to its parent; the create and parent adapters apply only where no driver implements `create` ([driver contract](driver-contract.md#creating-a-task)) | the host CLI's issue commands; GitHub sub-issues or GitLab child links for the parent |
 | Hosting & PR | where code lives, how to open or refresh a PR or MR | from the git remote |
-| Verify | the exact lint and test commands, and "never run X" rules | from the justfile or Makefile |
+| Verify | the exact lint and test commands, and "never run X" rules | the justfile's or Makefile's lint and test entries, else the stack's idiomatic commands; the loader prints the result as `verify:` |
 | Roles | the base role per step, replaced or added to, always or by area ([Roles](#roles)) | each step's base role |
 | Review | added review categories, each with a source-of-truth file; what never to flag; who answers an `ask` | the four core categories, reviewed locally by a blind agent; every ask goes to you |
 | Guardrails | domain rules a plan and its code must honour | none |
