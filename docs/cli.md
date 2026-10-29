@@ -79,7 +79,7 @@ f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... 
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
-f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
+f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
 f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
@@ -228,9 +228,9 @@ The bundle's base is the one `After:` its members name outside it; a line naming
 Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
-Before the first pipeline step, unless `catchup: off`, ship brings the branch up to date with the base when it moved - a merge unless `catchup_stacked: rebase`, since a rebase onto a branch that later rebases or squash-merges replays its old commits - and asks once - wait, or proceed on the plan's assumption - when it still equals the default branch.
+Before implement, where a base is recorded on the branch, ship's catchup guard brings the base in by the method `f10 pr catchup` prints, unless `catchup: off`: `merge`, `rebase`, or `onto` for a base that was squash-merged or rebased, which replays only the branch's own commits. A recorded base whose branch has no code yet gets one question instead, wait or proceed on the plan's assumption, even under `catchup: off`; a driven run waits.
 A conflict there stops ship, marks the branch for the base that conflicted (`f10-landed`, or `f10-base-moved` for a recorded base), and hands off to `/f10:catchup`, which settles it with both sides kept.
-Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`.
+Ship also catches up with the base, or the default branch when none is recorded, before every `pr` entry and a change judge, unless `catchup: off`; once the branch is on origin these are merges, so the push never forces.
 The pr step opens the PR or MR against the base branch, so it is stacked and the base's finish retargets it to the default branch; a base not yet on origin stops that step rather than pushing another task's branch.
 `f10 finish` on the base task clears the record from every dependent, since the base's code is in the default branch from then on.
 It also records the base commit each dependent was built on, so the dependent's catchup drops the base's pre-squash commits (`f10 pr catchup`, `method: onto`).
@@ -382,7 +382,7 @@ The plan and ship skills run it first whenever their argument is a task id, beca
    Forward names the agent, the workspace and the step, and sends nothing; a prompt submitted behind that dialog would wait with it.
    An idle agent on a `blocked` run is the driven state this verb exists for, and is sent to.
 
-The answer path: `f10 status 42` reads the run the worktree's agent reports, its `ask` row included; `f10 forward 42 "1. proceed 2. keep ours"` sends the answers back as that agent's next prompt.
+The answer path: `f10 status 42` reads the run the worktree's agent reports, its `ask` row included; `f10 asks answer 42 1=proceed 2="keep ours"` writes the answers through the asks inbox, which sends them as that agent's next prompt and closes the ask for every session.
 `/f10:status 42` does both in one go, with the question put to you in between.
 
 Out of scope: more than one task or more than one command per call, tailing the remote agent's output, and answering Claude Code permission prompts.
@@ -393,18 +393,18 @@ Out of scope: more than one task or more than one command per call, tailing the 
 
 ```
 FT-116  2 done · 1 halted · 1 reviewing
-├─ ✓ FT-117     done       finish  #128 merged
+├─ ✓ FT-117     done       finish  󰘭 #128 merged
 │            trailers + traces switch
-├─ · FT-118     reviewing  review  #129
+├─ · FT-118     reviewing  review  󰓂 #129
 │  │         PR state block
-│  └─ ✓ FT-120  done       finish  #131 merged
+│  └─ ✓ FT-120  done       finish  󰘭 #131 merged
 │               look-around + f10 board
 └─ ✗ FT-121     halted     ship
              sidebar icons
        halt  agent gh-121-1a2b3c in workspace w3 is idle while its run says ship running: implement
 ```
 
-A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking, `·` anything else), the id, the stage, the current or last step, and the PR with its state when it is not open.
+A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking, `·` anything else), the id, the stage, the current or last step, and the PR with its state when it is not open, an open or merged PR's number after a Nerd Font icon (`F10_STATUS_GLYPHS` replaces the icons on a terminal without the font).
 A task's run block gains an `agent` row, the profile its branch records (`opus:high`), when that is not the kind's default; `--json` carries it as `agent`.
 The title goes on the line beneath, cut to fit; the ask, the halt reason and what unblocks it (`next`) follow as labelled lines.
 A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
@@ -547,7 +547,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    The mark is `f10-landed` with the default branch's name when the PR targets it, `f10-base-moved` with the base's head for a base branch no task in the drive owns.
    A branch already marked, one its target is already in, or one never pushed is left alone, and a fetch that fails skips the poll.
    The catchup follows `catchup:`, or `catchup_stacked:` for a base branch.
-   Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against origin's tip when it sent the catchup after a rebase, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
+   Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against origin's tip when it sent the catchup after a rebase or an `onto`, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
    A branch origin moved on while the catchup ran is not pushed: the task halts, saying to bring `origin/<branch>` in and run `/f10:catchup` there, since the rebased branch lacks what was pushed meanwhile.
    A drive with no such record (resumed, or rerun after a halt) never force-pushes a caught-up branch, and halts instead.
    A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
@@ -660,7 +660,7 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 | key | meaning |
 |---|---|
 | `branch` | the current branch |
-| `base`, `sha` | the ref to integrate and its sha |
+| `base`, `sha` | the ref to integrate and its sha; with `f10-base-moved` set (not before `pr` or `judge`), the commit the mark names, printed as a sha |
 | `upstream` | with `method: onto` only: the base's old tip, from `branch.<name>.f10-base-tip` |
 | `found` | `f10-landed`, `f10-after-branch`, `f10-after-branch gone` (its task finished: unset both after keys) or `default branch` |
 | `how` | how the base was found, in a sentence |
@@ -670,6 +670,7 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 | `code` | for an `f10-after-branch` base: `yes`, or `none` when it has no commit of its own, merges not counted |
 
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
+`f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the drive's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
 `onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
 `f10 start --after` records the tip, `f10 finish` records it again for each dependent before deleting the base branch (a spike closed without merging clears it instead), and the catchup step refreshes it once green.

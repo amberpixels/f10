@@ -155,8 +155,8 @@ var pickGH = &pickup{
 	number: "30",
 	url:    "https://github.com/o/r/pull/30",
 	branch: "alice/fix-login",
-	view:   "gh pr view 30 --comments",
-	diff:   "gh pr diff 30",
+	view:   "f10 pr view --comments 30",
+	diff:   "f10 pr diff 30",
 }
 
 func TestPickupOf(t *testing.T) {
@@ -166,7 +166,7 @@ func TestPickupOf(t *testing.T) {
 	}
 
 	gl := newHost("glab", "").pickupOf("7", pull{WebURL: "https://gl/mr/7", SourceBranch: "b"})
-	if gl.view != "glab mr view 7 --comments" || gl.diff != "glab mr diff 7" || gl.branch != "b" {
+	if gl.view != "f10 pr view --comments 7" || gl.diff != "f10 pr diff 7" || gl.branch != "b" {
 		t.Errorf("pickupOf on glab = %+v", gl)
 	}
 
@@ -260,7 +260,7 @@ func TestFetchPickup(t *testing.T) {
 func TestPromptForAPickup(t *testing.T) {
 	for _, mode := range []string{modeDefault, modeDiscuss} {
 		got := prompt(mode, shipFlow{}, "GH-1", nil, "", pickGH, "")
-		for _, want := range []string{"f10 task read GH-1", "gh pr view 30 --comments", "gh pr diff 30", "stop and wait"} {
+		for _, want := range []string{"f10 task read GH-1", "f10 pr view --comments 30", "f10 pr diff 30", "stop and wait"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("prompt(%q) for a PR = %q, missing %q", mode, got, want)
 			}

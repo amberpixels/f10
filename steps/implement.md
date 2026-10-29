@@ -4,7 +4,7 @@ Role: a **senior engineer** in the project's stack, or the base role the plan's 
 Input: a plan: from the plan step just run, a saved `<storage root>/plans/<task>.md`, or a file the user passed.
 Output: verified code in the working tree; later pipeline steps (`pr`, `push`, `review`, `deploy`) decide where it goes.
 A spike's output is its spike report, its code left uncommitted, and no later step runs.
-Context: `project.md` guardrails and Verify.
+Context: `project.md` guardrails and the loader's `verify:` line.
 
 0. **Check the plan's gaps first**: open items are handled per `conventions/gaps.md` before any code.
 1. **Implement the plan** in the project's house style: its CLAUDE.md rules and the guardrails in project.md / the implement overlay.
