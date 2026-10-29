@@ -47,7 +47,8 @@ Context: `project.md → Tracker` (the **create adapter**, used where `f10 task 
    Apply the project's declared default status/labels.
    A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`f10 task create --label bug`), so fetch settles the same kind later; a debug brief's kind is confirmed, so it always gets one.
    A spike gets its label only when the user calls the task one, since the label alone makes ship skip the PR.
-   A split creates the parent first, then links each subtask to it: through `f10 task create`, `--parent` is the link (a GitHub sub-issue, a GitLab work-item child, or the driver's); through the adapter, the tracker's native parent link or the declared **parent** adapter.
+   A split creates the parent first, then links each subtask to it: through `f10 task create`, `--parent` is the link (a GitHub sub-issue, or the driver's); through the adapter, the tracker's native parent link or the declared **parent** adapter.
+   GitLab nests no issue under an issue: there create warns, and the checklist below goes in.
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
    Through `f10 task create`, `f10 task children <parent>` confirms the link: an exit 3 is a tracker with no parent link, so the checklist goes in; a subtask missing from its rows means the link was dropped (a driver ignoring `--parent`, or a host link create warned about), and the report names it for the user to link by hand.
 4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; a split reports through `f10 status <parent> --plain`, printed verbatim (`conventions/report.md` → Several tasks).

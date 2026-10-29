@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -279,22 +280,16 @@ func TestHostCreateRefusals(t *testing.T) {
 	}
 }
 
-// GitLab links in the work-item hierarchy, by global ids read per iid.
-func TestLinkWorkItem(t *testing.T) {
+// GitLab takes no issue under an issue, so the link is refused without a
+// call and create warns.
+func TestLinkParentGitLab(t *testing.T) {
 	f := newFakes(t)
 
-	f.script("glab repo view -F json", `{"path_with_namespace":"g/r"}`)
-
-	for iid, gid := range map[string]string{"7": "gid://gitlab/WorkItem/70", "12": "gid://gitlab/WorkItem/120"} {
-		f.script("glab api graphql -f query="+workItemIDQuery+" -f path=g/r -f iid="+iid,
-			`{"data":{"project":{"workItems":{"nodes":[{"id":"`+gid+`"}]}}}}`)
+	if err := newHost("glab", "").linkParent(t.Context(), "7", "12"); !errors.Is(err, errGitLabNoIssueParent) {
+		t.Errorf("linkParent = %v", err)
 	}
 
-	mutation := "glab api graphql -f query=" + workItemParentMutation +
-		" -f id=gid://gitlab/WorkItem/120 -f parent=gid://gitlab/WorkItem/70"
-	f.script(mutation, `{"data":{"workItemUpdate":{"errors":[]}}}`)
-
-	if err := newHost("glab", "").linkParent(t.Context(), "7", "12"); err != nil || !f.called(mutation) {
-		t.Errorf("linkParent = %v", err)
+	if f.called("glab api") {
+		t.Error("glab was called")
 	}
 }

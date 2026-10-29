@@ -573,3 +573,65 @@ func TestTaskCurrent(t *testing.T) {
 		})
 	}
 }
+
+// hostRepo is createRepo on a GitHub tracker with a github.com origin, and a
+// fake gh first on PATH that logs its calls and prints an issue url for a
+// create; script, when given, is the driver.
+func hostRepo(t *testing.T, script string) (string, string) {
+	t.Helper()
+
+	repo := createRepo(t, script)
+	md := "---\ntracker:\n  kind: github\n  id: FT-###\n---\n# demo\n"
+
+	if err := os.WriteFile(filepath.Join(repo, ".f10", "instructions", "project.md"), []byte(md), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := exec.Command("git", "-C", repo, "remote", "add", "origin",
+		"git@github.com:o/r.git").CombinedOutput(); err != nil {
+		t.Fatalf("git remote: %v %s", err, out)
+	}
+
+	bin := t.TempDir()
+	calls := filepath.Join(bin, "calls")
+	gh := "#!/bin/sh\necho \"$@\" >> " + calls + "\n" +
+		"case \"$1 $2\" in \"issue create\") echo https://github.com/o/r/issues/12 ;; esac\n"
+
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(gh), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	return repo, calls
+}
+
+// A GitHub tracker creates the issue itself, with no driver or past one
+// declining create, and prints the new id.
+func TestTaskCreateOnHostIssues(t *testing.T) {
+	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
+		repo, calls := hostRepo(t, script)
+
+		out, _, err := runCreate(t, repo, "# Add it\n\nbody\n", "--label", "draft")
+		if err != nil || out != "FT-12\n" {
+			t.Errorf("%s: create = %q, %v; want FT-12", name, out, err)
+		}
+
+		if got := readFile(t, calls); !strings.Contains(got, "issue create --title Add it --body body --label draft") {
+			t.Errorf("%s: gh calls = %q", name, got)
+		}
+	}
+}
+
+// With no host CLI to reach the issues, create answers exit 3 before stdin,
+// so capture falls back to its adapter.
+func TestTaskCreateNoHostCLI(t *testing.T) {
+	repo, _ := hostRepo(t, "")
+	if out, err := exec.Command("git", "-C", repo, "remote", "remove", "origin").CombinedOutput(); err != nil {
+		t.Fatalf("git remote: %v %s", err, out)
+	}
+
+	if _, _, err := runCreate(t, repo, "# A\n"); exitCode(err) != exitNoCreate {
+		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
+	}
+}

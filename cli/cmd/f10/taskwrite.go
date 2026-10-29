@@ -584,6 +584,18 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
+// createsOnHost is a tracker on the host's issues with a host CLI to reach
+// them; without one, create answers exit 3 like a tracker f10 cannot reach.
+func (t *target) createsOnHost() bool {
+	if !t.hostIssues() {
+		return false
+	}
+
+	_, err := t.host()
+
+	return err == nil
+}
+
 // hostCreate makes the task an issue on the host. The parent link is a second
 // write, since it needs the new number; the issue exists by then, so a failed
 // link is a warning and never a reason to create it again.

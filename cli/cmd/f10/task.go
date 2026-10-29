@@ -669,9 +669,9 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
 	d := t.driver()
-	if d == nil && !t.hostIssues() {
+	if d == nil && !t.createsOnHost() {
 		return cli.Exit("f10: no driver creates tasks here (looked for "+strings.Join(t.driverPaths(), ", ")+
-			"), and a "+t.eff.TrackerKind+" tracker has no host-issues fallback; "+
+			"), and no host issues take them; "+
 			"create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
 	}
 
@@ -699,7 +699,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 	if d != nil {
 		r, created.URL, err = driverCreate(ctx, cmd.ErrWriter, t, d, doc, args)
-		if errors.Is(err, driver.ErrUnsupported) && !t.hostIssues() {
+		if errors.Is(err, driver.ErrUnsupported) && !t.createsOnHost() {
 			return cli.Exit("f10: the driver at "+d.Path+" declines `create`; "+
 				"create the task through the project's Create adapter (project.md, Tracker)", exitNoCreate)
 		}
