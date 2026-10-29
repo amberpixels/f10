@@ -8,7 +8,7 @@ argument-hint: "[task-id]"
 # f10 · asks
 
 Driven agents' questions wait in one per-user inbox until the first answer from any way in (`docs/cli.md` → Asks).
-This skill reads the inbox, asks the user, and writes the answers; it runs no step and loads no conventions.
+This skill reads the inbox, asks the user, and writes the answers (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`); it runs no step.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.

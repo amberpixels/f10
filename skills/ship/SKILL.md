@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "f10 ship skill (full run) - take a task through the project's flow: implement, then whatever the project declares (review, commit, PR/MR, deploy). Use when the user says \"/f10:ship [<task-id | plan-file.md | description>]\". Fetches and plans as needed, then runs the flow end to end."
+description: "f10 ship skill - take a task through the project's flow: implement, then whatever the project declares (review, commit, PR/MR, deploy); fetches and plans as needed, then runs the flow end to end. Use when the user says \"/f10:ship [<task-id | plan-file.md | description>]\"."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ScheduleWakeup, ExitPlanMode
 argument-hint: "[<task-id | plan.md | description>]"
 ---
@@ -20,15 +20,15 @@ Deploy has its own confirmation (the **deploy** step).
   Two areas mapping to different flows: the deliverable's area wins, as for Roles, and the brief names the other.
   The area map is the project's choice, not yours: never self-select another flow, though for tiny work you may suggest one.
   Name the flow an area chose, and the area, in one line before the first step.
-- A **plan file** (`*.md` path): run the flow with it.
-- A **task id** (project id format / id / url), or a **bundle** joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
+- `<plan.md>`: a plan file; run the flow with it.
+- `<task-id>` (project id format / id / url), or a bundle joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
   Found: reuse it, never asking; a task with a plan file never plans again, and replanning is `/f10:plan <id>` by hand.
   Missing: under `stale_after`, fetch judges an old task first and may end the run blocked before any plan or flow entry (`anyway` in the steering skips it); then run the **plan** step when the flow leads with `plan` (with `flow_by_area`, start and drive leave planning to ship); a **planless** flow (below) never runs it, and the fetch brief becomes the inline plan.
   Then the flow.
-- A **free-text description**: the **capture**, **fetch** and **plan** steps, then the flow.
-- **No argument** (flags or a flow word alone count as none; a description is free text, above): a task already in this conversation (a plan just saved, a task fetched), else the branch's task, the id `f10 task current` prints.
-  Say in one line which task you took and where from, then run it as a **task id**, forward mode included, so a saved plan is reused.
+- `<description>`: free text; the **capture**, **fetch** and **plan** steps, then the flow.
+- No argument (flags or a flow word alone count as none; a description is free text, above): a task already in this conversation (a plan just saved, a task fetched), else the branch's task, the id `f10 task current` prints.
+  Say in one line which task you took and where from, then run it as a `<task-id>`, forward mode included, so a saved plan is reused.
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
   `resume at <entry>` (sent by `f10 drive` once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.

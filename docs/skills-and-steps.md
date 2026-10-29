@@ -39,7 +39,7 @@ A step never names the skill that runs it, except where its behavior differs by 
 6. **The skill's own content.**
 7. **`**Exit**`**, a list: where the run ends (stop at an artifact, or stay in the conversation) and, where one follows, a `Next:` skill with its condition.
    `conventions/report.md` says how it is offered.
-   Skills that only run the binary keep their ending in the procedure, since it follows the command's exit codes.
+   Skills that only run the binary (`modes/binary.md`) have no Run or Exit: the command block, then a numbered procedure whose items name the exit codes they handle, each ending where the command's output does.
 
 ## Edge cases
 
@@ -47,7 +47,7 @@ A step never names the skill that runs it, except where its behavior differs by 
   The skill keeps only the flags and the no-argument default.
 - **Authorization is granted once, in the skill.**
   The step says the action is outward-facing; `ship/SKILL.md` grants the push and the PR, `resolve/SKILL.md` asks before a `+reply`, and before landing fixes on an open PR unless driven.
-- **Logic two skills share goes in a mode** (`modes/forward.md`), not copied into both.
+- **Logic two skills share goes in a mode** (`modes/forward.md`, `modes/binary.md`), not copied into both.
 - **A skill that needs part of another step's work** runs those points of that step and names where it differs (ship runs `steps/catchup.md` as a guard before implement, `pr` and a change judge, failing on a conflict).
 - **A skill or step that defers to another step** ("as `steps/X.md` point 2 says") loads that step in every caller, or inlines the few lines it needs; a rule several steps share goes in a convention (`conventions/context.md` → Commits).
   `TestStepReferences` (`cli/internal/layout/steps_test.go`) fails on a followed step (a bold step name in a skill) or a deferred-to one (a `steps/X.md` mention followed by `point` or `points`, or after `as `) that a load of the caller does not name; other forms, such as `steps/X.md` → Section, go unchecked.

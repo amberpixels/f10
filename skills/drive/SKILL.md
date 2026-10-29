@@ -2,27 +2,25 @@
 name: drive
 description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing only when an agent asks; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "<id>[:profile]... [--flow <name> | --local] [--agent <profile> | --model <model>]"
+argument-hint: "<id>[:profile]... [--flow <name> | --local]"
 ---
 
 # f10 · drive
 
-Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
-Each task runs the `default` flow, or the one `--flow <name>` or `--local` names (`f10 flow` lists them): `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the frontmatter's `drive_finish` is on; a spike is closed after ship either way (`f10 finish` closes it without a merge).
-A rerun keeps the flow a task's branch already records.
-No chain is typed after the ids: the flow says what runs.
-`--agent` picks every agent's profile, `kind:model:effort` or a part of it, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model` is the model-only form.
-`<id>:<profile>` picks one task's, which wins.
-A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
-This skill expands parents, runs the command, relays its questions and prints its report; it runs no step.
+Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the frontmatter's `drive_finish` is on (a spike is closed after ship either way: `f10 finish` closes it without a merge).
+This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report; it runs no step.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- A parent id expands into the subtasks the user picks (**Parents** below); everything else goes to `f10 drive` verbatim.
+- `<id>`: a task to drive; a parent id expands into the subtasks the user picks (**Parents** below).
+  A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
+- `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
+- `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them); a rerun keeps the flow a task's branch already records.
+  No chain is typed after the ids: the flow says what runs.
+- `--agent <profile>`: every agent's profile, `kind:model:effort` or a part of it, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model <model>` is the model-only form.
+- Everything else goes to `f10 drive` verbatim.
 
-## Parents
-
-A task id whose task has subtasks is never driven itself: the user picks which subtasks run, every time, with no silent default.
+**Parents**: a task id whose task has subtasks is never driven itself; the user picks which subtasks run, every time, with no silent default.
 
 1. **Find the parents, in one Bash call**: `f10 task children <id> --json` for each listed id; not a range's ends or flags.
    Strip a `:profile` suffix (`:opus`, `:opus:high`) for the lookup and keep it.
@@ -52,25 +50,21 @@ Rerunning the same arguments follows the drive already running, and from another
 f10 drive <arguments>
 ```
 
-The arguments are the expanded ones from **Parents**.
-Its first line is `drive <n>`, the record it keeps; rerunning the same arguments picks that record up.
-When it exits, read its output and act on the exit code.
-On every exit, a line starting `!!!` goes first, verbatim, above everything else.
-
-- **0** - every task went through its flow.
-  Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
-- **4** - one or more agents asked; each ask waits in the asks inbox, so it can also be answered in the agent's pane, with `f10 asks` or from another session.
-  Follow `${CLAUDE_PLUGIN_ROOT}/skills/asks/SKILL.md` for this drive's asking tasks: the questions in one `AskUserQuestion`, then `f10 asks answer`, which resumes the drive through the daemon.
-  Then rerun the same arguments in the background to follow the resumed drive, and act on its exit as above; an ask already answered elsewhere resumes the drive the same way.
-- **5** - a task halted; the lines beneath the report say which and why.
-  Print the report block and those lines verbatim, and stop.
-  A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 drive list` shows it and `f10 drive cancel <n>` stops it.
-  The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
-  A task whose run stopped (a `next:` line under its halt) is prompted again only when it stopped for a catchup (its `next:` names `/f10:catchup`, or a catchup failed) and a later catchup ended clean; any other needs steering through `--answer`.
-  A ship stopped by its catchup guard gets a catchup from the drive each time its base moves and resumes without a halt; it halts here when a catchup made no progress or did not end clean.
-  A task whose branch is on origin is caught up whenever its PR's target moves, at its next skill boundary, and the drive pushes the caught-up branch.
-- **anything else** - the command refused; its message names the cause.
-  `drive <n> is running` means another session drives the same list: point at `f10 drive list`, and at `f10 drive cancel <n>` if the user wants to take it over.
-  Print it verbatim and stop.
-
-A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.
+1. Run it with the expanded arguments from **Parents**.
+   Its first line is `drive <n>`, the record it keeps; rerunning the same arguments picks that record up.
+   When it exits, read its output and act on the exit code.
+2. **Exit 0**: every task went through its flow.
+   Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
+3. **Exit 4**: one or more agents asked; each ask waits in the asks inbox, so it can also be answered in the agent's pane, with `f10 asks` or from another session.
+   Follow `${CLAUDE_PLUGIN_ROOT}/skills/asks/SKILL.md` for this drive's asking tasks: the questions in one `AskUserQuestion`, then `f10 asks answer`, which resumes the drive through the daemon.
+   Then rerun the same arguments in the background to follow the resumed drive, and act on its exit as above; an ask already answered elsewhere resumes the drive the same way.
+4. **Exit 5**: a task halted; the lines beneath the report say which and why.
+   Print the report block and those lines verbatim, and stop.
+   A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 drive list` shows it and `f10 drive cancel <n>` stops it.
+   The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
+   A task whose run stopped (a `next:` line under its halt) is prompted again only when it stopped for a catchup (its `next:` names `/f10:catchup`, or a catchup failed) and a later catchup ended clean; any other needs steering through `--answer`.
+   A ship stopped by its catchup guard gets a catchup from the drive each time its base moves and resumes without a halt; it halts here when a catchup made no progress or did not end clean.
+   A task whose branch is on origin is caught up whenever its PR's target moves, at its next skill boundary, and the drive pushes the caught-up branch.
+5. **Any other exit**: the command refused; its message names the cause.
+   `drive <n> is running` means another session drives the same list: point at `f10 drive list`, and at `f10 drive cancel <n>` if the user wants to take it over.
+   Print it verbatim and stop.

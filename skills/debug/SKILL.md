@@ -15,16 +15,15 @@ argument-hint: "<error | stack trace | description>"
 - `<error | trace | description>`: the bug report, run through the **debug** step.
   A confirmed cause runs **capture** with the debug brief, then **fetch** and **plan** on the new task id.
   An argument that reports no bug ("let's debug something") counts as none.
-- **No argument**:
+- No argument:
   - An error or stack trace already in this conversation: that is the report.
     Say in one line which one you took, then start.
   - Nothing in the conversation: ask for the report in one line and wait.
-- A `&& /f10:<skill> ...` tail is a chain, run once the plan is saved (`conventions/report.md`).
 
 **Run**
 1. Run `f10-load-project.sh debug capture fetch plan` first, on every call of this skill.
 2. Follow the **debug** step it prints; on a confirmed cause, **capture**, **fetch** and **plan**, in that order.
 
 **Exit**
-- Stop at the saved plan, or at debug's report when the bug does not reproduce.
+- Stop at the saved plan, unless the argument chains a skill: then run it; or at debug's report when the bug does not reproduce.
 - Next: `/f10:ship <id>`, once a plan is saved.

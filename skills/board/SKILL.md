@@ -2,13 +2,13 @@
 name: board
 description: "f10 board skill - what changed in this project today (else the last working day): started, updated, reviewed, finished, new tasks; or, with --state, where every task stands and who owes the next move, with your own next moves offered one per line. Use when the user says \"/f10:board\", asks what changed, what happened yesterday or this week, for the board, where every task is, what is in flight, what is blocked or waiting on them, or what to pick up next."
 allowed-tools: Bash
-argument-hint: "[today | yesterday | last-workday | this-week | last-week | <date>] [--state] [--remote] [-C <checkout>]"
+argument-hint: "[today | yesterday | <date>] [--state]"
 ---
 
 # f10 · board
 
 The board, in a session: `f10 board` reads the host, the tracker and this machine, and draws what changed in a window (the feed), or with `--state` one line per task with its stage and next action.
-This skill only runs the command and relays its output; it runs no step.
+This skill only runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`); it runs no step.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -32,7 +32,8 @@ f10 board <arguments>
    The feed: a header naming the span (`today · <date>`, or `last-workday · <date> (no activity today)`), a `<source>  failed  <error>` line per source that did not read, `local only` for a checkout with no origin remote, then one line per row under `started`, `updated`, `reviewed`, `finished` and `new tasks`, each ending in what happened and who owes the next move, and a closing line counting the open requests with no commits, reviews or status changes in the window; or `no activity in the window`.
    The state: the source lines, then one line per row under `in progress`, `next` and `done`, or `nothing in flight, nothing next, nothing done since <date>`.
    None of those is a failure; a failure is printed as is and ends the turn.
-2. **The feed offers nothing**: it reports what happened. Under it, say in one line that `/f10:board --state` shows the moves.
+2. **The feed offers nothing**: it reports what happened.
+   Under it, say in one line that `/f10:board --state` shows the moves.
 3. **The state offers your moves**, one line each under the block, in the board's order.
    A row ends in a tail of up to three fields: `#<n>` for its request, who (an agent name and its status, an assignee, or the author), and its next action where it has one; `done` rows have none.
    The next action is a command (`f10 finish FT-71`, `/f10:resolve FT-71`) or a sentence (`waiting on review`, `at implement`).
@@ -41,5 +42,3 @@ f10 board <arguments>
    The `next` group is folded: one line, the command of its first row that has one, with `and <N> more` when it has more rows, since the board ranks them by priority; a group whose rows all wait on a base offers nothing.
    Run none of them; the call is the user's.
 4. Nothing else: no group, stage or reason the board did not print, no summary of the block.
-
-A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

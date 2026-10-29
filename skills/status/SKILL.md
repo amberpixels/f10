@@ -9,6 +9,7 @@ argument-hint: "[task-id]"
 
 Where a run is, in words: the task, the three phases, the step a stopped run stopped on, the reason, and what unblocks it.
 The status-line badge draws the same facts as three glyphs.
+This skill runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`); it runs no step.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -44,5 +45,3 @@ The status-line badge draws the same facts as three glyphs.
    A task with no live run of its own prints `run none for <id>` instead: what the agent in its checkout is on now (`agent`), and its `plan` and `pr` where they exist.
    That block never carries an `ask` row.
    A finished task, its branch gone, prints a one-row tree, `done` with the merged PR, its gates as lines under it.
-
-A `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`. A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.

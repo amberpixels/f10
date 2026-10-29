@@ -7,6 +7,7 @@ Steps, plan, pipeline and reports stay the same.
 **Activation:** the token **`--driven`** anywhere in the argument.
 Strip it and read the argument as normal.
 It holds for the whole run: a skill that chains into another (`/f10:plan ... && /f10:ship ...`) passes it on.
+The skills that take it: catchup, cleanup, debug, judge, plan, resolve, review, ship and standup; brainstorm, capture, demo and explain never see it, since nothing prompts them from another session, and a skill that only runs the binary (`modes/binary.md`) has no run to drive.
 
 A step with a **Driven** paragraph (judge, catchup) adds to this file for that step; follow both.
 
