@@ -114,7 +114,7 @@ A failing `lore add` is one line in the report, never a failed step: the finding
    Re-find each by file, title and summary, never by line alone.
    Judge `fixed` and `fix introduced a problem` on the code, the two `explanation` statuses on the skip's `reason:` (the reviewer must say what it misses).
    Restate a disputed explanation in one line.
-   A round one with `lens: coherence` is a sweep this branch then fixed: judge its ids on the code the same way, `fixed` or `still open`, against their `where:` and `tasks:`.
+   A round one with `lens: coherence` is a sweep this branch then settled: judge its fixes on the code against their `where:` and `tasks:`, and its skips on their `reason:`, a `follow-up:` reason accepted when the finding is larger than a resolve fix.
 6. **Write the file**, return the summary.
 
 ## The coherence lens
@@ -162,7 +162,7 @@ The findings go to round one of the checked-out branch's directory (`f10 review 
 ## Rounds
 
 **One round is the default.**
-Round two runs only when `project.md → Review` says `Rounds: 2`, when round one was heavy (its resolve fixed six or more findings), or when round one is a `lens: coherence` sweep, whose fixes no diff review has read.
+Round two runs only when `project.md → Review` says `Rounds: 2`, when round one was heavy (its resolve fixed six or more findings), or when round one is a `lens: coherence` sweep whose resolve recorded a `fix`, since no diff review has read it.
 Otherwise never run, suggest or offer a second round: a resolve with every finding settled and verify green ends the review.
 A user who asks for round two by name gets it.
 
