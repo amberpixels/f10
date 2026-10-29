@@ -198,6 +198,14 @@ func Fetch(ctx context.Context, dir string) error {
 	return err
 }
 
+// FetchRef fetches one ref from origin into FETCH_HEAD: a closed request's
+// head, which no branch holds once its branch is deleted.
+func FetchRef(ctx context.Context, dir, refspec string) error {
+	_, err := Exec(ctx, dir, "fetch", "origin", refspec)
+
+	return err
+}
+
 // TrackBranch creates local branch tracking origin's of the same name, so a
 // pull or push in its worktree needs no upstream set. force moves an existing
 // branch there, which git refuses while a worktree has it checked out.

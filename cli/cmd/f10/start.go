@@ -139,6 +139,10 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	if err := refuseLandedPlan(mode, pick); err != nil {
+		return err
+	}
+
 	task := strings.TrimSpace(cmd.String("task"))
 
 	var (
@@ -327,6 +331,17 @@ func refuseNote(mode string, pick *pickup, note string) error {
 
 	return fmt.Errorf("%q: a note goes to an agent that stops and waits, with --discuss or a PR picked up; "+
 		"a driven run takes its instructions from the task", note)
+}
+
+// refuseLandedPlan stops --plan on a merged or closed PR: its diff is no
+// starting point once it landed, and going on from it is a task of its own.
+func refuseLandedPlan(mode string, pick *pickup) error {
+	if pick == nil || !pick.landed() || mode != modePlan {
+		return nil
+	}
+
+	return fmt.Errorf("--plan continues an open PR; %s is %s: start its task by id to go on from it",
+		pick.url, pick.state)
 }
 
 // refusePickupFlags stops the flags a picked-up PR has no use for: its
@@ -671,6 +686,8 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		notes = append(notes, settled.slugNote)
 	}
 
+	notes = appendNote(notes, settled.staleNote)
+
 	wts, err := gitx.Worktrees(ctx, in.main)
 	if err != nil {
 		return openedTask{}, err
@@ -682,7 +699,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	path := worktreeOf(wts, name)
 
-	if in.pick != nil && !existing.remote {
+	if in.pick != nil && !in.pick.landed() && !existing.remote {
 		note, err := syncPickup(ctx, in.main, name, path != "")
 		if err != nil {
 			return openedTask{}, err
@@ -730,6 +747,10 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgTaskID, in.task.ID); err != nil {
 			return openedTask{}, fmt.Errorf("linking %s to %s: %w", name, in.task.ID, err)
 		}
+	}
+
+	if in.pick != nil && in.pick.landed() {
+		notes = append(notes, handBackLanded(ctx, in, name, existing.name == "")...)
 	}
 
 	if len(in.task.Riders()) > 0 {
@@ -823,17 +844,22 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 // A settledBranch is what start knows before creating anything.
 type settledBranch struct {
-	name     string
-	slugNote string
-	base     baseRef
-	dep      *dependency
-	existing foundBranch
+	name      string
+	slugNote  string
+	staleNote string // a landed PR's branch on origin, left alone
+	base      baseRef
+	dep       *dependency
+	existing  foundBranch
 }
 
-// branchFor settles the branch before anything is created. A picked-up
-// PR's branch and base are the PR's, so only whether it is local yet is open.
+// branchFor settles the branch before anything is created. An open PR's
+// branch and base are the PR's, so only whether it is local yet is open; a
+// landed one gets the task's branch at the commit it landed as.
 func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
-	if in.pick != nil {
+	switch {
+	case in.pick != nil && in.pick.landed():
+		return landedBranchFor(ctx, in)
+	case in.pick != nil:
 		name := in.pick.branch
 		local := refSHA(ctx, in.main, "refs/heads/"+name) != ""
 
@@ -857,6 +883,60 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 
 	return settledBranch{name: name, slugNote: slugNote, base: base, dep: dep, existing: existing}, nil
 }
+
+// landedBranchFor names a merged or closed PR's branch as a task start
+// would, so worktree, workspace and agent name follow one rule. A branch the
+// task has locally is reused as it is; origin's copy of the PR's branch is
+// stale since it landed and is left alone. The base carries no sha: the
+// landed commit at the default branch's tip is nothing to note.
+func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) {
+	name, slugNote, err := branchName(ctx, in.driver, in.task, "", in.title)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	existing, err := existingBranch(ctx, in.main, name, in.task.ID, "")
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	settled := settledBranch{
+		name:     name,
+		slugNote: slugNote,
+		base:     baseRef{ref: in.pick.sha, flag: in.pick.url + "'s landed commit"},
+		existing: existing,
+	}
+
+	if existing.remote {
+		settled.staleNote = fmt.Sprintf("origin/%s is left alone: %s landed past it", existing.name, in.pick.url)
+		settled.existing = foundBranch{}
+	}
+
+	return settled, nil
+}
+
+// handBackLanded marks a landed pickup's branch as `f10 watch off` does,
+// before the daemon's first pass: the PR merged before the branch existed,
+// and a pass would report that as news every time. A failed write is a note,
+// since the worktree is the result.
+func handBackLanded(ctx context.Context, in startInput, name string, created bool) []string {
+	var notes []string
+
+	if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgWatch, "false"); err != nil {
+		notes = append(notes, "the watcher was not told to leave "+name+" alone: "+err.Error())
+	}
+
+	where := name + " is local only"
+	if created {
+		where += " at " + shortSHA(in.pick.sha)
+	}
+
+	return append(notes, fmt.Sprintf("%s is %s: %s, and the watcher leaves it alone (f10 watch on %s undoes that)",
+		in.pick.url, in.pick.state, where, in.task.ID))
+}
+
+// shortSHA is the seven characters a reader recognises a commit by.
+func shortSHA(sha string) string { return sha[:min(len(sha), 7)] }
 
 // shellWait reports a wait for the pane's shell to finish starting, so a
 // slow rc file reads as progress rather than a hang. A nil w reports nothing.
@@ -1082,9 +1162,14 @@ func discussPrompt(id string, dep *dependency, plan, note string) string {
 // pickupPrompt is discussPrompt for a picked-up PR: the task, the PR's
 // state and its diff summarised, then the agent waits in its own pane.
 func pickupPrompt(id, plan string, pick *pickup, note string) string {
+	standing := "the PR's state (reviews, checks, open threads)"
+	if pick.landed() {
+		standing = "that the PR is " + pick.state
+	}
+
 	p := fmt.Sprintf("Run `f10 task read %s`, `%s` and `%s`, and summarise in a few lines what the task asks, "+
-		"the PR's state (reviews, checks, open threads) and what its diff does, opening any image the PR links.",
-		id, pick.view, pick.diff)
+		"%s and what its diff does, opening any image the PR links.",
+		id, pick.view, pick.diff, standing)
 
 	if plan != "" {
 		p += " A plan for it is saved at " + plan + "; read it too."

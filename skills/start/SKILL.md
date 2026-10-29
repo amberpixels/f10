@@ -13,6 +13,7 @@ A plan the main checkout saved for the task (`/f10:plan` after a discussion ther
 `--agent` picks the agent's profile, `kind:model:effort` (`claude:opus:high`), `model:effort` or either alone, laid over the agents map's `default` (`docs/project-setup.md` → Agents).
 `--model` is the model-only form (`opus`, `fable`, `opus-5.5`), near misses corrected.
 A PR link or `#n` picks up that PR: its branch checked out tracking origin's and linked to its task, and an agent that summarises it and waits.
+A merged or closed PR is picked up the same way, for a post-merge review: checked out at the commit it landed as, on a local-only branch named for the task, the agent told the PR's state; `--plan` is refused on it.
 `ABC-1+ABC-2` starts a **bundle**: several tasks on one branch, one worktree, one agent and one PR, keyed on the lead (the first id); any member's id reopens it.
 With `--discuss` or a PR, words after the id are a note: the agent acts on it after its summary, then waits.
 This skill only runs the command and relays its output; it runs no step and never waits on the new agent.
