@@ -12,6 +12,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
 func TestWrap(t *testing.T) {
@@ -188,5 +190,77 @@ func TestConfigShowsAgentsPerKey(t *testing.T) {
 
 	if len(v.Problems) != 1 || !strings.Contains(v.Problems[0].Message, "agents.review") {
 		t.Errorf("a refused user file is a problem: %+v", v.Problems)
+	}
+}
+
+// The load prints one verify line per run: a declaration wins, a found
+// command beats a judgment, and nothing at all says so.
+func TestVerifyLine(t *testing.T) {
+	just := probe.Signal{Value: "just lint / just test", Evidence: "justfile"}
+	goJudgment := probe.Signal{Value: "no build file names them: go test ./...", Evidence: "go.mod", Judgment: true}
+
+	cases := []struct {
+		name    string
+		layers  []string // project.md bodies, main first
+		signals []probe.Signal
+		want    string
+	}{
+		{
+			name:    "declared beats detected",
+			layers:  []string{"- **Verify** - `just test`\n"},
+			signals: []probe.Signal{just},
+			want:    "verify: declared (main)  `just test`\n",
+		},
+		{
+			name:   "worktree layer beats main",
+			layers: []string{"- **Verify** - just test\n", "- **Verify** - go test ./...\n"},
+			want:   "verify: declared (worktree)  go test ./...\n",
+		},
+		{
+			name:   "a multi-line declaration indents beneath",
+			layers: []string{"## Verify\n\n`just test`\n\nNever run `just e2e`.\n"},
+			want:   "verify: declared (main)\n  `just test`\n  \n  Never run `just e2e`.\n",
+		},
+		{
+			name:    "detected",
+			signals: []probe.Signal{just, {Value: "make test", Evidence: "Makefile"}},
+			want:    "verify: detected (justfile, Makefile)  just lint / just test / make test\n",
+		},
+		{
+			name:    "a found command drops the judgment",
+			signals: []probe.Signal{just, {Value: "the Makefile has no entry", Evidence: "Makefile", Judgment: true}},
+			want:    "verify: detected (justfile)  just lint / just test\n",
+		},
+		{
+			name:    "judgment",
+			signals: []probe.Signal{goJudgment},
+			want:    "verify: judgment (go.mod)  no build file names them: go test ./...\n",
+		},
+		{
+			name: "absent",
+			want: "verify: absent  nothing declared or detected: find the commands the repo uses, and suggest declaring them under Verify in project.md\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lay := &layout.Layout{Project: "demo", Layering: layout.LayeringExtends}
+
+			for i, body := range tc.layers {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "project.md"), []byte(body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+
+				lay.Layers = append(lay.Layers, layout.Layer{Label: []string{"main", "worktree"}[i], Dir: dir})
+			}
+
+			pb := &probe.Probes{Verify: tc.signals}
+			eff := facts.Build(lay, pb)
+
+			if got := verifyLine(fieldNamed(eff.Fields, "Verify"), pb); got != tc.want {
+				t.Errorf("verifyLine = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

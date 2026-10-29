@@ -16,6 +16,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/mdline"
+	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/projects"
 )
 
@@ -87,8 +88,9 @@ func (v *view) withAgents(eff *facts.Effective) {
 
 func configCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "config",
-		Usage: "print the effective configuration, with the origin of every value",
+		Name:      "config",
+		Usage:     "print the effective configuration, with the origin of every value",
+		ArgsUsage: "[verify]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "json", Usage: "emit the same view as JSON"},
 		},
@@ -105,6 +107,21 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	lay, pb, eff := t.lay, t.pb, t.eff
+
+	// the project load prints this one line, so a section selector stays
+	// limited to it until another has a reader
+	if cmd.Args().Len() > 0 {
+		if cmd.Args().Len() > 1 || cmd.Args().First() != "verify" {
+			return fmt.Errorf(
+				"config: %q is not a section it prints alone (only verify)",
+				strings.Join(cmd.Args().Slice(), " "),
+			)
+		}
+
+		_, err := io.WriteString(cmd.Writer, verifyLine(fieldNamed(eff.Fields, "Verify"), pb))
+
+		return err
+	}
 
 	v := &view{
 		CheckoutRoot:    lay.CheckoutRoot,
@@ -160,6 +177,55 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	renderHuman(cmd.Writer, v, termWidth(cmd.Writer))
 
 	return nil
+}
+
+func fieldNamed(fields []facts.Field, name string) facts.Field {
+	for _, f := range fields {
+		if f.Name == name {
+			return f
+		}
+	}
+
+	return facts.Field{Name: name, Origin: facts.OriginAbsent}
+}
+
+// verifyLine is the verify the steps run, resolved once: its origin, the
+// file it came from, then the commands or the judgment left to the model.
+func verifyLine(f facts.Field, pb *probe.Probes) string {
+	body := strings.TrimSpace(f.Value)
+
+	switch {
+	case strings.HasPrefix(f.Origin, "declared") && !strings.Contains(body, "\n"):
+		return "verify: " + f.Origin + "  " + body + "\n"
+	case strings.HasPrefix(f.Origin, "declared"):
+		var b strings.Builder
+
+		b.WriteString("verify: " + f.Origin + "\n")
+
+		for line := range strings.SplitSeq(body, "\n") {
+			b.WriteString("  " + line + "\n")
+		}
+
+		return b.String()
+	case f.Origin == facts.OriginDetected || f.Origin == facts.OriginJudgment:
+		picked, judgment := probe.VerifyPicked(pb.Verify)
+		values := make([]string, 0, len(picked))
+		evidence := make([]string, 0, len(picked))
+
+		for _, s := range picked {
+			values = append(values, s.Value)
+			evidence = append(evidence, s.Evidence)
+		}
+
+		sep := " / "
+		if judgment {
+			sep = "; "
+		}
+
+		return "verify: " + f.Origin + " (" + strings.Join(evidence, ", ") + ")  " + strings.Join(values, sep) + "\n"
+	default:
+		return "verify: absent  nothing declared or detected: find the commands the repo uses, and suggest declaring them under Verify in project.md\n"
+	}
 }
 
 // headerIndent is the value column of the header block: the widest label,
@@ -588,7 +654,7 @@ func styleOrigin(origin string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // cyan
 	case strings.HasPrefix(origin, "declared"):
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	case origin == facts.OriginDefault:
+	case origin == facts.OriginDefault || origin == facts.OriginJudgment:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
 	default: // absent
 		return lipgloss.NewStyle().Faint(true)

@@ -25,6 +25,8 @@ const (
 	OriginDetected = "detected"
 	OriginDefault  = "default"
 	OriginAbsent   = "absent"
+	// OriginJudgment is guidance the probe could not turn into commands
+	OriginJudgment = "judgment"
 )
 
 // A Field is one effective configuration value with its provenance.
@@ -32,7 +34,7 @@ type Field struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
 	Prose  bool   `json:"prose,omitempty"`  // multi-line prose, not a scalar
-	Origin string `json:"origin"`           // "detected", "declared (<layer>)", "default", "absent"
+	Origin string `json:"origin"`           // "detected", "declared (<layer>)", "default", "judgment", "absent"
 	Source string `json:"source,omitempty"` // file for declared, evidence for detected
 }
 
@@ -353,7 +355,14 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 			Source: pb.CLI.Evidence,
 		}
 	case "Verify":
-		return detectedList(name, pb.Verify)
+		picked, judgment := probe.VerifyPicked(pb.Verify)
+		f := detectedList(name, picked)
+
+		if judgment {
+			f.Origin = OriginJudgment
+		}
+
+		return f
 	case "Visibility":
 		return Field{Name: name, Value: "stealth", Origin: OriginDefault}
 	case "Storage":

@@ -38,7 +38,7 @@ Under a replaced role, a step instruction phrased for code (critical files, migr
 
 ## Reading the project load
 
-`f10-load-project.sh` prints the project's instructions, layered, the inference probes, the generic steps the skill named, and each layer's overlays for them.
+`f10-load-project.sh` prints the project's instructions, layered, the verify commands resolved, the inference probes, the generic steps the skill named, and each layer's overlays for them.
 Steps come only from it, never from the plugin's `steps/` read by hand.
 It concatenates; you interpret `project.md` and bind adapters.
 If it is ever unavailable, the points below say what to do by hand:
@@ -59,7 +59,7 @@ If it is ever unavailable, the points below say what to do by hand:
    A contradiction you cannot resolve: say so rather than pick.
 4. **`instructions files:`** names every `.md` per layer; layer blocks and `absent:` cover only requested names.
    A flow entry with no generic step (like `e2e`) is a **project-defined step**: its `.f10/instructions/e2e.md` *is* the step.
-5. **Inferred defaults**, when `project.md` is absent or partial: the remote host gives `gh`/`glab`; the project name gives the task id prefix (`f10` is `F10`, `git-undo` is `GU`, `herdr` is `HER`); `go.mod` / `Gemfile` / `package.json` give stack and role; `justfile` / `Makefile` give verify commands.
+5. **Inferred defaults**, when `project.md` is absent or partial: the remote host gives `gh`/`glab`; the project name gives the task id prefix (`f10` is `F10`, `git-undo` is `GU`, `herdr` is `HER`); `go.mod` / `Gemfile` / `package.json` give stack and role; verify comes resolved (**Verify** below), and with no load, the justfile's or Makefile's lint and test entries, else the stack's idiomatic commands.
    State them once, the prefix included, and suggest `f10 init`, which writes `.f10/instructions/project.md` from the same probes.
    Never refuse to run for missing config.
 6. **Agent profiles**: a step that spawns a subagent (the review step's blind reviewer, `judge --blind`, cleanup's rules check) passes the Agent tool the `model` and `effort` its own profile line names in its `Agent tool:` part: the `<step>.<kind>` line for the plan's `Kind` (absent meaning feature) when the load prints one, else the plain `<step>` line.
@@ -78,6 +78,8 @@ The full reference for humans is `docs/project-setup.md`.
 - **Hosting & PR** - how to open or refresh a PR/MR: a skill, or `gh pr create` / `glab mr create` and `gh pr edit` / `glab mr update` mechanics (branch naming, labels, assignee).
   The branch's *shape* is the project's; that it carries the task id is not (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.
+  The load prints it resolved, one `verify:` line every step runs from: `declared (<layer>)`, `detected` (the justfile or Makefile entries found), `judgment` (none found: the stack's idiomatic commands, such as `go test ./...` and the linter the repo configures) or `absent`.
+  Run what it names, keeping the declaration's "never run X" rules; a `judgment` or `absent` line is yours to settle, the commands you chose named in the report.
 - **Roles** - **Always** for every run, **Conditional** when the task touches a named area.
   A bullet `+ <role>` adds a role on top of the base role ("+ senior UI/UX engineer on user-facing UI"); `= <role>` sets the base role, replacing the step's `Role:` line.
   A step list scopes either (`plan, judge: = senior marketing analyst`); none means every step.

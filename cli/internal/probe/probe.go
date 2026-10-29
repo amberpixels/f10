@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -19,6 +20,9 @@ import (
 type Signal struct {
 	Value    string `json:"value"`
 	Evidence string `json:"evidence"`
+	// Judgment marks guidance rather than commands: a build file with no
+	// lint or test entry, or a bare stack. Never written into project.md.
+	Judgment bool `json:"judgment,omitempty"`
 }
 
 // Probes holds everything detection can say about a checkout.
@@ -59,13 +63,7 @@ func Run(ctx context.Context, lay *layout.Layout) *Probes {
 		p.Stack = append(p.Stack, Signal{Value: "Ruby gem", Evidence: filepath.Base(specs[0])})
 	}
 
-	if fileExists(filepath.Join(root, "justfile")) || fileExists(filepath.Join(root, "Justfile")) {
-		p.Verify = append(p.Verify, Signal{Value: "just lint / just test", Evidence: "justfile"})
-	}
-
-	if fileExists(filepath.Join(root, "Makefile")) {
-		p.Verify = append(p.Verify, Signal{Value: "make", Evidence: "Makefile"})
-	}
+	p.Verify = verifySignals(root, p.Stack)
 
 	p.Review = reviewWorkflow(root)
 	p.Plans = planNames(p.PlansDir)
@@ -183,7 +181,7 @@ func planNames(dir string) []string {
 		name := filepath.Base(m)
 		names = append(names, name)
 
-		if fi, err := os.Stat(m); err == nil {
+		if fi, err := os.Stat(m); err == nil { //nolint:gosec // a glob match under this checkout's own storage root
 			mtime[name] = fi.ModTime().UnixNano()
 		}
 	}
@@ -203,4 +201,147 @@ func fileExists(path string) bool {
 	fi, err := os.Stat(path)
 
 	return err == nil && !fi.IsDir()
+}
+
+// verifySignals names the verify commands the build files hold, else a
+// judgment from the stack, so no step re-derives the fallback by hand.
+func verifySignals(root string, stack []Signal) []Signal {
+	var out []Signal
+
+	for _, b := range []struct {
+		files   []string
+		tool    string
+		targets []string
+		names   func(string) []string
+	}{
+		{files: []string{"justfile", "Justfile"}, tool: "just", targets: []string{"lint", "test"}, names: justRecipes},
+		{files: []string{"Makefile"}, tool: "make", targets: []string{"lint", "test", "check"}, names: makeTargets},
+	} {
+		for _, f := range b.files {
+			data, err := os.ReadFile(filepath.Join(root, f))
+			if err != nil {
+				continue
+			}
+
+			have := b.names(string(data))
+
+			var cmds []string
+
+			for _, t := range b.targets {
+				if slices.Contains(have, t) {
+					cmds = append(cmds, b.tool+" "+t)
+				}
+			}
+
+			if len(cmds) == 0 {
+				entries := strings.Join(b.targets, " or ")
+				out = append(out, Signal{
+					Value:    "the " + f + " has no " + entries + " entry: pick the ones that lint and test",
+					Evidence: f,
+					Judgment: true,
+				})
+			} else {
+				out = append(out, Signal{Value: strings.Join(cmds, " / "), Evidence: f})
+			}
+
+			break
+		}
+	}
+
+	if len(out) > 0 {
+		return out
+	}
+
+	idiomatic := map[string]string{
+		"Go":       "go test ./... and the linter the repo configures",
+		"Ruby":     "bundle exec rake or rspec, and rubocop where the repo configures it",
+		"Ruby gem": "bundle exec rake or rspec, and rubocop where the repo configures it",
+		"JS/TS":    "the package.json test and lint scripts",
+	}
+
+	seen := map[string]bool{}
+
+	for _, s := range stack {
+		cmds, ok := idiomatic[s.Value]
+		if !ok || seen[cmds] {
+			continue
+		}
+
+		seen[cmds] = true
+		out = append(out, Signal{
+			Value:    "no build file names them: the stack's idiomatic commands, e.g. " + cmds,
+			Evidence: s.Evidence,
+			Judgment: true,
+		})
+	}
+
+	return out
+}
+
+// VerifyPicked is the signals verify runs from: the commands found, else the
+// judgments, never both, so a found command is never mixed with a guess.
+func VerifyPicked(signals []Signal) ([]Signal, bool) {
+	var picked []Signal
+
+	for _, s := range signals {
+		if !s.Judgment {
+			picked = append(picked, s)
+		}
+	}
+
+	if len(picked) > 0 {
+		return picked, false
+	}
+
+	return signals, len(signals) > 0
+}
+
+// justRecipes reads recipe names from top-level lines: `name args...:`,
+// `@name:`, never an assignment (`x := y`) or a setting.
+func justRecipes(src string) []string {
+	var names []string
+
+	for _, head := range ruleHeads(src) {
+		if f := strings.Fields(head); len(f) > 0 {
+			names = append(names, strings.TrimPrefix(f[0], "@"))
+		}
+	}
+
+	return names
+}
+
+// makeTargets reads every target a rule line names (`lint test: deps`).
+func makeTargets(src string) []string {
+	var names []string
+
+	for _, head := range ruleHeads(src) {
+		names = append(names, strings.Fields(head)...)
+	}
+
+	return names
+}
+
+// ruleHeads is the text before the colon of each unindented rule line,
+// skipping comments, attributes and `:=` assignments.
+func ruleHeads(src string) []string {
+	var heads []string
+
+	for line := range strings.SplitSeq(src, "\n") {
+		if line == "" || strings.ContainsAny(line[:1], " \t#[") {
+			continue
+		}
+
+		head, rest, ok := strings.Cut(line, ":")
+		f := strings.Fields(head)
+
+		// `x := y` and `X = a:b`; a just parameter default (`arg="x"`) is kept
+		if !ok || len(f) == 0 || strings.HasPrefix(rest, "=") || strings.Contains(f[0], "=") ||
+			(len(f) > 1 && strings.HasPrefix(f[1], "=")) {
+			continue
+		}
+
+		heads = append(heads, head)
+	}
+
+	return heads
 }

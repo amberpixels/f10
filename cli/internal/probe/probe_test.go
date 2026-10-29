@@ -84,3 +84,80 @@ func writeFile(t *testing.T, path, body string) {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
+
+func TestVerifySignals(t *testing.T) {
+	goMod := []Signal{{Value: "Go", Evidence: "go.mod"}}
+	cases := []struct {
+		name  string
+		files map[string]string
+		stack []Signal
+		want  []Signal
+	}{
+		{
+			name: "justfile with both recipes",
+			files: map[string]string{"justfile": "mod cli\nset shell := [\"bash\"]\n\n# lint it\n" +
+				"[group('qa')]\nlint: cli::lint\n    shellcheck x\n\n@test *args:\n    go test\n"},
+			want: []Signal{{Value: "just lint / just test", Evidence: "justfile"}},
+		},
+		{
+			name:  "justfile with one, a parameter default kept",
+			files: map[string]string{"justfile": "test pkg=\"./...\":\n    go test {{pkg}}\nlint := \"x\"\n"},
+			want:  []Signal{{Value: "just test", Evidence: "justfile"}},
+		},
+		{
+			name:  "justfile with neither is a judgment, the stack unused",
+			files: map[string]string{"justfile": "build:\n    go build\n"},
+			stack: goMod,
+			want: []Signal{
+				{
+					Value:    "the justfile has no lint or test entry: pick the ones that lint and test",
+					Evidence: "justfile",
+					Judgment: true,
+				},
+			},
+		},
+		{
+			name: "Makefile targets, several on one line",
+			files: map[string]string{
+				"Makefile": ".PHONY: test check\nCC := gcc\nURL = http://x\ntest check: deps\n\tgo test\n",
+			},
+			want: []Signal{{Value: "make test / make check", Evidence: "Makefile"}},
+		},
+		{
+			name:  "no build file, Go stack",
+			stack: goMod,
+			want: []Signal{
+				{
+					Value:    "no build file names them: the stack's idiomatic commands, e.g. go test ./... and the linter the repo configures",
+					Evidence: "go.mod",
+					Judgment: true,
+				},
+			},
+		},
+		{
+			name:  "Ruby and its gemspec give one line",
+			stack: []Signal{{Value: "Ruby", Evidence: "Gemfile"}, {Value: "Ruby gem", Evidence: "x.gemspec"}},
+			want: []Signal{
+				{
+					Value:    "no build file names them: the stack's idiomatic commands, e.g. bundle exec rake or rspec, and rubocop where the repo configures it",
+					Evidence: "Gemfile",
+					Judgment: true,
+				},
+			},
+		},
+		{name: "nothing at all"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, body := range tc.files {
+				writeFile(t, filepath.Join(dir, name), body)
+			}
+
+			if got := verifySignals(dir, tc.stack); !slices.Equal(got, tc.want) {
+				t.Errorf("verifySignals = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
