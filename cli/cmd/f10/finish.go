@@ -142,8 +142,8 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lease.Release()
 
-	in, err := finishInputFor(t, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), h, r)
-	if err != nil {
+	in := finishInputFor(t, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), h, r)
+	if in.cwd, in.workspace, err = processPlace(); err != nil {
 		return err
 	}
 
@@ -231,12 +231,7 @@ type finishInput struct {
 // finishInputFor fills what comes from the task and the project's settings,
 // so the command, the drive and the watcher all take the same ones; each
 // caller then sets only its own fields.
-func finishInputFor(t *target, main string, h host, task ref.Ref) (finishInput, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return finishInput{}, fmt.Errorf("getwd: %w", err)
-	}
-
+func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 	task = task.Head()
 
 	return finishInput{
@@ -248,11 +243,20 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) (finishInput, 
 		traces:    t.eff.Traces,
 		loreStore: &lore.Store{Root: loreRootFor(t)},
 		gate:      t.eff.LoreGate,
-		cwd:       cwd,
-		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
 		plansDir:  t.sharedPlansDir(),
 		title:     titleLookup(t, task.Number),
-	}, nil
+	}
+}
+
+// processPlace is this process's directory and workspace, for finish's
+// self-close check.
+func processPlace() (string, string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", "", fmt.Errorf("getwd: %w", err)
+	}
+
+	return cwd, os.Getenv("HERDR_WORKSPACE_ID"), nil
 }
 
 // finishedEvent records a finish that ran in this process, where no hook

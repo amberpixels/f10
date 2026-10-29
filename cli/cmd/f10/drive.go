@@ -2053,8 +2053,10 @@ type driveFinish struct {
 }
 
 func driveFinishInput(t *target, main string, h host, req driveFinish) (finishInput, error) {
-	in, err := finishInputFor(t, main, h, req.task)
-	if err != nil {
+	in := finishInputFor(t, main, h, req.task)
+
+	var err error
+	if in.cwd, in.workspace, err = processPlace(); err != nil {
 		return finishInput{}, err
 	}
 

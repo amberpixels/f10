@@ -735,15 +735,11 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 
 	var buf bytes.Buffer
 
-	in, err := finishInputFor(t, main, h, r)
-	if err != nil {
-		return err
-	}
-
+	in := finishInputFor(t, main, h, r)
 	in.branch, in.mergedOnly = task.branch, true
-	// the daemon's cwd is wherever it started: a watcher finish must never
-	// take the self-close path, which ends the process running it
-	in.cwd, in.workspace = main, ""
+	// never processPlace: the self-close path would end the daemon, and its
+	// directory may be a worktree since removed, where getwd fails
+	in.cwd = main
 
 	err = finish(ctx, &buf, in)
 
