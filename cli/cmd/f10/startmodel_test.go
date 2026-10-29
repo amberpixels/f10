@@ -198,3 +198,75 @@ func TestAgentArgs(t *testing.T) {
 		})
 	}
 }
+
+// A run's flag lays over the map's default segment by segment, so a lone
+// effort keeps the map's model, and a step's own key still wins over it.
+func TestFlagOverlaysTheMapsDefault(t *testing.T) {
+	m := agentMap{
+		"default": {Key: "default", Value: "opus:high", Origin: "user"},
+		"review":  {Key: "review", Value: "sonnet", Origin: "project"},
+	}
+
+	cases := []struct {
+		flag, step, want, model, effort string
+	}{
+		{
+			flag: "low", step: "default", want: "claude:opus:low",
+			model: "default (user)", effort: agentKeyFlag + " (--agent)",
+		},
+		{
+			flag: "sonnet", step: "implement", want: "claude:sonnet:high",
+			model: agentKeyFlag + " (--agent)", effort: "default (user)",
+		},
+		{
+			flag: "haiku:max", step: "review", want: "claude:sonnet:max",
+			model: "review (project)", effort: agentKeyFlag + " (--agent)",
+		},
+	}
+
+	for _, c := range cases {
+		r := m.with(c.flag, agentFlagOrigin).profileFor(c.step, "")
+		if r.Profile.String() != c.want || r.Sources["model"] != c.model || r.Sources["effort"] != c.effort {
+			t.Errorf("--agent %s for %s = %q from %v; want %q, model %q, effort %q",
+				c.flag, c.step, r.Profile, r.Sources, c.want, c.model, c.effort)
+		}
+	}
+
+	// the last profile laid on wins whole: a task's own suffix over the run's flag
+	own := m.with("low", agentFlagOrigin).with("haiku", "<id>:haiku")
+	if r := own.profileFor("default", ""); r.Profile.String() != "claude:haiku:high" {
+		t.Errorf("a task's own profile over the flag: %q", r.Profile)
+	}
+}
+
+// The branch's record lays under a spawning step's line when no flag is
+// given, read from f10-agent, else the model recorded before profiles.
+func TestWithBranchReadsTheRecord(t *testing.T) {
+	f := newFakes(t)
+	f.script("git config --get branch.GH-1/slug."+cfgAgent, "claude:sonnet:low")
+	f.script("git config --get branch.GH-2/slug."+cfgModel, "opus")
+
+	m := agentMap{"default": {Key: "default", Value: "opus:high", Origin: "user"}}
+
+	got, err := m.withBranch(t.Context(), "/code/repo", "GH-1/slug")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r := got.profileFor("review", ""); r.Profile.String() != "claude:sonnet:low" ||
+		r.Sources["model"] != agentKeyFlag+" (recorded on branch GH-1/slug)" {
+		t.Errorf("review on a recorded profile = %q from %v", r.Profile, r.Sources)
+	}
+
+	if got, err = m.withBranch(t.Context(), "/code/repo", "GH-2/slug"); err != nil {
+		t.Fatal(err)
+	}
+
+	if r := got.profileFor("review", ""); r.Profile.String() != "claude:opus:high" {
+		t.Errorf("an old model record keeps the map's effort: %q", r.Profile)
+	}
+
+	if got, err = m.withBranch(t.Context(), "/code/repo", ""); err != nil || len(got) != 1 {
+		t.Errorf("no branch leaves the map: %v %v", got, err)
+	}
+}

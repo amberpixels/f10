@@ -281,9 +281,9 @@ agents:
   plan.bug: opus:medium
 ```
 
-Three layers of the same map resolve one profile per step, the later winning **key by key**: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), the project's `agents:` (main's and a worktree's layers merged key by key too), then a run's flag.
-The flag (`f10 start --agent`, `f10 drive --agent`, a task's own `<id>:<profile>`) sets `default`.
-A step's profile is then `default`, overlaid segment by segment by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
+Two layers of the same map merge **key by key**, the later winning: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), then the project's `agents:` (main's and a worktree's layers merged key by key too).
+A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, `f10 drive --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
+So `--agent low` over `default: opus:high` runs on `opus:low`, and the flag is recorded on the branch, where `f10 agents` reads it back for a spawning step's line.
 A key is `default` or a step some declared flow names (the default flow included); a misspelt step is refused, as is a profile the kind refuses.
 `f10 agents` prints the merged map with each value's origin, and `f10 agents <step>...` each step's resolved profile with the key and layer behind each segment.
 `f10 config` lists the map as `agents.<key>` rows.

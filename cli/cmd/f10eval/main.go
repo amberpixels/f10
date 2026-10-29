@@ -106,6 +106,13 @@ func run(ctx context.Context, o options) error {
 	}
 
 	version, commit := pluginVersion(root), gitOut(ctx, root, "rev-parse", "--short", "HEAD")
+
+	// a run on an uncommitted tree says so, as git describe --dirty does,
+	// since the commit alone would name code that did not run
+	if gitOut(ctx, root, "status", "--porcelain") != "" {
+		commit += "-dirty"
+	}
+
 	failed, runs := 0, 0
 
 	for _, s := range scenarios {

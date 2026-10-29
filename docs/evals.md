@@ -33,7 +33,7 @@ Each report holds:
 - pass/fail for each check;
 - `cost_usd` and `duration_ms`, from claude's JSON output;
 - the profile the run started on, as `agent`;
-- the plugin version and the commit.
+- the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run.
 
 Two profiles of one scenario sit side by side under one version, so a cheaper profile is justified by diffing its report against the dearer one on the same checks.
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // A step's agent profile comes from three layers of one map, later winning
@@ -60,13 +62,19 @@ func agentLayers(eff *facts.Effective, flag string) (agentMap, error) {
 			return nil, fmt.Errorf("--agent %w", err)
 		}
 
-		m[facts.AgentKeyDefault] = agentEntry{Key: facts.AgentKeyDefault, Value: flag, Origin: agentFlagOrigin}
+		m = m.with(flag, agentFlagOrigin)
 	}
 
 	return m, nil
 }
 
-// with is m with one more default on top: a task's own profile on a drive.
+// agentKeyFlag holds a run's profile in the map: a key no file can declare
+// (CheckAgentKey refuses it), laid over `default` segment by segment, so
+// `--agent low` keeps the map's model.
+const agentKeyFlag = "--agent"
+
+// with is m with a run's profile on top: the flag, a drive task's own
+// suffix, or the branch's record. The last one given wins whole.
 func (m agentMap) with(value, origin string) agentMap {
 	if strings.TrimSpace(value) == "" {
 		return m
@@ -77,9 +85,29 @@ func (m agentMap) with(value, origin string) agentMap {
 		out = agentMap{}
 	}
 
-	out[facts.AgentKeyDefault] = agentEntry{Key: facts.AgentKeyDefault, Value: value, Origin: origin}
+	out[agentKeyFlag] = agentEntry{Key: agentKeyFlag, Value: value, Origin: origin}
 
 	return out
+}
+
+// withBranch lays the profile a branch records under the run, so a step's
+// subagent runs on what the task agent was started on; nothing recorded
+// leaves m as it is.
+func (m agentMap) withBranch(ctx context.Context, main, branch string) (agentMap, error) {
+	if branch == "" {
+		return m, nil
+	}
+
+	recorded, err := recordedProfile(ctx, main, branch)
+	if err != nil {
+		return nil, err
+	}
+
+	if recorded.IsDefault() {
+		return m, nil
+	}
+
+	return m.with(recorded.Short(), "recorded on branch "+branch), nil
 }
 
 // A resolvedProfile is a step's profile with the key and layer each
@@ -95,7 +123,7 @@ type resolvedProfile struct {
 // Every value went through the vocabulary when it was read, so a parse
 // error here is a programming error, not the user's.
 func (m agentMap) profileFor(step, kind string) resolvedProfile {
-	keys := []string{facts.AgentKeyDefault}
+	keys := []string{facts.AgentKeyDefault, agentKeyFlag}
 	if step != "" && step != facts.AgentKeyDefault {
 		keys = append(keys, step)
 		if kind != "" {
@@ -253,6 +281,15 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 	m, err := agentLayers(t.eff, cmd.String("agent"))
 	if err != nil {
 		return err
+	}
+
+	// no flag: the branch's record is what the task agent started on, so a
+	// spawning step's subagent follows it
+	if strings.TrimSpace(cmd.String("agent")) == "" {
+		main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+		if m, err = m.withBranch(ctx, main, gitx.CurrentBranch(ctx, t.lay.CheckoutRoot)); err != nil {
+			return err
+		}
 	}
 
 	steps := cmd.Args().Slice()

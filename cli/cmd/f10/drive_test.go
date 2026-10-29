@@ -340,12 +340,13 @@ func TestDriveMarksStarted(t *testing.T) {
 // name that is no model starts claude's default, said once at the top.
 func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 	cases := []struct {
-		name         string
-		args         []string
-		model1       string
-		model2       string
-		recorded     string // the profile GH-1's branch records
-		out, notWant string
+		name          string
+		args          []string
+		model1        string
+		model2        string
+		recorded      string // the profile GH-1's branch records
+		recordedModel string // the model GH-1's branch recorded before profiles
+		out, notWant  string
 	}{
 		{
 			name: "own and run-wide", args: []string{"GH-1:sonnet", "GH-2", "--model", "opus", "judge"},
@@ -373,6 +374,10 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 			name: "a flag wins over the record", args: []string{"GH-1", "GH-2", "--agent", "opus", "judge"},
 			model1: "opus", model2: "opus", recorded: "claude:haiku:low", notWant: "haiku",
 		},
+		{
+			name: "a model recorded before profiles", args: []string{"GH-1", "GH-2", "judge"},
+			model1: "opus", recordedModel: "opus", out: "workspace ws:GH-1 on opus",
+		},
 	}
 
 	for _, c := range cases {
@@ -387,6 +392,10 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 				porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 			if c.recorded != "" {
 				fx.f.script("git config --get branch.GH-1."+cfgAgent, c.recorded)
+			}
+
+			if c.recordedModel != "" {
+				fx.f.script("git config --get branch.GH-1."+cfgModel, c.recordedModel)
 			}
 
 			fx.opensOn("GH-1", "ws:GH-1", "pane:1", c.model1)

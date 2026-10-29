@@ -2,8 +2,8 @@
   "scenario": "feature-small",
   "agent": "opus:high",
   "version": "0.47.0",
-  "commit": "7a0155c",
-  "at": "2026-10-29T08:59:03.656804Z",
+  "commit": "b0a2e87-dirty",
+  "at": "2026-10-29T09:29:29.933693Z",
   "pass": true,
   "checks": [
     {
@@ -31,6 +31,6 @@
       "pass": true
     }
   ],
-  "cost_usd": 0.7196045999999999,
-  "duration_ms": 53389
+  "cost_usd": 0.7627528,
+  "duration_ms": 77485
 }
