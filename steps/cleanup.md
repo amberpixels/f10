@@ -1,4 +1,4 @@
-# Step · cleanup - comments, prose or code tightened, scope proven
+# Step · cleanup - comments, prose or code tightened, scope proven on a full pass
 
 Role: a **senior engineer** preparing a change for someone who reads it cold.
 Input: targets and a scope (below).
@@ -20,12 +20,32 @@ Bug hunting is not a target: it stays with review.
 
 Skip generated, vendored, fixture and lock files, changelogs and verbatim quotes.
 
+**Size.**
+With the default scope and no targets named, count the lines in scope after the skips: the `+` lines of `f10 pr diff` (not the `+++` headers) plus every line of the untracked files.
+Under 200 lines runs the **light pass** (below); 200 or more, a path scope, or named targets (`/f10:cleanup comments`, a flow entry `cleanup:comments,prose`) run the full **Procedure**.
+Say the count and the pass in the step's first line.
+
 **Dashes**, every target, unless the project's guardrails or overlay say otherwise.
 No em or en dash on a line the pass rewrites, or anywhere in a file given by path: a plain hyphen, or the sentence restructured where a hyphen reads badly.
 Ranges become `1-10`; arrows in prose become words.
 Fenced code blocks and verbatim quotes keep theirs.
 
+## Light pass
+
+1. **Read the diff** (`f10 pr diff` and the untracked files), opening the lines around a hunk only where it needs context.
+2. **Rewrite with the Edit tool** what each applicable target's Keep, Cut and Shape rules flag on the added or changed lines.
+   No rule moves between files: Cut 13 and the outside-file search before it belong to the full pass.
+   Then grep the changed files for em and en dashes and fix any on those lines; in a source file, only inside comments, since a dash in code stays.
+3. **Skip the proofs**: no snapshot, baseline, full-file read, `f10-cleanup-check.sh`, inventory or rules subagent.
+   Each target's Baseline and Check belong to the full pass only.
+   The `code` target still splits certain from uncertain fixes and asks about the uncertain ones.
+4. **Verify** as Procedure point 5 says.
+5. **Report** in two lines: what changed, or that nothing needed it; and that the proofs were skipped for size, with the line count.
+   Then one line per `code` fix with its category, and per problem noticed and left alone, with `file:line`.
+
 ## Procedure
+
+The full pass, for every run the light pass does not cover.
 
 1. **Snapshot first.**
    Copy every file in scope into the scratchpad before the first edit, keeping its relative path; run the rest from the checkout root with the same path spelling:

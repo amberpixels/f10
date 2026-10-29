@@ -1,6 +1,6 @@
 ---
 name: cleanup
-description: "f10 cleanup skill - tighten a change before review: comments cut to the why, markdown prose cut to plain rules, development leftovers removed from code, each target proving its diff stayed in scope and verify green after. Use when the user says \"/f10:cleanup [comments|prose|code] [<path>]\", asks to clean up or tighten comments, de-slop or shave a skill or prompt, or strip dead code and debug leftovers before a commit. Bug hunting is /f10:review."
+description: "f10 cleanup skill - tighten a change before review: comments cut to the why, markdown prose cut to plain rules, development leftovers removed from code, each target proving its diff stayed in scope (a light pass without proofs on a small diff) and verify green after. Use when the user says \"/f10:cleanup [comments|prose|code] [<path>]\", asks to clean up or tighten comments, de-slop or shave a skill or prompt, or strip dead code and debug leftovers before a commit. Bug hunting is /f10:review."
 allowed-tools: Bash, Read, Edit, Grep, Glob, Agent, AskUserQuestion
 argument-hint: "[comments|prose|code] [<path>...]"
 ---
