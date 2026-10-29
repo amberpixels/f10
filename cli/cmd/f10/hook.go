@@ -19,8 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The hook noun is what hooks/hooks.json runs for every event: one process,
-// the payload on stdin, read once. Hidden, since nobody types it.
+// The hook noun is what hooks/hooks.json runs; hidden, since nobody types it.
 func hookCommand() *cli.Command {
 	return &cli.Command{
 		Name:   "hook",
@@ -78,7 +77,6 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// hookTaskID is the task id an issue url names, in the project's format.
 func hookTaskID(ctx context.Context, cwd, url string) string {
 	t, err := targetAt(ctx, cwd, true, "hook")
 	if err != nil {
@@ -93,8 +91,8 @@ func hookTaskID(ctx context.Context, cwd, url string) string {
 	return r.ID
 }
 
-// hookStatusText is `f10 status` for a session, run in this process, and
-// whether it printed a question a driven agent waits on.
+// hookStatusText runs `f10 status` in this process and says whether it
+// printed a question a driven agent waits on.
 func hookStatusText(ctx context.Context, session string) (string, bool) {
 	if err := os.Setenv("F10_SESSION_ID", session); err != nil {
 		return "", false

@@ -15,11 +15,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
-// A drive keeps a record under the storage root, what it was started with,
-// the answers given and each task's outcome, and holds a lease per task
-// while it acts on it. Rerunning the same command picks up the record; a
-// second drive, or `f10 finish`, skips or refuses a task whose lease it
-// holds.
+// A drive's record, under the storage root, is what a rerun of the same
+// command picks up; its leases make a second drive, or `f10 finish`, skip or
+// refuse a task it holds.
 
 // recordArgs is the command line a record is matched on: --answer, --every
 // and --resume dropped, since none of them names another drive.
@@ -49,9 +47,8 @@ func recordArgs(argv []string) []string {
 	return out
 }
 
-// openRecord finds the record this command line resumes, else creates
-// one, takes the drive's own lease, and folds the answers it kept under
-// the ones given now. A root of "" keeps no record.
+// openRecord folds the record's kept answers under the ones given now; a
+// root of "" keeps no record.
 func (in *driveInput) openRecord(tasks []driveTask) error {
 	if in.root == "" {
 		return nil
@@ -141,10 +138,8 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	return nil
 }
 
-// recordLaunch adds the drive to the launches of the session that typed
-// it, a rerun of the same command from a new session included. A --resume
-// (a drained drive, a drive resuming itself) and an --answer relayed from
-// another session add nothing.
+// recordLaunch: a --resume (a drained drive, a drive resuming itself) and an
+// --answer relayed from another session are nobody's launch.
 func (in *driveInput) recordLaunch() error {
 	if !in.launched || in.rec == nil {
 		return nil
@@ -179,7 +174,6 @@ func (in *driveInput) save(change func(*drives.Record)) {
 	in.rec = rec
 }
 
-// saveTask applies change to one task's entry in the record.
 func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
 	ids := []string{r.task.ref.Label() + suffixOf(r.task.suffix), r.task.ref.ID + suffixOf(r.task.suffix)}
 
@@ -194,7 +188,6 @@ func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
 	})
 }
 
-// savePending writes the answers not yet taken, and records one taken.
 func (in *driveInput) savePending(taken *drives.Answer) {
 	in.save(func(rec *drives.Record) {
 		rec.Answers = map[string]string{}
@@ -210,7 +203,6 @@ func (in *driveInput) savePending(taken *drives.Answer) {
 	})
 }
 
-// took records an answer taken: by which task, at which skill.
 func (in *driveInput) took(id, skill, text string) {
 	if in.rec != nil {
 		in.savePending(&drives.Answer{Task: id, Skill: skill, Text: text, At: in.now()})
@@ -293,7 +285,6 @@ func (in *driveInput) releaseAll() {
 	in.own.Release()
 }
 
-// number is the drive's record number, 0 with no record.
 func (in *driveInput) number() int {
 	if in.rec == nil {
 		return 0
@@ -302,7 +293,6 @@ func (in *driveInput) number() int {
 	return in.rec.Number
 }
 
-// resumeLine is how the report says to answer the drive.
 func (in *driveInput) resumeLine() string {
 	if in.rec != nil {
 		return "f10 drive --resume " + strconv.Itoa(in.rec.Number)
@@ -311,7 +301,6 @@ func (in *driveInput) resumeLine() string {
 	return resumeCommand(in.argv)
 }
 
-// driveList prints every drive, newest first, and where its tasks stand.
 func driveList(w io.Writer, root string, all bool) error {
 	recs, err := drives.List(root)
 	if err != nil {
@@ -371,8 +360,6 @@ func driveList(w io.Writer, root string, all bool) error {
 	return nil
 }
 
-// taskStanding is a task's line in the list: its outcome, else what is in
-// flight while its drive runs.
 func taskStanding(t drives.Task, running bool) string {
 	switch {
 	case t.Outcome != nil:

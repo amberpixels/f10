@@ -1,17 +1,7 @@
-// Package facts interprets the declared project.md layers, merges them with
-// the detection probes and the contract's defaults, and attributes every
-// effective value to its origin. It is the one component of f10 allowed to
-// interpret instruction prose - bin/f10-load-project.sh stays a concatenator.
-//
-// Interpretation stays shallow: only the sub-facts with a fixed vocabulary
-// (Layering, Visibility, Storage, the tracker kind and its id prefix, the
-// remote review's four facts) become structure; everything else is shown as
-// the declared prose, attributed but unparsed. The binary may be incomplete,
-// never wrong - what it cannot place it shows as-is instead of guessing.
-//
-// It writes that prose too, in scaffold.go: `f10 init` renders detection as
-// a project.md. Reader and writer share a package so the vocabulary one
-// keys on and the words the other emits cannot drift apart.
+// Package facts merges the declared project.md layers with detection and
+// the contract's defaults. Only facts with a fixed vocabulary become
+// structure, so the binary is incomplete but never wrong; scaffold.go writes
+// the prose here too, so its words cannot drift from the readers' vocabulary.
 package facts
 
 import (
@@ -109,9 +99,8 @@ type Effective struct {
 	twice     [][2]string // file, key: a fact both places declare alike
 }
 
-// contractFields is the project.md contract. The order is presentation
-// order, not the contract's listing order: the short identity facts
-// (Project, Visibility, Storage, Layering) lead, the prose fields follow.
+// contractFields is the project.md contract, in presentation order: the
+// short identity facts lead, the prose fields follow.
 func contractFields() []string {
 	return []string{
 		"Project", "Visibility", "Storage", "Layering", "Roles", "Tracker",
@@ -174,9 +163,8 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 		problems []Problem
 	)
 
-	// field-level merge: a field a later layer mentions wins outright,
-	// silence keeps the earlier layer's value (conventions/context.md); the
-	// frontmatter merges key by key on the same rule
+	// a field a later layer mentions wins outright, silence keeps the earlier
+	// layer's (conventions/context.md); the frontmatter follows the same rule
 	for _, layer := range lay.Layers {
 		file := filepath.Join(layer.Dir, "project.md")
 
@@ -260,19 +248,16 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 	return eff
 }
 
-// The two shapes a declared task id format takes. The contract's placeholder
-// form (`ABC-####`) is trusted first; a literal sample (`ABC-1234`) is the
-// fallback, since that shape also fits UTF-8 or ISO-8601. Neither ends on \b:
-// `#` is not a word character, so `**`ABC-####`**` would never match.
+// The placeholder form (`ABC-####`) is tried before a literal sample, whose
+// shape also fits UTF-8 or ISO-8601. Neither ends on \b: `#` is not a word
+// character, so a placeholder inside markup would never match.
 var (
 	idPlaceholderRE = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-#+`)
 	idSampleRE      = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-\d+\b`)
 )
 
-// idPrefix extracts the task id format's letters from declared Tracker
-// prose, or "" when it declares none. The prefix is the half the ref
-// lookup needs: it is how a branch name is searched and how a plan file
-// is named.
+// idPrefix is the task id format's letters in Tracker prose, "" when none:
+// the half a branch search and a plan filename need.
 func idPrefix(declared string) string {
 	for _, re := range []*regexp.Regexp{idPlaceholderRE, idSampleRE} {
 		if m := re.FindStringSubmatch(declared); m != nil {
@@ -287,22 +272,16 @@ func idPrefix(declared string) string {
 // since f10 init writes a derived prefix back and it must parse again.
 var prefixRE = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
-// The two cuts projectPrefix makes on a single word: a name this short
-// that holds a digit is already an abbreviation, a longer word gives up
-// its first letters.
+// A one-word name this short with a digit is already an abbreviation; a
+// longer word gives up its first letters.
 const (
 	shortName  = 4
 	wordPrefix = 3
 )
 
-// ProjectPrefix derives a task id prefix from the project's name, for a
-// project that declares no id format. The host's letters would name every
-// GitLab project GL; the project's own name says which project in a branch
-// or a plan filename. A short name with a digit keeps its letters (f10 ->
-// F10, r3 -> R3), several segments give initials (git-undo -> GU), one word
-// gives its first three characters (herdr -> HER). A name that yields
-// nothing usable (one letter, a leading digit) derives no prefix, so only
-// explicit ids are accepted and f10 init leaves the Tracker section to a human.
+// ProjectPrefix derives a task id prefix from the project's name, since the
+// host's letters would name every GitLab project GL. A name yielding nothing
+// usable derives none, so f10 init leaves the Tracker section to a human.
 func ProjectPrefix(name string) string {
 	segments := strings.FieldsFunc(strings.ToLower(name), func(r rune) bool {
 		return r == '-' || r == '_' || r == '.' || r == ' '
@@ -346,9 +325,8 @@ func ProjectPrefix(name string) string {
 	return prefix
 }
 
-// fallbackFor answers for a contract field no layer declared: detection
-// where a probe can, the contract's default where one exists, absent
-// otherwise. A zero Field means the field has nothing to say here.
+// fallbackFor answers for a contract field no layer declared: detection,
+// else the contract's default, else absent. A zero Field has nothing to say.
 func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 	switch name {
 	case "Project":
@@ -381,8 +359,7 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 	case "Storage":
 		return storageField(name, lay)
 	case "Review":
-		// a CI workflow running the Claude Code action is a remote review
-		// detection can name; the local half has nothing to infer
+		// the local half has nothing to infer; the remote one a workflow may name
 		if body := reviewBody(pb); body != "" {
 			return Field{Name: name, Value: body, Prose: true, Origin: OriginDetected, Source: pb.Review.Workflow}
 		}
@@ -393,8 +370,6 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 	}
 }
 
-// detectedList renders probe signals as one detected value, or absent when
-// no signal fired.
 func detectedList(name string, signals []probe.Signal) Field {
 	if len(signals) == 0 {
 		return Field{Name: name, Origin: OriginAbsent}
@@ -446,14 +421,9 @@ func storageField(name string, lay *layout.Layout) Field {
 	return Field{Name: name, Value: "in-repo (" + lay.StorageRoot + ")", Origin: OriginDefault}
 }
 
-// parseFile splits one project.md into contract sections. Three shapes open
-// one: a markdown heading (`## Tracker`), an unindented bold list item naming
-// a contract field (`- **Tracker** - …`), and a plain label naming one
-// (`Roles: plan as …`). A bold item the contract does not know stays in the
-// open section's body (`- **Fetch:** …` under Tracker, a named pipeline under
-// Ship pipelines). Unknown headings are returned separately, not dropped; an
-// empty one (a document title) is skipped. data is the file below any
-// frontmatter.
+// parseFile splits one project.md into contract sections, opened by a
+// heading, a bold item or a plain label naming a field. An unknown bold item
+// continues the open section; an unknown heading is kept apart, not dropped.
 func parseFile(data []byte, path, layer string) (map[string]section, []section) {
 	boldItem := regexp.MustCompile(`^[-*]\s+\*\*([^*]+)\*\*\s*[-:]?\s*(.*)$`)
 	heading := regexp.MustCompile(`^#{1,6}\s+(.+?)\s*$`)
@@ -519,8 +489,6 @@ func parseFile(data []byte, path, layer string) (map[string]section, []section) 
 	return fields, unknown
 }
 
-// matchOpener runs the handler on a regexp match and reports whether the
-// line was consumed as a section opener.
 func matchOpener(re *regexp.Regexp, line string, handle func([]string) bool) bool {
 	m := re.FindStringSubmatch(line)
 
@@ -531,11 +499,9 @@ func isProse(value string) bool {
 	return strings.Contains(strings.TrimSpace(value), "\n")
 }
 
-// normalizeBody reduces declared prose to logical lines: hard-wrapped
-// continuations (broken at the author's editor width, which is not a
-// clause boundary) rejoin their paragraph or bullet, so renderers wrap to
-// the reader's width instead of double-wrapping. A bullet or a blank line
-// starts a new logical line; blanks collapse to one paragraph break.
+// normalizeBody rejoins hard-wrapped continuations into logical lines, so
+// renderers wrap to the reader's width instead of double-wrapping; a bullet
+// or a blank line starts a new one.
 func normalizeBody(body string) string {
 	var logical []string
 
@@ -561,12 +527,9 @@ func isBullet(line string) bool {
 	return strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ")
 }
 
-// rolesLines reshapes Roles prose so each role sits on its own line:
-// the paragraph is unwrapped (declared prose is hard-wrapped at the
-// author's editor width, which is not a clause boundary), then split at
-// semicolons and at sentence breaks. A value already structured as
-// markdown bullets - the contract's Always/Conditional shape - keeps its
-// own lines.
+// rolesLines puts each role on its own line, splitting the unwrapped
+// paragraph at semicolons and sentence breaks; a value already in the
+// contract's bullet shape keeps its lines.
 func rolesLines(value string) string {
 	for line := range strings.SplitSeq(value, "\n") {
 		if isBullet(strings.TrimSpace(line)) {

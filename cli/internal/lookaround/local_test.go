@@ -64,7 +64,7 @@ func TestReadRootCountsOpenFindings(t *testing.T) {
 }
 
 // The shared root is read once; a worktree's own .f10 only where it still
-// holds task files from before storage moved to main's.
+// holds task files.
 func TestStorageRoots(t *testing.T) {
 	main, fresh, legacy := t.TempDir(), t.TempDir(), t.TempDir()
 	shared := filepath.Join(main, ".f10")

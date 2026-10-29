@@ -1,16 +1,7 @@
-// Package projects maps a bare project name to a checkout directory,
-// for `-C r3` run from somewhere else entirely.
-//
-// Off unless asked for. GH-20 fenced the binary as answering for the repo it
-// runs in and never walking the filesystem looking for others, and a
-// basename search over projects is exactly that walk. The fence holds
-// because the search is opt-in: without F10_ROOTS nothing is globbed and
-// nothing is scanned, and a bare name says so rather than guessing. Setting
-// the variable - one line in a shell profile, no file for f10 to own - is
-// what turns multi-project lookup on.
-//
-// A path never comes here. `-C ../r3` needs no lookup at all, so it works
-// whether or not the variable is set.
+// Package projects maps a bare project name to a checkout directory, for
+// `-C r3` run from elsewhere. Lookup is off unless F10_ROOTS is set: GH-20
+// fenced the binary as answering for the repo it runs in, never walking the
+// filesystem for others, and a basename search over projects is that walk.
 package projects
 
 import (
@@ -22,16 +13,15 @@ import (
 	"strings"
 )
 
-// RootsEnv holds a colon-separated list of globs, PATH-style, each
-// expanding to candidate checkout directories: `~/code/github.com/*/*`.
+// RootsEnv is a PATH-style list of globs expanding to checkouts, such as
+// `~/code/github.com/*/*`.
 const RootsEnv = "F10_ROOTS"
 
 // ErrDisabled means a name was given while name lookup is off.
 var ErrDisabled = errors.New("finding a project by name needs " + RootsEnv +
 	" set to a colon-separated list of globs (for example ~/code/github.com/*/*); a path such as -C ../r3 always works")
 
-// Roots is the configured glob list, with a leading ~ expanded. Empty means
-// name lookup is off.
+// Roots is the glob list, ~ expanded; empty means name lookup is off.
 func Roots() []string {
 	raw := strings.TrimSpace(os.Getenv(RootsEnv))
 	if raw == "" {
@@ -60,9 +50,7 @@ func Roots() []string {
 	return roots
 }
 
-// IsName reports whether a -C value is a project name rather than a path.
-// Anything carrying a separator, a ~, or a leading dot is a path, and paths
-// need none of this.
+// IsName reports a -C value that is a project name rather than a path.
 func IsName(value string) bool {
 	return value != "" &&
 		!strings.ContainsRune(value, filepath.Separator) &&
@@ -70,9 +58,9 @@ func IsName(value string) bool {
 		!strings.HasPrefix(value, ".")
 }
 
-// Find returns the one checkout named name under the configured roots.
-// Nothing found and more than one found are both errors that name what was
-// searched: a wrong guess here would run a command against the wrong repo.
+// Find is the one checkout named name under the roots; none or several are
+// errors naming what was searched, since a guess would run a command against
+// the wrong repo.
 func Find(name string) (string, error) {
 	roots := Roots()
 	if len(roots) == 0 {
@@ -105,8 +93,7 @@ func Find(name string) (string, error) {
 	}
 }
 
-// All is every checkout under the configured roots, sorted, for a command
-// that reads every project, such as `f10 standup --all`.
+// All is every checkout under the roots, sorted, for `f10 standup --all`.
 func All() ([]string, error) {
 	roots := Roots()
 	if len(roots) == 0 {

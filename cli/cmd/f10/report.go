@@ -5,18 +5,14 @@ import (
 	"io"
 )
 
-// A fact is one row of the facts block: a label, a value, and whether the
-// value is a url, which earns the marker cell.
 type fact struct {
 	label string
 	value string
 	url   bool
 }
 
-// writeReport prints the facts block conventions/report.md fixes: labels
-// padded to the widest including its colon, two spaces, the marker cell
-// (the arrow for a url, blank otherwise), one space, the value. Notes
-// follow as prose beneath the block.
+// writeReport prints the facts block as conventions/report.md fixes it; notes
+// follow as prose beneath.
 func writeReport(w io.Writer, rows []fact, notes []string) error {
 	width := 0
 	for _, r := range rows {

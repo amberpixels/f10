@@ -17,13 +17,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
-// init writes only the two files that register a project: the project.md
-// detection can fill, and the exclude entry that keeps it out of sight. The
-// file's existence is the membership rule - no filesystem heuristic tells a
-// vendored fork from a checkout someone works in, so the act is explicit.
+// init registers a project by writing its project.md: the file's existence is
+// the membership rule, since no filesystem heuristic tells a vendored fork
+// from a checkout someone works in.
 
-// excludeLine is the entry stealth needs, written exactly as a repo that
-// did it by hand writes it.
+// excludeLine is spelled as a repo that did it by hand would, so an existing
+// entry is found.
 const excludeLine = ".f10/"
 
 func initCommand() *cli.Command {
@@ -81,9 +80,8 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// destination is where a project.md would land, or the reason none can:
-// this command creates, and only for a checkout that is a project of its
-// own.
+// destination is where project.md lands, or why it cannot: init creates, and
+// only for a checkout that is a project of its own.
 func destination(lay *layout.Layout) (string, error) {
 	if lay.MainRoot == "" {
 		return "", fmt.Errorf("%s is not a git checkout - f10 init registers one", lay.CheckoutRoot)
@@ -122,9 +120,8 @@ func writeNew(path, content string) error {
 	return f.Close()
 }
 
-// excludeF10 appends the stealth entry to the repo's info/exclude, and says
-// what it found: the ignore entry itself is never committed, which is why
-// this file and not .gitignore.
+// excludeF10 appends the entry to info/exclude rather than .gitignore, so the
+// ignore itself is never committed.
 func excludeF10(ctx context.Context, root string) (string, error) {
 	named := gitx.Out(ctx, root, "rev-parse", "--git-path", "info/exclude")
 	if named == "" {
@@ -169,8 +166,7 @@ func excludeF10(ctx context.Context, root string) (string, error) {
 	return excludeLine + " in " + path, f.Close()
 }
 
-// report prints what now exists, in the label block config and status use.
-// The last row is the one fact no probe reaches: a human still owes the
+// report's last row is the one fact no probe reaches: a human still owes the
 // project its one-liner.
 func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	plain := lipgloss.NewStyle()
@@ -192,9 +188,8 @@ func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	headerRow(w, "next", "write the Project line: what this project is, in a sentence", limit, plain)
 }
 
-// runMigrate puts a frontmatter block on top of a prose-only project.md and
-// says which prose it supersedes. The prose stays: it is the user's text,
-// and deleting it is theirs to do once the block reads right.
+// runMigrate leaves the superseded prose in place: it is the user's text,
+// theirs to delete once the block reads right.
 func runMigrate(w io.Writer, path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -245,7 +240,6 @@ func runMigrate(w io.Writer, path string) error {
 	return nil
 }
 
-// rewrite replaces an existing file's content, keeping its mode.
 func rewrite(path, content string, mode os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {

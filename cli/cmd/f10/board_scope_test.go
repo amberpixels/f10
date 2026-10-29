@@ -17,10 +17,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// The board over a scope: every project on its own, one that cannot be
-// read failing alone, the JSON an array of boards. These checkouts have
-// no remote, so every host and tracker source fails and the local one
-// carries the run; the host side of a scope is the repo-entry fixture's.
+// The board over a scope. These checkouts have no remote, so every host and
+// tracker source fails and the local one carries the run.
 
 // --all is the F10_ROOTS walk, so it is off until the variable is set.
 func TestBoardAllNeedsRoots(t *testing.T) {

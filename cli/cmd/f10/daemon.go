@@ -22,8 +22,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 )
 
-// The daemon noun runs drives outside any session: `f10 drive` starts it
-// on demand, and it exits once nothing is left to drive.
 func daemonCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "daemon",
@@ -126,7 +124,6 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// driveTitle names a run by its project and drive number.
 func driveTitle(r daemon.Run) string {
 	project := projectName(r.Root)
 	if r.Drive == 0 {
@@ -136,8 +133,6 @@ func driveTitle(r daemon.Run) string {
 	return fmt.Sprintf("%s: drive %d", project, r.Drive)
 }
 
-// projectName is the checkout an in-repo storage root sits in, or an
-// out-of-tree root's own name.
 func projectName(root string) string {
 	if project := filepath.Base(root); project != ".f10" {
 		return project
@@ -211,9 +206,6 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// driveThroughDaemon hands the drive to this user's daemon, starting one
-// when needed, and prints its log until it exits, with its exit code. A
-// drive drained for an upgrade is followed into the new daemon.
 func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []string, a driveArgs) error {
 	dir, ver := daemon.RunDir(), daemonVersion()
 
@@ -247,9 +239,8 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 	return followDrive(ctx, w, dir, ver, req, nil)
 }
 
-// followDrive hands req to the daemon in dir and follows the drive until
-// it exits, into the next daemon when an upgrade drained it. spawn starts a
-// daemon; nil is this binary's.
+// followDrive follows the drive until it exits, into the next daemon when
+// an upgrade drained it. spawn starts a daemon; nil is this binary's.
 func followDrive(
 	ctx context.Context,
 	w io.Writer,
@@ -393,8 +384,6 @@ var (
 	}
 )
 
-// driveEnv keeps the allowlisted entries of environ, and the keys the
-// project's drive_env names.
 func driveEnv(environ, extra []string) []string {
 	var out []string
 

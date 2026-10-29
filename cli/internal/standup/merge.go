@@ -7,10 +7,9 @@ import (
 	"time"
 )
 
-// A Tracker is where a repository's task ids live. Repositories with the
-// same Key share their ids, so the same id in each is one task; the command
-// sets the key, since only it knows whether a tracker is the repository's
-// own issues.
+// A Tracker is where a repository's task ids live; repositories with the same
+// Key share ids. The command sets Key, since only it knows whether a tracker
+// is the repository's own issues.
 type Tracker struct {
 	Kind   string `json:"kind"`
 	Prefix string `json:"prefix"`
@@ -45,11 +44,9 @@ type Standup struct {
 	Projects []Project `json:"projects"`
 }
 
-// Merge joins per-repository reports, read over one period, into projects,
-// one per tracker key,
-// and the tasks in a project by id. A task's PRs stay in chain order per
-// repository, repository by repository: a base_pr is a number in one
-// repository, so a chain never crosses two.
+// Merge joins per-repository reports into projects, one per tracker key, and
+// tasks by id. PRs stay in chain order repository by repository: a base_pr is
+// a number in one repository, so a chain never crosses two.
 func Merge(since time.Time, period string, reports []Report) Standup {
 	since = since.UTC()
 	out := Standup{Schema: Schema, Since: since, Period: period, Days: []string{}, Projects: []Project{}}
@@ -98,9 +95,8 @@ func Merge(since time.Time, period string, reports []Report) Standup {
 	return out
 }
 
-// mergeTask adds another repository's activity on a task. The state is
-// combined, not recomputed: each repository's came from its own default
-// branch, which differ between repositories.
+// mergeTask adds another repository's activity. The state is combined, not
+// recomputed, since each repository's came from its own default branch.
 func mergeTask(a, b Task, since time.Time) Task {
 	a.PRs = append(slices.Clone(a.PRs), b.PRs...)
 	a.Commits = append(slices.Clone(a.Commits), b.Commits...)
@@ -121,8 +117,7 @@ func mergeTask(a, b Task, since time.Time) Task {
 	return a
 }
 
-// combineStates is taskState's rule over two repositories: the least
-// advanced unfinished state, else shipped if either shipped, else closed.
+// combineStates is taskState's rule over two repositories.
 func combineStates(a, b string) string {
 	ra, openA := rank[a]
 	rb, openB := rank[b]
@@ -145,7 +140,6 @@ func combineStates(a, b string) string {
 	}
 }
 
-// sortCommits orders commits by author date, then sha, as Group does.
 func sortCommits(cs []Commit) {
 	slices.SortFunc(cs, func(a, b Commit) int {
 		return cmp.Or(a.At.Compare(b.At), strings.Compare(a.SHA, b.SHA))

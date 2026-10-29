@@ -169,8 +169,8 @@ func core(v string) ([]int, bool) {
 	return out, true
 }
 
-// checkScripts lists the plugin's bin/ - listed, not named, so a new
-// script is covered - and inside a session checks each resolves there.
+// checkScripts lists the plugin's bin/, so a new script is covered without
+// naming it, and inside a session checks each resolves there.
 func checkScripts(env *Env, p plugin, reason string) Result {
 	if p.Root == "" {
 		return notInstalled(CheckScripts, reason, p)
@@ -240,9 +240,6 @@ func checkScripts(env *Env, p plugin, reason string) Result {
 }
 
 // checkHooks tells "not registered" from "registered, but needs a restart".
-// Inside a session the start is this session's own marker, written by the
-// SessionStart hook; elsewhere, or from an older plugin that writes none, it
-// is the statusline symlink every session start re-points.
 func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Result {
 	if p.Root == "" {
 		return notInstalled(CheckHooks, reason, p)
@@ -298,8 +295,9 @@ func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Re
 	return r
 }
 
-// lastStart is when the session doctor runs in started, else when any
-// session last started, and which of the two it is.
+// lastStart is when this session started, by the marker its SessionStart
+// hook wrote, else when any session last did, by the statusline symlink
+// every start re-points: an older plugin writes no marker.
 func lastStart(env *Env) (time.Time, string, bool) {
 	if sid := sessionID(env); sid != "" {
 		if fi, err := os.Stat(filepath.Join(stateDir(env), sid+".started")); err == nil {
@@ -343,8 +341,6 @@ func statuslineLink(env *Env) string {
 	return filepath.Join(env.Home, ".claude", "f10", "statusline")
 }
 
-// checkStatusline checks the user's statusLine runs the f10 segment and
-// the symlink it runs resolves.
 func checkStatusline(env *Env, set settings) Result {
 	r := Result{Name: CheckStatusline, Scope: statuslineScope}
 	link := statuslineLink(env)
@@ -401,8 +397,6 @@ func checkHerdr(env *Env) Result {
 	return r
 }
 
-// checkHost checks the forge CLI the remote routes to is installed and
-// signed in to the remote's host.
 func checkHost(ctx context.Context, env *Env) Result {
 	r := Result{Name: CheckHost}
 	pb := env.Probes
@@ -445,8 +439,6 @@ func checkHost(ctx context.Context, env *Env) Result {
 	return r
 }
 
-// checkProject checks project.md's frontmatter; outside a project there
-// is none to check, and the inferred defaults apply.
 func checkProject(env *Env) Result {
 	r := Result{Name: CheckProject}
 
@@ -498,7 +490,6 @@ func projectFile(lay *layout.Layout) string {
 	return filepath.Join(lay.Layers[len(lay.Layers)-1].Dir, "project.md")
 }
 
-// realDir resolves symlinks in dir, or returns it as is.
 func realDir(dir string) string {
 	if r, err := filepath.EvalSymlinks(dir); err == nil {
 		return r

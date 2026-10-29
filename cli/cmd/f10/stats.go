@@ -20,11 +20,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
-// The stats verb is how long planning and implementing took, per task, in
-// the run's own time: every wait on the user is out, tool run time stays
-// in. Size is what finish measured; density is implement minutes per 100
-// changed lines. It reads the ledger, so counting starts with the release
-// that records waits.
+// The stats verb is active plan and implement time per task: every wait on
+// the user is out, tool run time stays in. Density is implement minutes per
+// 100 changed lines; a task from before waits were recorded has no numbers.
 func statsCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",

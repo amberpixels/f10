@@ -22,10 +22,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// A standup's period and a board's scope are the person's, not a
-// checkout's: two scopes run the same morning agree. So these files live in
-// ~/.f10/, beside the out-of-tree project directories, with an extension no
-// project directory carries.
+// A standup's period and a board's scope are the person's, not a checkout's,
+// so these files live in ~/.f10/, with an extension no project directory
+// there carries.
 const (
 	standupStateFile  = "standup.json" // the last reported standup; f10 writes it
 	standupConfigFile = "standup.md"   // the user's standup settings; f10 only reads it
@@ -80,9 +79,8 @@ func readAgentsConfig() (map[string]string, string, error) {
 	return cfg.Agents, path, nil
 }
 
-// readLastStandup is the stored standup, nil when none was ever reported.
-// A file that does not read is an error: dropping it would quietly move
-// the period.
+// readLastStandup is nil when none was reported; a file that does not read
+// is an error, since dropping it would quietly move the period.
 func readLastStandup() (*standup.Last, error) {
 	dir, err := userF10Dir()
 	if err != nil {
@@ -156,16 +154,12 @@ type standupConfig struct {
 	Groups   map[string][]string `yaml:"groups"` // a name to the paths and globs of its checkouts
 }
 
-// boardConfig is the frontmatter of ~/.f10/board.md: groups as standup
-// has them, with repositories allowed beside paths; repositories watched
-// with no checkout, which --all reads; and the people map.
 type boardConfig struct {
 	Groups map[string][]string `yaml:"groups"`
 	Repos  []repoEntry         `yaml:"repos"`
 	People []person            `yaml:"people"`
 }
 
-// A person is one name and the identities the sources know them by.
 type person struct {
 	Name    string   `yaml:"name"`
 	Tracker string   `yaml:"tracker"`
@@ -173,9 +167,8 @@ type person struct {
 	Emails  []string `yaml:"emails"`
 }
 
-// A repoEntry is a repository with no checkout: `github.com/acme/widgets`
-// as a string, or a map with `repo` and the task id `prefix` to read ids
-// with, where the name derives the wrong one.
+// A repoEntry is a string, `github.com/acme/widgets`, or a map adding the
+// task id `prefix`, for a name that derives the wrong one.
 type repoEntry struct {
 	Repo   string `yaml:"repo"`
 	Prefix string `yaml:"prefix"`
@@ -193,10 +186,9 @@ func (r *repoEntry) UnmarshalYAML(node *yaml.Node) error {
 	return node.Decode((*plain)(r))
 }
 
-// readUserConfig reads the frontmatter of ~/.f10/<file> into cfg and
-// returns the file's path for error texts; a missing file or one with no
-// frontmatter leaves cfg as it was. Each caller reads only the key it
-// needs, so a broken file fails only a run that uses it.
+// readUserConfig leaves cfg as it was for a missing file or one with no
+// frontmatter. Each caller reads only the key it needs, so a broken file
+// fails only a run that uses it.
 func readUserConfig(file string, cfg any) (string, error) {
 	dir, err := userF10Dir()
 	if err != nil {
@@ -258,8 +250,7 @@ func readBoardConfig() (boardConfig, string, error) {
 
 var weekdays = map[string]int{"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
 
-// readWorkdays is the working weekdays ~/.f10/standup.md declares, Monday
-// to Friday when it is missing or does not say.
+// readWorkdays is Monday to Friday when standup.md is missing or does not say.
 func readWorkdays() (standup.Workdays, error) {
 	cfg, path, err := readStandupConfig()
 	if err != nil {
@@ -292,12 +283,9 @@ func readWorkdays() (standup.Workdays, error) {
 	return w, nil
 }
 
-// readGroups is what the named groups in ~/.f10/<file> list, in the
-// order given: checkouts from paths and globs, and repositories with no
-// checkout. A glob keeps the checkouts it matches and skips anything else;
-// a plain path that is not a checkout is an error, since the user named
-// it. The user declared each entry, so expanding a group is not the
-// filesystem walk F10_ROOTS fences.
+// readGroups: a glob keeps the checkouts it matches and skips the rest; a
+// plain path that is not a checkout is an error, since the user named it.
+// The user declared each entry, so this is not the walk F10_ROOTS fences.
 func readGroups(file string, names []string) ([]scopeItem, error) {
 	groups, path, err := userGroups(file)
 	if err != nil {
@@ -344,9 +332,6 @@ func userGroups(file string) (map[string][]string, string, error) {
 	return cfg.Groups, path, err
 }
 
-// groupEntry is what one group entry names: a repository where the entry
-// is one (no leading / or ~, no glob), else the checkouts of its path or
-// glob.
 func groupEntry(entry string) ([]scopeItem, error) {
 	entry = strings.TrimSpace(entry)
 

@@ -11,10 +11,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// The pr noun needs nothing declared anywhere. Which CLI to reach for is a
-// function of the git remote, which probe already answers with its
-// evidence, so `f10 pr open` is right by construction in a repo whose host
-// you would otherwise have to remember.
+// The pr noun needs nothing declared: the CLI follows from the git remote,
+// which probe already answers.
 func prCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "pr",
@@ -77,8 +75,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 	return shell.Passthrough(ctx, h.Dir, h.Name, h.prArgs(number, "--web")...)
 }
 
-// prArgs is the subcommand each CLI names this thing: GitHub has pull
-// requests, GitLab has merge requests.
+// prArgs: GitHub has pull requests, GitLab merge requests.
 func (h host) prArgs(number string, tail ...string) []string {
 	args := h.Pick([]string{"pr", "view"}, []string{"mr", "view"})
 
@@ -89,8 +86,7 @@ func (h host) prArgs(number string, tail ...string) []string {
 	return append(args, tail...)
 }
 
-// pullRows is the first page of open requests, newest first, as rows: gh
-// numbers them #n, glab !n.
+// pullRows is the first page of open requests, newest first.
 func (h host) pullRows(ctx context.Context) ([]row, error) {
 	var found []pull
 
@@ -120,7 +116,6 @@ func (h host) pullRows(ctx context.Context) ([]row, error) {
 	return rows, nil
 }
 
-// prURL is the url of the request number names.
 func (h host) prURL(ctx context.Context, number string) (string, error) {
 	var payload map[string]any
 

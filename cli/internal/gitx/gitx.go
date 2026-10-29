@@ -1,14 +1,7 @@
-// Package gitx is the binary's one door to git. The reads mirror the
-// shell-outs bin/f10-load-project.sh makes - the bash script is the semantics
-// oracle, and shelling out identically keeps the two comparable. The
-// writes are `f10 start`'s - a branch (new, or tracking origin's), a
-// worktree, and the config entries that record what a branch depends on - and `f10 finish`'s, which undoes
-// them once the branch has merged: the pull, the worktree removal, the
-// branch deletion. `f10 drive` adds one: the push of a branch it caught up
-// before merging.
-//
-// Everything goes through Exec, a variable so a test can answer git
-// without a checkout. No go-git.
+// Package gitx is the binary's one door to git: reads mirror the shell-outs
+// bin/f10-load-project.sh makes, the semantics oracle, so the two stay
+// comparable. Everything goes through Exec, a variable so a test can answer
+// git without a checkout. No go-git.
 package gitx
 
 import (
@@ -93,11 +86,9 @@ func Out(ctx context.Context, dir string, args ...string) string {
 	return out
 }
 
-// Read runs a quiet git read: exit 0 is the value and present, exit 1 is
-// absent with no error, and anything else - a lock, a broken worktree, a
-// killed git - is the error. A form whose "not there" exits 128 (a
-// rev-parse --verify without -q) reads absence as an error, which halts
-// rather than proceeds.
+// Read runs a quiet git read: exit 0 is the value, exit 1 absent with no
+// error, anything else the error. A form whose "not there" exits 128 (a
+// rev-parse --verify without -q) reads absence as an error, which halts.
 func Read(ctx context.Context, dir string, args ...string) (string, bool, error) {
 	out, err := Exec(ctx, dir, args...)
 
@@ -125,12 +116,9 @@ func Ref(ctx context.Context, dir, ref string) (string, error) {
 	return sha, err
 }
 
-// Refs lists the refs matching patterns, in git's own order, as branch
-// names: `refs/heads/` and `refs/remotes/` stripped, so a remote branch
-// reads `origin/x`. The full refname is asked for rather than the short
-// one, which git disambiguates to `heads/x` when a tag shares the name.
-// A pattern is what for-each-ref takes: a literal ref, which also matches
-// everything under it at a slash, or a glob.
+// Refs lists the refs matching for-each-ref patterns as branch names,
+// `refs/heads/` and `refs/remotes/` stripped. The full refname is asked for
+// since git shortens to `heads/x` when a tag shares the name.
 func Refs(ctx context.Context, dir string, patterns ...string) ([]string, error) {
 	args := append([]string{"for-each-ref", "--format=%(refname)"}, patterns...)
 
@@ -164,8 +152,6 @@ func Worktrees(ctx context.Context, dir string) ([]Worktree, error) {
 	return parseWorktrees(out), nil
 }
 
-// parseWorktrees reads the porcelain format: entries separated by a blank
-// line, each opened by a `worktree <path>` line.
 func parseWorktrees(out string) []Worktree {
 	var (
 		list []Worktree
@@ -212,10 +198,9 @@ func Fetch(ctx context.Context, dir string) error {
 	return err
 }
 
-// TrackBranch creates local branch from origin's branch of the same name,
-// tracking it, so a pull or push in its worktree needs no upstream set.
-// With force an existing branch is moved there, which git refuses while a
-// worktree has it checked out.
+// TrackBranch creates local branch tracking origin's of the same name, so a
+// pull or push in its worktree needs no upstream set. force moves an existing
+// branch there, which git refuses while a worktree has it checked out.
 func TrackBranch(ctx context.Context, dir, branch string, force bool) error {
 	args := []string{"branch", "--track", branch, "origin/" + branch}
 	if force {
@@ -227,18 +212,16 @@ func TrackBranch(ctx context.Context, dir, branch string, force bool) error {
 	return err
 }
 
-// SetConfig writes one entry to the repository's local config, replacing
-// any value the key held. Local config never leaves the machine, which is
-// what makes it the place for a per-branch fact in stealth mode.
+// SetConfig writes one local config entry. Local config never leaves the
+// machine, which makes it the place for a per-branch fact in stealth mode.
 func SetConfig(ctx context.Context, dir, key, value string) error {
 	_, err := Exec(ctx, dir, "config", key, value)
 
 	return err
 }
 
-// Status lists what `status --porcelain` reports for dir: one line per
-// changed or untracked path, empty for a clean tree. Ignored files are
-// not listed, so an excluded .f10/ never counts.
+// Status lists `status --porcelain`'s lines, empty for a clean tree. Ignored
+// files are not listed, so an excluded .f10/ never counts.
 func Status(ctx context.Context, dir string) ([]string, error) {
 	out, err := Exec(ctx, dir, "status", "--porcelain")
 	if err != nil {
@@ -286,11 +269,9 @@ func unknownObject(err error) bool {
 	return ok && (strings.Contains(exit.Stderr, "Not a valid") || strings.Contains(exit.Stderr, "bad object"))
 }
 
-// MergesCleanly reports whether head merges into base without a conflict,
-// tried in memory the way a host tries a pull request: nothing is checked
-// out or written. git exits 1 both for a conflict, reported on stdout, and
-// for a ref it cannot merge, reported on stderr, which is an error.
-// Not --quiet: git 2.56 exits 0 with it on a conflict.
+// MergesCleanly tries the merge in memory, nothing checked out or written.
+// git exits 1 both for a conflict (on stdout) and for a ref it cannot merge
+// (on stderr), which is an error. Not --quiet: git 2.56 exits 0 with it.
 func MergesCleanly(ctx context.Context, dir, base, head string) (bool, error) {
 	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", base, head)
 
@@ -304,10 +285,9 @@ func MergesCleanly(ctx context.Context, dir, base, head string) (bool, error) {
 	}
 }
 
-// A Conflict is one path a merge would conflict on, with the blob each
-// stage brought: 1 the merge base, 2 base's side, 3 head's side, "" where
-// a side lacks the path. Two conflicts on a path are the same conflict only
-// when their blobs are.
+// A Conflict is one path a merge would conflict on, with the blob each stage
+// brought (1 the merge base, 2 base's side, 3 head's side, "" where a side
+// lacks the path); two on a path are the same only when their blobs are.
 type Conflict struct {
 	Path   string
 	Stages [4]string
@@ -319,10 +299,9 @@ func (c Conflict) Key() string {
 }
 
 // Conflicts is what head conflicts on in base, sorted by path, tried in
-// memory as MergesCleanly does: nil is a clean merge. git exits 1 with the
-// tree and a `<mode> <oid> <stage>\t<path>` line per conflicted stage on
-// stdout, and with its reason on stderr for a ref it cannot merge, which is
-// an error.
+// memory as MergesCleanly does; nil is a clean merge. git exits 1 with a stage
+// line per conflicted path on stdout, and on stderr for a ref it cannot
+// merge, which is an error.
 func Conflicts(ctx context.Context, dir, base, head string) ([]Conflict, error) {
 	_, err := Exec(ctx, dir, "merge-tree", "--write-tree", "--no-messages", base, head)
 
@@ -405,10 +384,9 @@ func UpdateRef(ctx context.Context, dir, ref, sha, old string) error {
 	return err
 }
 
-// Push sends HEAD to origin's branch. A lease (the sha origin's branch had
-// when the caller read it) forces the push only while origin still has that
-// sha, which a rebased branch needs; "" pushes a fast-forward and nothing
-// else.
+// Push sends HEAD to origin's branch. A lease (the sha origin had when the
+// caller read it) forces the push only while origin still has it, which a
+// rebased branch needs; "" pushes a fast-forward and nothing else.
 func Push(ctx context.Context, dir, branch, lease string) error {
 	args := []string{"push", "origin", "HEAD:refs/heads/" + branch}
 	if lease != "" {
@@ -458,10 +436,9 @@ func RemoveWorktree(ctx context.Context, dir, path string) error {
 	return err
 }
 
-// DeleteBranch deletes the local branch whether or not git sees it as
-// merged: a squash or rebase merge leaves no trace git recognises, so the
-// caller's proof is the host's, not git's. The branch's config section
-// goes with it.
+// DeleteBranch deletes the local branch whether or not git sees it as merged:
+// a squash or rebase merge leaves no trace git recognises, so the caller's
+// proof is the host's. The branch's config section goes with it.
 func DeleteBranch(ctx context.Context, dir, branch string) error {
 	_, err := Exec(ctx, dir, "branch", "-D", branch)
 

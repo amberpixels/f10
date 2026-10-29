@@ -24,9 +24,8 @@ func (fx *finishFixture) spike(t *testing.T) string {
 	return filepath.Join(fx.in.plansDir, "archive")
 }
 
-// A spike with no PR closes without a merge: the plan and the report
-// archived side by side, dependents released, the experiment discarded
-// before the worktree and branch go, and the task left for the tracker.
+// A spike with no PR closes without a merge: the experiment is discarded
+// before the worktree and branch go, and the task is left for the tracker.
 func TestFinishClosesASpike(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()

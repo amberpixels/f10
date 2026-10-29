@@ -331,8 +331,6 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 	return c, nil
 }
 
-// awaitNumber reads the number the drive writes to numberFile once its
-// record opens, until the drive ends.
 func (s *Server) awaitNumber(c *child, numberFile string) {
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()

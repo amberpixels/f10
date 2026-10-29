@@ -42,16 +42,13 @@ const (
 	StateFinal = "state_final"
 )
 
-// Observer records a hook's observations. Rows go to the spool; only an
-// observation that compares against prior rows (a stop, a findings or a
-// verdict file) opens the ledger, so most hooks never touch SQLite. Close
-// releases it.
+// Observer records a hook's observations to the spool; only one that compares
+// against prior rows (a stop, a findings or a verdict file) opens the ledger,
+// so most hooks never touch SQLite.
 type Observer struct {
 	StateDir string
 	Busy     time.Duration
-	// NoReplay leaves the spool to a later writer: a synchronous hook holds
-	// the prompt while it runs.
-	NoReplay bool
+	NoReplay bool // a synchronous hook holds the prompt: the spool waits for a later writer
 	// TaskID is the tracker task id a created issue's url names.
 	TaskID func(ctx context.Context, cwd, url string) string
 
@@ -252,10 +249,9 @@ func nonEmpty(s string) any {
 	return s
 }
 
-// findings records a findings file: the round opening once per reviewed
-// sha, then each finding whose verdict differs from the last one recorded.
-// Review writes the file and resolve edits it, so the diff against the
-// ledger decides, not the tool that wrote it.
+// findings records the round opening once per reviewed sha, then each finding
+// whose verdict differs from the last recorded. Review writes the file and
+// resolve edits it, so the diff against the ledger decides, not the writer.
 func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []Event {
 	raw, err := os.ReadFile(o.Path)
 	if err != nil {
@@ -278,7 +274,7 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	var events []Event
 
 	opened := false
-	last := map[string]string{} // round/finding -> verdict and status last recorded
+	last := map[string]string{} // verdict and status last recorded, by round/finding
 
 	for _, e := range prior {
 		switch e.Kind {
@@ -329,10 +325,9 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	return events
 }
 
-// verdict records a judge's verdict file once per verdict and decision:
-// a rewrite in the same session that changes neither adds nothing, a
-// decision filled in after a driven ask adds a row. Another session at the
-// same path is a new run: numbering restarts in a recreated checkout.
+// verdict records a verdict file once per verdict and decision, so a
+// decision filled in after a driven ask adds a row and a plain rewrite none;
+// another session at the same path is a recreated checkout's new run.
 func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m observe.Meta) []Event {
 	raw, err := os.ReadFile(o.Path)
 	if err != nil {

@@ -8,16 +8,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// The drive's dependency graph. Each task has at most one base: the
-// f10-after its branch records once it started, the After: line in its
-// body before. The graph is a map of task to base, rebuilt on every run
-// from those two places, so nothing about it is stored: the resume is the
-// same command, and it reads the same answer.
+// Each task has at most one base: the f10-after its branch records once
+// started, else its body's After: line. The graph is rebuilt every run from
+// those, so nothing is stored and a resume reads the same answer.
 
-// graph reads every unfinished task's base onto the task and returns the
-// order the drive runs them in. A base outside the list must already be
-// finished, and a cycle cannot run at all; both are refused before anything
-// is created. The notes name a branch and a body that disagree.
+// graph refuses a base outside the list that is not finished, and a cycle,
+// before anything is created.
 func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []string, error) {
 	var notes []string
 
@@ -102,9 +98,8 @@ func listIndex(tasks []driveTask) map[string]int {
 	return index
 }
 
-// topoOrder puts every base before its dependents. Among the tasks ready at
-// once, the one listed first goes first, so a list already in order runs in
-// that order. Tasks left over when none is ready wait on each other.
+// topoOrder puts bases before dependents; among the ready, the one listed
+// first goes first, so a list already in order runs in that order.
 func topoOrder(tasks []driveTask, index map[string]int) ([]int, error) {
 	placed := make([]bool, len(tasks))
 	order := make([]int, 0, len(tasks))

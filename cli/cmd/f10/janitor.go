@@ -19,17 +19,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
-// The janitor clears task branches that outlived their task: a PR merged in
-// the host's UI or by `gh pr merge`, a worktree removed by hand. finish
-// cleans up after itself; this catches everything that went around it.
-// Every rule that can keep a branch is checked before anything of that
-// branch is deleted, and one branch failing never stops the next.
+// The janitor catches the task branches that went around finish: a PR merged
+// in the host's UI, a worktree removed by hand. Every keep rule is checked
+// before anything is deleted, and one branch failing never stops the next.
 
-// janitorEvery is how long start waits between two janitor runs.
+// janitorEvery is how long start and finish wait between two janitor runs.
 const janitorEvery = 6 * time.Hour
 
-// janitorStamp names the file in the shared storage root whose mtime is the
-// last run.
+// janitorStamp's mtime is the last run.
 const janitorStamp = "janitor.stamp"
 
 func janitorCommand() *cli.Command {
@@ -67,10 +64,8 @@ func runJanitor(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// sweepIfDue runs the janitor after start or finish has done its own work,
-// when the stamp says it is due. Nothing it does fails that command: an
-// error is one warning. The stamp moves first, so commands in quick
-// succession run it once.
+// sweepIfDue never fails the command that ran it: an error is one warning.
+// The stamp moves first, so commands in quick succession run it once.
 func sweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	run func(context.Context) ([]string, error),
 ) {
@@ -94,8 +89,6 @@ func sweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	}
 }
 
-// janitorDue reports whether the last run is older than janitorEvery, or
-// there was none.
 func janitorDue(stamp string, now time.Time) bool {
 	fi, err := os.Stat(stamp)
 
@@ -122,8 +115,7 @@ type janitorInput struct {
 	prefix   string
 	plansDir string
 	dry      bool
-	// localOnly lists no branch on origin: the watcher reads only branches
-	// a checkout here holds, and asks the network nothing before the host
+	// localOnly: the watcher asks the network nothing before the host
 	localOnly bool
 }
 
@@ -139,15 +131,14 @@ func janitorFor(t *target) janitorInput {
 	return in
 }
 
-// A staleBranch is one branch tied to a task, local, on origin or both.
 type staleBranch struct {
 	name                string
 	ids                 []string // the tasks it ships, a bundle's lead first
 	localSHA, originSHA string   // "" where the branch is not
 }
 
-// janitor removes every task branch that qualifies and returns a line per
-// removal and per branch kept for a reason worth knowing.
+// janitor reports a line per removal, and per branch kept for a reason worth
+// knowing.
 func janitor(ctx context.Context, in janitorInput) ([]string, error) {
 	def, err := janitorDefault(ctx, in.main)
 	if err != nil {
@@ -161,7 +152,6 @@ func janitor(ctx context.Context, in janitorInput) ([]string, error) {
 
 	j := &sweeper{in: in, def: def}
 
-	// each removed branch, and when its request ended
 	removed := map[string]time.Time{}
 
 	for _, b := range branches {
@@ -183,8 +173,7 @@ func janitor(ctx context.Context, in janitorInput) ([]string, error) {
 	return j.lines, nil
 }
 
-// janitorDefault is the default branch as origin names it, else, with no
-// origin, the branch the main checkout is on.
+// janitorDefault falls back to the main checkout's branch only with no origin.
 func janitorDefault(ctx context.Context, main string) (string, error) {
 	if def, err := localDefault(ctx, main); err == nil {
 		return def, nil
@@ -199,11 +188,10 @@ func janitorDefault(ctx context.Context, main string) (string, error) {
 	return "", errors.New("cannot tell the default branch: origin has no HEAD here (git remote set-head origin -a)")
 }
 
-// taskBranches lists every local and origin branch tied to a task id, by
-// the rule finish reads a branch with: its f10-task link or recorded
-// bundle, else the bundle its name spells, else the id it carries, which
-// on origin only counts in the shapes start creates. The default branch is
-// never one. held is every branch a checkout has, main's included.
+// taskBranches reads a branch as finish does: its link or recorded bundle,
+// else its name. On origin a bare id counts only in the shapes start creates,
+// so a name merely mentioning one is someone else's. held is every branch a
+// checkout has, main's included.
 func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBranch, map[string]bool, error) {
 	locals, err := gitx.Refs(ctx, in.main, "refs/heads/")
 	if err != nil {
@@ -321,8 +309,8 @@ func (j *sweeper) say(format string, args ...any) {
 	j.lines = append(j.lines, fmt.Sprintf(format, args...))
 }
 
-// sweep removes b when it qualifies, reporting whether it was (or, dry,
-// would be) removed and when its request ended.
+// sweep reports whether b was (or, dry, would be) removed, and when its
+// request ended.
 func (j *sweeper) sweep(ctx context.Context, b staleBranch) (time.Time, bool) {
 	var (
 		p   *forge.PR
@@ -407,9 +395,8 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 	return ""
 }
 
-// sweepUnpushed removes a branch with no request when finish would read it
-// as never pushed and its changes are already in the default branch. Its
-// work ended with its last commit.
+// sweepUnpushed removes a branch finish would read as never pushed once its
+// changes are in the default branch; its work ended with its last commit.
 func (j *sweeper) sweepUnpushed(ctx context.Context, b staleBranch) (time.Time, bool) {
 	if b.localSHA == "" || b.originSHA != "" {
 		return time.Time{}, false
@@ -434,8 +421,7 @@ func (j *sweeper) sweepUnpushed(ctx context.Context, b staleBranch) (time.Time, 
 	return ended, j.remove(ctx, b, nil)
 }
 
-// remove deletes b: dependents released for a merged request, origin's
-// copy for the user's own request, then the local branch. A step failing
+// remove drops origin's copy only for the user's own request. A step failing
 // is a line, and the branch counts as kept.
 func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 	why := "never pushed, already in " + j.def
@@ -527,10 +513,9 @@ func (j *sweeper) own(ctx context.Context, p *forge.PR) bool {
 	return *j.login != "" && strings.EqualFold(*j.login, p.Author)
 }
 
-// archive moves the plan, and drops the images, of every task whose
-// branches all went, a bundle's riders included. A task with a branch left
-// keeps both: a second attempt's worktree may still read its plan. So does
-// a plan written after the request ended: the task was planned again.
+// archive keeps the plan of a task with a branch left (a second attempt may
+// still read it) and one written after the request ended (the task was
+// planned again); a kept plan keeps its images.
 func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) {
 	left := map[string][]string{}
 	cleared := map[string]time.Time{}
@@ -557,7 +542,6 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 	for _, id := range ids {
 		plan := taskPlan(j.in.main, j.in.plansDir, id)
 
-		// a kept plan keeps its images too
 		switch {
 		case !exists(plan):
 		case len(left[id]) > 0:
@@ -591,7 +575,6 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 	}
 }
 
-// laterOf is the later of two times.
 func laterOf(a, b time.Time) time.Time {
 	if b.After(a) {
 		return b
@@ -600,22 +583,18 @@ func laterOf(a, b time.Time) time.Time {
 	return a
 }
 
-// writtenAfter reports whether the file at path changed after t; a zero t
-// is no bound.
+// writtenAfter reports whether path changed after t; a zero t is no bound.
 func writtenAfter(path string, t time.Time) bool {
 	fi, err := os.Stat(path)
 
 	return err == nil && !t.IsZero() && fi.ModTime().After(t)
 }
 
-// startShape reports whether name is a branch start would create for id:
-// the id itself, or the id followed by a slug, a suffix or a bundle.
 func startShape(name, id string) bool {
 	return name == id || strings.HasPrefix(name, id+"/") || strings.HasPrefix(name, id+"-") ||
 		strings.HasPrefix(name, id+ref.Separator)
 }
 
-// dependentsOf are the local branches started --after branch.
 func dependentsOf(ctx context.Context, dir, branch string) ([]string, error) {
 	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
 	if err != nil {

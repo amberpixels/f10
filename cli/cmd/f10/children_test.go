@@ -102,8 +102,6 @@ FT-74  t74  after FT-73
 	}
 }
 
-// childTarget is a GitHub or GitLab target with no driver and an empty
-// plan archive, under the fakes.
 func childTarget(t *testing.T, cli string) *target {
 	t.Helper()
 

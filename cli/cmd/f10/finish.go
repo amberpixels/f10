@@ -22,22 +22,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
-// The finish verb is start's inverse across the host CLI, git and Herdr.
-// By hand, the skipped steps (the worktree, the pull) leave sibling
-// directories and a main behind its own merge; a worktree from before
-// storage moved to main's, removed by hand, takes the only copy of its plan.
-//
-// Everything after the merge is gated on the merge having landed: the
-// merge commit must be in the local default branch before anything local
-// is touched. Every refusal comes before the first change, and the plan
-// is out of the worktree before the worktree goes. A task shipped from the
-// main checkout has no worktree: main is switched to the default branch
-// and only the local branch goes.
-//
-// A PR someone else opened is not merged unasked: --merge merges it, and
-// --local cleans up here and leaves it open, for a review handed back.
-//
-// A spike with no PR is closed without a merge (finishspike.go).
+// The finish verb is start's inverse. Nothing local moves until the merge
+// commit is in the local default branch, and the plan leaves the worktree
+// before the worktree goes: by hand, those are the steps that get skipped.
 func finishCommand() *cli.Command {
 	return &cli.Command{
 		Name: "finish",
@@ -68,10 +55,9 @@ func finishCommand() *cli.Command {
 	}
 }
 
-// finishRef is the task a finish token names, its suffix, and for an empty
-// token the branch checked out here, which picks it among suffixed siblings.
-// The session's task is refused: off a task branch no workspace refusal
-// stands between a bare call and the merge.
+// finishRef is the task a token names, its suffix, and for a bare call the
+// branch checked out here, which picks it among suffixed siblings. The
+// session's task is refused: nothing else would stand between it and a merge.
 func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -93,8 +79,6 @@ func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, s
 	return r, suffix, "", err
 }
 
-// errNotMerged is a finish that only finishes merged work meeting a
-// branch whose request has not merged.
 var errNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
 
 // exitForeign is finish's exit when the PR is someone else's and no flag
@@ -201,8 +185,6 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// finishLease takes the task's lease for the command, refusing while a
-// drive or another finish holds it.
 func finishLease(root, id string) (*drives.Lease, error) {
 	lease, err := drives.Acquire(root, id, 0)
 	if held := (drives.HeldError{}); errors.As(err, &held) {
@@ -216,8 +198,7 @@ func finishLease(root, id string) (*drives.Lease, error) {
 	return lease, err
 }
 
-// A foreignPullError is an open PR someone else opened, met with neither
-// --merge nor --local: finish changed nothing and the choice is the user's.
+// A foreignPullError is a refusal: nothing changed, the choice is the user's.
 type foreignPullError struct {
 	url    string
 	author string
@@ -239,9 +220,8 @@ type finishInput struct {
 	host   host
 	method string // the merge method project.md declares, "" for none
 	traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
-	// loreStore is the change's lore: the report's one line on what it left
-	// (loreNote) and the check right before its merge lands; nil reads nothing.
-	// gate is lore_gate: warn notes a failing check's reasons, block refuses
+	// loreStore feeds the report's lore line and the pre-merge check (nil reads
+	// nothing); gate is lore_gate: warn notes a failing check, block refuses
 	loreStore *lore.Store
 	gate      string
 	cwd       string // where the command runs: inside the worktree is the self-close case
@@ -253,27 +233,21 @@ type finishInput struct {
 	plansDir  string // the plans dir every checkout shares; the spikes dir sits beside it
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
-	// close is a bundle's riders the PR delivers, closed with the lead; nil
-	// until --close answers, which a bundle's merge refuses to go without
+	// close is the riders the PR delivers, closed with the lead; nil, no
+	// --close answer yet, refuses a bundle's merge
 	close []string
-	// sweep runs the janitor once the task's own cleanup is done and before
-	// a workspace closes, since closing this one ends the process; nil for none
+	// sweep runs the janitor before the workspace closes, since a self-close
+	// ends the process; nil for none
 	sweep func(context.Context)
 	// progress names each action as it starts, for drive's record; nil for none
 	progress func(string)
-	// mergedOnly refuses everything but a request already merged on the
-	// host: the watcher finishes merged work and never merges anything
+	// mergedOnly refuses all but an already merged request: the watcher never merges
 	mergedOnly bool
 }
 
-// finish runs the flow: branch, worktree, the refusals, the merge, the
-// pull, the dependents, the plan, the report, the removal, the workspace.
-// A branch never pushed, with no request, is merged into the default branch
-// here instead, and nothing is pulled or pushed.
-// The report is printed before anything local goes, and the workspace
-// closes last: on the self-close path the close ends this process, so
-// everything that must happen has happened by then. With the branch checked
-// out in main, main's workspace is neither closed nor focused.
+// finish runs the flow in the order the refusals need: the report prints
+// before anything local goes, and the workspace closes last, since on the
+// self-close path the close ends this process.
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	name, path, onMain, err := finishTarget(ctx, in)
 	if gone := (goneError{}); errors.As(err, &gone) {
@@ -426,8 +400,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		var sha string
 
-		// measured before landing, recorded once it landed; a branch with
-		// nothing to measure, as a rerun of a local land finds it, records none
+		// recorded only once it landed, and only when there was something to measure
 		size, sized := measureBranch(ctx, in.main, name, def, local)
 		sized = sized && size.files > 0
 
@@ -448,9 +421,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 			notes = append(notes, riderNotes...)
 
-			// on main, the default branch is checked out nowhere, so pullMain fetches
-			// into it and main stays on the task's branch until the end: a failure
-			// before then leaves a rerun the same shape to find
+			// main stays on the task's branch until the end, so a failure before
+			// then leaves a rerun the same shape to find
 			in.step("pulling " + def)
 
 			note, err := pullMain(ctx, in.main, def, p.sha())
@@ -509,9 +481,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
-	// a worktree's own report is copied out before the worktree goes, and
-	// goes with it; a shared one moves after the removal: either way a rerun
-	// after a failed removal still finds the spike
+	// the report is copied out before the worktree goes and moved only after
+	// it, so a rerun after a failed removal still finds the spike
 	var spikeDst string
 
 	early := spike != "" && !onMain && inside(spike, path)
@@ -577,8 +548,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return nil
 	}
 
-	// the last action: removing the checkout deletes the branch, and the
-	// record with it
+	// last: removing the checkout deletes the branch, and the record with it
 	in.step("removing worktree")
 
 	if err := removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike); err != nil {
@@ -604,10 +574,9 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	return nil
 }
 
-// checkLore runs the change's lore check right before its merge lands, and
-// only then: a merged request, a --local cleanup and a spike's close merge
-// nothing. Under warn the reasons are a note and the merge goes on; under
-// block they are the error, before anything changed. An unreadable store is a reason.
+// checkLore runs only right before a merge lands (a merged request, --local
+// and a spike's close merge nothing). An unreadable store is a reason; under
+// block it is the error, before anything changed.
 func checkLore(in finishInput, merging bool) (string, error) {
 	if in.loreStore == nil || !merging {
 		return "", nil
@@ -649,10 +618,8 @@ func (in finishInput) sweepNow(ctx context.Context) {
 	}
 }
 
-// switchMain ends a finish run on the main checkout: main onto the default
-// branch, then the task's branch deleted, or moved to kept when not "".
-// Each error names what already happened to the PR (ended: "<url> merged")
-// and what is left to do by hand.
+// switchMain ends a finish on the main checkout; each error names what
+// already happened to the PR (ended) and what is left to do by hand.
 func switchMain(ctx context.Context, main, def, branch, kept, ended string) error {
 	if err := gitx.Switch(ctx, main, def); err != nil {
 		return fmt.Errorf("%s, but switching the main checkout to %s failed: %w", ended, def, err)
@@ -674,10 +641,9 @@ func switchMain(ctx context.Context, main, def, branch, kept, ended string) erro
 	return nil
 }
 
-// leaveOpen reports whether finish cleans up locally and leaves the PR as
-// it is. A merged PR always takes the full path, which only confirms it.
-// An open PR someone else opened, with neither flag, is a refusal that
-// changes nothing; a closed one is left only with --local.
+// leaveOpen reports whether finish leaves the PR as it is. A merged PR always
+// takes the full path; someone else's open one, with neither flag, is a
+// refusal that changes nothing; a closed one is left only with --local.
 func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
 	switch {
 	case p.status() == pullMerged:
@@ -721,7 +687,6 @@ func refuseUnpushed(ctx context.Context, main, branch string) error {
 		"since leaving the PR open deletes the local branch", branch, branch)
 }
 
-// appendNote adds note to notes unless it is empty.
 func appendNote(notes []string, note string) []string {
 	if note == "" {
 		return notes
@@ -730,10 +695,9 @@ func appendNote(notes []string, note string) []string {
 	return append(notes, note)
 }
 
-// finishTarget is the task's branch, the checkout that has it checked out,
-// and whether that checkout is main's: a worktree start created, or main
-// itself for a task shipped from there. A branch checked out nowhere is a
-// refusal, since finish cleans up only those two shapes.
+// finishTarget is the task's branch and the checkout holding it, main's or a
+// worktree's. A branch checked out nowhere is a refusal: finish cleans up
+// only what start made.
 func finishTarget(ctx context.Context, in finishInput) (string, string, bool, error) {
 	name, path, err := in.branch, "", error(nil)
 	if name == "" {
@@ -759,8 +723,7 @@ func finishTarget(ctx context.Context, in finishInput) (string, string, bool, er
 	return name, path, gitx.SamePath(path, in.main), nil
 }
 
-// refuseDirty stops on anything git would list in the worktree, named file
-// by file. There is no --force: the work is the user's to commit or drop.
+// refuseDirty has no --force: the work is the user's to commit or drop.
 func refuseDirty(ctx context.Context, path string) error {
 	lines, err := gitx.Status(ctx, path)
 	if err != nil {
@@ -782,7 +745,6 @@ func refuseDirty(ctx context.Context, path string) error {
 	return errors.New(b.String())
 }
 
-// workspaceAt is the workspace showing the checkout at path, or nil.
 func workspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
 	for i := range wss {
 		if wss[i].Path != "" && gitx.SamePath(wss[i].Path, path) {
@@ -793,7 +755,6 @@ func workspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
 	return nil
 }
 
-// workspaceByID is the workspace with id, or nil once Herdr no longer shows it.
 func workspaceByID(wss []agentctl.Workspace, id string) *agentctl.Workspace {
 	for i := range wss {
 		if wss[i].ID == id {
@@ -812,12 +773,9 @@ func workspaceLabel(ws *agentctl.Workspace) string {
 	return ws.Label
 }
 
-// landPull makes sure the branch's request is merged: merges it when open,
-// confirms it when already merged, refuses otherwise. When the host still
-// has the remote branch, it moves every open request based on it to the
-// merged one's base, then deletes the branch and the local copy of it. The
-// notes say which requests moved, when the merge was not this run's and
-// when the merge method was a default rather than a declaration.
+// landPull merges an open request or confirms a merged one. Requests based
+// on the branch move to the merged one's base before the branch goes, since
+// the delete would close them; the notes say which moved.
 func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pull, []string, error) {
 	var notes []string
 
@@ -896,10 +854,9 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 	return p, notes, nil
 }
 
-// retargetStacked moves every open request based on branch to base, a
-// note each. A failure stops before the branch is deleted, so the request
-// stays open and a rerun, reaching the merged case, retries it; its error
-// names the requests already moved, since no report follows it.
+// retargetStacked moves every open request based on branch to base. A
+// failure stops before the delete, so the request stays open for a rerun;
+// its error names the requests already moved, since no report follows it.
 func retargetStacked(ctx context.Context, h host, merged pull, branch, base string) ([]string, error) {
 	stacked, err := h.stackedPulls(ctx, branch)
 	if err != nil {
@@ -926,12 +883,9 @@ func retargetStacked(ctx context.Context, h host, merged pull, branch, base stri
 	return notes, nil
 }
 
-// lastState leaves the PR body's hidden state block saying finish, the
-// last state before the merge, and returns the body as the host now holds
-// it. A failed read or write is a note, never a failed finish: the merge is
-// the work, the block a trace of it. The one exception is a bundle whose
-// body cannot be read: settleRiders just rewrote its closing keywords, and
-// the fallback would close a rider the user kept.
+// lastState sets the PR body's state block to finish, returning the body the
+// host holds. A failed read or write is a note, except for a bundle, whose
+// fallback body would close a rider settleRiders just kept open.
 func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string, error) {
 	body, err := in.host.pullBody(ctx, branch)
 
@@ -947,8 +901,6 @@ func lastState(ctx context.Context, in finishInput, branch, fallback string) (st
 	return body, stateNote(err), nil
 }
 
-// putLastState rewrites body's block for finish and writes it back when
-// it changed, returning the body the host holds afterwards.
 func putLastState(ctx context.Context, in finishInput, branch, body string) (string, error) {
 	out, err := trace.Rewrite(body, trace.Update{
 		Step:   "finish",
@@ -967,7 +919,6 @@ func putLastState(ctx context.Context, in finishInput, branch, body string) (str
 	return out, nil
 }
 
-// stateNote is the report's line for a state block left as it was.
 func stateNote(err error) string {
 	if err == nil {
 		return ""
@@ -976,11 +927,9 @@ func stateNote(err error) string {
 	return "the PR body's state block was not rewritten: " + err.Error()
 }
 
-// mergeBody is what the host's commit says under its subject: the request's
-// description without its hidden state block, then one Task: line per
-// member, so the commit that survives a squash still names what it shipped.
-// Only with traces on and for a squash or a GitHub merge commit; a rebase,
-// like glab's merge (""), lands the branch's own trailers.
+// mergeBody is the host commit's body: the description minus its state
+// block, then a Task: line per member, so a squash still names what it
+// shipped. A rebase, or glab's plain merge (""), keeps the branch's trailers.
 func mergeBody(in finishInput, description, method string) string {
 	if !in.traces || (method != "--squash" && method != "--merge") {
 		return ""
@@ -998,11 +947,8 @@ func mergeBody(in finishInput, description, method string) string {
 	return trailers
 }
 
-// pullMain brings the local default branch up to the merge: a
-// fast-forward pull when the main checkout is on it, a fetch into the
-// branch when the checkout is parked elsewhere, which the note says.
-// Either way the merge commit must then be in it, or nothing local is
-// removed.
+// pullMain brings the local default branch up to the merge; the merge commit
+// must then be in it, or nothing local is removed.
 func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 	var note string
 
@@ -1031,11 +977,9 @@ func pullMain(ctx context.Context, main, def, sha string) (string, error) {
 	return note, nil
 }
 
-// releaseDependents clears the dependency other branches recorded on the
-// finished one with `start --after`, so their pr targets the default branch
-// instead of a deleted one, and marks each landed: a dependent branched
-// before the base's code existed, so its next ship or catchup brings the
-// default branch in first.
+// releaseDependents clears other branches' `start --after` dependency on the
+// finished one and marks them landed: their pr must target the default
+// branch now, and their next ship or catchup must bring it in first.
 func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, error) {
 	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
 	if err != nil {
@@ -1074,11 +1018,9 @@ func releaseDependents(ctx context.Context, dir, branch, def string) ([]string, 
 	return notes, nil
 }
 
-// archivePlan moves the task's plan into the shared plans dir's archive/,
-// main's when that dir is "". A worktree keeping its own .f10 holds the plan
-// and its prior versions, which move out with it. A missing plan is a note,
-// since a task shipped without one still needs cleaning up; a plan that
-// cannot be moved is an error, since removing the worktree would delete it.
+// archivePlan moves the plan into the shared archive. A missing plan is a
+// note, since a task shipped without one still needs cleaning up; one that
+// cannot move is an error, since removing the worktree would delete it.
 func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	plan := taskPlan(worktree, plansDir, id)
 	src, own := filepath.Dir(plan), filepath.Join(worktree, ".f10", "plans")
@@ -1096,9 +1038,8 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
 	}
 
-	// a worktree's own: older versions it archived go first, so the current
-	// plan ends up with the highest number; the shared archive is already
-	// in place
+	// a worktree's own archived versions move first, so the current plan
+	// takes the highest number
 	if gitx.SamePath(src, own) && !gitx.SamePath(worktree, main) {
 		older, _ := filepath.Glob(filepath.Join(src, "archive", id+".*.md"))
 		for _, o := range older {
@@ -1116,10 +1057,8 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	return target, "", nil
 }
 
-// removeImages drops the images `task read` downloaded for the task into
-// the shared root (main's .f10/ from a worktree keeping its own); a
-// worktree's own go with the worktree. A failure is a note: the task is
-// finished either way.
+// removeImages drops the images `task read` downloaded for the task; a
+// failure is a note, since the task is finished either way.
 func removeImages(main, plansDir, id string) string {
 	dir := filepath.Join(main, ".f10", "images", id)
 	if plansDir != "" {
@@ -1133,15 +1072,12 @@ func removeImages(main, plansDir, id string) string {
 	return ""
 }
 
-// taskPlansDir is where a task's plan sits: the shared plans dir, else
-// (none given) the checkout's own .f10/plans.
 func taskPlansDir(checkout, plansDir string) string {
 	return cmp.Or(plansDir, filepath.Join(checkout, ".f10", "plans"))
 }
 
-// taskPlan is the task's plan file: in the shared plans dir, unless only
-// the checkout's own .f10/plans holds it, as a worktree from before storage
-// moved to main's does.
+// taskPlan falls back to the checkout's own .f10/plans, which a worktree
+// from before storage moved to main's still holds.
 func taskPlan(checkout, plansDir, id string) string {
 	plan := filepath.Join(taskPlansDir(checkout, plansDir), id+".md")
 	if own := filepath.Join(checkout, ".f10", "plans", id+".md"); !exists(plan) && exists(own) {
@@ -1151,8 +1087,7 @@ func taskPlan(checkout, plansDir, id string) string {
 	return plan
 }
 
-// freeArchiveName is `<id>.md` under dir when free, else `<id>.<N>.md` with
-// the next integer, the numbering steps/plan.md uses.
+// freeArchiveName numbers `<id>.<N>.md` the way steps/plan.md does.
 func freeArchiveName(dir, id string) string {
 	candidate := filepath.Join(dir, id+".md")
 	if !exists(candidate) {
@@ -1167,14 +1102,12 @@ func freeArchiveName(dir, id string) string {
 	}
 }
 
-// exists reports whether something is at path.
 func exists(path string) bool {
 	_, err := os.Stat(path)
 
 	return err == nil
 }
 
-// inside reports whether dir is path or lies below it.
 func inside(dir, path string) bool {
 	rel, err := filepath.Rel(gitx.Resolved(path), gitx.Resolved(dir))
 	if err != nil {

@@ -1,11 +1,6 @@
 // Package lore keeps a change's intent, decisions, findings, verdicts and
-// lessons as immutable markdown entries next to the code, and answers why a
-// line is the way it is and what to know before editing a file.
-// docs/lore.md is the spec.
-//
-// The package imports nothing else from this module, so it can be copied
-// out as a standalone tool: git goes through the Git interface, and the
-// root is always a parameter.
+// lessons as immutable markdown entries beside the code (spec: docs/lore.md).
+// It imports nothing else from this module, so it can be lifted out whole.
 package lore
 
 import (

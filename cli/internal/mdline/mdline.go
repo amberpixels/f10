@@ -1,7 +1,6 @@
-// Package mdline reads the `key: value` lines f10 takes out of markdown
-// that people and agents edit: project.md's facts and a task body's After:
-// line. The model reads `**local**: ...` and `local: ...` alike, so every
-// Go reader goes through here to read them alike too.
+// Package mdline reads the `key: value` lines f10 takes out of markdown that
+// people and agents edit. The model reads `**local**: ...` and `local: ...`
+// alike, so every Go reader goes through here to read them alike too.
 package mdline
 
 import (
@@ -26,12 +25,10 @@ func Item(line string) (string, bool) {
 	return line, false
 }
 
-// Cut splits a line at the earliest of seps. The key comes back without
-// marks; the value keeps its code spans, since some values carry an
-// identity in one, and loses only the emphasis a marked key left behind
-// (`**local:** ...`). A bold label cuts after its closing `**` even with no
-// separator (`**Reviewer** bot ...`). It returns the key, the value, and
-// whether a non-empty key was found.
+// Cut splits a line at the earliest of seps into key, value and whether a
+// non-empty key was found. The key loses its marks; the value keeps its code
+// spans (some carry an identity in one), losing only a marked key's leftover
+// emphasis; a bold label cuts after its closing `**` even with no separator.
 func Cut(line string, seps ...string) (string, string, bool) {
 	if rest, bold := strings.CutPrefix(line, "**"); bold {
 		label, after, closed := strings.Cut(rest, "**")

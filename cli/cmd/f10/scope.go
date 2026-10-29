@@ -17,17 +17,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/projects"
 )
 
-// A scope is the set of projects a command answers for at once: standup
-// and board read several, through the same flags. Every -C in order, then
-// the --group groups in the order given, then with --all every checkout
-// under F10_ROOTS; the current checkout with none of them.
+// A scope is the projects a command answers for at once: every -C in order,
+// then the --group groups, then with --all every checkout under F10_ROOTS;
+// the current checkout with none of them.
 
-// scopeParallel is how many projects a scoped command collects at once;
-// the host CLI's calls are most of the time.
+// scopeParallel: the host CLI's calls are most of a scoped command's time.
 const scopeParallel = 4
 
-// A scopeItem is one thing the scope names: a checkout directory, or a
-// repository with no checkout on this machine.
 type scopeItem struct {
 	dir  string
 	repo *repoRef
@@ -41,13 +37,12 @@ type repoRef struct {
 	Prefix string // the task id prefix its ids are read with
 }
 
-// id is the project id a checkout of the repository would get.
 func (r repoRef) id() string { return r.Host + "/" + r.Path }
 
 func (r repoRef) name() string { return path.Base(r.Path) }
 
-// repo is what forge.Host.Repo takes: the path alone on the CLI's default
-// host, the host in front elsewhere.
+// repo is what forge.Host.Repo takes: the host in front only off the CLI's
+// default host.
 func (r repoRef) repo() string {
 	if r.Host == "github.com" || r.Host == "gitlab.com" {
 		return r.Path
@@ -56,8 +51,6 @@ func (r repoRef) repo() string {
 	return r.Host + "/" + r.Path
 }
 
-// isRepoEntry tells a repository from a path in a group's list: no
-// leading / or ~, no glob character, a host with a dot in front.
 func isRepoEntry(entry string) bool {
 	entry = strings.TrimPrefix(strings.TrimPrefix(entry, "gh:"), "glab:")
 	host, _, ok := strings.Cut(entry, "/")
@@ -66,9 +59,8 @@ func isRepoEntry(entry string) bool {
 		!strings.HasPrefix(entry, ".") && !strings.ContainsAny(entry, "*?[") && strings.Contains(host, ".")
 }
 
-// parseRepo reads `[gh:|glab:]host/owner/repo`. github.com is gh and
-// gitlab.com glab; any other host says which with the prefix. The task id
-// prefix is the one given, else what a checkout of that name would derive.
+// parseRepo reads `[gh:|glab:]host/owner/repo`; a host other than github.com
+// or gitlab.com must say its CLI with the prefix.
 func parseRepo(entry, prefix string) (repoRef, error) {
 	entry = strings.TrimSpace(entry)
 
@@ -113,10 +105,7 @@ func parseRepo(entry, prefix string) (repoRef, error) {
 	return r, nil
 }
 
-// scopeItems is what the flags name, in scope order, before anything is
-// bound: -C values resolved to directories, groups expanded from the
-// user file given, --all's checkouts, and with --all the board's watched
-// repositories. Nothing named at all is the current checkout.
+// scopeItems is what the flags name, in scope order, before anything is bound.
 func scopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPath string) ([]scopeItem, error) {
 	sels, groups := checkoutFlags(cmd), cmd.StringSlice("group")
 
@@ -168,9 +157,8 @@ func scoped(cmd *cli.Command) bool {
 	return len(checkoutFlags(cmd))+len(cmd.StringSlice("group")) > 0 || cmd.Bool("all")
 }
 
-// A scopeEntry is one project of the scope, bound: a target for a
-// checkout, a repoRef for a repository with no checkout, or the error
-// binding it, which the command decides what to do with.
+// A scopeEntry is one bound project, or the error binding it, for the command
+// to decide on.
 type scopeEntry struct {
 	dir    string
 	main   string // the main checkout, for a board of a checkout that would not bind
@@ -180,13 +168,9 @@ type scopeEntry struct {
 	err    error
 }
 
-// bindScope binds every item to its project, in the order given.
-// Checkouts of one repository (a main checkout and its worktrees) see the
-// same facts, so the repository is read once, from the first of them
-// given. A repository named outright that a checkout anywhere in the
-// scope covers is dropped too, since the checkout knows more: the
-// checkouts are bound first, so every project id is known before a
-// repository is kept.
+// bindScope reads one repository once across its main checkout and worktrees,
+// and drops a repository named outright that a checkout covers, since the
+// checkout knows more; checkouts bind first so every id is known by then.
 func bindScope(ctx context.Context, items []scopeItem, cmdName string) []scopeEntry {
 	entries := make([]scopeEntry, len(items))
 	keep := make([]bool, len(items))
@@ -237,9 +221,8 @@ func bindScope(ctx context.Context, items []scopeItem, cmdName string) []scopeEn
 	return out
 }
 
-// standupTargets is the checkouts a standup reads. A checkout that fails
-// fails the run, named: dropping it would leave its work out of a report
-// meant to be whole. A repository with no checkout has no history to read.
+// standupTargets fails on a checkout that fails, named: dropping it would
+// leave its work out of a report meant to be whole.
 func standupTargets(ctx context.Context, cmd *cli.Command) ([]*target, error) {
 	if !scoped(cmd) {
 		t, err := targetFor(ctx, cmd)

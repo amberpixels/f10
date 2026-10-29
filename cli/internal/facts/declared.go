@@ -21,10 +21,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
-// The typed half of project.md: the facts the binary acts on, declared in a
-// leading YAML block so they are read, not parsed out of prose. Every key is
-// optional; an unknown key or a value outside its vocabulary is an error,
-// never a default, since a silent default is what the block exists to end.
+// The typed half of project.md, a leading YAML block. An unknown key or a
+// value outside its vocabulary is an error, never a default, since a silent
+// default is what the block exists to end.
 
 // Declared is one layer's frontmatter.
 type Declared struct {
@@ -59,11 +58,8 @@ type Declared struct {
 	DriveChain Steps             `yaml:"drive_chain,omitempty"`
 }
 
-// TrackerDecl is the tracker's kind, its task id format (`FT-###`), the
-// priority map for host issues, which have no priority field of their own
-// (a level of the driver contract's vocabulary to the labels that carry
-// it), the status map: a moment f10 reports, `started` or `shipped`, to
-// the tracker's own word for it, and the title template (`{id}: {title}`).
+// TrackerDecl is the frontmatter's tracker key. Priority maps a contract
+// level to host labels, since issues have no priority field of their own.
 type TrackerDecl struct {
 	Kind     string            `yaml:"kind,omitempty"`
 	ID       string            `yaml:"id,omitempty"`
@@ -108,9 +104,8 @@ func (l *Labels) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// ReviewDecl is the remote review's four facts and the optional settled
-// mark, in the vocabulary the prose items use, so the same sub-parsers read
-// both.
+// ReviewDecl is the remote review's facts in the prose items' vocabulary, so
+// the same sub-parsers read both.
 type ReviewDecl struct {
 	Reviewer string `yaml:"reviewer,omitempty"`
 	Arrives  string `yaml:"arrives,omitempty"`
@@ -119,9 +114,8 @@ type ReviewDecl struct {
 	Settled  string `yaml:"settled,omitempty"`
 }
 
-// StandupDecl is what `f10 standup` reads: the paths that, alone in a
-// commit, make it upkeep, on top of the lockfiles, generated files and
-// snapshots it knows (schema dumps, a project's own codegen output).
+// StandupDecl lists paths that, alone in a commit, make it upkeep, on top of
+// the lockfiles and generated files standup already knows.
 type StandupDecl struct {
 	Upkeep []string `yaml:"upkeep,omitempty"`
 }
@@ -385,10 +379,9 @@ func (t TrackerDecl) checkPriority() []string {
 	return bad
 }
 
-// foldTraces moves the old spelling review_traces into traces, so one key
-// goes through the merge and a later layer's statement wins whichever word
-// it used. Reading it is a warning that names the migration; a layer
-// saying both is the ambiguity the block exists to end.
+// foldTraces moves the old spelling review_traces into traces before the
+// merge, so a later layer's statement wins whichever word it used. Both in
+// one layer is the ambiguity the block exists to end, so an error.
 func (d Declared) foldTraces(file string) (Declared, Problem, bool) {
 	switch {
 	case d.ReviewTraces == "":
@@ -407,9 +400,8 @@ func (d Declared) foldTraces(file string) (Declared, Problem, bool) {
 	}
 }
 
-// layered is the frontmatter of every layer merged key by key: a key a
-// later layer sets wins outright, as a later layer's prose section does.
-// origin records which layer set each key.
+// layered is every layer's frontmatter merged key by key, a later layer
+// winning outright as its prose sections do; origin records who set each key.
 type layered struct {
 	Declared
 

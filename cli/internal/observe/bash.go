@@ -26,13 +26,9 @@ var (
 // failed before it printed anything is no step started.
 const projectLoaded = "=== f10 project @"
 
-// FromBash reads one Bash tool call: the command line as the model wrote it
-// and what it printed. A creation, commit or push counts only with its
-// evidence in the output - the url on stdout, the commit line, a moved ref -
-// which covers failures and dry runs without an exit code the payload may
-// not carry. Urls are read from stdout alone: `gh pr create` names an
-// existing PR on stderr when it refuses. Meta is left for the caller to
-// Stamp.
+// FromBash reads one Bash tool call. A creation, commit or push counts only
+// with its evidence in the output, so failures and dry runs need no exit code;
+// urls come from stdout alone: a refused `gh pr create` names a PR on stderr.
 func FromBash(command, stdout, stderr string) []Observation {
 	out := stdout + "\n" + stderr
 
@@ -172,11 +168,9 @@ func positional(args []string) []string {
 	return out
 }
 
-// Segments splits a command line into its simple commands, each as words
-// with quotes removed: split on `&&`, `||`, `;`, `|`, `&`, newlines and
-// parentheses outside quotes. Redirections and their targets are dropped,
-// here-document bodies and comments skipped, and `$(...)` kept inside its
-// word. It reads, never evaluates: no expansion, no globbing.
+// Segments splits a command line into its simple commands as unquoted words.
+// Redirections with their targets, heredoc bodies and comments are dropped,
+// `$(...)` stays inside its word. It reads, never evaluates: no expansion.
 func Segments(line string) [][]string {
 	t := tokenizer{src: []rune(line)}
 	t.run()

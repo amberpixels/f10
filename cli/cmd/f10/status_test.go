@@ -113,9 +113,8 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	}
 }
 
-// The runs the state writer leaves at each point a task's own agent can be
-// read from, classified against the task: a ship seeded from a reference,
-// the same once fetch opens the plan phase, the --local pipeline word
+// The runs the state writer leaves at each point, classified against the
+// task: a ship seeded from a reference, through fetch, with the --local word
 // before the id, and a capture, which is about another task.
 func TestTaskRunsFromTheWriter(t *testing.T) {
 	seed := func(skill, args string) func(r *state.Run) {

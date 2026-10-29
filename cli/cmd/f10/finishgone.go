@@ -8,9 +8,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// A goneError is a task whose checkout is already gone, as a finish that
-// stopped halfway leaves it: no branch at all, or a branch with no
-// worktree.
+// A goneError is a checkout a finish that stopped halfway left: no branch,
+// or a branch with no worktree.
 type goneError struct {
 	err    error
 	branch string // "" for no branch
@@ -20,10 +19,8 @@ func (e goneError) Error() string { return e.err.Error() }
 
 func (e goneError) Unwrap() error { return e.err }
 
-// finishGone finishes what a finish that stopped halfway left: a task with
-// no branch whose plan is archived is already finished, and a branch with
-// no worktree whose PR merged is cleaned up without one. Anything else
-// keeps the refusal, which guards branches start never made.
+// finishGone completes a finish that stopped halfway; anything else keeps
+// the refusal, which guards branches start never made.
 func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError) error {
 	if gone.branch == "" {
 		if !planArchived(in) {
@@ -112,9 +109,8 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	return gitx.DeleteBranch(ctx, in.main, name)
 }
 
-// planArchived reports the task's plan in the shared archive, as finish
-// leaves it, with no live plan beside it: a re-plan archives the old one
-// too, and keeps the new one in place.
+// planArchived wants an archived plan with no live one beside it, since a
+// re-plan archives the old plan too.
 func planArchived(in finishInput) bool {
 	plans := filepath.Join(in.main, ".f10", "plans")
 	if in.plansDir != "" {

@@ -10,13 +10,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// The git half of the upkeep rules against real git, in a repository built
-// for the test: a clone of a bare origin where the user merges main into
-// one task, bumps only go.sum on another, and writes code on a third, then
-// rebases and amends to give range-diff something to pair. The recorded
-// fixtures cover real histories; this covers the cases none of them hold.
+// The git half of the upkeep rules against real git: a merge of main, a
+// go.sum-only bump, code, then a rebase and an amend for range-diff to pair.
+// The recorded fixtures cover real histories; this covers what none holds.
 
-// gitRepo runs git in dir with a fixed author and committer date.
+// gitRepo runs git with a fixed author and committer date.
 type gitRepo struct {
 	t   *testing.T
 	dir string

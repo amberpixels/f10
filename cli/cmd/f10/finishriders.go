@@ -11,16 +11,13 @@ import (
 )
 
 // A bundle's riders at finish. The PR body carries a closing keyword per
-// member, so a merge closes every one; a rider the PR delivers only in part
-// has its keyword turned into a plain reference before the merge, or is
-// reopened when the merge already happened. Which riders close is the
-// user's call, asked once: finish refuses to guess.
+// member, so a merge closes every one; which riders the PR really delivers
+// is the user's call, asked once: finish refuses to guess.
 
 // exitRiders is finish's exit when a bundle's riders have no --close
 // answer yet: the finish skill asks which the PR delivers and reruns.
 const exitRiders = 7
 
-// closeAll and closeNone are the --close answers that name no rider.
 const (
 	closeAll  = "all"
 	closeNone = "none"
@@ -36,9 +33,7 @@ func (e ridersError) Error() string {
 		"(ids, %s or %s); the rest stay open", e.task.ID, strings.Join(e.task.Riders(), ", "), closeAll, closeNone)
 }
 
-// closeChoice reads --close into the riders to close. A token names a
-// rider in any form the tracker takes (`GH-2`, `2`, `#2`); one outside the
-// bundle is a typo, refused.
+// closeChoice reads --close; a token outside the bundle is a typo, refused.
 func closeChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, error)) ([]string, error) {
 	riders := task.Riders()
 
@@ -71,11 +66,9 @@ func closeChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, erro
 	return closing, nil
 }
 
-// settleRiders makes the merge close only the chosen riders: before an
-// open PR merges, each kept rider's closing keyword leaves its body; after
-// a merge that already happened, each kept rider is reopened. A tracker
-// that is not the host closes nothing on merge, so the notes say what to
-// close by hand.
+// settleRiders makes the merge close only the chosen riders: before the
+// merge by editing the body's keywords, after one by reopening. A tracker
+// that is not the host closes nothing, so the notes say what to close by hand.
 func settleRiders(ctx context.Context, in finishInput, branch string, merged bool) ([]string, error) {
 	var kept, closing []ref.Ref
 
@@ -155,16 +148,14 @@ func refIDs(refs []ref.Ref) []string {
 const closingKeyword = `(?i)\b(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving|` +
 	`implement(?:s|ed|ing)?):?\s+(#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`
 
-// keepOpen turns every closing keyword for issue number into a plain
-// reference, `Closes #12` into `Part of #12`, so the merge leaves it open.
+// keepOpen turns `Closes #12` into `Part of #12`, so the merge leaves it open.
 func keepOpen(body, number string) string {
 	re := regexp.MustCompile(fmt.Sprintf(closingKeyword, regexp.QuoteMeta(number)))
 
 	return re.ReplaceAllString(body, "Part of $1")
 }
 
-// closeAgain undoes keepOpen for issue number: `Part of #12` back into
-// `Closes #12`.
+// closeAgain undoes keepOpen.
 func closeAgain(body, number string) string {
 	re := regexp.MustCompile(fmt.Sprintf(`\bPart of (#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`,
 		regexp.QuoteMeta(number)))
@@ -172,7 +163,6 @@ func closeAgain(body, number string) string {
 	return re.ReplaceAllString(body, "Closes $1")
 }
 
-// reopenIssue reopens issue number.
 func (h host) reopenIssue(ctx context.Context, number string) error {
 	_, err := h.Run(ctx, "issue", "reopen", number)
 

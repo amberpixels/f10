@@ -25,14 +25,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The board noun is what changed in a window (the feed, the default) or,
-// with --state, where every task of a project stands: done lately, in
-// progress at which stage and who owes the next move, and what comes next.
-// It reads the host, the tracker and this machine, each a source that can
-// fail on its own, and derives nothing here: lookaround decides every
-// group and stage, and the terminal, --json and --html draw the same
-// rows. A scope (-C, --group, --all) reads several projects, each on its
-// own, and a repository with no checkout here reads from its host alone.
+// The board noun reads the host, the tracker and this machine, each a
+// source that can fail alone, and derives nothing: lookaround decides every
+// group and stage, and the terminal, --json and --html draw the same rows.
 func boardCommand() *cli.Command {
 	return &cli.Command{
 		Name: "board",
@@ -80,7 +75,6 @@ func boardCommand() *cli.Command {
 	}
 }
 
-// boardPage is how many open tasks the board asks the host for.
 const boardPage = 100
 
 // The board's output formats; the empty one is the terminal.
@@ -150,14 +144,11 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 
 	boards := collectBoards(ctx, entries, cmd.ErrWriter, now, span, stateView, remote, people)
 
-	// several projects are --all, --group or more than one -C: their JSON
-	// is an array, the page draws one project, and their glance is a line
-	// each unless --detail asks for the rows; one project, named or not,
-	// is one document and its rows
+	// several projects (--all, --group, more than one -C) are a JSON array
+	// and a line each unless --detail; the page draws one project
 	several := cmd.Bool("all") || len(cmd.StringSlice("group")) > 0 || len(checkoutFlags(cmd)) > 1
 	summary := (cmd.Bool("all") || len(cmd.StringSlice("group")) > 0) && !cmd.Bool("detail")
 
-	// the page draws one project; several boards are one JSON array
 	switch {
 	case format == boardHTML && several:
 		return errors.New("--html draws one project: name one with -C, or none")
@@ -197,9 +188,8 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// boardFormat settles the output format from the flags before anything is
-// collected: --json and --html are exclusive, and --out has no meaning for
-// the terminal, whose width is the terminal's.
+// boardFormat settles the format before anything is collected; --out has no
+// meaning for the terminal, whose width is the terminal's.
 func boardFormat(cmd *cli.Command) (string, error) {
 	switch {
 	case cmd.Bool("json") && cmd.Bool("html"):
@@ -215,7 +205,6 @@ func boardFormat(cmd *cli.Command) (string, error) {
 	}
 }
 
-// boardBytes is the board in one of the file formats.
 func boardBytes(b lookaround.Board, format string) ([]byte, error) {
 	var buf bytes.Buffer
 
@@ -233,9 +222,6 @@ func boardBytes(b lookaround.Board, format string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// emitBoard writes the rendered board to the path, else to the writer. The
-// file is world-readable on purpose: it is a report meant to be attached
-// or hosted as is.
 func emitBoard(w io.Writer, path string, data []byte) error {
 	if path == "" {
 		_, err := w.Write(data)
@@ -250,7 +236,6 @@ func emitBoard(w io.Writer, path string, data []byte) error {
 	return nil
 }
 
-// boardPeople is the people map in lookaround's shape.
 func boardPeople(people []person) []lookaround.Person {
 	out := make([]lookaround.Person, 0, len(people))
 	for _, p := range people {
@@ -260,11 +245,9 @@ func boardPeople(people []person) []lookaround.Person {
 	return out
 }
 
-// collectBoards derives one board per scope entry, a few at a time,
-// keeping the scope's order. An entry that could not be bound is a board
-// whose sources all failed; every other one still renders. The feed's
-// default span is chosen once the facts of every entry are in, so a
-// scope shares one span: the day is the person's.
+// collectBoards derives one board per entry; one that could not be bound is
+// a board whose sources all failed, so the others still render. The feed's
+// span is chosen once every entry's facts are in: the day is the person's.
 func collectBoards(
 	ctx context.Context, entries []scopeEntry, warn io.Writer, now time.Time, span boardSpan, stateView, remote bool,
 	people []lookaround.Person,
@@ -336,10 +319,8 @@ func collectBoards(
 	return boards
 }
 
-// boardInputs binds the collectors to the target: the host CLI the probe
-// routed to, the tracker through the driver or the host's issues, and
-// this machine's state, worktrees, plans and files. A checkout with no
-// origin remote is local only: no host, and no tracker but a driver.
+// boardInputs binds the collectors to the target. A checkout with no origin
+// remote is local only: no host, and no tracker but a driver.
 func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time, remote bool) lookaround.Inputs {
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 	place := ledger.Where(ctx, main)
@@ -410,9 +391,8 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 	return in
 }
 
-// repoInputs binds the collectors to a repository with no checkout: the
-// host CLI named outright for its requests and its issues, no driver, no
-// priority labels, and nothing local, as --remote reads.
+// repoInputs binds the collectors to a repository with no checkout: its host
+// alone, no driver, no priority labels, nothing local, as --remote reads.
 func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
 	h := host{Name: r.CLI, Repo: r.repo()}
 
@@ -433,9 +413,8 @@ func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
 	}
 }
 
-// boardTasks is tracker rows in the board's shape. The base is the row's
-// `after`, else the After: line of its body, in the project's id format:
-// a driver may send the bare number.
+// boardTasks is tracker rows in the board's shape, the base in the project's
+// id format since a driver may send the bare number.
 func boardTasks(rows []row, prefix string) []lookaround.Task {
 	out := make([]lookaround.Task, 0, len(rows))
 
@@ -456,10 +435,8 @@ func boardTasks(rows []row, prefix string) []lookaround.Task {
 	return out
 }
 
-// A boardModel is what a renderer draws: the feed's span, the sources
-// worth a line, the sentence for an empty board, one line per row, and
-// the feed's quiet line. board.html builds the same model in JavaScript;
-// the JSON tags are the parity test's contract.
+// A boardModel is what a renderer draws. board.html builds the same model in
+// JavaScript; the JSON tags are the parity test's contract.
 type boardModel struct {
 	Header string      `json:"header,omitempty"`
 	Notes  []boardNote `json:"notes"`
@@ -468,15 +445,12 @@ type boardModel struct {
 	Quiet  string      `json:"quiet,omitempty"`
 }
 
-// A boardNote is a source that did not deliver: failed, with its error,
-// skipped on purpose, or the host of a checkout that is local only.
 type boardNote struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
 }
 
-// A boardLine is one row, reduced to what a glance needs.
 type boardLine struct {
 	Group       string    `json:"group"`
 	Key         string    `json:"key"`
@@ -493,17 +467,14 @@ type boardLine struct {
 	NextCommand bool      `json:"next_command,omitempty"`
 }
 
-// A boardPR is a request a line lists beside its own.
 type boardPR struct {
 	Number int    `json:"number"`
 	URL    string `json:"url,omitempty"`
 }
 
-// localOnly is the note a local-only checkout's host source carries.
 const localOnly = "local only"
 
-// boardLines reduces the board to its model: the rows and the sources,
-// never the header facts but the feed's span. The feed skips its local
+// boardLines reduces the board to its model. The feed skips its local
 // source on purpose, so a skip there is no note; a local-only checkout
 // notes its host alone.
 //
@@ -541,7 +512,6 @@ func boardLines(b lookaround.Board) boardModel {
 	return m
 }
 
-// lineOf is one row reduced to its line.
 func lineOf(r lookaround.Row) boardLine {
 	line := boardLine{
 		Group:      lookaround.StateGroup(r),
@@ -572,9 +542,6 @@ func lineOf(r lookaround.Row) boardLine {
 	return line
 }
 
-// feedLines is the feed's model: its span, a line per row, the quiet
-// line.
-//
 //nolint:lostfield // a reduction by design
 func feedLines(b lookaround.Board, m boardModel) boardModel {
 	m.Header = windowLabel(b.Window)
@@ -606,8 +573,6 @@ func feedLines(b lookaround.Board, m boardModel) boardModel {
 	return m
 }
 
-// feedLine is one feed row reduced to its line: the group's word in the
-// stage column, the summary, and who owes the next move, in the tail.
 func feedLine(r lookaround.FeedRow) boardLine {
 	line := boardLine{
 		Group:     strings.ReplaceAll(r.Group, "-", " "),
@@ -657,8 +622,6 @@ func feedLine(r lookaround.FeedRow) boardLine {
 	return line
 }
 
-// windowLabel names the feed's span: how it was chosen, its first day,
-// its last where it spans several, and the fallback's reason.
 func windowLabel(w lookaround.Window) string {
 	from := localDate(w.Since)
 	label := cmp.Or(w.Chosen, "since") + " · " + from
@@ -689,9 +652,7 @@ func titleAfterKey(title, key string) string {
 	return cmp.Or(strings.TrimLeft(rest, ": -"), title)
 }
 
-// renderBoard draws the board for a terminal: failed sources first, then
-// one line per row, grouped by stage in the board's order. --json is the
-// contract; this is a glance at it.
+// renderBoard is a glance at the board; --json is the contract.
 func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 	m := boardLines(b)
 	faint := lipgloss.NewStyle().Faint(true)
@@ -728,9 +689,6 @@ func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 	}
 }
 
-// renderSources prints the sources that did not run: failed with their
-// error, skipped on purpose; under the project's name where rows of
-// several are drawn together.
 func renderSources(w io.Writer, b lookaround.Board, project string) {
 	faint := lipgloss.NewStyle().Faint(true)
 	red := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))
@@ -752,10 +710,7 @@ func renderSources(w io.Writer, b lookaround.Board, project string) {
 	}
 }
 
-// renderSummary is one line per project, for a scope read at a glance:
-// how much is in flight, how much of it waits on a person (a next action
-// that is a command: an ask to answer, a review to resolve, a merge to
-// finish, a plan to ship), the oldest of it, and what failed.
+// renderSummary is a scope at a glance, one line per project.
 func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit int) {
 	faint := lipgloss.NewStyle().Faint(true)
 	red := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))
@@ -831,8 +786,6 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 	}
 }
 
-// feedCounts is a feed's line in a summary: its rows counted by group,
-// and the quiet requests.
 func feedCounts(b lookaround.Board, faint lipgloss.Style) []string {
 	if b.Feed == nil {
 		return nil
@@ -880,8 +833,6 @@ func unreachable(b lookaround.Board) string {
 	return err
 }
 
-// renderByPerson is every project's rows, or feed rows, under the person
-// each groups by, the rows with nobody last, each row naming its project.
 func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 	type entry struct {
 		project string
@@ -961,7 +912,6 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 	}
 }
 
-// age is how long ago t was, in the coarsest unit that is not zero.
 func age(now, t time.Time) string {
 	d := now.Sub(t)
 
@@ -981,8 +931,6 @@ func firstLine(s string) string {
 	return line
 }
 
-// cut shortens s to n runes with an ellipsis; a limit of zero or less
-// leaves it whole.
 func cut(s string, n int) string {
 	runes := []rune(s)
 	if n <= 8 || len(runes) <= n {
@@ -992,8 +940,6 @@ func cut(s string, n int) string {
 	return string(runes[:n-1]) + "…"
 }
 
-// A boardLayout is the column widths one set of lines needs: the key, the
-// stage, and the project when lines of several are drawn together.
 type boardLayout struct {
 	keyW, stageW, projW, limit int
 	faint                      lipgloss.Style
@@ -1013,9 +959,6 @@ func newBoardLayout(rows []boardLine, projects []string, limit int) boardLayout 
 	return lay
 }
 
-// line draws one row: the project where several are drawn together, the
-// key, the stage in the badge's palette, where its evidence came from,
-// the title cut to fit, then the request, who, and the next action.
 func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 	var tail []string
 

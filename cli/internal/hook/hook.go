@@ -1,12 +1,7 @@
-// Package hook is f10's one entry point for Claude Code hook events: a skill
-// starting seeds the run's badge, a Bash call or a file write becomes typed
-// observations, Stop backs up the most-dropped badge call, and SessionStart
-// keeps the status line wired and the state directory small. Across them,
-// a run's waits on the user (a turn, a question, a permission dialog) are
-// recorded as they open and end.
-//
-// Nothing here fails a run: a payload it cannot read, a state file it cannot
-// write, an observer that errors - each is dropped, and the hook exits 0.
+// Package hook is f10's one entry point for Claude Code hook events: they
+// seed the run's badge, become typed observations and record the run's waits
+// on the user. Nothing here fails a run: a payload, state file or observer
+// that errors is dropped and the hook exits 0.
 package hook
 
 import (
@@ -102,10 +97,9 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			env.PromptTyped(ctx, p.Cwd, p.Prompt)
 		}
 	case "UserPromptExpansion":
-		// the typed path: /f10:ship reaches the model as an expansion, never
-		// as a Skill tool call. Bare status only: `/f10:status <task-id>` may
-		// relay a question, which needs a model turn, and so may a bare one
-		// whose launches tree holds an ask: answerStatus lets that through.
+		// the typed path, which the Skill tool never sees. Only a bare status
+		// is answered here: one with a task id, or holding an ask (answerStatus
+		// checks), may relay a question, which needs a model turn
 		if (p.CommandName == "f10:status" || p.CommandName == "status") && p.CommandArgs == "" {
 			return answerStatus(ctx, env, sid)
 		}
@@ -179,10 +173,10 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 	return nil
 }
 
-// skillOf is the f10 skill a command or Skill-tool name refers to; empty
-// means not one that opens a phase. The bare form is accepted too: a wrong
-// match costs one wrong badge for one turn. debug opens capture, prefixed
-// only: a bare `debug` is as likely another plugin's, and seeding clears the run.
+// skillOf is the phase skill a command or Skill-tool name refers to, "" for
+// none. A bare name is accepted, a wrong match costing one badge for one
+// turn, except debug: a bare one is as likely another plugin's, and seeding
+// clears the run.
 func skillOf(name string) string {
 	if name == "f10:debug" {
 		return "debug"
@@ -303,10 +297,10 @@ func observed(ctx context.Context, env *Env, p Payload) []observe.Observation {
 	return nil
 }
 
-// linkStatusline re-points the stable ~/.claude/f10/statusline symlink at
-// this install's renderer: the plugin root moves with every update, and the
-// user's statusLine command names the link. Swapped in through a rename, so
-// a refresh never finds the link missing.
+// linkStatusline re-points ~/.claude/f10/statusline at this install's
+// renderer, since the plugin root moves with every update and the user's
+// statusLine command names the link. Swapped in by rename, so a refresh never
+// finds it missing.
 func linkStatusline(env *Env) {
 	if env.PluginRoot == "" || env.Home == "" {
 		return

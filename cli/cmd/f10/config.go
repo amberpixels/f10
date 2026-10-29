@@ -98,7 +98,7 @@ func configCommand() *cli.Command {
 
 func runConfig(ctx context.Context, cmd *cli.Command) error {
 	// through the shared target, so -C answers here too: which project's
-	// configuration you are looking at is exactly what this command is for
+	// configuration you see is what this command is for
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
@@ -166,25 +166,18 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 // "checkout root", plus the gap.
 const headerIndent = 16
 
-// pageMin and pageMax clamp the page width: rules and prose end at the
-// widest row, but never shorter than pageMin nor wider than pageMax.
 const (
 	pageMin = 60
 	pageMax = 100
 )
 
-// A headerLine is one row of the header block, kept until the page width
-// is measured.
 type headerLine struct {
 	label, value string
 	style        lipgloss.Style
 }
 
-// renderHuman prints the aligned two-column header and the field table. The
-// origin column is the feature; lipgloss colors degrade to plain text when
-// stdout is not a tty or NO_COLOR is set - termenv handles both. Values
-// longer than the terminal wrap inside their own column, never under the
-// labels. limit is the terminal width, 0 when piped.
+// renderHuman prints the header and the field table; the origin column is
+// the feature. limit is the terminal width, 0 when piped.
 func renderHuman(w io.Writer, v *view, limit int) {
 	faint := lipgloss.NewStyle().Faint(true)
 	plain := lipgloss.NewStyle()
@@ -229,9 +222,8 @@ func renderHuman(w io.Writer, v *view, limit int) {
 	header = append(header, headerLine{"projects", projectLookup, faint})
 
 	if len(v.Plans) > 0 {
-		// the freshest few, not the whole dir - it grows without bound.
-		// No directory here: it is always <storage root>/plans, and
-		// --json still carries both the path and the full list
+		// the freshest few, not the whole dir, which grows without bound;
+		// --json still carries the full list
 		const recent = 3
 
 		shown := v.Plans
@@ -279,8 +271,6 @@ func renderHuman(w io.Writer, v *view, limit int) {
 	renderProblems(w, v.Problems)
 }
 
-// pageWidth is where rules end and prose wraps: the widest row, clamped to
-// pageMin..pageMax and never past the terminal. 0 (piped) stays 0.
 func pageWidth(widest, limit int) int {
 	if limit <= 0 {
 		return 0
@@ -289,7 +279,6 @@ func pageWidth(widest, limit int) int {
 	return min(limit, max(pageMin, min(widest, pageMax)))
 }
 
-// banner prints a dimmed rule naming the block below it.
 func banner(w io.Writer, title string, limit int) {
 	if limit > 0 {
 		title = "── " + title + " " + rule(limit-len(title)-4)
@@ -298,7 +287,6 @@ func banner(w io.Writer, title string, limit int) {
 	fmt.Fprintln(w, lipgloss.NewStyle().Faint(true).Render(title))
 }
 
-// factFields shows the typed facts in the same table as the sections.
 func factFields(list []facts.Fact) []facts.Field {
 	fields := make([]facts.Field, 0, len(list))
 	for _, f := range list {
@@ -330,8 +318,6 @@ func renderProblems(w io.Writer, problems []facts.Problem) {
 	}
 }
 
-// headerRow prints one label/value line, the label dimmed so values carry
-// the eye, wrapping the value inside its own column.
 func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style) {
 	faint := lipgloss.NewStyle().Faint(true)
 
@@ -343,16 +329,13 @@ func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style
 	}
 }
 
-// stanzaIndent and stanzaRightPad are a prose block's margins: a hair of
-// left inset under the header, and enough right inset that text never
-// touches the page's edge.
+// stanzaIndent and stanzaRightPad are a prose block's margins, so text
+// never touches the page's edge.
 const (
 	stanzaIndent   = 1
 	stanzaRightPad = 2
 )
 
-// An entry is one field ready to print: its display origin, its value, and
-// for a stanza whose body is only `**Label** - value` items, those pairs.
 type entry struct {
 	field  facts.Field
 	origin string
@@ -360,20 +343,17 @@ type entry struct {
 	pairs  [][2]string
 }
 
-// A fieldLayout is a field list split by render form: every inline row
-// first, so scalars scan as one table, then the stanzas. The split is made
-// once, so the page width is measured on exactly what prints.
+// A fieldLayout splits a field list by render form once, so the page width
+// is measured on exactly what prints.
 type fieldLayout struct {
 	rows, blocks   []entry
 	nameW, originW int
 	blockNameW     int
 }
 
-// layoutFields puts scalar values that fit the terminal in rows and the
-// rest in stanzas - a `name  origin` header with the value as an indented
-// block. One table cannot serve both: a three-column prefix leaves a
-// paragraph a ribbon of the terminal, and a paragraph gives a scalar
-// nothing back.
+// layoutFields puts scalar values that fit in rows and the rest in stanzas:
+// one table cannot serve both, since a three-column prefix leaves a
+// paragraph a ribbon of the terminal and a paragraph gives a scalar nothing.
 func layoutFields(fields []facts.Field, limit int) fieldLayout {
 	origins := displayOrigins(fields)
 
@@ -415,8 +395,6 @@ func (l fieldLayout) width() int {
 	return widest
 }
 
-// renderFields prints a layout: the rows as one aligned table, then each
-// stanza under its header, a blank line between the groups.
 func renderFields(w io.Writer, l fieldLayout, page int) {
 	for _, e := range l.rows {
 		paddedOrigin := fmt.Sprintf("%-*s", l.originW, e.origin)
@@ -445,9 +423,8 @@ func renderFields(w io.Writer, l fieldLayout, page int) {
 	}
 }
 
-// keyValues reads a body made only of `- **Label** - value` items as its
-// pairs, markup stripped; nil when any line is something else, so ordinary
-// prose keeps its own rendering.
+// keyValues reads a body made only of `- **Label** - value` items as pairs;
+// nil when any line is something else, so ordinary prose keeps its rendering.
 func keyValues(value string) [][2]string {
 	var pairs [][2]string
 
@@ -481,8 +458,6 @@ func pairLabelWidth(pairs [][2]string) int {
 	return labelW
 }
 
-// renderPairs prints key/value items as aligned sub-rows, each value
-// wrapping inside its own column.
 func renderPairs(w io.Writer, pairs [][2]string, page int) {
 	labelW := pairLabelWidth(pairs)
 	col := stanzaIndent + labelW + 2
@@ -497,10 +472,8 @@ func renderPairs(w io.Writer, pairs [][2]string, page int) {
 	}
 }
 
-// stanzaHeader draws a section header as a horizontal rule carrying the
-// name and origin - `── Roles · declared ─────` - so each prose block gets
-// a crisp edge to scan by. Names pad to nameW so the dot and the origin
-// align down the page. Piped output keeps the plain two-word header.
+// stanzaHeader draws a section header as a rule carrying the name and
+// origin, so each prose block gets a crisp edge; piped output keeps it plain.
 func stanzaHeader(w io.Writer, name, origin string, originStyle lipgloss.Style, limit, nameW int) {
 	bold := lipgloss.NewStyle().Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
@@ -517,8 +490,6 @@ func stanzaHeader(w io.Writer, name, origin string, originStyle lipgloss.Style, 
 			originStyle.Render(origin)+" "+faint.Render(rule(limit-used)))
 }
 
-// rule is n cells of horizontal line, none when the header already fills
-// the width.
 func rule(n int) string {
 	if n < 1 {
 		return ""
@@ -527,8 +498,7 @@ func rule(n int) string {
 	return strings.Repeat("─", n)
 }
 
-// renderProse prints a value block: each logical line wrapped to the
-// width, bullets keeping a hanging indent so continuations align with
+// renderProse wraps each line; bullets hang so continuations align with
 // their text.
 func renderProse(w io.Writer, value string, limit int) {
 	for line := range strings.SplitSeq(value, "\n") {
@@ -552,9 +522,8 @@ func renderProse(w io.Writer, value string, limit int) {
 	}
 }
 
-// displayOrigins shortens origin labels for display: the layer qualifier
-// on "declared" earns its width only when more than one declaring layer is
-// actually in play. The full origin stays in --json.
+// displayOrigins drops the layer qualifier on "declared" unless more than
+// one declaring layer is in play; the full origin stays in --json.
 func displayOrigins(fields []facts.Field) []string {
 	declared := map[string]bool{}
 	for _, f := range fields {
@@ -574,9 +543,8 @@ func displayOrigins(fields []facts.Field) []string {
 	return origins
 }
 
-// wrap greedily breaks text at spaces so every line fits width. Width 0 or
-// below (terminal unknown, or narrower than the indent) disables wrapping;
-// a single token longer than the width is hard-cut rather than overflowed.
+// wrap breaks text at spaces; width 0 or below disables it, and a token
+// longer than the width is hard-cut rather than overflowed.
 func wrap(text string, width int) []string {
 	if width <= 0 || len(text) <= width {
 		return []string{text}
@@ -597,8 +565,7 @@ func wrap(text string, width int) []string {
 	return append(lines, text)
 }
 
-// termWidth is the width wrapping targets: the terminal's when stdout is
-// one, otherwise 0 - piped output stays unwrapped for greppability.
+// termWidth is 0 when piped, so output stays unwrapped for grep.
 func termWidth(w io.Writer) int {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -613,8 +580,8 @@ func termWidth(w io.Writer) int {
 	return width
 }
 
-// styleOrigin colors the origin cell: detection, declaration and defaults
-// must be tellable apart at a glance - that column is the whole point.
+// styleOrigin keeps detection, declaration and defaults tellable apart at a
+// glance; that column is the whole point.
 func styleOrigin(origin string) lipgloss.Style {
 	switch {
 	case origin == facts.OriginDetected:

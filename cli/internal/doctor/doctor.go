@@ -1,7 +1,6 @@
-// Package doctor checks that the two halves of an f10 install - the Claude
-// Code plugin and the f10 binary - are present, agree with each other, and
-// are wired into the environment they run in. Every check reads; none
-// writes, so `f10 doctor` is always safe to run.
+// Package doctor checks that the Claude Code plugin and the f10 binary are
+// present, agree with each other and are wired into their environment. Every
+// check reads and none writes, so `f10 doctor` is always safe to run.
 package doctor
 
 import (
@@ -50,8 +49,7 @@ type Env struct {
 	Run      func(ctx context.Context, dir, name string, args ...string) (shell.Result, error)
 }
 
-// Run runs every check in a fixed order; a failing check never stops the
-// ones after it.
+// Run runs every check in a fixed order; a failing one never stops the rest.
 func Run(ctx context.Context, env *Env) []Result {
 	in, reason := readInstall(env)
 	p := resolvePlugin(env, in)
@@ -76,9 +74,8 @@ func Run(ctx context.Context, env *Env) []Result {
 	return results
 }
 
-// Failed reports whether any check that every command needs has a problem.
-// A scoped problem affects only the commands it names, and a check that is
-// not needed here never fails.
+// Failed reports a problem in a check every command needs: a scoped problem
+// affects only the commands it names, and a not-needed check never fails.
 func Failed(results []Result) bool {
 	for _, r := range results {
 		if r.Status == StatusProblem && len(r.Scope) == 0 {
@@ -112,10 +109,9 @@ func (in *install) id() string {
 	return in.Key
 }
 
-// readInstall finds the plugin in installed_plugins.json: the project-scope
-// entry for this checkout first, then the user-scope one. A nil install
-// with a non-empty reason means it is not installed, or the file cannot
-// be read.
+// readInstall finds the plugin in installed_plugins.json, this checkout's
+// project-scope entry before the user-scope one; a nil install carries the
+// reason.
 func readInstall(env *Env) (*install, string) {
 	path := filepath.Join(env.ClaudeDir, "plugins", "installed_plugins.json")
 

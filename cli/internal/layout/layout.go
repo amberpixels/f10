@@ -1,8 +1,7 @@
 // Package layout locates the f10 configuration layers for a working
-// directory: the checkout root, the instruction layers in precedence order,
-// their layering mode, and the storage root. bin/f10-load-project.sh is the semantics
-// oracle - the parity test in this package runs both against the same
-// fixtures, so a change to either side fails loudly until both move.
+// directory. bin/f10-load-project.sh is the semantics oracle: the parity test
+// runs both against the same fixtures, so a change to either side fails
+// until both move.
 package layout
 
 import (
@@ -40,7 +39,7 @@ type Layout struct {
 	MainRoot         string  // root of the main checkout; empty when git cannot name one
 	Project          string  // basename of the main checkout, or of the cwd outside git
 	StorageRoot      string  // where plans, reviews, verdicts and lore live: main's .f10 for every checkout, or the out-of-tree root
-	LegacyStorage    bool    // a linked worktree keeps its own .f10, which held task files before storage moved to main's
+	LegacyStorage    bool    // a linked worktree's own .f10 still holds task files, so it stays the storage root
 	Layering         string  // LayeringExtends or LayeringReplaces
 	LayeringDeclared bool    // a worktree project.md declares Layering
 	LayeringFrom     string  // "frontmatter" or "prose", when declared
@@ -49,9 +48,8 @@ type Layout struct {
 	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
 }
 
-// HoldsTaskFiles says a worktree's own .f10 holds the task files it kept
-// before in-repo storage moved to main's: any one of these dirs keeps that
-// worktree's root.
+// HoldsTaskFiles says a worktree's own .f10 holds task files: any one of
+// these dirs keeps that worktree's storage root its own rather than main's.
 func HoldsTaskFiles(dotF10 string) bool {
 	for _, d := range []string{"plans", "reviews", "verdicts", "spikes"} {
 		if existingDir(filepath.Join(dotF10, d)) != "" {
@@ -87,9 +85,7 @@ func Locate(ctx context.Context, cwd string) *Layout {
 	lay.Project = filepath.Base(baseRoot)
 	lay.StorageRoot = filepath.Join(baseRoot, ".f10")
 
-	// in-repo storage is main's .f10 for every checkout, so removing a
-	// worktree loses nothing; a worktree whose own .f10 already holds task
-	// files predates that and keeps them until it finishes
+	// main's .f10 is every checkout's storage, so removing a worktree loses nothing
 	if here != baseRoot && HoldsTaskFiles(filepath.Join(here, ".f10")) {
 		lay.LegacyStorage = true
 		lay.StorageRoot = filepath.Join(here, ".f10")
@@ -102,9 +98,8 @@ func Locate(ctx context.Context, cwd string) *Layout {
 		wtInstr = existingDir(filepath.Join(here, ".f10", "instructions"))
 	}
 
-	// `Layering - replaces main` in the worktree's own project.md takes
-	// main's place wholesale; anything else - another value, no line, no
-	// project.md - extends it.
+	// only `replaces` in the worktree's own project.md takes main's place;
+	// any other value, or none, extends it
 	if wtInstr != "" && baseInstr != "" {
 		if decl, from := layeringDecl(filepath.Join(wtInstr, "project.md")); decl != "" {
 			lay.LayeringDeclared, lay.LayeringFrom = true, from
@@ -194,10 +189,9 @@ func existingDir(path string) string {
 	return ""
 }
 
-// layeringDecl returns the file's Layering declaration and where it was
-// found: the frontmatter's `layering:` key, else the first prose line. The
-// patterns match the script's greps; the prose one tolerates list markers
-// and emphasis or code marks, `-` or `:` after the word.
+// layeringDecl is the file's Layering declaration and where it was found,
+// frontmatter or prose. The patterns match the script's greps; the prose one
+// tolerates list markers, emphasis or code marks, and `-` or `:` after the word.
 func layeringDecl(projectMD string) (string, string) {
 	data, err := os.ReadFile(projectMD)
 	if err != nil {

@@ -8,10 +8,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// badge applies the observations that settle something the model would
-// otherwise report itself. It only fills in: a stop state, a task already
-// named or a phase the model moved on from is never overridden, since an
-// async hook can land after the model's own call.
+// badge applies the observations that settle what the model would otherwise
+// report itself. It only fills in: a stop state, a named task or a phase the
+// model moved past is never overridden, since an async hook can land late.
 type badge struct {
 	env     *Env
 	session string

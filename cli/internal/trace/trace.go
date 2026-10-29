@@ -1,8 +1,7 @@
 // Package trace is the vocabulary of what f10 leaves on the host for a reader
 // of the history: the git trailers a step's commit carries. Render and Parse
-// sit side by side so the lines the binary writes are the lines the board
-// reads back; docs/traces.md is the spec and testdata/trailers its
-// conformance suite.
+// sit side by side so the lines written are the lines read back;
+// docs/traces.md is the spec, testdata/trailers its conformance suite.
 package trace
 
 import (
@@ -28,18 +27,17 @@ type Review struct {
 	Skipped int `json:"skipped"`
 }
 
-// Trailers is what one commit message says about its task and step. Tasks
-// holds every member of a bundle, lead first; Step the step whose work the
-// commit carries; Review the counts on a resolve fix.
+// Trailers is what one commit message says about its task and step; Tasks
+// lists a bundle lead first.
 type Trailers struct {
 	Tasks  []string `json:"tasks,omitempty"`
 	Step   string   `json:"step,omitempty"`
 	Review *Review  `json:"review,omitempty"`
 }
 
-// Parsed is what Parse reads out of a whole message. A squash merge
-// concatenates several commits, so every Step: and Review: line is kept in
-// order; Step and Review are the last of each.
+// Parsed is what Parse reads out of a whole message: a squash merge
+// concatenates commits, so every Step: and Review: line is kept in order,
+// Step and Review being the last.
 type Parsed struct {
 	Trailers
 
@@ -96,14 +94,12 @@ func Render(t Trailers) (string, error) {
 	return b.String(), nil
 }
 
-// A trailer is a whole line, `Key: value`, the key case-insensitive. No
-// anchoring to the last paragraph: a squash merge buries a commit's
-// trailers mid-body under its `* subject` line.
+// A trailer is any whole `Key: value` line, not anchored to the last
+// paragraph: a squash merge buries a commit's trailers mid-body.
 var lineRe = regexp.MustCompile(`(?i)^(task|step|review):[ \t]+(\S.*?)[ \t]*$`)
 
-// Parse reads every trailer line a message holds. Nothing in a message is
-// an error: history nobody controlled is still read, and a message with no
-// trailer parses to a zero value.
+// Parse reads every trailer line. Nothing is an error: history nobody
+// controlled is still read, and no trailer parses to a zero value.
 func Parse(message string) Parsed {
 	var p Parsed
 
@@ -142,8 +138,6 @@ func (p *Parsed) addTask(id string) {
 	p.Tasks = append(p.Tasks, id)
 }
 
-// parseReview reads `round=1 fixed=2 skipped=0`: pairs separated by
-// spaces, an unknown key or a value that is not an integer ignored.
 func parseReview(value string) Review {
 	var r Review
 

@@ -22,7 +22,6 @@ import (
 
 var gatePipeline = []string{"implement", "cleanup", "pr", "review (local)", "judge", "pr"}
 
-// hookEvent is a hook's row in a checkout on a branch.
 func hookEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Event {
 	e := sessionEvent(at, session, kind, p)
 	e.Task, e.Branch, e.Checkout = "", "FT-1/thing", "/code/repo.FT-1"
@@ -30,7 +29,6 @@ func hookEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Even
 	return e
 }
 
-// texts is each gate's step and text, for a test to compare.
 func texts(gates []gate) map[string]string {
 	out := map[string]string{}
 
@@ -345,8 +343,7 @@ func TestGatesOutcomes(t *testing.T) {
 	}
 }
 
-// writeLore puts entries straight into a change directory, as `f10 lore
-// add` would leave them.
+// writeLore writes entries as `f10 lore add` would leave them.
 func writeLore(t *testing.T, root string, entries ...lore.Entry) {
 	t.Helper()
 

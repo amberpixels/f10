@@ -73,8 +73,8 @@ func normalized(t *testing.T, path string) string {
 }
 
 // Every scenario under testdata/scenarios is a starting state file, payloads
-// in order, and the state file the bash dispatcher left for them, recorded
-// before it was retired. The port must leave the same file.
+// in order, and the state file the retired bash dispatcher left for them,
+// which this port must leave too.
 func TestScenariosMatchTheBashDispatcher(t *testing.T) {
 	dirs, err := filepath.Glob(filepath.Join("testdata", "scenarios", "*"))
 	if err != nil || len(dirs) == 0 {

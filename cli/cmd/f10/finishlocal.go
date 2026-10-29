@@ -9,12 +9,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// neverPushed reads the host's answer for the branch's request: no request,
-// no copy on origin and no upstream is a branch never pushed, which finish
-// merges here. A host that failed to answer stays an error, and so does
-// --local, which merges nothing. A pushed branch with no request belongs on
-// the host, and an upstream origin lacks may be a request merged there that
-// the host no longer lists by branch (glab lists open ones only).
+// neverPushed proves a branch has no request, no copy on origin and no
+// upstream before finish merges it here: an upstream origin lacks may be a
+// request merged there that the host no longer lists (glab lists open only).
 func neverPushed(ctx context.Context, in finishInput, branch string, pullErr error) (bool, error) {
 	if pullErr == nil {
 		return false, nil
@@ -47,9 +44,8 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 	return true, nil
 }
 
-// landingBase is the commit a branch never pushed lands on: the local
-// default branch, or origin's copy when the local one is only behind it,
-// so origin's commits are never folded into the merge. Diverged is refused.
+// landingBase is the local default branch, or origin's copy when the local
+// one is only behind it, so origin's commits are never folded into the merge.
 func landingBase(ctx context.Context, dir, def string) (string, error) {
 	local, err := gitx.Ref(ctx, dir, "refs/heads/"+def)
 	if err != nil {
@@ -81,12 +77,9 @@ func landingBase(ctx context.Context, dir, def string) (string, error) {
 	return "", fmt.Errorf("%s and origin/%s have diverged: bring %s up to date with origin first", def, def, def)
 }
 
-// landLocal merges a branch never pushed into the local default branch by
-// the project's merge method, built in memory on landingBase so no checkout
-// is touched, then moves the default branch: a fast-forward in the main
-// checkout when it is on it, else the ref alone. A conflict, or a rebase
-// that is not a fast-forward, is left to a catchup. A branch already in
-// the default branch, as a rerun finds it, lands nothing.
+// landLocal builds the merge in memory on landingBase so no checkout is
+// touched, then moves the default branch. A conflict, or a rebase that is
+// not a fast-forward, is left to a catchup; a rerun lands nothing.
 func landLocal(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
 	defRef, head := "refs/heads/"+def, "refs/heads/"+branch
 	// old is the compare-and-swap value the ref moves from: an unread one
@@ -168,19 +161,16 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 	return sha, notes, nil
 }
 
-// alreadyLanded reports whether every change on head is in base already:
-// merging it would leave base's tree as it is, the case landLocal lands
-// nothing for. A conflict is not landed.
+// alreadyLanded reports every change on head already in base, the case
+// landLocal lands nothing for; a conflict is not landed.
 func alreadyLanded(ctx context.Context, dir, base, head string) bool {
 	tree, err := gitx.MergeTree(ctx, dir, base, head)
 
 	return err == nil && tree == gitx.Out(ctx, dir, "rev-parse", base+"^{tree}")
 }
 
-// squashMessage is what a squash merged here says: the task and its title,
-// as a PR title carries them, else the branch's first commit subject; then
-// the branch's subjects when it has several, and the trailers with traces
-// (mergeBody is empty without them).
+// squashMessage shapes the commit as a PR squash would: the task and title
+// as subject, the branch's subjects as body, and the trailers with traces on.
 func squashMessage(ctx context.Context, in finishInput, base, head string) []string {
 	subjects := strings.Split(gitx.Out(ctx, in.main, "log", "--reverse", "--format=%s", base+".."+head), "\n")
 	subject := subjects[0]
@@ -199,7 +189,6 @@ func squashMessage(ctx context.Context, in finishInput, base, head string) []str
 	return paragraphs(subject, cmp.Or(mergeBody(in, description, "--squash"), description))
 }
 
-// paragraphs drops the empty parts of a commit message.
 func paragraphs(parts ...string) []string {
 	var out []string
 
@@ -212,8 +201,7 @@ func paragraphs(parts ...string) []string {
 	return out
 }
 
-// unclosedNote names the tasks a local merge leaves open: no request
-// closes them, so the tracker does.
+// unclosedNote: no request closes a locally merged task, so the tracker must.
 func unclosedNote(in finishInput) string {
 	ids := append([]string{in.task.ID}, in.close...)
 

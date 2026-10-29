@@ -11,13 +11,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// A spike's run ends at its report with the experiment code uncommitted and
-// no PR. Finish closes it without a merge: the report is archived beside the
-// plan, the experiment discarded (or, with --keep, committed onto a branch
-// that no longer carries the task id), the worktree and branch removed.
+// A spike's run ends at its report with the experiment uncommitted and no
+// PR, so finish closes it without a merge.
 
-// taskSpikesDir is where a task's spike report sits: the shared spikes dir
-// beside the shared plans dir, else (none given) the checkout's own.
 func taskSpikesDir(checkout, plansDir string) string {
 	if plansDir != "" {
 		return filepath.Join(filepath.Dir(plansDir), "spikes")
@@ -26,10 +22,9 @@ func taskSpikesDir(checkout, plansDir string) string {
 	return filepath.Join(checkout, ".f10", "spikes")
 }
 
-// taskSpike is the task's spike report, "" for none: in the shared spikes
-// dir, unless only a worktree keeping its own .f10 holds it. A plan that is
-// not a spike's wins over a report, so a report left from an earlier spike
-// under the same id never closes a task planned again as something else.
+// taskSpike is the task's spike report, "" for none. A plan that is not a
+// spike's wins over a report, so a report left from an earlier spike never
+// closes a task planned again as something else.
 func taskSpike(checkout, plansDir, id string) string {
 	for _, dir := range []string{taskSpikesDir(checkout, plansDir), filepath.Join(checkout, ".f10", "spikes")} {
 		p := filepath.Join(dir, id+".md")
@@ -47,11 +42,9 @@ func taskSpike(checkout, plansDir, id string) string {
 	return ""
 }
 
-// kindSpike matches a plan's kind line as plans write it: `Kind: spike`,
-// `- **Kind**: spike, from the label`, `**Kind:** spike (a question)`.
+// kindSpike matches a plan's kind line in the shapes plans write it.
 var kindSpike = regexp.MustCompile(`(?i)^(- )?kind\s*:\s*spike\b`)
 
-// spikePlan reports whether the plan's head carries a spike's kind line.
 func spikePlan(path string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -68,9 +61,8 @@ func spikePlan(path string) bool {
 	return false
 }
 
-// spikeArchiveName is where the spike report goes in the plans archive,
-// beside the plan: <id>.spike.md, which also counts the task finished for a
-// spike planned inline with no plan file.
+// spikeArchiveName is <id>.spike.md in the plans archive, which also counts
+// the task finished for a spike planned inline with no plan file.
 func spikeArchiveName(main, plansDir, id string) (string, error) {
 	dst := filepath.Join(main, ".f10", "plans", "archive")
 	if plansDir != "" {
@@ -84,7 +76,6 @@ func spikeArchiveName(main, plansDir, id string) (string, error) {
 	return freeArchiveName(dst, id+".spike"), nil
 }
 
-// archiveSpike moves the report to target.
 func archiveSpike(report, target string) error {
 	if err := os.Rename(report, target); err != nil {
 		return fmt.Errorf("archiving the spike report at %s: %w", report, err)
@@ -108,9 +99,6 @@ func copySpike(report, target string) error {
 	return nil
 }
 
-// spikeNotes are the report's lines for a spike closed without a merge:
-// what the experiment loses or where it is kept, and that nothing closes
-// the task. dirty is the worktree's status before the close.
 func spikeNotes(ctx context.Context, in finishInput, name, def, kept string, dirty []string) []string {
 	notes := []string{unclosedNote(in)}
 
@@ -131,8 +119,8 @@ func spikeNotes(ctx context.Context, in finishInput, name, def, kept string, dir
 	return notes
 }
 
-// trimStatus is the paths of `git status --porcelain` lines; the output's
-// trim may have taken the first line's leading space.
+// trimStatus is the paths of porcelain lines; the first line may have lost
+// its leading space to the output's trim.
 func trimStatus(lines []string) []string {
 	paths := make([]string, 0, len(lines))
 	for _, l := range lines {
@@ -143,9 +131,8 @@ func trimStatus(lines []string) []string {
 	return paths
 }
 
-// keptName is the branch a kept spike moves to: kept/ and the branch's name
-// with the task's ids taken out, so no task lookup finds it, numbered when
-// taken.
+// keptName is kept/ and the branch's name with the task's ids taken out, so
+// no task lookup finds it; numbered when taken.
 func keptName(ctx context.Context, main, branch string, ids []string) string {
 	slug := branch
 	for _, id := range ids {
@@ -178,9 +165,8 @@ func idPattern(id string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)` + regexp.QuoteMeta(prefix) + `-?` + regexp.QuoteMeta(num) + `\b`)
 }
 
-// commitExperiment commits everything in the worktree onto the branch,
-// skipping hooks: experiment code need not pass them, and never leaves the
-// machine.
+// commitExperiment skips hooks: experiment code need not pass them and
+// never leaves the machine.
 func commitExperiment(ctx context.Context, path, id string, dirty []string) error {
 	if len(dirty) == 0 {
 		return nil
@@ -204,9 +190,8 @@ func commitExperiment(ctx context.Context, path, id string, dirty []string) erro
 	return nil
 }
 
-// discardExperiment leaves the worktree clean, so either removal backend
-// takes it: tracked changes reset, untracked files removed, ignored ones (a
-// legacy .f10 among them) left for the removal.
+// discardExperiment leaves the worktree clean for either removal backend;
+// ignored files (a legacy .f10 among them) are left to the removal.
 func discardExperiment(ctx context.Context, path string) error {
 	if _, err := gitx.Exec(ctx, path, "reset", "--hard"); err != nil {
 		return fmt.Errorf("discarding the experiment in %s: %w", path, err)
@@ -237,9 +222,6 @@ func createKept(ctx context.Context, main, branch, kept string) error {
 	return nil
 }
 
-// removeTaskCheckout removes the worktree and the branch. A spike closed
-// here first discards its experiment, or with kept commits it and keeps
-// the branch under that name, removing only the worktree.
 func removeTaskCheckout(
 	ctx context.Context,
 	in finishInput,

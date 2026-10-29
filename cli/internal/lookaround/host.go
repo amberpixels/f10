@@ -11,13 +11,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
-// collectHost reads every open request and every one merged in the
-// window, the state block in each body, the trailers on the commits of a
-// request nothing else names a task for, whether a merged one's branch is
-// still there (one branch listing for all of them), and whether the
-// declared remote reviewer has one waiting. The list failing fails the
-// source; a read on one request, or the branch listing, is a note, the
-// requests kept without it.
+// collectHost reads the open and recently merged requests with what the
+// board needs beyond the list. The list failing fails the source; a failed
+// read on one request, or the branch listing, is a note.
 func collectHost(ctx context.Context, in Inputs) ([]PR, []string, error) {
 	pulls, err := in.Host.PullsSince(ctx, in.Since)
 	if err != nil {
@@ -60,13 +56,11 @@ func collectHost(ctx context.Context, in Inputs) ([]PR, []string, error) {
 }
 
 // pullParallel bounds the host calls in flight for one project: each is a
-// gh or glab process, and one at a time made a busy repo's board take a
-// call's latency per merged request.
+// gh or glab process, and serial calls cost a busy repo's board a call's
+// latency per merged request.
 const pullParallel = 8
 
-// readPull is one request with what the board reads beyond the list: its
-// state block, the trailers when nothing else names a task, whether a
-// merged one's branch is still there, the remote reviewer's open review.
+// readPull is one request with what the board reads beyond the list.
 // branches is every branch the host has, nil when it was not listed.
 func readPull(ctx context.Context, in Inputs, p forge.PR, branches map[string]bool) (PR, []string) {
 	pr := PR{PR: p}
@@ -111,10 +105,9 @@ func readPull(ctx context.Context, in Inputs, p forge.PR, branches map[string]bo
 	return pr, notes
 }
 
-// collectActivity reads what the repository did since the window's start
-// in one query, then, for the requests opened, merged or closed in it
-// that name a task, the task's other requests in one more: how a task's
-// requests relate is told by those. Nothing else is read per request.
+// collectActivity reads the window in one query, then the other requests
+// of every task opened, merged or closed in it in one more, since how a
+// task's requests relate is told by those. Nothing is read per request.
 func collectActivity(ctx context.Context, in Inputs) (*forge.Activity, map[string][]forge.PR, []string, error) {
 	a, err := in.Host.Activity(ctx, in.Since)
 	if err != nil {

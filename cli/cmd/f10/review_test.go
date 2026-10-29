@@ -15,9 +15,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// The review noun is exercised against a scripted gh or glab: what each
-// verb asks the host and what it concludes, with the facts declared the way
-// f10 init writes them.
+// The review noun against a scripted gh or glab, with the facts declared the
+// way f10 init writes them.
 
 const (
 	reviewPR = "gh pr view --json number,url,headRefOid,commits"
@@ -51,10 +50,9 @@ func ghReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 	return rv
 }
 
-// Two reviews by the bot: an older one the viewer reacted to after its last
-// edit (handled), and a sticky one re-edited after the reaction (unhandled
-// again, the way a re-review must read). Pick returns the sticky one with
-// the sha the PR had when it was posted.
+// An older review reacted to after its last edit is handled; a sticky one
+// re-edited after the reaction is unhandled again, as a re-review must read.
+// Pick returns it with the sha the PR had when it was posted.
 func TestReviewPickSkipsHandledAndSeesThroughStaleReactions(t *testing.T) {
 	f := newFakes(t)
 	rv := ghReviewer(t, f, stickyFacts())

@@ -22,9 +22,6 @@ const (
 	cmdCI      = "/f10:resolve %s ci"
 )
 
-// next fills the row's next action from its stage and the evidence
-// behind it. A row with no task id gets a sentence where a command would
-// need one.
 func (r *row) next() {
 	id := ""
 	if !strings.HasPrefix(r.Key, "#") {

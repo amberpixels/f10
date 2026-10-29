@@ -9,7 +9,6 @@ import (
 
 var t0 = time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
 
-// ev is one row of a scenario: minute, kind, task, and the payload.
 func ev(minute float64, kind, task string, p ledger.Payload) ledger.Event {
 	if p == nil {
 		p = ledger.Payload{}

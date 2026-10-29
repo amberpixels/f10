@@ -145,9 +145,8 @@ func TestMatchBranch(t *testing.T) {
 	}
 }
 
-// The cascade's precedence, exercised through the one path a test can drive
-// end to end without a checkout: explicit beats everything, and the session
-// answers when nothing else does.
+// The cascade's precedence through the one path a test can drive without a
+// checkout: explicit beats everything, the session answers last.
 func TestLookupCascade(t *testing.T) {
 	dir := t.TempDir()
 	state := []byte("v 1\ntask GH-22\nurl https://x\n")
@@ -224,7 +223,6 @@ func TestFromBranchReadsTheLink(t *testing.T) {
 	}
 }
 
-// fakeGit answers git calls from a table, and fails the rest.
 func fakeGit(t *testing.T, answers map[string]string) {
 	t.Helper()
 

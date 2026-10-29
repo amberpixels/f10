@@ -26,18 +26,16 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The watcher reconciles a project's tasks that no drive owns: the daemon
-// runs `f10 watch --pass` in its main checkout every few minutes. Owning
-// is holding the task's lease, so a task a drive or a finish holds is
-// never touched, and the watcher's own finish takes the lease first.
+// The watcher reconciles a project's tasks that no drive owns, from the
+// daemon's `f10 watch --pass` every few minutes. Owning is holding the
+// task's lease, so a task a drive or a finish holds is never touched, and
+// the watcher's own finish takes the lease first.
 
-// watchStallGrace is how long an agent sits idle under a running phase
-// before the watcher reports it; longer than drive's, since nobody asked
-// the watcher to keep the task moving.
+// watchStallGrace is longer than drive's, since nobody asked the watcher to
+// keep the task moving.
 const watchStallGrace = 10 * time.Minute
 
-// watchFile is the shared storage root's record of what each pass last
-// reported per task, so the same fact is told once.
+// watchFile records what each pass last reported, so a fact is told once.
 const watchFile = "watch.yaml"
 
 // cfgWatch is the branch config key `f10 watch off` sets to false.
@@ -145,7 +143,6 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// runWatchToggle sets or clears a task's opt-out on its branch.
 func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
@@ -232,8 +229,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 		return err
 	}
 
-	// the janitor deletes branches, here and on origin: an act, which only
-	// watch: finish lets a pass take
+	// the janitor deletes branches: an act, which only watch: finish allows
 	if in.mode == "finish" {
 		sweepIfDue(ctx, cmd.Writer, filepath.Join(root, janitorStamp), time.Now(),
 			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
@@ -247,10 +243,9 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 }
 
 // watchProject hands the project to this user's daemon, starting one when
-// none runs, so its tasks are watched once nothing drives them. It never
-// replaces or waits out a running daemon: that is f10 drive's, which can
-// tell the user. Nothing it does fails the command: an error is one
-// warning. A variable so tests start no daemon.
+// none runs. It never replaces or waits out a running daemon (f10 drive's
+// job, which can tell the user), and an error is one warning, never a failed
+// command. A variable so tests start no daemon.
 var watchProject = func(ctx context.Context, w io.Writer, t *target) {
 	if !daemon.Supported || t.eff.Watch == "off" {
 		return
@@ -308,9 +303,8 @@ type watchInput struct {
 	finish func(context.Context, watchedTask) error
 	out    reporter
 	warn   func(string) // a line for the pass's output that is no report; nil drops it
-	// catchup is watch_catchup: on, a pass catching an open PR up with its
-	// target; prompt sends the catchup to a task's agent, nil with no
-	// backend to reach one
+	// catchup is watch_catchup: on; prompt is nil with no backend to reach
+	// an agent
 	catchup bool
 	prompt  func(ctx context.Context, task watchedTask, text string) error
 }
@@ -343,9 +337,8 @@ type watchedTask struct {
 	busy      string   // why its worktree cannot take a catchup, or ""
 }
 
-// A sentCatchup is the catchup the watcher sent for a task and has not
-// settled: a pass keeps nothing else between runs, so it lives on the
-// task's stored report.
+// A sentCatchup lives on the task's stored report, since a pass keeps
+// nothing else between runs.
 type sentCatchup struct {
 	Target string    `yaml:"target"` // the sha the branch was caught up to
 	Head   string    `yaml:"head"`   // the branch's tip when the catchup went out
@@ -357,7 +350,6 @@ type sentCatchup struct {
 	Failed bool `yaml:"failed,omitempty"`
 }
 
-// A watchReport is one thing a pass tells about a task.
 type watchReport struct {
 	Task string `yaml:"-"`
 	Kind string `yaml:"kind"`
@@ -378,8 +370,8 @@ type watchReport struct {
 // watchToldMax bounds a task's told keys; the oldest go first.
 const watchToldMax = 32
 
-// A reporter is where a pass tells what it found. The pass's own output,
-// which the daemon keeps in the project's watch log, is the only one.
+// A reporter is where a pass tells what it found; the daemon keeps the
+// pass's output as the project's watch log.
 type reporter interface {
 	report(watchReport)
 }
@@ -399,9 +391,8 @@ func (l lineReporter) report(r watchReport) {
 	fmt.Fprintln(l.w, line)
 }
 
-// watchPass reads every task worktree, reports what is new about each one
-// no drive owns, and finishes merged ones when the mode says so. watching
-// is false once the project has no task worktree and no local task branch.
+// watchPass reports false once the project has no task worktree and no
+// local task branch, so the daemon drops it.
 func watchPass(ctx context.Context, in watchInput) (bool, error) {
 	tasks, branches, err := collectWatched(ctx, in)
 	if err != nil {
@@ -428,13 +419,12 @@ func watchPass(ctx context.Context, in watchInput) (bool, error) {
 	return len(tasks) > 0 || (in.mode == "finish" && branches > 0), nil
 }
 
-// watchHostKey is the store's entry for the host not answering: about the
+// watchHostKey is the store's entry for the host not answering, about the
 // project, not one task.
 const watchHostKey = "host"
 
-// hostTrouble says, every pass, that the host did not answer and which
-// tasks it left out, since those tasks go silent; f10 watch shows it
-// until the host answers again.
+// hostTrouble is told every pass, naming the tasks left out, since those
+// tasks go silent; f10 watch shows it until the host answers again.
 func (in watchInput) hostTrouble(tasks []watchedTask, store map[string]watchReport) {
 	var (
 		ids   []string
@@ -466,9 +456,8 @@ func (in watchInput) hostTrouble(tasks []watchedTask, store map[string]watchRepo
 	store[watchHostKey] = rep
 }
 
-// reconcile reports what is new about each task, finishing the merged
-// ones the mode lets it, and forgets tasks gone from the project, except a
-// finish, kept a day for f10 watch.
+// reconcile forgets tasks gone from the project, except a finish, kept a
+// day for f10 watch.
 func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store map[string]watchReport) {
 	now := in.now()
 	seen := map[string]bool{}
@@ -496,8 +485,7 @@ func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store m
 	}
 }
 
-// tell reports rep about a task unless its fact was told already, and
-// stores it, the task's told keys and its catchup record carried over.
+// tell carries the stored report's told keys and catchup record over.
 func (in watchInput) tell(store map[string]watchReport, id string, now time.Time, rep *watchReport) {
 	if rep == nil {
 		return
@@ -521,15 +509,13 @@ func (in watchInput) tell(store map[string]watchReport, id string, now time.Time
 	store[id] = *rep
 }
 
-// setCatchup records, or with nil clears, a task's catchup in flight.
 func setCatchup(store map[string]watchReport, id string, rec *sentCatchup) {
 	r := store[id]
 	r.Catchup = rec
 	store[id] = r
 }
 
-// finishReport runs the watcher's finish of a merged task, as a report.
-// A lease someone took meanwhile is no report: they own it now.
+// finishReport: a lease someone took meanwhile is no report, they own it now.
 func (in watchInput) finishReport(ctx context.Context, task watchedTask) *watchReport {
 	err := in.finish(ctx, task)
 
@@ -554,8 +540,8 @@ func (in watchInput) finishReport(ctx context.Context, task watchedTask) *watchR
 	}
 }
 
-// decideWatch is what a pass says about one task, and whether it finishes
-// it: the request first, then a stalled agent, then a stopped run.
+// decideWatch answers the request first, then a stalled agent, then a
+// stopped run.
 func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool) {
 	// a host that did not answer leaves the request unknown: saying
 	// anything else about the task this pass could hide a merge
@@ -631,8 +617,6 @@ func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool)
 	}, false
 }
 
-// runStopText names the phase a run stopped in and how: `ship blocked
-// at judge`, `ship done`.
 func runStopText(run *state.Run) string {
 	for _, phase := range slices.Backward(state.Phases) {
 		if s := run.Status(phase); state.Stopped(s) || (phase == "ship" && s == "done") {
@@ -648,8 +632,6 @@ func runStopText(run *state.Run) string {
 	return "stopped"
 }
 
-// collectWatched reads every task worktree, and counts the local task
-// branches, with or without one.
 func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, error) {
 	def, err := janitorDefault(ctx, in.main)
 	if err != nil {
@@ -729,10 +711,9 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 	return tasks, len(branches), nil
 }
 
-// watcherFinish finishes a merged task under its lease, held as the
-// watcher, with a finish that refuses anything but a merged request. Its
-// report goes to the pass's output, a line per row. It writes no drive
-// finish record: the board would read the watcher as a drive.
+// watcherFinish holds the lease as the watcher and refuses anything but a
+// merged request. It writes no drive finish record: the board would read
+// the watcher as a drive.
 func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root string, task watchedTask) error {
 	lease, err := drives.AcquireAs(root, task.id, drives.Holder{Watch: true})
 	if err != nil {
@@ -791,9 +772,8 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 	return err
 }
 
-// handedBack reports branch handed back by f10 watch off. A mark git
-// cannot read counts as handed back for this pass, with a line naming it:
-// a finish must never run on a task the user may have taken back.
+// handedBack counts a mark git cannot read as handed back, with a line naming
+// it: a finish must never run on a task the user may have taken back.
 func (in watchInput) handedBack(ctx context.Context, branch string) bool {
 	v, err := gitx.Config(ctx, in.main, "branch."+branch+"."+cfgWatch)
 	if err != nil {
@@ -807,9 +787,8 @@ func (in watchInput) handedBack(ctx context.Context, branch string) bool {
 	return v == "false"
 }
 
-// recheckFinish reads again, under the lease, what the pass read before
-// it: an agent that started working, or a commit the PR lacks, since then
-// keeps the task.
+// recheckFinish reads again, under the lease, what the pass read before it:
+// an agent that started working, or a commit the PR lacks, keeps the task.
 func recheckFinish(ctx context.Context, b agentctl.Backend, main string, task watchedTask) error {
 	tip, err := gitx.Ref(ctx, main, "refs/heads/"+task.branch)
 	if err != nil {
@@ -880,11 +859,9 @@ func onOff(on bool) string {
 	return "off"
 }
 
-// readTargets fetches origin once, when any task could be caught up or has
-// a catchup to settle, and reads what each needs: origin's tip, what its
-// request targets and whether its worktree is free. A failed fetch reads
-// nothing: a stale origin could hide a move, and a push lease needs the
-// current sha.
+// readTargets fetches origin once, for every task that could be caught up
+// or has a catchup to settle. A failed fetch reads nothing: a stale origin
+// could hide a move, and a push lease needs the current sha.
 func (in watchInput) readTargets(ctx context.Context, tasks []watchedTask, store map[string]watchReport) {
 	var want []int
 
@@ -926,9 +903,6 @@ func (in watchInput) readTargets(ctx context.Context, tasks []watchedTask, store
 	}
 }
 
-// catchupStep is the watcher's part in keeping a task's open request
-// current: it settles a catchup it sent on an earlier pass, or sends one
-// when the request's target moved past the branch.
 func (in watchInput) catchupStep(ctx context.Context, task watchedTask, store map[string]watchReport) *watchReport {
 	if !task.fetched || task.agent == agentctl.StatusWorking || waitingOnAsk(task.run) {
 		return nil
@@ -948,12 +922,10 @@ func (in watchInput) catchupStep(ctx context.Context, task watchedTask, store ma
 	return in.sendCatchup(ctx, task, rec, store)
 }
 
-// settleCatchup reads from git how a sent catchup ended: clean, the branch
-// is pushed under the task's lease, against the origin tip the catchup
-// started from, so a commit pushed to the request meanwhile is never
-// overwritten; not clean with the agent idle, the failure is told once and
-// the branch left as it is, since an operation in progress there may be
-// someone's hand merge.
+// settleCatchup pushes a clean catchup under the task's lease, against the
+// origin tip it started from, so a commit pushed meanwhile is never
+// overwritten; one not clean with the agent idle is told once and left as
+// it is, since an operation in progress there may be someone's hand merge.
 func (in watchInput) settleCatchup(
 	ctx context.Context, task watchedTask, rec *sentCatchup, store map[string]watchReport,
 ) *watchReport {
@@ -988,7 +960,6 @@ func (in watchInput) settleCatchup(
 
 	defer lease.Release()
 
-	// the agent and the tree, read again under the lease
 	if in.worktreeBusy(ctx, task) {
 		return nil
 	}
@@ -1032,8 +1003,7 @@ func (in watchInput) settleCatchup(
 	}
 }
 
-// pushFailed is a caught-up branch the watcher could not push: told once per
-// cause, the record kept so the next pass tries again.
+// pushFailed is told once per cause, the record kept so the next pass retries.
 func (in watchInput) pushFailed(task watchedTask, rec *sentCatchup, err error) *watchReport {
 	return &watchReport{
 		Kind: watchCatchup,
@@ -1043,11 +1013,9 @@ func (in watchInput) pushFailed(task watchedTask, rec *sentCatchup, err error) *
 	}
 }
 
-// sendCatchup marks a branch whose open request fell behind its target and
-// prompts its agent with a driven catchup, under the task's lease, with an
-// idle agent and a clean tree; what it cannot act on is told once. failed,
-// the last catchup that did not end clean, blocks another until the target
-// or the head moves.
+// sendCatchup prompts the agent only under the task's lease, idle and with
+// a clean tree; what it cannot act on is told once. failed, the last catchup
+// that did not end clean, blocks another until the target or the head moves.
 func (in watchInput) sendCatchup(
 	ctx context.Context, task watchedTask, failed *sentCatchup, store map[string]watchReport,
 ) *watchReport {
@@ -1091,17 +1059,16 @@ func (in watchInput) sendCatchup(
 			pr.URL, pr.Base, base, task.branch))
 	}
 
-	// the branch and its request must agree before either moves: a worktree
-	// behind origin would rebase a stale branch, one ahead of it is work the
-	// request has not seen
+	// a worktree behind origin would rebase a stale branch; one ahead of it
+	// holds work the request has not seen
 	if task.localSHA != task.originSHA {
 		return behind("diverged", fmt.Sprintf("%s moved past %s, whose tip is not origin's: not caught up",
 			target.name, task.branch))
 	}
 
-	// a mark already on the branch (a finish that landed its base, a ship
-	// guard that stopped on a conflict, a catchup of the watcher's own that
-	// failed) is a catchup owed that nobody else will send: set again below
+	// a mark already on the branch (a finish that landed its base, a ship guard
+	// stopped on a conflict, a failed watcher catchup) is a catchup owed that
+	// nobody else sends: set again below
 	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+task.branch)
 
 	switch {
@@ -1174,13 +1141,12 @@ func (in watchInput) sendCatchup(
 	}
 }
 
-// waitingOnAsk reports a run stopped on a question for a person: its agent
-// is idle, but the next prompt it gets should be the answer, not a catchup.
+// waitingOnAsk: the next prompt such an idle agent gets should be the
+// answer, not a catchup.
 func waitingOnAsk(run *state.Run) bool { return run != nil && run.Ask != "" }
 
-// worktreeBusy reads again, under the lease, what the pass read before it:
-// an agent that started working, or a tree no longer clean, keeps the
-// watcher's hands off until the next pass.
+// worktreeBusy is recheckFinish's read for a catchup: a working agent or an
+// unclean tree waits for the next pass.
 func (in watchInput) worktreeBusy(ctx context.Context, task watchedTask) bool {
 	if in.agents != nil {
 		wss, err := in.agents.Workspaces(ctx)

@@ -11,12 +11,9 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// A Review is the remote review a CI workflow declares: a workflow under
-// .github/workflows that runs the Claude Code action, read for who posts
-// the review and what fires it. Everything else about the review (where it
-// arrives, what marks it handled) is the action's out-of-the-box behavior
-// and is written by facts.Scaffold as declared defaults, so a project whose
-// workflow does otherwise edits one line.
+// A Review is the remote review a workflow running the Claude Code action
+// declares: who posts and what fires it. Where it arrives and what marks it
+// handled are the action's defaults, which facts.Scaffold writes as declared.
 type Review struct {
 	Reviewer string `json:"reviewer"`          // the login that posts: claude[bot], or github-actions[bot] with a github_token
 	Trigger  string `json:"trigger"`           // "automatic", "manual", or "automatic, manual"
@@ -44,12 +41,9 @@ var (
 	mentionRE = regexp.MustCompile(`contains\(\s*github\.event\.(?:comment|review|issue)\.body\s*,\s*['"](@[\w-]+)['"]`)
 )
 
-// reviewWorkflow finds the workflow using the Claude Code action, or nil.
-// The stock setup installs two (a pull_request review and an `@claude`
-// answerer), so the first that fires on its own wins whatever the file names,
-// and the first of any trigger stands only when none does. Files are read in
-// name order; one yaml cannot parse is skipped, a broken workflow being CI's
-// problem to report.
+// reviewWorkflow is the workflow using the Claude Code action, or nil. The
+// stock setup installs two (a pull_request review and an `@claude` answerer),
+// so one firing on its own wins; yaml that cannot parse is CI's to report.
 func reviewWorkflow(root string) *Review {
 	dir := filepath.Join(root, ".github", "workflows")
 

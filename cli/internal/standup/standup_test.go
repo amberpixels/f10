@@ -64,9 +64,8 @@ func numbers(prs []PR) []int {
 	return out
 }
 
-// Three PRs stacked for one task list root first; the third's host base was
-// retargeted to main after its base merged, and the recorded f10 base puts
-// it back in the chain.
+// A stack lists root first; the third PR's host base was retargeted to main
+// after its base merged, and the recorded f10 base puts it back in the chain.
 func TestGroupChainsAStackInOneTask(t *testing.T) {
 	in := input(nil, []HostPR{
 		own(3, "FT-1/c", "main", HostOpen),

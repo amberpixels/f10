@@ -11,9 +11,9 @@ import (
 
 const promptExt = ".prompted"
 
-// PromptedPath is the mark a session's last prompt leaves beside its state
-// file: which checkout it was typed in and when. A drive reads it to tell
-// a turn that ran between two looks from one never taken.
+// PromptedPath is the mark a session's last prompt leaves: which checkout and
+// when, so a drive can tell a turn that ran between two looks from one never
+// taken.
 func PromptedPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+promptExt)
 }
@@ -102,9 +102,8 @@ func readPrompt(path string) (Prompt, bool) {
 	return p, p.Root != "" && !p.At.IsZero()
 }
 
-// FileRoot is the checkout a per-session file in dir is about: a run file's
-// root, a prompt mark's, or for an open wait its session's; "" for any other
-// file, or a session with neither.
+// FileRoot is the checkout a per-session file is about, an open wait taking
+// its session's; "" for any other file, or a session with neither.
 func FileRoot(dir, name string) string {
 	path := filepath.Join(dir, name)
 

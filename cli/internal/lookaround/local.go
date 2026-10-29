@@ -33,11 +33,9 @@ type LocalInputs struct {
 	Agents     agentctl.Backend // the agent backend, when reachable: read its workspaces; nil reads none
 }
 
-// collectLocal reads the worktrees and branches, the live runs in them,
-// every plan, findings and verdict file under the roots, what the ledger
-// closed, and Herdr's workspaces. Git failing fails the source; a file or
-// the ledger that cannot be read is a note. prefix spells a branch's task
-// from its name where nothing links one.
+// collectLocal reads this machine's facts. Git failing fails the source; a
+// file or the ledger that cannot be read is a note. prefix spells a branch's
+// task from its name where nothing links one.
 func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.Time) (*Local, []string, error) {
 	l := &Local{
 		Branches:   map[string]Branch{},
@@ -58,11 +56,9 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 
 	def := gitx.Out(ctx, in.Main, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 
-	// one log per worktree gives the count of commits past the base and
-	// who wrote them, for the same call rev-list --count would cost: a
-	// line per commit, the sha first so a commit with no author email
-	// still counts once the output is trimmed, signatures off so
-	// log.showSignature adds none
+	// one log per worktree counts the commits past the base and who wrote
+	// them: the sha first so a commit with no author email still counts after
+	// trimming, signatures off so log.showSignature adds none
 	for _, wt := range wts {
 		w := Worktree{Path: wt.Path, Branch: wt.Branch}
 		if wt.Branch != "" && def != "" && wt.Branch != strings.TrimPrefix(def, "origin/") {
@@ -188,8 +184,6 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	return l, notes, nil
 }
 
-// readRoot reads one storage root's plans, archive, findings and
-// verdicts into l.
 func readRoot(root string, l *Local) []string {
 	var notes []string
 
@@ -241,8 +235,8 @@ func readRoot(root string, l *Local) []string {
 			fd.Round = r
 		}
 
-		// a prior block takes a verdict only in the three statuses that
-		// reopen it; a settled one carries none by design
+		// a prior block takes a verdict only in the statuses that reopen
+		// it; a settled one carries none
 		for _, fi := range f.Findings {
 			if fi.Prior && !findings.Reopens(fi.Status) {
 				continue
@@ -294,7 +288,6 @@ func readRoot(root string, l *Local) []string {
 	return notes
 }
 
-// readLedger marks the tasks the ledger holds task_finished for.
 func readLedger(ctx context.Context, path, project string, l *Local) []string {
 	_ = ledger.SyncAt(ctx, path) // a failed replay still reads what the database holds
 
@@ -323,7 +316,6 @@ func readLedger(ctx context.Context, path, project string, l *Local) []string {
 	return nil
 }
 
-// latest is the highest-numbered <n>.md in dir, and its n.
 func latest(dir string) (string, int) {
 	best, n := "", -1
 
@@ -341,7 +333,6 @@ func latest(dir string) (string, int) {
 	return best, n
 }
 
-// dirEntries is a directory's entries, none for one that is not there.
 func dirEntries(dir string) []fs.DirEntry {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -351,9 +342,9 @@ func dirEntries(dir string) []fs.DirEntry {
 	return entries
 }
 
-// storageRoots are the .f10 dirs holding task files: the shared root, plus
-// a worktree's own where it holds task files from before storage moved to
-// main's; with no shared root, every checkout's.
+// storageRoots are the .f10 dirs holding task files: the shared root plus
+// any worktree's own that still holds some; with no shared root, every
+// checkout's.
 func storageRoots(shared string, wts []gitx.Worktree) []string {
 	var roots []string
 	if shared != "" {

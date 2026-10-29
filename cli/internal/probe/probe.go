@@ -1,7 +1,6 @@
 // Package probe runs the deterministic detection probes bin/f10-load-project.sh
-// runs: remote host and CLI routing, stack and verify marker files, and the
-// existing plans. Each answer carries the evidence that produced it - the
-// provenance column is the point of the binary.
+// runs: host and CLI routing, stack and verify markers, existing plans. Each
+// answer carries its evidence; the provenance column is the binary's point.
 package probe
 
 import (
@@ -74,9 +73,8 @@ func Run(ctx context.Context, lay *layout.Layout) *Probes {
 	return p
 }
 
-// hostOf extracts the hostname from a git remote url the way the script's
-// host_of does - scp-like, ssh://, https://, userinfo and ports all
-// handled. A local path remote yields "".
+// hostOf is a git remote url's hostname, read as the script's host_of reads
+// it; a local path remote yields "".
 func hostOf(url string) string {
 	h := url
 	if i := strings.Index(h, "://"); i >= 0 {
@@ -170,9 +168,8 @@ func xdgConfigHome() string {
 	return filepath.Join(home, ".config")
 }
 
-// planNames lists the .md files in the plans dir, most recently touched
-// first - a plans dir grows without bound, so recency is the order a
-// lookaround wants and lets renderers trim to the freshest few.
+// planNames lists the plans dir's .md files, most recent first: the dir
+// grows without bound, so recency lets renderers trim to the freshest few.
 func planNames(dir string) []string {
 	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
 	if err != nil || len(matches) == 0 {

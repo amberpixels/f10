@@ -88,14 +88,11 @@ func openPath(dir, key string) string { return filepath.Join(dir, key+ext) }
 
 func answeredPath(dir, key string) string { return filepath.Join(dir, answeredDir, key+ext) }
 
-// Raise records a, open, and reports whether it is new. An open ask with
-// the same text is the same ask, and so is an answered one still on its
-// way: no drive has taken it, and it either awaits delivery or belongs to a
-// drive that will take it. The same ask keeps its time and answer, takes
-// whatever a knows that it did not (the drive, the url), and is not new, so
-// the agent's ask and its drive's report of it tell the user once. An
-// answer the agent already heard, with no drive to take it, is done: the
-// same question asked again is a new ask.
+// Raise reports whether a is new. An open ask with the same text is the same
+// ask, and so is an answered one no drive has taken yet: it keeps its time
+// and answer and takes what a adds (the drive, the url), so the agent's ask
+// and its drive's report tell the user once. An answer the agent already
+// heard, with no drive to take it, is done: asking again is a new ask.
 func Raise(dir string, a Ask, now time.Time) (Ask, bool, error) {
 	a.Text = strings.TrimSpace(a.Text)
 	a.Questions = Parse(a.Text)
@@ -193,9 +190,8 @@ const (
 
 var holds atomic.Int64
 
-// hold takes the open ask key by renaming it into claims/: only one caller
-// can, and the ask reads as held, not gone, until it is put back or
-// answered.
+// hold renames the open ask into claims/, which only one caller can do; the
+// ask reads as held, not gone, until it is put back or answered.
 func hold(dir, key string) (string, error) {
 	claims := filepath.Join(dir, claimDir)
 	if err := os.MkdirAll(claims, 0o700); err != nil {
@@ -217,10 +213,9 @@ func heldElsewhere(dir, key string) bool {
 	return len(held) > 0
 }
 
-// Claim answers the open ask key: the first claim wins, through a rename
-// only one caller can make; a later one gets ClosedError naming the winner.
-// delivered says the answer already reached the agent; one delivered with
-// no drive to take it is done, and so marked taken.
+// Claim answers the open ask key; the first claim wins and a later one gets
+// ClosedError naming the winner. delivered says the answer already reached
+// the agent; delivered with no drive to take it, the ask is marked taken.
 func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, error) {
 	var held string
 

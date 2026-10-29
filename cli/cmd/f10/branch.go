@@ -13,14 +13,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
-// A task's branch: how it is named when start creates it, and how it is
-// found again by start, finish and --after once it exists, whether start
-// named it or the id sits past a prefix. Both halves live here so the name
-// start would give and the patterns finish searches with cannot drift apart.
+// A task's branch is named and found in one file so the name start gives
+// and the patterns finish and --after search with cannot drift apart.
 
-// branchName is the driver's answer to `branch`, else `<ID>/<slug>` from
-// the task's title, else the bare id with a note saying why no slug came -
-// and the suffix appended to whichever came back.
+// branchName is the task's branch name and, when no slug came, the note
+// saying why.
 func branchName(
 	ctx context.Context,
 	d *driver.Driver,
@@ -55,12 +52,9 @@ func branchName(
 	return name, note, nil
 }
 
-// slugBranch is the default shape, `<ID>/<slug>`: the id in front keeps
-// the branch searchable by its task, the slug says what the task is where
-// only the branch name shows - a Herdr tab, a worktree listing. A bundle
-// puts every id in front, `ABC-1+ABC-2/<slug>`, the slug from the lead's
-// title, so trackers that link branches by issue key link every member. No
-// title, or one that slugs to nothing, leaves the bare ids and says so.
+// slugBranch is `<ID>/<slug>`: the id in front keeps the branch searchable
+// by task, the slug says what it is where only the name shows. A bundle
+// puts every id in front so trackers linking by issue key link each member.
 func slugBranch(ctx context.Context, task ref.Ref, title func(context.Context) (string, error)) (string, string) {
 	ids := task.Label()
 
@@ -85,10 +79,8 @@ func slugBranch(ctx context.Context, task ref.Ref, title func(context.Context) (
 // short enough for a tab label and a worktree path.
 const slugMax = 40
 
-// slugify turns a title into a branch segment: ASCII letters and digits
-// kept and lowercased, every other run of characters a single hyphen, cut
-// at the last hyphen at or before slugMax so no word is split, hard at
-// slugMax when there is none.
+// slugify cuts at the last hyphen at or before slugMax so no word is split,
+// hard at slugMax when there is none.
 func slugify(title string) string {
 	var (
 		b   strings.Builder
@@ -127,10 +119,9 @@ func slugify(title string) string {
 	return slug[:slugMax]
 }
 
-// taskRefs are the patterns a task's branch can sit under a root: the id
-// itself (which for-each-ref extends to everything below it at a slash),
-// the id with a dash suffix, and a bundle the id leads, bare or slugged
-// (a for-each-ref `*` stops at a slash).
+// taskRefs are the patterns a task's branch can sit under a root. for-each-ref
+// extends a bare id to everything below it at a slash, but a `*` stops at a
+// slash, so a slugged bundle needs its own pattern.
 func taskRefs(root, id string) []string {
 	bundle := root + id + ref.Separator + "*"
 
@@ -146,10 +137,8 @@ func riderRefs(root, id string) []string {
 }
 
 // branchBundle is the lead and riders a branch ships: its recorded link,
-// else the ids its name spells, as a branch fetched from origin carries
-// them. A branch that ships no bundle has no riders. A link git cannot
-// read is an error: falling back to the name would read a bundle's branch
-// as its lead alone.
+// else the ids its name spells, as a fetched branch carries them. A link git
+// cannot read is an error: the name alone would read a bundle as its lead.
 func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string, error) {
 	section := "branch." + branch + "."
 
@@ -174,10 +163,9 @@ func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []st
 	return "", nil, nil
 }
 
-// branchesFor lists the branches under root that belong to task id,
-// narrowed to one suffix when the caller salted the name. Locally, a miss
-// on the shapes start creates falls back to the id anywhere in the name
-// (`feat/ABC-6-slug`), read by the rule `task read` applies to a branch.
+// branchesFor lists the task's branches under root, narrowed to a suffix
+// when given. Locally, a miss on the shapes start creates falls back to the
+// id anywhere in the name (`feat/ABC-6-slug`), as `task read` reads a branch.
 func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, error) {
 	refs, err := gitx.Refs(ctx, dir, taskRefs(root, id)...)
 	if err != nil {
@@ -197,10 +185,9 @@ func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, e
 	return slices.DeleteFunc(refs, func(r string) bool { return !strings.HasSuffix(r, "-"+suffix) }), nil
 }
 
-// carryingBranches are the local branches whose name carries id past a
-// prefix, minus any linked to another task: a picked-up PR's branch may
-// mention an id it does not ship. The prefix is the id's own, so an id
-// without one finds none, and GH-10 never reads as GH-1.
+// carryingBranches are the local branches carrying id past a prefix, minus
+// any linked to another task, since a picked-up PR's branch may mention an id
+// it does not ship. The prefix is the id's own, so GH-10 never reads as GH-1.
 func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 	cut := strings.LastIndexByte(id, '-')
 	if cut <= 0 {
@@ -236,10 +223,9 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 	}), nil
 }
 
-// taskBranch is the branch --after names: the branch linked to the task,
-// else its local branch, else its branch on origin. Nothing matching is a
-// failure before anything is created; several matching is one too, since
-// guessing would base the work on the wrong attempt.
+// taskBranch is the branch --after names. Nothing or several matching fails
+// before anything is created, since guessing would base the work on the
+// wrong attempt.
 func taskBranch(ctx context.Context, dir, id string) (string, error) {
 	linked, err := linkedBranches(ctx, dir, id)
 	if err != nil {
@@ -274,13 +260,11 @@ func taskBranch(ctx context.Context, dir, id string) (string, error) {
 	return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
 }
 
-// cfgTaskKeys matches every branch's f10-task and f10-tasks entry in the
-// local config.
 const cfgTaskKeys = `^branch\..*\.(` + cfgTaskID + `|` + cfgRiders + `)$`
 
-// linkedBranches are the local branches whose f10-task names id, or whose
-// f10-tasks lists it: a branch picked up from a PR, whose name need not
-// carry the id at all, and a bundle's branch, found by any member.
+// linkedBranches are the local branches linked to id as lead or rider: a
+// picked-up PR's branch need not carry the id, and a bundle's branch is
+// found by any member.
 func linkedBranches(ctx context.Context, dir, id string) ([]string, error) {
 	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
 	if err != nil {
@@ -311,11 +295,9 @@ func linkedBranches(ctx context.Context, dir, id string) ([]string, error) {
 	return names, nil
 }
 
-// namedRef is the ref --base names, with the commit it points at: the local
-// branch, else a remote branch typed as such (`origin/main`), else the
-// branch on origin. Exact refs rather than for-each-ref, since a base is
-// one commit and a literal pattern would also match everything below the
-// name at a slash. Nothing matching is a failure before anything is created.
+// namedRef is the ref --base names, with its commit. Exact refs rather than
+// for-each-ref, since a base is one commit and a literal pattern would also
+// match everything below the name at a slash.
 func namedRef(ctx context.Context, dir, branch string) (string, string, error) {
 	for _, root := range []string{"refs/heads/", "refs/remotes/", "refs/remotes/origin/"} {
 		if sha := refSHA(ctx, dir, root+branch); sha != "" {
@@ -326,8 +308,6 @@ func namedRef(ctx context.Context, dir, branch string) (string, string, error) {
 	return "", "", fmt.Errorf("--base %s: no branch %s locally or on origin", branch, branch)
 }
 
-// refSHA is the commit a ref points at - a full ref, or a branch name git
-// expands itself - or "" when there is no such ref.
 func refSHA(ctx context.Context, dir, r string) string {
 	return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", r)
 }
@@ -340,10 +320,8 @@ type foundBranch struct {
 }
 
 // existingBranch is the branch to reuse, or "" when the task has none yet.
-// A branch linked to the task wins, then the name start would create, then
-// the one task branch, locally and then on origin. Several is an error,
-// since a suffix exists to say which. A suffix skips the link: it names an
-// attempt by its branch name.
+// Several is an error, since a suffix exists to say which; a suffix skips
+// the link, naming an attempt by its branch name.
 func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBranch, error) {
 	if suffix == "" {
 		linked, err := linkedBranches(ctx, dir, id)
@@ -396,12 +374,9 @@ func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBra
 	return foundBranch{}, nil
 }
 
-// taskCheckout is where a task is being worked on: its branch, found the way
-// start would find it, and the checkout that has the branch checked out.
-// Both are "" when the task has no local branch; the path alone is "" when the
-// branch is checked out nowhere. The checkout can be the main one, for a
-// task shipped from main without a worktree. No title lookup: the branch exists or it
-// does not, and a slug would cost a host call for nothing.
+// taskCheckout is the task's branch and the checkout that has it checked
+// out: both "" with no local branch, the path "" when checked out nowhere.
+// No title lookup: a slug would cost a host call for nothing.
 func taskCheckout(
 	ctx context.Context,
 	main string,
@@ -437,9 +412,8 @@ func defaultBranch(ctx context.Context, dir string) string {
 	return gitx.Out(ctx, dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 }
 
-// localDefault is the default branch as a local name ("main"), read from
-// what origin points HEAD at. Without it finish cannot tell a stacked PR
-// from one against main, nor what to pull.
+// localDefault is the default branch as a local name. Without it finish
+// cannot tell a stacked PR from one against main, nor what to pull.
 func localDefault(ctx context.Context, dir string) (string, error) {
 	def := defaultBranch(ctx, dir)
 	if def == "" {

@@ -13,8 +13,7 @@ const (
 	PeriodWeek           = "week"
 )
 
-// FallbackDays is how far back a run with no stored standup looks for the
-// last working day with activity.
+// FallbackDays is how far back a run with no stored standup looks for activity.
 const FallbackDays = 14
 
 // Last is the standup the user last reported: when, and the start it used.
@@ -23,8 +22,7 @@ type Last struct {
 	Since time.Time `json:"since"`
 }
 
-// Workdays is the working weekdays, indexed by time.Weekday. Only a run
-// with no stored standup reads it.
+// Workdays is the working weekdays, indexed by time.Weekday.
 type Workdays [7]bool
 
 // DefaultWorkdays is Monday to Friday.
@@ -37,12 +35,10 @@ func DefaultWorkdays() Workdays {
 	return w
 }
 
-// Resolve picks the period's start: an explicit since, the last week, or
-// the last reported standup. A standup reported earlier today gives its own
-// start again, so a second report the same day is not empty. With nothing
-// stored it returns PeriodLastWorkingDay and a zero time, for the caller to
-// settle with LastWorkingDay once it has the activity. Days are in now's
-// location.
+// Resolve picks the period's start. A standup reported earlier today gives
+// its own start again, so a second report the same day is not empty; with
+// nothing stored it returns PeriodLastWorkingDay and a zero time, for the
+// caller to settle with LastWorkingDay once it has the activity.
 func Resolve(now, since time.Time, week bool, last *Last) (time.Time, string) {
 	switch {
 	case !since.IsZero():
@@ -66,8 +62,8 @@ func FallbackFrom(now time.Time) time.Time {
 }
 
 // LastWorkingDay is local midnight of the latest working day before today
-// with activity at any of the times. With none in the window, it is the
-// previous working day, so a first run never reaches back weeks.
+// with activity; with none in the window, the previous working day, so a
+// first run never reaches back weeks.
 func LastWorkingDay(now time.Time, w Workdays, activity []time.Time) time.Time {
 	active := map[string]bool{}
 	for _, d := range Days(activity, now.Location()) {
@@ -92,9 +88,7 @@ func LastWorkingDay(now time.Time, w Workdays, activity []time.Time) time.Time {
 	return today.AddDate(0, 0, -1)
 }
 
-// ActivityTimes is every time in a report the user did something within
-// its period: commits, PRs opened or merged, force-pushes, reviews and
-// merges of others'.
+// ActivityTimes is every time the user did something in the report's period.
 func ActivityTimes(r Report) []time.Time {
 	return activityTimes(r.Tasks, r.Other, r.Reviewed, r.Since)
 }
@@ -115,19 +109,17 @@ func activityTimes(tasks []Task, other Other, reviewed []ReviewedPR, since time.
 	return out
 }
 
-// A Day is a local date a task had activity on, and the class of that
-// day's activity alone: a task worked on Monday and only caught up with
-// its base on Tuesday is work on one and upkeep on the other.
+// A Day is a local date a task had activity on, with that day's class alone:
+// work on Monday and a base merge on Tuesday is work on one, upkeep on the
+// other.
 type Day struct {
 	Date  string `json:"date"`
 	Class string `json:"class"`
 }
 
-// SetDays fills in the local dates with activity: the report's, across
-// every project, each task's with that day's class, and each reviewed
-// PR's. All three read the same times, so a task's day is always one of
-// the report's. It runs after Merge, so a task merged across repositories
-// gets the days of all of them.
+// SetDays fills in the local dates with activity, report-wide and per task
+// and reviewed PR, from the same times, so a task's day is always one of the
+// report's. It runs after Merge, so a merged task gets every repository's days.
 func SetDays(s *Standup, loc *time.Location) {
 	var all []time.Time
 
@@ -165,7 +157,6 @@ func setTaskDays(t *Task, since time.Time, loc *time.Location) {
 	}
 }
 
-// taskTimes is the times a task's activity happened in the period.
 func taskTimes(t Task, since time.Time) []time.Time {
 	var out []time.Time
 
@@ -210,14 +201,12 @@ func actionTimes(p ReviewedPR, since time.Time) []time.Time {
 	return out
 }
 
-// inWindow reports whether at is set and falls from from until to; a zero
-// to has no end.
+// inWindow reports at within [from, to); a zero to has no end.
 func inWindow(at, from, to time.Time) bool {
 	return !at.IsZero() && !at.Before(from) && (to.IsZero() || at.Before(to))
 }
 
-// Days is the dates, YYYY-MM-DD in loc, that the times fall on: ascending,
-// each once.
+// Days is the dates in loc the times fall on, ascending, each once.
 func Days(times []time.Time, loc *time.Location) []string {
 	out := []string{}
 	for _, t := range times {

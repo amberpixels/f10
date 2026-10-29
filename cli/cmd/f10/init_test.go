@@ -11,7 +11,7 @@ import (
 )
 
 // init writes into a real repo, so these run the real command tree against
-// real repos: what it creates, and the three cases where it creates nothing.
+// real repos.
 
 func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 	isolateEnv(t)
@@ -139,8 +139,6 @@ func TestInitWritesOutOfTreeWithoutTouchingTheRepo(t *testing.T) {
 	}
 }
 
-// runInitIn runs `f10 -C <dir> init` through the real command tree and
-// returns what the command printed.
 func runInitIn(t *testing.T, dir string, flags ...string) (string, error) {
 	t.Helper()
 

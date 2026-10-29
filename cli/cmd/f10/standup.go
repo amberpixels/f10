@@ -20,17 +20,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
-// The standup noun reads what one person did over a period, in this
-// checkout or a set of them: their commits from git, the PRs or MRs they
-// authored, reviewed or merged from the host, grouped by project and task
-// id. It changes nothing, so it does
-// not fetch: remote-tracking refs are read as they are, and the host's PR
-// states are fresh regardless. The user is their git email and their host
-// login, never a name, which two people can share.
-//
-// The period runs since the last standup reported, which `mark` records
-// once a report went out. Reading never records: a script calling --json
-// does not move the next report's start.
+// The standup noun changes nothing, so it does not fetch. The user is their
+// git email and host login, never a name two people can share. Only `mark`
+// moves the period, so a script calling --json does not move the next start.
 func standupCommand() *cli.Command {
 	return &cli.Command{
 		Name: "standup",
@@ -148,10 +140,9 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	return renderStandup(cmd.Writer, rep)
 }
 
-// runStandupMark records a reported standup. It takes the start the report
-// showed rather than working it out again, so the record and the report
-// agree across midnight and across scopes. --at is when the report was
-// read: work done between reading and marking then falls in the next one.
+// runStandupMark takes the start the report showed rather than working it
+// out again, so the record and the report agree across midnight and scopes.
+// --at is when the report was read: work done since falls in the next one.
 func runStandupMark(_ context.Context, cmd *cli.Command) error {
 	since, err := parseSince(cmd.String("since"))
 	if err != nil {
@@ -321,10 +312,9 @@ func hostPRs(pulls []forge.PR) []standup.HostPR {
 	return out
 }
 
-// standupDefault is the default branch as a ref to walk and as a branch
-// name: origin/HEAD, else the host's answer. Without either, commits that
-// landed would read as unfinished work, so it refuses; a checkout with no
-// remote at all has no default anyone else sees, and gets none.
+// standupDefault is the default branch as a ref and a name: origin/HEAD,
+// else the host's answer. Without either, landed commits would read as
+// unfinished work, so it refuses; a checkout with no remote has none.
 func standupDefault(ctx context.Context, src standupSource, remotes []string) (string, string, error) {
 	if r := defaultBranch(ctx, src.dir); r != "" {
 		return r, refBranch(r, remotes, ""), nil
@@ -358,10 +348,9 @@ func standupDefault(ctx context.Context, src standupSource, remotes []string) (s
 // the subject last: it is the only field that can hold anything.
 const logFormat = "--format=%H%x1f%aE%x1f%aI%x1f%P%x1f%S%x1f%s"
 
-// userCommits is the commits on any branch, local or remote-tracking, whose
-// mailmapped author email is the user's. git log --author would match a
-// regex against the name too. --since reads the committer date and only
-// narrows the walk; standup.Group keeps commits by author date.
+// userCommits is the user's commits on any branch, local or remote-tracking,
+// by mailmapped author email: --author would match the name too. --since
+// only narrows the walk by committer date; Group keeps commits by author date.
 func userCommits(
 	ctx context.Context, dir, email string, since time.Time, defRef, def string, remotes []string,
 ) ([]standup.Commit, error) {
@@ -414,10 +403,9 @@ const numstatFormat = "--format=%x1e%H"
 // generatedHeader is Go's marker for a generated file (go help generate).
 const generatedHeader = `^// Code generated .* DO NOT EDIT\.$`
 
-// commitFacts fills in what the upkeep rules read from git: each commit's
-// changed files, which of them are generated, and whether a merge brought
-// in its base. Each fact is one walk or one call for all commits, and a
-// git read that fails leaves the fact unset, which classifies as work.
+// commitFacts fills in what the upkeep rules read from git, one walk or
+// call for all commits; a read that fails leaves the fact unset, which
+// classifies as work.
 func commitFacts(
 	ctx context.Context,
 	dir string,
@@ -566,10 +554,8 @@ func baseRefs(ctx context.Context, dir, base, defRef, def string) []string {
 	return refs
 }
 
-// onFirstParentLine reports whether commit is on base's first-parent line:
-// the walk from base that stops at commit's ancestors ends on a commit
-// whose first parent is commit, or base is commit. Plain ancestry would
-// also count a feature branch that has since landed.
+// onFirstParentLine reports whether commit is on base's first-parent line.
+// Plain ancestry would also count a feature branch that has since landed.
 func onFirstParentLine(ctx context.Context, dir, base, commit string) bool {
 	out, err := gitx.Exec(ctx, dir, "rev-list", "--first-parent", "--parents", base, "--not", commit)
 	if err != nil {
@@ -590,10 +576,9 @@ func onFirstParentLine(ctx context.Context, dir, base, commit string) bool {
 // commit and how they compare (= same patch, ! changed, < dropped, > added).
 var rangeDiffPair = regexp.MustCompile(`^\s*(?:\d+|-):\s+\S+\s+([=!<>])\s+(?:\d+|-):`)
 
-// samePatches compares the commits a force-push replaced with the ones it
-// pushed, each taken against base: true when every commit kept its patch.
-// nil when git cannot tell, typically because the old commits were never
-// fetched here.
+// samePatches is true when every commit a force-push replaced kept its patch
+// against base, nil when git cannot tell, typically because the old commits
+// were never fetched here.
 func samePatches(ctx context.Context, dir, base, before, after string) *bool {
 	if before == "" || after == "" {
 		return nil
@@ -668,10 +653,8 @@ func recordedBases(ctx context.Context, main string) map[string]string {
 	return out
 }
 
-// renderStandup is the report for a terminal: per project, one line per
-// task, the upkeep-only tasks on one line, then the activity with no task
-// and the reviews. One project prints with no heading. --json is the
-// contract; this is a glance at it.
+// renderStandup is the report for a terminal. --json is the contract; this
+// is a glance at it.
 func renderStandup(w io.Writer, s standup.Standup) error {
 	var b strings.Builder
 

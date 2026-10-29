@@ -18,16 +18,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 )
 
-// The host's side of `f10 review`: find the reviews a declared reviewer left
-// on a branch's pull or merge request, in whichever of the three places the
-// project said they arrive, tell whether each is done and whether it was
-// handled or settled, and leave either marker. Both CLIs are asked for JSON and
-// read into one shape per object, as host.go and merge.go do, so the review
-// noun decides on facts and never on a CLI's spelling of them.
+// The host's side of `f10 review`: the reviews a declared reviewer left on a
+// branch's request, in whichever of the three places the project said they
+// arrive.
 
-// A remoteReview is one review as it sits on the host, normalized across
-// the three arrival kinds and both CLIs. The exported fields are the --json
-// output; the rest is what ack needs to find its way back.
+// A remoteReview is one review normalized across the three arrival kinds and
+// both CLIs; the exported fields are the --json output, the rest is for ack.
 type remoteReview struct {
 	ID        string    `json:"id"`
 	Kind      string    `json:"kind"`
@@ -47,9 +43,8 @@ type remoteReview struct {
 	Triggerable bool   `json:"triggerable"`
 	Revision    string `json:"revision"`
 
-	// stored is the text as the host keeps it on the object ack edits. Body
-	// differs for an inline review, which folds its comments in for the
-	// reader; writing that back would copy every comment into the summary.
+	// stored is the host's text on the object ack edits: Body folds an inline
+	// review's comments in, and writing that back would copy them into the summary
 	stored string
 
 	threads    []string // inline review: the threads a `thread resolved` ack resolves
@@ -81,8 +76,8 @@ type pullCommit struct {
 	At  time.Time
 }
 
-// shaBefore is the last commit made before t: the head a reviewer saw when
-// it posted a comment at t. The head sha when no commit precedes it.
+// shaBefore is the head a reviewer saw when it posted at t; the head sha when
+// no commit precedes it.
 func (p reviewPull) shaBefore(t time.Time) string {
 	sha := p.HeadSHA
 
@@ -99,8 +94,6 @@ func (p reviewPull) shaBefore(t time.Time) string {
 // or none left unhandled. wait keeps polling on it and nothing else.
 var errNoReview = errors.New("no review")
 
-// reviewer binds a host to the four declared facts, the request and the
-// lazily fetched identities ack and the handled check need.
 type reviewer struct {
 	h     host
 	facts facts.Review
@@ -207,9 +200,8 @@ func (rv *reviewer) mrPath(tail string) string {
 	return "projects/:fullpath/merge_requests/" + rv.pull.Number + "/" + tail
 }
 
-// isReviewer is login matching the declared reviewer. GitLab names a bot
-// by its username alone, with no suffix anyone could forge or omit, so a
-// declared `[bot]` is dropped there; on GitHub sameLogin's rule stands.
+// isReviewer drops a declared `[bot]` on GitLab, which names a bot by username
+// alone with no suffix anyone could forge; on GitHub SameLogin's rule stands.
 func (rv *reviewer) isReviewer(login string) bool {
 	declared := rv.facts.Reviewer
 	if rv.h.GLab() {
@@ -219,10 +211,9 @@ func (rv *reviewer) isReviewer(login string) bool {
 	return forge.SameLogin(declared, login)
 }
 
-// candidates lists every review the reviewer left, newest update first,
-// done, handled and settled already judged. A settled review counts as
-// handled: a settled marker appended to the text is an edit, which would
-// otherwise make the handled reaction before it read as stale.
+// candidates lists every review, newest update first. A settled one counts as
+// handled: the settled marker is an edit, which would otherwise make the
+// earlier handled reaction read as stale.
 func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 	var (
 		found []remoteReview
@@ -268,9 +259,8 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 	return found, nil
 }
 
-// stale is commits landing on the request after the review saw it. An issue
-// comment is judged at its last edit: a sticky comment rewritten by a
-// re-review keeps the sha of its first post but reviewed the newer head.
+// stale judges an issue comment at its last edit: a sticky comment rewritten
+// by a re-review keeps its first post's sha but reviewed the newer head.
 func (rv *reviewer) stale(r remoteReview) bool {
 	sha := r.SHA
 	if r.Kind == facts.ArrivesComment {
@@ -300,8 +290,7 @@ func (rv *reviewer) pick(ctx context.Context) (remoteReview, error) {
 		errNoReview, rv.facts.Reviewer, found[0].URL, rv.manualHint())
 }
 
-// latest is the newest review the reviewer left, whatever its state: the
-// one resolve reads, settled or not.
+// latest is the newest review whatever its state: the one resolve reads.
 func (rv *reviewer) latest(ctx context.Context) (remoteReview, error) {
 	found, err := rv.candidates(ctx)
 	if err != nil {
@@ -316,9 +305,8 @@ func (rv *reviewer) latest(ctx context.Context) (remoteReview, error) {
 	return found[0], nil
 }
 
-// ackTarget is the review ack marks: the one id names, else the one pick
-// returns, or with every review handled the newest, which ack confirms
-// rather than marks twice.
+// ackTarget is the review id names, else pick's, else with every review
+// handled the newest, which ack confirms rather than marks twice.
 func (rv *reviewer) ackTarget(ctx context.Context, id string) (remoteReview, error) {
 	found, err := rv.candidates(ctx)
 	if err != nil {
@@ -348,9 +336,9 @@ func (rv *reviewer) ackTarget(ctx context.Context, id string) (remoteReview, err
 	return found[0], nil
 }
 
-// revision fingerprints what the reviewer wrote, without the marks f10
-// leaves: a sticky comment rewritten by a re-review keeps its id and the
-// sha of its first post, so its text is what tells the new review apart.
+// revision fingerprints the text without f10's marks: a sticky comment
+// rewritten by a re-review keeps its id and first sha, so only its text tells
+// the new review apart.
 func (rv *reviewer) revision(r remoteReview) string {
 	body := checkboxRE.ReplaceAllStringFunc(r.Body, func(box string) string {
 		return strings.NewReplacer("[x]", "[ ]", "[X]", "[ ]").Replace(box)
@@ -372,9 +360,8 @@ func (rv *reviewer) revision(r remoteReview) string {
 	return hex.EncodeToString(sum[:6])
 }
 
-// settleTarget is the review settle marks: the one with id, still at the
-// revision it was read at. A review now at another revision was rewritten
-// by a re-review, and marking it would settle findings nobody read.
+// settleTarget refuses a review now at another revision: a re-review rewrote
+// it, and marking it would settle findings nobody read.
 func (rv *reviewer) settleTarget(ctx context.Context, id, revision string) (remoteReview, error) {
 	found, err := rv.candidates(ctx)
 	if err != nil {
@@ -403,8 +390,8 @@ func (rv *reviewer) settleTarget(ctx context.Context, id, revision string) (remo
 		errNoReview, id, rv.facts.Reviewer, rv.pull.URL)
 }
 
-// firstUnhandled is the newest of found that nobody handled. pick returns
-// it and ack marks it, so the two verbs always name the same review.
+// firstUnhandled serves pick and ack, so the two verbs always name the same
+// review.
 func firstUnhandled(found []remoteReview) (remoteReview, bool) {
 	for _, r := range found {
 		if !r.Handled {
@@ -415,8 +402,6 @@ func firstUnhandled(found []remoteReview) (remoteReview, bool) {
 	return remoteReview{}, false
 }
 
-// manualHint names the manual trigger and who performs it: `f10 review
-// trigger` when the how reads as a comment or a review request, else a human.
 func (rv *reviewer) manualHint() string {
 	if !strings.Contains(rv.facts.Trigger, facts.TriggerManual) {
 		return ""
@@ -439,9 +424,8 @@ func (rv *reviewer) manualHint() string {
 	return "; the trigger is manual (" + how + ") and " + who
 }
 
-// trigger performs the declared manual trigger: posts the comment, or
-// requests the review. It returns what it did, where, and when the host
-// says it happened, the time a new review must postdate.
+// trigger returns what it did, where, and the host's time for it, which a new
+// review must postdate.
 func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, error) {
 	if !strings.Contains(rv.facts.Trigger, facts.TriggerManual) {
 		return "", "", time.Time{}, errors.New("the Review section's Trigger is automatic only: " +
@@ -479,8 +463,8 @@ func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, err
 	return "commented " + text, url, cmp.Or(posted.CreatedAt, time.Now().UTC()), nil
 }
 
-// requestReview asks login for a review. Neither host dates the request,
-// so the local clock stands in: a human's review comes long after.
+// requestReview: neither host dates the request, so the local clock stands
+// in; a human's review comes long after.
 func (rv *reviewer) requestReview(ctx context.Context, login string) (string, string, time.Time, error) {
 	at := time.Now().UTC().Truncate(time.Second)
 
@@ -499,7 +483,6 @@ func (rv *reviewer) requestReview(ctx context.Context, login string) (string, st
 	return "requested a review from " + login, rv.pull.URL, at, nil
 }
 
-// isDone applies the declared done signal to a review.
 func (rv *reviewer) isDone(r remoteReview) bool {
 	switch rv.facts.Done {
 	case facts.DoneMarker:
@@ -515,9 +498,9 @@ func (rv *reviewer) isDone(r remoteReview) bool {
 
 var checkboxRE = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ xX])\]`)
 
-// isHandled applies the declared handled marker. A reaction counts only
-// when it is newer than the review's last edit: a sticky comment keeps its
-// id across re-reviews, so round one's reaction must not handle round two.
+// isHandled counts a reaction only when newer than the review's last edit: a
+// sticky comment keeps its id across re-reviews, so round one's reaction must
+// not handle round two.
 func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error) {
 	switch rv.facts.Handled {
 	case facts.HandledReaction:
@@ -535,8 +518,7 @@ func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error)
 	}
 }
 
-// isSettled applies the declared settled mark, read as isHandled reads the
-// same kinds. None declared, or a check run, is never settled on the host.
+// isSettled: none declared, or a check run, is never settled on the host.
 func (rv *reviewer) isSettled(ctx context.Context, r remoteReview) (bool, error) {
 	if r.Kind == facts.ArrivesCheck {
 		return false, nil
@@ -573,8 +555,8 @@ func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview, emoji 
 	return fresh[emoji], nil
 }
 
-// freshReactions is the set of emoji the viewer left on r after its last
-// edit, read once so the handled and settled checks share one call.
+// freshReactions is read once so the handled and settled checks share one
+// call.
 func (rv *reviewer) freshReactions(ctx context.Context, r remoteReview) (map[string]bool, error) {
 	viewer, err := rv.viewerLogin(ctx)
 	if err != nil {
@@ -612,7 +594,6 @@ func (rv *reviewer) freshReactions(ctx context.Context, r remoteReview) (map[str
 	return fresh, nil
 }
 
-// reactionPath is where a review's reactions live, per kind and CLI.
 func (rv *reviewer) reactionPath(r remoteReview) (string, bool) {
 	id := r.ID
 	if r.Kind == facts.ArrivesInline {
@@ -650,8 +631,7 @@ func (rv *reviewer) viewerLogin(ctx context.Context) (string, error) {
 	return rv.viewer, nil
 }
 
-// ack leaves the declared handled marker on r. Already handled is confirmed
-// and nothing is posted twice.
+// ack confirms an already handled review rather than posting twice.
 func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 	if r.Handled {
 		return "already handled", nil
@@ -684,8 +664,8 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 	}
 }
 
-// settle leaves the declared settled mark on r: resolve's word that every
-// finding in it has a verdict. Already settled is confirmed, as ack confirms.
+// settle leaves the declared settled mark: resolve's word that every finding
+// has a verdict.
 func (rv *reviewer) settle(ctx context.Context, r remoteReview) (string, error) {
 	if r.Settled {
 		return "already settled", nil
@@ -726,9 +706,6 @@ func (rv *reviewer) react(ctx context.Context, r remoteReview, emoji string) (st
 	return "reaction " + emoji, nil
 }
 
-// patchBody rewrites the review's text with the marker in it. An issue
-// comment and a glab note are edited in place; a gh inline review is edited
-// through the pull's reviews endpoint.
 func (rv *reviewer) patchBody(ctx context.Context, r remoteReview, body, what string) (string, error) {
 	var args []string
 
@@ -796,7 +773,6 @@ func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string,
 	return fmt.Sprintf("%d thread(s) resolved", len(r.threads)), nil
 }
 
-// comments lists the request's issue-level comments by the reviewer.
 func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 	type note struct {
 		ID        int64     `json:"id"`
@@ -851,8 +827,6 @@ func (rv *reviewer) comments(ctx context.Context) ([]remoteReview, error) {
 	return found, nil
 }
 
-// inlineReviews lists the reviewer's submitted reviews with their inline
-// comments folded into the body as `path:line` blocks.
 func (rv *reviewer) inlineReviews(ctx context.Context) ([]remoteReview, error) {
 	if rv.h.GLab() {
 		return rv.discussions(ctx)
@@ -954,9 +928,6 @@ func (rv *reviewer) foldReviewComments(ctx context.Context, review *remoteReview
 	return nil
 }
 
-// threadsOf is the node ids of the review's threads, with their resolved
-// state read later by threadsResolved. GraphQL is the only place GitHub
-// exposes a thread.
 func (rv *reviewer) threadsOf(ctx context.Context, reviewID string) ([]string, error) {
 	threads, err := rv.reviewThreads(ctx)
 	if err != nil {
@@ -1057,9 +1028,8 @@ func (rv *reviewer) loadRepo(ctx context.Context) error {
 	return nil
 }
 
-// threadsResolved is true when the review opened threads and every one is
-// resolved. glab discussions carry the flag themselves; gh threads are
-// re-read, since the ids were gathered without their state.
+// threadsResolved re-reads gh threads, whose ids were gathered without their
+// state; glab discussions carry the flag themselves.
 func (rv *reviewer) threadsResolved(ctx context.Context, r remoteReview) (bool, error) {
 	if r.Kind != facts.ArrivesInline || len(r.threads) == 0 {
 		return false, nil
@@ -1083,10 +1053,9 @@ func (rv *reviewer) threadsResolved(ctx context.Context, r remoteReview) (bool, 
 	return true, nil
 }
 
-// discussions is GitLab's inline review: the reviewer's resolvable
-// discussions, folded into one review value whose threads are the
-// discussion ids. GitLab has no review object grouping them, so "the latest
-// review" is the set of discussions still open.
+// discussions folds the reviewer's resolvable discussions into one review:
+// GitLab has no review object grouping them, so "the latest review" is the
+// set still open.
 func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
 	type discussion struct {
 		ID    string `json:"id"`
@@ -1167,8 +1136,6 @@ func (rv *reviewer) discussions(ctx context.Context) ([]remoteReview, error) {
 	return []remoteReview{review}, nil
 }
 
-// checkRuns lists the check run (gh) or pipeline job (glab) named as the
-// reviewer, on the request's head.
 func (rv *reviewer) checkRuns(ctx context.Context) ([]remoteReview, error) {
 	if rv.h.GLab() {
 		return rv.pipelineJobs(ctx)

@@ -13,9 +13,7 @@ import (
 )
 
 // The host's side of `f10 finish`: read a branch's pull or merge request,
-// merge it, delete its remote branch. Both CLIs are asked for JSON and read
-// into one shape, as host.go does for issues, so finish decides on
-// open / merged and never on a CLI's spelling of them.
+// merge it, delete its remote branch.
 
 // pull is the union of the two CLIs' request shapes, tagged for both.
 type pull struct {
@@ -49,9 +47,7 @@ type pull struct {
 	} `json:"mergeCommit"`
 }
 
-// The two states finish acts on; anything else is a refusal that quotes
-// the state. gh spells them OPEN / MERGED / CLOSED, glab opened / merged /
-// closed / locked.
+// The two states finish acts on; any other is a refusal quoting the state.
 const (
 	pullOpen   = forge.Open
 	pullMerged = forge.Merged
@@ -77,9 +73,8 @@ func (p pull) fork() bool {
 
 func (p pull) status() string { return forge.Status(p.State) }
 
-// noSuchPull reports whether the host answered that there is no such
-// request, by number or for a branch, as opposed to failing to answer at
-// all. Every phrase either CLI uses for it lives here.
+// noSuchPull tells "no such request" from a host that failed to answer at
+// all; every phrase either CLI uses for it lives here.
 func noSuchPull(err error) bool {
 	if err == nil {
 		return false
@@ -101,9 +96,8 @@ func noSuchPull(err error) bool {
 	return false
 }
 
-// pull reads the request whose head is branch. No request is the host's
-// error, verbatim: finish has nothing to merge and says why in gh's or
-// glab's words.
+// pull passes a missing request through as the host's own error, so finish
+// says why in gh's or glab's words.
 func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	var p pull
 
@@ -121,7 +115,6 @@ func (h host) pull(ctx context.Context, branch string) (pull, error) {
 	return p, err
 }
 
-// pullBody reads the description of the request whose head is branch.
 func (h host) pullBody(ctx context.Context, branch string) (string, error) {
 	var p pull
 
@@ -133,7 +126,6 @@ func (h host) pullBody(ctx context.Context, branch string) (string, error) {
 	return p.body(), err
 }
 
-// editPullBody replaces the description of the request whose head is branch.
 func (h host) editPullBody(ctx context.Context, branch, body string) error {
 	if h.GLab() {
 		_, err := h.Run(ctx, "mr", "update", branch, "--description", body)
@@ -163,9 +155,6 @@ func (h host) editPullBody(ctx context.Context, branch, body string) error {
 	return err
 }
 
-// pullNumber reads the request numbered number, with what start needs to
-// pick it up: its head branch, where that lives, and the text a task id
-// is read from.
 func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 	var p pull
 
@@ -177,14 +166,11 @@ func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 	return p, err
 }
 
-// mergePull merges the request with method and reads it back, since the
-// merge commit exists only afterwards. Never --admin: a host that refuses
-// has a reason, and it is the error. glab's auto-merge is turned off so a
-// running pipeline makes it refuse rather than queue and report success.
-// A body replaces the commit's default body: gh keeps its subject, glab
-// takes the whole squash message, so the request's title goes on top. A
-// glab merge commit never gets one: its method is "" and the project fixes
-// its message.
+// mergePull reads the request back, since the merge commit exists only after.
+// Never --admin: a refusing host has a reason. glab's auto-merge is off so a
+// running pipeline refuses rather than queues; glab's squash message replaces
+// the whole commit message, so the title goes on top, and a merge commit
+// (method "") takes none, since the project fixes its message.
 func (h host) mergePull(ctx context.Context, p pull, branch, method, body string) (pull, error) {
 	args := h.Pick(
 		[]string{"pr", "merge", branch},
@@ -210,8 +196,8 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 	return h.pull(ctx, branch)
 }
 
-// stackedPulls reads the open requests whose base is branch, past both
-// CLIs' default page of 30: one left out would be closed by the delete.
+// stackedPulls pages past both CLIs' default 30: a request left out would be
+// closed by the delete.
 func (h host) stackedPulls(ctx context.Context, branch string) ([]pull, error) {
 	var ps []pull
 
@@ -225,8 +211,8 @@ func (h host) stackedPulls(ctx context.Context, branch string) ([]pull, error) {
 	return ps, err
 }
 
-// retargetPull moves the request p onto base. It goes by number, since a
-// stacked request's head is another task's branch.
+// retargetPull goes by number: a stacked request's head is another task's
+// branch.
 func (h host) retargetPull(ctx context.Context, p pull, base string) error {
 	_, err := h.Run(ctx, h.Pick(
 		[]string{"pr", "edit", p.id(), "--base", base},
@@ -236,13 +222,10 @@ func (h host) retargetPull(ctx context.Context, p pull, base string) error {
 	return err
 }
 
-// deleteRemoteBranch deletes branch on origin through the host's API, the
-// same call `gh pr merge --delete-branch` makes. That flag is not used
-// because it also deletes the local branch, which git refuses while a
-// worktree has it checked out, and gh then exits non-zero after the merge
-// landed. Unlike the host's own delete on merge, this one closes every
-// request still based on branch, so callers retarget them first. GitHub
-// takes the ref's slashes as path segments, GitLab wants the name as one.
+// deleteRemoteBranch goes through the API rather than `--delete-branch`, which
+// also deletes the local branch, refused while a worktree holds it, so gh
+// exits non-zero after the merge landed. Unlike the host's delete on merge
+// this closes every request based on branch, so callers retarget them first.
 func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 	segments := strings.Split(branch, "/")
 	for i, s := range segments {
@@ -257,12 +240,9 @@ func (h host) deleteRemoteBranch(ctx context.Context, branch string) error {
 	return err
 }
 
-// mergeMethod is the flag the host CLI takes for this repo's merge: the
-// method project.md declares, else the one the repo allows. GitLab fixes
-// the strategy per project and leaves only squash to the request, so the
-// project's squash option decides and "" means a plain merge. A GitHub repo
-// allowing several gets squash with a note, since a default that rewrites
-// history is not taken in silence.
+// mergeMethod reads the project's squash option on GitLab, which fixes the
+// strategy per project ("" is a plain merge); a GitHub repo allowing several
+// gets squash with a note, since a history-rewriting default is not silent.
 func (h host) mergeMethod(ctx context.Context, declared string) (string, string, error) {
 	if declared != "" {
 		method := strings.ToLower(declared)

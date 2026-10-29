@@ -15,10 +15,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
-// The task's write verbs past create: a comment, and an update of its
-// properties. Each goes to the driver, else to the host's issues; a tracker
-// that is neither answers exit 3, which a ship run reads as "report the
-// shipment locally only".
+// The task's write verbs go to the driver, else to the host's issues; a
+// tracker that is neither answers exit 3, which a ship run reads as "report
+// the shipment locally only".
 
 // exitNoWrite is comment's and update's "this tracker takes no such write
 // here": the driver declines it and the tracker has no host-issues fallback.
@@ -28,15 +27,11 @@ const exitNoWrite = 3
 // before failing, so posting again could post it twice.
 const mayPosted = "the comment may have been posted: check the task before running comment again"
 
-// props are the task properties create and update both carry: only the
-// ones the caller set, priority in its canonical form.
 type props struct {
 	status, priority, assignee string
 	labels, set                []string
 }
 
-// readProps reads the property flags, refusing a priority outside the
-// contract's vocabulary and a `--set` without a key.
 func readProps(cmd *cli.Command) (props, error) {
 	var p props
 
@@ -79,7 +74,6 @@ func (p props) empty() bool {
 	return p.status == "" && p.priority == "" && p.assignee == "" && p.labels == nil && p.set == nil
 }
 
-// args are the properties as the driver's flags, in a fixed order.
 func (p props) args() []string {
 	var args []string
 
@@ -106,8 +100,6 @@ func (p props) args() []string {
 	return args
 }
 
-// runTaskComment posts markdown on stdin as a comment on the task and
-// prints the comment's url when the tracker gives one. Never retried.
 func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 	t, r, d, err := writeTarget(ctx, cmd, driver.VerbComment)
 	if err != nil {
@@ -172,8 +164,7 @@ func postComment(
 	return url, nil
 }
 
-// runTaskUpdate sets the task's properties. Every value is absolute, so a
-// rerun after a failure sets the same values again.
+// runTaskUpdate takes absolute values, so a rerun after a failure is safe.
 func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	p, err := readProps(cmd)
 	if err != nil {
@@ -241,8 +232,6 @@ func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target, r
 	return t, r, d, nil
 }
 
-// writeHost is the host whose issues take a write the driver did not, or
-// exit 3 for a tracker that is not the host's.
 func writeHost(t *target, d *driver.Driver, verb string) (host, error) {
 	if t.hostIssues() {
 		return t.host()
@@ -257,7 +246,6 @@ func writeHost(t *target, d *driver.Driver, verb string) (host, error) {
 		why, t.eff.TrackerKind), exitNoWrite)
 }
 
-// comment posts body on the issue and returns the url the CLI prints, or "".
 func (h host) comment(ctx context.Context, number, body string) (string, error) {
 	if err := h.mustBeIssue(ctx, number); err != nil {
 		return "", err
@@ -280,12 +268,11 @@ func (h host) comment(ctx context.Context, number, body string) (string, error) 
 	return "", nil
 }
 
-// update sets an issue's properties. An issue has two states and no custom
-// properties, so `--status` takes open or closed only and `--set` is refused.
-// A priority is the label tracker.priority maps the level to, and the labels
-// of every other level come off, so the issue carries one level. An
-// assignee replaces the ones the issue has, as glab's flag does. With
-// tracker.title declared, a title renamed by hand gets its prefix back.
+// update: an issue has two states and no custom properties, so `--status`
+// takes open or closed and `--set` is refused; the labels of every other
+// priority level come off, so the issue carries one; an assignee replaces
+// the issue's, as glab's flag does; a title renamed by hand gets its prefix
+// back.
 func (h host) update(ctx context.Context, number string, p props, priorities map[string]string) error {
 	if len(p.set) > 0 {
 		return fmt.Errorf("%s issues have no custom properties for --set %s", h.Name, strings.Join(p.set, ", "))
@@ -370,7 +357,6 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 	return nil
 }
 
-// editArgs are the issue edit's arguments; an empty title leaves it as is.
 func (h host) editArgs(number, title string, add, remove []string, assignee string, unassign []string) []string {
 	if h.GLab() {
 		args := []string{"issue", "update", number}
@@ -417,9 +403,8 @@ func (h host) editArgs(number, title string, add, remove []string, assignee stri
 	return args
 }
 
-// priorityLabel is the label carrying level, the first in name order when
-// several do; labels are lower-cased in the index and the hosts match them
-// case-insensitively.
+// priorityLabel takes the first label in name order when several carry the
+// level; the index is lower-cased, and the hosts match case-insensitively.
 func priorityLabel(level string, priorities map[string]string) string {
 	var names []string
 
@@ -449,8 +434,6 @@ func (h host) mustBeIssue(ctx context.Context, number string) error {
 	return iss.notPull(number)
 }
 
-// retitled is raw written through tracker.title, or "" when it already is,
-// there is no template, or there is no title to write.
 func (h host) retitled(raw, number string) string {
 	id := h.taskID(number)
 	if raw == "" || h.titles.Applied(raw, id, number) {
@@ -460,11 +443,8 @@ func (h host) retitled(raw, number string) string {
 	return h.titles.Render(id, number, h.titles.Strip(raw, id, number))
 }
 
-// A titleChange is one issue whose title retitle rewrites.
 type titleChange struct{ id, number, from, to string }
 
-// titleChanges are the issues whose titles are not yet written through
-// tracker.title: number alone, or every issue, open and closed, for "".
 func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, error) {
 	var found []issue
 
@@ -503,8 +483,8 @@ func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, e
 // retitlePage is how many issues glab lists a page; gh takes one limit.
 const retitlePage = 100
 
-// allIssues lists every issue, open and closed; gh issue list never
-// includes pull requests, nor glab's merge requests.
+// allIssues: gh issue list never includes pull requests, nor glab's merge
+// requests, so nothing here filters them.
 func (h host) allIssues(ctx context.Context) ([]issue, error) {
 	if !h.GLab() {
 		var all []issue
@@ -531,16 +511,14 @@ func (h host) allIssues(ctx context.Context) ([]issue, error) {
 	}
 }
 
-// setTitle writes one issue's title.
 func (h host) setTitle(ctx context.Context, number, title string) error {
 	_, err := h.Run(ctx, h.editArgs(number, title, nil, nil, "", nil)...)
 
 	return err
 }
 
-// runTaskRetitle writes tracker.title onto the task's title, or with --all
-// onto every issue's, printing each change. A title already written
-// through it is left alone, so a second run changes nothing.
+// runTaskRetitle leaves a title already written through tracker.title alone,
+// so a second run changes nothing.
 func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {

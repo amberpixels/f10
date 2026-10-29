@@ -23,11 +23,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// A target is the project a command answers for: the layout, the
-// probes, and the effective facts. Every noun needs the same three, and -C
-// is the only thing that changes which checkout they describe - Locate
-// already takes a directory, so pointing it elsewhere is the whole
-// of cross-project support.
+// A target is the project a command answers for; -C only changes which
+// checkout it describes, which is the whole of cross-project support.
 type target struct {
 	dir    string
 	lay    *layout.Layout
@@ -48,8 +45,6 @@ func targetFor(ctx context.Context, cmd *cli.Command) (*target, error) {
 	return targetAt(ctx, dir, scoped, cmd.Name)
 }
 
-// targetAt is the target for one directory, for a command that answers for
-// several.
 func targetAt(ctx context.Context, dir string, scoped bool, cmdName string) (*target, error) {
 	lay := layout.Locate(ctx, dir)
 	pb := probe.Run(ctx, lay)
@@ -64,7 +59,6 @@ func targetAt(ctx context.Context, dir string, scoped bool, cmdName string) (*ta
 	return &target{dir: dir, lay: lay, pb: pb, eff: eff, scoped: scoped}, nil
 }
 
-// checkoutFlags is every -C given, trimmed, empty ones dropped.
 func checkoutFlags(cmd *cli.Command) []string {
 	var out []string
 
@@ -77,7 +71,6 @@ func checkoutFlags(cmd *cli.Command) []string {
 	return out
 }
 
-// rootDir turns -C into a directory, the current one without it.
 func rootDir(cmd *cli.Command) (string, bool, error) {
 	sels := checkoutFlags(cmd)
 
@@ -98,9 +91,8 @@ func rootDir(cmd *cli.Command) (string, bool, error) {
 	}
 }
 
-// checkoutDir turns one -C value into a directory. A path needs no lookup
-// and always works; a bare name goes to projects, which is off until the
-// user turns it on.
+// checkoutDir sends a bare name to projects, which is off until the user
+// turns it on; a path needs no lookup.
 func checkoutDir(sel string) (string, error) {
 	if projects.IsName(sel) {
 		return projects.Find(sel)
@@ -123,7 +115,6 @@ func checkoutDir(sel string) (string, error) {
 	return dir, nil
 }
 
-// expandHome expands a leading ~/ to the home directory.
 func expandHome(path string) (string, error) {
 	rest, ok := strings.CutPrefix(path, "~/")
 	if !ok {
@@ -138,10 +129,9 @@ func expandHome(path string) (string, error) {
 	return filepath.Join(home, rest), nil
 }
 
-// reference looks up a task reference for this target. Under -C the cascade
-// collapses instead of stretching: the branch and the session task are
-// answers about *this* checkout and this session, so pointing at another
-// project means saying which task.
+// reference looks up a task for this target. Under -C the cascade collapses:
+// the branch and the session task answer for *this* checkout, so pointing at
+// another project means saying which task.
 func (t *target) reference(ctx context.Context, explicit string) (ref.Ref, error) {
 	if t.scoped && strings.TrimSpace(explicit) == "" {
 		return ref.Ref{}, fmt.Errorf("-C %s needs an explicit task id: the branch and the session task "+
@@ -151,9 +141,8 @@ func (t *target) reference(ctx context.Context, explicit string) (ref.Ref, error
 	return ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir}.Find(ctx, explicit)
 }
 
-// host is the tracker/host CLI probe routing settled on, bound to this
-// checkout, or an error naming the evidence. A wrong guess opens the wrong
-// site, so "unknown" refuses rather than picking.
+// host is the CLI the probe settled on; a wrong guess opens the wrong site,
+// so "unknown" refuses rather than picking.
 func (t *target) host() (host, error) {
 	switch t.pb.CLI.Value {
 	case "gh", "glab":
@@ -168,11 +157,9 @@ func (t *target) host() (host, error) {
 	}
 }
 
-// driverPaths are where a driver may sit, in lookup order: this checkout's
-// own .f10 (or the out-of-tree root), then beside each instruction layer,
-// the last first. A worktree finds main's driver where it finds main's
-// instructions, and one that replaces main's instructions keeps main's
-// driver out too, so the shared storage root is not the first stop.
+// driverPaths, in lookup order: this checkout's own, then beside each
+// instruction layer, last first, so a worktree finds main's driver where it
+// finds main's instructions and one replacing them keeps main's driver out.
 func (t *target) driverPaths() []string {
 	own := filepath.Join(t.lay.CheckoutRoot, ".f10")
 	if t.outOfTree() {
@@ -190,7 +177,6 @@ func (t *target) driverPaths() []string {
 	return paths
 }
 
-// driver is the project's tracker driver, or nil when it has none.
 func (t *target) driver() *driver.Driver {
 	for _, p := range t.driverPaths() {
 		if d := driver.Find(filepath.Dir(p), t.dir); d != nil {
@@ -205,8 +191,8 @@ func (t *target) driver() *driver.Driver {
 	return nil
 }
 
-// verbNeeds says what needs each driver verb that falls back to host
-// issues, for the refusal when a non-host tracker's driver declines it.
+// verbNeeds names what needs each verb, for the refusal when a driver
+// declines it.
 var verbNeeds = map[string]string{
 	driver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
 	driver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
@@ -216,10 +202,9 @@ var verbNeeds = map[string]string{
 	driver.VerbSearch: "`f10 task search` needs",
 }
 
-// issues is the host for the issue fallback, used when no driver answers;
-// declined is the driver verb that exited 3, or "" when none was asked.
-// A project declaring a tracker no host CLI reaches is refused rather than
-// read from host issues, where an unrelated issue or PR shares the number.
+// issues is the host-issues fallback when no driver answers; declined is
+// the verb that exited 3. A tracker no host CLI reaches is refused, since
+// an unrelated issue or PR on the host shares the number.
 func (t *target) issues(declined string) (host, error) {
 	if t.hostIssues() {
 		return t.host()
@@ -241,8 +226,6 @@ func (t *target) issues(declined string) (host, error) {
 		t.eff.TrackerKind, strings.Join(t.driverPaths(), ", "))
 }
 
-// hostIssues reports whether the project's tracker is its host's issues:
-// nothing declared, or GitHub Issues or GitLab work items declared.
 func (t *target) hostIssues() bool {
 	kind := t.eff.TrackerKind
 
@@ -259,15 +242,11 @@ func (t *target) trackerDeclared() bool {
 	return false
 }
 
-// sharedPlansDir is the plans dir every checkout shares: main's .f10/plans
-// with in-repo storage, the out-of-tree root's otherwise, whichever
-// checkout runs the command.
 func (t *target) sharedPlansDir() string {
 	return filepath.Join(t.sharedRoot(), "plans")
 }
 
-// sharedRoot is the storage root every checkout shares: this layout's,
-// or main's .f10 from a worktree keeping its own.
+// sharedRoot is the storage root every checkout shares.
 func (t *target) sharedRoot() string {
 	if t.lay.LegacyStorage && t.lay.MainRoot != "" {
 		return filepath.Join(t.lay.MainRoot, ".f10")
@@ -281,9 +260,7 @@ func (t *target) outOfTree() bool {
 	return len(t.lay.Layers) == 1 && t.lay.Layers[0].Label == "out-of-tree"
 }
 
-// follow performs the side effect a url deserves, or prints it when the
-// caller asked for the address instead. Drivers return addresses; f10 is
-// what acts on them.
+// follow acts on a url: drivers return addresses, f10 is what acts on them.
 func follow(ctx context.Context, w io.Writer, dir, url string, linkOnly bool) error {
 	if linkOnly {
 		_, err := fmt.Fprintln(w, url)
@@ -299,19 +276,14 @@ func follow(ctx context.Context, w io.Writer, dir, url string, linkOnly bool) er
 	return shell.Passthrough(ctx, dir, opener, url)
 }
 
-// isTerminal reports whether w is a terminal, which is the one question
-// that decides how a document is presented.
 func isTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
 
 	return ok && term.IsTerminal(int(f.Fd()))
 }
 
-// writeDoc emits a markdown document the way its reader can use it: a
-// terminal gets $PAGER when one is set, and everything else (a pipe, a
-// redirect, an agent's Bash tool call) gets the markdown raw. No renderer is
-// bundled: glow, bat or an editor compose for free, since a pipe is not a
-// terminal and so receives exactly the markdown those tools want.
+// writeDoc pages markdown on a terminal and writes it raw to a pipe: no
+// renderer is bundled, since glow, bat or an editor compose for free.
 func writeDoc(ctx context.Context, w io.Writer, dir, doc string) error {
 	doc = strings.TrimRight(doc, "\n") + "\n"
 
@@ -325,16 +297,12 @@ func writeDoc(ctx context.Context, w io.Writer, dir, doc string) error {
 	return shell.Pipe(ctx, dir, doc, pager[0], pager[1:]...)
 }
 
-// linkFlag is the same flag on every verb that follows an address: print
-// it instead, for a pipe. It exists so `open` keeps one meaning across the
-// nouns - a plan's address is a path and a task's is a url, and no verb name
-// covers both honestly.
+// linkFlag is the same flag on every verb that follows an address, so `open`
+// keeps one meaning across nouns whose addresses are paths and urls alike.
 func linkFlag() cli.Flag {
 	return &cli.BoolFlag{Name: "link", Usage: "print the address instead of opening it"}
 }
 
-// printFlag is `open` writing what the address shows into the terminal: the
-// item, or the list's first page when no item is named.
 func printFlag() cli.Flag {
 	return &cli.BoolFlag{Name: "print", Usage: "write the item, or with none the list's first page, to stdout"}
 }

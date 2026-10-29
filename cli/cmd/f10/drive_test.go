@@ -55,8 +55,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	fx.f.script("git rev-parse -q --verify HEAD", "head0")
 	fx.f.script("git merge-tree --write-tree --no-messages main0 HEAD", "tree")
 
-	// a test names the chain after the ids, as drive once took it, to run
-	// its machinery on any skill; drive itself derives the chain
+	// a test names the chain after the ids to run the machinery on any
+	// skill; drive itself derives the chain from the flow
 	var chain, rest []string
 
 	for i := 0; i < len(args); i++ {
@@ -259,10 +259,8 @@ func listing(agents ...string) string {
 	return b.String()
 }
 
-// FT-21's acceptance run, with no dependency between the two tasks: both
-// worktrees are created and both agents prompted before either finishes a
-// skill, each moves to ship as its judge ends, and the report has a row
-// per task.
+// FT-21's acceptance run, no dependency between the tasks: both agents are
+// prompted before either finishes a skill, and the report has a row per task.
 func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge", "ship")
 	fx.task("GH-1", taskInfo{body: "first"}, "")
@@ -537,10 +535,9 @@ func (fx *driveFixture) adoptsGH1() {
 	fx.f.script("git status --porcelain", "")
 }
 
-// A ship the catchup guard stopped before pr resumes on a rerun once a
-// catchup settled the branch: the stale stop is not a halt, and ship is
-// prompted again at the entry it stopped on. A failed catchup resumes at the
-// entry it guarded, and a resumed ship that stops again halts.
+// A ship the catchup guard stopped resumes at that entry once a catchup
+// settled the branch, since the stale stop is not a halt; a failed catchup
+// resumes at the entry it guarded, and a resumed ship that stops again halts.
 func TestDriveResumesAShipStopACatchupSettled(t *testing.T) {
 	cases := map[string]struct {
 		status, leaf string
@@ -651,12 +648,9 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 	}
 }
 
-// A ship whose catchup guard conflicted, marking the branch, gets a
-// catchup from the drive and resumes at the entry it stopped on, fresh or
-// on a rerun. A catchup that does not end clean or one that asks stops the
-// task. A second guard conflict is judged by progress: main moved and other
-// files conflict, another catchup; main where it was, or the same files
-// again, a halt naming them.
+// A ship whose catchup guard conflicted gets a catchup from the drive and
+// resumes where it stopped; a second guard conflict is judged by progress,
+// so main moving with other files conflicting catches up again, else a halt.
 func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	landed := "git config --get branch.GH-1." + cfgLanded
 	catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
@@ -880,10 +874,8 @@ func (fx *driveFixture) reportsFor(t *testing.T, id string, at time.Time) {
 	}
 }
 
-// A catchup's turn that ends idle before its report is not done: the drive
-// waits through the grace, and reads the catchup as done only once the
-// signal its report writes is there, dated after the prompt. A signal an
-// earlier catchup left does not count.
+// A catchup idle before its report is not done: only the signal its report
+// writes, dated after the prompt, counts, never one an earlier catchup left.
 func TestDriveWaitsOnACatchupThatHasNotReported(t *testing.T) {
 	landed := "git config --get branch.GH-1." + cfgLanded
 	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
@@ -1639,10 +1631,8 @@ func all(status string, ids ...string) string {
 	return listing(pairs...)
 }
 
-// wave is the fixture for five tasks: GH-12, GH-13 and GH-14
-// after GH-11, GH-15 after GH-13, every worktree already listed so each
-// open reuses one, and finish recorded among the calls and closing the
-// task the way the tracker would.
+// wave is the fixture for five tasks: GH-12, GH-13 and GH-14 after GH-11,
+// GH-15 after GH-13, with finish recorded among the calls.
 func wave(t *testing.T, args ...string) *driveFixture {
 	t.Helper()
 
@@ -1764,10 +1754,9 @@ func TestDriveScopesAStopToItsDependents(t *testing.T) {
 	}
 }
 
-// A dependent started before its base finished is caught up with the
-// default branch before its next skill: finish marks it landed, the drive
-// sends /f10:catchup, and only once the mark is gone and the tree is clean
-// does judge follow. A catchup that leaves the mark halts the task.
+// A dependent started before its base finished is caught up before its next
+// skill, which follows only once the mark is gone and the tree is clean; a
+// catchup that leaves the mark halts the task.
 func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 	for _, clean := range []bool{true, false} {
 		t.Run(fmt.Sprintf("clean=%v", clean), func(t *testing.T) {
@@ -1849,15 +1838,9 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 	}
 }
 
-// A pull request that conflicts with the default branch at finish, as a
-// sibling that merged first leaves it, is caught up before the merge: the
-// branch is marked landed, the agent gets /f10:catchup, and the caught-up
-// branch is pushed once the catchup ends clean (with a lease, since the
-// catchup rebased it), before finish tries it again. A branch still
-// conflicting after that catchup is judged by progress: main moved and
-// other files conflict, catch up again; the catchup left the branch
-// unchanged, main did not move, or the same files conflict again, halt
-// naming them.
+// A pull request conflicting with the default branch at finish, as a sibling
+// that merged first leaves it, is caught up and pushed with a lease before
+// finish tries it again; a second conflict is judged by progress.
 func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 	conflicts := "git merge-tree --write-tree --no-messages "
 	cases := map[string]struct {
@@ -2006,14 +1989,9 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 	}
 }
 
-// A task whose branch is on origin is kept up to date with what its pull
-// request targets: at the boundary before each skill the drive fetches once
-// and marks the branch if the target moved past it (f10-landed for the
-// default branch, f10-base-moved for a base branch no task in the drive
-// owns), the catchup goes out there, never mid-turn, and the caught-up branch
-// is pushed before the next skill runs, unless origin does not hold what the
-// catchup brought in. A branch never pushed, one the target is already in
-// and one already marked are left alone; a fetch that fails skips the check.
+// A pushed branch is kept up to date with its pull request's target at the
+// boundary before each skill, never mid-turn, and pushed before the skill
+// runs unless origin lacks what the catchup brought in.
 func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 	landed := "git config branch.GH-1." + cfgLanded + " main"
 	moved := "git config branch.GH-1." + cfgMoved + " b2"
@@ -2368,9 +2346,8 @@ func (fx *driveFixture) existing() {
 const agentMissing = `{"error":{"code":"agent_not_found","message":"agent target pane:1 not found"}}`
 
 // FT-28's case: an earlier start left a workspace with no agent and a run
-// that still says running. The drive opens no second workspace, starts the
-// agent in the leftover's idle shell, and prompts it: the old run's agent
-// is gone, so its state halts nothing.
+// still saying running. The drive starts the agent in the leftover's shell,
+// and the old run halts nothing, since its agent is gone.
 func TestDriveAdoptsAWorkspaceAnEarlierStartLeft(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.existing()
@@ -2780,10 +2757,8 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 // before finish, which merges it here: clean goes straight to finish, a
 // conflict is marked landed and caught up first.
 func TestDriveFinishesABranchNeverPushed(t *testing.T) {
-	// clean merges at once; unsettled gets a catchup that leaves the mark;
-	// again gets a catchup that ends clean, then conflicts with the same
-	// local main, which origin's copy is behind, so the record and the check
-	// resolve the same commit and the halt names it unmoved
+	// again: the catchup ends clean, then conflicts with the same local main,
+	// which origin's copy is behind, so the halt names it unmoved
 	for _, mode := range []string{"clean", "unsettled", "again"} {
 		t.Run(mode, func(t *testing.T) {
 			clean := mode == "clean"
@@ -2855,10 +2830,8 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 	}
 }
 
-// spikeDrive is the fixture for GH-1 shipped as a spike, its report in the
-// spikes dir beside the shared plans dir once its ship turn ends, and
-// GH-2, when listed, after it; finish closes a task the way the tracker
-// would. The chain is ship alone unless the args name more.
+// spikeDrive is the fixture for GH-1 shipped as a spike, its report already
+// in the spikes dir, and GH-2, when listed, after it.
 func spikeDrive(t *testing.T, args ...string) *driveFixture {
 	t.Helper()
 

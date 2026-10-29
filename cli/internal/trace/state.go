@@ -14,12 +14,10 @@ import (
 // another version reads as no state.
 const StateVersion = 1
 
-// State is the hidden block a PR body carries: where the task stands now,
-// as the last step that ran left it. Task is the lead's id, Riders the
-// rest of a bundle, After the base task's id. Round, Open and Asks are a
-// review's counts: the round, the findings awaiting a verdict, and the
-// questions waiting on a person outside the run's own turn. The JSON key
-// order is the struct's, which is the spec's.
+// State is the hidden block a PR body carries: where the task stands, as the
+// last step left it. Round, Open and Asks are a review's counts (findings
+// awaiting a verdict, questions waiting on a person); the JSON key order is
+// the struct's, which is the spec's.
 type State struct {
 	V      int      `json:"v"`
 	Task   string   `json:"task,omitempty"`
@@ -51,16 +49,13 @@ var (
 	ErrBadAfter = errors.New("trace: a base task id has no whitespace")
 )
 
-// A block is one HTML comment on a line of its own: `<!-- state {...} -->`.
-// The JSON is matched up to the first `}` that a closing marker follows,
-// so a block holds no nested object. Not every match is the state: see
-// stateSpans.
+// blockRe matches up to the first `}` a closing marker follows, so a block
+// holds no nested object; stateSpans says which matches are the state.
 var blockRe = regexp.MustCompile(`<!--[ \t]*state[ \t]+(\{.*?\})[ \t]*-->`)
 
-// ParseState reads the first block a body holds. No block, JSON that does
-// not parse, a version other than StateVersion, or a count below zero is
-// no state, never an error: a body nobody controlled is still read.
-// Unknown keys are ignored.
+// ParseState reads the first block a body holds. Anything unreadable (no
+// block, bad JSON, another version, a count below zero) is no state, never an
+// error: a body nobody controlled is still read.
 func ParseState(body string) (State, bool) {
 	spans := stateSpans(body)
 	if len(spans) == 0 {
@@ -74,8 +69,7 @@ func ParseState(body string) (State, bool) {
 		return State{}, false
 	}
 
-	// a count below zero is a block nobody rendered: RenderState would
-	// refuse it, and carrying it would refuse every rewrite after
+	// carrying a count RenderState refuses would refuse every rewrite after
 	if s.Round < 0 || s.Open < 0 || s.Asks < 0 {
 		return State{}, false
 	}
@@ -83,9 +77,8 @@ func ParseState(body string) (State, bool) {
 	return s, true
 }
 
-// stateSpans is every block in body that is the state and not text: one
-// inside a fenced code block or a backtick span is an example, as the
-// spec's own is, and a PR body quoting the spec must keep it.
+// stateSpans skips blocks inside a fence or a backtick span: those are
+// examples, as the spec's own is, and a PR body quoting the spec must keep it.
 func stateSpans(body string) [][]int {
 	var spans [][]int
 
@@ -98,8 +91,6 @@ func stateSpans(body string) [][]int {
 	return spans
 }
 
-// inCode reports whether offset at sits inside a ``` or ~~~ fence, or
-// after an odd number of backticks on its own line.
 func inCode(body string, at int) bool {
 	lineStart := strings.LastIndexByte(body[:at], '\n') + 1
 
@@ -114,9 +105,8 @@ func inCode(body string, at int) bool {
 	return fenced || strings.Count(body[lineStart:at], "`")%2 == 1
 }
 
-// Merge is the state a rewrite leaves: the update's step, task, riders and
-// after, and each count from the update where it was passed, else from
-// prev. A prev that was no state is the zero value, so nothing carries.
+// Merge is the state a rewrite leaves: the update's fields, and each count
+// from the update where passed, else from prev.
 func Merge(prev State, u Update) State {
 	next := State{
 		V:      StateVersion,
@@ -144,9 +134,8 @@ func Merge(prev State, u Update) State {
 	return next
 }
 
-// RenderState writes the block for s, one line, no trailing newline, with
-// V set to StateVersion. It refuses a value ParseState would not read back
-// the same way, or that would break the comment.
+// RenderState writes the block for s, one line, V forced to StateVersion. It
+// refuses a value ParseState would not read back the same way.
 func RenderState(s State) (string, error) {
 	s.V = StateVersion
 
@@ -182,14 +171,12 @@ func RenderState(s State) (string, error) {
 	return "<!-- state " + strings.TrimSpace(b.String()) + " -->", nil
 }
 
-// badID reports an id with whitespace, or one that would end the comment.
 func badID(id string) bool {
 	return strings.TrimSpace(id) != id || strings.ContainsAny(id, " \t\r\n") || strings.Contains(id, "--")
 }
 
-// PutState writes s into body: the first block is replaced where it is and
-// any later one removed; a body without one gets the block appended after
-// a blank line. Nothing else in the body changes.
+// PutState replaces the first block in place and removes any later one, else
+// appends after a blank line; nothing else in the body changes.
 func PutState(body string, s State) (string, error) {
 	block, err := RenderState(s)
 	if err != nil {
@@ -199,11 +186,9 @@ func PutState(body string, s State) (string, error) {
 	return putBlock(body, block), nil
 }
 
-// CarryState copies the block from holds into body as it is, bytes and
-// all, where PutState would put a new one; a from without a block leaves
-// body as it was. It is what a body rewritten from scratch with traces
-// off does with the block the old body held: no block is written, and
-// the one already there is not dropped.
+// CarryState copies from's block into body byte for byte, where PutState
+// would put one, so a body rewritten from scratch with traces off keeps the
+// old block unrewritten.
 func CarryState(body, from string) string {
 	spans := stateSpans(from)
 	if len(spans) == 0 {
@@ -213,8 +198,6 @@ func CarryState(body, from string) string {
 	return putBlock(body, from[spans[0][0]:spans[0][1]])
 }
 
-// putBlock places one rendered block in body, replacing the first block
-// there, removing any later one, or appending after a blank line.
 func putBlock(body, block string) string {
 	spans := stateSpans(body)
 	if len(spans) == 0 {
@@ -233,17 +216,15 @@ func putBlock(body, block string) string {
 	return body[:spans[0][0]] + block + body[spans[0][1]:]
 }
 
-// Rewrite is PutState of Merge over the state body already holds: what a
-// step does to a PR body.
+// Rewrite is what a step does to a PR body: Merge over what it holds, put back.
 func Rewrite(body string, u Update) (string, error) {
 	prev, _ := ParseState(body)
 
 	return PutState(body, Merge(prev, u))
 }
 
-// StripState removes every block from body, each with the line it had to
-// itself and the blank line above it, for a commit message built from a
-// PR body: the block describes the PR, not the commit.
+// StripState removes every block, for a commit message built from a PR body:
+// the block describes the PR, not the commit.
 func StripState(body string) string {
 	for _, span := range slices.Backward(stateSpans(body)) {
 		body = removeSpan(body, span[0], span[1])

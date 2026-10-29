@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-// storageWith links one testdata driver into a temp storage root, which is
-// where Find looks. The fixtures live in testdata because a driver is an
-// executable, and the exec bit is the thing being tested.
+// storageWith links one testdata driver into a temp storage root; the
+// fixtures are files, not strings, because the exec bit is what Find tests.
 func storageWith(t *testing.T, fixture string) string {
 	t.Helper()
 
@@ -79,9 +78,8 @@ func TestRunBranch(t *testing.T) {
 	}
 }
 
-// The reserved code is a normal answer, not a failure: a driver may
-// implement read without search, and the caller falls back rather than
-// erroring out.
+// The reserved code is a normal answer, not a failure: a driver may offer
+// read without search.
 func TestRunUnsupportedVerb(t *testing.T) {
 	root := storageWith(t, "ok-driver")
 

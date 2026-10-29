@@ -1,8 +1,7 @@
 // Command f10eval runs f10's prompt scenarios against the real model and
-// checks what each run leaves behind: the plan file, verify, commits,
-// findings, verdicts, lore. It costs model spend, so it runs on demand and
-// before a release (`just eval`), never in CI. Each scenario writes a report
-// under evals/reports/<version>/, kept in git so releases compare by diff.
+// checks what each run leaves behind. It costs model spend, so it runs on
+// demand and before a release (`just eval`), never in CI; its reports under
+// evals/reports/<version>/ are kept in git so releases compare by diff.
 package main
 
 import (
@@ -21,8 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 )
 
-// A Scenario is one evals/scenarios/<name>/scenario.json: a fixture repo
-// under repo/, the prompt the run gets, and the checks it must pass.
+// A Scenario is one evals/scenarios/<name>/scenario.json.
 type Scenario struct {
 	Name        string   `json:"-"`
 	Description string   `json:"description"`
@@ -37,15 +35,14 @@ type Scenario struct {
 	f10 string   // this checkout's bin/f10, the binary the run itself used
 }
 
-// An Accept is a command run in the repo after the run and the stdout it
-// must print. It lives in scenario.json, outside the fixture, so the run
-// never sees what it is checked against.
+// An Accept lives in scenario.json, outside the fixture, so the run never
+// sees what it is checked against.
 type Accept struct {
 	Run  string `json:"run"`
 	Want string `json:"want"`
 }
 
-// A Report is one scenario's run.
+// A Report is one scenario's run, as written under evals/reports.
 type Report struct {
 	Scenario   string    `json:"scenario"`
 	Agent      string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
@@ -189,10 +186,9 @@ func loadScenarios(dir, only string) ([]Scenario, error) {
 	return list, nil
 }
 
-// runScenario copies the fixture into a temp dir and runs the prompt there.
-// f10's ledger, run state, asks and daemon dirs all point inside that dir,
-// so the nested run never reaches the user's own; the repo has no origin,
-// so nothing can be pushed.
+// runScenario points f10's ledger, run state, asks and daemon dirs inside
+// the temp dir, so the nested run never reaches the user's own; the repo
+// has no origin, so nothing can be pushed.
 func runScenario(ctx context.Context, root string, s Scenario, o options, p agentctl.Profile) Report {
 	rep := Report{Scenario: s.Name, Agent: p.Short(), At: time.Now().UTC()}
 
@@ -264,9 +260,8 @@ func runChecks(ctx context.Context, dir string, s Scenario) ([]Check, bool) {
 	return list, pass
 }
 
-// prepare copies the fixture to dir, its f10/ to .f10/ (a .f10/ inside this
-// repo would be excluded with f10's own), and commits it as the one
-// initial commit.
+// prepare renames the fixture's f10/ to .f10/, since a .f10/ inside this
+// repo would be excluded with f10's own.
 func prepare(ctx context.Context, src, dir string) error {
 	if err := os.CopyFS(dir, os.DirFS(src)); err != nil {
 		return err
@@ -292,7 +287,6 @@ func prepare(ctx context.Context, src, dir string) error {
 	return os.WriteFile(filepath.Join(dir, ".git", "info", "exclude"), []byte(".f10/\n"), 0o600)
 }
 
-// git runs git in dir with fixed arguments of this program's own.
 func git(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // fixed git args
 }

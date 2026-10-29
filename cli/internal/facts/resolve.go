@@ -16,12 +16,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
-// Resolution gives every fact the binary acts on one typed value. The
-// frontmatter wins; prose under the old headings is read for one release,
-// with a warning naming the migration; the contract's default fills the
-// rest. A fact both places declare differently is an error, since the
-// binary would follow one and the model, reading the whole file, maybe the
-// other.
+// Frontmatter wins, prose under the old headings is read with a warning, the
+// default fills the rest. Both declaring different values is an error, since
+// the binary would follow one and the model, reading the file, the other.
 
 // A Fact is one typed value and where it came from.
 type Fact struct {
@@ -125,7 +122,7 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 
 	body := func(name string) string { return declared[name].body }
 
-	// visibility and storage: a section's word, as absorb used to read it
+	// visibility and storage: a section's word
 	if e.settle("visibility", fmSource("visibility", fm.Visibility),
 		proseSource("Visibility", proseWord(body("Visibility"), "public", "stealth")),
 		Fact{Key: "visibility", Value: "stealth", Origin: OriginDefault}) == "frontmatter" {
@@ -296,7 +293,6 @@ func (e *Effective) resolveTracker(
 	}
 }
 
-// mapShown is a string map as `key: value` pairs in key order.
 func mapShown(m map[string]string) string {
 	pairs := make([]string, 0, len(m))
 	for _, k := range slices.Sorted(maps.Keys(m)) {
@@ -306,10 +302,9 @@ func mapShown(m map[string]string) string {
 	return strings.Join(pairs, ", ")
 }
 
-// priorityIndex inverts the declared map: each label, lower-cased, to its
-// level. Levels go in vocabulary order and the first level keeps a label, so
-// a label check() reports under two levels still indexes the same way on
-// every run, which config shows even while the error stops other commands.
+// priorityIndex inverts the declared map, each label lower-cased. Levels go
+// in vocabulary order and the first keeps a label, so a label check() reports
+// under two levels still indexes the same way on every run.
 func priorityIndex(declared map[string]Labels) map[string]string {
 	index := map[string]string{}
 
@@ -324,8 +319,7 @@ func priorityIndex(declared map[string]Labels) map[string]string {
 	return index
 }
 
-// priorityShown is the map as config prints it: `urgent: P0; high: P1,
-// priority:high`, levels in vocabulary order, levels with no labels left out.
+// priorityShown is the map as config prints it, levels in vocabulary order.
 func priorityShown(declared map[string]Labels) string {
 	var shown []string
 
@@ -454,9 +448,8 @@ func (e *Effective) resolveReview(
 	}
 }
 
-// The legacy prose readers: what the binary found in each section before
-// the frontmatter existed, read through mdline so markup does not hide a
-// fact. They go when the prose fallback does.
+// The legacy prose readers, through mdline so markup does not hide a fact.
+// They go when the prose fallback does.
 var (
 	mergeMethodRe = regexp.MustCompile(`(?i)\bmerge(?:\s+method)?\s*:\s*(squash|merge|rebase)\b`)
 	catchupRe     = regexp.MustCompile(`(?i)\bcatchup\s*:\s*(merge|rebase|off)\b`)
@@ -583,8 +576,8 @@ func cmpOr(s, fallback string) string {
 	return s
 }
 
-// proseChain tokenizes Drive chain prose the way drive always has: arrows,
-// commas and spaces separate, marks drop.
+// proseChain tokenizes Drive chain prose: arrows, commas and spaces
+// separate, marks drop.
 func proseChain(text string) []string {
 	r := strings.NewReplacer("→", " ", "->", " ", ",", " ")
 

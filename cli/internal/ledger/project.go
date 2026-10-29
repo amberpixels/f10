@@ -52,11 +52,9 @@ func Where(ctx context.Context, dir string) Place {
 	return p
 }
 
-// NormalizeRemote turns a git remote url into a project id, so one repo
-// cloned over ssh and over https is one project: scheme, user and a trailing
-// `.git` dropped, scp-style `host:path` read as `host/path`, the host
-// lowercased. `git@github.com:a/b.git` and `https://github.com/a/b` are both
-// `github.com/a/b`. A local path stays a cleaned path.
+// NormalizeRemote turns a remote url into a project id, so one repo cloned
+// over ssh and over https is one project: scheme, user, port and `.git`
+// dropped, scp-style `host:path` read as `host/path`, the host lowercased.
 func NormalizeRemote(url string) string {
 	url = strings.TrimSpace(url)
 	if url == "" {

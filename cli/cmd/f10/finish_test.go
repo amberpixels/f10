@@ -83,7 +83,6 @@ func newFinishFixture(t *testing.T) *finishFixture {
 	return fx
 }
 
-// workspaces is a listing with main's workspace and, when open, the task's.
 func (fx *finishFixture) workspaces(open bool) string {
 	main := `{"workspace_id":"ws:1","label":"repo","focused":true,"worktree":{"checkout_path":"` + fx.main + `"}}`
 	if !open {
@@ -110,7 +109,6 @@ func (fx *finishFixture) plan(t *testing.T, rel, body string) string {
 	return p
 }
 
-// openPR scripts the host side of a mergeable PR on GitHub.
 func (fx *finishFixture) openPR() {
 	fx.f.script(ghView, prOpen, prMerged)
 	fx.f.script(ghRepo, allowAll)
@@ -127,11 +125,9 @@ func (fx *finishFixture) run(t *testing.T) (string, error) {
 	return out.String(), err
 }
 
-// With traces on, the squash commit's body is the PR's description followed
-// by the task's trailer, so the commit on the default branch still names
-// the task; a rebase passes no body, since the branch commits keep theirs.
-// The PR body's state block says finish before the merge and never reaches
-// the commit.
+// With traces on, the squash body is the PR description plus the task's
+// trailer, so the commit on the default branch still names the task; the
+// state block says finish before the merge and never reaches the commit.
 func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.traces = true
@@ -311,8 +307,7 @@ func TestMergePullGlabSquashMessage(t *testing.T) {
 	}
 }
 
-// The happy path from main's checkout: view, merge, view again, delete the
-// remote branch, pull, confirm, archive, report, remove, delete, close.
+// The happy path from main's checkout.
 func TestFinishMergesAndCleansUp(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
@@ -383,11 +378,9 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 	}
 }
 
-// A branch another task started with --after on this one loses its
-// dependency once this one merged: both keys go, the branch is marked
-// landed with the base task's id so its next ship or catchup brings main
-// in, the note says so, and a dependency on some other branch is left
-// alone.
+// A branch started with --after on this one loses its dependency once this
+// one merged, and is marked landed so its next ship or catchup brings main
+// in; a dependency on some other branch is left alone.
 func TestFinishReleasesDependents(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
@@ -1197,10 +1190,8 @@ func (fx *finishFixture) onMain(t *testing.T, plan string) string {
 }
 
 // A branch checked out in main: no self-close refusal from main's cwd, the
-// merge, the default branch fetched into while main stays on the task's
-// branch, the plan archived within main, the report, then main switched
-// and the local branch deleted, with no worktree removal or workspace
-// close, worktrunk installed too.
+// default branch fetched into, then main switched and the branch deleted; no
+// worktree removed or workspace closed, even with worktrunk installed.
 func TestFinishFromTheMainCheckout(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.has["wt"] = true
@@ -1266,9 +1257,8 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 	}
 }
 
-// A branch named by the project's own shape, the id past a prefix and no
-// config link, is found by the id it carries: merged, its plan archived and
-// the branch deleted, from the main checkout and from a worktree.
+// A branch named by the project's own shape, the id past a prefix with no
+// config link, is found by the id it carries.
 func TestFinishFindsTheIdPastAPrefix(t *testing.T) {
 	const branch = "feat/GH-1-workdays"
 
@@ -1557,9 +1547,8 @@ func TestFinishClosedPRNamesLocal(t *testing.T) {
 	}
 }
 
-// noPull scripts a branch never pushed: the host has no request for it and
-// origin no copy, and main is two commits behind nothing, so the merge is
-// built in memory on main's head.
+// noPull scripts a branch never pushed: no request, no copy on origin, and
+// the merge built in memory on main's head.
 func (fx *finishFixture) noPull() {
 	fx.f.fail(ghView, shell.Result{Code: 1, Stderr: `no pull requests found for branch "GH-1"`})
 	fx.f.script(lsRem, "")
@@ -1572,10 +1561,9 @@ func (fx *finishFixture) noPull() {
 	fx.f.script("git log --reverse --format=%s m0..refs/heads/GH-1", "first\nsecond")
 }
 
-// A branch never pushed, with no PR, is squashed into the local default
-// branch by the declared method: the commit is built on main's head, main
-// fast-forwards to it, dependents are released, and nothing is pushed,
-// pulled or deleted on origin.
+// A branch never pushed is squashed into the local default branch here:
+// built on main's head, main fast-forwarded, nothing pushed, pulled or
+// deleted on origin.
 func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
 	for _, onDefault := range []bool{true, false} {
 		t.Run(fmt.Sprintf("onDefault=%v", onDefault), func(t *testing.T) {
@@ -1813,10 +1801,8 @@ func TestFinishArchivesALegacyWorktreesPlan(t *testing.T) {
 }
 
 // Finish records the branch's size against the base it forked from,
-// lockfiles left out and the markdown share kept: a stacked branch against
-// its base branch while it exists, a PR already merged with a merge commit
-// from that commit's first parent, a branch never pushed against the local
-// default branch. Nothing to measure records nothing.
+// lockfiles left out and the markdown share kept; nothing to measure records
+// nothing.
 func TestFinishRecordsTheBranchSize(t *testing.T) {
 	const (
 		numstat = "10\t2\tcli/stats.go\n5\t1\tdocs/cli.md\n40\t0\tgo.sum\n-\t-\tlogo.png"
@@ -2086,10 +2072,8 @@ func TestFinishMergedOnly(t *testing.T) {
 	}
 }
 
-// lore check runs right before the merge lands: under warn its reasons are
-// a note and the PR merges, under block they are the error and nothing
-// changed. Nothing about to merge runs no check, and a passing check is
-// silent.
+// The lore check runs right before the merge lands: warn notes and merges,
+// block errors with nothing changed; nothing about to merge runs no check.
 func TestFinishLoreGate(t *testing.T) {
 	storeIn := func(fx *finishFixture) *lore.Store {
 		return &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}

@@ -65,12 +65,10 @@ func opens(p Payload) (string, string) {
 	return "", ""
 }
 
-// ends reports whether an event ends an open wait. A prompt ends any wait;
-// a tool finishing, or failing, ends only its own question or dialog, since
-// an async PostToolUse of the turn's last tool can land after Stop opened
-// the turn. Its own is the same tool call where both payloads carry the id,
-// else the same tool. A denied permission runs no tool: the next prompt or
-// turn end closes it.
+// ends reports whether an event ends an open wait: a prompt ends any; a tool
+// finishing or failing ends only its own dialog (same id, else same tool),
+// since the turn's last async PostToolUse can land after Stop opened the
+// turn. A denied permission runs no tool, so the next prompt or Stop ends it.
 func ends(w openWait, p Payload) bool {
 	switch p.Event {
 	case "UserPromptSubmit", "UserPromptExpansion":

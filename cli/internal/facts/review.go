@@ -8,21 +8,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
-// The remote half of the Review section: four facts with a fixed vocabulary,
-// and an optional fifth, the mark a resolved review gets,
-// written as bold items the way Tracker writes its adapters, so f10 init can
-// render them and `f10 review` can act on them. Everything else in the
-// section (the local reviewer's categories, a never-flag list, who answers
-// an ask) stays prose and is never read here.
-//
-//	- **Reviewer** - bot `claude[bot]`
-//	- **Arrives as** - issue comment
-//	- **Trigger** - automatic, on open and on push
-//	- **Done, handled** - posted, reaction `eyes`
-//	- **Settled** - reaction `rocket`
-//
-// A line that fits no vocabulary leaves its fact empty: the binary refuses
-// naming the fact rather than guessing, and config shows the prose as is.
+// The remote half of the Review section, bold items with a fixed vocabulary
+// so init can render them and `f10 review` act on them. A line fitting no
+// vocabulary leaves its fact empty, never guessed; the rest stays prose.
 
 // A Review is the parsed remote-review contract. The zero value means the
 // section declares no remote reviewer, which is the common case.
@@ -189,12 +177,9 @@ const (
 	ManualRequest = "request"
 )
 
-// ManualAction reads the manual how as the kind and its text: a comment
-// posting the first code span (`comment `@claude review“), or a review
-// requested from the span's login. Both need the code span: a request to a
-// word guessed from prose would reach a real account. false when the
-// trigger is not manual or the how reads as neither. Reading it is what
-// lets a flow run post it.
+// ManualAction is the manual how as a kind and its text: a comment posting
+// the first code span, or a review requested from the span's login. Both need
+// the span, since a word guessed from prose could reach a real account.
 func (r Review) ManualAction() (string, string, bool) {
 	if !strings.Contains(r.Trigger, TriggerManual) {
 		return "", "", false
@@ -343,8 +328,7 @@ func parseSettled(value string) (string, string) {
 	return settled, text
 }
 
-// markedText is the code span or quoted string on a line: the emoji's
-// name, the marker's text.
+// markedText is the code span or quoted string on a line.
 func markedText(value string) string {
 	for _, re := range []*regexp.Regexp{codeSpanRE, quotedRE} {
 		if m := re.FindStringSubmatch(value); m != nil {

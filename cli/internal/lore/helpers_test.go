@@ -94,7 +94,7 @@ func at(s string) time.Time {
 	return tm
 }
 
-// add writes e or fails the test.
+// mustAdd writes e or fails the test.
 func (s *Store) mustAdd(t *testing.T, e Entry) string {
 	t.Helper()
 

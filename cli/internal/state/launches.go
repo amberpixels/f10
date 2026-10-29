@@ -24,8 +24,8 @@ type Launch struct {
 	Value string // the task as typed for start, the drive's number for drive
 }
 
-// LaunchesPath is the list of what a session launched, beside its state
-// file, so a bare status in the main checkout can show it.
+// LaunchesPath lists what a session launched, so a bare status in the main
+// checkout can show it.
 func LaunchesPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+launchesExt)
 }

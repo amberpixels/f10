@@ -14,8 +14,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
-// The flow verb lists the declared flows and what selects each, the same
-// list an unknown --flow name fails with.
+// The flow verb lists the declared flows, the same list an unknown --flow
+// name fails with.
 
 // cfgFlow is the flow a started task runs, under `branch.<name>.` beside
 // f10-after, for status and for a rerun of drive.
@@ -32,7 +32,6 @@ func flowCommand() *cli.Command {
 	}
 }
 
-// A flowRow is one declared flow and the commands that run it.
 type flowRow struct {
 	Name     string   `json:"name"`
 	Entries  []string `json:"entries"`
@@ -77,8 +76,6 @@ func flowsView(eff *facts.Effective) flowView {
 	return v
 }
 
-// selectors is what runs a flow: default unasked, local by --local too,
-// any other by name.
 func selectors(name string) []string {
 	switch name {
 	case "default":
@@ -90,8 +87,6 @@ func selectors(name string) []string {
 	}
 }
 
-// writeFlows prints a row per flow, its entries, then what selects it,
-// and drive's finish setting under them.
 func writeFlows(w io.Writer, v flowView) error {
 	width := len("drive_finish")
 	for _, f := range v.Flows {
@@ -132,19 +127,15 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// A shipFlow is the flow a started task ships through: its name, "" for
-// default, and whether it writes a plan file. byArea is no flow named on a
-// project that declares flow_by_area: ship picks the flow from the task's
-// area, so it is told none, plans as that flow says, and nothing is
-// recorded on the branch.
+// A shipFlow is the flow a started task ships through. byArea is no flow
+// named on a project declaring flow_by_area: ship picks the flow from the
+// task's area, so it is told none and nothing is recorded on the branch.
 type shipFlow struct {
 	name     string
 	planless bool
 	byArea   bool
 }
 
-// word is how /f10:ship is told the flow: `local: ` before the id, nothing
-// for default.
 func (f shipFlow) word() string {
 	if f.name == "" {
 		return ""
@@ -153,7 +144,6 @@ func (f shipFlow) word() string {
 	return f.name + ": "
 }
 
-// recorded is the name written on the branch, "" for none.
 func (f shipFlow) recorded() string {
 	switch {
 	case f.byArea:
@@ -165,7 +155,6 @@ func (f shipFlow) recorded() string {
 	}
 }
 
-// label names the flow in a note.
 func (f shipFlow) label() string {
 	if f.byArea {
 		return "flow the task's area picks"
@@ -174,11 +163,8 @@ func (f shipFlow) label() string {
 	return f.recorded()
 }
 
-// plans reports whether start and drive send /f10:plan before ship.
 func (f shipFlow) plans() bool { return !f.planless && !f.byArea }
 
-// flowFlags reads --flow and --local into one name, "" for default:
-// --local is --flow local.
 func flowFlags(cmd *cli.Command) (string, error) {
 	name := strings.ToLower(strings.TrimSpace(cmd.String("flow")))
 
@@ -193,8 +179,6 @@ func flowFlags(cmd *cli.Command) (string, error) {
 	return name, nil
 }
 
-// resolveShipFlow is the named flow as declared; a name project.md does
-// not declare fails with the list f10 flow prints.
 func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
 	if name == "" && len(eff.FlowByArea) > 0 {
 		return shipFlow{byArea: true}, nil
@@ -221,7 +205,6 @@ func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
 	return shipFlow{name: lookup, planless: facts.Planless(flow)}, nil
 }
 
-// flowFlag is the --flow flag start and drive share.
 func flowFlag() cli.Flag {
 	return &cli.StringFlag{
 		Name:  "flow",
@@ -229,9 +212,6 @@ func flowFlag() cli.Flag {
 	}
 }
 
-// completeFlow answers shell completion: the declared flow names after
-// --flow, the default flag and command suggestions otherwise. Outside a
-// project it suggests nothing for --flow.
 func completeFlow(ctx context.Context, cmd *cli.Command) {
 	if !completingFlow(os.Args) {
 		cli.DefaultCompleteWithFlags(ctx, cmd)
@@ -249,8 +229,6 @@ func completeFlow(ctx context.Context, cmd *cli.Command) {
 	}
 }
 
-// completingFlow reports a completion request whose word before the
-// cursor is --flow.
 func completingFlow(args []string) bool {
 	const marker = "--generate-shell-completion"
 

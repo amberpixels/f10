@@ -1,11 +1,7 @@
-// Package forge is the binding to a forge's CLI, gh or glab, and the reads
-// more than one command shares: the pull requests a host lists, their
-// commits, the checks on a commit. Every call to either CLI goes through
-// Host: the spelling each wants is picked in one place, the JSON each
-// returns is read into one shape per noun, and a non-zero exit is the
-// CLI's own stderr, verbatim, since it names the cause better than any
-// paraphrase. The command package wraps Host with the nouns only it acts
-// on (issues, merges, reviews); standup and lookaround read through it.
+// Package forge binds a forge's CLI, gh or glab. Every call goes through
+// Host, so each CLI's spelling is picked in one place and its JSON read into
+// one shape per noun; a non-zero exit is the CLI's own stderr verbatim,
+// since it names the cause better than any paraphrase.
 package forge
 
 import (
@@ -27,10 +23,8 @@ import (
 type Host struct {
 	Name string // "gh" or "glab"
 	Dir  string // the checkout the CLI reads the remote from
-	// Repo names the repository when there is no checkout to read it from:
-	// `owner/repo`, or `host/owner/repo` off the CLI's default host. Set,
-	// every command carries it: a noun command as -R, an api call with its
-	// placeholders filled in.
+	// Repo names the repository when no checkout can: `owner/repo`, or
+	// `host/owner/repo` off the CLI's default host; set, every command carries it.
 	Repo string
 }
 
@@ -100,12 +94,9 @@ func (h Host) Login(ctx context.Context) (string, error) {
 	return login, nil
 }
 
-// named is args with the repository Repo names on them: nothing without
-// one. The CLIs fill `{owner}`, `{repo}` and `:fullpath` from the checkout
-// they run in, so an api call gets them filled here instead, and gh's
-// goes to the repository's host; every other command takes -R, which
-// both CLIs spell the same. glab wants a repository off gitlab.com as a
-// url, and its api calls reach that host through GITLAB_HOST.
+// named puts Repo on args: an api call gets `{owner}`, `{repo}` and
+// `:fullpath` filled here, since the CLIs fill them from a checkout; every
+// other command takes -R. glab wants an off-host repository as a url.
 func (h Host) named(args []string) []string {
 	if h.Repo == "" || len(args) == 0 {
 		return args
@@ -190,11 +181,9 @@ func Status(state string) string {
 	}
 }
 
-// SameLogin matches a declared identity against a login the host returned,
-// case-insensitive. A bare `claude` also matches `claude[bot]`, but a
-// declared `claude[bot]` never matches a bare `claude`: only an app's login
-// can carry the suffix, so dropping it on the host's side would let a user
-// who registered the bare name post as the declared bot.
+// SameLogin matches a declared identity against a host login, case blind. A
+// bare `claude` also matches `claude[bot]`, never the reverse, or a user
+// registering the bare name could post as the declared bot.
 func SameLogin(declared, login string) bool {
 	d, l := strings.ToLower(declared), strings.ToLower(login)
 	if d == "" {

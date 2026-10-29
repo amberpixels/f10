@@ -44,7 +44,6 @@ func shortRunDir(t *testing.T) string {
 	return dir
 }
 
-// syncBuffer is a writer two goroutines share.
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
@@ -64,7 +63,6 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
-// serving starts a daemon of version in dir for the test's life.
 func serving(ctx context.Context, dir, version string) func(context.Context) error {
 	return func(context.Context) error {
 		go func() { _ = (&daemon.Server{Dir: dir, Version: version, Child: scriptChild}).Serve(ctx) }()

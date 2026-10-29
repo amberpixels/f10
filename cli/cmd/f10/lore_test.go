@@ -27,7 +27,7 @@ func runLore(t *testing.T, args ...string) (string, error) {
 	return runLoreAt(t, append([]string{"--root", ".lore"}, args...)...)
 }
 
-// runLoreAt runs the lore noun with args as given, no --root added.
+// runLoreAt adds no --root.
 func runLoreAt(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 
