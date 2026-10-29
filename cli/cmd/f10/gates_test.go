@@ -338,7 +338,7 @@ func TestGatesOutcomes(t *testing.T) {
 		"finish":       "pending",
 	})
 
-	if got := compactGates(gates); got != "PJ proceed · L pending · R - · J rethink" {
+	if got := compactGates(gates); got != "󰊛 PJ proceed · 󰚔 L pending · R - · 󰊛 J rethink" {
 		t.Errorf("compact = %q", got)
 	}
 }
@@ -544,7 +544,7 @@ func TestRenderGates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(out.String(), "review  L … · R pending · J pending") {
+	if !strings.Contains(out.String(), "review  󰚔 L … · R pending · 󰊛 J pending") {
 		t.Errorf("rows lack the gate column:\n%s", out.String())
 	}
 
@@ -656,7 +656,7 @@ func TestGatesTaskJudge(t *testing.T) {
 		task: "FT-1", pipeline: gatePipeline, now: time.Now(),
 		outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "proceed"}},
 	})
-	if got := compactGates(gates); got != "TJ proceed · L pending · R - · J pending" {
+	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L pending · R - · 󰊛 J pending" {
 		t.Errorf("compact = %q", got)
 	}
 }

@@ -1,23 +1,17 @@
 FT-209  2 done · 1 asking · 1 halted · 1 reviewing · 1 not started
-├─ ✓ FT-206        done         finish     #208 merged
+├─ ✓ FT-206        done         finish     󰘭 #208 merged
 │            Show who runs a driven finish
-│       url  https://github.com/a/b/pull/208
-├─ ✓ FT-210        done         finish     #216 merged
+├─ ✓ FT-210        done         finish     󰘭 #216 merged
 │  │         Keep a drive as a record
-│  │    url  https://github.com/a/b/pull/216
-│  └─ · FT-212     reviewing    review     #219
+│  └─ · FT-212     reviewing    review     󰓂 #219
 │     │         Run drives in a per-user daemon
-│     │  gates  PJ proceed
-│     │    url  https://github.com/a/b/pull/219
+│     │  gates  󰊛 PJ proceed
 │     ├─ ✗ FT-213  halted       implement
 │     │            Keep asks in an inbox the user is told about
 │     │      halt  catchup guard: merging FT-212 conflicts in drives/record.go
 │     │      next  /f10:catchup, then /f10:ship FT-213
-│     │       url  https://github.com/a/b/issues/213
 │     └─ ? FT-214  asking       judge
 │                  Let the daemon watch tasks no drive owns
 │             ask  1. Proceed? [yes | no]
-│             url  https://github.com/a/b/issues/214
 └─ · FT-230        not started
              An unrelated task
-        url  https://github.com/a/b/issues/230
