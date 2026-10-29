@@ -35,8 +35,7 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
    - **bug** - reproduce it where the project can run it (a test, the CLI, the verify commands): the steps or input, expected against actual.
      Then trace the root cause to a `file:line`.
      A reproduction and root cause this run already confirmed (the debug step) are not redone: check the cited `file:line` still reads as the brief says, and carry both into this brief.
-     A bug that does not reproduce, or a cause still a guess after a few reads, never becomes a plan: ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, per `modes/driven.md`), and retry the reproduction once with the answer.
-     Still not reproduced: stop with `f10-state.sh set plan blocked` and a `note` naming what was tried and what to collect next.
+     A bug that does not reproduce, or a cause still a guess after a few reads, never becomes a plan: ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, per `modes/driven.md`), retry once with the answer, and if still not reproduced stop with `f10-state.sh set plan blocked` and a `note` naming what was tried and what to collect next.
    - **refactor** - the behavior that must not change, the tests that pin it, and where coverage is missing.
    - **spike** - the question, stated so an answer can be checked; the decision each answer feeds (the follow-up work it unlocks or kills); and the cheapest experiment that answers it.
      A question that cannot be stated that way is a gap, not a guess.
@@ -44,7 +43,7 @@ Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` 
 5. **Decide like a senior engineer.**
    Settle ~90% of open questions yourself from the code and its house style.
    The _major_ forks left over (they change scope or are hard to reverse) become **gaps**: note each with the default you'd proceed on and carry them into the plan's Gaps section (`conventions/gaps.md`).
-6. **Output** a short investigation brief: the kind (with a bug's reproduction and root cause, a refactor's invariant, or a spike's question), what changes, where, the **areas** the task really touches (correct the task's _Areas_ note if investigation disagrees, or derive areas from the code when the task carries none; name the conditional roles in `project.md → Roles` they trigger), the base role each step runs under where Roles replaces one, and what set it (`conventions/context.md` → Roles), the obstacles found, the decisions you took, and the gaps with their defaults for the plan to record.
+6. **Output** a short investigation brief: the kind (with a bug's reproduction and root cause, a refactor's invariant, or a spike's question); what changes, where; the **areas** the task really touches (correct the task's _Areas_ note if investigation disagrees, or derive them from the code when the task carries none) and the conditional roles in `project.md → Roles` they trigger; the base role each step runs under where Roles replaces one, and what set it (`conventions/context.md` → Roles); the obstacles found; the decisions you took; and the gaps with their defaults for the plan to record.
    A planless flow (no leading `plan` entry) has no plan step: the brief becomes the inline plan `/f10:ship` prints in chat, its gaps listed there on their defaults.
 
 **On failure:** the tracker does not know the id, or is unreachable (`conventions/failure.md`).

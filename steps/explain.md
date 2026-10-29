@@ -7,8 +7,7 @@ No verdict, no bug hunt, no evidence.
 
 **The reader knows the product, the domain and the codebase, but not this change.**
 Cut every sentence that would still be true without this diff: "The service caches responses in Redis" goes where Redis was already there; "The cache moved from in-process to Redis" stays.
-Keep a fact only where the reader would get the change wrong without it.
-Keep identifiers (a column, a method, a flag, a package), not what they are *for*.
+Keep a fact only where the reader would get the change wrong without it, and identifiers (a column, a method, a flag, a package), not what they are *for*.
 
 **Route.**
 Change-shaped: nothing, `this branch`, a PR/MR number or url, a task id or tracker url, a sha, an `<a>..<b>` range or "last N commits", `local` / `staged` / `uncommitted`.
@@ -37,13 +36,11 @@ Words around the subject ("very short", "is it just a day off?") are framing to 
 6. **Rollout, only where deploying needs something**: a migration, a two-deploy sequence, a backfill and what it skips, a population that degrades until touched, debt left knowingly.
    Drop-in: one line saying so, or nothing.
 7. **Review, only where one ran**: one line per finding that changed the code, worst first.
-8. **Report.**
-   Name the subject first: a facts block (`conventions/report.md`) for a task id or PR url, else the first prose line.
-   Then the items.
+8. **Report**: the subject first, as a facts block (`conventions/report.md`) for a task id or PR url, else as the first prose line; then the items.
 
 ## A thing: what is it
 
-The hallway answer, three or four sentences (five where the thing is really two things).
+Three or four sentences, five where the thing is really two things.
 Cut every sentence that would still be true if this thing did not exist.
 
 1. **Find it in the code.**

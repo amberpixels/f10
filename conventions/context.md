@@ -62,6 +62,9 @@ If it is ever unavailable, the points below say what to do by hand:
 5. **Inferred defaults**, when `project.md` is absent or partial: the remote host gives `gh`/`glab`; the project name gives the task id prefix (`f10` is `F10`, `git-undo` is `GU`, `herdr` is `HER`); `go.mod` / `Gemfile` / `package.json` give stack and role; `justfile` / `Makefile` give verify commands.
    State them once, the prefix included, and suggest `f10 init`, which writes `.f10/instructions/project.md` from the same probes.
    Never refuse to run for missing config.
+6. **Agent profiles**: a step that spawns a subagent (the review step's blind reviewer, `judge --blind`, cleanup's rules check) passes the Agent tool the `model` and `effort` its own profile line names in its `Agent tool:` part: the `<step>.<kind>` line for the plan's `Kind` (absent meaning feature) when the load prints one, else the plain `<step>` line.
+   A line with no `Agent tool:` part passes neither, and the tool's own defaults apply.
+   Every other step runs inline, on the task agent's profile (`docs/project-setup.md` → Agents).
 
 ## `project.md` contract
 

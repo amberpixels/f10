@@ -19,7 +19,7 @@ Everything before execution is the same, and a static report carries the script 
 
    **In a ship flow**, a change with nothing to show ends the step here: one line, `demo: skipped - <why>`, a normal end.
    Nothing to show means none of a UI change, a change in what the CLI prints or accepts, an API response, or a file the app writes for its user; a change to tests, prose, CI or internals only is the usual case, and a `Kind: refactor` plan always skips.
-   It comes before point 4, so a skipped demo asks for no overlay and creates no state, evidence or report.
+   It comes before point 4, so a skipped demo asks for no overlay and creates nothing.
    In doubt, demo runs.
    Standalone `/f10:demo` never skips.
 3. **Derive the demo script**: entry point, needed state, ordered steps, what to look for at each.
@@ -39,9 +39,7 @@ Everything before execution is the same, and a static report carries the script 
    Show the overlay, write `.f10/instructions/demo.md`, and continue the run; later runs never ask again.
    If the user declines, the run **degrades to hands-on**, naming the missing fact: a normal end.
 5. **Set the state up, out loud.**
-   Reuse a record that already fits.
-   Otherwise **create** the delta through the overlay's mechanism, in the database it names.
-   **Say what you will create first.**
+   Reuse a record that already fits; otherwise say what you will create, then **create** the delta through the overlay's mechanism, in the database it names.
    Created records stay: the report names each with its id, and removal is the user's call.
 6. **Execute, or hand over.**
    Static: run the script, capture as you go, note anything that behaved unlike the script.
@@ -64,7 +62,7 @@ Everything before execution is the same, and a static report carries the script 
 
     **Where the page goes is the project's choice** from point 4, recorded in the overlay: local file, also published, or published only.
     `--publish` and `--local` override it for one run.
-    Publishing makes a **private page on the user's own account**, but it leaves the machine: publish only what the overlay declares or the user asked for in as many words, with **no f10 traces** whatever the visibility (`conventions/context.md`): no storage-root paths, no plan references, nothing naming the pipeline.
+    Publishing makes a **private page on the user's own account**, but it leaves the machine: publish only what the overlay declares or the user asked for in as many words, with **no f10 traces** whatever the visibility (`conventions/context.md`).
     Upload screenshots with the page and use the urls the host returns.
     Nothing goes to the PR or the tracker.
 

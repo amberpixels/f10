@@ -26,9 +26,9 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
 
    Then ordered **stages**, the critical files each touches, data/migration work, tests to add or adjust, key tradeoffs and alternatives.
    Then a **`## Consequences` section**, a few lines of prose, in the ADR sense: what the chosen design makes easier, what it makes harder, the constraint it now depends on, and what to revisit under which condition.
-   For a bug, that includes the related failures this fix leaves uncovered, when there are any.
+   For a bug, also the related failures this fix leaves uncovered, when there are any.
    No trade-off worth naming: `## Consequences - none`.
-   Stage tradeoffs weigh the alternatives; Consequences records what the chosen one costs, Gaps what is still undecided, and rollout or monitoring stays out (below).
+   Stage tradeoffs weigh the alternatives; Consequences records what the chosen one costs; Gaps holds what is still undecided; rollout and monitoring stay out (below).
    Last, a **`## Gaps` section** (`conventions/gaps.md`), or `## Gaps - none`.
 
    **Altitude: a senior engineer who knows this codebase, not a code generator.**
@@ -51,7 +51,7 @@ Badge: `f10-state.sh set plan running` on entry if `fetch` did not open the phas
    - **Lore** (`docs/lore.md`), with a task id (a bundle's lead) and the file on disk: `f10 lore add intent --change <id> -m "<text>"`.
      The body is two to four sentences on what the change does and why, for someone reading it beside the code later: the domain reason, in no plan, stage or f10 vocabulary.
      A spike's intent states the question and what its answer decides.
-     A replan (a plan was archived above) supersedes the standing intent: `--supersedes <id>`, the id of the `intent` entry `f10 lore show <id> --json` lists; a judge's revision of the plan file in place is not a replan and leaves it.
+     A replan (a plan was archived above) supersedes the standing intent with `--supersedes <id>`, the id of the `intent` entry `f10 lore show <id> --json` lists; a judge's revision of the plan file in place is not a replan.
      A second intent without `--supersedes` is refused, naming the standing one.
      A failing `lore add` is one line in the hand-off, never a failed step; a plan with no task id writes none.
 4. **Hand off.**

@@ -11,7 +11,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
    A parent holds the problem, the settled shape and what is out of scope; a subtask holds its own scope, sized by the rules below.
    - **Title:** concise, imperative, at every size.
    - **Body: size it by what a reader needs to act**, not by how big the change is.
-     A heading appears only over something the reader cannot infer from the sentences above, never over a restatement or an "n/a"; a task whose prose makes the scope obvious has none.
+     A heading goes only over what the reader cannot infer from the sentences above, never over a restatement or an "n/a".
      - **small** - one place, nothing to decide: a couple of paragraphs, no headings.
      - **normal** - several places, or one real decision: the problem, the scope, an _Areas_ note.
        Acceptance criteria only where the scope does not already imply them.
@@ -25,9 +25,8 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
      - **Repro detail stops at what reproduces it**, not the session that found it.
      - **No effort estimates.**
    - **A dependency is a fixed last line.**
-     When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line; the binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything after the id, so the word and the shape are fixed.
-     For a reader on the tracker the id becomes a link: `f10 task create` rewrites the line itself, and a task the create adapter takes on a GFM renderer (GitHub, GitLab) gets `After: <the line f10 task ref <id> --md prints>`, which stays bare when ref prints it bare.
-     Any other renderer keeps the bare id: the binary reads the markdown link and the bare id only, never a native link.
+     When the order is known (the user names a task this one builds on, or capture creates tasks meant to run in sequence), the body ends with `After: <id>`, one id in the project's format, alone on its line, in the shape `conventions/context.md` → Task references fixes.
+     `f10 task create` rewrites the id as a link itself; a task the create adapter takes on a GFM renderer (GitHub, GitLab) gets `After: <the line f10 task ref <id> --md prints>`, bare when ref prints it bare; any other renderer keeps the bare id.
      No known order, no line.
      Tasks meant to run in sequence are created in that order, so each `After:` names an id that already exists.
    - **Other tasks named in the body** (a base task in prose, a parent, a subtask) carry their title, in the renderer's form, from one `f10 task ref` call (`conventions/context.md` → Task references).
@@ -44,7 +43,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where no driver 
    **Never re-run a failed `f10 task create` whose error says the task may exist**, whatever `conventions/failure.md` rule 3 allows: report the failure and let the user check the tracker.
    Any other failure (a missing title, an unknown priority or id) ran before the driver did: fix the input and run it again.
    Apply the project's declared default status/labels.
-   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later; a debug brief gets it whenever one exists, since its kind is confirmed.
+   A description that reads as a bug or a refactor also gets the tracker's label for it where one exists (`gh issue create --label bug`), so fetch settles the same kind later; a debug brief's kind is confirmed, so it always gets one.
    A spike gets its label only when the user calls the task one, since the label alone makes ship skip the PR.
    A split creates the parent first, then links each subtask to it: through the driver, `--parent` is the link; through the adapter, the tracker's native parent link, the declared **parent** adapter, else the host's (GitHub sub-issues: `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<the child's numeric id>`; GitLab: `glab api` on the parent's child links).
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.

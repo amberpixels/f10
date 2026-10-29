@@ -4,9 +4,7 @@ Role: a **senior architect, thinking as the CTO**, with the burden of proof on t
 Input: a raw idea, a task, a saved plan, or a diff.
 Output: a verdict in chat, the argument under it, and the **verdict file** (point 8); after `pr` in a ship run, also a pushed commit (yellow) and a status and comment on the PR.
 Context: after `pr` only, `project.md → Verify` and `→ Hosting & PR`, and the frontmatter's `traces`.
-**It writes only its verdict file** (folding a verdict into the plan is the ship skill's; the badge note lives outside every repo).
-The one exception is a judge entry after `pr` in a ship run: its route writes code, commits and PR traces under the ship skill's authorization.
-A standalone `/f10:judge` never does, on a PR included.
+**It writes only its verdict file**, except a judge entry after `pr` in a ship run, whose route writes code, commits and PR traces under the ship skill's authorization; a standalone `/f10:judge` never does, on a PR included.
 Name a bug only where it changes the verdict.
 **Proceed** is a full outcome, but never agree because agreeing is cheaper.
 
@@ -35,7 +33,7 @@ Name a bug only where it changes the verdict.
    - **stop** (red) - do not build it: not real, already solved, or not worth the cost.
 
    Open the reply with its **banner**, a `diff`-tagged block; line two is the reason, under 80 characters.
-   No emoji: the bar from line two opens line one too, and the word names the verdict; the terminal colors `+` green and `-` red, which shows only go or no-go, so `(!)` marks yellow and `(?)` marks orange:
+   No emoji; `(!)` marks yellow and `(?)` marks orange:
 
    ```diff
    + ▌ PROCEED
@@ -57,7 +55,8 @@ Name a bug only where it changes the verdict.
    Under it, only what is wrong.
    Points 2 to 6 are the investigation, not the reply: what holds gets one sentence at most, never a recap of the problem, a list of what to keep, or the evidence that it checks out.
    - **Green**: one or two sentences on why it holds.
-   - **Yellow**: one sentence on what holds, then a numbered list, one item per change: the defect in bold (what is wrong and where, `file:line` when there is one), then the fix in one or two lines.   - **Orange** and **red**: what is wrong with the shape, or why not to build it, in a short paragraph or two, and where the real problem lives.
+   - **Yellow**: one sentence on what holds, then a numbered list, one item per change: the defect in bold (what is wrong and where, `file:line` when there is one), then the fix in one or two lines.
+   - **Orange** and **red**: what is wrong with the shape, or why not to build it, in a short paragraph or two, and where the real problem lives.
 
    Close with the smallest thing that would change the verdict, in one line.
    In later replies, the banner returns only when the verdict changes.
@@ -91,9 +90,7 @@ Name a bug only where it changes the verdict.
 
 **Blind** (`--blind`): for work this session produced.
 Gather the subject per point 1, then spawn **one fresh `general-purpose` agent, never `fork`, which inherits the whole conversation**, with the subject verbatim, the checkout root, and the instruction to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh judge`), follow this step except point 8, write no file, and return the verdict and its argument.
-The Agent tool call carries the `model` and `effort` the project load's `judge` profile line names in its `Agent tool:` part (`docs/project-setup.md` → Agents): the `judge.<kind>` line for the plan's `Kind` (absent meaning feature) when the load prints one, else the plain `judge` line.
-A line with no `Agent tool:` part passes neither.
-A judge in a flow runs inline, on the task agent's profile.
+The Agent tool call carries the `model` and `effort` the load's `judge` profile line names (`conventions/context.md` → Agent profiles).
 Relay its verdict unchanged; you may dispute it in one line.
 The agent writes nothing: you write the verdict file with `blind: yes`, your dispute, if any, under `## Argument`.
 
@@ -102,7 +99,7 @@ Close each turn with what is now settled and the one question still open.
 
 **Before planning**: the fetch step runs this on a task older than the frontmatter's `stale_after`, with the subject `task <id>`.
 The question is whether the task is still worth doing as written against today's code: already solved, overtaken by another task, or its premise gone.
-Only **proceed** lets the run go on; every other verdict stops it blocked, since there is no plan yet to fold changes into and the task's scope is the user's call (the fetch step routes it).
+Only **proceed** lets the run go on; every other verdict stops it blocked (the fetch step routes it), since there is no plan yet to fold changes into.
 The file says `run: before plan` and `decision: continue` or `block`.
 
 **In a ship flow** the verdict routes the run; none is a failure.
@@ -130,7 +127,7 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 - **Yellow, proceed with changes** - the named changes are the work.
   The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, its CLAUDE.md rules and `project.md` guardrails, and run `project.md → Verify`, keeping its "never run X" rules (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands); commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
   With `traces: on`, the commit body names each change in plain words for a reader of the PR.
-  No second review round: a judge plus green verify is enough.
+  No second review round.
   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`), the changes left uncommitted and nothing posted.
   Green: leave the trace on the pushed commit and continue (`decision: continue`).
 - **Orange, rethink** - discuss it (**Discussion**, above).

@@ -53,10 +53,9 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
    - **`+reply`** - sends `reason:` to the reviewer.
      On a local block it stays in the file.
      A remote reply posts on the PR or MR (`gh pr comment` / `glab mr note`): on the `review:` url's thread for an inline review, else a comment quoting the finding's title.
-     It is outward-facing, under the run's authorization.
-     It reads as the user's own: no f10, no round, no findings file.
+     Outward-facing, under the run's authorization, and read as the user's own: no f10, no round, no findings file.
      Another task it names is a link with its title (`conventions/context.md` → Task references).
-     **A remote bot's skip replies by default** (its blocks only) (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread and re-raises a silent skip.
+     **A remote bot's skip replies by default**, its blocks only (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread.
      A human reviewer gets `+reply` only where the verdict names it.
 5. **Round two's prior section**: `fixed` and `explanation accepted` need nothing; `still open`, `fix introduced a problem` and `explanation disputed` take a verdict, and are an `ask` unless the code plainly settles them (there is no third reviewer).
 6. **Verify once after the fixes** (`project.md → Verify`, with implement's skip for an unmoved tree).

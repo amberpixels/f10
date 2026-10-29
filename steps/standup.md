@@ -8,7 +8,7 @@ All of it is read as instructions; there is no template.
 
 **Which instructions apply** never depends on the directory the session runs in: an overlay is loaded for a project in the report, from that project's checkout, or not at all.
 
-- **Wording, sections, audience and the Deliver adapter** belong to the person, since a standup does: a manager wants outcomes, a team wants PR links.
+- **Wording, sections, audience and the Deliver adapter** belong to the person: a manager wants outcomes, a team wants PR links.
   Later wins: the overlay of the one project the report covers (only when it covers exactly one), then `~/.f10/standup.md`'s person-wide prose, then its section for the group the run names.
 - **A group section** is a `## <name>` heading in that prose whose name is a key of the frontmatter's `groups:`.
   It runs to the next such heading or the end of the file, and any other heading inside it belongs to it, so the person-wide prose is everything above the first group heading.
@@ -21,7 +21,7 @@ All of it is read as instructions; there is no template.
 
 **The binary decides, the step renders.**
 Grouping, states, work against upkeep and the days all come from `f10 standup --json` (schema in `docs/cli.md` § Standup).
-Never re-read git or the host to second-guess them, and never fall back to doing so when the command fails: the same history always gives the same report.
+Never re-read git or the host to second-guess them, nor as a fallback when the command fails.
 
 1. **Collect**, in one call: the read time, the person's settings, then the report.
 
@@ -63,8 +63,7 @@ Never re-read git or the host to second-guess them, and never fall back to doing
 
    Four options per question, at most four questions, carry-over first, then assigned tasks by project in the JSON's order, each in its tracker's order; name what did not fit in one line.
    The answers are the report's **Next** section, each task linked as in point 4.
-6. **Print** the whole report as one fenced `markdown` block, so it copies with its links intact.
-   It is printed even where a Deliver adapter is named: it is the fallback a failed delivery points at.
+6. **Print** the whole report as one fenced `markdown` block, so it copies with its links intact, even where a Deliver adapter is named.
 7. **Deliver**, only where the rule above picks an adapter: a draft of the same report, Next section included, in the markup the adapter takes (HTML links for mail).
    - **Draft, never send.**
      Call only the adapter's draft-creating operation, never its send.
@@ -88,8 +87,7 @@ Never re-read git or the host to second-guess them, and never fall back to doing
 
 **Driven** (`modes/driven.md`): no questionnaire.
 The Next section lists the carry-over tasks and says assigned tasks were not offered; nothing becomes an ask.
-A driven run never marks: nobody read the report, so moving the period would hide that work from the next one.
-Nor does it deliver: the adapter is a tool the session may not have approved, and its permission dialog would stall a pane nobody watches; without a mark, each driven run would also draft the same period again.
+A driven run never marks, since nobody read the report, and never delivers, since the adapter's permission dialog would stall a pane nobody watches.
 One line under the report names the adapter that was not called.
 
 **On failure:** `f10 standup` fails (the plugin's `f10` has no binary and says so in one line, no git `user.email`, a host CLI not logged in, an unreadable `~/.f10/standup.json`).
