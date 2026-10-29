@@ -547,7 +547,9 @@ A cancelled record is never picked up again: the same command line starts a new 
    The mark is `f10-landed` with the default branch's name when the PR targets it, `f10-base-moved` with the base's head for a base branch no task in the drive owns.
    A branch already marked, one its target is already in, or one never pushed is left alone, and a fetch that fails skips the poll.
    The catchup follows `catchup:`, or `catchup_stacked:` for a base branch.
-   Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against the sha it read after a rebase, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
+   Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against origin's tip when it sent the catchup after a rebase, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
+   A branch origin moved on while the catchup ran is not pushed: the task halts, saying to bring `origin/<branch>` in and run `/f10:catchup` there, since the rebased branch lacks what was pushed meanwhile.
+   A drive with no such record (resumed, or rerun after a halt) never force-pushes a caught-up branch, and halts instead.
    A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
    `finish` marks each branch that depended on the finished task `f10-landed`.
    Before a marked task's next skill, the driver sends it `/f10:catchup --driven`; the driver never interrupts a turn.

@@ -1703,10 +1703,9 @@ func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string
 		return err
 	}
 
-	// the boundary fetched before marking, so this is origin's tip now
-	pushed, err := gitx.Ref(ctx, r.o.path, "refs/remotes/origin/"+r.o.branch)
+	pushed, err := in.originTip(ctx, r)
 	if err != nil {
-		return fmt.Errorf("reading origin/%s: %w", r.o.branch, err)
+		return err
 	}
 
 	r.lastCatchup = &catchupSent{
@@ -1715,6 +1714,27 @@ func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string
 	}
 
 	return nil
+}
+
+// originTip is origin's copy of the branch, fetched first when origin has
+// it, since a mark set earlier may follow no fetch at all.
+func (in *driveInput) originTip(ctx context.Context, r *driveRun) (string, error) {
+	tracking := "refs/remotes/origin/" + r.o.branch
+
+	pushed, err := gitx.Ref(ctx, r.o.path, tracking)
+	if err != nil || pushed == "" {
+		return pushed, err
+	}
+
+	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+		return "", fmt.Errorf("fetching origin before catching %s up: %w", r.o.branch, err)
+	}
+
+	if pushed, err = gitx.Ref(ctx, r.o.path, tracking); err != nil {
+		return "", fmt.Errorf("reading origin/%s: %w", r.o.branch, err)
+	}
+
+	return pushed, nil
 }
 
 // targetOrigin is the remote-tracking ref of what a mark's catchup brings
@@ -1996,12 +2016,26 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 // ancestor, and with a lease against pushed when it rebased. Pushed must be
 // origin's sha when the catchup went out: a commit pushed while it ran is not
 // on a rebased branch, and a lease read after would let the push drop it.
+// With no such record (a resumed drive, a rerun) only a plain push goes out.
 func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun, skill, pushed, base string) error {
+	refused := originMovedError{branch: r.o.branch, base: base, path: r.o.path}
+
 	if c := r.lastCatchup; c != nil && c.held {
 		c.held = false
 
 		if pushed != c.pushed {
-			return originMovedError{branch: r.o.branch, base: base, path: r.o.path}
+			return refused
+		}
+	} else {
+		fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
+		if err != nil {
+			return err
+		}
+
+		if !fastForward {
+			refused.unseen = true
+
+			return refused
 		}
 	}
 
@@ -2015,10 +2049,20 @@ func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun
 	return nil
 }
 
-// originMovedError is someone pushing to the branch while its catchup ran.
-type originMovedError struct{ branch, base, path string }
+// originMovedError refuses a force-push that could drop commits pushed to
+// the branch while its catchup ran: origin moved, or, unseen, nothing
+// recorded what origin held when the catchup went out.
+type originMovedError struct {
+	branch, base, path string
+	unseen             bool
+}
 
 func (e originMovedError) Error() string {
+	if e.unseen {
+		return fmt.Sprintf("%s caught up with %s, not pushed: the drive did not read origin/%s when the catchup "+
+			"went out, so a force-push could drop commits pushed since", e.branch, e.base, e.branch)
+	}
+
 	return fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed", e.branch, e.base, e.branch)
 }
 
@@ -2027,7 +2071,14 @@ func (e originMovedError) Error() string {
 func pushHalted(id, skill string, err error) driveResult {
 	res := halted(id, skill, err.Error())
 
-	if moved := (originMovedError{}); errors.As(err, &moved) {
+	moved := originMovedError{}
+
+	switch {
+	case !errors.As(err, &moved):
+	case moved.unseen:
+		res.lines = append(res.lines, "next: check origin/"+moved.branch+" holds nothing "+moved.path+
+			" lacks, push it with --force-with-lease yourself, then rerun the drive")
+	default:
 		res.lines = append(res.lines, "next: bring origin/"+moved.branch+" into "+moved.path+
 			", then /f10:catchup there, then rerun the drive")
 	}
