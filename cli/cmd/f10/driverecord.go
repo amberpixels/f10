@@ -90,7 +90,9 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 				profile = in.args.profiles[i]
 			}
 
-			in.rec.Tasks = append(in.rec.Tasks, drives.Task{ID: t.ref.Label() + suffixOf(t.suffix), Agent: profile})
+			in.rec.Tasks = append(in.rec.Tasks, drives.Task{
+				ID: t.ref.Label() + suffixOf(t.suffix), Agent: profile, After: t.after,
+			})
 		}
 
 		if err := drives.Create(in.root, in.rec); err != nil {

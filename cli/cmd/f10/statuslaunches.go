@@ -40,7 +40,7 @@ func launchStatus(ctx context.Context, cmd *cli.Command, t *target, sid string) 
 		return false, err
 	}
 
-	rows := slices.DeleteFunc(src.rowsFrom(ctx, kids), func(r taskRow) bool { return r.Stage == stageDone })
+	rows := dropRows(src.rowsFrom(ctx, kids), func(r taskRow) bool { return r.Stage == stageDone })
 	if len(rows) == 0 {
 		return false, nil
 	}
@@ -52,8 +52,35 @@ func launchStatus(ctx context.Context, cmd *cli.Command, t *target, sid string) 
 	return true, writeTaskRows(cmd, rows, launchesHead)
 }
 
-// launchKids is the session's launches as rows, in launch order, then the
-// session run's own task when no launch names it; a finished task is left out.
+// dropRows leaves out the rows drop picks, in tree order: what hung under a
+// dropped row moves up to its level.
+func dropRows(rows []taskRow, drop func(taskRow) bool) []taskRow {
+	var (
+		out []taskRow
+		cut []int // the depths of the dropped rows above this one
+	)
+
+	for _, r := range rows {
+		for len(cut) > 0 && cut[len(cut)-1] >= r.Depth {
+			cut = cut[:len(cut)-1]
+		}
+
+		if drop(r) {
+			cut = append(cut, r.Depth)
+
+			continue
+		}
+
+		r.Depth -= len(cut)
+		out = append(out, r)
+	}
+
+	return out
+}
+
+// launchKids is the session's launches as rows, nested under their bases
+// as a parent's children are. A finished task is left out, and so is the
+// session run's own task, which may be the parent the launches split.
 func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []childRow {
 	launches, err := state.Launches(state.Dir(), sid)
 	if err != nil {
@@ -67,6 +94,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 	// a start's task has a branch from the start: none left is done with
 	type token struct {
 		text    string
+		after   string // the base the drive recorded
 		started bool
 	}
 
@@ -77,25 +105,20 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		case state.LaunchStart:
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
-			for _, id := range driveTokens(t.sharedRoot(), l.Value) {
-				tokens = append(tokens, token{text: id})
+			for _, task := range driveTasks(t.sharedRoot(), l.Value) {
+				tokens = append(tokens, token{text: task.ID, after: task.After})
 			}
-		}
-	}
-
-	if len(tokens) > 0 {
-		if own := sessionTaskID(sid); own != "" {
-			tokens = append(tokens, token{text: own})
 		}
 	}
 
 	var (
 		kids []childRow
 		refs []ref.Ref
-		seen []childRow
 	)
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	archive := t.tracker().archive
+	bases := map[string]string{} // siblings share a base: resolve it once
 
 	for _, tok := range tokens {
 		id, suffix := ref.SplitSuffix(tok.text)
@@ -109,20 +132,19 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		k := childRow{ID: r.ID, suffix: suffix}
 
 		if slices.ContainsFunc(
-			seen,
+			kids,
 			func(o childRow) bool { return o.ID == k.ID && strings.EqualFold(o.suffix, k.suffix) },
 		) {
 			continue
 		}
 
-		seen = append(seen, k)
-
 		// a finished task reads nothing further: its row would only drop
 		branched, err := hasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, t.tracker().archive, r.ID, branched)) {
+		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, archive, r.ID, branched)) {
 			continue
 		}
 
+		k.After = launchBase(ctx, t, main, r.ID, suffix, tok.after, branched, bases)
 		kids = append(kids, k)
 		refs = append(refs, r)
 	}
@@ -135,12 +157,52 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		kids[i].Title, kids[i].URL = cleanTitle(kids[i].ID, known[kids[i].ID].Title), known[kids[i].ID].URL
 	}
 
-	return kids
+	return childTree(kids)
 }
 
-// driveTokens is drive n's tasks as typed, none once the drive is done or
+// launchBase is the base a launched task waits on, as an id: its branch's
+// recorded one, else the one its drive recorded, "" once that base finished.
+// seen holds each base as written against its answer.
+func launchBase(
+	ctx context.Context,
+	t *target,
+	main, id, suffix, recorded string,
+	branched bool,
+	seen map[string]string,
+) string {
+	base := recorded
+	if branched {
+		if b, err := existingBranchIn(ctx, main, "", id, suffix, "refs/heads/"); err == nil && b.name != "" {
+			base = cmp.Or(branchAfter(ctx, main, b.name), base)
+		}
+	}
+
+	if base == "" {
+		return ""
+	}
+
+	if out, ok := seen[base]; ok {
+		return out
+	}
+
+	out := ""
+	if r, err := t.reference(ctx, base); err == nil {
+		out = r.Head().ID
+
+		has, err := hasTaskBranch(ctx, main, out)
+		if err != nil || finishedTask(taskInfo{}, t.tracker().archive, out, has) {
+			out = ""
+		}
+	}
+
+	seen[base] = out
+
+	return out
+}
+
+// driveTasks is drive n's tasks as typed, none once the drive is done or
 // cancelled, or its record is gone.
-func driveTokens(root, n string) []string {
+func driveTasks(root, n string) []drives.Task {
 	num, err := strconv.Atoi(n)
 	if err != nil {
 		return nil
@@ -151,10 +213,5 @@ func driveTokens(root, n string) []string {
 		return nil
 	}
 
-	out := make([]string, 0, len(rec.Tasks))
-	for _, task := range rec.Tasks {
-		out = append(out, task.ID)
-	}
-
-	return out
+	return rec.Tasks
 }
