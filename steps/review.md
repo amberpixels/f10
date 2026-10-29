@@ -68,7 +68,7 @@ reason: the Rounds section now declines on an unsettled round one
 
 ## The base and the diff
 
-Base: `f10 pr base`, the branch `f10 start --after` recorded (a stacked task), else the default branch.
+Base: `f10 pr base`, the open PR's target, else the branch `f10 start --after` recorded (a stacked task), else the default branch.
 Diff: `f10 pr diff`, the working tree against where the branch left its base, plus every file `git ls-files --others --exclude-standard` lists.
 Read untracked text files under a few hundred KB whole; anything larger or binary (a `Binary files differ` line) goes unread, listed as one tests-and-docs finding ("not reviewed: `<path>`, `<size>`, untracked").
 Read the full diff every round.
