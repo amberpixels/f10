@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -996,9 +997,10 @@ func TestDriveAnswersASettledCatchupStop(t *testing.T) {
 }
 
 // A judge stop, blocked with no question, halts the task with its reason,
-// and the task after it is halted with it.
+// and the task after it is halted with it. The record keeps GH-2's base.
 func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge")
+	fx.in.root = t.TempDir()
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
 	fx.f.script(headRef, "origin/main") // GH-1 has no commit, so GH-2 waits
@@ -1025,6 +1027,15 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
+	}
+
+	rec, err := drives.Read(fx.in.root, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := rec.Task("GH-2").After; got != "GH-1" {
+		t.Errorf("GH-2's recorded base = %q, want GH-1", got)
 	}
 }
 

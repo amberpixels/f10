@@ -246,7 +246,7 @@ func TestRenderRows(t *testing.T) {
 
 	line, _, _ := strings.Cut(out.String(), "\n")
 	if !strings.Contains(line, hyperlink(rows[0].URL, "FT-206")) ||
-		!strings.Contains(line, hyperlink(rows[0].PR, "#208 merged")) {
+		!strings.Contains(line, hyperlink(rows[0].PR, "\U000F062D #208 merged")) {
 		t.Errorf("a terminal line = %q, want the id and the PR linked", line)
 	}
 
@@ -361,5 +361,33 @@ func TestRowStepNamesDriveFinish(t *testing.T) {
 
 	if plain.Step != "ship" {
 		t.Errorf("a pending finish changed the step to %q", plain.Step)
+	}
+}
+
+// An open or merged PR leads with its icon, a closed one with none, and
+// F10_STATUS_GLYPHS replaces the icons for a terminal without the font.
+func TestPRColumnIcons(t *testing.T) {
+	pr := "https://github.com/a/b/pull/7"
+
+	for state, want := range map[string]string{
+		pullOpen:   "\U000F04C2 #7",
+		pullMerged: "\U000F062D #7 merged",
+		"closed":   "#7 closed",
+	} {
+		if got := prColumn(taskRow{PR: pr, PRState: state}); got != want {
+			t.Errorf("%s: %q, want %q", state, got, want)
+		}
+	}
+
+	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
+
+	if got := prColumn(taskRow{PR: pr, PRState: pullMerged}); got != "MR #7 merged" {
+		t.Errorf("with F10_STATUS_GLYPHS: %q", got)
+	}
+
+	t.Setenv("F10_STATUS_GLYPHS", "too few")
+
+	if got := prColumn(taskRow{PR: pr}); got != "\U000F04C2 #7" {
+		t.Errorf("a short F10_STATUS_GLYPHS replaced the icons: %q", got)
 	}
 }

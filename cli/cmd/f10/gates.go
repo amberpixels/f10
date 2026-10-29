@@ -856,16 +856,16 @@ func compactGates(gates []gate) string {
 	for _, g := range gates {
 		switch {
 		case g.Step == "review" && g.State == gateOff:
-			parts = append(parts, "L - · R -")
+			parts = append(parts, statusGlyph(glyphReview)+" L - · R -")
 		case g.Step == "review":
-			parts = append(parts, "L "+g.Local.compact(), "R "+g.Remote.compact())
+			parts = append(parts, statusGlyph(glyphReview)+" L "+g.Local.compact(), "R "+g.Remote.compact())
 		case g.Step == "judge":
-			j := "J "
+			j := statusGlyph(glyphJudge) + " J "
 			switch g.Judged {
 			case "task":
-				j = "TJ "
+				j = statusGlyph(glyphJudge) + " TJ "
 			case "plan":
-				j = "PJ "
+				j = statusGlyph(glyphJudge) + " PJ "
 			}
 
 			parts = append(parts, j+g.compactState())

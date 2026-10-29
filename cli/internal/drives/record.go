@@ -38,6 +38,7 @@ type Task struct {
 	ID      string   `yaml:"id"`              // as typed, a suffix included
 	Agent   string   `yaml:"agent,omitempty"` // its own :profile as typed
 	Model   string   `yaml:"model,omitempty"` // its own :model from before profiles, read only
+	After   string   `yaml:"after,omitempty"` // the base its body's After: line named, as an id
 	Skill   string   `yaml:"skill,omitempty"` // in flight, "" for none
 	Outcome *Outcome `yaml:"outcome,omitempty"`
 }

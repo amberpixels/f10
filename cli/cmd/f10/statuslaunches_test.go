@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -176,7 +177,8 @@ func TestBareStatusDropsFinishedDrives(t *testing.T) {
 }
 
 // The session's own run naming a launched task (planned here, then
-// started) still prints the whole tree; one naming another task adds it.
+// started) still prints the whole tree; one naming another task, such as
+// the parent capture split, adds no row: only launches are rows.
 func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 	fx := newLaunchFixture(t)
 
@@ -200,8 +202,80 @@ func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing DM-2:planned DM-9:not started"; got != want {
+	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing DM-2:planned"; got != want {
 		t.Errorf("rows = %s, want %s", got, want)
+	}
+}
+
+// A launch nests under its base as a parent's child does: a driven task
+// not started yet waits on the base its drive recorded, a started one
+// hangs under the base its branch records.
+func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	git(t, fx.repo, "config", "branch.DM-5/work."+cfgAfter, "DM-3")
+
+	fx.drive(t, func(r *drives.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
+	fx.launch(t, state.LaunchStart, "DM-5")
+
+	rows := fx.rows(t)
+	if got, want := rowIDs(rows), "DM-3:implementing DM-4:waiting DM-5:planned"; got != want {
+		t.Fatalf("rows = %s, want %s", got, want)
+	}
+
+	if rows[1].Step != "after DM-3" || rows[1].Depth != 1 || rows[2].Depth != 1 {
+		t.Errorf("not nested under DM-3: %+v", rows)
+	}
+}
+
+// A base that finished holds nothing back: its dependent reads by its own
+// run, at the top level.
+func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	archive := filepath.Join(fx.repo, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archive, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(archive, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.drive(t, func(r *drives.Record) { r.Tasks[0].After = "DM-5" }, "DM-6")
+
+	rows := fx.rows(t)
+	if got, want := rowIDs(rows), "DM-6:not started"; got != want {
+		t.Fatalf("rows = %s, want %s", got, want)
+	}
+
+	if rows[0].After != "" || rows[0].Depth != 0 {
+		t.Errorf("a finished base still holds DM-6: %+v", rows[0])
+	}
+}
+
+// Dropping a row moves what hung under it up to its level.
+func TestDropRowsLiftsTheDroppedRowsChildren(t *testing.T) {
+	rows := []taskRow{
+		{ID: "A", Depth: 0, Stage: stageDone},
+		{ID: "B", Depth: 1},
+		{ID: "C", Depth: 2, Stage: stageDone},
+		{ID: "D", Depth: 3},
+		{ID: "E", Depth: 1},
+		{ID: "F", Depth: 0},
+	}
+
+	got := dropRows(rows, func(r taskRow) bool { return r.Stage == stageDone })
+
+	var b strings.Builder
+	for _, r := range got {
+		fmt.Fprintf(&b, "%s%d ", r.ID, r.Depth)
+	}
+
+	if want := "B0 D1 E0 F0 "; b.String() != want {
+		t.Errorf("rows = %q, want %q", b.String(), want)
 	}
 }
 
@@ -268,8 +342,14 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.launch(t, state.LaunchStart, "DM-1")
 
-	if text, asks := hookStatusText(t.Context(), "sess-1"); asks || !strings.HasPrefix(text, launchesHead) {
+	text, asks := hookStatusText(t.Context(), "sess-1")
+	if asks || !strings.HasPrefix(text, launchesHead) {
 		t.Errorf("no ask: asks = %v, text:\n%s", asks, text)
+	}
+
+	// the hook's answer is chat text, where a link escape prints as noise
+	if strings.Contains(text, "\x1b]8;") {
+		t.Errorf("the hook's tree carries OSC 8 links:\n%q", text)
 	}
 
 	fx.worktree(t, "DM-3", state.Run{

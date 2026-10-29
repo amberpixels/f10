@@ -69,7 +69,7 @@ f10 review settle [n] --id <id> --revision <rev>      # leave the declared settl
 f10 review round [task-id] [--json]                   # the findings directory, its latest round and the next, or the decline (exit 3)
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, task rows under --json), else this session's, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, nested by `After:` as a parent's children are, task rows under --json), else this session's, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
@@ -406,7 +406,8 @@ The title goes on the line beneath, cut to fit; the ask, the halt reason and wha
 A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
 On a terminal the id and the PR are links (OSC 8).
-`--plain` prints the same tree with no color, its gates as a `gates` line and its url (the PR's, else the task's) as a `url` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask or a url is never cut.
+`--plain` prints the same tree with no color and no urls, its gates as a `gates` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask is never cut.
+A model that needs a url runs `f10 task open <id> --link` or `f10 pr open <n> --link`.
 A skill relays it in a fenced block: relayed text shows an OSC 8 link's escape bytes, and a markdown table is reflowed at pane width.
 It applies only to the tree; a run's block prints as without it.
 
@@ -450,7 +451,9 @@ ship            running: review:local
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
 - **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), each block for the half its `source:` names, else the header's: remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each half; the newest `verdicts/<id>/<n>.md`, the task or plan judge's when its `subject:` is the task or a plan.
 
-A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `L 3/4 · R open · J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` not in the flow, `…` running, `?` unknown.
+A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `󰚔 L 3/4 · R open · 󰊛 J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` not in the flow, `…` running, `?` unknown.
+The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps one cell wide: `󰚔` before the review halves, `󰊛` before each judge, and in the PR column `󰓂` before an open PR, `󰘭` before a merged one.
+`F10_STATUS_GLYPHS` replaces all four, in that order (open PR, merged PR, review, judge), for a terminal without the font: `F10_STATUS_GLYPHS='PR MR rv jd'`.
 `--json` holds them in a `gates` array, on a run and on a row.
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 

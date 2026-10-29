@@ -14,7 +14,7 @@ This skill runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - No argument: the answer is below, already run: the current task's (the session's, else the branch's), as `f10 status <task-id>` prints it, or the session's run when no task is named.
-  In a checkout whose branch names no task, the main one, a session that started or drove tasks gets a `launched here` tree instead: a row per task still live, each start's and each running drive's.
+  In a checkout whose branch names no task, the main one, a session that started or drove tasks gets a `launched here` tree instead: a row per task still live, each start's and each running drive's, nested by `After:` as a parent's tree is.
   Print it as point 1 does, then follow points 2-4 with the task the output names; a `launched here` tree is followed as point 3 follows a parent's.
 - A task id: another run, the one the task's agent reports from the checkout that has its branch, usually a worktree `f10 start` opened.
   The hook lets this form through, because the answer may need you.

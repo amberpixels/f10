@@ -220,12 +220,12 @@ func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild,
 	return childTree(rows), nil
 }
 
-// childTree orders rows under their After: base, siblings by number. Rows
-// caught in a cycle come out at the top level, so the listing stays
-// readable and drive refuses the cycle itself.
+// childTree orders rows under their After: base, siblings by number, else
+// in the order given. Rows caught in a cycle come out at the top level, so
+// the listing stays readable and drive refuses the cycle itself.
 func childTree(rows []childRow) []childRow {
 	sorted := slices.Clone(rows)
-	slices.SortFunc(sorted, func(a, b childRow) int { return cmp.Compare(a.number, b.number) })
+	slices.SortStableFunc(sorted, func(a, b childRow) int { return cmp.Compare(a.number, b.number) })
 
 	ids := make(map[string]bool, len(sorted))
 	for _, r := range sorted {
@@ -245,15 +245,16 @@ func childTree(rows []childRow) []childRow {
 	}
 
 	out := make([]childRow, 0, len(sorted))
-	placed := map[string]bool{}
+	placed := map[string]bool{} // by id and suffix: two worktrees of a task are two rows
 
 	var walk func(r childRow, depth int)
 	walk = func(r childRow, depth int) {
-		if placed[r.ID] {
+		key := r.ID + "-" + strings.ToLower(r.suffix)
+		if placed[key] {
 			return
 		}
 
-		placed[r.ID] = true
+		placed[key] = true
 		r.Depth = depth
 		out = append(out, r)
 

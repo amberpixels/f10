@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -92,4 +93,23 @@ func TestPackedAndHung(t *testing.T) {
 		{Cells: cells("GH-1:", "done")},
 		{Cells: cells("GH-12:", "running ship")},
 	})
+}
+
+// A Nerd Font md-* icon takes one column, as it renders, so the column
+// after it lines up.
+func TestAlignCountsAnIconAsOneColumn(t *testing.T) {
+	var b strings.Builder
+
+	tree := Tree{Align: true}
+	if err := tree.Write(&b, []Node{
+		{Cells: []Cell{{Text: "A-1"}, {Text: "\U000F04C2 #7"}, {Text: "x"}}},
+		{Cells: []Cell{{Text: "A-2"}, {Text: "a #7"}, {Text: "y"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
+	if len([]rune(lines[0])) != len([]rune(lines[1])) {
+		t.Errorf("columns do not line up:\n%s", b.String())
+	}
 }

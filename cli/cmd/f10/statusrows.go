@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"slices"
 	"strconv"
@@ -401,8 +402,8 @@ func rowStageStyle(stage string) lipgloss.Style {
 	}
 }
 
-// rowView is how task rows print; plain adds a url line and a width, so a
-// skill can relay the tree where a terminal link does not survive.
+// rowView is how task rows print; plain is cut to a width and carries no
+// urls, since a model reads it and runs `f10 task open --link` for one.
 type rowView struct {
 	parent string // the parent's id, heading its children; "" for a task alone
 	width  int    // 0: no limit
@@ -468,11 +469,6 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 
 		for _, sub := range r.subLines() {
 			notes = append(notes, tasktree.Note{Label: sub[0], Text: sub[1], Whole: sub[0] == "ask"})
-		}
-
-		// a url is never cut, and on a line of its own the row stays narrow
-		if url := cmp.Or(r.PR, r.URL); v.plain && url != "" {
-			notes = append(notes, tasktree.Note{Label: "url", Text: url, Whole: true})
 		}
 
 		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells, Title: r.Title, Notes: notes}
@@ -544,18 +540,43 @@ func (row *taskRow) gateColumn() string {
 	return compactGates(row.Gates)
 }
 
-// prColumn is `#128`, with the state beside it unless the PR is open.
+// prColumn is `#128`, with the state beside it unless the PR is open, an
+// open or merged PR's icon before it so the number reads as a PR.
 func prColumn(r taskRow) string {
 	if r.PR == "" {
 		return ""
 	}
 
 	col := pullNumber(r.PR)
-	if r.PRState != "" && r.PRState != pullOpen {
-		col += " " + r.PRState
+
+	switch r.PRState {
+	case "", pullOpen:
+		return statusGlyph(glyphOpenPR) + " " + col
+	case pullMerged:
+		return statusGlyph(glyphMergedPR) + " " + col + " " + r.PRState
 	}
 
-	return col
+	return col + " " + r.PRState
+}
+
+// The status tree's icons, by position in F10_STATUS_GLYPHS.
+const (
+	glyphOpenPR = iota
+	glyphMergedPR
+	glyphReview
+	glyphJudge
+)
+
+// statusGlyph is a Nerd Font md-* icon, the only range that keeps one cell
+// in Claude Code's output; F10_STATUS_GLYPHS replaces all four for a
+// terminal without the font.
+func statusGlyph(i int) string {
+	glyphs := []string{"\U000F04C2", "\U000F062D", "\U000F0694", "\U000F029B"}
+	if set := strings.Fields(os.Getenv("F10_STATUS_GLYPHS")); len(set) == len(glyphs) {
+		glyphs = set
+	}
+
+	return glyphs[i]
 }
 
 // pullNumber is a request's url as `#128`.
