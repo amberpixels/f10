@@ -146,8 +146,9 @@ func proseCode(t *testing.T) []codeText {
 	return out
 }
 
-// resolveCommand walks words down the tree. A word that is no subcommand of
-// a command with its own Action is a positional argument, which ends the walk.
+// resolveCommand walks words down the tree. Under a leaf with its own Action
+// the next word is a positional argument, which ends the walk; under a command
+// with subcommands it must be one of them, so a typo fails.
 func resolveCommand(root *cli.Command, words []string) string {
 	cmd := root
 
@@ -158,7 +159,7 @@ func resolveCommand(root *cli.Command, words []string) string {
 			continue
 		}
 
-		if i > 0 && cmd.Action != nil {
+		if i > 0 && cmd.Action != nil && len(cmd.Commands) == 0 {
 			return ""
 		}
 

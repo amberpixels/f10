@@ -67,6 +67,14 @@ func TestHelpTiers(t *testing.T) {
 		}
 	}
 
+	// nested plumbing has no category heading of its own, so its full path is listed
+	walkCommands(newApp(), "", func(path string, c *cli.Command) {
+		if p := strings.TrimSpace(path); strings.Contains(p, " ") && isPlumbing(c) &&
+			!strings.Contains(all, "   "+p+"  ") {
+			t.Errorf("f10 help --all misses nested plumbing %q", p)
+		}
+	})
+
 	if !strings.Contains(all, plumbingCategory+":") {
 		t.Errorf("f10 help --all has no %s: heading:\n%s", plumbingCategory, all)
 	}
