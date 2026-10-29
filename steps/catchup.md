@@ -63,7 +63,7 @@ No conflict, or nothing to bring in, is a **correct run**.
      Both sides kept mechanically, a branch with no task, or a clean integration writes none; a failing `lore add` is one line in the report, never a failed step.
    - A clean merge takes the same message through `git merge <base> -m "<subject>" -m "$trailers"`.
 
-5. **Verify** with `project.md → Verify` (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands).
+5. **Verify** with the load's `verify:` line (`conventions/context.md` → Verify).
    Red with no textual conflict is a **semantic conflict** (a renamed function, a dropped column): fix it by the branch's intent, in a fix-up commit under a merge (`conventions/context.md` → Commits, `--step catchup`) or folded into its commit under a rebase, and re-verify.
    Green: `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set, then `f10-state.sh done catchup`, both before the report.
    For an operation already in progress on entry, a mark is unset only when the operation's other side is the marked base (`f10-landed`: the default branch's tip, local or `origin/`; `f10-base-moved`: the sha it holds, or a commit containing it); otherwise it stays set, since the drive reads a cleared mark as that base brought in, and the report names it.

@@ -58,7 +58,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
      **A remote bot's skip replies by default**, its blocks only (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread.
      A human reviewer gets `+reply` only where the verdict names it.
 5. **Round two's prior section**: `fixed` and `explanation accepted` need nothing; `still open`, `fix introduced a problem` and `explanation disputed` take a verdict, and are an `ask` unless the code plainly settles them (there is no third reviewer).
-6. **Verify once after the fixes** (`project.md → Verify`, with implement's skip for an unmoved tree).
+6. **Verify once after the fixes** (the load's `verify:` line, with implement's skip for an unmoved tree).
    Red fails the step: keep the `fix` verdict with the red output on `reason:`, and stop.
 7. **The questionnaire.**
    If the block is remote and `project.md → Review` names who answers there, the `ask` goes to them on the review and the finding waits: a normal end, badge `partial` on `review` (`conventions/failure.md` rule 7), a `note` naming the finding and `/f10:resolve`.

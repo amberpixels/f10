@@ -125,7 +125,7 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 
 - **Green, proceed** - leave the trace (below) and continue (`decision: continue`); the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.
-  The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, its CLAUDE.md rules and `project.md` guardrails, and run `project.md → Verify`, keeping its "never run X" rules (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands); commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
+  The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, its CLAUDE.md rules and `project.md` guardrails, and run the load's `verify:` line (`conventions/context.md` → Verify); commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
   With `traces: on`, the commit body names each change in plain words for a reader of the PR.
   No second review round.
   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`), the changes left uncommitted and nothing posted.

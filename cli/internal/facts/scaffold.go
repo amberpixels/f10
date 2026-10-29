@@ -134,6 +134,10 @@ func verifyBody(pb *probe.Probes) string {
 	var commands []string
 
 	for _, s := range pb.Verify {
+		if s.Judgment {
+			continue
+		}
+
 		for c := range strings.SplitSeq(s.Value, " / ") {
 			commands = append(commands, "`"+c+"`")
 		}

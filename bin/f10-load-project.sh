@@ -4,7 +4,8 @@
 # The project-specific half of a run's context, in one call (read per conventions/context.md): locate
 # .f10/instructions/ (a linked worktree's layered on main's), list each layer, cat the generic
 # steps this run executes plus each layer's project.md and overlays in precedence order, and run
-# the inference probes (remote host, stack, verify tooling). It never fails; absence is a result.
+# the inference probes (remote host, stack), and the verify commands the binary resolved. It never
+# fails; absence is a result.
 #
 # It concatenates and probes, never interprets, except for the worktree layer's `Layering`
 # declaration, which decides what gets concatenated.
@@ -338,6 +339,21 @@ if [ -n "$steps" ]; then
   echo
 fi
 
+# --- verify, resolved by the binary (declared beats detected, layers merged), so no step re-derives
+# it. An older binary ignores the argument and prints its whole config: only a verify: line counts ---
+echo "--- verify (run these, keeping project.md's \"never run X\" rules; a judgment or absent line is yours to settle) ---"
+vline=""
+command -v f10 >/dev/null 2>&1 && vline="$(f10 config verify 2>/dev/null)"
+case "$vline" in
+  verify:*) printf '%s\n' "$vline" ;;
+  *)
+    echo "note: f10 config verify gave no verify line; settle verify from project.md and these probes"
+    { [ -f justfile ] || [ -f Justfile ]; } && echo "verify: justfile present (try: just lint / just test)"
+    [ -f Makefile ] && echo "verify: Makefile present"
+    ;;
+esac
+echo
+
 echo "--- inferred signals (deterministic; use only where project.md is silent) ---"
 origin="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "${origin:-}" ]; then
@@ -371,8 +387,6 @@ for f in go.mod Gemfile package.json; do
   [ -f "$f" ] && echo "stack signal: $f present"
 done
 ls ./*.gemspec >/dev/null 2>&1 && echo "stack signal: *.gemspec present"
-{ [ -f justfile ] || [ -f Justfile ]; } && echo "verify: justfile present (try: just lint / just test)"
-[ -f Makefile ] && echo "verify: Makefile present"
 if [ -d "$storage/plans" ]; then
   shopt -s nullglob
   plans=("$storage"/plans/*.md)
