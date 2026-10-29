@@ -11,7 +11,7 @@ No bug hunt, no verdict; the merge is the user's call.
 **Hands-on** (`--hands-on`, or a pipeline entry naming it) seeds the state, leaves the app running and hands the script over.
 Everything before execution is the same, and a static report carries the script and the live url too.
 
-1. **Gather the change**: a PR number or url via the host CLI (`gh pr diff` / `gh pr view`, `glab mr diff` / `glab mr view`); a task id via the branch linked to it, or that branch's PR; the current branch, or no argument, via its PR when one is open, else `git diff <base>...HEAD`.
+1. **Gather the change**: `f10 pr diff [<subject>]` and `f10 pr view [<subject>]`, the subject a PR number or url, a task id, or nothing for the current branch; they find the branch, its open PR and its base.
    Then the task and the plan the branch points to.
 2. **Say what changed, in the user's words**: the report's headline.
    What the app did before, what it does now, what a user will notice; two or three sentences, derived from the diff, no handler names, component names or file paths.

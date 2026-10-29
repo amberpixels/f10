@@ -29,8 +29,7 @@ Context: `project.md` guardrails and Verify.
      The experiment code stays uncommitted in the worktree; the report names it by path.
      Verify still runs, and its result goes in the report, but red verify on throwaway code does not fail the step.
 2. **Verify locally.**
-   Run the verify commands in project.md's Verify section, keeping its "never run X" rules.
-   None declared: a `justfile` means `just lint` / `just test`; a `Makefile`, its standard targets; else the stack's idiomatic verify commands (`go test ./...` + the linter the repo configures, etc.).
+   Run the commands the load's `verify:` line names (`conventions/context.md` → Verify).
    Fix what you broke; a spike records red verify in its report instead (point 1).
    **Skip it only for a tree that did not move.**
    If *this session* already ran these same commands green and nothing has touched the working tree since, say so and move on.

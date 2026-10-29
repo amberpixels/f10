@@ -11,7 +11,7 @@ Name a bug only where it changes the verdict.
 1. **Gather the subject.**
    Free text: as written.
    A task id: `f10 task read <id>`, plus `f10 plan read <id>` where a plan exists.
-   A PR number, url, or the current branch: diff and description via the host CLI (`gh pr diff` / `gh pr view --comments`, `glab mr diff` / `glab mr view`), or `git diff <base>...HEAD` without a PR, plus the task and plan the branch name points to.
+   A PR number, url, or the current branch: `f10 pr diff [<PR>]` and `f10 pr view --comments [<PR>]` (the branch against its base when it has no PR), plus the task the view's `task:` line names and its plan.
    A sha, a range, or "last N commits": `git show <sha>` / `git diff <range>`, plus the task and plan the messages or branch point to; count commits with `git log --oneline` (`HEAD~N` skips merged branches).
    No argument: what this conversation is about; say in one line which subject you took before judging it.
    Whatever the subject, a plan's `## Consequences` are costs it already accepts: weigh them in point 5; a cost it leaves out, or `- none` on a design with an evident one, is a defect where it changes the verdict.
@@ -125,7 +125,7 @@ First read the PR (`gh pr view --json state,headRefOid` / `glab mr view -F json`
 
 - **Green, proceed** - leave the trace (below) and continue (`decision: continue`); the verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work.
-  The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, its CLAUDE.md rules and `project.md` guardrails, and run `project.md → Verify`, keeping its "never run X" rules (none declared: a `justfile` means `just lint` / `just test`, a `Makefile` its standard targets, else the stack's idiomatic commands); commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
+  The ship skill folds them into the plan file as before `pr`; then make them in the project's house style, its CLAUDE.md rules and `project.md` guardrails, and run the load's `verify:` line (`conventions/context.md` → Verify); commit per `conventions/context.md` → Commits with `--step judge`, and push to the PR's branch, never forcing.
   With `traces: on`, the commit body names each change in plain words for a reader of the PR.
   No second review round.
   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`), the changes left uncommitted and nothing posted.

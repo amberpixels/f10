@@ -687,6 +687,62 @@ func (h Host) MRReviews(ctx context.Context, iid int) ([]Review, error) {
 	return out, nil
 }
 
+// PullDiff is the request's diff as the host has it: what was pushed, not
+// what a checkout holds.
+func (h Host) PullDiff(ctx context.Context, number int) (string, error) {
+	n := strconv.Itoa(number)
+
+	return h.Run(ctx, h.Pick([]string{"pr", "diff", n}, []string{"mr", "diff", n})...)
+}
+
+// A Comment is one plain comment on a request, oldest first.
+type Comment struct {
+	Author string
+	Body   string
+	At     time.Time
+}
+
+// PullComments is the request's conversation; GitLab's system notes (pushes,
+// approvals, label changes) are events, not comments, and are left out.
+func (h Host) PullComments(ctx context.Context, number int) ([]Comment, error) {
+	type note struct {
+		Body      string    `json:"body"`
+		System    bool      `json:"system"`
+		CreatedAt time.Time `json:"createdAt"`
+		CreatedGL time.Time `json:"created_at"`
+		Author    user      `json:"author"`
+	}
+
+	var notes []note
+
+	if h.GLab() {
+		var err error
+		if notes, err = DecodePages[note](ctx, h,
+			fmt.Sprintf("projects/:fullpath/merge_requests/%d/notes?sort=asc&per_page=100", number)); err != nil {
+			return nil, err
+		}
+	} else {
+		var p struct {
+			Comments []note `json:"comments"`
+		}
+		if err := h.Decode(ctx, &p, "pr", "view", strconv.Itoa(number), "--json", "comments"); err != nil {
+			return nil, err
+		}
+
+		notes = p.Comments
+	}
+
+	out := make([]Comment, 0, len(notes))
+
+	for _, n := range notes {
+		if !n.System {
+			out = append(out, Comment{Author: n.Author.name(), Body: n.Body, At: cmp.Or(n.CreatedAt, n.CreatedGL)})
+		}
+	}
+
+	return out, nil
+}
+
 // ForcePushesQuery is the GraphQL that lists a PR's force-pushes.
 const ForcePushesQuery = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
 	"{ pullRequest(number: $number) { timelineItems(last: 100, itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT]) " +

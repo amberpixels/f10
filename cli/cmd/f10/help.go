@@ -51,7 +51,54 @@ func runHelp(ctx context.Context, cmd *cli.Command) error {
 		return cli.ShowCommandHelp(ctx, root, name)
 	}
 
-	return cli.ShowRootCommandHelp(root)
+	if err := cli.ShowRootCommandHelp(root); err != nil {
+		return err
+	}
+
+	if cmd.Bool("all") {
+		writeNestedPlumbing(root.Writer, root)
+	}
+
+	return nil
+}
+
+// writeNestedPlumbing lists the plumbing below the top level by full path:
+// the root listing shows one level, and urfave groups a subcommand's rows by
+// category only once that command runs.
+func writeNestedPlumbing(w io.Writer, root *cli.Command) {
+	var rows [][2]string
+
+	for _, top := range root.Commands {
+		var walk func(path string, c *cli.Command)
+		walk = func(path string, c *cli.Command) {
+			for _, sub := range c.Commands {
+				p := path + " " + sub.Name
+				// showPlumbing already cleared Hidden, so the category alone marks it
+				if sub.Category == plumbingCategory {
+					rows = append(rows, [2]string{p, sub.Usage})
+				}
+
+				walk(p, sub)
+			}
+		}
+
+		walk(top.Name, top)
+	}
+
+	if len(rows) == 0 {
+		return
+	}
+
+	width := 0
+	for _, r := range rows {
+		width = max(width, len(r[0]))
+	}
+
+	fmt.Fprintln(w, "\nPLUMBING SUBCOMMANDS:")
+
+	for _, r := range rows {
+		fmt.Fprintf(w, "   %-*s  %s\n", width, r[0], strings.Join(strings.Fields(r[1]), " "))
+	}
 }
 
 // showPlumbing clears Hidden on every plumbing command in the tree; urfave

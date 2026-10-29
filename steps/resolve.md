@@ -34,8 +34,8 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
 
 1. **Find the file.**
    A task id or PR whose branch is not current: one line naming the worktree that holds it (`git worktree list`), or that none does; a normal end.
-   The directory is named as `steps/review.md` names it: the task id (explicit, else `f10 task read` with no argument, else a PR's head branch via the host CLI), or the branch name with `/` as `-`.
-   Take the highest `<round>.md`.
+   `f10 review round [<task-id>]` (a PR's task id from the `task:` line `f10 pr view <PR>` prints) prints the file as `latest:`; its exit 3 declines a new round, not this one.
+   No `latest:` line: nothing to resolve, a normal end.
    Blocks with a `verdict:` are done; none left (a clean file included) is a normal end, after points 10 and 11 when their conditions hold and the sha point 10 would mark carries no `review (local)` status yet.
 2. **Read what was asked**: the task and the plan.
    The user's stated choice beats the reviewer.
@@ -58,7 +58,7 @@ Inside a ship run, after a `review:ci` or `review:local+ci` entry, point 5 alone
      **A remote bot's skip replies by default**, its blocks only (`skip +reply` unless the user said `skip` alone), since a CI re-review sees only the thread.
      A human reviewer gets `+reply` only where the verdict names it.
 5. **Round two's prior section**: `fixed` and `explanation accepted` need nothing; `still open`, `fix introduced a problem` and `explanation disputed` take a verdict, and are an `ask` unless the code plainly settles them (there is no third reviewer).
-6. **Verify once after the fixes** (`project.md → Verify`, with implement's skip for an unmoved tree).
+6. **Verify once after the fixes** (the load's `verify:` line, with implement's skip for an unmoved tree).
    Red fails the step: keep the `fix` verdict with the red output on `reason:`, and stop.
 7. **The questionnaire.**
    If the block is remote and `project.md → Review` names who answers there, the `ask` goes to them on the review and the finding waits: a normal end, badge `partial` on `review` (`conventions/failure.md` rule 7), a `note` naming the finding and `/f10:resolve`.

@@ -58,20 +58,10 @@ var hostCLIAllowlist = map[string]string{
 	"steps/catchup.md: gh pr view":            movesToBinary,
 	"steps/catchup.md: glab mr update":        movesToBinary,
 	"steps/catchup.md: glab mr view":          movesToBinary,
-	"steps/demo.md: gh pr diff":               movesToBinary,
-	"steps/demo.md: gh pr view":               movesToBinary,
-	"steps/demo.md: glab mr diff":             movesToBinary,
-	"steps/demo.md: glab mr view":             movesToBinary,
-	"steps/explain.md: gh pr diff":            movesToBinary,
-	"steps/explain.md: gh pr view":            movesToBinary,
-	"steps/explain.md: glab mr diff":          movesToBinary,
-	"steps/explain.md: glab mr view":          movesToBinary,
 	"steps/judge.md: gh api repos":            movesToBinary,
 	"steps/judge.md: gh pr comment":           movesToBinary,
-	"steps/judge.md: gh pr diff":              movesToBinary,
 	"steps/judge.md: gh pr view":              movesToBinary,
 	"steps/judge.md: glab api projects":       movesToBinary,
-	"steps/judge.md: glab mr diff":            movesToBinary,
 	"steps/judge.md: glab mr note":            movesToBinary,
 	"steps/judge.md: glab mr view":            movesToBinary,
 	"steps/pr.md: gh api user":                movesToBinary,
@@ -146,8 +136,9 @@ func proseCode(t *testing.T) []codeText {
 	return out
 }
 
-// resolveCommand walks words down the tree. A word that is no subcommand of
-// a command with its own Action is a positional argument, which ends the walk.
+// resolveCommand walks words down the tree. Under a leaf with its own Action
+// the next word is a positional argument, which ends the walk; under a command
+// with subcommands it must be one of them, so a typo fails.
 func resolveCommand(root *cli.Command, words []string) string {
 	cmd := root
 
@@ -158,7 +149,7 @@ func resolveCommand(root *cli.Command, words []string) string {
 			continue
 		}
 
-		if i > 0 && cmd.Action != nil {
+		if i > 0 && cmd.Action != nil && len(cmd.Commands) == 0 {
 			return ""
 		}
 

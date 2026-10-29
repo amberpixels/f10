@@ -381,8 +381,8 @@ f10 doctor     # is the plugin, the binary and the environment wired up? changes
 ```
 
 `f10 --help` lists the commands a person types.
-The verbs the steps and skills call (`f10 trace`, `f10 review`, `f10 task ref` and the like) are plumbing: `f10 help --all` lists them under their own heading.
-`f10 help --agent` prints one line per command, generated from the command definitions; `f10-load-conventions.sh` appends it, so every f10 run's context holds the CLI as built.
+The verbs the steps and skills call (`f10 trace`, `f10 review`, `f10 task ref` and the like) are plumbing: `f10 help --all` lists them under their own headings, top-level ones under `plumbing:` and subcommands by full path under `PLUMBING SUBCOMMANDS:`.
+`f10 help --agent` prints one line per command, generated from the command definitions; `bin/f10-inject.sh` tells every f10 skill that runs a step to load it beside the conventions, so its context holds the CLI as built.
 
 `f10 doctor` checks both halves of the install and what they need: the plugin and binary versions agree, the plugin's scripts are on PATH, its hooks are registered (or wait on a restart), the status line is wired, Herdr, the host CLI's login and `project.md`'s frontmatter, each with a remedy line when it is not.
 
