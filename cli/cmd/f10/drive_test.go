@@ -829,6 +829,89 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	}
 }
 
+// An ask in one task does not end the drive while another can move: a ship
+// the catchup guard stopped gets its catchup and its resume, under either
+// mark, and the drive exits on the ask once the rest is through.
+func TestDriveCatchesUpAGuardStopWhileAnotherTaskAsks(t *testing.T) {
+	cases := map[string]struct{ key, target string }{
+		"landed":     {cfgLanded, "main"},
+		"base moved": {cfgMoved, "base1"},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			mark := "git config --get branch.GH-1." + tc.key
+			catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
+			resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
+
+			fx := newDriveFixture(t, "GH-1", "GH-2", "ship")
+			fx.adoptsGH1()
+			fx.task("GH-2", taskInfo{body: "second"}, heads("GH-2"))
+			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
+			fx.f.script(
+				"herdr worktree open --cwd /code/repo --path /code/repo.GH-2 --label GH-2",
+				`{"result":{"workspace":{"workspace_id":"ws:GH-2"},"root_pane":{"pane_id":"pane:2"},"already_open":true}}`,
+			)
+			fx.f.script("herdr agent get pane:2", agentFound)
+			fx.f.script(catchup, "{}")
+			fx.f.script(resume, "{}")
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+			fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+			fx.f.script(mark, tc.target)
+
+			if tc.key == cfgMoved {
+				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, "GH-0")
+				fx.f.script("git merge-tree --write-tree --no-messages base1 HEAD", "tree")
+			}
+
+			fx.writeRunFor(t, "GH-2", "blocked", "ship", "", "1. Keep the old flag? [yes | no]")
+
+			idle := listing("GH-1", "idle", "GH-2", "idle")
+			working := listing("GH-1", "working", "GH-2", "idle")
+			fx.f.script(wsList, unopened, idle, unopened, idle, working, idle, idle, working, idle)
+
+			fx.onTick[2] = func() {
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.reports(t, fx.clock)
+				fx.f.script(mark, "")
+			}
+			fx.onTick[4] = func() { fx.writeRun(t, "done", "", "", "") }
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if exitCode(err) != exitAsk {
+				t.Fatalf("err = %v, want exit %d\n%s", err, exitAsk, out)
+			}
+
+			for _, call := range []string{catchup, resume} {
+				if !fx.f.called(call) {
+					t.Errorf("%q was not prompted: %q\n%s", call, fx.f.calls, out)
+				}
+			}
+
+			for _, want := range []string{"GH-1:    done: ship", "GH-2:    asked at ship", "answer with:"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("output lacks %q:\n%s", want, out)
+				}
+			}
+
+			// the ask is told when it is found, not held for the exit
+			if ask, resumed := strings.Index(
+				out,
+				"GH-2 asks at ship",
+			), strings.Index(
+				out,
+				"resume at pr",
+			); ask < 0 || resumed < 0 ||
+				ask > resumed {
+				t.Errorf("the ask was not told before GH-1 resumed:\n%s", out)
+			}
+		})
+	}
+}
+
 // restored is what a driven catchup that stopped, then ended clean, leaves:
 // the mark cleared, the ship stop it found written back, and its done signal.
 func restored(fx *driveFixture, t *testing.T) {

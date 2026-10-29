@@ -567,8 +567,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    No sign within two minutes halts the task, and so does a workspace that still shows no agent status by then.
    Once the agent is idle again, the run says how the turn ended:
    - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
-     At the end of that poll the driver prints every task's ask and the command that answers them all, and exits **4**.
-     The other agents keep working in their own panes;
+     The driver keeps driving every other task: a guard stop still gets its catchup, a base still releases its dependents.
+     Once nothing else can move (every other task ended, asking, or held on its base), it prints every task's ask and the command that answers them all, and exits **4**;
    - **blocked waiting on its base** (`f10 state wait`, a driven ship that found its base without code) - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
      Once the base is released and its branch head has moved past the one the ship found, ship is sent again with `resume at implement`; the same head never sends it twice.
      A wait on a base this drive does not run, or one already through, halts the task with the run's note;
@@ -583,7 +583,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver exited on an ask), `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `running <skill>` (still working when the driver was drained for an upgrade), `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
    Exit 6 is a drive stopped for a daemon upgrade; only the daemon and the command following it see it.
 
