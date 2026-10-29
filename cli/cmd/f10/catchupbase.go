@@ -311,7 +311,7 @@ func (p *catchupPlan) originBase(ctx context.Context, main, name, how string) er
 }
 
 // afterBase is the recorded branch, local first: a catchup by name takes the
-// base task's newest work, pushed or not.
+// base task's newest work, pushed or not, unless f10-base-moved names a sha.
 func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fromOrigin bool) error {
 	p.found = foundAfter
 
@@ -334,12 +334,24 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 		p.code = codeYes
 	}
 
+	moved := ""
+	if !fromOrigin {
+		if moved, err = movedMark(ctx, main, p.branch, after); err != nil {
+			return err
+		}
+	}
+
 	switch {
 	case fromOrigin && remote == "":
 		p.skip("base " + after + " is not on origin yet")
 		return nil
 	case fromOrigin:
 		p.base, p.sha, p.how = "origin/"+after, remote, "f10-after-branch: "+after+" as origin holds it"
+	case moved != "":
+		// the drive and the watcher gate the push on this sha, so a newer
+		// local tip would carry commits neither checked
+		p.base, p.sha = moved, moved
+		p.how = "f10-base-moved: " + short(moved) + " of " + after + ", the commit the mark names"
 	case local != "":
 		p.base, p.sha, p.how = after, local, "f10-after-branch: "+after
 	default:
@@ -349,6 +361,42 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 	p.mark = cfgMoved + " " + p.sha
 
 	return nil
+}
+
+// movedMark is the commit f10-base-moved names on branch, "" when unset. A
+// mark naming no commit, or one the base no longer reaches (rewritten since),
+// fails rather than falling back to a branch tip or bringing in old commits.
+func movedMark(ctx context.Context, main, branch, after string) (string, error) {
+	key := "branch." + branch + "." + cfgMoved
+
+	moved, err := gitx.Config(ctx, main, key)
+	if err != nil || moved == "" {
+		return "", err
+	}
+
+	sha, err := gitx.Ref(ctx, main, moved+"^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("reading the %s mark %s: %w", cfgMoved, moved, err)
+	}
+
+	if sha == "" {
+		return "", fmt.Errorf("%s names %s, no commit here: unset %s to catch up with the base branch",
+			cfgMoved, moved, key)
+	}
+
+	for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
+		held, err := gitx.IsAncestor(ctx, main, sha, ref)
+		if err != nil {
+			return "", fmt.Errorf("checking whether %s holds the %s mark: %w", after, cfgMoved, err)
+		}
+
+		if held {
+			return sha, nil
+		}
+	}
+
+	return "", fmt.Errorf("%s names %s, which %s no longer holds: unset %s to catch up with the base branch",
+		cfgMoved, short(sha), after, key)
 }
 
 // rewritten is the base's old tip when its history was rewritten: onto

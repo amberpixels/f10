@@ -658,7 +658,7 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 | key | meaning |
 |---|---|
 | `branch` | the current branch |
-| `base`, `sha` | the ref to integrate and its sha |
+| `base`, `sha` | the ref to integrate and its sha; with `f10-base-moved` set (not before `pr` or `judge`), the commit the mark names, printed as a sha |
 | `upstream` | with `method: onto` only: the base's old tip, from `branch.<name>.f10-base-tip` |
 | `found` | `f10-landed`, `f10-after-branch`, `f10-after-branch gone` (its task finished: unset both after keys) or `default branch` |
 | `how` | how the base was found, in a sentence |
@@ -668,6 +668,7 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 | `code` | for an `f10-after-branch` base: `yes`, or `none` when it has no commit of its own, merges not counted |
 
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
+`f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the drive's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
 `onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
 `f10 start --after` records the tip, `f10 finish` records it again for each dependent before deleting the base branch (a spike closed without merging clears it instead), and the catchup step refreshes it once green.
