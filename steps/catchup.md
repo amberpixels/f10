@@ -108,8 +108,8 @@ Every question point 4 would put to the user is decided by the task's intent, re
 Each choice is written down, one per file, so the reviewer and the change judge see what was chosen:
 
 - the lore `decision` point 4 writes for a hunk settled by taking one side, here for every file decided by the task's intent, a modify-versus-delete and a regenerate included;
-- a line under a `## Catchup` heading in the PR body, when the branch has an open PR (`gh pr view --json number,body` / `glab mr view -F json`): `<path>: kept <side>, <why>`, added to the heading's lines, or under a new heading at the end of the body.
-  Write it with `gh pr edit <n> --body-file <file>` / `glab mr update <n> --description "$(cat <file>)"`, the draft in a temp file outside the repo.
+- a line under a `## Catchup` heading in the PR body, when the branch has an open PR (its body from `f10 pr view`): `<path>: kept <side>, <why>`, added to the heading's lines, or under a new heading at the end of the body.
+  Write it with `f10 pr edit --body-file <file>`, the draft in a temp file outside the repo.
   No PR, no line: lore and the report carry it, and the pr step renders the heading from lore when it opens one.
 
 Any failure, the **On failure** cases below included and a conflict the step cannot settle at all (a binary both sides changed, a regenerate that fails), is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
