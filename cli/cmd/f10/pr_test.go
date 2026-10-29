@@ -177,8 +177,75 @@ func TestOpenPullOfSkipsClosed(t *testing.T) {
 
 	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	if n, err := openPullOf(t.Context(), tg, "feat"); err != nil || n != 5 {
-		t.Errorf("openPullOf = %d, %v; want 5", n, err)
+	if p, err := openPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
+		t.Errorf("openPullOf = %d, %v; want 5", p.Number, err)
+	}
+}
+
+// A task id finds its branch locally, or on origin alone, and names a task
+// with no branch as one to start.
+func TestPRSubjectByTaskID(t *testing.T) {
+	dir := prRepo(t)
+	git(t, dir, "switch", "-q", "-c", "REPO-7")
+	commitFile(t, dir, "seven.txt")
+	git(t, dir, "push", "-q", "origin", "REPO-7")
+	git(t, dir, "switch", "-q", "-c", "REPO-8", "main")
+	commitFile(t, dir, "eight.txt")
+	git(t, dir, "switch", "-q", "main")
+
+	out, _, err := runPR(t, dir, "view", "REPO-8")
+	if err != nil || !strings.Contains(out, "branch: REPO-8\n") || !strings.Contains(out, "task: REPO-8\n") {
+		t.Errorf("local branch: view = %q, %v", out, err)
+	}
+
+	if out, _, err := runPR(t, dir, "diff", "REPO-8", "--name-only"); err != nil || out != "eight.txt\n" {
+		t.Errorf("local branch: diff = %q, %v; want its commits alone", out, err)
+	}
+
+	git(t, dir, "branch", "-q", "-D", "REPO-7")
+
+	if out, _, err := runPR(t, dir, "diff", "REPO-7", "--name-only"); err != nil || out != "seven.txt\n" {
+		t.Errorf("origin-only branch: diff = %q, %v; want seven.txt", out, err)
+	}
+
+	if _, _, err := runPR(t, dir, "view", "REPO-9"); err == nil || !strings.Contains(err.Error(), "start it first") {
+		t.Errorf("no branch: err = %v, want the task named as one to start", err)
+	}
+}
+
+// A PR's head branch names its task by the link start writes, else by the
+// id in its name.
+func TestBranchTask(t *testing.T) {
+	dir := prRepo(t)
+	git(t, dir, "config", "branch.picked-up."+cfgTaskID, "REPO-3")
+
+	tg, err := targetAt(t.Context(), dir, false, "pr")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	named := tg.eff.IDPrefix + "-4"
+
+	for branch, want := range map[string]string{"picked-up": "REPO-3", named + "/slug": named, "other": ""} {
+		got := ""
+		if r := branchTask(t.Context(), tg, dir, branch); r != nil {
+			got = r.ID
+		}
+
+		if got != want {
+			t.Errorf("branchTask(%q) = %q, want %q", branch, got, want)
+		}
+	}
+}
+
+func TestPullCommentsGitHub(t *testing.T) {
+	f := newFakes(t)
+	f.script("gh pr view 4 --json comments", `{"comments":[`+
+		`{"author":{"login":"ann"},"body":"looks good","createdAt":"2026-10-01T00:00:00Z"}]}`)
+
+	got, err := newHost("gh", t.TempDir()).PullComments(t.Context(), 4)
+	if err != nil || len(got) != 1 || got[0].Author != "ann" || got[0].Body != "looks good" {
+		t.Errorf("PullComments = %+v, %v", got, err)
 	}
 }
 

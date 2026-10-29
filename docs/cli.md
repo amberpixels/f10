@@ -56,6 +56,9 @@ f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path)
 f10 demo open [id]       # the demo report, in the browser (--link writes the path)
 f10 pr open [n]          # the PR or MR, no number their list; gh or glab decided by the remote (--link, --print as for task)
+f10 pr base [PR | id] [--origin]      # the branch the PR targets or would: the recorded stacked base, else the default branch
+f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
+f10 pr view [PR | id] [--comments]    # branch, base, task and open PR with its description; says so when there is no PR
 f10 review pick [n] [--latest] [--json]               # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names

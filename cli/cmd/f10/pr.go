@@ -102,6 +102,10 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	if s.lookupErr != nil {
+		fmt.Fprintf(cmd.ErrWriter, "f10: no PR read (%v), so the base is the recorded or default branch\n", s.lookupErr)
+	}
+
 	var out string
 
 	if s.number > 0 && !s.here {
@@ -118,7 +122,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 			out = patchFiles(out)
 		}
 	} else {
-		base, err := prBase(ctx, cmd.ErrWriter, s.main, s.branch)
+		base, err := s.base(ctx, cmd.ErrWriter)
 		if err != nil {
 			return err
 		}
@@ -184,7 +188,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	base, err := prBase(ctx, cmd.ErrWriter, s.main, s.branch)
+	base, err := s.base(ctx, cmd.ErrWriter)
 	if err != nil {
 		return err
 	}
@@ -195,6 +199,13 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 
 	if s.task != nil {
 		fmt.Fprintf(&b, "task: %s\n", s.task.Label())
+	}
+
+	if s.lookupErr != nil {
+		fmt.Fprintf(&b, "\nno PR read for %s: %v\n", s.branch, s.lookupErr)
+		_, err = io.WriteString(cmd.Writer, b.String())
+
+		return err
 	}
 
 	if s.number == 0 {

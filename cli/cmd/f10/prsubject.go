@@ -24,7 +24,12 @@ type prSubject struct {
 	path   string // the checkout holding it, "" when none does
 	here   bool   // checked out in the checkout the command runs in
 	task   *ref.Ref
-	number int // the request: one named, else the branch's open one; 0 for none
+	number int    // the request: one named, else the branch's open one; 0 for none
+	target string // the request's own base branch, which wins over the recorded one
+
+	// lookupErr is a failed host lookup for a branch checked out here, whose
+	// diff is local and goes on against the git-only base
+	lookupErr error
 }
 
 // pullNumberOf is the request a token names, or 0: a url, #n, !n, or a bare
@@ -63,8 +68,9 @@ func resolvePRSubject(ctx context.Context, t *target, token string, withPull boo
 			return s, fmt.Errorf("%s returned no head branch for #%d", h.Name, n)
 		}
 
-		s.number, withPull = n, false
+		s.number, s.target, withPull = n, p.base(), false
 		s.remote = refSHA(ctx, s.main, "refs/heads/"+s.branch) == ""
+		s.task = branchTask(ctx, t, s.main, s.branch)
 	case token == "":
 		if s.branch = gitx.CurrentBranch(ctx, t.dir); s.branch == "" {
 			return s, errors.New("HEAD is detached: name a PR or a task")
@@ -112,38 +118,74 @@ func resolvePRSubject(ctx context.Context, t *target, token string, withPull boo
 	}
 
 	if withPull {
-		n, err := openPullOf(ctx, t, s.branch)
-		if err != nil {
+		p, err := openPullOf(ctx, t, s.branch)
+
+		switch {
+		case err != nil && s.here:
+			s.lookupErr = err
+		case err != nil:
 			return s, err
 		}
 
-		s.number = n
+		s.number, s.target = p.Number, p.Base
 	}
 
 	return s, nil
 }
 
+// branchTask is the task a PR's head branch belongs to: its link, else the
+// id in its name; nil when neither names one the tracker resolves.
+func branchTask(ctx context.Context, t *target, main, branch string) *ref.Ref {
+	id, _ := gitx.Config(ctx, main, "branch."+branch+"."+ref.TaskKey)
+	if id == "" && t.eff != nil {
+		id = ref.Matcher(t.eff.IDPrefix)(branch)
+	}
+
+	if id == "" {
+		return nil
+	}
+
+	r, err := t.reference(ctx, id)
+	if err != nil {
+		return nil
+	}
+
+	r = r.Head()
+
+	return &r
+}
+
+// base is the branch the subject is diffed against: its open request's
+// target, else the one prBase reads from git.
+func (s prSubject) base(ctx context.Context, warn io.Writer) (string, error) {
+	if s.target != "" {
+		return s.target, nil
+	}
+
+	return prBase(ctx, warn, s.main, s.branch)
+}
+
 // openPullOf is the newest open request whose head is branch, or 0: a merged
 // or closed one is history, not the change's request. A checkout with no
 // host CLI has no requests, and still diffs.
-func openPullOf(ctx context.Context, t *target, branch string) (int, error) {
+func openPullOf(ctx context.Context, t *target, branch string) (forge.PR, error) {
 	h, err := t.host()
 	if err != nil {
-		return 0, nil //nolint:nilerr // no host is no request
+		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
 
 	prs, err := h.PullsByHead(ctx, branch)
 	if err != nil {
-		return 0, err
+		return forge.PR{}, err
 	}
 
 	for _, p := range prs {
 		if p.Status == forge.Open {
-			return p.Number, nil
+			return p, nil
 		}
 	}
 
-	return 0, nil
+	return forge.PR{}, nil
 }
 
 // prBase is the branch the subject's request targets or would target. A
