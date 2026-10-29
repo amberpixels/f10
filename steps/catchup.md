@@ -70,6 +70,7 @@ It differs from the run above:
 - **Base and method**: `f10 catchup base --guard <entry>` (`implement`, `pr` or `judge`).
   Before `pr` and a change judge it reads every base from origin, what the PR targets, so unpushed commits of another task never ride into this PR; before implement, point 2's local-first order stays, and nothing recorded is nothing to do.
   This branch, once on origin, is merged whatever `catchup:` or `catchup_stacked:` says, so the push after it never forces.
+  `found: f10-after-branch gone` unsets both keys, as point 2 says.
 - **Nothing to do**: `method: skip` (`catchup: off`, the default branch itself, no recorded base before implement, a base not on origin yet before `pr`) says nothing; `method: none` (the base already an ancestor) says nothing and still clears the marks as point 3 does.
 - **Clean tree**: the ship skill commits the tree first where it has to; the guard never stashes.
 - **An operation already in progress** on entry (the loader's `in progress:` line) is the user's, not the guard's: fail the run before anything moves, never aborting it, with the operation and its other side in the `state` row and `/f10:catchup` in `next`.

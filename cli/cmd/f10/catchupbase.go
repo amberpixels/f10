@@ -146,17 +146,21 @@ func resolveCatchup(ctx context.Context, in catchupInput) (catchupPlan, error) {
 	p := catchupPlan{branch: branch}
 	def := cmp.Or(strings.TrimPrefix(defaultBranch(ctx, in.main), "origin/"), "main")
 
-	switch {
-	case in.guard != "" && in.catchup == "off":
-		p.skip("catchup: off")
-		return p, nil
-	case in.guard != "" && branch == def:
+	if in.guard != "" && branch == def {
 		p.skip("on the default branch")
 		return p, nil
 	}
 
 	if err := p.findBase(ctx, in, def); err != nil || p.method == methodSkip {
 		return p, err
+	}
+
+	// the base still prints: ship asks about a base with no code even when off
+	if in.guard != "" && in.catchup == "off" {
+		p.mark = ""
+		p.skip("catchup: off")
+
+		return p, nil
 	}
 
 	inBranch, err := gitx.IsAncestor(ctx, in.dir, p.sha, "HEAD")
@@ -200,7 +204,7 @@ func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string)
 			return p.originBase(ctx, in.main, def, "f10-landed: the default branch as origin holds it")
 		}
 
-		sha, name, err := defaultTarget(ctx, in.main)
+		sha, name, err := defaultTargetOf(ctx, in.main, def)
 		if err != nil {
 			return err
 		}

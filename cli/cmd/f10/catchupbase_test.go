@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -260,5 +262,70 @@ func TestCatchupBaseOutput(t *testing.T) {
 	want := "branch: FT-1/a\nbase: origin/main\nsha: abc\nfound: default branch\nhow: h\nmethod: rebase\nwhy: w\n"
 	if b.String() != want {
 		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
+	}
+}
+
+func TestCatchupGuardOffStillPrintsTheBase(t *testing.T) {
+	r := newCatchupRepo(t)
+	r.at(during, "branch", "FT-2/b", "origin/main")
+	r.at(during, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+
+	in := r.input("implement")
+	in.catchup, in.catchupDefault = "off", false
+
+	p := r.resolve(in)
+	wantPlan(t, p, "FT-2/b", foundAfter, methodSkip)
+
+	if p.sha != r.sha("FT-2/b") || p.mark != "" {
+		t.Errorf("sha %q mark %q", p.sha, p.mark)
+	}
+}
+
+func TestCatchupBaseLandedWithoutOriginHead(t *testing.T) {
+	r := newCatchupRepo(t)
+	r.at(during, "config", "branch.FT-1/a."+cfgLanded, "main")
+	r.at(during, "remote", "set-head", "origin", "-d")
+
+	wantPlan(t, r.resolve(r.input("")), "main", foundLanded, methodRebase)
+}
+
+func TestCatchupBaseCommand(t *testing.T) {
+	r := newCatchupRepo(t)
+
+	dir := filepath.Join(r.dir, ".f10", "instructions")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	md := "---\ncatchup: merge\n---\n# demo\n"
+	if err := os.WriteFile(filepath.Join(dir, "project.md"), []byte(md), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(args ...string) (string, error) {
+		var out bytes.Buffer
+
+		app := newApp()
+		app.Writer = &out
+		err := app.Run(t.Context(), append([]string{"f10", "-C", r.dir, "catchup", "base", "--no-fetch"}, args...))
+
+		return out.String(), err
+	}
+
+	for _, guard := range [][]string{nil, {"--guard", "judge"}} {
+		out, err := run(guard...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, want := range []string{"base: origin/main\n", "method: merge\n", "why: catchup: merge\n"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%v: no %q in\n%s", guard, want, out)
+			}
+		}
+	}
+
+	if _, err := run("--guard", "bogus"); err == nil || !strings.Contains(err.Error(), "want implement, pr or judge") {
+		t.Errorf("--guard bogus: %v", err)
 	}
 }
