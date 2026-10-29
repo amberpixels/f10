@@ -25,7 +25,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -214,32 +213,13 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		started:  startedMove(t),
 		record:   recordAt,
-		finish: func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error {
-			cwd, err := os.Getwd()
+		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
+			fin, err := driveFinishInput(t, main, h, req)
 			if err != nil {
-				return fmt.Errorf("getwd: %w", err)
+				return err
 			}
 
-			return finish(ctx, w, finishInput{
-				main:      main,
-				driver:    drv,
-				task:      task,
-				host:      h.at(main),
-				method:    t.eff.MergeMethod,
-				loreStore: &lore.Store{Root: loreRootFor(t)},
-				gate:      t.eff.LoreGate,
-				cwd:       cwd,
-				workspace: os.Getenv("HERDR_WORKSPACE_ID"),
-				merge:     pr == finishMerge,
-				local:     pr == finishLocal,
-				progress:  progress,
-				plansDir:  t.sharedPlansDir(),
-				title:     titleLookup(t, task.Number),
-				// a driven finish asks no second question, since a resume
-				// carries only the latest answer: a bundle's riders stay
-				// open, the reversible choice, and the report names them
-				close: []string{},
-			})
+			return finish(ctx, w, fin)
 		},
 		stateDir: state.Dir(),
 		session:  state.Session(),
@@ -515,7 +495,7 @@ type driveInput struct {
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	// pr: "", or the answer merge or local; progress names each action finish takes
-	finish   func(ctx context.Context, w io.Writer, task ref.Ref, pr string, progress func(string)) error
+	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
 	stateDir string
 	session  string // the session that typed the command, inherited through the daemon's environment
 	ttl      time.Duration
@@ -2063,6 +2043,33 @@ const (
 	finishLocal = "local"
 )
 
+// driveFinish is what a drive's finish needs from its run; the rest comes
+// from the project's settings.
+type driveFinish struct {
+	task     ref.Ref
+	suffix   string
+	branch   string // the run's branch, "" to look it up by task and suffix
+	pr       string // the answer to a foreign PR: finishMerge, finishLocal or ""
+	progress func(string)
+}
+
+func driveFinishInput(t *target, main string, h host, req driveFinish) (finishInput, error) {
+	in, err := finishInputFor(t, main, h, req.task)
+	if err != nil {
+		return finishInput{}, err
+	}
+
+	in.suffix, in.branch = req.suffix, req.branch
+	in.merge, in.local = req.pr == finishMerge, req.pr == finishLocal
+	in.progress = req.progress
+	// a driven finish asks no second question, since a resume carries only
+	// the latest answer: a bundle's riders stay open, the reversible choice,
+	// and the report names them
+	in.close = []string{}
+
+	return in, nil
+}
+
 // runFinish runs finish in process; its refusals halt the task, except a PR
 // someone else opened, which asks.
 func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) driveResult {
@@ -2079,8 +2086,14 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
 
-	err = in.finish(ctx, &buf, task.ref, pr, func(action string) {
-		in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
+	err = in.finish(ctx, &buf, driveFinish{
+		task:   task.ref,
+		suffix: task.suffix,
+		branch: r.o.branch,
+		pr:     pr,
+		progress: func(action string) {
+			in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
+		},
 	})
 
 	sc := bufio.NewScanner(&buf)
@@ -2103,15 +2116,8 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		return halted(id, "finish", err.Error())
 	}
 
-	// finish runs in this process, where no hook sees it
 	if in.record != nil {
-		in.record(ctx, in.main, ledger.Event{
-			At:      in.now(),
-			Task:    id,
-			Kind:    ledger.TaskFinished,
-			Source:  ledger.Observed,
-			Payload: ledger.NewPayload(ledger.Payload{"args": []any{id}}),
-		})
+		in.record(ctx, in.main, finishedEvent(id, "", in.now()))
 	}
 
 	return driveResult{row: "finished"}

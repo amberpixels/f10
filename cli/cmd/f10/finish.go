@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
@@ -141,38 +142,20 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer lease.Release()
 
-	cwd, err := os.Getwd()
+	in, err := finishInputFor(t, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), h, r)
 	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
+		return err
 	}
 
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	in.suffix, in.branch = suffix, branch
+	in.yes, in.merge, in.local, in.keep = cmd.Bool("yes"), cmd.Bool("merge"), cmd.Bool("local"), cmd.Bool("keep")
+	in.close = closing
+	in.sweep = func(ctx context.Context) {
+		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+	}
 
-	err = finish(ctx, cmd.Writer, finishInput{
-		main:      main,
-		driver:    t.driver(),
-		task:      r,
-		suffix:    suffix,
-		branch:    branch,
-		host:      h.at(main),
-		method:    t.eff.MergeMethod,
-		traces:    t.eff.Traces,
-		loreStore: &lore.Store{Root: loreRootFor(t)},
-		gate:      t.eff.LoreGate,
-		cwd:       cwd,
-		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
-		yes:       cmd.Bool("yes"),
-		merge:     cmd.Bool("merge"),
-		local:     cmd.Bool("local"),
-		keep:      cmd.Bool("keep"),
-		plansDir:  t.sharedPlansDir(),
-		title:     titleLookup(t, r.Number),
-		close:     closing,
-		sweep: func(ctx context.Context) {
-			sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
-				func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
-		},
-	})
+	err = finish(ctx, cmd.Writer, in)
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
 		return cli.Exit("f10: "+fp.Error(), exitForeign)
@@ -243,6 +226,50 @@ type finishInput struct {
 	progress func(string)
 	// mergedOnly refuses all but an already merged request: the watcher never merges
 	mergedOnly bool
+}
+
+// finishInputFor fills what comes from the task and the project's settings,
+// so the command, the drive and the watcher all take the same ones; each
+// caller then sets only its own fields.
+func finishInputFor(t *target, main string, h host, task ref.Ref) (finishInput, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return finishInput{}, fmt.Errorf("getwd: %w", err)
+	}
+
+	task = task.Head()
+
+	return finishInput{
+		main:      main,
+		driver:    t.driver(),
+		task:      task,
+		host:      h.at(main),
+		method:    t.eff.MergeMethod,
+		traces:    t.eff.Traces,
+		loreStore: &lore.Store{Root: loreRootFor(t)},
+		gate:      t.eff.LoreGate,
+		cwd:       cwd,
+		workspace: os.Getenv("HERDR_WORKSPACE_ID"),
+		plansDir:  t.sharedPlansDir(),
+		title:     titleLookup(t, task.Number),
+	}, nil
+}
+
+// finishedEvent records a finish that ran in this process, where no hook
+// sees it; by names who ran it, "" for the drive.
+func finishedEvent(id, by string, at time.Time) ledger.Event {
+	p := ledger.Payload{"args": []any{id}}
+	if by != "" {
+		p["by"] = by
+	}
+
+	return ledger.Event{
+		At:      at,
+		Task:    id,
+		Kind:    ledger.TaskFinished,
+		Source:  ledger.Observed,
+		Payload: ledger.NewPayload(p),
+	}
 }
 
 // finish runs the flow in the order the refusals need: the report prints
