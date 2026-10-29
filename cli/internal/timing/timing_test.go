@@ -217,6 +217,21 @@ func TestWindows(t *testing.T) {
 			want:  []got{{"review", 6}, {"resolve", 7}},
 		},
 		{
+			name: "a resolve blocked on an ask and resumed stays resolve",
+			events: join(
+				run(0, "ship"),
+				claim(0, "ship", "running", "review:local"),
+				ev(5, ledger.ReviewRoundOpened, "FT-1", ledger.Payload{"round": "1"}),
+				claim(8, "ship", "blocked", "review:local"),
+				wait(9, 30, "turn"),
+				claim(31, "ship", "running", "review:local"),
+				claim(41, "ship", "running", "judge"),
+				claim(42, "ship", "done"),
+			),
+			steps: []string{Review, Resolve},
+			want:  []got{{"review", 5}, {"resolve", 3}, {"resolve", 10}},
+		},
+		{
 			name: "a review entry with no findings file stays review",
 			events: join(
 				run(0, "ship"),
@@ -255,6 +270,22 @@ func TestWindows(t *testing.T) {
 			),
 			steps: []string{Glue},
 			want:  []got{{"glue", 1}, {"glue", 2}},
+		},
+		{
+			name: "a plan run that stops without a plan ends at its turn",
+			events: join(
+				run(0, "plan"),
+				claim(2, "plan", "blocked", "judge"),
+				ev(3, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(10, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				run(100, "ship"),
+				claim(100, "ship", "running", "implement"),
+				claim(101, "ship", "done"),
+				ev(102, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(103, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+			),
+			steps: []string{Glue},
+			want:  []got{{"glue", 3}, {"glue", 1}},
 		},
 		{
 			name: "a driven run blocked and resumed is two glue segments",

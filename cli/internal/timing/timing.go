@@ -126,7 +126,7 @@ func windows(evs []ledger.Event) []Window {
 		out     []Window
 		step    *Window // the ship step open now
 		entry   string  // the flow entry step was claimed as
-		split   bool    // the review entry open now reached its resolve
+		split   string  // the review entry whose round opened: a resumed claim of it is resolve
 		planRun *Window // a /f10:plan run not yet saved
 		inShip  bool
 	)
@@ -172,9 +172,9 @@ func windows(evs []ledger.Event) []Window {
 			}
 		case ledger.ReviewRoundOpened:
 			// review ends at the findings file; resolve settles it under the same entry
-			if step != nil && step.Step == Review && !split {
+			if step != nil && step.Step == Review && split != entry {
 				end(step, e)
-				step, split = open(e, Resolve), true
+				step, split = open(e, Resolve), entry
 			}
 		case ledger.SessionStopped:
 			if e.Payload.Val["backstop"] == true {
@@ -202,7 +202,15 @@ func windows(evs []ledger.Event) []Window {
 				if leaf != "" {
 					// `review:local` is review, `cleanup:comments` cleanup
 					name, _, _ := strings.Cut(leaf, ":")
-					step, entry, split = open(e, name), leaf, false
+					if name == Review && split == leaf {
+						name = Resolve // a resolve blocked on an ask and resumed
+					}
+
+					if leaf != split {
+						split = ""
+					}
+
+					step, entry = open(e, name), leaf
 				}
 			case phase == "ship" && slices.Contains([]string{"done", "failed", "partial", "blocked"}, status):
 				leave(e)
@@ -265,11 +273,16 @@ func segments(evs []ledger.Event) []Window {
 				closeAt(e)
 			}
 		case ledger.StateSet:
+			phase, status, _ := Claim(e)
+			stops := slices.Contains([]string{"done", "failed", "partial", "blocked"}, status)
+
+			if last == "plan" && phase == "plan" && stops {
+				over = seg != nil // a plan run that saved nothing ends too
+			}
+
 			if last != "ship" {
 				continue
 			}
-
-			phase, status, _ := Claim(e)
 
 			switch {
 			case phase != "ship":
@@ -277,7 +290,7 @@ func segments(evs []ledger.Event) []Window {
 				openAt(e)
 			case status == "running":
 				over = false
-			case slices.Contains([]string{"done", "failed", "partial", "blocked"}, status):
+			case stops:
 				over = seg != nil
 			}
 		}
