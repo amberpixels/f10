@@ -18,7 +18,7 @@ argument-hint: "[<idea | task-id | PR | this branch>] [--blind]"
 - No argument:
   - A subject in this conversation: judge that.
     Say in one line which subject you took, then start.
-  - Nothing open, on a branch other than the default branch: that branch against its base (the branch `f10 start --after` recorded, else the default branch), when it has commits or uncommitted changes past it.
+  - Nothing open, on a branch other than the default branch: that branch against its base, as `f10 pr base` prints it, when it has commits or uncommitted changes past it.
     No change yet: the task `f10 task current` prints, judged as `task <id>`.
     Say in one line which subject you took, then start.
   - Otherwise: ask for the subject in one line and wait.

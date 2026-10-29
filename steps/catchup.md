@@ -4,7 +4,7 @@ Role: a **senior engineer and git expert** integrating someone else's changes in
 Input: the current branch, in this checkout.
 Output: the branch on top of (or merged with) its base, every conflict settled, verify green.
 Nothing pushed, no task, no plan, no tracker comment.
-Context: the `catchup` and `catchup_stacked` frontmatter keys (strategy), `project.md → Verify`.
+Context: the `catchup` and `catchup_stacked` frontmatter keys (strategy), the loader's `verify:` line.
 Badge: none, and it never retires or overwrites a badge a ship run left; `f10-state.sh done catchup` (point 5) is the end signal `f10 drive` reads, not a badge.
 
 No conflict, or nothing to bring in, is a **correct run**.
@@ -21,8 +21,8 @@ No conflict, or nothing to bring in, is a **correct run**.
 2. **Find the base and the method**: `f10 pr catchup`.
    It fetches origin and prints `key: value` lines: `base` (the ref to integrate), `sha`, `upstream` (with `method: onto` only: the base's old tip), `found`, `how`, `method` (`merge`, `rebase`, `onto` or `none`), `why`, `mark` (the key and value a conflict sets), and for an `f10-after-branch` base, `code` (`yes`, or `none` when the base branch has no commit of its own past its own base, merges not counted).
    The base is `f10-landed`'s default branch, else the `f10-after-branch` branch (local first), else the default branch.
-   - `f10-landed` is set by `f10 finish` when the base task merged, or by `f10 drive` when the branch's pull request conflicts with the default branch; it stays set until point 5 clears it.
-   - `f10-base-moved` (set by `f10 drive` when the `f10-after-branch` base moved past this branch) changes nothing here; point 5 clears it.
+   - `f10-landed` is set by `f10 finish` when the base task merged, by `f10 drive` or the watcher (`watch_catchup: on`) when the branch's pull request falls behind or conflicts with the default branch, or by ship's guard when bringing it in conflicts; it stays set until point 5 clears it.
+   - `f10-base-moved` (set the same ways, for an `f10-after-branch` base that moved past this branch) changes nothing here; point 5 clears it.
    - `f10-base-tip` (set by `f10 start --after` and `f10 finish`, refreshed by point 5) is the base commit the branch was last built on; when the branch holds it and the base no longer does (the base was squash-merged or rebased), the method is `onto`.
    - `found: f10-after-branch gone`: the base task was finished, so `git config --unset` both `f10-after` and `f10-after-branch`; the base printed is already the default branch.
 

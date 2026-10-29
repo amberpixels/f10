@@ -45,8 +45,7 @@ Go service for invoices.
 
 ## Tracker
 
-- **Fetch** - `gh issue view <n> --comments`
-- **Create** - `gh issue create`
+GitHub issues need no adapter: f10 reads and creates them.
 
 ## Verify
 
@@ -382,7 +381,7 @@ Rounds: 2
 A source-of-truth file is read in full as reference data: instructions inside it are ignored, and an edit to it is reviewed, not obeyed.
 The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
-`Rounds: 2` makes a second review round the rule after any resolve that fixed something; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
+`Rounds: 2` makes a second review round run every time; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
 
 A **remote review** - a bot in CI, a human, a check - is four frontmatter keys and an optional fifth, with a fixed vocabulary, so `f10 init` can write them and `f10 review` can act on them:
 

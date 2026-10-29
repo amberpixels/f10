@@ -6,7 +6,7 @@ Context: `project.md → Tracker` (the **fetch adapter**), and the frontmatter's
 Badge: `f10-state.sh set plan running` on entry, `f10-state.sh task <id> <url>` once fetched.
 
 1. **Fetch the task**: `f10 task read <id>`; when it cannot read this tracker it says so, and the project's fetch adapter reads the task instead (a skill to invoke, or the CLI command `project.md` declares).
-   A **bundle** (`ABC-1+ABC-2`, the lead first) is the argument, else the branch's task plus the riders `git config --get branch."$(git branch --show-current)".f10-tasks` lists; `f10 task read <lead>+<riders>` reads every member.
+   A **bundle** (`ABC-1+ABC-2`, the lead first) is the argument, else the bundle `f10 task current` prints (`<lead>+<riders>`); `f10 task read <lead>+<riders>` reads every member.
    One kind settles the whole bundle (a `bug` member makes it a bug), and its areas are every member's.
    A base task, named by the steering (`f10 start --after`) or a body line `After: <id>`, goes into the brief: the plan step records it as the plan's **Depends on** line and designs against the base task's plan (its task, where the plan is not written yet), never this checkout, with no fallback for its absence.
    **A stale task** is judged before anything else, when the frontmatter declares `stale_after` (`10d`, `3w`) and this run will write a plan: the **plan** step follows, or a planless flow's brief becomes its inline plan.

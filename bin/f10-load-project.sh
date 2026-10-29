@@ -53,7 +53,7 @@ host_of() {
   printf '%s\n' "${h%%:*}"
 }
 
-# Is the CLI logged in to this host? Covers GitHub Enterprise and self-hosted GitLab with no
+# Can f10 reach this host: is gh or glab logged in to it? Covers GitHub Enterprise and self-hosted GitLab with no
 # hostname allowlist. Both files hold OAuth tokens: match and return a status, never cat them.
 knows_host() {
   [ -f "$1" ] || return 1
@@ -361,18 +361,14 @@ if [ -n "${origin:-}" ]; then
   rhost="$(host_of "$origin")"
   gh_hosts="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}/hosts.yml"
   glab_cfg="${GLAB_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/glab-cli}/config.yml"
+  # the host only: naming a CLI would steer agents past the f10 pr and task commands
   if [ -z "$rhost" ]; then
-    echo "host: none (local path remote) -> no PR/issue CLI"
-  elif knows_host "$gh_hosts" "$rhost"; then
-    echo "host: $rhost  -> PR/issue CLI: gh   (gh is logged in to this host)"
-  elif knows_host "$glab_cfg" "$rhost"; then
-    echo "host: $rhost  -> PR/issue CLI: glab (glab is logged in to this host)"
+    echo "host: none (local path remote)"
+  elif [ "$rhost" = github.com ] || [ "$rhost" = gitlab.com ] ||
+    knows_host "$gh_hosts" "$rhost" || knows_host "$glab_cfg" "$rhost"; then
+    echo "host: $rhost"
   else
-    case "$rhost" in
-      github.com) echo "host: $rhost  -> PR/issue CLI: gh" ;;
-      gitlab.com) echo "host: $rhost  -> PR/issue CLI: glab" ;;
-      *) echo "host: $rhost  -> PR/issue CLI: unknown (neither gh nor glab is logged in to it) - confirm with user" ;;
-    esac
+    echo "host: $rhost  (no gh or glab login covers it, so f10's pr and task commands cannot reach it) - confirm with user"
   fi
 else
   echo "remote: none (no origin)"

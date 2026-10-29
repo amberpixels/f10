@@ -17,7 +17,7 @@ Words around the subject ("very short", "is it just a day off?") are framing to 
 ## A change: what was it, what is it now
 
 1. **Gather the diff.**
-   No argument: the current branch against its base (a stacked task's base branch, else the default branch), `f10 pr diff` and `f10 pr view --comments`.
+   No argument: the current branch against its base, as `f10 pr base` prints it, `f10 pr diff` and `f10 pr view --comments`.
    A PR/MR: the same two with its number or url, plus the task the view's `task:` line names and its plan.
    A task id: `f10 task read <id>`, its `<storage root>/plans/<TASK-ID>.md` where one exists, and `f10 pr diff <id>` / `f10 pr view --comments <id>`.
    A sha or range: `git show` / `git diff`.
