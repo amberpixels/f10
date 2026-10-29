@@ -76,7 +76,7 @@ f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
-f10 stats [--since 30d] [<id>]   # active plan and implement minutes per task, with size and density; a median row
+f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command, or an answer, to the agent working on the task
@@ -975,12 +975,17 @@ Inside a session, `/f10:board` runs the command with the same flags and prints i
 
 ## Stats
 
-`f10 stats` is how long planning and implementing took, per task of the current project, newest first, then a median row.
+`f10 stats` is how long each part of a delivery took, per task of the current project, newest first, then a median row.
 
 - **plan**: active minutes. A `/f10:plan` run counts from its start to the plan it saves; inside `/f10:ship`, the plan step counts from entering it to entering the next step.
 - **implement**: active minutes of the `implement` step, summed over its stretches (a driven run blocked on an ask and resumed is two).
+- **review**: the review loop, review, resolve and judge together. A `review` entry runs both review and resolve under one claim: review ends when the round's findings file is first written, and the rest of the entry is resolve, a second round and a resolve resumed after an ask included. Under `review:local+ci` the file is first written by the local half, so the wait for the CI half counts as resolve. Every `judge` flow entry counts here, the one before implement as well; the judge fetch runs on a stale task counts as plan.
+- **deliver**: every other step the flow names: `pr`, `cleanup`, `commit`, `push`, `deploy`, `demo` and project-defined steps.
+- **glue**: the time a plan or ship run spends outside every step: loading, the fetch of a run that reuses a plan, the gaps between steps, and the work after the last step. A run's stretch ends at the first turn end after its last row (the saved plan, or `ship done`, `failed`, `partial` or `blocked`), else at the next run; a driven run resumed on an answer opens a new stretch. A stretch that never ends counts nothing.
 - **size**: lines added plus deleted, with the markdown share, as `f10 finish` measured it.
 - **density**: implement minutes per 100 changed lines.
+
+`f10 stats <id>` adds that task's steps under the table, one row per step in flow order (plan, judge, implement, cleanup, pr, review, resolve, then other steps alphabetically, glue last) and a total.
 
 Active means the window minus every wait on the user inside it: a turn ended and not yet answered, an `AskUserQuestion` open, a permission dialog open.
 The hook records each as `wait_started` and `wait_ended` in the ledger.

@@ -80,6 +80,6 @@ Inside a pipeline, `/f10:ship` passes the current step as `<leaf>` and declares 
 A stop state keeps its leaf; `note` records why and what unblocks it, one line each, for `f10 status` (`/f10:status` in a session).
 
 **Best-effort, but never skipped.**
-The run never reads this state back, but the ledger records every call, and `f10 stats` times the plan and implement steps from the `set ship running <entry>` calls: a skipped one counts the next step's time as this one's.
+The run never reads this state back, but the ledger records every call, and `f10 stats` times every step from the `set ship running <entry>` calls: a skipped one counts the next step's time as this one's.
 If a badge call fails, ignore it: never treat it as a step failure, retry it, mention it, or let it change the run.
 Send it in the same message as the step's first real call, joined with `;` or beside a `Read` (`conventions/latency.md`).
