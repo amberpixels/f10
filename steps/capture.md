@@ -51,7 +51,7 @@ Context: `project.md → Tracker` (the **create adapter**, used where `f10 task 
    GitLab nests no issue under an issue: there create warns, and the checklist below goes in.
    A tracker with no parent link gets a checklist of the subtasks in the parent's body, each with its title, edited in once they exist.
    Through `f10 task create`, `f10 task children <parent>` confirms the link: an exit 3 is a tracker with no parent link, so the checklist goes in; a subtask missing from its rows means the link was dropped (a driver ignoring `--parent`, or a host link create warned about), and the report names it for the user to link by hand.
-4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; a split reports through `f10 status <parent> --plain`, printed verbatim (`conventions/report.md` → Several tasks).
+4. **Report** per `conventions/report.md`: a `task` row (the id in the project's format), a `title` row and a `url` row, for the fetch step; a split reports through `f10 task report <parent> <subtask ids>` and `f10 status <parent> --plain`, each printed verbatim (`conventions/report.md` → Several tasks).
    Badge, in the same call: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, the parent's id for a split.
 
 Keep PII out of anything logged: ids, not names or emails.

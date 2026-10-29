@@ -341,6 +341,12 @@ func TestGatesOutcomes(t *testing.T) {
 	if got := compactGates(gates); got != "󰊛 PJ proceed · 󰚔 L pending · R - · 󰊛 J rethink" {
 		t.Errorf("compact = %q", got)
 	}
+
+	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
+
+	if got := compactGates(gates); got != "jd PJ proceed · rv L pending · R - · jd J rethink" {
+		t.Errorf("with F10_STATUS_GLYPHS: compactGates = %q", got)
+	}
 }
 
 // writeLore writes entries as `f10 lore add` would leave them.

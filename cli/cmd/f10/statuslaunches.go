@@ -87,6 +87,10 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		fmt.Fprintf(warn, "f10: reading this session's launches: %v\n", err)
 	}
 
+	if len(launches) == 0 {
+		return nil
+	}
+
 	// a start's task has a branch from the start: none left is done with
 	type token struct {
 		text    string
@@ -114,6 +118,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 	archive := t.tracker().archive
+	bases := map[string]string{} // siblings share a base: resolve it once
 
 	for _, tok := range tokens {
 		id, suffix := ref.SplitSuffix(tok.text)
@@ -139,7 +144,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 			continue
 		}
 
-		k.After = launchBase(ctx, t, main, r.ID, suffix, tok.after, branched)
+		k.After = launchBase(ctx, t, main, r.ID, suffix, tok.after, branched, bases)
 		kids = append(kids, k)
 		refs = append(refs, r)
 	}
@@ -157,7 +162,14 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 
 // launchBase is the base a launched task waits on, as an id: its branch's
 // recorded one, else the one its drive recorded, "" once that base finished.
-func launchBase(ctx context.Context, t *target, main, id, suffix, recorded string, branched bool) string {
+// seen holds each base as written against its answer.
+func launchBase(
+	ctx context.Context,
+	t *target,
+	main, id, suffix, recorded string,
+	branched bool,
+	seen map[string]string,
+) string {
 	base := recorded
 	if branched {
 		if b, err := existingBranchIn(ctx, main, "", id, suffix, "refs/heads/"); err == nil && b.name != "" {
@@ -169,19 +181,23 @@ func launchBase(ctx context.Context, t *target, main, id, suffix, recorded strin
 		return ""
 	}
 
-	r, err := t.reference(ctx, base)
-	if err != nil {
-		return ""
+	if out, ok := seen[base]; ok {
+		return out
 	}
 
-	base = r.Head().ID
+	out := ""
+	if r, err := t.reference(ctx, base); err == nil {
+		out = r.Head().ID
 
-	has, err := hasTaskBranch(ctx, main, base)
-	if err != nil || finishedTask(taskInfo{}, t.tracker().archive, base, has) {
-		return ""
+		has, err := hasTaskBranch(ctx, main, out)
+		if err != nil || finishedTask(taskInfo{}, t.tracker().archive, out, has) {
+			out = ""
+		}
 	}
 
-	return base
+	seen[base] = out
+
+	return out
 }
 
 // driveTasks is drive n's tasks as typed, none once the drive is done or

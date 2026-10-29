@@ -1055,7 +1055,7 @@ An id the tracker does not know, or a tracker that fails, prints bare with a not
 One id prints its `task`, `title` and `url` rows.
 Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
 A task with no url known prints bare, and the exit is 0.
-A parent and its subtasks report through `f10 status <parent> --plain`, whose tree carries the titles.
+A parent and its subtasks report through `f10 task report <parent> <subtask ids>` for the urls and `f10 status <parent> --plain`, whose tree carries the titles.
 
 ## Comment and update
 
