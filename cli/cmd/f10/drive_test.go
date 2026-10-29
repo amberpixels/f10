@@ -110,7 +110,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 			return nil
 		},
-		finish: func(context.Context, io.Writer, ref.Ref, string, func(string)) error {
+		finish: func(context.Context, io.Writer, driveFinish) error {
 			t.Fatal("finish ran although the chain has none")
 
 			return nil
@@ -1316,9 +1316,9 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 
 	var finished []string
 
-	fx.in.finish = func(_ context.Context, w io.Writer, task ref.Ref, _ string, _ func(string)) error {
-		finished = append(finished, task.ID)
-		fmt.Fprintln(w, "task:  "+task.ID)
+	fx.in.finish = func(_ context.Context, w io.Writer, req driveFinish) error {
+		finished = append(finished, req.task.ID)
+		fmt.Fprintln(w, "task:  "+req.task.ID)
 
 		return nil
 	}
@@ -1881,7 +1881,8 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	fx.f.script(worktrees, porcelain(pairs...))
 	fx.mergeable("GH-11", "GH-12", "GH-13", "GH-14", "GH-15")
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+		task := req.task
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 		fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -1999,7 +2000,8 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fx.mergeable("GH-1", "GH-2")
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+				task := req.task
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 				fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -2144,7 +2146,8 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.fail("git merge-base --is-ancestor origin/main HEAD", shell.Result{Code: 1})
 			fx.f.fail("git merge-tree --write-tree origin/main HEAD", shell.Result{Code: 1})
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+				task := req.task
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 				return nil
@@ -2327,7 +2330,8 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 				fx.f.script(push, "")
 			}
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+				task := req.task
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 				return nil
@@ -2723,9 +2727,9 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 
 	in := &driveInput{
 		answers: map[string]string{},
-		finish: func(_ context.Context, _ io.Writer, _ ref.Ref, pr string, _ func(string)) error {
-			got = append(got, pr)
-			if pr == "" {
+		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+			got = append(got, req.pr)
+			if req.pr == "" {
 				return foreignPullError{url: "https://gh/pr/9", author: "alice"}
 			}
 
@@ -2764,6 +2768,85 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 	}
 }
 
+// A suffixed attempt finishes its own branch: the drive hands finish the
+// run's suffix and branch, which the task id alone would not find.
+func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
+	var got driveFinish
+
+	in := &driveInput{
+		main:    t.TempDir(),
+		answers: map[string]string{},
+		now:     time.Now,
+		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+			got = req
+
+			return nil
+		},
+	}
+
+	run := &driveRun{task: driveTask{ref: gh1, suffix: "b"}, o: openedTask{branch: "GH-1-b"}}
+
+	if res := in.runFinish(t.Context(), io.Discard, run); res.code != 0 {
+		t.Fatalf("runFinish = %+v, want finished", res)
+	}
+
+	if got.task.ID != "GH-1" || got.suffix != "b" || got.branch != "GH-1-b" || got.progress == nil {
+		t.Errorf("finish was passed %+v, want GH-1, suffix b, branch GH-1-b and a progress hook", got)
+	}
+}
+
+// The drive's finish takes every setting the command does: under traces: on
+// its squash commit names the task, and lore_gate holds as it does by hand.
+func TestDriveFinishInputTakesTheSettings(t *testing.T) {
+	repo := tracedRepo(t, "main", "on")
+	project := "---\ntracker:\n  id: DM-###\ntraces: on\nmerge_method: squash\nlore_gate: block\n---\n"
+
+	path := filepath.Join(repo, ".f10", "instructions", "project.md")
+	if err := os.WriteFile(path, []byte(project), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tg, err := targetAt(t.Context(), repo, false, "drive")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bundle := ref.Ref{ID: "DM-2", Number: "2", Bundle: []string{"DM-1", "DM-2"}}
+	req := driveFinish{task: bundle, suffix: "b", branch: "DM-1-b", pr: finishMerge}
+
+	in, err := driveFinishInput(tg, repo, newHost("gh", repo), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !in.traces || in.method != "squash" || in.gate != "block" || in.loreStore == nil || in.title == nil {
+		t.Errorf("settings = traces %v, method %q, gate %q, lore %v; want them all from project.md",
+			in.traces, in.method, in.gate, in.loreStore)
+	}
+
+	if in.task.ID != "DM-1" || in.suffix != "b" || in.branch != "DM-1-b" || !in.merge || in.local {
+		t.Errorf("run = %s %q %q merge %v local %v; want the lead DM-1, the run's suffix and branch, a merge",
+			in.task.ID, in.suffix, in.branch, in.merge, in.local)
+	}
+
+	if in.close == nil || len(in.close) != 0 {
+		t.Errorf("close = %v, want riders left open, never nil", in.close)
+	}
+}
+
+// The watcher's finish record says who ran it; the drive's carries none.
+func TestFinishedEvent(t *testing.T) {
+	for _, by := range []string{"", "watch"} {
+		e := finishedEvent("GH-1", by, time.Time{})
+		got, set := e.Payload.Val["by"]
+
+		if e.Kind != ledger.TaskFinished || e.Source != ledger.Observed || e.Task != "GH-1" ||
+			set != (by != "") || (set && got != by) {
+			t.Errorf("by %q: %+v", by, e)
+		}
+	}
+}
+
 // chained is the fixture for GH-2 after GH-1, GH-2's branch already
 // recording it, with GH-1's branch one commit past main so GH-2 opens as
 // soon as GH-1 has.
@@ -2791,7 +2874,8 @@ func TestDriveStartsADependentAtItsBasesFirstCommit(t *testing.T) {
 	fx.expects("GH-2", "judge")
 	fx.mergeable("GH-1", "GH-2")
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+		task := req.task
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 		return nil
@@ -3000,7 +3084,8 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 			fx.f.script("git rev-parse -q --verify refs/heads/main", "m0")
 			fx.f.script(wsList, unopened, listing("GH-1", "idle"))
 
-			fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+			fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+				task := req.task
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 
 				return nil
@@ -3085,7 +3170,8 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 	// the ship turn writes the report
 	writePlan(t, filepath.Join(root, "spikes", "GH-1.md"))
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, _ func(string)) error {
+	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+		task := req.task
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
 		fx.infos[task.ID] = taskInfo{closed: true}
 
@@ -3183,8 +3269,9 @@ func TestDriveRecordsFinishProgress(t *testing.T) {
 		unopened, all("idle", ids...),
 		all("working", ids...), all("idle", ids...))
 
-	fx.in.finish = func(_ context.Context, _ io.Writer, task ref.Ref, _ string, progress func(string)) error {
-		progress("merging #9")
+	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
+		task := req.task
+		req.progress("merging #9")
 		fx.infos[task.ID] = taskInfo{closed: true}
 
 		return nil

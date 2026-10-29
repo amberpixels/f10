@@ -21,8 +21,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -737,20 +735,13 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 
 	var buf bytes.Buffer
 
-	err = finish(ctx, &buf, finishInput{
-		main:       main,
-		driver:     t.driver(),
-		task:       r.Head(),
-		branch:     task.branch,
-		host:       h.at(main),
-		method:     t.eff.MergeMethod,
-		traces:     t.eff.Traces,
-		cwd:        main,
-		plansDir:   t.sharedPlansDir(),
-		title:      titleLookup(t, r.Number),
-		loreStore:  &lore.Store{Root: loreRootFor(t)},
-		mergedOnly: true,
-	})
+	in := finishInputFor(t, main, h, r)
+	in.branch, in.mergedOnly = task.branch, true
+	// never processPlace: the self-close path would end the daemon, and its
+	// directory may be a worktree since removed, where getwd fails
+	in.cwd = main
+
+	err = finish(ctx, &buf, in)
 
 	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line != "" {
@@ -759,14 +750,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 	}
 
 	if err == nil {
-		// finish ran in this process, where no hook sees it
-		recordAt(ctx, main, ledger.Event{
-			At:      time.Now(),
-			Task:    task.id,
-			Kind:    ledger.TaskFinished,
-			Source:  ledger.Observed,
-			Payload: ledger.NewPayload(ledger.Payload{"args": []any{task.id}, "by": "watch"}),
-		})
+		recordAt(ctx, main, finishedEvent(task.id, "watch", time.Now()))
 	}
 
 	return err
