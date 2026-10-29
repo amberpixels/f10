@@ -54,13 +54,33 @@ func FromBash(command, stdout, stderr string) []Observation {
 				obs = append(obs, &StepStarted{Steps: positional(words[1:])})
 			}
 		case "f10":
-			if args := skipFlags(words[1:], "-C", "--project"); len(args) > 0 && args[0] == "finish" {
-				obs = append(obs, &Finished{Args: args[1:]})
-			}
+			obs = append(obs, f10Action(skipFlags(words[1:], "-C", "--project"), stdout, &prs)...)
 		}
 	}
 
 	return obs
+}
+
+// f10Action reads the f10 commands that create or finish: `pr create` prints
+// the url, `task create` the new id alone on its line.
+func f10Action(args []string, stdout string, prs *[]string) []Observation {
+	switch {
+	case len(args) > 0 && args[0] == "finish":
+		return []Observation{&Finished{Args: args[1:]}}
+	case len(args) < 2 || args[1] != "create":
+		return nil
+	case args[0] == "pr" && len(*prs) > 0:
+		url := (*prs)[0]
+		*prs = (*prs)[1:]
+
+		return []Observation{&PRCreated{Host: "f10", URL: url}}
+	case args[0] == "task":
+		if id := strings.TrimSpace(stdout); id != "" && !strings.ContainsAny(id, " \t\n") {
+			return []Observation{&IssueCreated{Host: "f10", ID: id}}
+		}
+	}
+
+	return nil
 }
 
 // hostCreate pairs `gh issue create` and the like with the urls printed, in

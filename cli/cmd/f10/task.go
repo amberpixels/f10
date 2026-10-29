@@ -114,8 +114,8 @@ func taskCommand() *cli.Command {
 			},
 			{
 				Name: "create",
-				Usage: "create a task through the driver from markdown on stdin, `# <title>` first, and print its id " +
-					"(exit 3: no driver creates tasks here)",
+				Usage: "create a task through the driver, else as an issue on the host, from markdown on stdin, " +
+					"`# <title>` first, and print its id (exit 3: neither creates tasks here)",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "status", Usage: "the status, in the tracker's own word"},
 					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
@@ -658,19 +658,21 @@ const exitNoCreate = 3
 // before failing, so running create again could make it twice.
 const mayExist = "the task may exist already: check the tracker before running create again"
 
-// runTaskCreate sends the task on stdin to the driver's create. f10 never
-// retries it, since a failed write is an unknown outcome.
+// runTaskCreate sends the task on stdin to the driver's create, else makes it
+// an issue on the host. f10 never retries it, since a failed write is an
+// unknown outcome.
 func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	// no driver answers before stdin or any check, so capture falls back on exit 3
+	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
 	d := t.driver()
-	if d == nil {
+	if d == nil && !t.createsOnHost() {
 		return cli.Exit("f10: no driver creates tasks here (looked for "+strings.Join(t.driverPaths(), ", ")+
-			"); create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+			"), and no host issues take them; "+
+			"create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
 	}
 
 	in, err := io.ReadAll(cmd.Reader)
@@ -691,40 +693,34 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
-	if errors.Is(err, driver.ErrUnsupported) {
-		return cli.Exit("f10: the driver at "+d.Path+" declines `create`; "+
-			"create the task through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+	var r ref.Ref
+
+	created := ledger.TaskRef{}
+
+	if d != nil {
+		r, created.URL, err = driverCreate(ctx, cmd.ErrWriter, t, d, doc, args)
+		if errors.Is(err, driver.ErrUnsupported) && !t.createsOnHost() {
+			return cli.Exit("f10: the driver at "+d.Path+" declines `create`; "+
+				"create the task through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+		}
+	}
+
+	if d == nil || errors.Is(err, driver.ErrUnsupported) {
+		var p props
+		if p, err = readProps(cmd); err == nil {
+			r, created.URL, err = hostCreate(ctx, cmd.ErrWriter, t, doc, p, cmd.String("parent"))
+		}
 	}
 
 	if err != nil {
-		return fmt.Errorf("%w\n%s", err, mayExist)
-	}
-
-	if warn != "" {
-		fmt.Fprintln(cmd.ErrWriter, warn)
-	}
-
-	// the driver may print the number or the prefixed id; f10 prints the id
-	line := strings.TrimSpace(out)
-	if line == "" || strings.ContainsAny(line, " \t\n"+ref.Separator) {
-		return fmt.Errorf("driver create printed %q, not one task id\n%s", out, mayExist)
-	}
-
-	r, err := t.reference(ctx, line)
-	if err != nil {
-		return fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
+		return err
 	}
 
 	// the number exists only now, so the template goes on in a second write
 	retitleAfter(ctx, cmd.ErrWriter, t, r, "created")
 
-	// the url too, best effort, so naming the new task costs no tracker call
-	created := ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc)}
-	if url, err := d.Run(ctx, driver.VerbURL, r.Number); err == nil {
-		created.URL = strings.TrimSpace(url)
-	}
-
+	// the url too, so naming the new task costs no tracker call
+	created.ID, created.Title = r.ID, docTitle(r.ID, doc)
 	t.rememberRefs(ctx, created)
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
@@ -732,9 +728,43 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// retitleAfter writes tracker.title onto an issue a driver just wrote, since
-// a driver has no title verb; the driver's write stands, so a failure is a
-// warning.
+// driverCreate returns the new task and its url, "" when the driver gives
+// none; a declined create is driver.ErrUnsupported, unwrapped.
+func driverCreate(
+	ctx context.Context, warnTo io.Writer, t *target, d *driver.Driver, doc string, args []string,
+) (ref.Ref, string, error) {
+	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
+	if errors.Is(err, driver.ErrUnsupported) {
+		return ref.Ref{}, "", err
+	}
+
+	if err != nil {
+		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
+	}
+
+	if warn != "" {
+		fmt.Fprintln(warnTo, warn)
+	}
+
+	// the driver may print the number or the prefixed id; f10 prints the id
+	line := strings.TrimSpace(out)
+	if line == "" || strings.ContainsAny(line, " \t\n"+ref.Separator) {
+		return ref.Ref{}, "", fmt.Errorf("driver create printed %q, not one task id\n%s", out, mayExist)
+	}
+
+	r, err := t.reference(ctx, line)
+	if err != nil {
+		return ref.Ref{}, "", fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
+	}
+
+	url, _ := d.Run(ctx, driver.VerbURL, r.Number)
+
+	return r, strings.TrimSpace(url), nil
+}
+
+// retitleAfter writes tracker.title onto an issue just written, since the
+// template needs the number and a driver has no title verb; the write
+// stands, so a failure is a warning.
 func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, verb string) {
 	if t.eff.TitleTemplate == "" || !t.hostIssues() {
 		return

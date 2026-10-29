@@ -181,7 +181,10 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 		}
 
 		e := one(TaskCaptured, Observed, "")
-		if ob.TaskID != nil {
+		if o.ID != "" {
+			e[0].Task = o.ID
+			e[0].Payload.Val["id"] = o.ID
+		} else if ob.TaskID != nil {
 			e[0].Task = ob.TaskID(ctx, m.Cwd, o.URL)
 			e[0].Payload.Val["id"] = e[0].Task
 		}

@@ -28,8 +28,11 @@ func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 	// the id lookup runs git and reads the project, so it happens before the
 	// load: a writer call landing during it must not be saved over
 	issueID := ""
-	if o, ok := o.(*observe.IssueCreated); ok && b.env.TaskID != nil {
-		issueID = b.env.TaskID(ctx, b.cwd, o.URL)
+	if o, ok := o.(*observe.IssueCreated); ok {
+		issueID = o.ID
+		if issueID == "" && b.env.TaskID != nil {
+			issueID = b.env.TaskID(ctx, b.cwd, o.URL)
+		}
 	}
 
 	r, loaded := state.LoadOrFresh(b.env.StateDir, b.session)

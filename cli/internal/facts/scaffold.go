@@ -101,28 +101,23 @@ func stackBody(pb *probe.Probes) string {
 	return strings.Join(values, ", ") + "."
 }
 
-// trackerBody is the Tracker section's prose half: the two adapters as the
-// host CLI's own commands. The kind and the id format are frontmatter.
+// trackerBody is the Tracker section's prose half. The kind and the id format
+// are frontmatter; the host's issues need no adapter, since f10 reads and
+// creates them, and a declared CLI command would steer agents past it.
 func trackerBody(eff *Effective, pb *probe.Probes) string {
 	if eff.TrackerKind == "" || eff.IDPrefix == "" {
 		return ""
 	}
 
-	view := "issue view <n> --comments"
-	if pb.CLI.Value == "glab" {
-		view = "issue view <n>"
-	}
-
-	return "- **Fetch** - `" + pb.CLI.Value + " " + view + "`\n" +
-		"- **Create** - `" + pb.CLI.Value + " issue create`"
+	return "Issues on " + pb.Host + ", read and created by `f10 task read` and `f10 task create`; no adapter needed."
 }
 
 func hostingBody(pb *probe.Probes) string {
 	switch pb.CLI.Value {
 	case "gh":
-		return pb.Host + ". Open PRs with `gh pr create`."
+		return pb.Host + ". Open PRs with `f10 pr create`."
 	case "glab":
-		return pb.Host + ". Open MRs with `glab mr create`."
+		return pb.Host + ". Open MRs with `f10 pr create`."
 	default:
 		return ""
 	}

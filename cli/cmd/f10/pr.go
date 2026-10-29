@@ -61,6 +61,21 @@ func prCommand() *cli.Command {
 				Action:    runPRView,
 			},
 			{
+				Name: "create",
+				Usage: "open a PR/MR for the branch checked out here against its base and print its url; " +
+					"an open one is printed instead",
+				Hidden:   true,
+				Category: plumbingCategory,
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "title", Usage: "the `TITLE`", Required: true},
+					&cli.StringFlag{Name: "body-file", Usage: "the body from `FILE`; - reads stdin", Required: true},
+					&cli.StringSliceFlag{Name: "label", Usage: "a `LABEL`; repeat for several"},
+					&cli.StringSliceFlag{Name: "assignee", Usage: "an `ASSIGNEE`; repeat for several"},
+					&cli.BoolFlag{Name: "draft", Usage: "open it as a draft"},
+				},
+				Action: runPRCreate,
+			},
+			{
 				Name:      "edit",
 				Usage:     "rewrite an open PR/MR's title, its body, or both; base, labels and assignees stay",
 				ArgsUsage: "[PR | task-id]",
