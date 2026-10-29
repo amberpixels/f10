@@ -943,8 +943,9 @@ func createdAt(ctx context.Context, dir, branch string) string {
 func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveRun, wss []agentctl.Workspace) error {
 	for _, r := range runs {
 		b := r.base
-		// a parked ship's own guard brings the base in when it resumes
-		if !r.active() || r.parked || r.skill == "catchup" || b == nil || !b.opened {
+		// a parked ship's own guard brings the base in when it resumes; an
+		// attached turn may be a catchup, which a mark mid-turn would halt
+		if !r.active() || r.parked || r.skill == "catchup" || r.attached || b == nil || !b.opened {
 			continue
 		}
 

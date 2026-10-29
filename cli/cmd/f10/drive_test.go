@@ -1050,6 +1050,7 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 
 	cases := map[string]struct {
 		before   bool // the catchup reported before the drive attached
+		stale    bool // a catchup reported before the attached turn's prompt
 		ship     bool // the attached turn was a ship, which reports done
 		unclean  bool // the catchup left a dirty tree
 		want     []string
@@ -1064,6 +1065,9 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 			unclean: true, want: []string{"GH-1 halted at catchup: the catchup did not end clean"}, haltCode: true,
 		},
 		"a ship turn": {ship: true, want: []string{"GH-1 ship: done", "GH-1:    done: ship"}},
+		"a ship turn after a catchup": {
+			stale: true, ship: true, want: []string{"GH-1 ship: done", "GH-1:    done: ship"},
+		},
 	}
 
 	for name, tc := range cases {
@@ -1085,8 +1089,11 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 
 			fx.writeShipStop(t, "partial", "pr", 7, catchupNext)
 
-			if tc.before {
+			switch {
+			case tc.before:
 				fx.reports(t, fx.clock.Add(-30*time.Second))
+			case tc.stale:
+				fx.reports(t, mark.Add(-30*time.Second))
 			}
 
 			// the attach, the turn, its end; then the look before the resumed
@@ -1096,6 +1103,10 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 				switch {
 				case tc.ship:
 					fx.writeRun(t, "done", "", "", "")
+
+					if tc.stale {
+						fx.reports(t, mark.Add(-30*time.Second))
+					}
 				case !tc.before:
 					fx.writeShipStop(t, "partial", "pr", 7, catchupNext)
 					fx.reports(t, fx.clock)
@@ -1118,6 +1129,10 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 				if !strings.Contains(out, want) {
 					t.Errorf("output lacks %q:\n%s", want, out)
 				}
+			}
+
+			if tc.ship && strings.Contains(out, "the turn was a catchup") {
+				t.Errorf("a ship turn was read as a catchup:\n%s", out)
 			}
 
 			if tc.resumed != fx.f.called(resume) {
