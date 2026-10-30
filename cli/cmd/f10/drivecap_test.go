@@ -46,7 +46,7 @@ func liveGate(in *driveInput) *openGate {
 	return g
 }
 
-// pass is one startRunnable pass without the shell: the gate decides, and
+// pass is the gate alone, without the shell: the gate decides, and
 // an admitted task opens with its chain under way.
 func pass(in *driveInput, g *openGate) {
 	for _, r := range g.order(in.runs) {
@@ -214,9 +214,7 @@ func TestDriveQueuesPastTheCap(t *testing.T) {
 	fx.task("GH-1", taskInfo{body: "first"}, "")
 	fx.task("GH-2", taskInfo{body: "second"}, "")
 	fx.f.script(worktrees,
-		porcelain(), porcelain(), porcelain("GH-1", "/code/repo.GH-1"),
-		porcelain("GH-1", "/code/repo.GH-1"), porcelain("GH-1", "/code/repo.GH-1"),
-		porcelain("GH-1", "/code/repo.GH-1"),
+		porcelain(), porcelain("GH-1", "/code/repo.GH-1"), porcelain("GH-1", "/code/repo.GH-1"),
 		porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.opens("GH-2", "ws:GH-2", "pane:2")
@@ -241,5 +239,64 @@ func TestDriveQueuesPastTheCap(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+// Through the drive, the second acceptance run: under --parallel 1, GH-1's
+// ask frees its slot on the tick it lands, GH-2 opens then while GH-3 stays
+// queued, and GH-3 opens once GH-2 is done.
+func TestDriveAskFreesTheSlot(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "GH-2", "GH-3", "judge", "--parallel", "1")
+
+	for _, id := range []string{"GH-1", "GH-2", "GH-3"} {
+		fx.task(id, taskInfo{body: id}, "")
+	}
+
+	one, two := []string{"GH-1", "/code/repo.GH-1"}, []string{"GH-2", "/code/repo.GH-2"}
+	fx.f.script(worktrees,
+		porcelain(), porcelain(one...), porcelain(one...),
+		porcelain(append(one, two...)...), porcelain(append(one, two...)...),
+		porcelain(append(append(one, two...), "GH-3", "/code/repo.GH-3")...))
+
+	for i, id := range []string{"GH-1", "GH-2", "GH-3"} {
+		fx.opens(id, "ws:"+id, fmt.Sprintf("pane:%d", i+1))
+	}
+
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.expects("GH-2", "judge")
+	fx.expects("GH-3", "judge")
+	fx.f.script(wsList,
+		unopened, unopened, listing("GH-1", "idle"), // the gate's look, GH-1's open, the look before its judge
+		listing("GH-1", "working"), listing("GH-1", "idle"), // GH-1's turn ends on its ask
+		listing("GH-1", "idle"), listing("GH-1", "idle", "GH-2", "idle"), // GH-2's open and look
+		listing("GH-1", "idle", "GH-2", "working"), listing("GH-1", "idle", "GH-2", "idle"),
+		listing("GH-1", "idle", "GH-2", "idle"), all("idle", "GH-1", "GH-2", "GH-3"), // GH-3's open and look
+		listing("GH-1", "idle", "GH-2", "idle", "GH-3", "working"), all("idle", "GH-1", "GH-2", "GH-3"))
+	fx.onTick[2] = func() { fx.writeRunFor(t, "GH-1", "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
+
+	if err := fx.drive(t); exitCode(err) != exitAsk {
+		t.Fatalf("err = %v, want exit %d\n%s", err, exitAsk, fx.out.String())
+	}
+
+	fx.assertOrder(t, []string{
+		"--create GH-1", agentOf("GH-1") + " /f10:judge",
+		"--create GH-2", agentOf("GH-2") + " /f10:judge",
+		"--create GH-3", agentOf("GH-3") + " /f10:judge",
+	}, "herdr agent prompt", "wt switch")
+
+	out := fx.out.String()
+	for _, want := range []string{
+		"GH-2: queued, 1 running", "GH-3: queued, 1 running",
+		"GH-1:    asked at judge", "GH-2:    done: judge", "GH-3:    done: judge",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+
+	// GH-3 is still queued when GH-2 opens: the ask freed one slot, not two
+	if i, j := strings.Index(out, "GH-2: branch"), strings.Index(out, "GH-3: branch"); i < 0 || j < i ||
+		strings.Contains(out[i:j], "GH-3 judge: sent") {
+		t.Errorf("GH-3 opened alongside GH-2:\n%s", out)
 	}
 }

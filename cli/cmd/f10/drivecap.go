@@ -77,9 +77,11 @@ type openGate struct {
 }
 
 // openGate reads the workspaces and checkouts only when the cap can bind:
-// a drive no longer than its cap never reaches it.
+// a drive no longer than its cap never reaches it, nor one with no task
+// left to open.
 func (in *driveInput) openGate(ctx context.Context, runs []*driveRun, wss []agentctl.Workspace) (*openGate, error) {
-	if in.parallel <= 0 || len(runs) <= in.parallel {
+	unopened := slices.ContainsFunc(runs, func(r *driveRun) bool { return !r.opened && r.end == nil })
+	if in.parallel <= 0 || len(runs) <= in.parallel || !unopened {
 		return &openGate{}, nil
 	}
 
@@ -92,15 +94,19 @@ func (in *driveInput) openGate(ctx context.Context, runs []*driveRun, wss []agen
 		in.wss = wss
 	}
 
-	trees, err := gitx.Worktrees(ctx, in.main)
-	if err != nil {
-		return nil, err
-	}
-
 	g := &openGate{on: true, limit: in.parallel, wss: wss, trees: map[string]string{}}
-	for _, t := range trees {
-		if t.Branch != "" {
-			g.trees[t.Branch] = t.Path
+
+	// only an unopened task with a branch is found by its checkout
+	if slices.ContainsFunc(runs, func(r *driveRun) bool { return !r.opened && r.end == nil && r.task.branch != "" }) {
+		trees, err := gitx.Worktrees(ctx, in.main)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, t := range trees {
+			if t.Branch != "" {
+				g.trees[t.Branch] = t.Path
+			}
 		}
 	}
 
