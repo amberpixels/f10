@@ -242,6 +242,51 @@ func TestStandupUpkeep(t *testing.T) {
 	}
 }
 
+// verify is a list of commands, each with optional paths; a later layer
+// replaces the list whole, and an entry with no command or a glob standup
+// cannot read stops the commands.
+func TestVerifyList(t *testing.T) {
+	eff := buildWith(t, "---\nverify:\n  - run: just lint\n    paths: [cli/**]\n  - run: just test\n---\n# demo\n", "")
+
+	if len(eff.Problems) > 0 {
+		t.Fatalf("problems: %+v", eff.Problems)
+	}
+
+	if len(eff.Verify) != 2 || eff.Verify[0].Run != "just lint" || eff.Verify[1].Paths != nil ||
+		eff.VerifyOrigin != "declared (main)" {
+		t.Errorf("verify = %+v from %q", eff.Verify, eff.VerifyOrigin)
+	}
+
+	if !slices.ContainsFunc(eff.Facts, func(f Fact) bool {
+		return f.Key == "verify" && f.Value == "just lint (cli/**); just test (every diff)" &&
+			f.Origin == "declared (main, frontmatter)"
+	}) {
+		t.Errorf("no attributed verify fact in %+v", eff.Facts)
+	}
+
+	wt := buildWith(
+		t,
+		"---\nverify:\n  - run: just lint\n  - run: just test\n---\n",
+		"---\nverify:\n  - run: go test ./...\n---\n",
+	)
+	if len(wt.Verify) != 1 || wt.Verify[0].Run != "go test ./..." || wt.VerifyOrigin != "declared (worktree)" {
+		t.Errorf("worktree verify = %+v from %q", wt.Verify, wt.VerifyOrigin)
+	}
+
+	bad := buildWith(t, "---\nverify:\n  - paths: [/abs]\n  - run: x\n    paths: [\"x/[y\"]\n---\n", "")
+	if n := len(bad.Problems); n != 3 {
+		t.Errorf("problems = %+v, want an empty run and two bad globs", bad.Problems)
+	}
+
+	if _, err := decodeDeclared([]byte("verify:\n  - run: x\n    path: [y]\n")); err == nil {
+		t.Error("an unknown verify key decoded")
+	}
+
+	if none := buildWith(t, "# demo\n\n## Verify\n\n`just test`\n", ""); none.Verify != nil {
+		t.Errorf("prose alone declared a list: %+v", none.Verify)
+	}
+}
+
 // traces is off unless declared, takes only on or off, and a later layer's
 // value wins with its origin.
 func TestTraces(t *testing.T) {

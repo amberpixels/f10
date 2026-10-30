@@ -75,6 +75,7 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
+| `verify` | a list of verify commands, each a `run` and optional `paths`, so a diff runs only the commands whose paths it touches ([Verify by path](#verify-by-path)) | none: the Verify heading, run whole |
 | `agents` | a map from `default`, a step some flow names, or `step.kind` (`plan.bug`) to the agent profile it runs on, `kind:model:effort` or a part of it ([Agents](#agents)) | none: every step on the kind's own default |
 
 An unknown key or a value outside its vocabulary stops every `f10` command except `f10 config`, which shows each fact with where it came from, and `f10 init`.
@@ -91,6 +92,31 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
 The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for flows, the area map and reporting back, the review step for the remote review, the catchup step for `catchup` and `catchup_stacked`, the fetch step for `stale_after`, the commit, resolve, judge and catchup steps for `traces`).
+
+## Verify by path
+
+By default every task runs the whole verify, even a diff that touches nothing those commands check.
+The frontmatter's `verify` list scopes each command to the paths it checks, in the same glob syntax as `standup.upkeep`:
+
+```yaml
+verify:
+  - run: just cli::lint && just cli::test
+    paths: [cli/**, go.mod]
+  - run: shfmt -f . | xargs -r shellcheck
+    paths: [bin/**, "*.sh"]
+  - run: just check-links
+```
+
+`f10 config verify` compares the branch with its base and prints only the commands whose paths match a changed file.
+The changed files are the branch's commits, staged and unstaged work, and untracked files, so a new file counts before it is committed.
+A command with no `paths` runs on every diff.
+A diff that matches no command prints `verify: nothing to check` and names the paths, so the report states it as a fact.
+If the base or the diff cannot be read, as on a detached HEAD, every command runs and the line says why.
+
+The load runs before implement writes any code, so its line says to run `f10 config verify` again right before verify runs.
+With `verify` declared, the Verify heading's prose is printed under the commands as rules ("never run X") and is not read for commands.
+A later layer's `verify` replaces the earlier layer's list whole.
+CI does not read the list, so keep CI running every check.
 
 ## Overlays
 

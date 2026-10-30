@@ -86,6 +86,11 @@ type Effective struct {
 	WatchCatchup   bool                `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
 	ReportBack     bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
 	UpkeepPaths    []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	// Verify is the frontmatter's verify list, which f10 config verify
+	// scopes to the diff; VerifyOrigin names its layer. Nil when undeclared,
+	// and the Verify field is the whole of verify.
+	Verify       []VerifyDecl `json:"verify,omitempty"`
+	VerifyOrigin string       `json:"verifyOrigin,omitempty"`
 	// Agents is agents: a step, `default` or `step.kind` to the profile it
 	// runs on, the layers merged key by key; AgentsOrigin names each key's
 	// layer. Nil when none is declared.
