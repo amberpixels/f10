@@ -383,3 +383,36 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 		t.Error("an asking launch did not report an ask")
 	}
 }
+
+// A task the drive has not opened yet shows the drive's flow, not the
+// default one; a bundle's row finds its drive by the lead.
+func TestBareStatusUnopenedTaskTakesTheDrivesFlow(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	path := filepath.Join(fx.repo, ".f10", "instructions", "project.md")
+	md := "---\ntracker:\n  id: DM-###\nflows:\n  default: plan judge implement pr review:local judge pr\n" +
+		"  prose: implement pr\n---\n# demo\n"
+
+	if err := os.WriteFile(path, []byte(md), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.drive(t, func(r *drives.Record) { r.Flow = "prose" }, "DM-7", "DM-8+DM-9")
+
+	rows := fx.rows(t)
+	if len(rows) != 2 {
+		t.Fatalf("rows = %s, want DM-7 and DM-8", rowIDs(rows))
+	}
+
+	for _, row := range rows {
+		for _, g := range row.Gates {
+			if g.Step == "judge" && g.State != gateOff || g.Local != nil {
+				t.Errorf("%s: gate %+v is the default flow's, not prose's", row.ID, g)
+			}
+		}
+
+		if gc := row.gateColumn(); gc != "" {
+			t.Errorf("%s: gate column = %q, want none", row.ID, gc)
+		}
+	}
+}

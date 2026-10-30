@@ -774,3 +774,17 @@ func TestGatesDriveFinish(t *testing.T) {
 		})
 	}
 }
+
+// A flow with no review or judge leaves both out of the compact row, while
+// the full listing still names them as not in this flow.
+func TestCompactGatesOmitsStepsNotInTheFlow(t *testing.T) {
+	gates := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: []string{"implement", "pr"}, now: time.Now(),
+	})
+
+	if got := compactGates(gates); got != "" {
+		t.Errorf("compact = %q, want none", got)
+	}
+
+	checkTexts(t, gates, map[string]string{"review": gateOff, "judge": gateOff})
+}

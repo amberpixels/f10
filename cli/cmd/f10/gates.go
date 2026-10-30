@@ -865,8 +865,8 @@ func compactGates(gates []gate) string {
 
 	for _, g := range gates {
 		switch {
-		case g.Step == "review" && g.State == gateOff:
-			parts = append(parts, statusGlyph(glyphReview)+" L - · R -")
+		case g.State == gateOff:
+			// a step the flow leaves out has no column to fill
 		case g.Step == "review":
 			parts = append(parts, statusGlyph(glyphReview)+" L "+g.Local.compact(), "R "+g.Remote.compact())
 		case g.Step == "judge":
@@ -941,6 +941,9 @@ type gateSource struct {
 	store  *lore.Store
 	host   *host
 	shared string // the storage root every checkout shares
+	// driveFlows is the flow each live drive runs its tasks under, by lead
+	// id: a task the drive has not opened has no branch to record it
+	driveFlows map[string]string
 }
 
 // storageFor is where a task's findings and verdicts are: its checkout's
@@ -957,6 +960,35 @@ func (src gateSource) storageFor(ctx context.Context, root string, run *state.Ru
 	return finishedStorage(src.shared, run.Root)
 }
 
+// liveDriveFlows maps each task of a drive still running its tasks to the
+// flow the drive took, the newest drive winning. A drive without --flow
+// records none, read as default: an area's pick is ship's to make.
+func liveDriveFlows(root string) map[string]string {
+	recs, err := drives.List(root)
+	if err != nil {
+		return nil
+	}
+
+	out := map[string]string{}
+
+	for _, r := range recs {
+		if r.Cancelled != nil || r.Done() {
+			continue
+		}
+
+		for _, t := range r.Tasks {
+			lead, _, _ := strings.Cut(t.ID, ref.Separator)
+			lead, _ = ref.SplitSuffix(lead)
+
+			if key := strings.ToUpper(lead); out[key] == "" {
+				out[key] = cmp.Or(r.Flow, "default")
+			}
+		}
+	}
+
+	return out
+}
+
 func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage string, run *state.Run) []gate {
 	in := gateInput{
 		task:       id,
@@ -969,7 +1001,8 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		now:        time.Now(),
 	}
 
-	flow := "default"
+	// the branch's record, else the drive that will open the task
+	flow := cmp.Or(src.driveFlows[strings.ToUpper(id)], "default")
 
 	if branch != "" && src.main != "" {
 		in.chain = strings.Fields(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgChain))
