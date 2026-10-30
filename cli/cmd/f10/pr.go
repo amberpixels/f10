@@ -230,21 +230,31 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		into, tree, err := mergedTree(ctx, dir, head, base)
-		if err != nil {
-			// a conflicting branch has no merged tree; the fork point still
-			// shows its work, with whatever main already holds
-			fmt.Fprintf(cmd.ErrWriter, "f10: %s does not merge into %s (%v), so the diff is from where it forked\n",
-				s.branch, base, err)
+		if err == nil {
+			out, err = gitx.Exec(ctx, dir, append(args, into, tree)...)
+		}
 
-			if into, err = forkPoint(ctx, dir, head, base); err != nil {
+		// a conflicting branch has no merged tree, and one main already holds
+		// merges to nothing; explain and judge still read its change after the
+		// merge, so both diff from the fork point
+		if err != nil || out == "" {
+			why := "main already holds it"
+			if err != nil {
+				why = fmt.Sprintf("it does not merge: %v", err)
+			}
+
+			fmt.Fprintf(cmd.ErrWriter,
+				"f10: %s merged into %s shows nothing new (%s), so the diff is from where it forked\n",
+				s.branch, base, why)
+
+			from, err := forkPoint(ctx, dir, head, base)
+			if err != nil {
 				return err
 			}
 
-			tree = head
-		}
-
-		if out, err = gitx.Exec(ctx, dir, append(args, into, tree)...); err != nil {
-			return err
+			if out, err = gitx.Exec(ctx, dir, append(args, from, head)...); err != nil {
+				return err
+			}
 		}
 	}
 

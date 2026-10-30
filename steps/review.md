@@ -144,7 +144,7 @@ The main agent first gathers these facts:
 
 - the checkout root, the base ref and its sha, and the diff command
 - the task id and its text (`f10 task read <id>`)
-- the round number, the prior round's path and the output path (`f10 review round`: `round:`, `latest:`, `path:`)
+- the round number, the prior round's path and the output path (`f10 review round`: `round:`, `latest:`, `path:`), and the `pr:` value for the header
 - each lesson that implement's hand-off in this run said it overrode, with the lesson id, its path and the reason (none when the hand-off noted none, or when the review runs standalone)
 - the review roles: the base role, where Roles replaces it, and the added roles, from the sources `conventions/context.md` → Roles ranks, the plan's `Roles` line first
 

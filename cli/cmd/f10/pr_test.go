@@ -292,3 +292,21 @@ func TestPRDiffShowsOnlyCommitsAfterASquashMerge(t *testing.T) {
 		t.Errorf("diff = %q, %v; want second.txt alone", out, err)
 	}
 }
+
+// A branch whose PR merged but which is not finished yet still shows its
+// change, which explain and judge read after the merge.
+func TestPRDiffOfAMergedBranchShowsItsChange(t *testing.T) {
+	dir := prRepo(t)
+	git(t, dir, "switch", "-q", "-c", "feat")
+	commitFile(t, dir, "first.txt")
+	git(t, dir, "switch", "-q", "main")
+	git(t, dir, "merge", "-q", "--squash", "feat")
+	git(t, dir, "commit", "-q", "-m", "first, squashed")
+	git(t, dir, "push", "-q", "origin", "main")
+	git(t, dir, "switch", "-q", "feat")
+
+	out, _, err := runPR(t, dir, "diff", "--name-only")
+	if err != nil || out != "first.txt\n" {
+		t.Errorf("diff = %q, %v; want first.txt", out, err)
+	}
+}

@@ -604,10 +604,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 			continue
 		case j.in.dry:
 			j.say("would archive %s", plan)
-
-			if reviews := taskReviews(j.in.main, j.in.plansDir, id); exists(reviews) {
-				j.say("would archive %s", reviews)
-			}
+			j.archiveReviews(id)
 
 			continue
 		default:
@@ -621,17 +618,32 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 			j.say("archived %s to %s", plan, archived)
 		}
 
+		if len(left[id]) == 0 {
+			j.archiveReviews(id)
+		}
+
 		if len(left[id]) == 0 && !j.in.dry {
 			if note := removeImages(j.in.main, j.in.plansDir, id); note != "" {
 				j.say("%s", note)
 			}
+		}
+	}
+}
 
-			switch reviews, err := archiveReviews(taskReviews(j.in.main, j.in.plansDir, id)); {
-			case err != nil:
-				j.say("%v", err)
-			case reviews != "":
-				j.say("archived %s's findings to %s", id, reviews)
-			}
+// archiveReviews ends the task's series of review rounds, so a later PR on
+// the same task starts at round 1.
+func (j *sweeper) archiveReviews(id string) {
+	reviews := taskReviews(j.in.main, j.in.plansDir, id)
+
+	switch {
+	case !exists(reviews):
+	case j.in.dry:
+		j.say("would archive %s", reviews)
+	default:
+		if archived, err := archiveReviews(reviews); err != nil {
+			j.say("%v", err)
+		} else {
+			j.say("archived %s's findings to %s", id, archived)
 		}
 	}
 }

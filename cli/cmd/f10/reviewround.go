@@ -150,8 +150,9 @@ func seriesOf(ctx context.Context, t *target, s prSubject, dir string, warn io.W
 
 // alreadyMerged reports whether merging the tree's work into base changes
 // nothing: tree equality, not ancestry, since a squash merge leaves the
-// branch's commits off main. Untracked files are work too, and a branch
-// that does not merge is not merged.
+// branch's commits off main. A branch with nothing past base yet, such as
+// the coherence lens's fresh sweep branch, is not merged, and neither are
+// untracked work or a branch that does not merge.
 func alreadyMerged(ctx context.Context, dir, base string) bool {
 	if untracked, _ := gitx.Exec(ctx, dir, "ls-files", "--others", "--exclude-standard"); untracked != "" {
 		return false
@@ -164,6 +165,10 @@ func alreadyMerged(ctx context.Context, dir, base string) bool {
 
 	into, tree, err := mergedTree(ctx, dir, head, base)
 	if err != nil {
+		return false
+	}
+
+	if fresh, err := gitx.IsAncestor(ctx, dir, head, into); err != nil || fresh {
 		return false
 	}
 
