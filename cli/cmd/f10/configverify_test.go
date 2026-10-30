@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -80,9 +81,14 @@ func TestScopedVerify(t *testing.T) {
 			files: []string{"README.md", "docs/guide.md"},
 			want: []string{
 				"verify: nothing to check  the diff against main touches none of cli/**, bin/**, *.sh",
-				"Never run `just eval`.",
+				"  rules from the Verify heading, not commands:\n    Never run `just eval`.",
 			},
 			not: []string{"just cli::lint", "shellcheck"},
+		},
+		{
+			name:  "a non-ASCII path is read verbatim",
+			files: []string{"cli/\u00fc.go"},
+			want:  []string{"  just cli::lint  (cli/** matched cli/\u00fc.go)"},
 		},
 		{
 			name:  "a new untracked Go file runs the Go command",
@@ -127,6 +133,28 @@ func TestScopedVerify(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A file renamed out of a scoped directory still calls for that directory's
+// command: removing it can break what the command checks.
+func TestScopedVerifyReadsBothSidesOfARename(t *testing.T) {
+	lay, _ := verifyRepo(t)
+	root := lay.CheckoutRoot
+
+	writeTestFile(t, filepath.Join(root, "cli", "a.go"), "package a\n")
+	git(t, root, "add", ".")
+	git(t, root, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "a")
+	git(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
+	git(t, root, "mv", "cli/a.go", "a.go")
+
+	_, changed, err := verifyDiff(t.Context(), lay)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Contains(changed, "cli/a.go") || !slices.Contains(changed, "a.go") {
+		t.Errorf("changed = %q, want both sides of the rename", changed)
 	}
 }
 

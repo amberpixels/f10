@@ -250,12 +250,13 @@ func verifyDiff(ctx context.Context, lay *layout.Layout) (string, []string, erro
 		return base, nil, err
 	}
 
-	tracked, err := gitx.Exec(ctx, dir, "diff", "--name-only", from)
+	// a rename lists both paths, and -z keeps non-ASCII paths unquoted
+	tracked, err := gitx.Exec(ctx, dir, "diff", "--name-only", "--no-renames", "-z", from)
 	if err != nil {
 		return base, nil, err
 	}
 
-	untracked, err := gitx.Exec(ctx, dir, "ls-files", "--others", "--exclude-standard")
+	untracked, err := gitx.Exec(ctx, dir, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		return base, nil, err
 	}
@@ -263,8 +264,10 @@ func verifyDiff(ctx context.Context, lay *layout.Layout) (string, []string, erro
 	var files []string
 
 	for _, out := range []string{tracked, untracked} {
-		if out != "" {
-			files = append(files, strings.Split(out, "\n")...)
+		for f := range strings.SplitSeq(out, "\x00") {
+			if f != "" {
+				files = append(files, f)
+			}
 		}
 	}
 
@@ -313,9 +316,12 @@ func scopedVerifyLine(eff *facts.Effective, prose facts.Field, base string, chan
 		}
 	}
 
+	// labelled, so a command the prose still names is not read as one to run
 	if strings.HasPrefix(prose.Origin, "declared") {
+		b.WriteString("  rules from the Verify heading, not commands:\n")
+
 		for line := range strings.SplitSeq(strings.TrimSpace(prose.Value), "\n") {
-			b.WriteString("  " + line + "\n")
+			b.WriteString("    " + line + "\n")
 		}
 	}
 

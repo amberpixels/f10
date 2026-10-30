@@ -109,13 +109,14 @@ verify:
 
 `f10 config verify` compares the branch with its base and prints only the commands whose paths match a changed file.
 The changed files are the branch's commits, staged and unstaged work, and untracked files, so a new file counts before it is committed.
+A rename counts as both of its paths, because moving a file out of a directory can break what that directory's command checks.
 A command with no `paths` runs on every diff.
 A diff that matches no command prints `verify: nothing to check` and names the paths, so the report states it as a fact.
 If the base or the diff cannot be read, as on a detached HEAD, every command runs and the line says why.
 
 The load runs before implement writes any code, so its line says to run `f10 config verify` again right before verify runs.
-With `verify` declared, the Verify heading's prose is printed under the commands as rules ("never run X") and is not read for commands.
-A later layer's `verify` replaces the earlier layer's list whole.
+With `verify` declared, the Verify heading's prose is printed under a `rules from the Verify heading, not commands:` label ("never run X"), and is not read for commands.
+A later layer's `verify` replaces the earlier layer's list whole, and an empty list is refused, so drop the key to go back to the Verify heading.
 CI does not read the list, so keep CI running every check.
 
 ## Overlays

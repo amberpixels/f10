@@ -308,6 +308,10 @@ func (d Declared) check() []string {
 		}
 	}
 
+	if d.Verify != nil && len(d.Verify) == 0 {
+		bad = append(bad, "verify: the list is empty; name a command, or drop the key to run the Verify heading")
+	}
+
 	for i, v := range d.Verify {
 		if strings.TrimSpace(v.Run) == "" {
 			bad = append(bad, fmt.Sprintf("verify[%d]: run is empty; name the command", i))

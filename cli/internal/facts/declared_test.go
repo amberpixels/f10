@@ -278,6 +278,10 @@ func TestVerifyList(t *testing.T) {
 		t.Errorf("problems = %+v, want an empty run and two bad globs", bad.Problems)
 	}
 
+	if empty := buildWith(t, "---\nverify: []\n---\n", ""); len(empty.Problems) != 1 {
+		t.Errorf("an empty list: problems = %+v, want one", empty.Problems)
+	}
+
 	if _, err := decodeDeclared([]byte("verify:\n  - run: x\n    path: [y]\n")); err == nil {
 		t.Error("an unknown verify key decoded")
 	}
