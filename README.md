@@ -65,7 +65,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:capture <desc>` | capture | task created (id + url) |
 | `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | plan file saved, before any code; or handed to the task's own agent |
 | `/f10:ship [<id \| plan.md \| desc>]` | whatever's missing, then the flow | end of the declared flow (an open PR by default); or handed to the task's own agent |
-| `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose to plain rules, leftovers out of the code; each diff proven in scope (a small one gets a light pass without proofs), verify green, nothing committed |
+| `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose rewritten for clarity, leftovers out of the code; each diff proven in scope (a small one gets a light pass without proofs), verify green, nothing committed |
 | `/f10:review <id \| PR \| this branch> [ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, or read in from the CI review; `since` checks how the tasks since a ref (the last tag by default) fit together, against their plans and lore |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, fixes verified, asks in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk |
@@ -177,7 +177,7 @@ For a Notion tracker, install [f10-drivers](https://github.com/amberpixels/f10-d
   A name with no generic step (e.g. `e2e`) is project-defined: `.f10/instructions/<name>.md` *is* the step.
   `f10 start` and `f10 drive` run `default`, `--local` runs `local`, `--flow <name>` any other.
   A flow with no leading `plan` skips the plan file, and for free text the ticket too.
-- **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, the project.md core, stealth, task references), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how it talks).
+- **Convention** - a rule every step obeys, in `conventions/`: `context.md` (config loading, the project.md core, stealth, task references), `latency.md` (turns, not commands), `gaps.md` (open decisions), `failure.md` (a step that cannot complete), `report.md` (what a success prints), `voice.md` (how a run talks and how f10 writes).
   A hook tells the model to load them when a skill starts and again after compaction; the project's instructions reload every run.
 - **Mode** - a run in `modes/` that changes execution: `help.md` (`--help`), `dry-run.md` (`--dry-run`), `driven.md` (`--driven`, a run prompted from another session) and `forward.md` (a task id another worktree holds).
 
