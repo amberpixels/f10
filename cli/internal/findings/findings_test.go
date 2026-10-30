@@ -123,3 +123,17 @@ func TestParseWithoutHeader(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// pr: names the PR a round reviewed; a file older than the line has none.
+func TestParsePR(t *testing.T) {
+	for text, want := range map[string]string{
+		"task: GH-13\nround: 1\npr: #204\n": "#204",
+		"task: GH-13\nround: 1\npr: none\n": "none",
+		"task: GH-13\nround: 1\n":           "",
+	} {
+		f, err := Parse(text)
+		if err != nil || f.PR != want {
+			t.Errorf("Parse(%q).PR = %q, %v; want %q", text, f.PR, err, want)
+		}
+	}
+}

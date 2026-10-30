@@ -344,6 +344,7 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	plan := fx.plan(t, "GH-1.md", "# plan")
+	writeFile(t, filepath.Join(fx.main, ".f10", "reviews", "GH-1", "1.md"), "task: GH-1\nround: 1\n")
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -351,6 +352,12 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 	}
 
 	archived := filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.md")
+
+	// the task's next PR starts its own series of review rounds
+	reviews := filepath.Join(fx.main, ".f10", "reviews", "archive", "GH-1.1")
+	if !exists(filepath.Join(reviews, "1.md")) || !strings.Contains(out, reviews) {
+		t.Errorf("findings not archived to %s:\n%s", reviews, out)
+	}
 
 	for _, want := range []string{
 		"task:", "GH-1", "pr:", "↗ https://gh/pr/9", "merge:", "m3rge", "plan:", archived,

@@ -125,8 +125,14 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
 	plan := fx.plan(t)
+	reviews := filepath.Join(fx.in.main, ".f10", "reviews")
+	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
 
 	out := fx.run(t)
+
+	if !exists(filepath.Join(reviews, "archive", "GH-1.1", "1.md")) {
+		t.Errorf("findings not archived:\n%s", out)
+	}
 
 	for _, call := range []string{
 		"gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1/x",
@@ -380,8 +386,14 @@ func TestJanitorDryRun(t *testing.T) {
 	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
 	plan := fx.plan(t)
+	reviews := filepath.Join(fx.in.main, ".f10", "reviews", "GH-1")
+	writeFile(t, filepath.Join(reviews, "1.md"), "task: GH-1\nround: 1\n")
 
 	out := fx.run(t)
+
+	if !exists(reviews) || !strings.Contains(out, "would archive "+reviews) {
+		t.Errorf("dry run moved or left out the findings:\n%s", out)
+	}
 
 	if fx.f.called("git branch -D") || fx.f.called("gh api -X DELETE") || fx.f.called("git update-ref") ||
 		!exists(plan) {

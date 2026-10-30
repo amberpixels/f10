@@ -284,6 +284,50 @@ func forkPoint(ctx context.Context, dir, head, base string) (string, error) {
 	return points[0], nil
 }
 
+// mergedTree is head merged in memory into the newer of base's local and
+// origin refs, and that ref. Diffed against the ref it holds only what main
+// lacks, which a merge base misses once the branch's earlier PR was squashed.
+func mergedTree(ctx context.Context, dir, head, base string) (string, string, error) {
+	var into string
+
+	for _, r := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
+		switch {
+		case refSHA(ctx, dir, r) == "":
+		case into == "":
+			into = r
+		default:
+			if behind, err := gitx.IsAncestor(ctx, dir, into, r); err != nil {
+				return "", "", err
+			} else if behind {
+				into = r
+			}
+		}
+	}
+
+	if into == "" {
+		return "", "", fmt.Errorf("%s is not a branch here or on origin", base)
+	}
+
+	tree, err := gitx.MergeTree(ctx, dir, into, head)
+	if err != nil {
+		return "", "", err
+	}
+
+	return into, tree, nil
+}
+
+// capturedHead is HEAD with the tracked work in the tree on top, as a commit
+// no ref points at: `git stash create` touches neither the stash list nor
+// the index, and prints nothing for a clean tree.
+func capturedHead(ctx context.Context, dir string) (string, error) {
+	sha, err := gitx.Exec(ctx, dir, "stash", "create")
+	if err != nil || sha != "" {
+		return sha, err
+	}
+
+	return gitx.Exec(ctx, dir, "rev-parse", "HEAD")
+}
+
 // headRef is the ref git reads the subject's branch at.
 func (s prSubject) headRef() string {
 	if s.here {

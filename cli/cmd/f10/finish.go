@@ -506,12 +506,21 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
+	reviews, err := archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID))
+	if err != nil {
+		return err
+	}
+
 	if in.loreStore != nil {
 		notes = appendNote(notes, loreNote(in.loreStore, in.task.ID))
 	}
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived})
+	}
+
+	if reviews != "" {
+		rows = append(rows, fact{label: "reviews", value: reviews})
 	}
 
 	// the report is copied out before the worktree goes and moved only after
@@ -1131,6 +1140,38 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	}
 
 	return target, "", nil
+}
+
+// archiveReviews moves a findings directory to reviews/archive/<id>.<N>/,
+// so the task's next PR starts its own series of rounds. N always counts
+// from 1, since a bare <id>/ under archive would read as a live directory.
+func archiveReviews(dir string) (string, error) {
+	if !exists(dir) {
+		return "", nil
+	}
+
+	archive := filepath.Join(filepath.Dir(dir), "archive")
+	if err := os.MkdirAll(archive, 0o750); err != nil {
+		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
+	}
+
+	for n := 1; ; n++ {
+		target := filepath.Join(archive, fmt.Sprintf("%s.%d", filepath.Base(dir), n))
+		if exists(target) {
+			continue
+		}
+
+		if err := os.Rename(dir, target); err != nil {
+			return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
+		}
+
+		return target, nil
+	}
+}
+
+// taskReviews is the task's findings directory, beside its plans.
+func taskReviews(main, plansDir, id string) string {
+	return filepath.Join(filepath.Dir(taskPlansDir(main, plansDir)), "reviews", id)
 }
 
 // removeImages drops the images `task read` downloaded for the task; a

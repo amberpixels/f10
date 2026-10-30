@@ -88,6 +88,11 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
+	reviews, err := archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID))
+	if err != nil {
+		return err
+	}
+
 	rows := []fact{
 		{label: "task", value: in.task.Label()},
 		{label: "pr", value: p.url(), url: true},
@@ -96,6 +101,10 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived})
+	}
+
+	if reviews != "" {
+		rows = append(rows, fact{label: "reviews", value: reviews})
 	}
 
 	notes = append(notes, name+" had no worktree left: only the branch is deleted, no workspace closed")

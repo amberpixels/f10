@@ -21,6 +21,8 @@ const (
 	Unsettled Decline = "unsettled"
 	// Exhausted is the last round already written.
 	Exhausted Decline = "exhausted"
+	// Merged is a branch whose content main already holds.
+	Merged Decline = "merged"
 )
 
 // Status is a findings directory read for the next review: the latest round
@@ -32,6 +34,11 @@ type Status struct {
 	Path    string  `json:"path,omitempty"`   // the next round's file
 	Decline Decline `json:"decline,omitempty"`
 	Open    []Open  `json:"open,omitempty"` // the findings behind the decline
+	// PR is the branch's open PR for the next round's `pr:` line, `none`
+	// without one; empty when the branch is not checked out here.
+	PR string `json:"pr,omitempty"`
+	// Archived is where a finished series moved before this round.
+	Archived string `json:"archived,omitempty"`
 }
 
 // Open is a finding a decline names, with why it is still open: `no

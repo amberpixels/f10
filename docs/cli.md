@@ -720,10 +720,21 @@ Nothing declared, or a fact outside the vocabulary, is a refusal naming the line
 
 Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's notes, discussions and pipeline jobs.
 
-`f10 review round` is the one local verb: it reads the storage root's findings files, needs no remote review declared, and writes nothing.
+`f10 review round` is the one local verb: it reads the storage root's findings files and needs no remote review declared.
 The directory is `reviews/<task id>` (a bundle's lead), else `reviews/<branch>` with `/` as `-` for work no task names.
-It prints `dir:`, `latest:` (the highest round's file, absent with none), and the next round's `round:` and `path:`.
-Two cases decline, exit 3, with a `decline:` line and the findings behind it instead of the next round: `1.md` holding a finding without a verdict, and `2.md` present, the last round, naming each finding whose latest block is an `ask` or still waits for a verdict.
+A directory holds one series of rounds, and a series belongs to one PR, named on each round's `pr:` header line.
+For a branch checked out here, the command checks whether the series has ended before it counts rounds.
+A series ends when the latest round's PR merged or closed on the host.
+A round that names no PR ends its series when HEAD cannot reach its `reviewed:` sha.
+An ended series moves to `reviews/archive/<id>.<N>/`, and the next round is 1.
+`f10 finish` and the janitor archive the directory the same way.
+A host that cannot be read keeps the series going, with a line on stderr, because archiving by mistake would hide findings that `/f10:resolve` still needs.
+It prints `dir:`, `archive:` when a series moved, `latest:` (the highest round's file, absent with none), `pr:` (the branch's open PR for the next header, `none` without one), and the next round's `round:` and `path:`.
+Three cases decline, exit 3, with a `decline:` line and the findings behind it instead of the next round:
+
+- A branch whose work its base already holds by content, as after a squash merge ("already merged, nothing to review").
+- `1.md` holding a finding without a verdict.
+- `2.md` present, the last round, naming each finding whose latest block is an `ask` or still waits for a verdict.
 `--json` emits the same.
 
 ## Standup

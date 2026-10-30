@@ -17,6 +17,7 @@ type File struct {
 	Task       string
 	Round      string
 	Reviewed   string // the sha, plus ` dirty` when the tree differed
+	PR         string // the PR reviewed (`#204`), `none`, or empty in a file older than the line
 	Reviewer   string // `local`, a remote identity, or both: `local, claude[bot]`
 	Verdict    string // clean or findings
 	Categories map[string]int
@@ -83,6 +84,8 @@ func Parse(text string) (*File, error) {
 				f.Round = value
 			case "reviewed":
 				f.Reviewed = value
+			case "pr":
+				f.PR = value
 			case "reviewer":
 				f.Reviewer = value
 			case "verdict":
