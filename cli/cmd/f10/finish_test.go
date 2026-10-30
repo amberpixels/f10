@@ -1106,6 +1106,55 @@ func TestFinishMergedWithoutWorktree(t *testing.T) {
 	}
 }
 
+// A finish marks the task finished in each stopped drive record that lists
+// it; a running drive's record and another attempt's row stay as they were.
+func TestFinishMarksDriveRecords(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.root = t.TempDir()
+
+	halted := func() *drives.Outcome { return &drives.Outcome{Row: "halted at catchup", Code: exitHalted} }
+	for _, tasks := range [][]drives.Task{
+		{{ID: "GH-1", Outcome: halted()}, {ID: "GH-2", Outcome: halted()}},
+		{{ID: "GH-1", Outcome: halted()}},
+		{{ID: "GH-1-b", Outcome: halted()}},
+	} {
+		if err := drives.Create(fx.in.root, &drives.Record{Tasks: tasks}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	running, err := drives.Acquire(fx.in.root, drives.DriveKey(2), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer running.Release()
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		drive int
+		id    string
+		want  string
+	}{
+		{1, "GH-1", rowFinished},
+		{1, "GH-2", "halted at catchup"},
+		{2, "GH-1", "halted at catchup"},
+		{3, "GH-1-b", "halted at catchup"},
+	} {
+		rec, err := drives.Read(fx.in.root, c.drive)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if o := rec.Task(c.id).Outcome; o == nil || o.Row != c.want {
+			t.Errorf("drive %d %s = %+v, want %q", c.drive, c.id, o, c.want)
+		}
+	}
+}
+
 // A task with no branch left and its plan archived is already finished.
 func TestFinishAlreadyFinished(t *testing.T) {
 	fx := newFinishFixture(t)

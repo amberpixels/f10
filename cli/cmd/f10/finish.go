@@ -614,6 +614,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			return err
 		}
 
+		finishRecords(w, in)
 		in.sweepNow(ctx)
 
 		return nil
@@ -630,6 +631,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
+	// before the close, which ends the process on the self-close path
+	finishRecords(w, in)
 	in.sweepNow(ctx)
 
 	if self && mainWS != nil {
@@ -643,6 +646,43 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	return nil
+}
+
+// finishRecords marks the task finished in every stopped drive record that
+// lists it, so drive list needs no rerun. A failure is a line: the merge
+// already landed.
+func finishRecords(w io.Writer, in finishInput) {
+	if in.root == "" {
+		return
+	}
+
+	recs, err := drives.List(in.root)
+	if err != nil {
+		fmt.Fprintf(w, "  marking drive records: %v\n", err)
+
+		return
+	}
+
+	// one attempt finished leaves the task's other attempts alive
+	match := func(t drives.Task) bool {
+		id, suffix := ref.SplitSuffix(t.ID)
+		if !strings.EqualFold(suffix, in.suffix) {
+			return false
+		}
+
+		return strings.EqualFold(id, in.task.Label()) ||
+			slices.ContainsFunc(in.task.Members(), func(m string) bool { return strings.EqualFold(id, m) })
+	}
+
+	for _, rec := range recs {
+		if !slices.ContainsFunc(rec.Tasks, func(t drives.Task) bool { return !rowDone(t) && match(t) }) {
+			continue
+		}
+
+		if err := markFinished(in.root, rec.Number, match); err != nil {
+			fmt.Fprintf(w, "  marking drive %d: %v\n", rec.Number, err)
+		}
+	}
 }
 
 // checkLore runs only right before a merge lands (a merged request, --local

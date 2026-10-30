@@ -132,7 +132,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if a.list {
-			return driveList(cmd.Writer, t.sharedRoot(), a.all)
+			return driveList(cmd.Writer, t.sharedRoot(), a.all, rowFinishedFor(ctx, t))
 		}
 
 		if err := driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now()); err != nil {
@@ -746,7 +746,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 	for _, i := range order {
 		r := &driveRun{task: tasks[i]}
 		if r.task.finished {
-			in.end(ctx, w, r, driveResult{row: "already finished"})
+			in.end(ctx, w, r, driveResult{row: rowAlreadyFinished})
 		}
 
 		runs = append(runs, r)
@@ -2283,7 +2283,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		in.record(ctx, in.main, finishedEvent(id, "", in.now()))
 	}
 
-	return driveResult{row: "finished"}
+	return driveResult{row: rowFinished}
 }
 
 // finishStep records finish's progress on the branch for status; a failed
@@ -2813,7 +2813,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	r.end, r.queued = &res, false
 
 	// a finished task's branch took the record with it
-	if res.row != "finished" {
+	if res.row != rowFinished {
 		in.clearFinish(ctx, r)
 	}
 

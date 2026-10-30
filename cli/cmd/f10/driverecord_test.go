@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"slices"
@@ -250,7 +251,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 	}
 
 	var list strings.Builder
-	if err := driveList(&list, fx.in.root, false); err != nil {
+	if err := driveList(&list, fx.in.root, false, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -258,6 +259,85 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 		if !strings.Contains(list.String(), want) {
 			t.Errorf("list lacks %q:\n%s", want, list.String())
 		}
+	}
+}
+
+// A stopped drive's open rows whose task finished outside it read finished,
+// and the record on disk says so; a row whose task is not finished stays.
+func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
+	root := t.TempDir()
+	rec := &drives.Record{Args: []string{"GH-1", "GH-2", "GH-3"}, Tasks: []drives.Task{
+		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: exitHalted}},
+		{ID: "GH-2", Outcome: &drives.Outcome{Row: "halted at catchup", Code: exitHalted}},
+		{ID: "GH-3", Skill: "ship"},
+	}}
+
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	finished := func(row string) bool { return row == "GH-1" || row == "GH-3" }
+
+	var list strings.Builder
+	if err := driveList(&list, root, false, finished); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"GH-1:  finished", "GH-2:  halted at catchup", "GH-3:  finished"} {
+		if !strings.Contains(list.String(), want) {
+			t.Errorf("list lacks %q:\n%s", want, list.String())
+		}
+	}
+
+	got, err := drives.Read(root, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for id, want := range map[string]string{"GH-1": rowFinished, "GH-2": "halted at catchup", "GH-3": rowFinished} {
+		if o := got.Task(id).Outcome; o == nil || o.Row != want {
+			t.Errorf("%s recorded %+v, want %q", id, o, want)
+		}
+	}
+
+	if got.Task("GH-3").Skill != "" {
+		t.Errorf("GH-3 kept its skill %q", got.Task("GH-3").Skill)
+	}
+}
+
+// A running drive owns its record: list checks none of its rows.
+func TestDriveListLeavesARunningDrive(t *testing.T) {
+	root := t.TempDir()
+	rec := &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{
+		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: exitHalted}},
+	}}
+
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := os.ReadFile(drives.Path(root, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	own, err := drives.Acquire(root, drives.DriveKey(1), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer own.Release()
+
+	var list strings.Builder
+	if err := driveList(&list, root, false, func(string) bool { return true }); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(list.String(), "GH-1:  halted at catchup") {
+		t.Errorf("list:\n%s", list.String())
+	}
+
+	if after, _ := os.ReadFile(drives.Path(root, 1)); !bytes.Equal(after, before) {
+		t.Errorf("record changed:\n%s", after)
 	}
 }
 
