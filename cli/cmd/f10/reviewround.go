@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -143,7 +144,9 @@ func seriesOf(ctx context.Context, t *target, s prSubject, dir string, warn io.W
 		return series, nil
 	}
 
-	series.archived, err = archiveReviews(dir)
+	head, _, _ := strings.Cut(f.Reviewed, " ")
+	restart := !digits(strings.TrimLeft(f.PR, "#!"))
+	series.archived, err = archiveReviews(dir, seriesEnd{pr: cmp.Or(f.PR, "none"), head: head, restart: restart})
 
 	return series, err
 }

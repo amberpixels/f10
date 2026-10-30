@@ -122,7 +122,8 @@ However, never agree because agreeing is cheaper.
    The file stays under the storage root.
    Never name it or its path in a commit, a PR comment, a status or tracker text.
 
-   With a task id, add a lore entry beside the file: `f10 lore add verdict --change <task> --outcome <verdict> --gate judge --commit <HEAD's sha> --judged <task|plan|change> -m <reason>`.
+   With a task id, add a lore entry beside the file: `f10 lore add verdict --change <change> --outcome <verdict> --gate judge --commit <HEAD's sha> --judged <task|plan|change> -m <reason>`.
+   `<change>` is what `f10 lore change <task>` prints, so a verdict on a follow-up PR never grades the first one.
    `--judged` is `task` when the subject is `task <id>`, `plan` when it is `plan <id>`, and `change` otherwise.
    An idea writes no lore entry.
    A failing `lore add` is one line in the report, never a failed step.

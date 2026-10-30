@@ -13,8 +13,9 @@ The package imports nothing else from f10, so it can be copied out as a standalo
 
 ## Glossary
 
-- **Change**: the unit of work.
-  Its id is the task id (`FT-138`).
+- **Change**: the unit of work, one PR.
+  Its id is the task id (`FT-138`) for the task's first PR, and `<id>.<n>` for its `n`-th (`FT-138.2`), because each PR is reviewed, judged and checked on its own.
+  f10 counts a task's PRs from the review series `f10 finish` archives, and `f10 lore change` prints the id the current one writes to.
   It is a directory holding every entry for that change.
 - **Entry kinds**, following the life of a change:
   - `intent`: what we are doing and why, written before code.
@@ -26,6 +27,7 @@ The package imports nothing else from f10, so it can be copied out as a standalo
 - **Anchor**: where an entry points in the code: `path:line[-end]@commit`, plus an optional symbol.
 - **Trailer**: `Change: <id>` on a commit, the link from code to its change.
   f10's `Task: <id>` trailer is accepted as an alias.
+  f10 writes `Change:` beside `Task:` only from a task's second PR on, on its commits and its squash commit, because `Task:` alone would lead to the first PR's change.
 
 ## Rules
 
@@ -110,6 +112,7 @@ Decisions and lessons come from a ship run: a change that reaches `f10 finish` a
 
 ```bash
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]
+f10 lore change [<task-id>]
 f10 lore show <change> [--json]
 f10 lore why <path:line[@rev]> [--json]
 f10 lore lessons <path> [--json]
@@ -125,7 +128,10 @@ Every verb takes `--root <dir>`.
   An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
   `human` is `git config user.email`.
   Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.
+- **`change`** prints the change the task's current PR writes to: the task id, or `<id>.<n>` once `n - 1` of its PRs have finished.
+  A series whose PR merged without `f10 finish` is archived first, as `f10 review round` does.
 - **`show`** prints the change's effective entries, the intent first, then by time.
+  A bare task id prints each of its PRs' changes, newest first, and `--json` flattens them into one array in that order; `show <id>.<n>` prints that one change.
 - **`why`** blames the line, reads the commit's `Change:` trailers (else its `Task:` trailers), loads each change, and prints the intent, the latest verdict, and the effective decisions, findings and lessons with an anchor on the same path that covers the line, or that share a symbol with such an anchor.
   A commit with no trailer, or whose changes hold no entries, falls back to every change's entries with an anchor on the same path whose `commit` is the blamed one, or with an anchor on the line whose `commit` is an ancestor of it (an anchor written before its code was committed); the output says the link came from an anchor, a weaker one than a trailer.
   `why` and `lessons` skip a file that does not parse; `validate` reports it.

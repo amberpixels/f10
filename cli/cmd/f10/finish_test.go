@@ -255,6 +255,13 @@ func TestMergeBody(t *testing.T) {
 			"## Summary\n\nAdds the thing.\n\nTask: GH-1\n",
 		},
 		{"bundle", bundle, "", "--squash", "Task: GH-1\nTask: GH-2\n"},
+		{
+			"a follow-up series",
+			finishInput{traces: true, task: gh1, change: "GH-1.2"},
+			"",
+			"--squash",
+			"Task: GH-1\nChange: GH-1.2\n",
+		},
 	}
 
 	for _, c := range cases {
@@ -2254,6 +2261,36 @@ func TestFinishLoreGate(t *testing.T) {
 
 		if fx.f.called("git commit-tree") || fx.f.called("git merge --ff-only") || fx.f.called("git worktree remove") {
 			t.Errorf("block landed or removed something: %v", fx.f.calls)
+		}
+	})
+
+	// the first PR's open major finding belongs to its own series
+	t.Run("a follow-up checks its own series", func(t *testing.T) {
+		fx := newFinishFixture(t)
+		fx.openPR()
+		store := storeIn(fx)
+		fx.in.loreStore, fx.in.gate = store, "warn"
+
+		if err := os.MkdirAll(filepath.Join(fx.main, ".f10", "reviews", "archive", "GH-1.1"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+
+		finding := lore.Entry{
+			Kind: lore.KindFinding, Change: "GH-1", Human: "dev@example.com",
+			Severity: "major", Status: "open", Source: "local", Body: "Breaks the thing",
+		}
+		if _, err := store.Add(t.Context(), finding); err != nil {
+			t.Fatal(err)
+		}
+
+		out, err := fx.run(t)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(out, "lore check GH-1.2: no entries for GH-1.2 (lore_gate: warn)") ||
+			strings.Contains(out, "Breaks the thing") {
+			t.Errorf("the follow-up was not checked on its own series:\n%s", out)
 		}
 	})
 

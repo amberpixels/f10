@@ -105,7 +105,7 @@ source: remote
 verdict: ask
 `)
 
-	o := fileOutcomes(root, "FT-1")
+	o := fileOutcomes(root, "FT-1", time.Time{})
 	if want := []reviewRound{{Round: "1", Found: 1, Fixed: 1}}; !slices.Equal(o.local, want) {
 		t.Errorf("local = %+v, want %+v", o.local, want)
 	}
@@ -161,7 +161,7 @@ category: correctness
 	writeFile(t, filepath.Join(reviews, "3.md"), "no header here\n")
 	writeFile(t, filepath.Join(reviews, "4.md"), "task: FT-1\nround: 1\nreviewer: claude[bot]\nverdict: clean\n")
 
-	o := fileOutcomes(root, "FT-1")
+	o := fileOutcomes(root, "FT-1", time.Time{})
 	want := []reviewRound{
 		{Round: "1", Found: 3, Fixed: 1, Skipped: 1, Ask: 1},
 		{Round: "2", Found: 2, Fixed: 1, Ask: 1},
@@ -182,7 +182,7 @@ category: correctness
 	writeFile(t, filepath.Join(verdicts, "11.md"), "subject: idea something else\nverdict: stop\n")
 	writeFile(t, filepath.Join(verdicts, "12.md"), "task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: sound\n")
 
-	o = fileOutcomes(root, "FT-1")
+	o = fileOutcomes(root, "FT-1", time.Time{})
 	if j := o.changeJudge; j == nil || j.Verdict != "proceed with changes" || j.Reason != "tighten the parser" {
 		t.Errorf("change judge = %+v, want 10.md's verdict", j)
 	}
@@ -194,6 +194,7 @@ category: correctness
 	if o := fileOutcomes(
 		root,
 		"FT-2",
+		time.Time{},
 	); o.local != nil || o.remote != nil || o.changeJudge != nil ||
 		o.planJudge != nil {
 		t.Errorf("a task with no files has outcomes: %+v", o)

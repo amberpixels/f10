@@ -87,7 +87,8 @@ f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: 
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
-f10 lore show <change> [--json]     # the change's effective entries, the intent first
+f10 lore change [<task-id>]         # the change the task's current PR writes to: <id>, or <id>.<n> for its n-th PR
+f10 lore show <change> [--json]     # the change's effective entries, the intent first; a task id lists each PR's change
 f10 lore why <path:line> [--json]   # the change behind a line: intent, latest verdict, entries on the line
 f10 lore lessons <path> [--json]    # the lessons to read before editing a file
 f10 lore check <change>             # exit 1 naming why the change does not pass its gate
@@ -266,7 +267,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Open: merged through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI, a required review, conflicts) its reason is the error and nothing has changed.
    Already merged: confirmed.
    Closed without a merge: a refusal.
-   Right before an open request merges, or a branch never pushed lands (below), `f10 lore check <id>` runs on the task: under `lore_gate: warn`, the default, its reasons are a note under the report and the merge goes on; under `block` they are the error, with nothing changed.
+   Right before an open request merges, or a branch never pushed lands (below), `f10 lore check` runs on the change the merge closes (`<id>`, or `<id>.<n>` for the task's `n`-th PR): under `lore_gate: warn`, the default, its reasons are a note under the report and the merge goes on; under `block` they are the error, with nothing changed.
    A passing check needs the intent, a judge verdict of proceed and no open blocker or major finding, so a flow with no `judge` entry stays on `warn`.
    A request already merged, `--local` and a spike's close merge nothing and are not checked; a lore root this clone lacks reads as `no entries`, which `block` refuses too.
    A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and its finish retargets this PR.
@@ -456,7 +457,7 @@ ship            running: review:local
   A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`drive: merging #204`, `drive finishes it`) in place of `f10 finish`.
 - **Judge** reads `pending`, `running`, or its outcome and reason; a judge or review half the flow does not declare shows once one ran, and otherwise the row reads `not in this flow`.
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
-- **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), each block for the half its `source:` names, else the header's: remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each half; the newest `verdicts/<id>/<n>.md`, the task or plan judge's when its `subject:` is the task or a plan.
+- **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), each block for the half its `source:` names, else the header's: remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each half; the newest `verdicts/<id>/<n>.md`, the task or plan judge's when its `subject:` is the task or a plan. A task with a branch reads its open series only: lore's `<id>.<n>` change, and the verdict files written since its previous PR's series closed. A task with no branch left reads the newest change lore holds.
 
 A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `󰚔 L 3/4 · R open · 󰊛 J proceed`: `L` and `R` the review halves (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` a review half the flow does not run, `…` running, `?` unknown; a review or judge the flow leaves out is left out of the column.
 The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps one cell wide: `󰚔` before the review halves, `󰊛` before each judge, and in the PR column `󰓂` before an open PR, `󰘭` before a merged one.
@@ -728,6 +729,9 @@ A series ends when the latest round's PR merged or closed on the host.
 A round that names no PR ends its series when HEAD cannot reach its `reviewed:` sha.
 An ended series moves to `reviews/archive/<id>.<N>/`, and the next round is 1.
 `f10 finish` and the janitor archive the directory the same way.
+A merge they see ends the series even when it had no rounds: it leaves an empty `reviews/archive/<id>.<N>/`, because the archive counts a task's PRs for its lore change (`docs/lore.md`).
+Each archived series holds a `closed` file naming its PR, its head and when it closed, so finishing the same PR again, or the janitor after it, closes nothing more.
+A series that ended only because a rebase left its `pr: none` rounds unreachable is marked `restart: yes`: those rounds belong to the PR still to come, so it counts as no PR for the lore change.
 A host that cannot be read keeps the series going, with a line on stderr, because archiving by mistake would hide findings that `/f10:resolve` still needs.
 It prints `dir:`, `archive:` when a series moved, `latest:` (the highest round's file, absent with none), `pr:` (the branch's open PR for the next header, `none` without one), and the next round's `round:` and `path:`.
 Three cases decline, exit 3, with a `decline:` line and the findings behind it instead of the next round:

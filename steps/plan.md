@@ -116,13 +116,15 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    - **In plan mode or read-only mode, never stop silently.**
      Call `ExitPlanMode` to present the plan and get the go-ahead, or ask the user to leave plan mode with shift+tab.
      Then write the file.
-   - **Lore** (`docs/lore.md`): once the file is on disk, a plan with a task id records its intent with `f10 lore add intent --change <id> -m "<text>"`, where a bundle's id is its lead's.
+   - **Lore** (`docs/lore.md`): once the file is on disk, a plan with a task id records its intent with `f10 lore add intent --change <change> -m "<text>"`.
+     `<change>` is what `f10 lore change` prints: the task id (a bundle's lead) for the task's first PR, and `<id>.<n>` for its `n`-th, so a follow-up PR's intent never replaces the first PR's.
      A plan with no task id writes no intent.
      The body is two to four sentences on what the change does and why, for someone reading it beside the code later.
      It gives the domain reason, with no plan, stage or f10 vocabulary.
      A spike's intent states the question and what its answer decides.
      A replan is a run that archived a plan above.
-     A replan supersedes the standing intent with `--supersedes <id>`, where `<id>` is the id that `f10 lore show <task-id> --json` lists for the `intent` entry.
+     A replan supersedes the standing intent with `--supersedes <id>`, where `<id>` is the id that `f10 lore show <change> --json` lists for the `intent` entry.
+     A follow-up PR's plan is not a replan, because `f10 finish` archived the first PR's plan, so it writes a fresh intent into its own change.
      A judge revising the plan file in place is not a replan.
      A second intent without `--supersedes` is refused, and the refusal names the standing one.
      A failing `lore add` is one line in the hand-off, never a failed step.

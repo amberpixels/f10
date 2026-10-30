@@ -104,7 +104,7 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
      Never use `git merge --continue`, because the commit must carry the trailers.
      Under a rebase, run `git rebase --continue` once for every conflicting commit; replayed commits keep their own messages.
    - Once the operation is concluded, each hunk settled by taking one side, or by a named reconciliation, is a **decision** on the branch's task (`docs/lore.md`).
-     Anchor it at the commit that now holds it: `f10 lore add decision --change <the id f10 task current prints> --anchor <path:line[-end]> --chosen <the side or the reconciliation> --rejected '<the other side>: <why it gave way>' -m "catchup: <path> - <the intent both sides had>"`.
+     Anchor it at the commit that now holds it: `f10 lore add decision --change <the id f10 lore change prints> --anchor <path:line[-end]> --chosen <the side or the reconciliation> --rejected '<the other side>: <why it gave way>' -m "catchup: <path> - <the intent both sides had>"`.
      The body opens with `catchup: <path>` because the pr step renders the change's catchup decisions from it, under the PR's `## Catchup` heading.
      No decision is written for both sides kept mechanically, for a branch with no task, or for a clean integration.
      A failing `lore add` is one line in the report, never a failed step.

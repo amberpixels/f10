@@ -117,8 +117,8 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
    A fix chosen here is verified, but not reviewed again.
 8. **Write the verdicts.**
    Under each block, write one `verdict:` line, plus a `reason:` line where the verdict has one.
-   Then settle the lore entry of each block that has a `lore:` line:
-   - For a `fix`: `f10 lore add finding --change <task> --supersedes <id> --status fixed --resolution <sha, or "working tree"> -m <what the fix changed>`.
+   Then settle the lore entry of each block that has a `lore:` line, with `<change>` the output of `f10 lore change`, the change the review wrote it to:
+   - For a `fix`: `f10 lore add finding --change <change> --supersedes <id> --status fixed --resolution <sha, or "working tree"> -m <what the fix changed>`.
    - For a `skip`: the same command with `--status wontfix --resolution <the reason> -m <the reason>`.
    - For an `ask`: nothing, until it is answered.
 
