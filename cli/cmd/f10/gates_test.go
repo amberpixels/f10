@@ -11,6 +11,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -772,5 +773,61 @@ func TestGatesDriveFinish(t *testing.T) {
 				t.Errorf("finish = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// A flow with no review or judge leaves both out of the compact row, while
+// the full listing still names them as not in this flow.
+func TestCompactGatesOmitsStepsNotInTheFlow(t *testing.T) {
+	gates := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: []string{"implement", "pr"}, now: time.Now(),
+	})
+
+	if got := compactGates(gates); got != "" {
+		t.Errorf("compact = %q, want none", got)
+	}
+
+	checkTexts(t, gates, map[string]string{"review": gateOff, "judge": gateOff})
+}
+
+// driveFlows reads drives neither cancelled nor done, the newest first, by
+// each task's lead id, and knows which driver still runs.
+func TestDriveFlows(t *testing.T) {
+	root := t.TempDir()
+	now := time.Now()
+
+	for _, rec := range []*drives.Record{
+		{Flow: "old", Tasks: []drives.Task{{ID: "FT-1"}, {ID: "FT-4"}}},
+		{Flow: "gone", Cancelled: &now, Tasks: []drives.Task{{ID: "FT-5"}}},
+		{Flow: "done", Tasks: []drives.Task{{ID: "FT-6", Outcome: &drives.Outcome{Row: "ok"}}}},
+		{Flow: "prose", Tasks: []drives.Task{{ID: "FT-1_v2"}, {ID: "FT-2+FT-3"}}},
+		{Tasks: []drives.Task{{ID: "FT-4"}}},
+	} {
+		if err := drives.Create(root, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	lease, err := drives.Acquire(root, drives.DriveKey(4), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Release()
+
+	got := driveFlows(root)
+	want := map[string]driveFlow{
+		"FT-1": {name: "prose", running: true},
+		"FT-2": {name: "prose", running: true},
+		"FT-4": {name: "default"},
+	}
+
+	if len(got) != len(want) {
+		t.Errorf("flows = %v, want %v", got, want)
+	}
+
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("%s: %+v, want %+v", id, got[id], w)
+		}
 	}
 }

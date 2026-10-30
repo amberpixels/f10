@@ -865,8 +865,8 @@ func compactGates(gates []gate) string {
 
 	for _, g := range gates {
 		switch {
-		case g.Step == "review" && g.State == gateOff:
-			parts = append(parts, statusGlyph(glyphReview)+" L - · R -")
+		case g.State == gateOff:
+			// a step the flow leaves out has no column to fill
 		case g.Step == "review":
 			parts = append(parts, statusGlyph(glyphReview)+" L "+g.Local.compact(), "R "+g.Remote.compact())
 		case g.Step == "judge":
@@ -887,8 +887,6 @@ func compactGates(gates []gate) string {
 
 func (g gate) compactState() string {
 	switch g.State {
-	case gateOff:
-		return "-"
 	case gateRunning:
 		return "…"
 	case gateDone:
@@ -941,6 +939,16 @@ type gateSource struct {
 	store  *lore.Store
 	host   *host
 	shared string // the storage root every checkout shares
+	// driveFlows is the flow each drive record holds its tasks under, by
+	// lead id: a task the drive has not opened has no branch to record it
+	driveFlows map[string]driveFlow
+}
+
+// A driveFlow is the flow a drive record names, and whether that drive's
+// driver still runs: only a running one can be opening a branch right now.
+type driveFlow struct {
+	name    string
+	running bool
 }
 
 // storageFor is where a task's findings and verdicts are: its checkout's
@@ -957,6 +965,37 @@ func (src gateSource) storageFor(ctx context.Context, root string, run *state.Ru
 	return finishedStorage(src.shared, run.Root)
 }
 
+// driveFlows maps each task of a drive neither cancelled nor done to the
+// flow the drive took, the newest drive winning. A drive without --flow
+// records none, read as default: an area's pick is ship's to make.
+func driveFlows(root string) map[string]driveFlow {
+	recs, err := drives.List(root)
+	if err != nil {
+		return nil
+	}
+
+	out := map[string]driveFlow{}
+
+	for _, r := range recs {
+		if r.Cancelled != nil || r.Done() {
+			continue
+		}
+
+		_, running := drives.Probe(root, drives.DriveKey(r.Number))
+
+		for _, t := range r.Tasks {
+			lead, _, _ := strings.Cut(t.ID, ref.Separator)
+			lead, _ = ref.SplitSuffix(lead)
+
+			if key := strings.ToUpper(lead); out[key].name == "" {
+				out[key] = driveFlow{name: cmp.Or(r.Flow, "default"), running: running}
+			}
+		}
+	}
+
+	return out
+}
+
 func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage string, run *state.Run) []gate {
 	in := gateInput{
 		task:       id,
@@ -969,7 +1008,13 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		now:        time.Now(),
 	}
 
+	// the branch's record, else the drive that will open the task: a
+	// stopped drive's record speaks only for a task with no branch yet,
+	// since a branch it never recorded may have been started another way
 	flow := "default"
+	if d := src.driveFlows[strings.ToUpper(id)]; d.running || branch == "" {
+		flow = cmp.Or(d.name, flow)
+	}
 
 	if branch != "" && src.main != "" {
 		in.chain = strings.Fields(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgChain))
