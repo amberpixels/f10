@@ -196,6 +196,7 @@ func (e foreignPullError) Error() string {
 // the flow can be tested without a checkout.
 type finishInput struct {
 	main   string         // the main checkout: host and git commands run here
+	root   string         // the shared storage root, for the pull's lease; "" takes none
 	driver *driver.Driver // nil without one
 	task   ref.Ref
 	suffix string
@@ -236,6 +237,7 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 
 	return finishInput{
 		main:      main,
+		root:      t.sharedRoot(),
 		driver:    t.driver(),
 		task:      task,
 		host:      h.at(main),
@@ -456,7 +458,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			// then leaves a rerun the same shape to find
 			in.step("pulling " + def)
 
-			note, err := pullMain(ctx, in.main, def, p.sha())
+			note, err := pullMain(ctx, in.root, in.main, def, p.sha())
 			if err != nil {
 				return err
 			}
@@ -978,9 +980,25 @@ func mergeBody(in finishInput, description, method string) string {
 	return trailers
 }
 
+// mainPullKey is the lease every finish pulling the main checkout takes, so
+// two finishes at once (a drive's, the watcher's, the command) never race on
+// origin's refs.
+const mainPullKey = "main-pull"
+
+// mainPullWait bounds the wait for another finish's pull.
+const mainPullWait = 2 * time.Minute
+
 // pullMain brings the local default branch up to the merge; the merge commit
 // must then be in it, or nothing local is removed.
-func pullMain(ctx context.Context, main, def, sha string) (string, error) {
+func pullMain(ctx context.Context, root, main, def, sha string) (string, error) {
+	if root != "" {
+		lease, err := drives.Await(ctx, root, mainPullKey, drives.Holder{}, mainPullWait)
+		if err != nil {
+			return "", fmt.Errorf("waiting to pull %s: %w", def, err)
+		}
+		defer lease.Release()
+	}
+
 	var note string
 
 	if gitx.CurrentBranch(ctx, main) == def {

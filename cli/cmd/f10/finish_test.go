@@ -679,6 +679,46 @@ func TestFinishRetargetsAfterEarlierMerge(t *testing.T) {
 	}
 }
 
+// A pull that fails after the merge leaves the task as it was, under the
+// main-pull lease, and a rerun on the merged PR finishes from the pull.
+func TestFinishRerunsAfterAFailedPull(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.root = t.TempDir()
+	fx.openPR()
+	fx.f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "Not possible to fast-forward") {
+		t.Fatalf("first run = %v, want the pull's error", err)
+	}
+
+	for _, p := range []string{"git worktree remove", "git branch -D", "herdr workspace close"} {
+		if fx.f.called(p) {
+			t.Errorf("%q ran after the pull failed", p)
+		}
+	}
+
+	if _, ok := drives.Probe(fx.in.root, mainPullKey); ok {
+		t.Error("the main-pull lease outlived the failed pull")
+	}
+
+	fx.f.calls = nil
+	fx.f.script(ghView, prMerged)
+	fx.f.script("git pull --ff-only", "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fx.f.called("gh pr merge") || !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("git branch -D GH-1") {
+		t.Errorf("calls:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+
+	if !strings.Contains(out, "was already merged") {
+		t.Errorf("report:\n%s", out)
+	}
+}
+
 // On GitLab a source branch the merge left behind has its MRs retargeted
 // by iid before the API deletes it.
 func TestFinishRetargetsStackedMRsOnGitLab(t *testing.T) {

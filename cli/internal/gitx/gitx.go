@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Exec runs git with args in dir and returns trimmed stdout. A non-zero
@@ -450,12 +451,37 @@ func Push(ctx context.Context, dir, branch, lease string) error {
 	return err
 }
 
-// PullFF fast-forwards the checked-out branch from its upstream, and fails
-// rather than merge when it cannot.
-func PullFF(ctx context.Context, dir string) error {
-	_, err := Exec(ctx, dir, "pull", "--ff-only")
+// pullLockWaits are the pauses before each retry of a pull that lost a ref
+// lock; their sum bounds the wait, since a crashed git's lock never clears.
+var pullLockWaits = []time.Duration{
+	100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond,
+	800 * time.Millisecond, 1600 * time.Millisecond,
+}
 
-	return err
+// PullFF fast-forwards the checked-out branch from its upstream, and fails
+// rather than merge when it cannot. A ref another git holds is busy only
+// while that git runs, so a lock failure retries.
+func PullFF(ctx context.Context, dir string) error {
+	for i := 0; ; i++ {
+		_, err := Exec(ctx, dir, "pull", "--ff-only")
+		if err == nil || i >= len(pullLockWaits) || !refLocked(err) {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(pullLockWaits[i]):
+		}
+	}
+}
+
+// refLocked reports whether git failed for want of a ref's lock: the file
+// exists, or the ref moved between git's read and its write.
+func refLocked(err error) bool {
+	exit, ok := errors.AsType[*ExitError](err)
+
+	return ok && strings.Contains(exit.Stderr, "cannot lock ref")
 }
 
 // FetchInto updates local branch from origin's branch of the same name
