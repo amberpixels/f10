@@ -1,16 +1,34 @@
 # Mode · dry-run - load and report, change nothing
 
-Load as normal, read the argument as the skill's Arguments items do, and report what the run would do.
+A dry run shows what a run would do, and does none of it.
+Load as normal, and read the argument as the skill's Arguments items say.
+Then report what the run would do.
 Execute nothing.
 
-**Reads stop at loading**: the instructions, `git worktree list`, and cheap checks (does `go.mod`, a `justfile`, a remote exist).
-Nothing is fetched (no `f10 task read`, no fetch adapter), written or created.
-Every command a step would run is printed, quoted, not run.
+## What a dry run reads
 
-**Context** is `f10 config`, printed verbatim: where each fact came from, `declared` or `default`.
+Reads stop once loading is done.
+A dry run reads the instructions and `git worktree list`.
+It may also make cheap checks, such as whether a `go.mod`, a `justfile` or a remote exists.
 
-**The path**, in the format below: how the argument was read, the steps in order, and per step its adapter, any overlay (`instructions files:` lists them before the step loads), and its exact output (the plan path, an archive move, the findings round).
-Only facts a step on this path consumes; never invented content such as a task body or plan prose.
+Nothing is fetched, so neither `f10 task read` nor the fetch adapter runs.
+Nothing is written or created.
+Every command a step would run is printed, quoted, and not run.
+
+## What the report holds
+
+The report has two parts, the context and the path.
+
+**The context** is the output of `f10 config`, printed verbatim.
+It shows where each fact came from, `declared` or `default`.
+
+**The path** follows the format below.
+It says how the argument was read and lists the steps in order.
+For each step it gives the adapter, the overlay if there is one, and the step's exact output, such as the plan path, an archive move or the findings round.
+The load's `instructions files:` line names the overlays before any step loads.
+
+The path holds only facts that a step on it consumes.
+Never invent content for it, such as a task body or plan prose.
 
 ```
 f10 · <skill> · DRY RUN - nothing will be fetched, written, created, or pushed
@@ -31,4 +49,7 @@ Step: <name>
 Not executed: <the first real side effect this run would have performed>
 ```
 
-Then stop; the user re-runs without `--dry-run`.
+## After the report
+
+Stop once the report is printed.
+The user runs the command again without `--dry-run` to do the work.
