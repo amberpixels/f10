@@ -88,7 +88,8 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
-	reviews, err := archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID))
+	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID),
+		seriesEnd{pr: pullNumber(p.url()), head: p.sha()})
 	if err != nil {
 		return err
 	}

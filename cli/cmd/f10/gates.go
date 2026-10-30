@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -591,17 +592,41 @@ type outcomes struct {
 // readOutcomes reads lore first and the findings and verdict files for
 // whatever lore holds nothing of: runs from before the steps wrote lore.
 func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
-	var o outcomes
+	return seriesOutcomes(store, storageRoot, task, true)
+}
+
+// seriesOutcomes reads the open series of a task with a branch, so a
+// follow-up PR never shows the first one's gates; a task with no branch
+// left reads the newest series lore holds, its open one being empty.
+func seriesOutcomes(store *lore.Store, storageRoot, task string, open bool) outcomes {
+	var (
+		o      outcomes
+		change = task
+		since  time.Time
+	)
 
 	if storageRoot != "" {
-		o = fileOutcomes(storageRoot, task)
+		dir := filepath.Join(storageRoot, "reviews", task)
+		change, since = changeOf(dir), seriesStart(dir)
+	}
+
+	if !open {
+		since = time.Time{}
+	}
+
+	if storageRoot != "" {
+		o = fileOutcomes(storageRoot, task, since)
 	}
 
 	if store == nil {
 		return o
 	}
 
-	entries, err := store.Effective(task)
+	if !open {
+		change = newestSeries(store, task)
+	}
+
+	entries, err := store.Effective(change)
 	if err != nil {
 		return o
 	}
@@ -634,6 +659,23 @@ func readOutcomes(store *lore.Store, storageRoot, task string) outcomes {
 	o.planAt, o.changeAt = latest(o.planAt, l.planAt), latest(o.changeAt, l.changeAt)
 
 	return o
+}
+
+// newestSeries is the task's newest change that holds entries, else the
+// task id.
+func newestSeries(store *lore.Store, task string) string {
+	changes, err := store.Changes()
+	if err != nil {
+		return task
+	}
+
+	for _, c := range loreSeries(changes, task) {
+		if _, err := store.Effective(c); err == nil {
+			return c
+		}
+	}
+
+	return task
 }
 
 // current is lore's counts answering for a half: as new as the newest
@@ -1004,7 +1046,7 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		run:        run,
 		events:     src.events,
 		remoteFlow: src.review.Remote(),
-		outcomes:   readOutcomes(src.store, storage, id),
+		outcomes:   seriesOutcomes(src.store, storage, id, branch != ""),
 		now:        time.Now(),
 	}
 

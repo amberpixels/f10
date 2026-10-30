@@ -35,7 +35,9 @@ type judgeOutcome struct {
 // fileOutcomes reads the task's findings and verdict files: a round is the
 // remote half's when its reviewer is not local (a file both halves wrote
 // counts once each), and a verdict goes by its subject: task, plan or change.
-func fileOutcomes(storageRoot, task string) outcomes {
+// Verdict files written before since are dropped: the judge writes them per
+// task, so an earlier PR's verdicts share the directory.
+func fileOutcomes(storageRoot, task string, since time.Time) outcomes {
 	var o outcomes
 
 	for _, rf := range reviewRounds(storageRoot, task) {
@@ -49,6 +51,10 @@ func fileOutcomes(storageRoot, task string) outcomes {
 	}
 
 	for _, v := range judgeFiles(storageRoot, task) {
+		if v.at.Before(since) {
+			continue
+		}
+
 		switch v.judged {
 		case "task":
 			o.taskJudge, o.taskAt = &v.outcome, v.at

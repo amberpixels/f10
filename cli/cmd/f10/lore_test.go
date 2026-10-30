@@ -391,3 +391,46 @@ func TestLoreNote(t *testing.T) {
 		t.Errorf("all kinds: %q, want %q", got, want)
 	}
 }
+
+// A task's second PR writes to <id>.2 once its first series is archived, and
+// show on the bare id lists every series, newest first.
+func TestLoreChangeAndShowSeries(t *testing.T) {
+	repo := tracedRepo(t, "DM-7/thing", "on")
+	git(t, repo, "config", "user.email", "dev@example.com")
+	t.Chdir(repo)
+
+	must := func(args ...string) string {
+		t.Helper()
+
+		out, err := runLore(t, args...)
+		if err != nil {
+			t.Fatalf("lore %q: %v\n%s", args, err, out)
+		}
+
+		return strings.TrimSpace(out)
+	}
+
+	if got := must("change"); got != "DM-7" {
+		t.Errorf("first series = %q, want DM-7", got)
+	}
+
+	if err := os.MkdirAll(filepath.Join(repo, ".f10", "reviews", "archive", "DM-7.1"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := must("change"); got != "DM-7.2" {
+		t.Errorf("after an archived series = %q, want DM-7.2", got)
+	}
+
+	must("add", "intent", "--change", "DM-7", "-m", "First PR")
+	must("add", "intent", "--change", "DM-7.2", "-m", "Follow-up")
+
+	show := must("show", "DM-7")
+	if first, second := strings.Index(show, "DM-7.2  "), strings.Index(show, "DM-7  "); first < 0 || second < first {
+		t.Errorf("show DM-7 does not list DM-7.2 before DM-7:\n%s", show)
+	}
+
+	if one := must("show", "DM-7.2"); strings.Contains(one, "First PR") {
+		t.Errorf("show DM-7.2 leaks the first series:\n%s", one)
+	}
+}

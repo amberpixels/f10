@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -303,6 +304,7 @@ type sweeper struct {
 	def   string
 	lines []string
 	login *string
+	prs   map[string]int // a removed branch's request, which closes its task's series
 }
 
 func (j *sweeper) say(format string, args ...any) {
@@ -339,7 +341,16 @@ func (j *sweeper) sweep(ctx context.Context, b staleBranch) (time.Time, bool) {
 		return time.Time{}, false
 	}
 
-	return cmp.Or(p.MergedAt, p.ClosedAt), j.remove(ctx, b, p)
+	removed := j.remove(ctx, b, p)
+	if removed {
+		if j.prs == nil {
+			j.prs = map[string]int{}
+		}
+
+		j.prs[b.name] = p.Number
+	}
+
+	return cmp.Or(p.MergedAt, p.ClosedAt), removed
 }
 
 // request is the request that decides b: an open one when any is, else
@@ -569,6 +580,7 @@ func (j *sweeper) own(ctx context.Context, p *forge.PR) bool {
 func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) {
 	left := map[string][]string{}
 	cleared := map[string]time.Time{}
+	ends := map[string]seriesEnd{} // what closes each task's series: its removed branch
 
 	for _, b := range branches {
 		ended, ok := removed[b.name]
@@ -576,6 +588,10 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		for _, id := range b.ids {
 			if ok {
 				cleared[id] = laterOf(cleared[id], ended)
+				ends[id] = seriesEnd{pr: "none", head: cmp.Or(b.localSHA, b.originSHA)}
+				if n := j.prs[b.name]; n > 0 {
+					ends[id] = seriesEnd{pr: "#" + strconv.Itoa(n), head: ends[id].head}
+				}
 			} else {
 				left[id] = append(left[id], b.name)
 			}
@@ -604,7 +620,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 			continue
 		case j.in.dry:
 			j.say("would archive %s", plan)
-			j.archiveReviews(id)
+			j.archiveReviews(id, ends[id])
 
 			continue
 		default:
@@ -619,7 +635,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		}
 
 		if len(left[id]) == 0 {
-			j.archiveReviews(id)
+			j.archiveReviews(id, ends[id])
 		}
 
 		if len(left[id]) == 0 && !j.in.dry {
@@ -631,18 +647,21 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 }
 
 // archiveReviews ends the task's series of review rounds, so a later PR on
-// the same task starts at round 1.
-func (j *sweeper) archiveReviews(id string) {
+// the same task starts at round 1 and writes its own lore change; a merge
+// with no rounds still closes one.
+func (j *sweeper) archiveReviews(id string, end seriesEnd) {
 	reviews := taskReviews(j.in.main, j.in.plansDir, id)
 
 	switch {
-	case !exists(reviews):
 	case j.in.dry:
-		j.say("would archive %s", reviews)
+		if exists(reviews) {
+			j.say("would archive %s", reviews)
+		}
 	default:
-		if archived, err := archiveReviews(reviews); err != nil {
+		switch archived, err := closeSeries(reviews, end); {
+		case err != nil:
 			j.say("%v", err)
-		} else {
+		case archived != "":
 			j.say("archived %s's findings to %s", id, archived)
 		}
 	}

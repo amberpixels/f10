@@ -167,7 +167,8 @@ The remote half writes the same block once its own file is on disk (**The remote
 
 **Lore** (`docs/lore.md`) is written by either half, once its file is on disk and a task id is known.
 The remote half writes it before its ack (**The remote review** point 4).
-Each finding this round adds gets one entry: `f10 lore add finding --change <task> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>`.
+`<change>` below is what `f10 lore change` prints, run once after `f10 review round`: the task id for the task's first PR, `<id>.<n>` for a later one.
+Each finding this round adds gets one entry: `f10 lore add finding --change <change> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>`.
 `--source` is the block's `source:` line.
 A block without one is `remote` only when `reviewer:` names a remote identity and not `local`.
 The reviewer picks the severity per finding: `blocker`, `major`, `minor` or `nit`, and `minor` when it cannot tell.
@@ -175,7 +176,7 @@ Each call prints the new entry's id.
 Add that id to the finding's block as a `lore: <id>` line, so resolve can supersede that entry later.
 
 Round two reopens in lore what it reopens in the file.
-A prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`) gets `f10 lore add finding --change <task> --supersedes <the round-one block's lore id> --status open -m <the evidence line>`.
+A prior block whose status takes a verdict (`still open`, `fix introduced a problem`, `explanation disputed`) gets `f10 lore add finding --change <change> --supersedes <the round-one block's lore id> --status open -m <the evidence line>`.
 Its new id becomes the prior block's `lore:` line.
 A round-one block with no `lore:` line writes nothing.
 A failing `lore add` is one line in the report and never a failed step, because the findings file stays the record that `f10 status` falls back to.
@@ -285,7 +286,7 @@ When that directory already holds a round, decline in one line, naming a fresh b
    - `## Categories` lists the four categories above.
    - Each block carries `tasks:` and `size:` beside `where:` and `category:`.
    - A `## Dropped as deliberate` section follows, one plain line per drop: its tasks, its `file:line`, and the plan or lore citation.
-6. **Lore**, written as the blind reviewer's half writes it, with `--change` set to the task id that keys the findings directory.
+6. **Lore**, written as the blind reviewer's half writes it, with `--change` set to what `f10 lore change` prints for the task that keys the findings directory.
    Write none when a branch name keys the directory.
    Then write the state block, as **The blind reviewer** describes it.
 

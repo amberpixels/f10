@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -461,7 +462,7 @@ func TestOutcomesRoundTwo(t *testing.T) {
 	writeFile(t, filepath.Join(reviews, "2.md"), "task: FT-1\nround: 2\nreviewer: local\nverdict: findings\n\n"+
 		"## Prior round\n\n### 1.1 A - fixed\n\n### 1.2 B - still open\n\n## Findings\n\n### 2.1 C\ncategory: x\n")
 
-	if o := fileOutcomes(storage, "FT-1"); o.localRaised != 3 {
+	if o := fileOutcomes(storage, "FT-1", time.Time{}); o.localRaised != 3 {
 		t.Fatalf("raised = %d, want 3: 1.1, 1.2 and 2.1, the reopened 1.2 once", o.localRaised)
 	}
 
@@ -829,5 +830,38 @@ func TestDriveFlows(t *testing.T) {
 		if got[id] != w {
 			t.Errorf("%s: %+v, want %+v", id, got[id], w)
 		}
+	}
+}
+
+// A follow-up PR shows only its own series: the first PR's lore verdict and
+// its verdict file stay out of its gates, while a finished task with no
+// branch still shows the series it ended with.
+func TestStatusReadsTheCurrentSeries(t *testing.T) {
+	storage := t.TempDir()
+	writeFile(t, filepath.Join(storage, "verdicts", "FT-1", "1.md"),
+		"task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: first PR\n")
+
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(storage, "verdicts", "FT-1", "1.md"), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	root := t.TempDir()
+	store := &lore.Store{Root: root}
+	writeLore(t, root, lore.Entry{
+		Kind: lore.KindVerdict, Change: "FT-1", Human: "h@x", At: old,
+		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "change", Body: "first PR",
+	})
+
+	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), seriesEnd{pr: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if o := seriesOutcomes(store, storage, "FT-1", true); o.changeJudge != nil || o.planJudge != nil {
+		t.Errorf("the follow-up shows the first PR's verdicts: %+v", o)
+	}
+
+	if o := seriesOutcomes(store, storage, "FT-1", false); o.changeJudge == nil || o.changeJudge.Reason != "first PR" {
+		t.Errorf("the finished task lost its last series: %+v", o)
 	}
 }

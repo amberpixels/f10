@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -199,6 +201,7 @@ type finishInput struct {
 	root   string         // the shared storage root, for the pull's lease; "" takes none
 	driver *driver.Driver // nil without one
 	task   ref.Ref
+	change string // the lore change this merge closes; finish fills it from the task's series
 	suffix string
 	branch string // a bare call's own branch, "" to look it up by task and suffix
 	host   host
@@ -282,6 +285,11 @@ func finishedEvent(id, by string, at time.Time) ledger.Event {
 // before anything local goes, and the workspace closes last, since on the
 // self-close path the close ends this process.
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
+	// read before the merge archives the series, which raises the count
+	if in.change == "" {
+		in.change = changeOf(taskReviews(in.main, in.plansDir, in.task.ID))
+	}
+
 	name, path, onMain, err := finishTarget(ctx, in)
 	if gone := (goneError{}); errors.As(err, &gone) {
 		return finishGone(ctx, w, in, gone)
@@ -373,6 +381,9 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		rows  []fact
 		notes []string
 		ended = p.url() + " merged"
+		// a merge ends the series; a PR left open or a spike's close only
+		// moves what rounds there were
+		end *seriesEnd
 	)
 
 	if local {
@@ -470,6 +481,11 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			sha = p.sha()
 		}
 
+		end = &seriesEnd{pr: "none", head: sha}
+		if !local {
+			end.pr = pullNumber(p.url())
+		}
+
 		notes = appendNote(notes, loreNote)
 
 		if sized {
@@ -506,13 +522,20 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
-	reviews, err := archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID))
+	var reviews string
+
+	if end != nil {
+		reviews, err = closeSeries(taskReviews(in.main, in.plansDir, in.task.ID), *end)
+	} else {
+		reviews, err = archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID), seriesEnd{})
+	}
+
 	if err != nil {
 		return err
 	}
 
 	if in.loreStore != nil {
-		notes = appendNote(notes, loreNote(in.loreStore, in.task.ID))
+		notes = appendNote(notes, loreNote(in.loreStore, in.loreChange()))
 	}
 
 	if archived != "" {
@@ -628,7 +651,7 @@ func checkLore(in finishInput, merging bool) (string, error) {
 
 	var reasons string
 
-	switch res, err := in.loreStore.Check(in.task.ID); {
+	switch res, err := in.loreStore.Check(in.loreChange()); {
 	case err != nil:
 		reasons = err.Error()
 	case res.Pass():
@@ -640,12 +663,18 @@ func checkLore(in finishInput, merging bool) (string, error) {
 	if in.gate == "block" {
 		return "", fmt.Errorf(
 			"lore check %s: %s (lore_gate: block): add the entries, or declare lore_gate: warn to merge anyway",
-			in.task.ID,
+			in.loreChange(),
 			reasons,
 		)
 	}
 
-	return fmt.Sprintf("lore check %s: %s (lore_gate: warn): merged anyway", in.task.ID, reasons), nil
+	return fmt.Sprintf("lore check %s: %s (lore_gate: warn): merged anyway", in.loreChange(), reasons), nil
+}
+
+// loreChange is the change the merge closes; a finishInput built without
+// finish (a test, mergeBody alone) reads the task id.
+func (in finishInput) loreChange() string {
+	return cmp.Or(in.change, in.task.ID)
 }
 
 func (in finishInput) step(action string) {
@@ -982,11 +1011,23 @@ func mergeBody(in finishInput, description, method string) string {
 		return ""
 	}
 
+	trailers += changeTrailer(in.task.ID, in.loreChange())
+
 	if body := strings.TrimSpace(trace.StripState(description)); body != "" {
 		return body + "\n\n" + trailers
 	}
 
 	return trailers
+}
+
+// changeTrailer names a later series' lore change, since a squash drops the
+// branch's own trailers and Task: alone leads lore why to the first PR.
+func changeTrailer(task, change string) string {
+	if change == "" || change == task {
+		return ""
+	}
+
+	return lore.TrailerChange + ": " + change + "\n"
 }
 
 // mainPullKey is the lease every finish pulling the main checkout takes, so
@@ -1145,7 +1186,7 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 // archiveReviews moves a findings directory to reviews/archive/<id>.<N>/,
 // so the task's next PR starts its own series of rounds. N always counts
 // from 1, since a bare <id>/ under archive would read as a live directory.
-func archiveReviews(dir string) (string, error) {
+func archiveReviews(dir string, end seriesEnd) (string, error) {
 	if !exists(dir) {
 		return "", nil
 	}
@@ -1155,18 +1196,152 @@ func archiveReviews(dir string) (string, error) {
 		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
 	}
 
-	for n := 1; ; n++ {
-		target := filepath.Join(archive, fmt.Sprintf("%s.%d", filepath.Base(dir), n))
-		if exists(target) {
-			continue
-		}
-
-		if err := os.Rename(dir, target); err != nil {
-			return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
-		}
-
-		return target, nil
+	target := nextSeries(archive, filepath.Base(dir))
+	if err := os.Rename(dir, target); err != nil {
+		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
 	}
+
+	return target, end.write(target)
+}
+
+// closeSeries ends the task's series even when it had no review rounds,
+// since the archive is what counts a task's PRs for its lore change; a series
+// already closed with the same PR or head (finish run again) adds none.
+func closeSeries(dir string, end seriesEnd) (string, error) {
+	if exists(dir) {
+		return archiveReviews(dir, end)
+	}
+
+	archive := filepath.Join(filepath.Dir(dir), "archive")
+	for _, n := range seriesNumbers(archive, filepath.Base(dir)) {
+		if end.same(readSeriesEnd(filepath.Join(archive, fmt.Sprintf("%s.%d", filepath.Base(dir), n)))) {
+			return "", nil
+		}
+	}
+
+	target := nextSeries(archive, filepath.Base(dir))
+	if err := os.MkdirAll(target, 0o750); err != nil {
+		return "", fmt.Errorf("closing the review series at %s: %w", dir, err)
+	}
+
+	return "", end.write(target)
+}
+
+// A seriesEnd is what an archived series records in its closed file: the PR
+// (#204, or none), the commit it ended at, and when.
+type seriesEnd struct {
+	pr, head string
+	at       time.Time
+}
+
+const seriesClosedFile = "closed"
+
+func (e seriesEnd) write(dir string) error {
+	at := e.at
+	if at.IsZero() {
+		at = time.Now()
+	}
+
+	body := fmt.Sprintf("pr: %s\nhead: %s\nclosed: %s\n",
+		cmp.Or(e.pr, "none"), e.head, at.UTC().Format(time.RFC3339))
+
+	if err := os.WriteFile(filepath.Join(dir, seriesClosedFile), []byte(body), 0o600); err != nil {
+		return fmt.Errorf("recording the end of the review series at %s: %w", dir, err)
+	}
+
+	return nil
+}
+
+// same compares by PR number, so gh's #7 and glab's !7 match, else by head.
+func (e seriesEnd) same(o seriesEnd) bool {
+	if n := strings.TrimLeft(e.pr, "#!"); digits(n) && n == strings.TrimLeft(o.pr, "#!") {
+		return true
+	}
+
+	return e.head != "" && e.head == o.head
+}
+
+// readSeriesEnd is zero for a series archived before the file existed.
+func readSeriesEnd(dir string) seriesEnd {
+	raw, err := os.ReadFile(filepath.Join(dir, seriesClosedFile))
+	if err != nil {
+		return seriesEnd{}
+	}
+
+	var e seriesEnd
+
+	for line := range strings.SplitSeq(string(raw), "\n") {
+		key, value, _ := strings.Cut(line, ":")
+
+		switch value = strings.TrimSpace(value); key {
+		case "pr":
+			e.pr = value
+		case "head":
+			e.head = value
+		case "closed":
+			e.at, _ = time.Parse(time.RFC3339, value)
+		}
+	}
+
+	return e
+}
+
+// seriesNumbers is the archived series of id, ascending.
+func seriesNumbers(archive, id string) []int {
+	entries, _ := os.ReadDir(archive)
+
+	var out []int
+
+	for _, e := range entries {
+		rest, ok := strings.CutPrefix(e.Name(), id+".")
+		if n, err := strconv.Atoi(rest); ok && e.IsDir() && err == nil && n > 0 {
+			out = append(out, n)
+		}
+	}
+
+	slices.Sort(out)
+
+	return out
+}
+
+func nextSeries(archive, id string) string {
+	n := 1
+	if have := seriesNumbers(archive, id); len(have) > 0 {
+		n = have[len(have)-1] + 1
+	}
+
+	return filepath.Join(archive, fmt.Sprintf("%s.%d", id, n))
+}
+
+// changeOf is the lore change of the task's open series: the task id for its
+// first PR, <id>.<n> for its n-th, counted from the archived series.
+func changeOf(dir string) string {
+	id := filepath.Base(dir)
+
+	have := seriesNumbers(filepath.Join(filepath.Dir(dir), "archive"), id)
+	if len(have) == 0 {
+		return id
+	}
+
+	return fmt.Sprintf("%s.%d", id, have[len(have)-1]+1)
+}
+
+// seriesStart is when the task's open series began, the newest archived
+// series' end; zero for a first series.
+func seriesStart(dir string) time.Time {
+	archive := filepath.Join(filepath.Dir(dir), "archive")
+
+	have := seriesNumbers(archive, filepath.Base(dir))
+	if len(have) == 0 {
+		return time.Time{}
+	}
+
+	newest := filepath.Join(archive, fmt.Sprintf("%s.%d", filepath.Base(dir), have[len(have)-1]))
+	if e := readSeriesEnd(newest); !e.at.IsZero() {
+		return e.at
+	}
+
+	return modTime(newest)
 }
 
 // taskReviews is the task's findings directory, beside its plans.

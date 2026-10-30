@@ -79,8 +79,16 @@ func loreCommand() *cli.Command {
 				Action: runLoreAdd,
 			},
 			{
+				Name:      "change",
+				Hidden:    true,
+				Category:  plumbingCategory,
+				Usage:     "print the lore change the task's current PR writes to: the task id, or <id>.<n> for its n-th PR",
+				ArgsUsage: "[<task-id>]",
+				Action:    runLoreChange,
+			},
+			{
 				Name:      "show",
-				Usage:     "the change's effective entries, the intent first, then by time",
+				Usage:     "the change's effective entries, the intent first, then by time; a task id lists each of its PRs' changes, newest first",
 				ArgsUsage: "<change>",
 				Flags:     []cli.Flag{jsonFlag()},
 				Action:    runLoreShow,
@@ -394,20 +402,98 @@ func runLoreShow(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	entries, err := l.store.Effective(change)
-
-	switch {
-	case errors.Is(err, lore.ErrNoRecord):
-		entries = []lore.Entry{}
-	case err != nil:
+	changes, err := l.store.Changes()
+	if err != nil {
 		return err
 	}
 
-	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, entries)
+	series := loreSeries(changes, change)
+	all := []lore.Entry{}
+
+	for i, c := range series {
+		entries, err := l.store.Effective(c)
+
+		switch {
+		case errors.Is(err, lore.ErrNoRecord):
+			entries = []lore.Entry{}
+		case err != nil:
+			return err
+		}
+
+		if cmd.Bool("json") {
+			all = append(all, entries...)
+
+			continue
+		}
+
+		if i > 0 {
+			fmt.Fprintln(cmd.Writer)
+		}
+
+		if err := lore.RenderShow(cmd.Writer, c, entries); err != nil {
+			return err
+		}
 	}
 
-	return lore.RenderShow(cmd.Writer, change, entries)
+	if cmd.Bool("json") {
+		return encodeJSON(cmd.Writer, all)
+	}
+
+	return nil
+}
+
+// loreSeries is the changes a show of id reads: every <id>.<n> newest first,
+// then id itself; a change named with its number, or a task with one PR,
+// is that change alone.
+func loreSeries(changes []string, id string) []string {
+	var later []int
+
+	for _, c := range changes {
+		rest, ok := strings.CutPrefix(c, id+".")
+		if n, err := strconv.Atoi(rest); ok && err == nil && n > 1 {
+			later = append(later, n)
+		}
+	}
+
+	slices.Sort(later)
+	slices.Reverse(later)
+
+	out := make([]string, 0, len(later)+1)
+	for _, n := range later {
+		out = append(out, id+"."+strconv.Itoa(n))
+	}
+
+	return append(out, id)
+}
+
+// runLoreChange archives a series whose PR merged without finish first, as
+// review round does, so the follow-up's first entry lands in its own change.
+func runLoreChange(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() > 1 {
+		return errors.New("lore change takes at most one task id")
+	}
+
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	r, err := t.reference(ctx, cmd.Args().First())
+	if err != nil {
+		return fmt.Errorf("lore change: %w", err)
+	}
+
+	dir := filepath.Join(t.lay.StorageRoot, "reviews", r.Head().ID)
+
+	if s, err := resolvePRSubject(ctx, t, cmd.Args().First()); err == nil && s.here {
+		if _, err := seriesOf(ctx, t, s, dir, cmd.ErrWriter); err != nil {
+			return err
+		}
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, changeOf(dir))
+
+	return err
 }
 
 func runLoreWhy(ctx context.Context, cmd *cli.Command) error {

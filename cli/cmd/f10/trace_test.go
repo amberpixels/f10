@@ -113,6 +113,26 @@ func TestTraceTrailers(t *testing.T) {
 	}
 }
 
+// A task's second PR names its own lore change, so lore why on its lines
+// finds the follow-up's entries; the first PR's commits carry no Change: line.
+func TestTraceTrailersNameTheSeriesChange(t *testing.T) {
+	repo := tracedRepo(t, "DM-7/thing", "on")
+
+	got, err := runTrace(t, repo, "--step", "implement")
+	if err != nil || got != "Task: DM-7\nStep: implement\n" {
+		t.Fatalf("first series printed %q, %v", got, err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(repo, ".f10", "reviews", "archive", "DM-7.1"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err = runTrace(t, repo, "--step", "implement")
+	if err != nil || got != "Task: DM-7\nStep: implement\nChange: DM-7.2\n" {
+		t.Errorf("a follow-up printed %q, %v", got, err)
+	}
+}
+
 // A session that recorded a task does not lend it to a branch naming none:
 // the trailer is the branch's task or nothing.
 func TestTraceTrailersIgnoreTheSessionTask(t *testing.T) {
