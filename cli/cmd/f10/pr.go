@@ -217,22 +217,33 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 
 		dir := cmp.Or(s.path, s.main)
 
-		from, err := forkPoint(ctx, dir, s.headRef(), base)
-		if err != nil {
-			return err
-		}
-
 		args := []string{"diff"}
 		if cmd.Bool("name-only") {
 			args = append(args, "--name-only")
 		}
 
-		args = append(args, from)
-		if !s.here {
-			args = append(args, s.headRef())
+		head := s.headRef()
+		if s.here {
+			if head, err = capturedHead(ctx, dir); err != nil {
+				return err
+			}
 		}
 
-		if out, err = gitx.Exec(ctx, dir, args...); err != nil {
+		into, tree, err := mergedTree(ctx, dir, head, base)
+		if err != nil {
+			// a conflicting branch has no merged tree; the fork point still
+			// shows its work, with whatever main already holds
+			fmt.Fprintf(cmd.ErrWriter, "f10: %s does not merge into %s (%v), so the diff is from where it forked\n",
+				s.branch, base, err)
+
+			if into, err = forkPoint(ctx, dir, head, base); err != nil {
+				return err
+			}
+
+			tree = head
+		}
+
+		if out, err = gitx.Exec(ctx, dir, append(args, into, tree)...); err != nil {
 			return err
 		}
 	}

@@ -605,6 +605,10 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		case j.in.dry:
 			j.say("would archive %s", plan)
 
+			if reviews := taskReviews(j.in.main, j.in.plansDir, id); exists(reviews) {
+				j.say("would archive %s", reviews)
+			}
+
 			continue
 		default:
 			archived, _, err := archivePlan(j.in.main, j.in.main, j.in.plansDir, id)
@@ -620,6 +624,13 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		if len(left[id]) == 0 && !j.in.dry {
 			if note := removeImages(j.in.main, j.in.plansDir, id); note != "" {
 				j.say("%s", note)
+			}
+
+			switch reviews, err := archiveReviews(taskReviews(j.in.main, j.in.plansDir, id)); {
+			case err != nil:
+				j.say("%v", err)
+			case reviews != "":
+				j.say("archived %s's findings to %s", id, reviews)
 			}
 		}
 	}

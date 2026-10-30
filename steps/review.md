@@ -35,8 +35,14 @@ There is no third round.
 `f10 review round` prints the paths:
 
 - `dir:` - the directory, named by the task id, else by the branch name
+- `archive:` - where the directory's earlier rounds moved, because the PR they reviewed merged or closed
 - `latest:` - the latest round's file
+- `pr:` - the value for the header's `pr:` line
 - `round:` and `path:` - the next round's number and file
+
+A directory holds one series of rounds, and a series belongs to one PR.
+A follow-up PR on the same task starts again at round 1, because `f10 review round` archives a series whose PR merged or closed.
+`f10 finish` and the janitor archive the directory too, to `reviews/archive/<TASK-ID>.<N>/`.
 
 Create the directory if it is missing.
 
@@ -48,6 +54,7 @@ task: GH-13
 round: 2
 reviewed: e6af491 dirty
 base: main e6af491
+pr: #204
 reviewer: local
 verdict: findings
 
@@ -85,6 +92,8 @@ The **header** comes first, one line per field, in this order:
 - `reviewed:` - HEAD's sha, plus `dirty` when the working tree differed from HEAD.
   The tree is dirty in a flow like `implement → review → pr`, where the review runs before any commit.
 - `base:` - the base branch and its sha.
+- `pr:` - the PR this round reviews, as `f10 review round` prints it on its `pr:` line, or `none` when the branch has no open PR yet.
+  Every round writes it, local, remote and coherence lens rounds alike, because it says which series the round belongs to.
 - `reviewer:` - `local`, or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`).
   A round that both halves wrote lists both, comma-separated (`local, claude[bot]`).
 - `review:` - remote rounds only: the url where a `+reply` posts.
@@ -120,7 +129,10 @@ A file is malformed when it has no header, when a finding lacks its id, `where:`
 ## The base and the diff
 
 The base is what `f10 pr base` prints: the open PR's target, else the branch `f10 start --after` recorded for a stacked task, else the default branch.
-The diff is `f10 pr diff`, which is the working tree against the point where the branch left its base, plus every file `git ls-files --others --exclude-standard` lists.
+The diff is `f10 pr diff`, plus every file `git ls-files --others --exclude-standard` lists.
+`f10 pr diff` compares the base with the base after the working tree's work is merged into it.
+So a change main already holds drops out, even after a squash merge, and a follow-up PR on a reused branch shows only its new commits.
+A branch that conflicts with its base is diffed from the point where it left the base instead.
 Read an untracked text file whole when it is under a few hundred KB.
 Leave a larger file, or a binary one (a `Binary files differ` line), unread.
 List it as one tests-and-docs finding: "not reviewed: `<path>`, `<size>`, untracked".
@@ -269,7 +281,7 @@ When that directory already holds a round, decline in one line, naming a fresh b
    Re-read every candidate's `file:line` at HEAD, and drop any that the code already settles.
    Of two clusters' duplicates, keep the better-cited one.
    Write the round file in the usual shape, with these differences:
-   - `reviewed:` is HEAD, `base:` is the ref and its sha, `reviewer:` is `local`, and the header adds `lens: coherence`.
+   - `reviewed:` is HEAD, `base:` is the ref and its sha, `pr:` is what `f10 review round` prints, `reviewer:` is `local`, and the header adds `lens: coherence`.
    - `## Categories` lists the four categories above.
    - Each block carries `tasks:` and `size:` beside `where:` and `category:`.
    - A `## Dropped as deliberate` section follows, one plain line per drop: its tasks, its `file:line`, and the plan or lore citation.
@@ -292,8 +304,11 @@ Otherwise, never run, suggest or offer a second round.
 A resolve that settles every finding, with verify green, ends the review.
 A user who asks for round two by name gets it.
 
-When `f10 review round` exits 3, that is a **decline**, for one of two reasons.
-Either round one still holds findings without a verdict, so a round two could only say `still open`, or round two already exists.
+When `f10 review round` exits 3, that is a **decline**, for one of three reasons:
+
+- The branch adds nothing to its base ("already merged, nothing to review"), as after its PR was squash-merged.
+- Round one still holds findings without a verdict, so a round two could only say `still open`.
+- Round two already exists.
 Print its `decline:` line and the findings it names.
 This is a normal end.
 Never delete or rewrite a round.

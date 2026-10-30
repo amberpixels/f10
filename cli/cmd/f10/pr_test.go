@@ -273,3 +273,22 @@ func TestPatchFiles(t *testing.T) {
 		t.Errorf("patchFiles = %q", got)
 	}
 }
+
+// After a squash merge the merge base is still where the first PR started,
+// so a commit added to the reused branch is all that is new.
+func TestPRDiffShowsOnlyCommitsAfterASquashMerge(t *testing.T) {
+	dir := prRepo(t)
+	git(t, dir, "switch", "-q", "-c", "feat")
+	commitFile(t, dir, "first.txt")
+	git(t, dir, "switch", "-q", "main")
+	git(t, dir, "merge", "-q", "--squash", "feat")
+	git(t, dir, "commit", "-q", "-m", "first, squashed")
+	git(t, dir, "push", "-q", "origin", "main")
+	git(t, dir, "switch", "-q", "feat")
+	commitFile(t, dir, "second.txt")
+
+	out, _, err := runPR(t, dir, "diff", "--name-only")
+	if err != nil || out != "second.txt\n" {
+		t.Errorf("diff = %q, %v; want second.txt alone", out, err)
+	}
+}

@@ -207,7 +207,8 @@ func readRoot(root string, l *Local) []string {
 	}
 
 	for _, e := range dirEntries(filepath.Join(root, "reviews")) {
-		if !e.IsDir() {
+		// archive/ holds the series of finished PRs, no task's live rounds
+		if !e.IsDir() || e.Name() == "archive" {
 			continue
 		}
 

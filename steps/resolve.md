@@ -57,6 +57,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
    For a PR, take the task id from the `task:` line that `f10 pr view <PR>` prints.
    Its exit 3 means a new round is declined, which does not stop this resolve of the current round.
    With no `latest:` line, there is nothing to resolve, and the step ends normally.
+   That includes an `archive:` line with no `latest:`, because the archived rounds belong to a PR that merged or closed.
    A block that already has a `verdict:` line is done.
    If no block is left to settle (a clean file counts), the step ends normally.
    Before it ends, it still runs points 10 and 11 when their conditions hold and the sha that point 10 would mark has no `review (local)` status yet.
@@ -65,6 +66,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
    When the user stated a choice, it beats the reviewer.
 3. **Re-find each finding** in the code, in file order, by its file, title and summary.
    If the file's `reviewed:` sha is not HEAD, or it says `dirty`, the line numbers are only advisory.
+   They are advisory on a branch behind its base too, because the review's diff numbers lines as they read with the branch merged into the base.
    If the code a finding names no longer exists, its verdict is `skip`, and the reason says so.
 4. **Give each finding one verdict.**
    Neither agree blindly nor push back by reflex.
