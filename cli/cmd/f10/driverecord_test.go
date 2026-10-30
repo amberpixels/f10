@@ -276,7 +276,8 @@ func TestParseDriveSubcommands(t *testing.T) {
 		{args: []string{"--resume", "2", "--answer", "1. yes"}, want: driveArgs{
 			resume: 2, answers: []string{"1. yes"}, every: defaultEvery,
 		}},
-		{args: []string{"--resume=2", "GH-1"}, err: "takes only --answer and --every"},
+		{args: []string{"--resume=2", "GH-1"}, err: "takes only --answer, --every and --parallel"},
+		{args: []string{"--resume", "2", "--parallel=3"}, want: driveArgs{resume: 2, parallel: 3, every: defaultEvery}},
 	}
 
 	for _, c := range cases {
@@ -290,7 +291,7 @@ func TestParseDriveSubcommands(t *testing.T) {
 		case err != nil:
 			t.Errorf("%q: %v", c.args, err)
 		case got.list != c.want.list || got.all != c.want.all || got.cancel != c.want.cancel ||
-			got.resume != c.want.resume || !slices.Equal(got.answers, c.want.answers):
+			got.resume != c.want.resume || got.parallel != c.want.parallel || !slices.Equal(got.answers, c.want.answers):
 			t.Errorf("%q = %+v, want %+v", c.args, got, c.want)
 		}
 	}
@@ -298,7 +299,10 @@ func TestParseDriveSubcommands(t *testing.T) {
 
 func TestRecordArgs(t *testing.T) {
 	got := recordArgs(
-		[]string{"GH-1", "--answer", "1. x", "--every=5s", "--flow", "local", "--resume", "2", "GH-2:opus"},
+		[]string{
+			"GH-1", "--answer", "1. x", "--every=5s", "--flow", "local", "--resume", "2",
+			"--parallel", "3", "GH-2:opus", "--parallel=4",
+		},
 	)
 	if want := []string{"GH-1", "--flow", "local", "GH-2:opus"}; !slices.Equal(got, want) {
 		t.Errorf("recordArgs = %q, want %q", got, want)
@@ -350,5 +354,62 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 		if got := string(b); got != want {
 			t.Errorf("%s launches = %q, want %q", session, got, want)
 		}
+	}
+}
+
+// The cap a drive starts with is kept in its record: a rerun without
+// --parallel keeps it, one with a new cap replaces it, and a drive started
+// with none takes the default.
+func TestOpenRecordKeepsTheCap(t *testing.T) {
+	root := t.TempDir()
+
+	open := func(argv []string, parallel int) *driveInput {
+		in := &driveInput{
+			root: root, stateDir: t.TempDir(), argv: argv, now: time.Now, defaultParallel: 6,
+			args: driveArgs{parallel: parallel},
+		}
+		if err := in.openRecord(nil); err != nil {
+			t.Fatal(err)
+		}
+
+		in.releaseAll()
+
+		return in
+	}
+
+	for _, c := range []struct {
+		argv     []string
+		parallel int
+		want     int
+	}{
+		{[]string{"GH-1", "--parallel", "3"}, 3, 3},
+		{[]string{"GH-1"}, 0, 3},
+		{[]string{"GH-1", "--parallel=5"}, 5, 5},
+		{[]string{"GH-1"}, 0, 5},
+		{[]string{"GH-2"}, 0, 6},
+	} {
+		in := open(c.argv, c.parallel)
+		if in.parallel != c.want {
+			t.Errorf("%q: cap %d, want %d", c.argv, in.parallel, c.want)
+		}
+
+		rec, err := drives.Read(root, in.rec.Number)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if rec.Parallel != c.want {
+			t.Errorf("%q: record keeps %d, want %d", c.argv, rec.Parallel, c.want)
+		}
+	}
+}
+
+func TestTaskStandingQueued(t *testing.T) {
+	if got := taskStanding(drives.Task{Queued: true}, true); got != "queued" {
+		t.Errorf("a queued task in a running drive stands %q", got)
+	}
+
+	if got := taskStanding(drives.Task{Queued: true}, false); got != "not reached" {
+		t.Errorf("a queued task in a stopped drive stands %q", got)
 	}
 }

@@ -20,7 +20,7 @@ import (
 type Record struct {
 	Number      int        `yaml:"number"`
 	Created     time.Time  `yaml:"created"`
-	Args        []string   `yaml:"args"` // the command line, --answer, --every and --foreground dropped
+	Args        []string   `yaml:"args"` // the command line, --answer, --every, --parallel and --foreground dropped
 	Tasks       []Task     `yaml:"tasks"`
 	Flow        string     `yaml:"flow,omitempty"`
 	Agent       string     `yaml:"agent,omitempty"` // the run-wide --agent (or --model) as typed
@@ -28,6 +28,9 @@ type Record struct {
 	DriveFinish bool       `yaml:"drive_finish"`
 	Cancelled   *time.Time `yaml:"cancelled,omitempty"`
 	Session     string     `yaml:"session,omitempty"` // the session that created it, "" from a plain terminal
+	// Parallel is the cap on tasks running a skill at once, as the drive
+	// took it; a rerun or a resume keeps it unless it passes --parallel
+	Parallel int `yaml:"parallel,omitempty"`
 	// Answers are given and not yet taken, by task id, "" for the bare one
 	Answers  map[string]string `yaml:"answers,omitempty"`
 	Answered []Answer          `yaml:"answered,omitempty"`
@@ -35,11 +38,12 @@ type Record struct {
 
 // A Task is one task of a drive, as typed, and where it stands.
 type Task struct {
-	ID      string   `yaml:"id"`              // as typed, a suffix included
-	Agent   string   `yaml:"agent,omitempty"` // its own :profile as typed
-	Model   string   `yaml:"model,omitempty"` // its own :model from before profiles, read only
-	After   string   `yaml:"after,omitempty"` // the base its body's After: line named, as an id
-	Skill   string   `yaml:"skill,omitempty"` // in flight, "" for none
+	ID      string   `yaml:"id"`               // as typed, a suffix included
+	Agent   string   `yaml:"agent,omitempty"`  // its own :profile as typed
+	Model   string   `yaml:"model,omitempty"`  // its own :model from before profiles, read only
+	After   string   `yaml:"after,omitempty"`  // the base its body's After: line named, as an id
+	Skill   string   `yaml:"skill,omitempty"`  // in flight, "" for none
+	Queued  bool     `yaml:"queued,omitempty"` // held back by the drive's cap
 	Outcome *Outcome `yaml:"outcome,omitempty"`
 }
 

@@ -73,6 +73,7 @@ type childRow struct {
 
 	number int
 	suffix string // a launched start's worktree suffix: the checkout read is that one
+	queued bool   // a drive's cap holds it back
 }
 
 type rawChild struct {
