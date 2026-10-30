@@ -169,7 +169,8 @@ func (h host) pullNumber(ctx context.Context, number string) (pull, error) {
 // Never --admin: a refusing host has a reason. glab's auto-merge is off so a
 // running pipeline refuses rather than queues; glab's squash message replaces
 // the whole commit message, so the title goes on top, and a merge commit
-// (method "") takes none, since the project fixes its message.
+// (method "") takes none, since the project fixes its message. gh's squash
+// gets the title as its subject, else GitHub uses a lone commit's subject.
 func (h host) mergePull(ctx context.Context, p pull, branch, method, body string) (pull, error) {
 	args := h.Pick(
 		[]string{"pr", "merge", branch},
@@ -177,6 +178,10 @@ func (h host) mergePull(ctx context.Context, p pull, branch, method, body string
 	)
 	if method != "" {
 		args = append(args, method)
+	}
+
+	if !h.GLab() && method == "--squash" && p.Title != "" {
+		args = append(args, "--subject", p.Title+" (#"+p.id()+")")
 	}
 
 	if body != "" {

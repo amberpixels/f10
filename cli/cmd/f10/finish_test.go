@@ -307,6 +307,38 @@ func TestMergePullGlabSquashMessage(t *testing.T) {
 	}
 }
 
+// gh's squash takes the title as its subject: left to itself, GitHub uses a
+// single commit's own subject instead.
+func TestMergePullGhSquashSubject(t *testing.T) {
+	cases := []struct {
+		name  string
+		p     pull
+		merge string
+	}{
+		{
+			"titled",
+			pull{Title: "Add the thing", Number: 9},
+			"gh pr merge GH-1 --squash --subject Add the thing (#9) --body Task: GH-1\n",
+		},
+		{"untitled", pull{Number: 9}, "gh pr merge GH-1 --squash --body Task: GH-1\n"},
+	}
+
+	for _, c := range cases {
+		f := newFakes(t)
+		h := newHost("gh", t.TempDir())
+		f.script(c.merge, "")
+		f.script(ghView, prMerged)
+
+		if _, err := h.mergePull(t.Context(), c.p, "GH-1", "--squash", "Task: GH-1\n"); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+
+		if !f.called(c.merge) {
+			t.Errorf("%s: calls:\n%s", c.name, strings.Join(f.calls, "\n"))
+		}
+	}
+}
+
 // The happy path from main's checkout.
 func TestFinishMergesAndCleansUp(t *testing.T) {
 	fx := newFinishFixture(t)
