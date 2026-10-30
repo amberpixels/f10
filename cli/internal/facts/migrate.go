@@ -42,7 +42,8 @@ func isEmpty(d Declared) bool {
 		d.MergeMethod == "" && d.Catchup == "" && d.CatchupStacked == "" && d.Traces == "" && d.ReviewTraces == "" && d.Lore == "" && d.StaleAfter == "" && d.DriverTimeout == "" &&
 		d.Flows == nil && d.FlowByArea == nil && d.DriveFinish == "" && d.DriveEnv == nil && d.Watch == "" && d.WatchCatchup == "" &&
 		d.Pipelines == nil && d.Planless == nil && d.ByArea == nil && d.ReportBack == "" &&
-		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil
+		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil &&
+		d.Verify == nil
 }
 
 // A Migration is what `f10 init --migrate` makes of one project.md, with

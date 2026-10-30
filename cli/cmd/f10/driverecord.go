@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -19,8 +20,8 @@ import (
 // command picks up; its leases make a second drive, or `f10 finish`, skip or
 // refuse a task it holds.
 
-// recordArgs is the command line a record is matched on: --answer, --every
-// and --resume dropped, since none of them names another drive.
+// recordArgs is the command line a record is matched on: --answer, --every,
+// --parallel and --resume dropped, since none of them names another drive.
 func recordArgs(argv []string) []string {
 	var out []string
 
@@ -33,7 +34,7 @@ func recordArgs(argv []string) []string {
 			continue
 		case tok == "--foreground":
 			continue
-		case name == "--answer" || name == "--every" || name == "--resume":
+		case name == "--answer" || name == "--every" || name == "--parallel" || name == "--resume":
 			if !inline {
 				i++
 			}
@@ -50,6 +51,8 @@ func recordArgs(argv []string) []string {
 // openRecord folds the record's kept answers under the ones given now; a
 // root of "" keeps no record.
 func (in *driveInput) openRecord(tasks []driveTask) error {
+	in.parallel = cmp.Or(in.args.parallel, in.defaultParallel)
+
 	if in.root == "" {
 		return nil
 	}
@@ -82,6 +85,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 			Agent:       in.args.agent,
 			DriveFinish: slices.Contains(in.chain, "finish"),
 			Session:     in.session,
+			Parallel:    in.parallel,
 		}
 
 		for i, t := range tasks {
@@ -111,6 +115,12 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	}
 
 	in.own = own
+
+	// the drive keeps the cap it started with, unless this run passes one
+	in.parallel = cmp.Or(in.args.parallel, in.rec.Parallel, in.defaultParallel)
+	if in.rec.Parallel != in.parallel {
+		in.save(func(rec *drives.Record) { rec.Parallel = in.parallel })
+	}
 
 	// an answer kept from a run that stopped before taking it goes first,
 	// and one given now for the same task replaces it
@@ -223,6 +233,11 @@ func (in *driveInput) cancelled() bool {
 	}
 
 	in.rec = rec
+
+	// a rerun attached to this live drive writes its new cap here
+	if rec.Parallel > 0 {
+		in.parallel = rec.Parallel
+	}
 
 	return rec.Cancelled != nil
 }
@@ -366,6 +381,8 @@ func taskStanding(t drives.Task, running bool) string {
 	switch {
 	case t.Outcome != nil:
 		return t.Outcome.Row
+	case running && t.Queued:
+		return "queued"
 	case running && t.Skill != "":
 		return "running " + t.Skill
 	case t.Skill != "":
