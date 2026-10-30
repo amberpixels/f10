@@ -222,6 +222,12 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 		Env:  driveEnv(os.Environ(), t.eff.DriveEnv),
 	}
 
+	// a rerun may attach to the drive still running, which reads its cap
+	// from the record each tick
+	if a.parallel > 0 {
+		setDriveParallel(w, t.sharedRoot(), argv, a)
+	}
+
 	// a drive given answers starts its own process, so the answers reach it
 	if len(a.answers) == 0 {
 		req.Resume = a.resume
@@ -237,6 +243,29 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 	watchProject(ctx, w, t)
 
 	return followDrive(ctx, w, dir, ver, req, nil)
+}
+
+// setDriveParallel writes a given --parallel into the record --resume names
+// or this command line picks up; with none, the new drive records it itself.
+func setDriveParallel(w io.Writer, root string, argv []string, a driveArgs) {
+	var (
+		rec *drives.Record
+		err error
+	)
+
+	if a.resume > 0 {
+		rec, err = drives.Read(root, a.resume)
+	} else {
+		rec, err = drives.Find(root, recordArgs(argv))
+	}
+
+	if err != nil || rec == nil || rec.Parallel == a.parallel {
+		return
+	}
+
+	if _, err := drives.Update(root, rec.Number, func(r *drives.Record) { r.Parallel = a.parallel }); err != nil {
+		fmt.Fprintf(w, "  recording drive %d's --parallel: %v\n", rec.Number, err)
+	}
 }
 
 // followDrive follows the drive until it exits, into the next daemon when

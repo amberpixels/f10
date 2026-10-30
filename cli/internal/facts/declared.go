@@ -49,6 +49,7 @@ type Declared struct {
 	ReportBack     string            `yaml:"report_back,omitempty"`
 	Review         ReviewDecl        `yaml:"review,omitempty"`
 	Standup        StandupDecl       `yaml:"standup,omitempty"`
+	Verify         []VerifyDecl      `yaml:"verify,omitempty"` // verify commands, each scoped to the paths it checks
 	Agents         map[string]string `yaml:"agents,omitempty"` // a step, `default` or `step.kind` to the agent profile it runs on
 
 	// The keys flows replaces, read and converted with a warning.
@@ -118,6 +119,13 @@ type ReviewDecl struct {
 // the lockfiles and generated files standup already knows.
 type StandupDecl struct {
 	Upkeep []string `yaml:"upkeep,omitempty"`
+}
+
+// VerifyDecl is one verify command and the paths it checks, in standup's
+// glob syntax; a command with no paths runs on every diff.
+type VerifyDecl struct {
+	Run   string   `yaml:"run"`
+	Paths []string `yaml:"paths,omitempty"`
 }
 
 // Steps is an ordered list of names, written as a YAML list or as one
@@ -300,6 +308,22 @@ func (d Declared) check() []string {
 		}
 	}
 
+	if d.Verify != nil && len(d.Verify) == 0 {
+		bad = append(bad, "verify: the list is empty; name a command, or drop the key to run the Verify heading")
+	}
+
+	for i, v := range d.Verify {
+		if strings.TrimSpace(v.Run) == "" {
+			bad = append(bad, fmt.Sprintf("verify[%d]: run is empty; name the command", i))
+		}
+
+		for _, glob := range v.Paths {
+			if err := standup.CheckGlob(glob); err != nil {
+				bad = append(bad, fmt.Sprintf("verify[%d].paths: %q: %v", i, glob, err))
+			}
+		}
+	}
+
 	// the values here; the keys are checked against the merged flows once
 	// those are resolved (agents.go)
 	for _, key := range slices.Sorted(maps.Keys(d.Agents)) {
@@ -446,6 +470,7 @@ func (l *layered) merge(d Declared, label string) {
 	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
+	set("verify", d.Verify != nil, func() { l.Verify = d.Verify })
 
 	// the agents map merges key by key: a worktree tuning one step keeps
 	// main's others, and each key remembers the layer that set it

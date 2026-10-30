@@ -80,7 +80,7 @@ f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with s
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
-f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
+f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
@@ -476,8 +476,10 @@ Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it aga
 `--foreground` runs the driver in this process, as the daemon itself runs each drive; it is for tests and debugging, and on a platform without unix sockets it is how every drive runs.
 
 **The record.**
-Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--resume` and `--foreground`), the tasks with their `:profile`, the flow, the run-wide profile, `drive_finish`, the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
-Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer` and `--every` beside it.
+Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--parallel`, `--resume` and `--foreground`), the tasks with their `:profile`, the flow, the run-wide profile, `drive_finish`, the cap (`parallel`), the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
+Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer`, `--every` and `--parallel` beside it.
+A rerun and a `--resume` keep the record's cap, unless they pass `--parallel`, which rewrites it.
+A driver still running reads the new cap at its next poll.
 An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
 The branch's `f10-drive`, `f10-chain` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
 
@@ -492,7 +494,7 @@ On a platform without `flock` nothing is exclusive.
 Lock files are never deleted.
 
 **List and cancel.**
-`f10 drive list` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
+`f10 drive list` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
 `f10 drive cancel <n>` marks the record cancelled: a running driver stops at its next poll, after any finish it is in the middle of, ends every task still going with the row `cancelled` and exits **5**; nothing more is prompted, and worktrees, branches and agents stay as they are.
 A cancelled record is never picked up again: the same command line starts a new one.
 
@@ -502,7 +504,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the frontmatter's `drive_finish` is off.
    A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
-   `--flow`, `--local`, `--agent`, `--model`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
+   `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--agent` starts every agent on that profile, read as start reads it, and `--model` is its model-only form; `<id>:<profile>` starts one task's agent on its own, which wins (`42:sonnet:low 43 --agent opus`).
    The profile starts at the first colon with no slash after it, so a url keeps its own and `42:claude:opus:high` reads whole.
@@ -528,7 +530,17 @@ A cancelled record is never picked up again: the same command line starts a new 
    `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
-   Every task that is ready starts in the same pass, since each agent is its own session.
+   Every task that is ready starts in the same pass, up to the cap.
+   `--parallel <n>` caps the tasks running a skill at once, by default half the CPU cores, from 2 to 8.
+   A task keeps its slot from one skill of its chain to the next.
+   It frees the slot once it asks, waits for its base's first commit, or waits at finish for its base.
+   Open agents are capped too, at twice the cap, because an idle session still holds its memory.
+   The agent limit counts the tasks under way and the tasks asking, including agents an earlier run of the drive left open.
+   A done or halted task's agent does not count, because the drive is finished with it.
+   Counting it would also stall a drive with `drive_finish` off, whose done tasks keep their agents open, so no task past the limit would ever start.
+   A task past either limit shows as `queued` in the report, `f10 drive list` and `f10 status`, and starts in the drive's order as slots free.
+   A task whose agent an earlier run left open goes first, because it adds no session.
+   A turn already running when the driver reaches the task is tracked and counted even past the cap, because the driver cannot stop it.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
    A plan the main checkout saved for the task is read in place under start's rules (a worktree's own plan, from before storage moved to main's, wins).
    A checkout Herdr already shows, as an earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle shell.

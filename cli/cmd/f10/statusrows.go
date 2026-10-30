@@ -34,6 +34,7 @@ const (
 	stagePlanning     = "planning"
 	stagePlanned      = "planned"
 	stageWaiting      = "waiting"
+	stageQueued       = "queued"
 	stageNotStarted   = "not started"
 )
 
@@ -66,6 +67,7 @@ type rowFacts struct {
 	halt     *ledgerHalt // a halt drive recorded after the run's last claim
 	after    string
 	baseDone bool
+	queued   bool // its drive's cap holds it back
 }
 
 type ledgerHalt struct {
@@ -88,6 +90,8 @@ func stageOf(f rowFacts) (string, string) {
 		return stageWaiting, "on " + r.Wait
 	case r != nil && stoppedRun(r):
 		return stageHalted, cmp.Or(r.Leaf, furthestPhase(r))
+	case r == nil && f.queued:
+		return stageQueued, ""
 	case r == nil && f.after != "" && !f.baseDone:
 		return stageWaiting, "after " + f.after
 	case r == nil:
@@ -311,7 +315,7 @@ func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
 // ledger's last claim, then the PR by branch or by the url the ledger kept.
 func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts) {
 	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
-	f := rowFacts{finished: k.Finished, after: k.After}
+	f := rowFacts{finished: k.Finished, after: k.After, queued: k.queued}
 	lt := ledgerFor(src.events, k.ID, src.idOf)
 
 	branch, root := "", ""
@@ -416,7 +420,7 @@ type rowView struct {
 // stageOrder is the stages as a parent's heading counts them.
 var stageOrder = []string{
 	stageDone, stageShipped, stageAsking, stageHalted, stageImplementing, stageReviewing,
-	stageResolving, stageJudging, stagePlanning, stagePlanned, stageWaiting, stageNotStarted,
+	stageResolving, stageJudging, stagePlanning, stagePlanned, stageWaiting, stageQueued, stageNotStarted,
 }
 
 // renderRows prints the rows as a task tree under the parent's heading.
