@@ -502,3 +502,26 @@ func TestPullFFFailsAtOnceOnAnythingElse(t *testing.T) {
 		t.Errorf("calls = %q, want one pull", *calls)
 	}
 }
+
+// FetchInto shares the pull's retry, since a fetch into the default branch
+// updates the same remote-tracking ref.
+func TestFetchIntoRetriesALostRefLock(t *testing.T) {
+	var calls int
+
+	prev, waits := Exec, pullLockWaits
+	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "", &ExitError{Args: args, Code: 1, Stderr: "error: cannot lock ref 'refs/remotes/origin/main'"}
+		}
+
+		return "", nil
+	}
+	pullLockWaits = []time.Duration{time.Millisecond}
+
+	t.Cleanup(func() { Exec, pullLockWaits = prev, waits })
+
+	if err := FetchInto(t.Context(), "/repo", "main"); err != nil || calls != 2 {
+		t.Errorf("FetchInto = %v after %d calls, want success on the retry", err, calls)
+	}
+}

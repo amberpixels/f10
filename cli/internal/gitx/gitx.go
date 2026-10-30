@@ -451,7 +451,7 @@ func Push(ctx context.Context, dir, branch, lease string) error {
 	return err
 }
 
-// pullLockWaits are the pauses before each retry of a pull that lost a ref
+// pullLockWaits are the pauses before each retry of a git that lost a ref
 // lock; their sum bounds the wait, since a crashed git's lock never clears.
 var pullLockWaits = []time.Duration{
 	100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond,
@@ -459,11 +459,16 @@ var pullLockWaits = []time.Duration{
 }
 
 // PullFF fast-forwards the checked-out branch from its upstream, and fails
-// rather than merge when it cannot. A ref another git holds is busy only
-// while that git runs, so a lock failure retries.
+// rather than merge when it cannot.
 func PullFF(ctx context.Context, dir string) error {
+	return retryRefLock(ctx, dir, "pull", "--ff-only")
+}
+
+// retryRefLock runs git, again after a pause when it lost a ref's lock: a ref
+// another git holds is busy only while that git runs.
+func retryRefLock(ctx context.Context, dir string, args ...string) error {
 	for i := 0; ; i++ {
-		_, err := Exec(ctx, dir, "pull", "--ff-only")
+		_, err := Exec(ctx, dir, args...)
 		if err == nil || i >= len(pullLockWaits) || !refLocked(err) {
 			return err
 		}
@@ -488,9 +493,7 @@ func refLocked(err error) bool {
 // without touching the checkout: git fast-forwards a branch that is not
 // checked out and refuses anything else.
 func FetchInto(ctx context.Context, dir, branch string) error {
-	_, err := Exec(ctx, dir, "fetch", "origin", branch+":"+branch)
-
-	return err
+	return retryRefLock(ctx, dir, "fetch", "origin", branch+":"+branch)
 }
 
 // FetchCommit brings one commit over from origin by sha: a request's head

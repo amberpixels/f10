@@ -129,7 +129,8 @@ func AcquireAs(root, key string, h Holder) (*Lease, error) {
 const awaitPoll = 100 * time.Millisecond
 
 // Await takes key's lease as h, waiting while another process holds it,
-// until ctx ends or wait passes; then the HeldError names the holder.
+// until ctx ends or wait passes; then the HeldError names the holder, beside
+// ctx's error when ctx ended.
 func Await(ctx context.Context, root, key string, h Holder, wait time.Duration) (*Lease, error) {
 	deadline := time.Now().Add(wait)
 
@@ -141,7 +142,7 @@ func Await(ctx context.Context, root, key string, h Holder, wait time.Duration) 
 
 		select {
 		case <-ctx.Done():
-			return nil, err
+			return nil, errors.Join(ctx.Err(), err)
 		case <-time.After(awaitPoll):
 		}
 	}

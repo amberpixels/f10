@@ -262,8 +262,9 @@ func TestAwaitWaitsForTheHolder(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	if _, err := Await(ctx, root, "main-pull", Holder{}, time.Minute); !errors.As(err, &he) {
-		t.Errorf("Await on an ended context = %v, want the HeldError", err)
+	if _, err := Await(ctx, root, "main-pull", Holder{}, time.Minute); !errors.As(err, &he) ||
+		!errors.Is(err, context.Canceled) {
+		t.Errorf("Await on an ended context = %v, want the cancel and the HeldError", err)
 	}
 
 	l.Release()
