@@ -117,6 +117,14 @@ func Raise(dir string, a Ask, now time.Time) (Ask, bool, error) {
 			continue
 		}
 
+		// a claim may have answered it since the check above: a claim writes
+		// the answer before it drops its hold, so it shows here
+		if errors.Is(err, fs.ErrNotExist) {
+			if ans, err := read(answeredPath(dir, key)); err == nil && ans.Text == a.Text && ans.pending() {
+				continue
+			}
+		}
+
 		if err != nil || prev.Text != a.Text {
 			break
 		}
