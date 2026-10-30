@@ -534,6 +534,12 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
+	if end != nil {
+		if change, ok := closedChange(taskReviews(in.main, in.plansDir, in.task.ID), *end); ok {
+			in.change = change
+		}
+	}
+
 	if in.loreStore != nil {
 		notes = appendNote(notes, loreNote(in.loreStore, in.loreChange()))
 	}
@@ -1228,10 +1234,13 @@ func closeSeries(dir string, end seriesEnd) (string, error) {
 }
 
 // A seriesEnd is what an archived series records in its closed file: the PR
-// (#204, or none), the commit it ended at, and when.
+// (#204, or none), the commit it ended at, and when. A restart is rounds
+// ended by a rebase before any PR existed: still the same PR, so it counts
+// for no lore change.
 type seriesEnd struct {
 	pr, head string
 	at       time.Time
+	restart  bool
 }
 
 const seriesClosedFile = "closed"
@@ -1244,6 +1253,9 @@ func (e seriesEnd) write(dir string) error {
 
 	body := fmt.Sprintf("pr: %s\nhead: %s\nclosed: %s\n",
 		cmp.Or(e.pr, "none"), e.head, at.UTC().Format(time.RFC3339))
+	if e.restart {
+		body += "restart: yes\n"
+	}
 
 	if err := os.WriteFile(filepath.Join(dir, seriesClosedFile), []byte(body), 0o600); err != nil {
 		return fmt.Errorf("recording the end of the review series at %s: %w", dir, err)
@@ -1280,6 +1292,8 @@ func readSeriesEnd(dir string) seriesEnd {
 			e.head = value
 		case "closed":
 			e.at, _ = time.Parse(time.RFC3339, value)
+		case "restart":
+			e.restart = value == "yes"
 		}
 	}
 
@@ -1313,30 +1327,58 @@ func nextSeries(archive, id string) string {
 	return filepath.Join(archive, fmt.Sprintf("%s.%d", id, n))
 }
 
-// changeOf is the lore change of the task's open series: the task id for its
-// first PR, <id>.<n> for its n-th, counted from the archived series.
-func changeOf(dir string) string {
-	id := filepath.Base(dir)
+// closedPRs is the archived series that each ended a PR, oldest first: a
+// restart is left out.
+func closedPRs(dir string) []string {
+	archive, id := filepath.Join(filepath.Dir(dir), "archive"), filepath.Base(dir)
 
-	have := seriesNumbers(filepath.Join(filepath.Dir(dir), "archive"), id)
-	if len(have) == 0 {
+	var out []string
+
+	for _, n := range seriesNumbers(archive, id) {
+		path := filepath.Join(archive, fmt.Sprintf("%s.%d", id, n))
+		if !readSeriesEnd(path).restart {
+			out = append(out, path)
+		}
+	}
+
+	return out
+}
+
+// changeOf is the lore change of the task's open series: the task id for its
+// first PR, <id>.<n> for its n-th, counted from the PRs archived.
+func changeOf(dir string) string {
+	return seriesChange(filepath.Base(dir), len(closedPRs(dir))+1)
+}
+
+// closedChange is the change of the PR end closed, when the newest archived
+// PR is that one: a finish run again after its merge reports on it, not on
+// the next series.
+func closedChange(dir string, end seriesEnd) (string, bool) {
+	closed := closedPRs(dir)
+	if len(closed) == 0 || !end.same(readSeriesEnd(closed[len(closed)-1])) {
+		return "", false
+	}
+
+	return seriesChange(filepath.Base(dir), len(closed)), true
+}
+
+func seriesChange(id string, n int) string {
+	if n <= 1 {
 		return id
 	}
 
-	return fmt.Sprintf("%s.%d", id, have[len(have)-1]+1)
+	return fmt.Sprintf("%s.%d", id, n)
 }
 
 // seriesStart is when the task's open series began, the newest archived
-// series' end; zero for a first series.
+// PR's end; zero for a first series.
 func seriesStart(dir string) time.Time {
-	archive := filepath.Join(filepath.Dir(dir), "archive")
-
-	have := seriesNumbers(archive, filepath.Base(dir))
-	if len(have) == 0 {
+	closed := closedPRs(dir)
+	if len(closed) == 0 {
 		return time.Time{}
 	}
 
-	newest := filepath.Join(archive, fmt.Sprintf("%s.%d", filepath.Base(dir), have[len(have)-1]))
+	newest := closed[len(closed)-1]
 	if e := readSeriesEnd(newest); !e.at.IsZero() {
 		return e.at
 	}

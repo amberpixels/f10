@@ -731,6 +731,7 @@ An ended series moves to `reviews/archive/<id>.<N>/`, and the next round is 1.
 `f10 finish` and the janitor archive the directory the same way.
 A merge they see ends the series even when it had no rounds: it leaves an empty `reviews/archive/<id>.<N>/`, because the archive counts a task's PRs for its lore change (`docs/lore.md`).
 Each archived series holds a `closed` file naming its PR, its head and when it closed, so finishing the same PR again, or the janitor after it, closes nothing more.
+A series that ended only because a rebase left its `pr: none` rounds unreachable is marked `restart: yes`: those rounds belong to the PR still to come, so it counts as no PR for the lore change.
 A host that cannot be read keeps the series going, with a line on stderr, because archiving by mistake would hide findings that `/f10:resolve` still needs.
 It prints `dir:`, `archive:` when a series moved, `latest:` (the highest round's file, absent with none), `pr:` (the branch's open PR for the next header, `none` without one), and the next round's `round:` and `path:`.
 Three cases decline, exit 3, with a `decline:` line and the findings behind it instead of the next round:

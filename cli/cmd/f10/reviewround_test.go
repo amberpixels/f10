@@ -263,6 +263,48 @@ func TestReviewRoundStartsANewSeriesPastAnUnreachableSha(t *testing.T) {
 	}
 }
 
+// Rounds a rebase ended before any PR belong to the PR that follows, so the
+// lore change stays the task id, and the merge after them is the first PR.
+func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
+	repo := tracedRepo(t, "DM-5/fix", "")
+	twoRounds(t, repo, "reviewed: 0123456789abcdef0123456789abcdef01234567\n")
+
+	if _, err := runRound(t, repo); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(repo, ".f10", "reviews", "DM-5")
+	if got := changeOf(dir); got != "DM-5" {
+		t.Errorf("after a restart: %q, want DM-5", got)
+	}
+
+	if _, err := closeSeries(dir, seriesEnd{pr: "#7", head: "abc1234"}); err != nil || changeOf(dir) != "DM-5.2" {
+		t.Errorf("after the PR merged: %q, %v, want DM-5.2", changeOf(dir), err)
+	}
+
+	if got, ok := closedChange(dir, seriesEnd{pr: "#7"}); !ok || got != "DM-5" {
+		t.Errorf("finish run again names %q, %v; want the merged PR's DM-5", got, ok)
+	}
+}
+
+// lore change closes a series whose PR merged without finish, so the
+// follow-up's first entry already lands in its own change.
+func TestLoreChangeArchivesAMergedSeries(t *testing.T) {
+	repo := tracedRepo(t, "DM-5/fix", "")
+	hostGH(t, "MERGED")
+	twoRounds(t, repo, "pr: #7\n")
+	t.Chdir(repo)
+
+	out, err := runLore(t, "change")
+	if err != nil || strings.TrimSpace(out) != "DM-5.2" {
+		t.Fatalf("lore change = %q, %v; want DM-5.2", out, err)
+	}
+
+	if e := readSeriesEnd(filepath.Join(repo, ".f10", "reviews", "archive", "DM-5.1")); e.pr != "#7" || e.restart {
+		t.Errorf("the archived series records %+v", e)
+	}
+}
+
 // A rebase keeps the branch's open PR, so the series and its limit stand.
 func TestReviewRoundKeepsTheSeriesOfAnOpenPR(t *testing.T) {
 	repo := tracedRepo(t, "DM-5/fix", "")

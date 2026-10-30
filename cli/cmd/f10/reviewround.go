@@ -145,7 +145,8 @@ func seriesOf(ctx context.Context, t *target, s prSubject, dir string, warn io.W
 	}
 
 	head, _, _ := strings.Cut(f.Reviewed, " ")
-	series.archived, err = archiveReviews(dir, seriesEnd{pr: cmp.Or(f.PR, "none"), head: head})
+	restart := !digits(strings.TrimLeft(f.PR, "#!"))
+	series.archived, err = archiveReviews(dir, seriesEnd{pr: cmp.Or(f.PR, "none"), head: head, restart: restart})
 
 	return series, err
 }
