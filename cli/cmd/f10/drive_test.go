@@ -1689,6 +1689,8 @@ func TestParseDriveArgs(t *testing.T) {
 		{args: []string{"GH-1", "--every", "soon"}, wantErr: "positive duration"},
 		{args: []string{"GH-1", "--answer"}, wantErr: "needs a value"},
 		{args: []string{"GH-1", "--force"}, wantErr: "unknown flag"},
+		{args: []string{"GH-1", "--parallel", "0"}, wantErr: "a positive number"},
+		{args: []string{"GH-1", "--parallel=many"}, wantErr: "a positive number"},
 	}
 
 	for _, c := range cases {

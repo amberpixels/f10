@@ -1,6 +1,6 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--parallel N]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "<id>[:profile]... [--flow <name> | --local]"
 ---
@@ -18,6 +18,11 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
 - `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them); a rerun keeps the flow a task's branch already records.
   No chain is typed after the ids: the flow says what runs.
 - `--agent <profile>`: every agent's profile, `kind:model:effort` or a part of it, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model <model>` is the model-only form.
+- `--parallel N`: at most N tasks run a skill at once, and at most twice N agents stay open, because an idle session still holds its memory.
+  The default is half the CPU cores, from 2 to 8.
+  Tasks past the cap queue in the drive's order and show as `queued`.
+  A task frees its slot once it asks, waits for its base's first commit, or waits at finish for its base.
+  A rerun or `--resume` keeps the drive's cap unless it passes a new one.
 - Everything else goes to `f10 drive` verbatim.
 
 **Parents**: a task id whose task has subtasks is never driven itself; the user picks which subtasks run, every time, with no silent default.
