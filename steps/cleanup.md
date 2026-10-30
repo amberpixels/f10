@@ -1,4 +1,4 @@
-# Step · cleanup - comments, prose or code tightened, scope proven on a full pass
+# Step · cleanup - comments cut to the why, prose rewritten for clarity, code leftovers removed, scope proven on a full pass
 
 Role: a **senior engineer** preparing a change for someone who reads it cold.
 Input: targets and a scope (below).
@@ -33,11 +33,11 @@ Fenced code blocks and verbatim quotes keep theirs.
 ## Light pass
 
 1. **Read the diff** (`f10 pr diff` and the untracked files), opening the lines around a hunk only where it needs context.
-2. **Rewrite with the Edit tool** what each applicable target's Keep, Cut and Shape rules flag on the added or changed lines.
-   No rule moves between files: Cut 13 and the outside-file search before it belong to the full pass.
+2. **Rewrite with the Edit tool** what each applicable target's rules flag on the added or changed lines.
+   No rule moves between files: moving a rule stated in several files to its one home, and the outside-file search it needs, belong to the full pass.
    Then grep the changed files for em and en dashes and fix any on those lines; in a source file, only inside comments, since a dash in code stays.
 3. **Skip the proofs**: no snapshot, baseline, full-file read, `f10-cleanup-check.sh`, inventory or rules subagent.
-   Each target's Baseline and Check belong to the full pass only.
+   A target's Baseline and Check belong to the full pass only.
    The `code` target still splits certain from uncertain fixes and asks about the uncertain ones.
 4. **Verify** as Procedure point 5 says.
 5. **Report** in two lines: what changed, or that nothing needed it; and that the proofs were skipped for size, with the line count.
@@ -56,7 +56,7 @@ The full pass, for every run the light pass does not cover.
    ```
 
    Every proof below compares against this snapshot, never HEAD: in a pipeline the tree already holds implement's uncommitted work.
-   Take the baseline the target names, and grep for em and en dashes, prose arrows and any other character the house style forbids.
+   Take the baseline the target names, if it names one, and grep for em and en dashes, prose arrows and any other character the house style forbids.
 2. **Read every file in full before the first edit.**
    A comment that looks redundant can be the only record of a trap; a rule that looks repeated can carry an exception.
 3. **Rewrite with the Edit tool**, one hunk at a time, by the target's rules below.
@@ -66,7 +66,7 @@ The full pass, for every run the light pass does not cover.
    A change the check flags is reverted, unless it is an allowed exception the target names.
 5. **Verify** per the load's `verify:` line (implement's skip for an unmoved tree holds).
    Red: revert the hunk that broke it when it is identifiable, re-verify, and fail if still red.
-6. **Report** per `conventions/report.md`, prose per target: the baseline and final numbers, the kinds of change with one before/after example each, every exception the check allowed and why, problems noticed and left alone with `file:line` (each a candidate task), and the checks' output.
+6. **Report** per `conventions/report.md`, prose per target: the baseline and final numbers where the target has a baseline, the kinds of change with one before/after example each, every exception the check allowed and why, problems noticed and left alone with `file:line` (each a candidate task), and the checks' output.
 
 ## comments
 
@@ -103,34 +103,47 @@ Keep a `DASH IN CODE` line only where nothing matches the old text (a test, a pa
 
 ## prose
 
-Every sentence must change what the reader, a model or a person, does.
-Say each thing once, plainly, where it applies.
+The goal is prose that reads at least as easily as before and loses no rule.
+The check for how it reads is `conventions/voice.md`, both its parts; this target does not repeat those rules.
 
-Baseline: word count per file.
-Instruction prose (skills, prompts, steps, conventions) can usually lose 40 to 50%; READMEs and docs keep their reasons and examples, and 20 to 30% is normal.
-They are targets; falling short does not fail the pass.
+The pass never sets a percentage or word target, and never reports a word count as a score.
+It never shortens prose by packing sentences tighter or by dropping a reason, so a rewrite may come out longer.
 
-Before editing, list the rules stated in more than one file, find copies outside the scope with a repo-wide grep on a distinctive phrase, and give each rule one canonical home: the file that owns the concept.
-Snapshot every outside file you will edit.
-
-**Keep**
-- Every rule, default, exception, path, command, flag, number and ticket reference: shorter wording, same meaning.
+Every rewrite keeps:
+- Every rule, default, exception, path, command, flag, number and ticket reference, with the same meaning.
 - Code blocks byte-identical.
-- A reason where the reader would otherwise break the rule in a case it does not name, in one clause.
 - Headings and structure that tools or other files cite: frontmatter, step names, anchors.
+- The file's list style and its layout of one sentence per line; no reflow of paragraphs you did not change.
 
-**Cut** the nine forms in `conventions/voice.md`, plus:
+It fixes:
+- A sentence that breaks a rule in `conventions/voice.md`.
+- A rule said twice, such as an aphorism that restates the rule before it, or a rule restated as its own reason.
+- A rule stated in more than one file.
+  Before editing, list those rules and find their copies outside the scope with a repo-wide grep on a distinctive phrase.
+  Give each rule one home, the file that owns the concept, which keeps the full statement.
+  A copy becomes a reference to it, or goes if the reader already loaded that file.
+  Snapshot every outside file you will edit.
 
-10. **Aphorism after a rule** - the rule already said it.
-11. **Rule restated as its reason** - "Do X. Not doing X is the failure this prevents."
-12. **Design justification** where the reader only needs what to do; it belongs in a commit message or a design doc.
-13. **Repeated rules** - the canonical home keeps the full statement; a copy becomes a reference or goes, if the reader already loaded the canonical file.
-14. **Lists enumerating what one noun covers**, and tricolons where one item carries the meaning.
+A worked example, from the plan step's rule for a small plan.
+Before, one packed sentence:
 
-**Shape**
-- Sentences under 25 words.
-- Keep enough of each explanation that the reader can still apply the rule, then stop.
-- The file's wrap width and list style; no reflow of paragraphs you did not change.
+```
+- **small** - every condition holds: the cause or the one place to change is already named (a feature's in its task; a bug's or a refactor's in the task's _Root cause_, this run's debug brief, or one `file:line` the fetch brief traced); one area; no decision another competent engineer would take the other way; no gap.
+```
+
+After, one rule per sentence, the default first:
+
+```
+Most plans are normal: the full shape above.
+
+A plan is small when the work is already decided, which means all of these are true:
+- You know where the change goes.
+- It touches one area.
+- No other competent engineer would make a different call on it.
+- There are no gaps.
+
+If you are unsure about any of them, the plan is normal.
+```
 
 **Inventory as you go.**
 After each file, append its rules to `<scratchpad>/cleanup/inventory.md` under the file's path: one line per must, never, only, exception and default, quoted from the snapshot, noting where a moved rule went.
@@ -141,8 +154,9 @@ After each file, append its rules to `<scratchpad>/cleanup/inventory.md` under t
   Tokens dropped on purpose (a stale example, a duplicate) go in `$SNAP/.dropped`, one per line, and in the report; restore anything else.
 - **Rules:** one fresh `general-purpose` subagent per run, or per about 15k words rewritten; never one per file, never a fork, so it judges blind.
   The Agent tool call carries the `model` and `effort` the load's `cleanup` profile line names (`conventions/context.md` → Agent profiles).
-  Give it the inventory and the changed files; it marks each line `kept`, `changed` (quoting both) or `lost` and returns only the non-kept lines.
-  Restore every `lost` line; fix or justify every `changed` one.
+  Give it the inventory, the changed files, their snapshots and `conventions/voice.md`.
+  It marks each inventory line `kept`, `changed` (quoting both) or `lost`, and each changed sentence that reads harder than its snapshot `harder` (quoting both), and returns only the lines not marked `kept`.
+  Restore every `lost` line, fix or justify every `changed` one, and rewrite or revert every `harder` one.
 
 ## code
 
