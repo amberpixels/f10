@@ -1,9 +1,16 @@
 # Mode · binary - a skill that only runs the f10 binary
 
-**Activation:** a skill whose procedure is one `f10` command and its output (asks, board, drive, finish, read, start, status).
-It runs no step and loads no conventions; `--help` runs the command's own (`modes/help.md`).
+Some skills do all their work through one `f10` command: asks, board, drive, finish, read, start and status.
+The procedure of each is to run that command and relay its output.
+Such a skill runs no step and loads no conventions.
+Its `--help` runs the command's own help (`modes/help.md`).
 
-- A line starting `!!!` goes first, verbatim, above everything else the command printed.
-- A refusal the skill does not name as a question is final: print the message verbatim and stop; it names the cause and what to do.
-- `flag provided but not defined` or an unknown command means a stale `f10` earlier on `PATH` shadows the plugin's: say so, quote `f10 --version`, and point at `f10 doctor`.
-- A missing binary fails inside the plugin's `f10` with its own one-line message: relay it.
+## Relaying the output
+
+- A line that starts with `!!!` goes first, verbatim, above everything else the command printed.
+- A refusal is final, unless the skill names it as a question to put to the user.
+  Print the message verbatim and stop, because the message already names the cause and what to do about it.
+- The error `flag provided but not defined`, or an unknown command, means an older `f10` earlier on `PATH` shadows the plugin's own.
+  Say so, quote the output of `f10 --version`, and point the user at `f10 doctor`.
+- When the binary is missing, the plugin's `f10` fails with a one-line message of its own.
+  Relay that message.

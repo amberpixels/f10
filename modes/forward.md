@@ -1,19 +1,29 @@
 # Mode · forward - a task another worktree holds
 
-A task started with `f10 start` has its own worktree, workspace and agent.
-Running a task-id command for it here would use the wrong branch, so `/f10:plan` and `/f10:ship` hand it over first.
+A task started with `f10 start` has a worktree, a workspace and an agent of its own.
+A task-id command run for it here would work on the wrong branch.
+So `/f10:plan` and `/f10:ship` hand the command over to that task's agent before doing anything else.
 
-**Activation:** the argument is a task id, or a `+` bundle of them (`f10 forward` takes it whole and finds the lead's checkout).
-Before loading anything, one call, with the skill that was invoked:
+## Activation
+
+Forward mode applies when the argument is a task id, or a bundle of task ids joined by `+`.
+`f10 forward` takes a bundle whole and finds the checkout of its lead task.
+
+Before loading anything, make one call, naming the skill that was invoked:
 
 ```
 f10 forward <task-id> "/f10:<skill> <the argument verbatim>"
 ```
 
-- **exit 0** - another checkout holds the task's branch and the command went to its agent.
-  Print the command's block (task, workspace, sent) in a fenced `yaml` block and stop.
-  Join `f10-state.sh clear` to the same call to retire the badge seeded when the command was typed: this session has no run.
-- **exit 3** - the task is here (its branch is this checkout's, or it has no worktree), as stderr says.
+## The exit code
+
+- **exit 0** - another checkout holds the task's branch, and the command went to its agent.
+  Print the command's output (task, workspace, sent) in a fenced `yaml` block, then stop.
+  Join `f10-state.sh clear` to the same call (`f10 forward ... && f10-state.sh clear`).
+  It retires the badge that was set when the command was typed, because this session has no run.
+- **exit 3** - the task is here, as stderr says.
+  Either its branch is this checkout's, or it has no worktree.
   Continue with the skill.
-- anything else is a failure per `conventions/failure.md` (outside Herdr, no workspace shows the worktree, the agent is idle and not reporting).
-  Report it and stop.
+- **Any other exit** is a failure, handled as `conventions/failure.md` says.
+  Examples are a session outside Herdr, no workspace showing the worktree, or an agent that is idle and not reporting.
+  Report the failure and stop.
