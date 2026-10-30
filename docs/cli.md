@@ -253,6 +253,9 @@ The notes also carry one line on the change's lore (`docs/lore.md`): its intent,
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
 A finish that stopped halfway is finished by a rerun: a task with no branch whose plan is in the archive reports `already finished` and exits 0, and a branch whose worktree is gone but whose PR merged is cleaned up without one (dependents released, default branch pulled, plan archived, only the branch deleted, no workspace closed).
 A branch with no worktree and no merged PR is still refused.
+Once a finish succeeds, it marks the task finished in every stopped drive record that lists it, so `f10 drive list` needs no rerun of the drive.
+It takes each drive's own lease without waiting, so a running drive's record is left to that drive.
+Only the attempt finish acted on is marked: the suffix typed, else the one its branch ends in, so finishing `<id>-b` leaves an `<id>` row as it was.
 There finish merges as usual, brings the default branch up to the merge, switches main to it, deletes the local branch, and leaves main's workspace open; the report says the checkout was main's and was switched, not removed.
 
 1. **Refusals, before anything changes.**
@@ -498,6 +501,9 @@ Lock files are never deleted.
 
 **List and cancel.**
 `f10 drive list` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
+A drive that is not running, a cancelled one included, has each row not yet finished checked against its task: a task with no branch here or on origin and its plan archived reads `finished`, the same test finish uses to report `already finished`.
+The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
+A row only ever moves to finished, because only a rerun knows a drive's next step for a halt settled halfway.
 `f10 drive cancel <n>` marks the record cancelled: a running driver stops at its next poll, after any finish it is in the middle of, ends every task still going with the row `cancelled` and exits **5**; nothing more is prompted, and worktrees, branches and agents stay as they are.
 A cancelled record is never picked up again: the same command line starts a new one.
 

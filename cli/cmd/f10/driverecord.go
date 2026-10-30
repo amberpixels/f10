@@ -450,16 +450,18 @@ func driveList(w io.Writer, root string, all bool, finished func(row string) boo
 // branches and plan; a row that names no task reads as unfinished.
 func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	seen := map[string]bool{} // a task several records list is checked once
 
 	return func(row string) bool {
 		id, _ := ref.SplitSuffix(row)
-
-		r, err := t.reference(ctx, id)
-		if err != nil {
-			return false
+		if done, ok := seen[id]; ok {
+			return done
 		}
 
-		return taskFinished(ctx, main, t.sharedPlansDir(), r.Head().ID)
+		r, err := t.reference(ctx, id)
+		seen[id] = err == nil && taskFinished(ctx, main, t.sharedPlansDir(), r.Head().ID)
+
+		return seen[id]
 	}
 }
 

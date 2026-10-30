@@ -1155,6 +1155,37 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 	}
 }
 
+// A finish matches the attempt it acted on: the typed suffix, else the one
+// its branch ends in, so a bare finish in GH-1-b's worktree leaves GH-1 alone.
+func TestAttemptRows(t *testing.T) {
+	rows := []drives.Task{{ID: "GH-1"}, {ID: "GH-1-b"}, {ID: "GH-2"}}
+
+	for _, c := range []struct {
+		suffix, branch string
+		want           []string
+	}{
+		{"", "GH-1-b", []string{"GH-1-b"}},
+		{"", "GH-1", []string{"GH-1"}},
+		{"b", "", []string{"GH-1-b"}},
+		{"", "feat/GH-1-dark-mode-b", []string{"GH-1-b"}},
+	} {
+		in := finishInput{task: gh1, suffix: c.suffix}
+		match := attemptRows(in, c.branch, rows)
+
+		var got []string
+
+		for _, r := range rows {
+			if match(r) {
+				got = append(got, r.ID)
+			}
+		}
+
+		if !slices.Equal(got, c.want) {
+			t.Errorf("suffix %q branch %q matched %v, want %v", c.suffix, c.branch, got, c.want)
+		}
+	}
+}
+
 // A task with no branch left and its plan archived is already finished.
 func TestFinishAlreadyFinished(t *testing.T) {
 	fx := newFinishFixture(t)
@@ -1169,9 +1200,27 @@ func TestFinishAlreadyFinished(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	fx.in.root = t.TempDir()
+
+	halted := &drives.Outcome{Row: "halted at catchup", Code: exitHalted}
+
+	rec := &drives.Record{Tasks: []drives.Task{{ID: "GH-1", Outcome: halted}}}
+	if err := drives.Create(fx.in.root, rec); err != nil {
+		t.Fatal(err)
+	}
+
 	out, err := fx.run(t)
 	if err != nil || !strings.Contains(out, "already finished") {
 		t.Errorf("err = %v, out:\n%s", err, out)
+	}
+
+	rec, err = drives.Read(fx.in.root, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != rowFinished {
+		t.Errorf("the drive record kept %+v", o)
 	}
 
 	// a re-plan archives the old plan too, and keeps the new one live
