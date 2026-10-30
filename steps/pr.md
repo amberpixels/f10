@@ -4,46 +4,94 @@ Role: a **senior engineer** opening a PR someone else will have to review.
 Input: verified changes (`implement` and any earlier review steps done), and the branch's PR if one is open.
 Context: `project.md → Hosting & PR` (the PR adapter).
 
-1. **Authorization.**
-   Pushing and opening or refreshing the PR are outward-facing, under the run's authorization, for _this_ PR only.
-   A run that does not grant it asks first.
-2. **The branch carries the task id**, where the run has one: `ABC-1042/dark-mode`, `feat/GH-22-lookaround`, whatever shape the project uses.
-   The shape is the project's; the id in it is not, since `f10 task read` with no argument reads it back out of the branch.
-   A run with no task id (free-text planless work) names its branch however the project does.
-   A branch this step creates for a task id is linked to it, `git config branch.<name>.f10-task <id>`, so `f10 start`, `f10 finish`, `--after` and `f10 drive` find it whatever its shape.
-3. **Open or refresh.**
-   `f10 pr view` on the current branch: only an open PR counts, so `no open PR` (none, or one merged or closed) means open a new one (points 4 and 5), and an open one means refresh it (point 6).
-   `no PR read` is a host that did not answer: the step fails (`conventions/failure.md`), never opening a second PR.
-   In a ship flow the catchup guard (`steps/catchup.md` → **As a guard**) integrates the base before this step, unless `catchup: off`; this step never integrates it.
-4. **A recorded dependency sets the base.**
-   `f10 pr base --origin` prints the branch the PR targets: the one `f10 start --after` recorded, else the default branch.
-   `f10 pr create` opens against that same base, so a recorded one stacks the PR, and the base's `f10 finish` retargets it to the default branch.
-   A non-zero exit is a base not on origin yet: stop and report (`conventions/failure.md`) with the branch named and `next: push the base task's branch`.
-   One exception: a `found: f10-after-branch gone` line under the branch is a base finished and deleted, its code in the default branch: `git config --unset` both `f10-after` and `f10-after-branch`, and open against the default branch it printed.
-5. **Open it** via the project's PR adapter, a skill, else plain mechanics: commit, `git push -u origin <branch>`, then `f10 pr create --title … --body-file <file>`.
-   `--label` and `--assignee` follow project.md; the draft goes in a temp file outside the repo.
-   It prints the PR's url, refuses a branch origin does not hold at `HEAD`, and prints an already open PR's url rather than open a second.
-   A commit made here follows `conventions/context.md` → Commits, `--step implement`; in stealth mode, no f10 traces in the branch name, commits, or PR text.
-   Another task named in the PR text is a link with its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
-   A **bundle** (the `task:` line of `f10 pr view` names `<lead>+<riders>`): the title is the lead's, and the body links every member with its title.
-   A `## Catchup` section lists the choices a catchup made on this branch, one line per file (`<path>: kept <side>, <why>`), rendered from the change's lore decision entries whose body opens `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`); no such entry, no section.
-   On a host that closes issues on merge it carries one closing keyword per member, each on a line of its own (`Closes #12`): `f10 finish` rewrites a rider's line to keep it open.
-   Once it is open, `f10 trace state --step pr` writes the hidden state block into its body (`docs/traces.md`): nothing with `traces: off`, and a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
-6. **Refresh it**, so a later `pr` entry brings the description up to what review, resolve or judge changed.
-   - **Push first**: commit what the tree holds per the adapter (`conventions/context.md` → Commits, `--step implement`), then push, never forcing, so the description never covers code the PR lacks.
-   - **Someone else's PR** (view's `mine:` anything but `yes`, `unknown` included): stop after the push and leave the title and body as they are.
-   - **Rewrite from scratch**: draft title and body as point 5 would for a new PR, from `f10 pr diff` (the change against the PR's own base, the tree just pushed), the task and the plan, never patching the old body ("also adds…").
-     The title keeps its task id.
-     Other tasks it names resolve through `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
-   - **Owned sections**: a section the overlay names as maintained elsewhere (a screenshots section a script regenerates) is copied verbatim from the old body into its place in the new one; one the old body lacks stays out.
-     `## Catchup` is owned by the **catchup** step the same way, except that where the old body has none it is rendered from lore as point 5 says.
-     The old body is read for these sections only.
-   - **The state block** (`docs/traces.md`): with plain mechanics, run `f10 trace state --step pr --body-file <file>` on the draft before writing it, and the block and its counts come over from the old body.
-     A skill adapter takes no draft: there the block is an owned section, copied verbatim, and `f10 trace state --step pr` runs after the skill's write.
-     With `traces: off` no block is written, and one the old body holds comes over as it is; a non-zero exit is `partial` (`conventions/failure.md` rule 7), never a failed step.
-   - **Write it** through the project's PR adapter: a skill adapter refreshes through that skill, and one with no way to refresh fails the step (`conventions/failure.md` rule 4).
-     Plain mechanics: `f10 pr edit --title … --body-file <file>`, the draft in a temp file outside the repo; the base, labels and assignee stay as they are.
-7. **Never merge** unless project.md explicitly says otherwise.
-8. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab) carrying the url, then one line saying whether the PR was opened, refreshed, or only pushed to.
+The **PR adapter** is how the project opens and edits PRs.
+It is a skill when `project.md → Hosting & PR` names one.
+Otherwise it is the **plain commands** this step names: `git`, `f10 pr create` and `f10 pr edit`.
+Any commit this step makes follows `conventions/context.md` → Commits, with `--step implement`, because it carries implemented code.
 
-**On failure:** the PR adapter errors: report whether the branch was pushed (`conventions/failure.md`); a refresh that fails after its push leaves the commits on the PR under a stale description, and the report says so.
+1. **Authorization.**
+   Pushing and opening or refreshing the PR are outward-facing actions.
+   The run's authorization covers them for _this_ PR only.
+   A run that does not grant that authorization asks first.
+2. **The branch carries the task id**, when the run has one: `ABC-1042/dark-mode`, `feat/GH-22-lookaround`, or whatever shape the project uses.
+   The project chooses the shape.
+   The id must still be in it, because `f10 task read` with no argument reads the id back out of the branch name.
+   A run with no task id (free-text planless work) names its branch the way the project does.
+   When this step creates a branch for a task id, it links the branch to the task with `git config branch.<name>.f10-task <id>`.
+   That link lets `f10 start`, `f10 finish`, `--after` and `f10 drive` find the branch whatever its shape.
+3. **Open or refresh.**
+   Run `f10 pr view` on the current branch.
+   Only an open PR counts.
+   `no open PR` means there is none, or the last one was merged or closed, so open a new one (point 6).
+   An open PR means refresh it (point 7).
+   `no PR read` means the host did not answer, so the step fails (`conventions/failure.md`) and never opens a second PR.
+   This step never integrates the base branch.
+   In a ship flow, the catchup guard (`steps/catchup.md` → **As a guard**) has already integrated it before this step, unless the project sets `catchup: off`.
+4. **The base the PR targets.**
+   `f10 pr base --origin` prints it: the branch `f10 start --after` recorded, else the default branch.
+   `f10 pr create` opens the PR against that same base.
+   So a recorded base stacks the PR on the base task's branch, and the base task's `f10 finish` later retargets the PR to the default branch.
+   A non-zero exit means the base is not on origin yet.
+   Stop and report it (`conventions/failure.md`), naming the branch, with `next: push the base task's branch`.
+   There is one exception.
+   A `found: f10-after-branch gone` line under the branch means the base task finished and its branch was deleted, so its code is already in the default branch.
+   In that case, run `git config --unset` on both `f10-after` and `f10-after-branch`, and open against the default branch the command printed.
+5. **Draft the title and body.**
+   Opening and refreshing draft them the same way.
+   - Write the draft to a temp file outside the repo.
+   - In stealth mode, the branch name, the commits and the PR text carry no f10 traces.
+   - Another task named in the PR text is a link carrying its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
+   - A **bundle** is several tasks shipped in one PR, and the `task:` line of `f10 pr view` names it as `<lead>+<riders>`.
+     A bundle's title is the lead's, and its body links every member with its title.
+   - On a host that closes issues on merge, the body carries one closing keyword per member, each on a line of its own (`Closes #12`).
+     `f10 finish` later rewrites a rider's line, so the rider's issue stays open.
+   - The `## Catchup` section lists the choices a catchup made on this branch, one line per file: `<path>: kept <side>, <why>`.
+     Render it from the change's lore decision entries whose body opens with `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`).
+     With no such entry, leave the section out.
+     On a refresh, the old body's section is copied instead (point 7).
+6. **Open it** through the PR adapter.
+   A skill adapter opens the PR itself.
+   With the plain commands, commit, run `git push -u origin <branch>`, then run `f10 pr create --title … --body-file <file>`.
+   `--label` and `--assignee` follow `project.md`.
+   `f10 pr create` prints the new PR's url.
+   It refuses to open a PR when origin does not hold the branch at `HEAD`.
+   If a PR is already open, it prints that PR's url instead of opening a second one.
+7. **Refresh it.**
+   A later `pr` entry in the flow refreshes the PR, so its description covers what review, resolve or judge changed since it opened.
+   - **Push first.**
+     Commit what the tree holds through the adapter, then push, never forcing.
+     The push comes first so the description never covers code the PR lacks.
+   - **Someone else's PR** is one whose `mine:` line in `f10 pr view` says anything but `yes`, `unknown` included.
+     Stop after the push, and leave its title and body as they are.
+   - **Rewrite from scratch.**
+     Draft the title and body as point 5 says, and never patch the old body ("also adds…").
+     Draft from the task, the plan and `f10 pr diff`, which shows the change against the PR's own base as just pushed.
+     The title keeps its task id.
+     Links to other tasks come from `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
+   - **Owned sections** are sections the overlay names as maintained elsewhere, such as a screenshots section a script regenerates.
+     Copy each one verbatim from the old body into its place in the new one.
+     An owned section the old body lacks stays out.
+     `## Catchup` is owned by the **catchup** step in the same way, with one difference: when the old body has no `## Catchup`, render it from lore as point 5 says.
+     Read the old body for owned sections only.
+   - **Write it** through the PR adapter.
+     A skill adapter refreshes the PR through that skill.
+     A skill with no way to refresh fails the step (`conventions/failure.md` rule 4).
+     With the plain commands, run `f10 pr edit --title … --body-file <file>`, with the draft in a temp file outside the repo.
+     The base, labels and assignee stay as they are.
+8. **The hidden state block** is a block in the PR body that `f10 trace state --step pr` writes (`docs/traces.md`).
+   When it runs depends on how the body was written:
+   - After opening a PR, run `f10 trace state --step pr` once the PR is open.
+   - On a refresh with the plain commands, run `f10 trace state --step pr --body-file <file>` on the draft, before point 7 writes it.
+     The block and its counts come over from the old body.
+   - On a refresh with a skill adapter, there is no draft to run it on.
+     The block is then an owned section, copied verbatim, and `f10 trace state --step pr` runs after the skill writes the body.
+
+   With `traces: off`, no block is written.
+   On a refresh, a block the old body already holds comes over as it is.
+   A non-zero exit from `f10 trace state` marks the run `partial` (`conventions/failure.md` rule 7), and is never a failed step.
+9. **Never merge** unless project.md explicitly says otherwise.
+10. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab) carrying the url, then one line saying whether the PR was opened, refreshed, or only pushed to.
+
+**On failure:** the PR adapter errors.
+Report whether the branch was pushed (`conventions/failure.md`).
+A refresh that fails after its push leaves the new commits on the PR under a stale description, and the report says so.
