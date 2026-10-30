@@ -192,6 +192,17 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 		})
 	}
 
+	// frontmatter only: the prose heading stays the commands of a project
+	// that scopes none, and the rules of one that does
+	if e.Verify = fm.Verify; e.Verify != nil {
+		e.VerifyOrigin = "declared (" + fm.origin["verify"] + ")"
+		e.Facts = append(e.Facts, Fact{
+			Key:    "verify",
+			Value:  verifyShown(e.Verify),
+			Origin: "declared (" + fm.origin["verify"] + ", frontmatter)",
+		})
+	}
+
 	_, reviewDeclared := declared["Review"]
 	e.resolveReview(fm, fmSource, proseSource, body, reviewDeclared, pb)
 
