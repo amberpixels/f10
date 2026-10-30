@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Exec runs git with args in dir and returns trimmed stdout. A non-zero
@@ -450,21 +451,49 @@ func Push(ctx context.Context, dir, branch, lease string) error {
 	return err
 }
 
+// pullLockWaits are the pauses before each retry of a git that lost a ref
+// lock; their sum bounds the wait, since a crashed git's lock never clears.
+var pullLockWaits = []time.Duration{
+	100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond,
+	800 * time.Millisecond, 1600 * time.Millisecond,
+}
+
 // PullFF fast-forwards the checked-out branch from its upstream, and fails
 // rather than merge when it cannot.
 func PullFF(ctx context.Context, dir string) error {
-	_, err := Exec(ctx, dir, "pull", "--ff-only")
+	return retryRefLock(ctx, dir, "pull", "--ff-only")
+}
 
-	return err
+// retryRefLock runs git, again after a pause when it lost a ref's lock: a ref
+// another git holds is busy only while that git runs.
+func retryRefLock(ctx context.Context, dir string, args ...string) error {
+	for i := 0; ; i++ {
+		_, err := Exec(ctx, dir, args...)
+		if err == nil || i >= len(pullLockWaits) || !refLocked(err) {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(pullLockWaits[i]):
+		}
+	}
+}
+
+// refLocked reports whether git failed for want of a ref's lock: the file
+// exists, or the ref moved between git's read and its write.
+func refLocked(err error) bool {
+	exit, ok := errors.AsType[*ExitError](err)
+
+	return ok && strings.Contains(exit.Stderr, "cannot lock ref")
 }
 
 // FetchInto updates local branch from origin's branch of the same name
 // without touching the checkout: git fast-forwards a branch that is not
 // checked out and refuses anything else.
 func FetchInto(ctx context.Context, dir, branch string) error {
-	_, err := Exec(ctx, dir, "fetch", "origin", branch+":"+branch)
-
-	return err
+	return retryRefLock(ctx, dir, "fetch", "origin", branch+":"+branch)
 }
 
 // FetchCommit brings one commit over from origin by sha: a request's head

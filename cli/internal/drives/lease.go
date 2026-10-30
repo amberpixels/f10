@@ -4,6 +4,7 @@
 package drives
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -122,6 +123,29 @@ func AcquireAs(root, key string, h Holder) (*Lease, error) {
 	}
 
 	return &Lease{f: f}, nil
+}
+
+// awaitPoll is how often Await tries a held lease again.
+const awaitPoll = 100 * time.Millisecond
+
+// Await takes key's lease as h, waiting while another process holds it,
+// until ctx ends or wait passes; then the HeldError names the holder, beside
+// ctx's error when ctx ended.
+func Await(ctx context.Context, root, key string, h Holder, wait time.Duration) (*Lease, error) {
+	deadline := time.Now().Add(wait)
+
+	for {
+		l, err := AcquireAs(root, key, h)
+		if held := (HeldError{}); !errors.As(err, &held) || !time.Now().Before(deadline) {
+			return l, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, errors.Join(ctx.Err(), err)
+		case <-time.After(awaitPoll):
+		}
+	}
 }
 
 // Release drops the lease; nil and a second call are fine.

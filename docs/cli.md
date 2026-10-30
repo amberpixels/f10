@@ -295,6 +295,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
 5. **Main is pulled** with `--ff-only` when the main checkout is on the default branch, else the default branch is fetched into without touching the checkout, and a note says so.
    A main checkout on the task's branch has the default branch fetched into without a note, and stays on the task's branch until after the report, so a failure before then leaves a rerun the same checkout to find.
    Either way the merge commit must be in the local default branch, or the run stops here with nothing removed.
+   Finishes that share a main checkout pull one at a time: a finish waits up to two minutes for another's pull, then stops naming the holder.
+   A pull or fetch that loses a ref's lock to another git retries for a few seconds, because the ref is busy only while that git runs.
 6. **Dependents are released.**
    A branch another task started with `--after` on this one has `branch.<name>.f10-after` and `.f10-after-branch` in local config.
    Both are cleared, since the base is in the default branch now and the dependent's pr targets it from here.

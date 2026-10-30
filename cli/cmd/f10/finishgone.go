@@ -64,7 +64,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	in.step("pulling " + def)
 
-	note, err := pullMain(ctx, in.main, def, p.sha())
+	note, err := pullMain(ctx, in.root, in.main, def, p.sha())
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@
 package drives
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strconv"
@@ -230,4 +231,41 @@ func TestRecordKeepsItsSession(t *testing.T) {
 			t.Errorf("record %d session = %q, want %q", rec.Number, got.Session, session)
 		}
 	}
+}
+
+// Await waits out a holder that lets go, and names one that does not.
+func TestAwaitWaitsForTheHolder(t *testing.T) {
+	root := t.TempDir()
+
+	held, err := Acquire(root, "main-pull", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		held.Release()
+	}()
+
+	l, err := Await(t.Context(), root, "main-pull", Holder{}, 5*time.Second)
+	if err != nil {
+		t.Fatalf("Await on a lease released soon = %v", err)
+	}
+
+	_, err = Await(t.Context(), root, "main-pull", Holder{}, 150*time.Millisecond)
+
+	var he HeldError
+	if !errors.As(err, &he) || he.Holder.PID != os.Getpid() {
+		t.Errorf("Await past its bound = %v, want a HeldError naming the holder", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if _, err := Await(ctx, root, "main-pull", Holder{}, time.Minute); !errors.As(err, &he) ||
+		!errors.Is(err, context.Canceled) {
+		t.Errorf("Await on an ended context = %v, want the cancel and the HeldError", err)
+	}
+
+	l.Release()
 }

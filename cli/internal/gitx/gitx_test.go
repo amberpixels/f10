@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // script answers Exec from a map keyed by the joined arguments and records
@@ -442,5 +443,85 @@ func TestConflictsOnARealConflict(t *testing.T) {
 
 	if conflicts, err := Conflicts(t.Context(), dir, "main", "main"); conflicts != nil || err != nil {
 		t.Errorf("main into main = %v, %v, want clean", conflicts, err)
+	}
+}
+
+// A pull that meets another git process holding origin's ref waits for it,
+// against a real git: the lock file stands in for a concurrent pull.
+func TestPullFFWaitsOutARefLock(t *testing.T) {
+	root := t.TempDir()
+	origin, clone := filepath.Join(root, "origin"), filepath.Join(root, "clone")
+	run := func(dir string, args ...string) {
+		t.Helper()
+
+		if _, err := Exec(t.Context(), dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	run(root, "init", "-q", "-b", "main", origin)
+	run(origin, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "a")
+	run(root, "clone", "-q", origin, clone)
+	run(origin, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "b")
+
+	lock := filepath.Join(clone, ".git", "refs", "remotes", "origin", "main.lock")
+	if err := os.WriteFile(lock, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	released := make(chan struct{})
+
+	go func() {
+		defer close(released)
+
+		time.Sleep(300 * time.Millisecond)
+		_ = os.Remove(lock)
+	}()
+
+	err := PullFF(t.Context(), clone)
+	<-released
+
+	if err != nil {
+		t.Fatalf("PullFF with a briefly held ref = %v, want it to wait the lock out", err)
+	}
+
+	if Out(t.Context(), clone, "rev-parse", "HEAD") != Out(t.Context(), origin, "rev-parse", "HEAD") {
+		t.Error("the clone did not reach origin's tip")
+	}
+}
+
+// Only a lost ref lock retries: a pull that cannot fast-forward fails at once.
+func TestPullFFFailsAtOnceOnAnythingElse(t *testing.T) {
+	calls := script(t, map[string]string{})
+
+	if err := PullFF(t.Context(), "/repo"); err == nil {
+		t.Fatal("PullFF on a failing pull = nil")
+	}
+
+	if len(*calls) != 1 {
+		t.Errorf("calls = %q, want one pull", *calls)
+	}
+}
+
+// FetchInto shares the pull's retry, since a fetch into the default branch
+// updates the same remote-tracking ref.
+func TestFetchIntoRetriesALostRefLock(t *testing.T) {
+	var calls int
+
+	prev, waits := Exec, pullLockWaits
+	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "", &ExitError{Args: args, Code: 1, Stderr: "error: cannot lock ref 'refs/remotes/origin/main'"}
+		}
+
+		return "", nil
+	}
+	pullLockWaits = []time.Duration{time.Millisecond}
+
+	t.Cleanup(func() { Exec, pullLockWaits = prev, waits })
+
+	if err := FetchInto(t.Context(), "/repo", "main"); err != nil || calls != 2 {
+		t.Errorf("FetchInto = %v after %d calls, want success on the retry", err, calls)
 	}
 }
