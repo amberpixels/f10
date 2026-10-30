@@ -1,57 +1,100 @@
 # Mode · driven - a run prompted from another session
 
-A **driven** run has nobody watching its pane: `f10 start`, `f10 forward` or `f10 drive` prompted it from another session.
-A question asked here stalls until someone finds it, so driven mode mostly changes **how questions travel.**
-Steps, plan, pipeline and reports stay the same.
+A **driven** run is one that another session prompted, through `f10 start`, `f10 forward` or `f10 drive`.
+Nobody is watching its pane.
+A question asked in that pane stalls until someone happens to find it, so driven mode mostly changes **how questions travel.**
+The steps, the plan, the pipeline and the reports stay the same.
 
-**Activation:** the token **`--driven`** anywhere in the argument.
-Strip it and read the argument as normal.
-It holds for the whole run: a skill that chains into another (`/f10:plan ... && /f10:ship ...`) passes it on.
-The skills that take it: catchup, cleanup, debug, judge, plan, resolve, review, ship and standup; brainstorm, capture, demo and explain never see it, since nothing prompts them from another session, and a skill that only runs the binary (`modes/binary.md`) has no run to drive.
+## Activation
 
-A step with a **Driven** paragraph (judge, catchup) adds to this file for that step; follow both.
+The token **`--driven`** anywhere in the argument turns driven mode on.
+Strip the token, then read the rest of the argument as usual.
+
+Driven mode holds for the whole run.
+If a skill chains into another (`/f10:plan ... && /f10:ship ...`), it passes `--driven` on to the next one.
+
+These skills take the token: catchup, cleanup, debug, judge, plan, resolve, review, ship and standup.
+Brainstorm, capture, demo and explain never see it, because nothing prompts them from another session.
+A skill that only runs the binary (`modes/binary.md`) has no run to drive, so the token does not apply to it.
+
+Some steps have a **Driven** paragraph of their own (judge, catchup).
+That paragraph adds to this file for that step, so follow both.
 
 ## No interactive question, ever
 
-Never open `AskUserQuestion`, never end a turn on a question in chat.
-Every question the steps call for (a judge's rethink, a resolve `ask`, a deploy confirmation) goes through run state:
+In a driven run, never open `AskUserQuestion`.
+Never end a turn on a question in chat.
+Instead, every question the steps call for goes through run state.
+Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
 
-1. **The whole batch as one ask**: `f10-state.sh ask "<text>"`, one line, numbered questions, options in brackets, the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Deploy to staging? [yes | no]`.
-2. **Stop blocked, in the same call**: `; f10-state.sh set <phase> blocked [<leaf>]` (for ship, the flow entry as leaf).
-   The `Stop` hook leaves `blocked` alone.
-3. **End the turn**, printing the ask once under a facts block carrying the task.
-   The print is for a person looking at this pane: end it with "Answer here", never a command for another session (`f10 forward`, `f10 status`, `f10 drive --answer`).
-   The driving session reads the ask through `f10 status <task-id>` and knows its own way back.
-   `f10-state.sh ask` also puts the ask in the user's asks inbox, which counts it on the status line, tells other sessions and notifies the user (`f10 asks`).
+1. **Ask the whole batch as one ask.**
+   Run `f10-state.sh ask "<text>"` with the text on one line.
+   Number the questions, put each one's options in brackets, and list the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Deploy to staging? [yes | no]`.
+2. **Stop blocked, in the same call.**
+   Append `; f10-state.sh set <phase> blocked [<leaf>]`.
+   For ship, the leaf is the flow entry that stopped.
+   The `Stop` hook leaves a `blocked` state alone.
+3. **End the turn.**
+   Print the ask once, under a facts block that carries the task.
+   The print is for a person looking at this pane, so end it with "Answer here".
+   Never end it with a command meant for another session, such as `f10 forward`, `f10 status` or `f10 drive --answer`.
+   The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
 
-A gap never becomes an ask: a driven run takes every gap on its default, listing the open ones in its report (`conventions/gaps.md`).
-Neither does a conflict: a driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
-Neither does a base with no code: ship stops with `f10-state.sh wait <base-id>` and no ask, and `f10 drive` sends it again once the base commits (`skills/ship/SKILL.md` → the catchup guard).
-Neither does a stale task's verdict (`steps/fetch.md` point 1): the run ends blocked with the verdict file named, and the user decides by sending `anyway` (`f10 drive --answer <id> anyway`, or typed here) or closing the task.
+`f10-state.sh ask` also puts the ask in the user's asks inbox (`f10 asks`).
+The inbox counts the ask on the status line, tells other sessions about it and notifies the user.
+
+Four kinds of open question never become an ask:
+
+- **A gap.** A driven run takes every gap on its default and lists the open ones in its report (`conventions/gaps.md`).
+- **A conflict.** A driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
+- **A base with no code.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
+  `f10 drive` sends ship again once the base commits (`skills/ship/SKILL.md` → the catchup guard).
+- **A stale task's verdict** (`steps/fetch.md` point 1).
+  The run ends blocked and names the verdict file.
+  The user decides either by sending `anyway`, as `f10 drive --answer <id> anyway` or typed in this pane, or by closing the task.
 
 ## A turn ends at its report, never before
 
-The drive and the watcher read an idle agent as a turn that ended.
-A turn that ended before its report is one that stopped without reporting.
-The task halts after a minute's grace, and the report that lands later finds the drive gone.
+The drive and the watcher read an idle agent as a turn that has ended.
+So a turn that ends before its report looks like one that stopped without reporting.
+After a minute's grace the task halts, and a report that lands later finds the drive gone.
 
-- Verify, and every other long command, runs in the foreground, with a raised `timeout` where the default is short.
-- A command that must run in the background is waited on in the same turn, with a Monitor until-loop on its exit, never by ending the turn to be woken when it reports.
-- The only ends of a driven turn are the step's report, an ask or a failure.
+- Run verify, and every other long command, in the foreground.
+  Raise the `timeout` where the default is too short.
+- If a command must run in the background, wait for it in the same turn with a Monitor until-loop on its exit.
+  Never end the turn expecting to be woken when it reports.
+- A driven turn ends in only three ways: the step's report, an ask or a failure.
 
 ## The answer
 
-Answers arrive as your **next prompt**, plain text, numbered as the ask was: typed in this pane, sent by the drive, or sent by `f10 asks answer` or `/f10:asks` from anywhere.
-The first answer closes the ask in the inbox, whichever way it came.
-Run `f10-state.sh set <phase> running [<leaf>]`, which clears the ask; fold the answers in as `conventions/gaps.md` does (gaps **Resolved** in the plan file, decisions into the stages, and Consequences where they change a cost); resume from the step that stopped.
-An answer with no ask recorded is steering.
+An answer arrives as your **next prompt**, in plain text, numbered the way the ask was.
+It may be typed in this pane, sent by the drive, or sent from anywhere by `f10 asks answer` or `/f10:asks`.
+The first answer to arrive closes the ask in the inbox, whichever way it came.
 
-A **Claude Code permission dialog** cannot travel this way: the driving session sees an idle agent.
-Stay inside the session's existing permissions; an unavoidable dialog is answered in this pane.
+When the answer arrives:
+
+1. Run `f10-state.sh set <phase> running [<leaf>]`, which clears the ask.
+2. Fold the answers in as `conventions/gaps.md` does.
+   Mark the gaps **Resolved** in the plan file, fold the decisions into the stages, and update Consequences where an answer changes a cost.
+3. Resume from the step that stopped.
+
+A prompt that arrives while no ask is recorded is not an answer.
+Treat it as steering.
+
+A **Claude Code permission dialog** cannot travel through run state.
+The driving session sees only an idle agent.
+So stay inside the session's existing permissions.
+A dialog you cannot avoid is answered in this pane.
 
 ## When drive finishes the task
 
-A ship prompt that says drive finishes it after ship (`f10 drive` with `drive_finish` on) ends its report with one line naming that, the PR by number where there is one, and that nothing is owed in this pane: `Next: f10 drive merges #204 and removes this worktree; nothing to do here.` (a spike: `Next: f10 drive closes the spike and removes this worktree; nothing to do here.`).
-A driven run whose prompt does not say so adds no such line.
+Sometimes the ship prompt says that drive finishes the task after ship, which `f10 drive` does when `drive_finish` is on.
+In that case, end the report with one line that says so.
+Name the PR by number where there is one, and say that nothing is owed in this pane: `Next: f10 drive merges #204 and removes this worktree; nothing to do here.`
+For a spike the line is `Next: f10 drive closes the spike and removes this worktree; nothing to do here.`
 
-`--dry-run` with `--driven` is a dry run that also lists which questions would become asks.
+A driven run whose prompt does not say this adds no such line.
+
+## Dry run
+
+`--dry-run` together with `--driven` is a dry run that also lists which questions would become asks.
