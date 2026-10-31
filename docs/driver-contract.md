@@ -96,7 +96,8 @@ The task's properties arrive as flags, and only the ones the caller set:
 
 A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
 Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
-Exit `4` when you reject the call before reaching the tracker, such as an option the property does not have, a missing title or a config error, because then no task exists and running `create` again is safe ([Exit codes](#exit-codes)).
+Exit `4` when `create` fails before any write, because then no task exists and running it again is safe ([Exit codes](#exit-codes)).
+That covers a call you reject yourself (an option the property does not have, a missing title, a config error) and one the tracker rejected before acting (a validation error, a 429).
 With `tracker.title` declared, f10 takes a leading id off the titles in your `list`, `search` and `children` rows, and collapses a doubled id in your `read` document's `# ` heading to one; on the host's issues, it writes the template onto the title after your `create` and `update`, since a driver has no title verb.
 
 ## Commenting on and updating a task
@@ -138,6 +139,8 @@ A declined `create` falls back to the host's issues where the tracker is the hos
 A declined `comment` or `update` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task comment` and `f10 task update` exit 3, and a ship run puts its shipment in the final report alone.
 Code `4` tells f10 that a failed `create` made no task, so its error carries your stderr without the warning that the task may exist, and the caller fixes the input and runs it again.
 On any other verb, `4` is an ordinary failure.
+Exit `4` only on purpose, because f10 trusts it to mean nothing was written.
+Once the create request was sent, never let a subcommand's exit code pass through (`jq -e` exits 4 on an empty result): map any failure from then on to `1`.
 Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Rules worth knowing
