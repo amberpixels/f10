@@ -27,7 +27,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 			return gone.err
 		}
 
-		if err := writeReport(w, []fact{{label: "task", value: in.task.Label()}},
+		if err := writeReport(w, []fact{taskFact(ctx, w, in.main, in.task.Label())},
 			[]string{in.task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	}
 
 	rows := []fact{
-		{label: "task", value: in.task.Label()},
+		taskFact(ctx, w, in.main, in.task.Label()),
 		{label: "pr", value: p.url(), url: true},
 		{label: "merge", value: p.sha()},
 	}

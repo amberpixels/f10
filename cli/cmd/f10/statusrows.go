@@ -436,6 +436,8 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 		tree.Head = v.parent + "  " + stageCounts(rows)
 	}
 
+	links := linksOn(v.term)
+
 	faint := lipgloss.NewStyle().Faint(true)
 	if v.term {
 		tree.Label = func(s string) string { return faint.Render(s) }
@@ -458,11 +460,13 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 
 		cells = append(cells, tasktree.Cell{Text: prColumn(r)})
 
+		links.Known("", r.ID, r.URL)
+
 		if v.term {
-			glyph, id, url := stateGlyph(r.Stage), r.ID, r.URL
+			glyph, id := stateGlyph(r.Stage), links.ID("", r.ID)
 			stage, pr := rowStageStyle(r.Stage), r.PR
 
-			cells[0].Render = func(string) string { return glyph + " " + hyperlink(url, id) }
+			cells[0].Render = func(string) string { return glyph + " " + id }
 			cells[1].Render = func(s string) string { return stage.Render(s) }
 			cells[2].Render = func(s string) string { return faint.Render(s) }
 			cells[len(cells)-1].Render = func(s string) string { return hyperlink(pr, s) }

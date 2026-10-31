@@ -618,6 +618,8 @@ func writeRows(w io.Writer, rows []row, none string) error {
 		priorityW = max(priorityW, len(r.Priority))
 	}
 
+	links := linksOn(true)
+
 	for _, r := range rows {
 		// ↗ marks a row that opens, as in the report blocks; it is one cell wide
 		marker := "  "
@@ -625,7 +627,8 @@ func writeRows(w io.Writer, rows []row, none string) error {
 			marker = hyperlink(r.URL, "↗") + " "
 		}
 
-		id := hyperlink(r.URL, r.ID) + strings.Repeat(" ", idW-len(r.ID))
+		links.Known("", r.ID, r.URL)
+		id := padRight(links.ID("", r.ID), idW)
 		title := hyperlink(r.URL, r.Title)
 
 		priority := ""
@@ -639,15 +642,6 @@ func writeRows(w io.Writer, rows []row, none string) error {
 	}
 
 	return nil
-}
-
-// hyperlink is an OSC 8 link, which a terminal without support shows as text.
-func hyperlink(url, text string) string {
-	if url == "" {
-		return text
-	}
-
-	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
 }
 
 // exitNoCreate is `task create`'s "no driver creates tasks here": a normal

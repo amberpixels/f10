@@ -165,33 +165,44 @@ func listAsks(w io.Writer, dir string, now time.Time, asJSON bool) error {
 		fmt.Fprintln(w, "no open asks")
 	}
 
+	links := linksFor(w, false)
+
 	for i, a := range open {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, a, now)
+		printAsk(w, links, a, now)
 	}
 
 	if len(answered) > 0 {
 		fmt.Fprintln(w, "\nanswered in the last day:")
 
 		for _, a := range answered {
-			fmt.Fprintf(w, "  %s answered %s at %s: %s\n",
-				askName(a), asks.Way(a.By), a.AnsweredAt.Local().Format("15:04"), cmp.Or(a.Answer, "(nothing sent)"))
+			fmt.Fprintf(
+				w,
+				"  %s answered %s at %s: %s\n",
+				askLink(
+					links,
+					a,
+				),
+				asks.Way(a.By),
+				a.AnsweredAt.Local().Format("15:04"),
+				cmp.Or(a.Answer, "(nothing sent)"),
+			)
 		}
 	}
 
 	return nil
 }
 
-func printAsk(w io.Writer, a asks.Ask, now time.Time) {
+func printAsk(w io.Writer, links *taskLinks, a asks.Ask, now time.Time) {
 	where := ""
 	if a.Skill != "" {
 		where = " at " + a.Skill
 	}
 
-	fmt.Fprintf(w, "%s asks%s, %s ago\n", askName(a), where, now.Sub(a.AskedAt).Round(time.Minute))
+	fmt.Fprintf(w, "%s asks%s, %s ago\n", askLink(links, a), where, now.Sub(a.AskedAt).Round(time.Minute))
 
 	for _, q := range a.Questions {
 		fmt.Fprintf(w, "  %d. %s\n", q.N, q.Text)
@@ -213,6 +224,18 @@ func askName(a asks.Ask) string {
 	}
 
 	return a.Project + ":" + a.Task
+}
+
+// askLink is askName with the task linked to the url the ask carries.
+func askLink(links *taskLinks, a asks.Ask) string {
+	links.Known(a.Project, a.Task, a.URL)
+
+	name := links.ID(a.Project, a.Task)
+	if a.Project == "" {
+		return name
+	}
+
+	return a.Project + ":" + name
 }
 
 // findOpen is the open ask a token names: a task id, or project:task where
@@ -403,12 +426,14 @@ func walkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 		return nil
 	}
 
+	links := linksFor(w, false)
+
 	for i, a := range open {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, a, time.Now())
+		printAsk(w, links, a, time.Now())
 
 		given := map[int]string{}
 		skip := false

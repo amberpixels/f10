@@ -1002,10 +1002,9 @@ func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 		from = r.StageFrom
 	}
 
-	key := r.Key
-	if lay.limit > 0 {
-		key = hyperlink(r.URL, r.Key)
-	}
+	links := linksOn(lay.limit > 0)
+	links.Known(project, r.Key, r.URL)
+	key := links.ID(project, r.Key)
 
 	lead := ""
 	if lay.projW > 0 {

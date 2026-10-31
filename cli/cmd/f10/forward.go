@@ -138,7 +138,7 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 	}
 
 	return writeReport(w, []fact{
-		{label: "task", value: in.task.ID},
+		taskFact(ctx, w, in.main, in.task.ID),
 		{label: "workspace", value: ws.ID},
 		{label: "sent", value: text},
 	}, nil)

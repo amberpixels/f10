@@ -251,7 +251,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 	}
 
 	var list strings.Builder
-	if err := driveList(&list, fx.in.root, false, nil); err != nil {
+	if err := driveList(t.Context(), &list, nil, "", fx.in.root, false, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -279,7 +279,7 @@ func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 	finished := func(row string) bool { return row == "GH-1" || row == "GH-3" }
 
 	var list strings.Builder
-	if err := driveList(&list, root, false, finished); err != nil {
+	if err := driveList(t.Context(), &list, nil, "", root, false, finished); err != nil {
 		t.Fatal(err)
 	}
 
@@ -328,7 +328,7 @@ func TestDriveListLeavesARunningDrive(t *testing.T) {
 	defer own.Release()
 
 	var list strings.Builder
-	if err := driveList(&list, root, false, func(string) bool { return true }); err != nil {
+	if err := driveList(t.Context(), &list, nil, "", root, false, func(string) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 

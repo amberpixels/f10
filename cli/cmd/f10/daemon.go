@@ -91,6 +91,13 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	writeDaemonStatus(ctx, w, linksFor(w, false), rep)
+
+	return nil
+}
+
+// writeDaemonStatus prints what the daemon runs and watches.
+func writeDaemonStatus(ctx context.Context, w io.Writer, links *taskLinks, rep daemon.Reply) {
 	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
@@ -103,8 +110,22 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if rec, err := drives.Read(r.Root, r.Drive); err == nil {
+			// each drive's ids resolve under its own project, since the
+			// daemon runs drives for several
+			project := ""
+			if links.on {
+				project = projectOf(ctx, r.Dir)
+			}
+
+			ids := make([]string, 0, len(rec.Tasks))
 			for _, t := range rec.Tasks {
-				fmt.Fprintf(w, "  %-6s %s\n", t.ID, taskStanding(t, true))
+				ids = append(ids, t.ID)
+			}
+
+			links.Load(ctx, project, ids...)
+
+			for _, t := range rec.Tasks {
+				fmt.Fprintf(w, "  %s %s\n", padRight(links.ID(project, t.ID), 6), taskStanding(t, true))
 			}
 		}
 	}
@@ -120,8 +141,6 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 
 		fmt.Fprintf(w, "  log    %s\n", wt.Log)
 	}
-
-	return nil
 }
 
 func driveTitle(r daemon.Run) string {

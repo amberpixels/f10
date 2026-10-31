@@ -268,7 +268,7 @@ func TestRenderStandup(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, r); err != nil {
+	if err := renderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -368,7 +368,7 @@ func TestRenderStandupFoldsUpkeep(t *testing.T) {
 	}}}}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, r); err != nil {
+	if err := renderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -570,7 +570,7 @@ func TestRenderStandupProjects(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, r); err != nil {
+	if err := renderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -592,7 +592,7 @@ func TestRenderStandupChainsOnlyStackedPRs(t *testing.T) {
 	}}}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, r); err != nil {
+	if err := renderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
