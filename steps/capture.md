@@ -2,7 +2,7 @@
 
 Role: a **senior engineer** capturing a well-scoped task.
 Input: a free-text description of a feature or a bug, possibly terse, or a debug brief.
-Context: `project.md → Tracker`, for the task **id format** and the **create adapter**, which creates the task when `f10 task create` exits 3.
+Context: `project.md → Tracker`, for the task **id format**, the **create adapter**, which creates the task when `f10 task create` exits 3, and the **Properties** a new task carries.
 
 1. **Check the scope.**
    Infer the scope yourself.
@@ -57,7 +57,7 @@ Context: `project.md → Tracker`, for the task **id format** and the **create a
      - **Unknown** - plain paragraphs, with no markup that reads as noise when it is not rendered.
 3. **Create the task**, through `f10 task create` first.
    Pass the draft on stdin, `# <title>` on the first line and the body after it.
-   Pass its properties as flags: `--status`, `--priority`, `--label` once per label, and `--parent <id>` for a subtask.
+   Pass its properties as flags: `--status`, `--priority`, `--label` once per label, `--parent <id>` for a subtask, and `--set <key>=<value>` once per declared property (below).
    Apply the project's declared default status and labels.
    `f10 task create` creates the task through the project's driver, else as an issue on GitHub or GitLab, and prints the new id.
    `f10 task open <id> --link` then prints the url for the report.
@@ -74,6 +74,15 @@ Context: `project.md → Tracker`, for the task **id format** and the **create a
      A description that reads as a bug or a refactor gets the tracker's label for that kind, where one exists (`f10 task create --label bug`), so that the fetch step settles the same kind later.
      A task from a debug brief always gets the label, because the brief has confirmed its kind.
      A spike gets its label only when the user calls the task a spike, because that label alone makes the ship skill skip the PR.
+   - **Declared properties.**
+     A tracker that classifies tasks with named properties declares them under `project.md → Tracker` as **Properties**, and a capture overlay may add or override entries.
+     Each entry names a key, its allowed values and how to choose one.
+     Choose each value from the draft by that rule, and pass it on create, so the task is created classified in the same write.
+     Leave a property unset when the draft does not settle its value, because a wrong value misfiles the task.
+     A create warning that names a dropped `--set` property means that property was not written, as with a driver older than f10-drivers v0.4.0.
+     Set it with `f10 task update <id> --set <key>=<value>`, and name it in the report if that fails too.
+     On an exit 3, the create adapter sets the same properties by its own means.
+     A split sets them on the parent and on every subtask.
    - **A split** creates the parent first, then links each subtask to it.
      Through `f10 task create`, `--parent` makes the link: a GitHub sub-issue, or the driver's own link.
      Through the create adapter, use the tracker's native parent link, or the **parent** adapter the project declares.

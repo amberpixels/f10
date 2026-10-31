@@ -121,6 +121,10 @@ func taskCommand() *cli.Command {
 					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
 					&cli.StringSliceFlag{Name: "label", Usage: "a label; repeat for several"},
 					&cli.StringFlag{Name: "parent", Usage: "the task id to link it under as a subtask"},
+					&cli.StringSliceFlag{
+						Name:  "set",
+						Usage: "`key=value` for a property the driver knows; repeat for several (host issues refuse it)",
+					},
 				},
 				Action: runTaskCreate,
 			},
