@@ -107,6 +107,26 @@ func StartedPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".started")
 }
 
+// ModelPath holds the model the session started on, from its SessionStart
+// payload; lore reads it to name the agent behind an entry.
+func ModelPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".model")
+}
+
+// SessionModel is the model ModelPath recorded, "" when none was.
+func SessionModel(dir, session string) string {
+	if dir == "" || session == "" {
+		return ""
+	}
+
+	raw, err := os.ReadFile(ModelPath(dir, session))
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(raw))
+}
+
 // WaitPath is the wait a session has open: what on and since when.
 func WaitPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".wait")

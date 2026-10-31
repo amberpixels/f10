@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,6 +47,8 @@ func TestLoreVerbs(t *testing.T) {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("F10_AGENT_MODEL", "")
 	t.Setenv("F10_AGENT_SESSION", "")
+	t.Setenv("F10_SESSION_ID", "")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
 
 	dir := t.TempDir()
 	git := func(args ...string) {
@@ -432,5 +435,65 @@ func TestLoreChangeAndShowSeries(t *testing.T) {
 
 	if one := must("show", "DM-7.2"); strings.Contains(one, "First PR") {
 		t.Errorf("show DM-7.2 leaks the first series:\n%s", one)
+	}
+}
+
+// With no agent flags or F10_AGENT_* set, an entry written inside a Claude
+// Code session names that session and the model its SessionStart recorded.
+func TestLoreAgentFromSession(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("F10_AGENT_MODEL", "")
+	t.Setenv("F10_AGENT_VIA", "")
+	t.Setenv("F10_AGENT_SESSION", "")
+	t.Setenv("F10_SESSION_ID", "")
+	t.Setenv("CLAUDECODE", "1")
+
+	stateDir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", stateDir)
+
+	if err := os.WriteFile(filepath.Join(stateDir, "s1.model"), []byte("claude-opus-5-5\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+
+	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "dev@example.com"}} {
+		cmd := exec.CommandContext(t.Context(), "git", args...)
+		cmd.Dir = dir
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	t.Chdir(dir)
+
+	for _, tc := range []struct {
+		session, change string
+		want            *lore.Agent
+	}{
+		{"s1", "FT-1", &lore.Agent{Model: "claude-opus-5-5", Via: "claude-code", Session: "s1"}},
+		{"s2", "FT-2", &lore.Agent{Via: "claude-code", Session: "s2"}},
+	} {
+		t.Setenv("CLAUDE_CODE_SESSION_ID", tc.session)
+
+		if out, err := runLore(t, "add", "intent", "--change", tc.change, "-m", "Limit the API"); err != nil {
+			t.Fatalf("add: %v\n%s", err, out)
+		}
+
+		out, err := runLore(t, "show", tc.change, "--json")
+		if err != nil {
+			t.Fatalf("show: %v\n%s", err, out)
+		}
+
+		var entries []lore.Entry
+		if err := json.Unmarshal([]byte(out), &entries); err != nil {
+			t.Fatalf("show --json: %v\n%s", err, out)
+		}
+
+		if len(entries) != 1 || entries[0].Agent == nil || *entries[0].Agent != *tc.want {
+			t.Errorf("%s: agent = %+v, want %+v\n%s", tc.session, entries, tc.want, out)
+		}
 	}
 }
