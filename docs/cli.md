@@ -284,9 +284,12 @@ There finish merges as usual, brings the default branch up to the merge, switche
    No PR, no `origin/<branch>` and no upstream recorded for the branch: the branch merges into the local default branch instead, by the merge method below, built in memory (`git merge-tree`, `git commit-tree`) so no checkout is touched.
    The merge is built on the local default branch, or on `origin/<default>` when the local one only lags it, so origin's commits never fold into the merge; the two diverged is a refusal.
    A squash's subject is the task and its title, its body the branch's commit subjects and, with traces on, the `Task:` trailers; a merge writes a two-parent commit; a rebase lands only a fast-forward.
+   On a host-issues tracker (GitHub, GitLab), the squash or merge commit also carries a `Closes #<n>` line for the task and each rider `--close` names, whatever `traces` says, so the issue closes when the commit reaches origin's default branch and never before.
    The default branch then moves: `git merge --ff-only` when the main checkout is on it, else `git update-ref`.
    A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
-   Nothing is pushed, pulled or deleted on origin, and the task stays open on the tracker, since no PR closes it: the notes say so.
+   Nothing is pushed, pulled or deleted on origin, and no PR closes the task, so the notes say who does.
+   When the commit carries the closing lines, the task closes once the default branch reaches origin.
+   Otherwise (another tracker, a rebase, or a branch already in the default branch) the task stays open until it is closed on the tracker.
    A pushed branch with no PR is a refusal: open one, or delete origin's copy to merge here.
    So is a branch with an upstream origin lacks (a request the host merged may no longer be listed by branch), and `--local`, which merges nothing.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).

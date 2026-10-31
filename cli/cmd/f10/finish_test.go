@@ -1799,6 +1799,90 @@ func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
 	}
 }
 
+// On a host-issues tracker the local commit closes the task once it reaches
+// origin's default branch, above the trailers with traces on, with or without
+// them; the rebase method writes no commit, so the task stays for the tracker.
+func TestFinishLocalCommitClosesTheTask(t *testing.T) {
+	cases := []struct {
+		name, method string
+		traces       bool
+		commit, sha  string
+	}{
+		{
+			name:   "squash",
+			method: "squash",
+			commit: "git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second\n\nCloses #1",
+			sha:    "s9",
+		},
+		{
+			name:   "squash with traces",
+			method: "squash",
+			traces: true,
+			commit: "git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second\n\nCloses #1\n\nTask: GH-1\n",
+			sha:    "s9",
+		},
+		{
+			name:   "merge",
+			method: "merge",
+			commit: "git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1' -m Closes #1",
+			sha:    "mm",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.noPull()
+			fx.in.method, fx.in.traces, fx.in.hostIssues = c.method, c.traces, true
+			fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+			fx.f.script(c.commit, c.sha)
+			fx.f.script("git merge --ff-only "+c.sha, "")
+
+			out, err := fx.run(t)
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			if !fx.f.called(c.commit) {
+				t.Errorf("%q did not run: %q", c.commit, fx.f.calls)
+			}
+
+			if !strings.Contains(out, "GH-1 closes when main reaches origin") || strings.Contains(out, "no PR closes") {
+				t.Errorf("the note does not say the push closes the task:\n%s", out)
+			}
+		})
+	}
+
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.in.method, fx.in.hostIssues = "rebase", true
+	fx.f.script("git merge-base --is-ancestor m0 refs/heads/GH-1", "")
+	fx.f.script("git merge --ff-only t1", "")
+
+	if out, err := fx.run(t); err != nil || !strings.Contains(out, "no PR closes GH-1") {
+		t.Fatalf("rebase: %v\n%s", err, out)
+	}
+}
+
+// Each member the merge closes gets a line: the lead, and the riders --close
+// names; a rider kept open, or a tracker that is not the host's, gets none.
+func TestClosingLines(t *testing.T) {
+	in := finishInput{task: bundle12, hostIssues: true}
+	if got := closingLines(in); got != "Closes #1" {
+		t.Errorf("rider kept open: %q", got)
+	}
+
+	in.close = []string{"GH-2"}
+	if got := closingLines(in); got != "Closes #1\nCloses #2" {
+		t.Errorf("rider closed: %q", got)
+	}
+
+	in.hostIssues = false
+	if got := closingLines(in); got != "" {
+		t.Errorf("not the host's issues: %q", got)
+	}
+}
+
 // The merge and rebase methods land a branch never pushed too: a merge
 // commit with both parents, a fast-forward to the branch's own head.
 func TestFinishLandsANeverPushedBranchByMethod(t *testing.T) {
