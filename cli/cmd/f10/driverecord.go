@@ -384,7 +384,14 @@ func (in *driveInput) resumeLine() string {
 
 // driveList prints the records, newest first. finished reports a row's task
 // finished outside its drive; nil checks nothing.
-func driveList(w io.Writer, root string, all bool, finished func(row string) bool) error {
+func driveList(
+	ctx context.Context,
+	w io.Writer,
+	links *taskLinks,
+	project, root string,
+	all bool,
+	finished func(row string) bool,
+) error {
 	recs, err := drives.List(root)
 	if err != nil {
 		return err
@@ -402,6 +409,15 @@ func driveList(w io.Writer, root string, all bool, finished func(row string) boo
 	if !all && len(recs) > shown {
 		more, recs = len(recs)-shown, recs[:shown]
 	}
+
+	var ids []string
+	for _, rec := range recs {
+		for _, t := range rec.Tasks {
+			ids = append(ids, t.ID)
+		}
+	}
+
+	links.Load(ctx, project, ids...)
 
 	for i, rec := range recs {
 		if i > 0 {
@@ -431,7 +447,11 @@ func driveList(w io.Writer, root string, all bool, finished func(row string) boo
 
 		nodes := make([]tasktree.Node, len(rec.Tasks))
 		for j, t := range rec.Tasks {
-			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{{Text: t.ID + ":"}, {Text: taskStanding(t, running)}}}
+			id := links.ID(project, t.ID) + ":"
+			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{
+				{Text: t.ID + ":", Render: func(string) string { return id }},
+				{Text: taskStanding(t, running)},
+			}}
 		}
 
 		if err := (tasktree.Tree{Indent: "  ", Hang: true, Align: true}).Write(w, nodes); err != nil {

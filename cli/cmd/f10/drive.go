@@ -132,7 +132,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if a.list {
-			return driveList(cmd.Writer, t.sharedRoot(), a.all, rowFinishedFor(ctx, t))
+			return driveList(ctx, cmd.Writer, linksFor(cmd.Writer, false), t.refProject(ctx), t.sharedRoot(), a.all,
+				rowFinishedFor(ctx, t))
 		}
 
 		if err := driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now()); err != nil {
@@ -534,6 +535,11 @@ type driveInput struct {
 	asksDir string
 	notify  func(context.Context, asks.Ask) error
 	resume  func(ctx context.Context, n int) error
+
+	// links prints this drive's task ids for people, under project
+	links   *taskLinks
+	project string
+
 	// answeredIn is when a task's ask was answered where the agent heard
 	// it: the drive follows that turn instead of sending the skill again
 	answeredIn map[string]time.Time
@@ -740,6 +746,8 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 	}
 
+	in.loadLinks(ctx, w, tasks)
+
 	runs := make([]*driveRun, 0, len(order))
 	byID := map[string]*driveRun{}
 
@@ -837,7 +845,36 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 	}
 
+	// a task read for the first time during the drive is in the ledger now
+	in.loadLinks(ctx, w, tasks)
+
 	return in.report(w, runs, append(notes, in.inboxNotes...))
+}
+
+// loadLinks reads the urls of the drive's tasks and their bases; a drive
+// the daemon runs writes to a log, so it links nothing.
+func (in *driveInput) loadLinks(ctx context.Context, w io.Writer, tasks []driveTask) {
+	if in.links == nil {
+		in.links = linksFor(w, false)
+		if in.links.on {
+			in.project = projectOf(ctx, in.main)
+		}
+	}
+
+	ids := make([]string, 0, 2*len(tasks))
+	for _, t := range tasks {
+		ids = append(ids, t.ref.Members()...)
+		if t.base != "" {
+			ids = append(ids, t.base)
+		}
+	}
+
+	in.links.Load(ctx, in.project, ids...)
+}
+
+// id is a task id as the drive prints it for people.
+func (in *driveInput) id(id string) string {
+	return in.links.ID(in.project, id)
 }
 
 // resolveProfiles resolves each named profile once over the layers (the
@@ -992,7 +1029,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 		// poll reads again, and a wrong "moved" would send a catchup
 		head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
 		if err != nil {
-			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", r.task.ref.ID, b.o.branch, err)
+			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), b.o.branch, err)
 
 			continue
 		}
@@ -1003,7 +1040,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 
 		if has, err := gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.branch); has || err != nil {
 			if err != nil {
-				fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", r.task.ref.ID, r.o.branch, err)
+				fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), r.o.branch, err)
 			}
 
 			continue
@@ -1013,7 +1050,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 
 		marked, err := gitx.Config(ctx, in.main, key)
 		if err != nil {
-			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", r.task.ref.ID, key, err)
+			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), key, err)
 
 			continue
 		}
@@ -1026,7 +1063,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 			return fmt.Errorf("%s: marking %s moved: %w", r.task.ref.ID, b.o.branch, err)
 		}
 
-		fmt.Fprintf(w, "%s: base %s moved, catching up before the next skill\n", r.task.ref.ID, b.o.branch)
+		fmt.Fprintf(w, "%s: base %s moved, catching up before the next skill\n", in.id(r.task.ref.ID), b.o.branch)
 	}
 
 	return nil
@@ -1043,7 +1080,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 	}
 
 	skip := func(what string, err error) error {
-		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", id, what, err)
+		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", in.id(id), what, err)
 
 		return nil
 	}
@@ -1093,7 +1130,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
 	}
 
-	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", id, target.name, branch)
+	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), target.name, branch)
 
 	return nil
 }
@@ -1139,11 +1176,11 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 	halted := map[string]bool{}
 
 	for _, r := range runs {
-		id := r.task.ref.ID
+		id, shown := r.task.ref.ID, in.id(r.task.ref.ID)
 
 		switch {
 		case r.end != nil:
-			rows = append(rows, fact{label: id, value: r.end.row})
+			rows = append(rows, fact{label: shown, value: r.end.row})
 			lines = append(lines, r.end.lines...)
 
 			if r.end.code == exitAsk {
@@ -1153,19 +1190,19 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 			halted[id] = r.end.code == exitHalted
 			code = max(code, r.end.code)
 		case r.queued:
-			rows = append(rows, fact{label: id, value: "queued"})
+			rows = append(rows, fact{label: shown, value: "queued"})
 		case r.active() && r.parked:
-			rows = append(rows, fact{label: id, value: "waiting on " + r.base.task.ref.ID})
+			rows = append(rows, fact{label: shown, value: "waiting on " + in.id(r.base.task.ref.ID)})
 		case r.active() && r.waiting:
-			rows = append(rows, fact{label: id, value: "waiting for " + r.base.task.ref.ID})
+			rows = append(rows, fact{label: shown, value: "waiting for " + in.id(r.base.task.ref.ID)})
 		case r.active():
-			rows = append(rows, fact{label: id, value: "running " + r.skill})
+			rows = append(rows, fact{label: shown, value: "running " + r.skill})
 		case halted[r.task.base]:
-			rows = append(rows, fact{label: id, value: "halted: base " + r.task.base + " halted"})
+			rows = append(rows, fact{label: shown, value: "halted: base " + in.id(r.task.base) + " halted"})
 			halted[id] = true
 			code = max(code, exitHalted)
 		default:
-			rows = append(rows, fact{label: id, value: "not reached"})
+			rows = append(rows, fact{label: shown, value: "not reached"})
 		}
 	}
 
@@ -1466,7 +1503,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		return err
 	}
 
-	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s%s\n", task.ref.ID, o.branch, o.path, o.ws.ID, onProfile(o))
+	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s%s\n", in.id(task.ref.ID), o.branch, o.path, o.ws.ID, onProfile(o))
 
 	if o.fresh {
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
@@ -1635,7 +1672,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	if skill != "finish" && r.base != nil && !in.baseReady(ctx, r) {
 		if !r.parked {
-			fmt.Fprintf(w, "%s %s: waiting on %s for code\n", r.task.ref.ID, skill, r.base.task.ref.ID)
+			fmt.Fprintf(w, "%s %s: waiting on %s for code\n", in.id(r.task.ref.ID), skill, in.id(r.base.task.ref.ID))
 		}
 
 		r.parked = true
@@ -1647,7 +1684,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
-			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", r.task.ref.ID, r.base.task.ref.ID)
+			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", in.id(r.task.ref.ID), in.id(r.base.task.ref.ID))
 			in.finishStep(ctx, w, r.o.branch, ref.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
@@ -1925,7 +1962,7 @@ func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *s
 
 	r.parked, r.parkedHead, r.waitHead = true, head, head
 
-	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", r.task.ref.ID, b.task.ref.ID)
+	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
 
 	return nil
 }
@@ -2045,7 +2082,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return &res
 	}
 
-	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
+	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)
 	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
 
 	return nil
@@ -2083,7 +2120,7 @@ func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun
 		return err
 	}
 
-	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", r.task.ref.ID, skill, r.o.branch, base, how)
+	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", in.id(r.task.ref.ID), skill, r.o.branch, base, how)
 
 	return nil
 }
@@ -2178,7 +2215,7 @@ func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun)
 
 		if !seen {
 			fmt.Fprintf(w, "%s catchup: %s caught up with %s, not pushed: %s is not on origin yet\n",
-				id, branch, base, base)
+				in.id(id), branch, base, base)
 
 			return nil
 		}
@@ -2243,7 +2280,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		return halted(id, "finish", err.Error())
 	}
 
-	fmt.Fprintf(w, "%s finish: running\n", id)
+	fmt.Fprintf(w, "%s finish: running\n", in.id(id))
 
 	var buf bytes.Buffer
 
@@ -2373,14 +2410,14 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.sentAt = p.At.Truncate(time.Second)
 		}
 
-		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
+		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", in.id(id), skill)
 	case answered:
 		// the agent heard the answer where it was given: its turn began
 		// then, and the prompt mark the hook wrote just before the claim
 		// may fall in the second before
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
-		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", id, skill)
+		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
 	case run != nil && skill == "catchup" && heldStop(run):
 		// the ship stop is the one this catchup settles
 		return in.prompt(ctx, w, r, ws, skill, "")
@@ -2395,7 +2432,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 					why = "its base has code now"
 				}
 
-				fmt.Fprintf(w, "%s %s: %s: %s\n", id, skill, why, at)
+				fmt.Fprintf(w, "%s %s: %s: %s\n", in.id(id), skill, why, at)
 
 				return in.prompt(ctx, w, r, ws, skill, at)
 			}
@@ -2414,10 +2451,10 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		}
 
 		in.took(id, skill, answer)
-		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
+		fmt.Fprintf(w, "%s %s: answer sent\n", in.id(id), skill)
 	case run != nil && phaseDone(run, skill):
 		// the agent got there before a drive that stopped could see it
-		fmt.Fprintf(w, "%s %s: already done\n", id, skill)
+		fmt.Fprintf(w, "%s %s: already done\n", in.id(id), skill)
 
 		if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
 			return fmt.Errorf("recording %s done: %w", skill, err)
@@ -2456,7 +2493,7 @@ func (in *driveInput) prompt(
 		return err
 	}
 
-	fmt.Fprintf(w, "%s %s: sent\n", id, skill)
+	fmt.Fprintf(w, "%s %s: sent\n", in.id(id), skill)
 
 	return nil
 }
@@ -2650,7 +2687,7 @@ func (in *driveInput) poll(
 
 	// catchup has no phase, so only its done signal names the turn as one
 	if r.attached && skill != "catchup" && run != nil && run.Done == "catchup" && run.DoneAt.After(since) {
-		fmt.Fprintf(w, "%s %s: the turn was a catchup\n", id, skill)
+		fmt.Fprintf(w, "%s %s: the turn was a catchup\n", in.id(id), skill)
 
 		r.skill, skill = "catchup", "catchup"
 	}
@@ -2671,7 +2708,7 @@ func (in *driveInput) poll(
 				return nil
 			}
 
-			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", id)
+			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
 			return in.next(ctx, w, r)
 		default:
@@ -2700,7 +2737,7 @@ func (in *driveInput) poll(
 		return nil
 	}
 
-	fmt.Fprintf(w, "%s %s: done\n", id, skill)
+	fmt.Fprintf(w, "%s %s: done\n", in.id(id), skill)
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
@@ -2835,7 +2872,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	}
 
 	if len(res.lines) == 0 {
-		fmt.Fprintf(w, "%s: %s\n", r.task.ref.ID, res.row)
+		fmt.Fprintf(w, "%s: %s\n", in.id(r.task.ref.ID), res.row)
 
 		return
 	}

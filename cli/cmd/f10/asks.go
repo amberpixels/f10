@@ -24,6 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -129,11 +130,11 @@ func viewOf(a asks.Ask) askView {
 	return v
 }
 
-func runAsksList(_ context.Context, cmd *cli.Command) error {
-	return listAsks(cmd.Writer, asks.Dir(), time.Now(), cmd.Bool("json"))
+func runAsksList(ctx context.Context, cmd *cli.Command) error {
+	return listAsks(ctx, cmd.Writer, asks.Dir(), time.Now(), cmd.Bool("json"))
 }
 
-func listAsks(w io.Writer, dir string, now time.Time, asJSON bool) error {
+func listAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
 	open, err := asks.Open(dir)
 	if err != nil {
 		return err
@@ -165,33 +166,45 @@ func listAsks(w io.Writer, dir string, now time.Time, asJSON bool) error {
 		fmt.Fprintln(w, "no open asks")
 	}
 
+	links := linksFor(w, false)
+	loadAskLinks(ctx, links, append(slices.Clone(open), answered...))
+
 	for i, a := range open {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, a, now)
+		printAsk(w, links, a, now)
 	}
 
 	if len(answered) > 0 {
 		fmt.Fprintln(w, "\nanswered in the last day:")
 
 		for _, a := range answered {
-			fmt.Fprintf(w, "  %s answered %s at %s: %s\n",
-				askName(a), asks.Way(a.By), a.AnsweredAt.Local().Format("15:04"), cmp.Or(a.Answer, "(nothing sent)"))
+			fmt.Fprintf(
+				w,
+				"  %s answered %s at %s: %s\n",
+				askLink(
+					links,
+					a,
+				),
+				asks.Way(a.By),
+				a.AnsweredAt.Local().Format("15:04"),
+				cmp.Or(a.Answer, "(nothing sent)"),
+			)
 		}
 	}
 
 	return nil
 }
 
-func printAsk(w io.Writer, a asks.Ask, now time.Time) {
+func printAsk(w io.Writer, links *taskLinks, a asks.Ask, now time.Time) {
 	where := ""
 	if a.Skill != "" {
 		where = " at " + a.Skill
 	}
 
-	fmt.Fprintf(w, "%s asks%s, %s ago\n", askName(a), where, now.Sub(a.AskedAt).Round(time.Minute))
+	fmt.Fprintf(w, "%s asks%s, %s ago\n", askLink(links, a), where, now.Sub(a.AskedAt).Round(time.Minute))
 
 	for _, q := range a.Questions {
 		fmt.Fprintf(w, "  %d. %s\n", q.N, q.Text)
@@ -213,6 +226,44 @@ func askName(a asks.Ask) string {
 	}
 
 	return a.Project + ":" + a.Task
+}
+
+// loadAskLinks reads each ask's task urls from the ledger of the project
+// its main checkout belongs to, keyed by the ask's display project.
+func loadAskLinks(ctx context.Context, links *taskLinks, all []asks.Ask) {
+	if links == nil || !links.on {
+		return
+	}
+
+	projects := map[string]string{}
+
+	for _, a := range all {
+		dir := cmp.Or(a.Main, a.Worktree)
+		if dir == "" {
+			continue
+		}
+
+		if _, ok := projects[dir]; !ok {
+			projects[dir] = projectOf(ctx, dir)
+		}
+
+		links.LoadAs(ctx, projects[dir], a.Project, a.Task)
+	}
+}
+
+// askLink is askName with the task linked; the url the ask carries is the
+// lead's, so a bundle links its members from the ledger instead.
+func askLink(links *taskLinks, a asks.Ask) string {
+	if !strings.Contains(a.Task, ref.Separator) {
+		links.Known(a.Project, a.Task, a.URL)
+	}
+
+	name := links.ID(a.Project, a.Task)
+	if a.Project == "" {
+		return name
+	}
+
+	return a.Project + ":" + name
 }
 
 // findOpen is the open ask a token names: a task id, or project:task where
@@ -351,7 +402,7 @@ func (d deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.
 		fmt.Fprintf(w, "  recording the answer sent: %v\n", err)
 	}
 
-	fmt.Fprintf(w, "sent to %s's agent\n", a.Task)
+	fmt.Fprintf(w, "sent to %s's agent\n", askLink(linksFor(w, false), a))
 
 	return nil
 }
@@ -403,12 +454,15 @@ func walkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 		return nil
 	}
 
+	links := linksFor(w, false)
+	loadAskLinks(ctx, links, open)
+
 	for i, a := range open {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, a, time.Now())
+		printAsk(w, links, a, time.Now())
 
 		given := map[int]string{}
 		skip := false
@@ -568,14 +622,14 @@ func raiseAsk(
 ) {
 	raised, fresh, err := asks.Raise(dir, a, now)
 	if err != nil {
-		fmt.Fprintf(w, "  keeping %s's ask in the inbox: %v\n", a.Task, err)
+		fmt.Fprintf(w, "  keeping %s's ask in the inbox: %v\n", askLink(linksFor(w, false), a), err)
 
 		return
 	}
 
 	if fresh && notify != nil {
 		if err := notify(ctx, raised); err != nil {
-			fmt.Fprintf(w, "  notifying %s's ask: %v\n", a.Task, err)
+			fmt.Fprintf(w, "  notifying %s's ask: %v\n", askLink(linksFor(w, false), a), err)
 		}
 	}
 }

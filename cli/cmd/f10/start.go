@@ -479,7 +479,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
 	}
 
-	rows := []fact{{label: "task", value: o.task.Label()}}
+	rows := []fact{taskFact(ctx, w, in.main, o.task.Label())}
 	if in.pick != nil {
 		rows = append(rows, fact{label: "pr", value: in.pick.url, url: true})
 	}

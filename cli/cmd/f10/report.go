@@ -16,7 +16,7 @@ type fact struct {
 func writeReport(w io.Writer, rows []fact, notes []string) error {
 	width := 0
 	for _, r := range rows {
-		width = max(width, len(r.label)+1)
+		width = max(width, visibleWidth(r.label)+1)
 	}
 
 	for _, r := range rows {
@@ -25,7 +25,7 @@ func writeReport(w io.Writer, rows []fact, notes []string) error {
 			marker = "↗"
 		}
 
-		if _, err := fmt.Fprintf(w, "%-*s  %s %s\n", width, r.label+":", marker, r.value); err != nil {
+		if _, err := fmt.Fprintf(w, "%s  %s %s\n", padRight(r.label+":", width), marker, r.value); err != nil {
 			return err
 		}
 	}

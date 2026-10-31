@@ -408,7 +408,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			return err
 		}
 
-		rows = []fact{{label: "task", value: in.task.Label()}}
+		rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
 		if kept != "" {
 			rows = append(rows, fact{label: "branch", value: kept})
 		}
@@ -420,7 +420,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		}
 
 		ended = p.url() + " left open"
-		rows = []fact{{label: "task", value: in.task.ID}, {label: "pr", value: p.url(), url: true}}
+		rows = []fact{taskFact(ctx, w, in.main, in.task.ID), {label: "pr", value: p.url(), url: true}}
 		notes = append(notes, fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
 			p.url(), p.status()))
 	default:
@@ -500,7 +500,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		notes = append(notes, released...)
 
-		rows = []fact{{label: "task", value: in.task.Label()}}
+		rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
 		if !local {
 			rows = append(rows, fact{label: "pr", value: p.url(), url: true})
 		}

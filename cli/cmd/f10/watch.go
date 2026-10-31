@@ -121,13 +121,27 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 
 	slices.Sort(ids)
 
+	links, project := linksFor(w, false), ""
+	if links.on {
+		project = t.refProject(ctx)
+	}
+
+	links.Load(ctx, project, ids...)
+
 	for _, id := range ids {
 		r := store[id]
 		if r.Kind == "" {
 			continue // only a catchup record, nothing told yet
 		}
 
-		fmt.Fprintf(w, "\n%s  %s, %s\n  %s\n", id, r.Kind, r.At.Local().Format(time.DateTime), r.Text)
+		fmt.Fprintf(
+			w,
+			"\n%s  %s, %s\n  %s\n",
+			links.ID(project, id),
+			r.Kind,
+			r.At.Local().Format(time.DateTime),
+			r.Text,
+		)
 
 		if r.Ask != "" {
 			fmt.Fprintf(w, "  asks: %s\n", r.Ask)
@@ -169,7 +183,7 @@ func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
 	if on {
 		_ = gitx.UnsetConfig(ctx, main, key) // absent is fine
 
-		fmt.Fprintf(cmd.Writer, "%s is watched again\n", r.ID)
+		fmt.Fprintf(cmd.Writer, "%s is watched again\n", taskFact(ctx, cmd.Writer, main, r.ID).value)
 
 		return nil
 	}

@@ -52,7 +52,7 @@ func (in *driveInput) queue(w io.Writer, r *driveRun) {
 	}
 
 	r.queued = true
-	fmt.Fprintf(w, "%s: queued, %d running\n", r.task.ref.ID, in.busy(r))
+	fmt.Fprintf(w, "%s: queued, %d running\n", in.id(r.task.ref.ID), in.busy(r))
 	in.saveTask(r, func(t *drives.Task) { t.Queued = true })
 }
 

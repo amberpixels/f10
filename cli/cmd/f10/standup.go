@@ -139,7 +139,31 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		return enc.Encode(rep)
 	}
 
-	return renderStandup(cmd.Writer, rep)
+	links := linksFor(cmd.Writer, false)
+	loadStandupLinks(ctx, links, rep)
+
+	return renderStandup(cmd.Writer, links, rep)
+}
+
+// loadStandupLinks resolves each project's ids in its own ledger project,
+// found from its first repository, keyed by the project's name.
+func loadStandupLinks(ctx context.Context, links *taskLinks, rep standup.Standup) {
+	if links == nil || !links.on {
+		return
+	}
+
+	for _, p := range rep.Projects {
+		if len(p.Repos) == 0 || len(p.Tasks) == 0 {
+			continue
+		}
+
+		ids := make([]string, 0, len(p.Tasks))
+		for _, t := range p.Tasks {
+			ids = append(append(ids, t.ID), t.Riders...)
+		}
+
+		links.LoadAs(ctx, projectOf(ctx, p.Repos[0].Checkout), p.Name, ids...)
+	}
 }
 
 // runStandupMark takes the start the report showed rather than working it
@@ -657,7 +681,7 @@ func recordedBases(ctx context.Context, main string) map[string]string {
 
 // renderStandup is the report for a terminal. --json is the contract; this
 // is a glance at it.
-func renderStandup(w io.Writer, s standup.Standup) error {
+func renderStandup(w io.Writer, links *taskLinks, s standup.Standup) error {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "since %s", s.Since.Local().Format("2006-01-02 15:04"))
@@ -685,7 +709,7 @@ func renderStandup(w io.Writer, s standup.Standup) error {
 			fmt.Fprintf(&b, "\n== %s%s\n", p.Name, repoNames(p))
 		}
 
-		renderProject(&b, p)
+		renderProject(&b, links, p)
 	}
 
 	if empty {
@@ -712,7 +736,7 @@ func repoNames(p standup.Project) string {
 	return " (" + strings.Join(names, ", ") + ")"
 }
 
-func renderProject(b *strings.Builder, p standup.Project) {
+func renderProject(b *strings.Builder, links *taskLinks, p standup.Project) {
 	// a number names a PR only within its repository
 	label := func(repo string, n int) string {
 		if len(p.Repos) > 1 {
@@ -730,12 +754,19 @@ func renderProject(b *strings.Builder, p standup.Project) {
 
 	for _, t := range p.Tasks {
 		if t.Class == standup.ClassUpkeep {
-			upkeep = append(upkeep, t.ID)
+			upkeep = append(upkeep, links.ID(p.Name, t.ID))
 
 			continue
 		}
 
-		fmt.Fprintf(b, "%-10s %-12s %s%s\n", t.ID, t.State, prList(t.PRs, label), commitCount(t.PRs, t.Commits))
+		fmt.Fprintf(
+			b,
+			"%s %-12s %s%s\n",
+			padRight(links.ID(p.Name, t.ID), 10),
+			t.State,
+			prList(t.PRs, label),
+			commitCount(t.PRs, t.Commits),
+		)
 	}
 
 	// tasks that only caught up with their base, rebased or regenerated

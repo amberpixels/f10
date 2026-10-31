@@ -170,7 +170,7 @@ func TestListAsksJSON(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := listAsks(&out, dir, time.Now(), true); err != nil {
+	if err := listAsks(t.Context(), &out, dir, time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
 
