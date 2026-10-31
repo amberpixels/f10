@@ -146,6 +146,23 @@ func TestRunInputFailures(t *testing.T) {
 	}
 }
 
+// Exit 4 marks a create as not written, keeping the driver's stderr as the
+// message; on any other verb it is an ordinary failure.
+func TestNotWrittenOnlyOnCreate(t *testing.T) {
+	d := Find(storageWith(t, "rejecting-driver"), t.TempDir())
+	want := `is not an option of "Tags"`
+
+	_, _, err := d.RunInput(t.Context(), "# x\n", VerbCreate)
+	if !errors.Is(err, ErrNotWritten) || !strings.Contains(err.Error(), want) {
+		t.Errorf("RunInput(create) = %v, want ErrNotWritten carrying %q", err, want)
+	}
+
+	_, _, err = d.RunInput(t.Context(), "note\n", VerbComment, "22")
+	if err == nil || errors.Is(err, ErrNotWritten) {
+		t.Errorf("RunInput(comment) = %v, want a plain failure", err)
+	}
+}
+
 // The vocabulary is ordered and case-insensitive; a word outside it has no
 // rank, so a caller can drop it with a warning rather than guess.
 func TestPriorityRank(t *testing.T) {
