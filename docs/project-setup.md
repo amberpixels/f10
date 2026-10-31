@@ -83,7 +83,7 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | heading | what it declares | default |
 |---|---|---|
 | Project | one line: what this is, and the stack | detected from build files |
-| Tracker | the fetch and create adapters, and a parent adapter linking a subtask to its parent; the create and parent adapters apply only where neither a driver nor the host's issues create tasks ([driver contract](driver-contract.md#creating-a-task)) | `f10 task read` and `f10 task create` on the host's issues; GitHub sub-issues or GitLab work-item children for the parent |
+| Tracker | the fetch and create adapters, and a parent adapter linking a subtask to its parent; the create and parent adapters apply only where neither a driver nor the host's issues create tasks ([driver contract](driver-contract.md#creating-a-task)); the properties capture sets on a new task ([Properties](#properties)) | `f10 task read` and `f10 task create` on the host's issues; GitHub sub-issues or GitLab work-item children for the parent |
 | Hosting & PR | where code lives, how to open or refresh a PR or MR | from the git remote |
 | Verify | the exact lint and test commands, and "never run X" rules | the justfile's or Makefile's lint and test entries, else the stack's idiomatic commands; the loader prints the result as `verify:` |
 | Roles | the base role per step, replaced or added to, always or by area ([Roles](#roles)) | each step's base role |
@@ -463,3 +463,20 @@ Notion, Jira, a wiki: drop an executable at `.f10/driver` and `f10 task` routes 
 For Notion, [f10-drivers](https://github.com/amberpixels/f10-drivers) is that executable: `exec f10-drivers notion "$@"` plus a `.f10/driver.toml`.
 Its `branch` verb is also where the project encodes its branch shape for `f10 start`; without one, the branch is `<ID>/<slug>` from the task's title.
 See [the driver contract](driver-contract.md).
+
+### Properties
+
+A tracker that classifies tasks with named properties (a `Kind`, `Scope` or `Area` select on Notion, a Jira field) declares them in a **Properties** bullet under `## Tracker`.
+Each entry names the key the driver knows, its allowed values, and how to choose one.
+The capture step reads it and passes each value to `f10 task create` as `--set <key>=<value>`, so the task is created classified in one write.
+A capture overlay (`.f10/instructions/capture.md`) can add or override entries, because overlays layer on top of `project.md`.
+
+```markdown
+## Tracker
+
+- **Properties**
+  - `Kind`: `Feature`, `Bug` or `Chore`; the kind the description reads as.
+  - `Scope`: `CLI`, `Docs` or `Infra`; the part of the project the _Areas_ note names first.
+```
+
+Issues on GitHub or GitLab have no named properties, so `f10 task create --set` there fails before an issue is created.
