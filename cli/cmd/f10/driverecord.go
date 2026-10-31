@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
@@ -19,6 +21,68 @@ import (
 // A drive's record, under the storage root, is what a rerun of the same
 // command picks up; its leases make a second drive, or `f10 finish`, skip or
 // refuse a task it holds.
+
+// The rows a finished task ends on: finished by the drive or outside it, or
+// found finished when the drive started.
+const (
+	rowFinished        = "finished"
+	rowAlreadyFinished = "already finished"
+)
+
+func rowDone(t drives.Task) bool {
+	return t.Outcome != nil && (t.Outcome.Row == rowFinished || t.Outcome.Row == rowAlreadyFinished)
+}
+
+func setFinished(t *drives.Task) {
+	t.Skill, t.Queued, t.Outcome = "", false, &drives.Outcome{Row: rowFinished}
+}
+
+// markFinished moves drive n's open rows that match to finished, under the
+// drive's own lease: a held one is a running drive, which owns its record,
+// so nothing is written. A row only ever moves to finished, since only a
+// rerun knows a drive's next step for a halt settled halfway.
+func markFinished(root string, n int, match func(drives.Task) bool) error {
+	l, err := drives.Acquire(root, drives.DriveKey(n), 0)
+	if held := (drives.HeldError{}); errors.As(err, &held) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+	defer l.Release()
+
+	_, err = drives.Update(root, n, func(rec *drives.Record) {
+		for i := range rec.Tasks {
+			if t := &rec.Tasks[i]; !rowDone(*t) && match(*t) {
+				setFinished(t)
+			}
+		}
+	})
+
+	return err
+}
+
+// healFinished settles a stopped drive's open rows whose task finished
+// outside it, on screen always and on disk when the lease is free.
+func healFinished(root string, rec *drives.Record, finished func(string) bool) {
+	if finished == nil {
+		return
+	}
+
+	hit := map[string]bool{}
+
+	for i := range rec.Tasks {
+		if t := &rec.Tasks[i]; !rowDone(*t) && finished(t.ID) {
+			hit[t.ID] = true
+			setFinished(t)
+		}
+	}
+
+	if len(hit) > 0 {
+		_ = markFinished(root, rec.Number, func(t drives.Task) bool { return hit[t.ID] })
+	}
+}
 
 // recordArgs is the command line a record is matched on: --answer, --every,
 // --parallel and --resume dropped, since none of them names another drive.
@@ -318,7 +382,9 @@ func (in *driveInput) resumeLine() string {
 	return resumeCommand(in.argv)
 }
 
-func driveList(w io.Writer, root string, all bool) error {
+// driveList prints the records, newest first. finished reports a row's task
+// finished outside its drive; nil checks nothing.
+func driveList(w io.Writer, root string, all bool, finished func(row string) bool) error {
 	recs, err := drives.List(root)
 	if err != nil {
 		return err
@@ -343,6 +409,9 @@ func driveList(w io.Writer, root string, all bool) error {
 		}
 
 		holder, running := drives.Probe(root, drives.DriveKey(rec.Number))
+		if !running {
+			healFinished(root, rec, finished)
+		}
 
 		status := "stopped"
 
@@ -375,6 +444,25 @@ func driveList(w io.Writer, root string, all bool) error {
 	}
 
 	return nil
+}
+
+// rowFinishedFor checks a record's row, an id as typed, against the task's
+// branches and plan; a row that names no task reads as unfinished.
+func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
+	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	seen := map[string]bool{} // a task several records list is checked once
+
+	return func(row string) bool {
+		id, _ := ref.SplitSuffix(row)
+		if done, ok := seen[id]; ok {
+			return done
+		}
+
+		r, err := t.reference(ctx, id)
+		seen[id] = err == nil && taskFinished(ctx, main, t.sharedPlansDir(), r.Head().ID)
+
+		return seen[id]
+	}
 }
 
 func taskStanding(t drives.Task, running bool) string {

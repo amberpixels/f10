@@ -27,8 +27,14 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 			return gone.err
 		}
 
-		return writeReport(w, []fact{{label: "task", value: in.task.Label()}},
-			[]string{in.task.ID + " has no branch and its plan is archived: already finished"})
+		if err := writeReport(w, []fact{{label: "task", value: in.task.Label()}},
+			[]string{in.task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
+			return err
+		}
+
+		finishRecords(w, in, in.branch)
+
+		return nil
 	}
 
 	name := gone.branch
@@ -116,7 +122,13 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	in.step("deleting " + name)
 
-	return gitx.DeleteBranch(ctx, in.main, name)
+	if err := gitx.DeleteBranch(ctx, in.main, name); err != nil {
+		return err
+	}
+
+	finishRecords(w, in, name)
+
+	return nil
 }
 
 // planArchived wants an archived plan with no live one beside it, since a
@@ -127,16 +139,33 @@ func planArchived(in finishInput) bool {
 		plans = in.plansDir
 	}
 
-	if exists(filepath.Join(plans, in.task.ID+".md")) {
+	return planArchivedIn(plans, in.task.ID)
+}
+
+func planArchivedIn(plans, id string) bool {
+	if exists(filepath.Join(plans, id+".md")) {
 		return false
 	}
 
 	dir := filepath.Join(plans, "archive")
-	if exists(filepath.Join(dir, in.task.ID+".md")) {
+	if exists(filepath.Join(dir, id+".md")) {
 		return true
 	}
 
-	older, _ := filepath.Glob(filepath.Join(dir, in.task.ID+".*.md"))
+	older, _ := filepath.Glob(filepath.Join(dir, id+".*.md"))
 
 	return len(older) > 0
+}
+
+// taskFinished is finish's own "already finished", which drive list shares so
+// the two never disagree: no task branch here or on origin, and the plan
+// archived. A git error reads as unfinished, since a wrong yes hides a halt.
+func taskFinished(ctx context.Context, main, plans, id string) bool {
+	if !planArchivedIn(plans, id) {
+		return false
+	}
+
+	branched, err := hasTaskBranch(ctx, main, id)
+
+	return err == nil && !branched
 }
