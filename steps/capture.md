@@ -77,8 +77,10 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
    - **Declared properties.**
      A tracker that classifies tasks with named properties declares them under `project.md → Tracker` as **Properties**, and a capture overlay may add or override entries.
      Each entry names a key, its allowed values and how to choose one.
-     Choose each value from the draft by that rule, and pass it on create, so the task is never created half-classified and needs no `f10 task update` after it.
+     Choose each value from the draft by that rule, and pass it on create, so the task is created classified in the same write.
      Leave a property unset when the draft does not settle its value, because a wrong value misfiles the task.
+     A create warning that names a dropped `--set` property means that property was not written, as with a driver older than f10-drivers v0.4.0.
+     Set it with `f10 task update <id> --set <key>=<value>`, and name it in the report if that fails too.
      On an exit 3, the create adapter sets the same properties by its own means.
      A split sets them on the parent and on every subtask.
    - **A split** creates the parent first, then links each subtask to it.
