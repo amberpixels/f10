@@ -476,7 +476,12 @@ func TestSessionStart(t *testing.T) {
 		t.Errorf("startup recorded model %q, want claude-opus-5-5", got)
 	}
 
-	// compact carries no model, so the one startup recorded stands
+	// compact carries no model, so the one startup recorded stands, touched
+	// so a session older than the prune age keeps it
+	if err := os.Chtimes(state.ModelPath(env.StateDir, "s1"), week, week); err != nil {
+		t.Fatal(err)
+	}
+
 	Dispatch(context.Background(), payload(t, "ss-compact"), env)
 
 	if got := state.SessionModel(env.StateDir, "s1"); got != "claude-opus-5-5" {

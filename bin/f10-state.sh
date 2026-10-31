@@ -67,6 +67,20 @@ find_sid() {
   file="$state_dir/$sid.state"
 }
 
+# `f10 lore add` names the agent's model from `<session>.model`. SessionStart records the model a
+# session started on; the status line sees every `/model` switch, and rewriting when the run's
+# state file is newer keeps a live session's file from being pruned.
+remember_model() {
+  local id="$1" mf cur=""
+  [ -n "$id" ] && [ -n "$sid" ] || return 0
+  mf="$state_dir/$sid.model"
+  [ -f "$mf" ] && read -r cur <"$mf"
+  if [ "$cur" != "$id" ] || [ "$mf" -ot "$file" ]; then
+    { printf '%s\n' "$id" >"$mf"; } 2>/dev/null
+  fi
+  return 0
+}
+
 load() {
   [ -n "$file" ] && [ -f "$file" ] || return 1
   local k v
@@ -148,6 +162,7 @@ render() {
   local want="${1:-}"
   # The piped status-line JSON carries the authoritative session id; the environment is the
   # by-hand fallback. Parsed with string operations, to spare a `jq` per refresh.
+  local model=""
   if [ -z "$want" ] && [ ! -t 0 ]; then
     local blob rest
     blob="$(cat 2>/dev/null)"
@@ -156,6 +171,12 @@ render() {
       rest="${rest#*\"}"
       want="${rest%%\"*}"
     fi
+    rest="${blob#*\"model\"}"
+    if [ "$rest" != "$blob" ]; then
+      rest="${rest#*\"id\"}"
+      rest="${rest#*\"}"
+      model="${rest%%\"*}"
+    fi
   fi
 
   asks_segment
@@ -163,6 +184,7 @@ render() {
     printf '%s' "$_asks"
     return 0
   }
+  remember_model "$model"
   load || {
     printf '%s' "$_asks"
     return 0

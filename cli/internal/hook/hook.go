@@ -168,11 +168,15 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			}
 		}
 
-		// a source without a model (compact) keeps the one recorded before
+		// a source without a model (compact) keeps the one recorded before,
+		// touched so a session that outlives the prune age keeps it
 		if sid != "" && p.Model != "" {
 			if err := os.MkdirAll(env.StateDir, 0o750); err == nil {
 				_ = os.WriteFile(state.ModelPath(env.StateDir, sid), []byte(p.Model+"\n"), 0o600)
 			}
+		} else if sid != "" {
+			now := env.now()
+			_ = os.Chtimes(state.ModelPath(env.StateDir, sid), now, now)
 		}
 
 		state.Prune(env.StateDir, env.now())
