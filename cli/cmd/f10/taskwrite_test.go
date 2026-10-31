@@ -256,13 +256,14 @@ func TestHostCreateLinkFailureWarns(t *testing.T) {
 	}
 }
 
-// A closed status or an unmapped priority is refused before anything is
-// created; a create printing no issue url may still have made one.
+// A closed status, an unmapped priority or a --set property is refused
+// before anything is created; a create printing no issue url may still have
+// made one.
 func TestHostCreateRefusals(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
 
-	for _, p := range []props{{status: "closed"}, {priority: "urgent"}} {
+	for _, p := range []props{{status: "closed"}, {priority: "urgent"}, {set: []string{"Kind=Bug"}}} {
 		if _, _, err := hostCreate(t.Context(), &bytes.Buffer{}, tg, "# A\n", p, ""); err == nil {
 			t.Errorf("%+v: no error", p)
 		}
