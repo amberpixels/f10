@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -1877,9 +1878,40 @@ func TestClosingLines(t *testing.T) {
 		t.Errorf("rider closed: %q", got)
 	}
 
-	in.hostIssues = false
+	in.driver = &driver.Driver{}
+	if got := closingLines(in); got != "" {
+		t.Errorf("a driver's tracker: %q", got)
+	}
+
+	in.driver, in.hostIssues = nil, false
 	if got := closingLines(in); got != "" {
 		t.Errorf("not the host's issues: %q", got)
+	}
+}
+
+// A rerun after a landing finds the branch already in the default branch:
+// the unpushed commit that closes the task makes the note say so.
+func TestFinishLocalRerunKeepsTheClosingNote(t *testing.T) {
+	for _, landed := range []string{"GH-1: Add the thing\n\nCloses #1\n", "GH-1: Add the thing\n"} {
+		fx := newFinishFixture(t)
+		fx.noPull()
+		fx.in.hostIssues = true
+		fx.f.script("git rev-parse m0^{tree}", "tr33")
+		fx.f.script("git log --format=%B refs/remotes/origin/main..refs/heads/main", landed)
+
+		out, err := fx.run(t)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		want := "GH-1 closes when main reaches origin"
+		if !strings.Contains(landed, "Closes") {
+			want = "no PR closes GH-1"
+		}
+
+		if !strings.Contains(out, want) {
+			t.Errorf("landed %q: report lacks %q:\n%s", landed, want, out)
+		}
 	}
 }
 

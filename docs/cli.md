@@ -289,7 +289,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
    Nothing is pushed, pulled or deleted on origin, and no PR closes the task, so the notes say who does.
    When the commit carries the closing lines, the task closes once the default branch reaches origin.
-   Otherwise (another tracker, a rebase, or a branch already in the default branch) the task stays open until it is closed on the tracker.
+   A rerun that finds the branch already in the default branch says the same when an unpushed commit there carries those lines.
+   Otherwise (another tracker, one a driver reads, a rebase, or a branch that landed without the lines) the task stays open until it is closed on the tracker.
    A pushed branch with no PR is a refusal: open one, or delete origin's copy to merge here.
    So is a branch with an upstream origin lacks (a request the host merged may no longer be listed by branch), and `--local`, which merges nothing.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).

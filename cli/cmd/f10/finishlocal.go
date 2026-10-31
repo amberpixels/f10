@@ -114,7 +114,14 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 	notes := []string{fmt.Sprintf("%s was never pushed: merged into %s here, nothing pushed", branch, def)}
 
 	if tree == gitx.Out(ctx, in.main, "rev-parse", base+"^{tree}") {
-		return base, append(notes, branch+" was already in "+def, unclosedNote(in)), nil
+		// a rerun after a landing: the unpushed commit may already close the task
+		note := unclosedNote(in)
+		if closing := closingLines(in); closing != "" && strings.Contains(
+			gitx.Out(ctx, in.main, "log", "--format=%B", "refs/remotes/origin/"+def+"..refs/heads/"+def), closing) {
+			note = closesOnPush(in, def)
+		}
+
+		return base, append(notes, branch+" was already in "+def, note), nil
 	}
 
 	method, note, err := in.host.mergeMethod(ctx, in.method)
@@ -166,7 +173,11 @@ func landLocal(ctx context.Context, in finishInput, branch, def string) (string,
 		return sha, append(notes, unclosedNote(in)), nil
 	}
 
-	return sha, append(notes, strings.Join(closedIDs(in), ", ")+" closes when "+def+" reaches origin"), nil
+	return sha, append(notes, closesOnPush(in, def)), nil
+}
+
+func closesOnPush(in finishInput, def string) string {
+	return strings.Join(closedIDs(in), ", ") + " closes when " + def + " reaches origin"
 }
 
 // alreadyLanded reports every change on head already in base, the case
@@ -222,9 +233,10 @@ func closedIDs(in finishInput) []string {
 
 // closingLines closes the lead and the riders --close names once the commit
 // reaches origin's default branch; written whatever traces says, since it is
-// the task's own reference. Other trackers are not closed by a commit.
+// the task's own reference. Other trackers, a driver's included, are not
+// closed by a commit, as on the PR path.
 func closingLines(in finishInput) string {
-	if !in.hostIssues {
+	if !in.hostIssues || in.driver != nil {
 		return ""
 	}
 
