@@ -693,3 +693,34 @@ func TestRenderCountsAsks(t *testing.T) {
 		}
 	}
 }
+
+// The status line sees a /model switch that no hook payload carries, so the
+// renderer keeps <session>.model current for lore.
+func TestRenderRecordsModel(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash script")
+	}
+
+	_, file, _, _ := runtime.Caller(0)
+	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
+	dir := t.TempDir()
+
+	r := &Run{Session: "s1", Capture: "pending", Plan: "pending", Ship: "pending"}
+	if err := r.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5"} {
+		cmd := exec.Command(script, "render")
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_ASKS_DIR="+t.TempDir())
+		cmd.Stdin = strings.NewReader(`{"session_id":"s1","model":{"id":"` + model + `","display_name":"x"}}`)
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("render: %v\n%s", err, out)
+		}
+
+		if got := SessionModel(dir, "s1"); got != model {
+			t.Errorf("after rendering %s, recorded model %q", model, got)
+		}
+	}
+}

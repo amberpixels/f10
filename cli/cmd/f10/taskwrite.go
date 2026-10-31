@@ -598,10 +598,18 @@ func (t *target) createsOnHost() bool {
 
 // hostCreate makes the task an issue on the host. The parent link is a second
 // write, since it needs the new number; the issue exists by then, so a failed
-// link is a warning and never a reason to create it again.
+// link is a warning and never a reason to create it again. An issue has no
+// named properties, so --set is refused before anything is written.
 func hostCreate(
 	ctx context.Context, warnTo io.Writer, t *target, doc string, p props, parent string,
 ) (ref.Ref, string, error) {
+	if len(p.set) > 0 {
+		return ref.Ref{}, "", fmt.Errorf(
+			"issues on the host have no custom properties for --set %s; nothing was created",
+			strings.Join(p.set, ", "),
+		)
+	}
+
 	switch strings.ToLower(p.status) {
 	case "", "open", "opened":
 	default:

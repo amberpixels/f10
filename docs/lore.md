@@ -127,7 +127,7 @@ Every verb takes `--root <dir>`.
   A repeatable flag takes one value per occurrence, commas included: `--rejected 'fixed window: edge bursts, twice the limit'` is one option, and several anchors are several `--anchor` flags.
   An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
   `human` is `git config user.email`.
-  Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.
+  Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`, else the Claude Code session: its id, and the model its SessionStart hook recorded (the model it started on, kept current by the status line when it is f10's, which sees a `/model` switch); a subagent shares its parent's session, so a subagent that writes lore passes `--agent-model`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.
 - **`change`** prints the change the task's current PR writes to: the task id, or `<id>.<n>` once `n - 1` of its PRs have finished.
   A series whose PR merged without `f10 finish` is archived first, as `f10 review round` does.
 - **`show`** prints the change's effective entries, the intent first, then by time.

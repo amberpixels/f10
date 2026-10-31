@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The lore noun only resolves the root and the paths and hands over to
@@ -66,14 +68,17 @@ func loreCommand() *cli.Command {
 					&cli.BoolFlag{Name: "retired", Usage: "a lesson superseding another: retire it"},
 					&cli.StringFlag{Name: "message", Aliases: []string{"m"}, Usage: "the body `TEXT`"},
 					&cli.StringFlag{Name: "file", Aliases: []string{"F"}, Usage: "read the body from `FILE`"},
-					&cli.StringFlag{Name: "agent-model", Usage: "the agent's model; F10_AGENT_MODEL when absent"},
+					&cli.StringFlag{
+						Name:  "agent-model",
+						Usage: "the agent's model; F10_AGENT_MODEL, else the model the session started on",
+					},
 					&cli.StringFlag{
 						Name:  "agent-via",
 						Usage: "the agent's harness; F10_AGENT_VIA, else claude-code inside Claude Code",
 					},
 					&cli.StringFlag{
 						Name:  "agent-session",
-						Usage: "the agent's session id; F10_AGENT_SESSION when absent",
+						Usage: "the agent's session id; F10_AGENT_SESSION, else the Claude Code session's",
 					},
 				},
 				Action: runLoreAdd,
@@ -363,8 +368,8 @@ func loreBody(cmd *cli.Command) (string, error) {
 	return string(data), nil
 }
 
-// loreAgent is nil when neither flags nor environment name a model or a
-// session.
+// loreAgent is nil when neither flags, environment nor the session name a
+// model or a session, so a human in a plain terminal writes no agent.
 func loreAgent(cmd *cli.Command) *lore.Agent {
 	pick := func(flag, env string) string {
 		if v := cmd.String(flag); v != "" {
@@ -377,7 +382,11 @@ func loreAgent(cmd *cli.Command) *lore.Agent {
 	a := &lore.Agent{
 		Model:   pick("agent-model", "F10_AGENT_MODEL"),
 		Via:     pick("agent-via", "F10_AGENT_VIA"),
-		Session: pick("agent-session", "F10_AGENT_SESSION"),
+		Session: cmp.Or(pick("agent-session", "F10_AGENT_SESSION"), state.Session()),
+	}
+
+	if a.Model == "" {
+		a.Model = state.SessionModel(state.Dir(), a.Session)
 	}
 
 	if a.Model == "" && a.Session == "" {

@@ -113,6 +113,7 @@ Every heading is optional, and only **Tracker** matters for the pipeline's contr
 - **Tracker** - kind and **task id format** go in the frontmatter's `tracker:` (`ABC-####`, `GH-###`).
   Under the heading go the **fetch** and **create** adapters, each a skill or a CLI command (`gh issue view <n> --comments`, `gh issue create`).
   An optional **parent** adapter links a subtask to its parent (`steps/capture.md`).
+  An optional **Properties** bullet names the properties capture sets on a new task (`steps/capture.md`).
 - **Hosting & PR** - how to open or refresh a PR/MR: a skill, or the branch naming, labels and assignee `f10 pr create` and `f10 pr edit` follow.
   The branch's shape is the project's, but a task's branch always carries its task id (`steps/pr.md`).
 - **Verify** - the exact lint and test commands, plus any "never run X" rules.

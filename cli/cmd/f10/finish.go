@@ -207,6 +207,8 @@ type finishInput struct {
 	host   host
 	method string // the merge method project.md declares, "" for none
 	traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
+	// hostIssues: the tracker is the host's issues, which a commit's closing keyword closes
+	hostIssues bool
 	// loreStore feeds the report's lore line and the pre-merge check (nil reads
 	// nothing); gate is lore_gate: warn notes a failing check, block refuses
 	loreStore *lore.Store
@@ -239,17 +241,18 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 	task = task.Head()
 
 	return finishInput{
-		main:      main,
-		root:      t.sharedRoot(),
-		driver:    t.driver(),
-		task:      task,
-		host:      h.at(main),
-		method:    t.eff.MergeMethod,
-		traces:    t.eff.Traces,
-		loreStore: &lore.Store{Root: loreRootFor(t)},
-		gate:      t.eff.LoreGate,
-		plansDir:  t.sharedPlansDir(),
-		title:     titleLookup(t, task.Number),
+		main:       main,
+		root:       t.sharedRoot(),
+		driver:     t.driver(),
+		task:       task,
+		host:       h.at(main),
+		method:     t.eff.MergeMethod,
+		traces:     t.eff.Traces,
+		hostIssues: t.hostIssues(),
+		loreStore:  &lore.Store{Root: loreRootFor(t)},
+		gate:       t.eff.LoreGate,
+		plansDir:   t.sharedPlansDir(),
+		title:      titleLookup(t, task.Number),
 	}
 }
 
@@ -454,8 +457,6 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			if sha, notes, err = landLocal(ctx, in, name, def); err != nil {
 				return err
 			}
-
-			notes = append(notes, unclosedNote(in))
 		} else {
 			in.step("merging " + pullNumber(p.url()))
 

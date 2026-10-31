@@ -435,6 +435,21 @@ func TestTaskCreateThroughTheDriver(t *testing.T) {
 	}
 }
 
+// --set reaches the driver's create once per property, in the order given,
+// as update passes it.
+func TestTaskCreateSetsProperties(t *testing.T) {
+	repo := createRepo(t, "echo 1043\n")
+
+	if _, _, err := runCreate(t, repo, "# A\n", "--set", "Kind=Bug", "--set", "Scope=CLI tools"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if got, want := readFile(t, filepath.Join(repo, ".f10", "args")),
+		"create --set Kind=Bug --set Scope=CLI tools\n"; got != want {
+		t.Errorf("driver args = %q, want %q", got, want)
+	}
+}
+
 // Blank lines before the title are dropped, so the driver reads the title
 // on the first line as the contract promises.
 func TestTaskCreateTitleOnTheFirstLine(t *testing.T) {
@@ -491,6 +506,7 @@ func TestTaskCreateRefusesBadInput(t *testing.T) {
 		{"no title\n", nil, "`# <title>`"},
 		{"#\n", nil, "`# <title>`"},
 		{"# A\n", []string{"--priority", "p1"}, `priority "p1"`},
+		{"# A\n", []string{"--set", "nokey"}, `--set "nokey" is not key=value`},
 	} {
 		repo := createRepo(t, "echo 1\n")
 
@@ -631,6 +647,24 @@ func TestTaskCreateOnHostIssues(t *testing.T) {
 
 		if got := readFile(t, calls); !strings.Contains(got, "issue create --title Add it --body body --label draft") {
 			t.Errorf("%s: gh calls = %q", name, got)
+		}
+	}
+}
+
+// Host issues have no named properties, so --set fails before an issue is
+// created, with no driver or past one declining create.
+func TestTaskCreateOnHostIssuesRefusesSet(t *testing.T) {
+	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
+		repo, calls := hostRepo(t, script)
+
+		_, _, err := runCreate(t, repo, "# A\n", "--set", "Kind=Bug")
+		if err == nil || !strings.Contains(err.Error(), "nothing was created") ||
+			strings.Contains(err.Error(), mayExist) {
+			t.Errorf("%s: err = %v, want a refusal saying nothing was created", name, err)
+		}
+
+		if got, _ := os.ReadFile(calls); strings.Contains(string(got), "issue create") {
+			t.Errorf("%s: an issue was created: %q", name, got)
 		}
 	}
 }
