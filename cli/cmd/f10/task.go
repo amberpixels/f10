@@ -628,7 +628,7 @@ func writeRows(w io.Writer, rows []row, none string) error {
 		}
 
 		links.Known("", r.ID, r.URL)
-		id := padRight(links.ID("", r.ID), idW)
+		shown := padRight(links.ID("", r.ID), idW)
 		title := hyperlink(r.URL, r.Title)
 
 		priority := ""
@@ -636,7 +636,16 @@ func writeRows(w io.Writer, rows []row, none string) error {
 			priority = fmt.Sprintf("%-*s  ", priorityW, r.Priority)
 		}
 
-		if _, err := fmt.Fprintf(w, "%s%s  %-*s  %s%s\n", marker, id, statusW, r.Status, priority, title); err != nil {
+		if _, err := fmt.Fprintf(
+			w,
+			"%s%s  %-*s  %s%s\n",
+			marker,
+			shown,
+			statusW,
+			r.Status,
+			priority,
+			title,
+		); err != nil {
 			return fmt.Errorf("writing rows: %w", err)
 		}
 	}

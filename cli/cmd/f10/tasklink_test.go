@@ -170,7 +170,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := listAsks(&out, dir, time.Now(), false); err != nil {
+			if err := listAsks(t.Context(), &out, dir, time.Now(), false); err != nil {
 				t.Fatal(err)
 			}
 
@@ -215,6 +215,16 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			if err := in.report(&out, runs, nil); err != nil {
 				t.Fatal(err)
 			}
+
+			return out.String()
+		},
+		"drive progress": func(t *testing.T, _ bool) string {
+			var out bytes.Buffer
+
+			in := &driveInput{}
+			in.loadLinks(t.Context(), &out, []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
+			in.queue(&out, &driveRun{task: driveTask{ref: ref.Ref{ID: "FT-1"}}})
+			in.queue(&out, &driveRun{task: driveTask{ref: ref.Ref{ID: "FT-2"}}})
 
 			return out.String()
 		},
@@ -263,5 +273,53 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 				t.Errorf("piped output links:\n%q", out)
 			}
 		})
+	}
+}
+
+// plainIDPrint is a print whose argument is a bare task id: a local id, a
+// ref's ID, a row's ID, an ask's Task or a bundle's Label().
+var plainIDPrint = regexp.MustCompile(
+	`fmt\.Fprint\w*\([^,]+, "[^"]*"(, [^,()]+)*, (id|[\w.]*ref\.ID|[\w.]*\.ID|[\w.]*\.Task|[\w.]*\.Label\(\))[,)]`)
+
+// machineRead are prints of a bare id that agents or scripts parse, by file
+// and a piece of the line, so they stay plain on purpose.
+var machineRead = map[string]string{
+	"host.go":        `"# %s: %s\n\n"`,   // the task as markdown, for an agent
+	"reviewround.go": `"  %s %s - %s\n"`, // a declined round, read by the review step
+	"review.go":      `"%s  %s  %s\n"`,   // review pick, parsed
+	"pr.go":          `"task: %s\n"`,     // pr view, parsed
+	"taskref.go":     `"f10: %s: %v\n"`,  // a warning on stderr
+}
+
+// The render table above covers the commands that exist; this scan catches a
+// new print of a bare task id in any file, which must go through taskLinks or
+// be listed in machineRead.
+func TestNoPlainTaskIDPrints(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for i, line := range strings.Split(string(src), "\n") {
+			if !plainIDPrint.MatchString(line) {
+				continue
+			}
+
+			if allowed, ok := machineRead[f]; ok && strings.Contains(line, allowed) {
+				continue
+			}
+
+			t.Errorf("%s:%d prints a task id plain; print it through taskLinks:\n%s", f, i+1, strings.TrimSpace(line))
+		}
 	}
 }

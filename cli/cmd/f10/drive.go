@@ -533,12 +533,13 @@ type driveInput struct {
 	// none. notify tells the user of a new ask; resume starts this drive
 	// again for an answer that came after it stopped looking.
 	asksDir string
+	notify  func(context.Context, asks.Ask) error
+	resume  func(ctx context.Context, n int) error
 
 	// links prints this drive's task ids for people, under project
 	links   *taskLinks
 	project string
-	notify  func(context.Context, asks.Ask) error
-	resume  func(ctx context.Context, n int) error
+
 	// answeredIn is when a task's ask was answered where the agent heard
 	// it: the drive follows that turn instead of sending the skill again
 	answeredIn map[string]time.Time
@@ -1079,7 +1080,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 	}
 
 	skip := func(what string, err error) error {
-		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", id, what, err)
+		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", in.id(id), what, err)
 
 		return nil
 	}
@@ -1129,7 +1130,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
 	}
 
-	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", id, target.name, branch)
+	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), target.name, branch)
 
 	return nil
 }
@@ -2081,7 +2082,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return &res
 	}
 
-	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", id, branch, base)
+	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)
 	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
 
 	return nil
@@ -2214,7 +2215,7 @@ func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun)
 
 		if !seen {
 			fmt.Fprintf(w, "%s catchup: %s caught up with %s, not pushed: %s is not on origin yet\n",
-				id, branch, base, base)
+				in.id(id), branch, base, base)
 
 			return nil
 		}
@@ -2279,7 +2280,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		return halted(id, "finish", err.Error())
 	}
 
-	fmt.Fprintf(w, "%s finish: running\n", id)
+	fmt.Fprintf(w, "%s finish: running\n", in.id(id))
 
 	var buf bytes.Buffer
 
@@ -2409,14 +2410,14 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.sentAt = p.At.Truncate(time.Second)
 		}
 
-		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", id, skill)
+		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", in.id(id), skill)
 	case answered:
 		// the agent heard the answer where it was given: its turn began
 		// then, and the prompt mark the hook wrote just before the claim
 		// may fall in the second before
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
-		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", id, skill)
+		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
 	case run != nil && skill == "catchup" && heldStop(run):
 		// the ship stop is the one this catchup settles
 		return in.prompt(ctx, w, r, ws, skill, "")
@@ -2431,7 +2432,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 					why = "its base has code now"
 				}
 
-				fmt.Fprintf(w, "%s %s: %s: %s\n", id, skill, why, at)
+				fmt.Fprintf(w, "%s %s: %s: %s\n", in.id(id), skill, why, at)
 
 				return in.prompt(ctx, w, r, ws, skill, at)
 			}
@@ -2450,10 +2451,10 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		}
 
 		in.took(id, skill, answer)
-		fmt.Fprintf(w, "%s %s: answer sent\n", id, skill)
+		fmt.Fprintf(w, "%s %s: answer sent\n", in.id(id), skill)
 	case run != nil && phaseDone(run, skill):
 		// the agent got there before a drive that stopped could see it
-		fmt.Fprintf(w, "%s %s: already done\n", id, skill)
+		fmt.Fprintf(w, "%s %s: already done\n", in.id(id), skill)
 
 		if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
 			return fmt.Errorf("recording %s done: %w", skill, err)
@@ -2492,7 +2493,7 @@ func (in *driveInput) prompt(
 		return err
 	}
 
-	fmt.Fprintf(w, "%s %s: sent\n", id, skill)
+	fmt.Fprintf(w, "%s %s: sent\n", in.id(id), skill)
 
 	return nil
 }
@@ -2686,7 +2687,7 @@ func (in *driveInput) poll(
 
 	// catchup has no phase, so only its done signal names the turn as one
 	if r.attached && skill != "catchup" && run != nil && run.Done == "catchup" && run.DoneAt.After(since) {
-		fmt.Fprintf(w, "%s %s: the turn was a catchup\n", id, skill)
+		fmt.Fprintf(w, "%s %s: the turn was a catchup\n", in.id(id), skill)
 
 		r.skill, skill = "catchup", "catchup"
 	}
@@ -2707,7 +2708,7 @@ func (in *driveInput) poll(
 				return nil
 			}
 
-			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", id)
+			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
 			return in.next(ctx, w, r)
 		default:
@@ -2736,7 +2737,7 @@ func (in *driveInput) poll(
 		return nil
 	}
 
-	fmt.Fprintf(w, "%s %s: done\n", id, skill)
+	fmt.Fprintf(w, "%s %s: done\n", in.id(id), skill)
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
