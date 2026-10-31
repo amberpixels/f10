@@ -60,6 +60,21 @@ const ExitUnsupported = 3
 // ErrUnsupported is ExitUnsupported as an error; callers fall back, never fail.
 var ErrUnsupported = errors.New("driver does not implement this verb")
 
+// ExitNotWritten is `create` failing before any write, so running it again
+// cannot make the task twice. On any other verb it is an ordinary failure.
+const ExitNotWritten = 4
+
+// ErrNotWritten is ExitNotWritten as an error: callers drop the may-exist warning.
+var ErrNotWritten = errors.New("create failed before writing")
+
+// notWrittenError matches ErrNotWritten and reads as the driver's own error, so
+// the user sees its stderr, not the sentinel's text.
+type notWrittenError struct{ error }
+
+func (e notWrittenError) Is(target error) bool { return target == ErrNotWritten }
+
+func (e notWrittenError) Unwrap() error { return e.error }
+
 // DefaultTimeout bounds one verb when a Driver sets no Timeout.
 const DefaultTimeout = 30 * time.Second
 
@@ -163,6 +178,11 @@ func (d *Driver) classify(verb string, res shell.Result) error {
 			detail = fmt.Sprintf("exit %d, no stderr", res.Code)
 		}
 
-		return fmt.Errorf("%s %s: %s", filepath.Base(d.Path), verb, detail)
+		err := fmt.Errorf("%s %s: %s", filepath.Base(d.Path), verb, detail)
+		if res.Code == ExitNotWritten && verb == VerbCreate {
+			return notWrittenError{err}
+		}
+
+		return err
 	}
 }

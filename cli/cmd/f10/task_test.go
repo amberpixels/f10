@@ -535,6 +535,18 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 	}
 }
 
+// A driver that exits 4 rejected the create before writing, so its error
+// carries the driver's stderr and no may-exist warning.
+func TestTaskCreateNotWrittenDropsMayExist(t *testing.T) {
+	script := "echo '--label \"bug\" is not an option of \"Tags\"' >&2\nexit 4\n"
+
+	_, _, err := runCreate(t, createRepo(t, script), "# A\n", "--label", "bug")
+	if err == nil || !strings.Contains(err.Error(), `is not an option of "Tags"`) ||
+		strings.Contains(err.Error(), mayExist) {
+		t.Errorf("err = %v, want the driver's stderr and no may-exist warning", err)
+	}
+}
+
 // failingReader fails a test that reads it.
 type failingReader struct{ t *testing.T }
 

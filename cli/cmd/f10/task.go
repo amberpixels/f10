@@ -658,8 +658,8 @@ func hyperlink(url, text string) string {
 // answer the capture step reads as "use the project's Create adapter".
 const exitNoCreate = 3
 
-// mayExist follows every failed create: the driver may have made the task
-// before failing, so running create again could make it twice.
+// mayExist follows every failed create but a driver's exit 4: the driver may
+// have made the task before failing, so running create again could make it twice.
 const mayExist = "the task may exist already: check the tracker before running create again"
 
 // runTaskCreate sends the task on stdin to the driver's create, else makes it
@@ -739,6 +739,11 @@ func driverCreate(
 ) (ref.Ref, string, error) {
 	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
 	if errors.Is(err, driver.ErrUnsupported) {
+		return ref.Ref{}, "", err
+	}
+
+	// the driver rejected the input before writing, so running it again is safe
+	if errors.Is(err, driver.ErrNotWritten) {
 		return ref.Ref{}, "", err
 	}
 

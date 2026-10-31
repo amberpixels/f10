@@ -68,7 +68,7 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      If the retitle fails, report it, but never create the task again, because it already exists.
    - **A failure whose error says the task may exist** is never re-run, whatever `conventions/failure.md` rule 3 allows.
      Report the failure, and let the user check the tracker.
-   - **Any other failure**, such as a missing title or an unknown priority or id, happened before the driver ran.
+   - **Any other failure** happened before anything was written: f10 rejected the input (a missing title, an unknown priority or id) before the driver ran, or the driver rejected it before calling the tracker (a label that is not one of the tracker's options).
      Fix the input and run the command again.
    - **Kind labels.**
      A description that reads as a bug or a refactor gets the tracker's label for that kind, where one exists (`f10 task create --label bug`), so that the fetch step settles the same kind later.
