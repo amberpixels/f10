@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -1796,6 +1797,121 @@ func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// On a host-issues tracker the local commit closes the task once it reaches
+// origin's default branch, above the trailers with traces on, with or without
+// them; the rebase method writes no commit, so the task stays for the tracker.
+func TestFinishLocalCommitClosesTheTask(t *testing.T) {
+	cases := []struct {
+		name, method string
+		traces       bool
+		commit, sha  string
+	}{
+		{
+			name:   "squash",
+			method: "squash",
+			commit: "git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second\n\nCloses #1",
+			sha:    "s9",
+		},
+		{
+			name:   "squash with traces",
+			method: "squash",
+			traces: true,
+			commit: "git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second\n\nCloses #1\n\nTask: GH-1\n",
+			sha:    "s9",
+		},
+		{
+			name:   "merge",
+			method: "merge",
+			commit: "git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1' -m Closes #1",
+			sha:    "mm",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.noPull()
+			fx.in.method, fx.in.traces, fx.in.hostIssues = c.method, c.traces, true
+			fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+			fx.f.script(c.commit, c.sha)
+			fx.f.script("git merge --ff-only "+c.sha, "")
+
+			out, err := fx.run(t)
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			if !fx.f.called(c.commit) {
+				t.Errorf("%q did not run: %q", c.commit, fx.f.calls)
+			}
+
+			if !strings.Contains(out, "GH-1 closes when main reaches origin") || strings.Contains(out, "no PR closes") {
+				t.Errorf("the note does not say the push closes the task:\n%s", out)
+			}
+		})
+	}
+
+	fx := newFinishFixture(t)
+	fx.noPull()
+	fx.in.method, fx.in.hostIssues = "rebase", true
+	fx.f.script("git merge-base --is-ancestor m0 refs/heads/GH-1", "")
+	fx.f.script("git merge --ff-only t1", "")
+
+	if out, err := fx.run(t); err != nil || !strings.Contains(out, "no PR closes GH-1") {
+		t.Fatalf("rebase: %v\n%s", err, out)
+	}
+}
+
+// Each member the merge closes gets a line: the lead, and the riders --close
+// names; a rider kept open, or a tracker that is not the host's, gets none.
+func TestClosingLines(t *testing.T) {
+	in := finishInput{task: bundle12, hostIssues: true}
+	if got := closingLines(in); got != "Closes #1" {
+		t.Errorf("rider kept open: %q", got)
+	}
+
+	in.close = []string{"GH-2"}
+	if got := closingLines(in); got != "Closes #1\nCloses #2" {
+		t.Errorf("rider closed: %q", got)
+	}
+
+	in.driver = &driver.Driver{}
+	if got := closingLines(in); got != "" {
+		t.Errorf("a driver's tracker: %q", got)
+	}
+
+	in.driver, in.hostIssues = nil, false
+	if got := closingLines(in); got != "" {
+		t.Errorf("not the host's issues: %q", got)
+	}
+}
+
+// A rerun after a landing finds the branch already in the default branch:
+// the unpushed commit that closes the task makes the note say so.
+func TestFinishLocalRerunKeepsTheClosingNote(t *testing.T) {
+	for _, landed := range []string{"GH-1: Add the thing\n\nCloses #1\n", "GH-1: Add the thing\n"} {
+		fx := newFinishFixture(t)
+		fx.noPull()
+		fx.in.hostIssues = true
+		fx.f.script("git rev-parse m0^{tree}", "tr33")
+		fx.f.script("git log --format=%B refs/remotes/origin/main..refs/heads/main", landed)
+
+		out, err := fx.run(t)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		want := "GH-1 closes when main reaches origin"
+		if !strings.Contains(landed, "Closes") {
+			want = "no PR closes GH-1"
+		}
+
+		if !strings.Contains(out, want) {
+			t.Errorf("landed %q: report lacks %q:\n%s", landed, want, out)
+		}
 	}
 }
 
