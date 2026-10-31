@@ -33,6 +33,7 @@ type Payload struct {
 	ToolInput    json.RawMessage `json:"tool_input"`
 	ToolResponse json.RawMessage `json:"tool_response"`
 	Prompt       string          `json:"prompt"` // UserPromptSubmit
+	Model        string          `json:"model"`  // SessionStart, when the source carries one
 }
 
 // Env is everything a hook reaches outside its payload, so a test can point
@@ -164,6 +165,13 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		if sid != "" && (p.Source == "startup" || p.Source == "resume") {
 			if err := os.MkdirAll(env.StateDir, 0o750); err == nil {
 				_ = os.WriteFile(state.StartedPath(env.StateDir, sid), nil, 0o600)
+			}
+		}
+
+		// a source without a model (compact) keeps the one recorded before
+		if sid != "" && p.Model != "" {
+			if err := os.MkdirAll(env.StateDir, 0o750); err == nil {
+				_ = os.WriteFile(state.ModelPath(env.StateDir, sid), []byte(p.Model+"\n"), 0o600)
 			}
 		}
 

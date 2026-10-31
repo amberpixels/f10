@@ -472,6 +472,17 @@ func TestSessionStart(t *testing.T) {
 
 	Dispatch(context.Background(), payload(t, "ss-startup"), env)
 
+	if got := state.SessionModel(env.StateDir, "s1"); got != "claude-opus-5-5" {
+		t.Errorf("startup recorded model %q, want claude-opus-5-5", got)
+	}
+
+	// compact carries no model, so the one startup recorded stands
+	Dispatch(context.Background(), payload(t, "ss-compact"), env)
+
+	if got := state.SessionModel(env.StateDir, "s1"); got != "claude-opus-5-5" {
+		t.Errorf("compact left model %q, want claude-opus-5-5", got)
+	}
+
 	if dest, err := os.Readlink(link); err != nil || dest != renderer {
 		t.Errorf("statusline -> %q (%v), want %s", dest, err, renderer)
 	}
