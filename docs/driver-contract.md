@@ -96,6 +96,7 @@ The task's properties arrive as flags, and only the ones the caller set:
 
 A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
 Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
+Exit `4` when you reject the call before reaching the tracker, such as an option the property does not have, a missing title or a config error, because then no task exists and running `create` again is safe ([Exit codes](#exit-codes)).
 With `tracker.title` declared, f10 takes a leading id off the titles in your `list`, `search` and `children` rows, and collapses a doubled id in your `read` document's `# ` heading to one; on the host's issues, it writes the template onto the title after your `create` and `update`, since a driver has no title verb.
 
 ## Commenting on and updating a task
@@ -126,6 +127,7 @@ A priority there is the label `tracker.priority` maps the level to.
 |---|---|
 | `0` | it worked; stdout is the answer |
 | `3` | this driver does not implement that verb |
+| `4` | `create` only: it failed before any write, so running it again is safe |
 | anything else | it failed; stderr is shown to the user verbatim |
 
 Code `3` is a normal answer, not an error.
@@ -134,6 +136,8 @@ On a tracker that is not the host's issues (Notion, Jira), a declined `read`, `u
 A declined `branch` there names the branch by the bare id, and a declined `children` reads as no parent link.
 A declined `create` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task create` exits 3, and the capture step creates the task through the Create adapter in `project.md`, as it does for a project with no driver.
 A declined `comment` or `update` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task comment` and `f10 task update` exit 3, and a ship run puts its shipment in the final report alone.
+Code `4` tells f10 that a failed `create` made no task, so its error carries your stderr without the warning that the task may exist, and the caller fixes the input and runs it again.
+On any other verb, `4` is an ordinary failure.
 Every other non-zero exit is a real failure, and f10 surfaces your stderr rather than paraphrasing a tracker error it cannot interpret.
 
 ## Rules worth knowing
@@ -150,7 +154,7 @@ A read can be retried after a 5xx; a `create` or `comment` retried after a 5xx o
 Retry those only after a failure the tracker reports as rejected before acting, such as a 429.
 Treat any other failure as an unknown outcome and say so on stderr, so the user checks the tracker before running it again.
 `update` sets absolute values, so a driver may retry it after a transient 5xx.
-f10 itself never retries a write verb, and its own error after a failed `create` or `comment` says the task or comment may exist.
+f10 itself never retries a write verb, and its own error after a failed `create` or `comment` says the task or comment may exist, except after a `create` that exited `4`.
 
 **Answer within the limit.**
 f10 kills a verb that has not exited within `driver_timeout` (30 seconds unless project.md declares otherwise) and fails the command with `<driver> <verb>: no answer within <limit>`; after a write verb the error adds that the write may still have reached the tracker.

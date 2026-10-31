@@ -1,0 +1,5 @@
+#!/bin/sh
+# A driver that rejected its input before calling the tracker: exit 4, which
+# the contract gives meaning only on create.
+echo '--label "bug" is not an option of "Tags"' >&2
+exit 4

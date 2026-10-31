@@ -1112,7 +1112,7 @@ The body's `After: <id>` line reaches the driver as a link to the base task, `Af
 `--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable) and `--parent` go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
 On the host, `--status` takes only open, `--priority` becomes the label `tracker.priority` maps to it, and `--parent` links the new issue as a GitHub sub-issue; a link that fails is a warning, and the id still prints. GitLab nests tasks, not issues, under an issue, so there `--parent` always warns and the parent's body lists its subtasks.
 It exits **3** when neither creates tasks here (no driver, or one declining `create`, on a tracker that is not the host's): the capture step then uses the project's Create adapter.
-A failed create is never retried, and its error says the task may exist already.
+A failed create is never retried, and its error says the task may exist already, unless the driver exited 4 to say it failed before writing ([driver contract](driver-contract.md#exit-codes)).
 With `tracker.title` declared on the host's issues, the new issue's title is then written through it; a failure there is a warning naming `f10 task retitle`, since the task exists.
 
 ## Ref
