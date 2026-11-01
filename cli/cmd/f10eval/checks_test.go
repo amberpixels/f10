@@ -105,10 +105,85 @@ func TestScenariosLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	root := filepath.Join("..", "..", "..", "evals", "scenarios")
+
 	for _, s := range list {
 		if s.Task == "" || s.Prompt == "" {
 			t.Errorf("%s: no task or prompt", s.Name)
 		}
+
+		if s.Fixture != "" {
+			if _, err := os.Stat(filepath.Join(root, s.Fixture, "repo")); err != nil {
+				t.Errorf("%s: fixture %s: %v", s.Name, s.Fixture, err)
+			}
+		}
+
+		if s.Change != "" {
+			if _, err := os.Stat(filepath.Join(root, s.Name, s.Change)); err != nil {
+				t.Errorf("%s: change %s: %v", s.Name, s.Change, err)
+			}
+		}
+	}
+}
+
+// planted finds each defect by a finding inside its line range, and bounds
+// the findings outside every range. The canned round has main.go:3 and :40.
+func TestPlantedCheck(t *testing.T) {
+	dir := canned(t)
+	zero := 0
+
+	for name, c := range map[string]struct {
+		s      Scenario
+		pass   bool
+		detail string
+	}{
+		"found": {
+			s:      Scenario{Task: "T-1", Planted: []Planted{{File: "main.go", From: 1, To: 5}}},
+			pass:   true,
+			detail: "1 of 1 planted found, 1 outside",
+		},
+		"missed": {
+			s:      Scenario{Task: "T-1", Planted: []Planted{{File: "main.go", From: 1, To: 5}, {File: "main.go", From: 10, To: 12, What: "leak"}}},
+			detail: "missed main.go:10-12 (leak)",
+		},
+		"too many outside": {
+			s:      Scenario{Task: "T-1", Planted: []Planted{{File: "main.go", From: 1, To: 5}}, MaxExtra: &zero},
+			detail: "1 findings outside the planted defects, at most 0 allowed",
+		},
+		"no findings": {
+			s:      Scenario{Task: "T-2", Planted: []Planted{{File: "main.go", From: 1, To: 5}}},
+			detail: "no findings file",
+		},
+	} {
+		got := checkPlanted(t.Context(), dir, c.s)
+		if got.Pass != c.pass || !strings.Contains(got.Detail, c.detail) {
+			t.Errorf("%s = %+v, want pass %v with %q", name, got, c.pass, c.detail)
+		}
+	}
+}
+
+// A scenario's change lands as a commit on the task's branch, so a review
+// run sees a diff against main.
+func TestApplyChange(t *testing.T) {
+	dir := canned(t)
+	patch := filepath.Join(t.TempDir(), "change.patch")
+
+	body := "--- a/main.go\n+++ b/main.go\n@@ -1,3 +1,3 @@\n package main\n \n-func main() {}\n+func main() { println(1) }\n"
+	if err := os.WriteFile(patch, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := applyChange(t.Context(), dir, "EV-9", patch); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := exec.Command("git", "-C", dir, "log", "--format=%D %s", "main..HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(out), "EV-9/change") || !strings.Contains(string(out), "EV-9: change") {
+		t.Errorf("log = %q, want one commit on EV-9/change", out)
 	}
 }
 

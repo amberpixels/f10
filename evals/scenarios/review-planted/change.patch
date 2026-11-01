@@ -1,0 +1,154 @@
+diff --git a/notes.go b/notes.go
+new file mode 100644
+index 0000000..4b64af2
+--- /dev/null
++++ b/notes.go
+@@ -0,0 +1,100 @@
++package main
++
++import (
++	"bufio"
++	"fmt"
++	"io"
++	"net/http"
++	"os"
++	"path/filepath"
++	"slices"
++	"strconv"
++	"strings"
++)
++
++const (
++	pageSize = 10
++	maxNote  = 1 << 20
++)
++
++// list writes one page of notes, each as its name and its first line.
++func (s *server) list(w http.ResponseWriter, r *http.Request) {
++	page, err := strconv.Atoi(r.URL.Query().Get("page"))
++	if err != nil || page < 1 {
++		page = 1
++	}
++
++	entries, err := os.ReadDir(s.dir)
++	if err != nil {
++		http.Error(w, err.Error(), http.StatusInternalServerError)
++
++		return
++	}
++
++	var names []string
++	for _, e := range entries {
++		if strings.HasSuffix(e.Name(), ".txt") {
++			names = append(names, e.Name())
++		}
++	}
++
++	slices.Sort(names)
++
++	start := page * pageSize
++	end := min(start+pageSize, len(names))
++
++	for _, name := range names[start:end] {
++		f, err := os.Open(filepath.Join(s.dir, name))
++		if err != nil {
++			continue
++		}
++
++		first, _ := bufio.NewReader(f).ReadString('\n')
++		fmt.Fprintf(w, "%s\t%s\n", strings.TrimSuffix(name, ".txt"), strings.TrimSpace(first))
++	}
++}
++
++// read writes one note's text.
++func (s *server) read(w http.ResponseWriter, r *http.Request) {
++	name := r.URL.Query().Get("name")
++
++	body, err := os.ReadFile(filepath.Join(s.dir, name+".txt"))
++	if err != nil {
++		http.NotFound(w, r)
++
++		return
++	}
++
++	_, _ = w.Write(body)
++}
++
++// save stores the request body as a note, refusing one over maxNote.
++func (s *server) save(w http.ResponseWriter, r *http.Request) {
++	name := r.URL.Query().Get("name")
++	if name == "" || strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
++		http.Error(w, "bad note name", http.StatusBadRequest)
++
++		return
++	}
++
++	body, err := io.ReadAll(r.Body)
++	if err != nil {
++		http.Error(w, err.Error(), http.StatusBadRequest)
++
++		return
++	}
++
++	if len(body) > maxNote {
++		http.Error(w, "note too large", http.StatusRequestEntityTooLarge)
++
++		return
++	}
++
++	if err := os.WriteFile(filepath.Join(s.dir, name+".txt"), body, 0o600); err != nil {
++		http.Error(w, err.Error(), http.StatusInternalServerError)
++
++		return
++	}
++
++	w.WriteHeader(http.StatusCreated)
++}
+diff --git a/server.go b/server.go
+index c8048e6..8b7e1ac 100644
+--- a/server.go
++++ b/server.go
+@@ -11,6 +11,9 @@ func (s *server) routes() http.Handler {
+ 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+ 		w.WriteHeader(http.StatusNoContent)
+ 	})
++	mux.HandleFunc("GET /notes", s.list)
++	mux.HandleFunc("GET /note", s.read)
++	mux.HandleFunc("POST /note", s.save)
+ 
+ 	return mux
+ }
+diff --git a/server_test.go b/server_test.go
+index bf158af..eaf0a8b 100644
+--- a/server_test.go
++++ b/server_test.go
+@@ -3,6 +3,7 @@ package main
+ import (
+ 	"net/http"
+ 	"net/http/httptest"
++	"strings"
+ 	"testing"
+ )
+ 
+@@ -14,3 +15,21 @@ func TestHealth(t *testing.T) {
+ 		t.Fatalf("health = %d", rec.Code)
+ 	}
+ }
++
++func TestSaveThenRead(t *testing.T) {
++	h := (&server{dir: t.TempDir()}).routes()
++
++	rec := httptest.NewRecorder()
++	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/note?name=todo", strings.NewReader("milk\n")))
++
++	if rec.Code != http.StatusCreated {
++		t.Fatalf("save = %d", rec.Code)
++	}
++
++	rec = httptest.NewRecorder()
++	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/note?name=todo", nil))
++
++	if rec.Body.String() != "milk\n" {
++		t.Fatalf("read = %q", rec.Body.String())
++	}
++}

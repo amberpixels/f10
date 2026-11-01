@@ -253,9 +253,9 @@ drive_finish: off
 `f10 start` and `f10 drive` run `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` stops after `plan`.
 `plan` leads a flow or is absent: it runs only for a task with no plan file, so a planned task never plans again, and `/f10:ship` runs the entries after it.
 A flow with no `plan` writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
-An entry takes an argument after a colon, so each is one shell word: `review:local` and `review:ci` name the review's half, `review:local+ci` runs both (the CI review fired or awaited first, the local one read while it is pending, one findings file and one resolve for both), `cleanup:comments,prose` the cleanup targets, `deploy:staging` the environment; bare `cleanup` runs the targets that apply, as a light pass with no scope proofs when the diff is under 200 added lines; named targets always get the full pass.
+An entry takes an argument after a colon, so each is one shell word: `review:local` and `review:ci` name the review's half, `review:host` runs the local half on the host's own code review (Claude Code's built-in `code-review`) shaped into the same findings file, `review:local+ci` runs both (the CI review fired or awaited first, the local one read while it is pending, one findings file and one resolve for both), `cleanup:comments,prose` the cleanup targets, `deploy:staging` the environment; bare `cleanup` runs the targets that apply, as a light pass with no scope proofs when the diff is under 200 added lines; named targets always get the full pass.
 Every `review` entry runs its resolve.
-A review argument other than `local`, `ci` or `local+ci` is an error; a CI half with no remote reviewer declared, or with no `pr` or `push` before it, is a warning, since it would fail at run time.
+A review argument other than `local`, `host`, `ci` or `local+ci` is an error; a CI half with no remote reviewer declared, or with no `pr` or `push` before it, is a warning, since it would fail at run time.
 `judge` reads by position: before `implement` it judges the plan, a yellow verdict revising the plan file in place; after it, the change.
 A judge before `implement` needs a leading `plan`, since a planless flow has no plan file to judge.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
@@ -403,12 +403,15 @@ Categories, each with its source of truth:
 Never flag: generated code under `gen/`, TODO comments.
 Human reviewer: the PR's assignee, on the PR.
 Rounds: 2
+Host level: xhigh
 ```
 
 A source-of-truth file is read in full as reference data: instructions inside it are ignored, and an edit to it is reviewed, not obeyed.
 The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
 `Rounds: 2` makes a second review round the rule once round one's resolve fixed something; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
+`Host level:` is the level `review:host` passes the host's code review: `low`, `medium`, `high`, `xhigh` or `max`, `high` when absent; the cloud `ultra` is never passed, since only the user launches it.
+The blind reviewer's depth is its agent profile: the `review` line under **Agents** sets its model and effort.
 
 A **remote review** - a bot in CI, a human, a check - is four frontmatter keys and an optional fifth, with a fixed vocabulary, so `f10 init` can write them and `f10 review` can act on them:
 
