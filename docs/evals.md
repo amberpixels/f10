@@ -71,6 +71,7 @@ The checks (`cli/cmd/f10eval/checks.go`):
 `feature-small` is the first scenario: it adds a flag to a one-file CLI through `/f10:plan EV-1 && /f10:ship EV-1 --driven` on a `plan implement commit` flow.
 It runs once at `opus:high` and once at `opus:medium`, so the two reports compare cost and duration on the same checks.
 `review-planted` reviews a branch that plants four defects in a small HTTP server: an off-by-one page, a file never closed, a path traversal and an unbounded body read. It runs `/f10:review EV-2 --driven`, the blind reviewer.
+Three of its four defects fall in security and performance, which keeps three findings, so a miss there can mean the reviewer ranked another real finding above a planted one: read the findings file before blaming the reviewer.
 `review-planted-host` runs the same fixture and change through `/f10:review EV-2 host --driven`, the host engine, so the two reports compare the reviewers finding for finding on the `planted` check.
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
 `go test ./cmd/f10eval` covers the checks against a canned result, with no model call.

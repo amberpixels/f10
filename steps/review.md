@@ -253,10 +253,14 @@ It takes the local half's place in rounds, resolve, lore and the state block, an
 1. **Facts**: the main agent gathers the facts **The blind reviewer** lists.
 2. **Invoke** the host's `code-review` skill with the Skill tool, from the main agent, because the skill's higher levels spawn reviewer agents of their own, and a spawned agent may not be allowed to.
    Hand it nothing beyond its arguments, no plan and no facts, so it reviews the diff exactly as it would when the user runs it.
-   Its arguments are a level and a target:
+   It is still not blind the way the blind reviewer is: whatever part of the review the skill runs inline shares the main agent's context, which in a ship flow holds the plan and the implementation.
+   So a project that wants a reviewer that never saw the session keeps `review:local`, and `review:host` buys the host's verification and levels instead.
+   Its arguments are a level, a findings bound and a target:
    - **Level**: `project.md → Review`'s `Host level:` line, one of `low`, `medium`, `high`, `xhigh` or `max`, else `high`.
      Always pass it, because with none the skill reuses the level the user typed last.
      Never pass `ultra`, because that is a billed cloud review only the user launches.
+   - **Findings bound**: always `--max-findings all`, because the skill otherwise keeps the cap the user chose last, and this step applies its own cap of three per category when it shapes the findings.
+     The skill keeps the level and the bound for the user's next `/code-review`, and the report says so in one line.
    - **Target**: the PR number when `f10 review round` prints one on `pr:`, because the PR's target branch is the base.
      With no open PR it is the current branch.
      The skill then diffs against the default branch, so when `f10 pr base` names another branch, the report says so in one line.
@@ -274,7 +278,7 @@ It takes the local half's place in rounds, resolve, lore and the state block, an
    **Never flag** items are dropped.
    A run that reports no findings is recorded as a `clean` round.
    The header says `reviewer: local`, because the findings parser reads any other name as a remote reviewer, and adds the line `engine: host <level>` after it.
-   In round two, the main agent writes `## Prior round` itself, judging each round-one id as point 5 of the brief says, before it invokes the skill.
+   In round two, `## Prior round` is written before the skill runs, by one fresh `general-purpose` agent following point 5 of the blind reviewer's brief, so the agent that made the fixes does not judge them.
 4. **Lore and the state block** are written as for the blind reviewer, with `--source local`, and the main agent picks each severity.
 
 **On failure:** no `code-review` skill in the session, or a run that ends without `ReportFindings`, fails the entry (`conventions/failure.md`).
