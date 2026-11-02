@@ -41,16 +41,17 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	results := doctor.Run(ctx, &doctor.Env{
-		ClaudeDir: filepath.Dir(claudeSettingsPath()),
-		Home:      home,
-		Layout:    t.lay,
-		Probes:    t.pb,
-		Facts:     t.eff,
-		Version:   version(debug.ReadBuildInfo()),
-		Driver:    t.driver(),
-		Getenv:    os.Getenv,
-		LookPath:  exec.LookPath,
-		Run:       shell.Capture,
+		ClaudeDir:   filepath.Dir(claudeSettingsPath()),
+		Home:        home,
+		Layout:      t.lay,
+		Probes:      t.pb,
+		Facts:       t.eff,
+		Version:     version(debug.ReadBuildInfo()),
+		Driver:      t.driver(),
+		NeedsDriver: !t.hostIssues(),
+		Getenv:      os.Getenv,
+		LookPath:    exec.LookPath,
+		Run:         shell.Capture,
 	})
 
 	if cmd.Bool("json") {

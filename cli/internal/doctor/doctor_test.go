@@ -433,9 +433,16 @@ func TestDriverCheck(t *testing.T) {
 			delete(f.path, "f10-drivers")
 			f.drivers = "f10-drivers v0.4.0"
 		}, StatusOK, false, filepath.Join("go", "bin", "f10-drivers")},
-		{"version fails", func(f *fixture) {
+		{"predates --version", func(f *fixture) {
 			f.shim(`exec f10-drivers notion "$@"`)
-		}, StatusProblem, false, "--version failed"},
+		}, StatusProblem, true, "predates --version"},
+		{"commented-out old path", func(f *fixture) {
+			f.shim("# was: exec /nope/f10-drivers notion \"$@\"\nexec f10-drivers notion \"$@\" # current")
+			f.drivers = "f10-drivers v0.3.0"
+		}, StatusProblem, true, "v0.3.0"},
+		{"tracker needs a driver, none found", func(f *fixture) {
+			f.e.NeedsDriver = true
+		}, StatusProblem, false, "no .f10/driver"},
 		{"dev build", func(f *fixture) {
 			f.shim(`exec f10-drivers notion "$@"`)
 			f.drivers = "f10-drivers dev"
@@ -456,8 +463,13 @@ func TestDriverCheck(t *testing.T) {
 				t.Fatalf("status = %q (%s), want %q with %q", r.Status, r.Detail, c.want, c.detail)
 			}
 
-			if c.want == StatusProblem && r.Remedy != driver.F10DriversInstall {
-				t.Errorf("remedy = %q, want the install command", r.Remedy)
+			want := driver.F10DriversInstall
+			if f.e.Driver == nil {
+				want = "docs/driver-contract.md"
+			}
+
+			if c.want == StatusProblem && !strings.Contains(r.Remedy, want) {
+				t.Errorf("remedy = %q, want it to contain %q", r.Remedy, want)
 			}
 
 			if c.want != StatusProblem && r.Remedy != "" {

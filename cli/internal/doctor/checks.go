@@ -514,6 +514,15 @@ const versionTimeout = 5 * time.Second
 // shim: released f10-drivers answers --version only as its sole argument.
 func checkDriver(ctx context.Context, env *Env) Result {
 	r := Result{Name: CheckDriver}
+
+	if env.Driver == nil {
+		r.Status = StatusProblem
+		r.Detail = "the tracker reads only through a driver, and no .f10/driver was found"
+		r.Remedy = "add an executable .f10/driver (docs/driver-contract.md); for Notion, exec f10-drivers notion \"$@\""
+
+		return r
+	}
+
 	shim := env.Driver.Path
 
 	exe, named := driversExecutable(env, shim)
@@ -535,9 +544,20 @@ func checkDriver(ctx context.Context, env *Env) Result {
 	defer cancel()
 
 	res, err := env.Run(ctx, env.Driver.Dir, exe, "--version")
-	if err != nil || res.Code != 0 {
+	if err != nil {
 		r.Status = StatusProblem
-		r.Detail = exe + " --version failed"
+		r.Detail = exe + " --version did not run: " + err.Error()
+		r.Remedy = driver.F10DriversInstall
+
+		return r
+	}
+
+	// v0.1.0 rejects --version as a usage error; v0.2.0 first answers it
+	if res.Code != 0 {
+		r.Status = StatusProblem
+		r.Scope = driverScope
+		r.Detail = driversName + " at " + exe + " predates --version, so it is older than v0.2.0 and below " +
+			driver.MinF10Drivers + " that --set on task create needs"
 		r.Remedy = driver.F10DriversInstall
 
 		return r
@@ -591,7 +611,7 @@ func driversExecutable(env *Env, shim string) (string, bool) {
 	head := make([]byte, 4096) // a shim is a line or two; never read a binary whole
 	n, _ := io.ReadFull(f, head)
 
-	for tok := range strings.FieldsSeq(string(head[:n])) {
+	for tok := range strings.FieldsSeq(stripComments(string(head[:n]))) {
 		tok = os.Expand(strings.Trim(tok, `"'`), env.Getenv)
 		if filepath.Base(tok) != driversName {
 			continue
@@ -615,4 +635,18 @@ func driversExecutable(env *Env, shim string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// stripComments drops each line's shell comment, the shebang included, so a
+// commented-out old exec line never names the executable.
+func stripComments(script string) string {
+	lines := strings.Split(script, "\n")
+	for i, line := range lines {
+		before, _, found := strings.Cut(line, "#")
+		if found && (before == "" || strings.HasSuffix(before, " ") || strings.HasSuffix(before, "\t")) {
+			lines[i] = before
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
