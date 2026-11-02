@@ -213,6 +213,11 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 			map[string]string{"review": "local: round 1 running (driven)"},
 		},
 		{
+			"a host engine review is the local half",
+			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "FT-1 host"})},
+			map[string]string{"review": "local: round 1 running (manual)"},
+		},
+		{
 			"a remote review read in",
 			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "FT-1 ci"})},
 			map[string]string{"review": "local: pending · remote: round 1 running (manual)"},

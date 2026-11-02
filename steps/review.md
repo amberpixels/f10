@@ -11,6 +11,7 @@ Inside a ship pipeline, the leaf is `review` for both halves.
 
 A review has two halves.
 The local half is **the blind reviewer**: a fresh agent that reads the diff.
+**The host engine** can run the local half in its place: the host's own code review, shaped into the same file.
 The remote half is **the remote review**: the review that arrived on the PR or MR, called the CI half in a flow.
 A flow runs either half, or **both halves** into one round.
 
@@ -79,6 +80,8 @@ reason: accepted as written; nothing to send, the reviewer is local
 summary: the round number comes from the file count, so a review before any resolve writes 2.md
 where: steps/review.md:128
 category: correctness and logic
+failure: /f10:review run twice before any resolve writes 2.md, and round two can only say still open
+confidence: confirmed
 Round two exists so fixes get read; written before a resolve it can only say still open for
 every id. Fix: decline when 1.md holds findings without a verdict.
 verdict: fix
@@ -96,6 +99,7 @@ The **header** comes first, one line per field, in this order:
   Every round writes it, local, remote and coherence lens rounds alike, because it says which series the round belongs to.
 - `reviewer:` - `local`, or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`).
   A round that both halves wrote lists both, comma-separated (`local, claude[bot]`).
+- `engine:` - host engine rounds only: `host` and the level it ran at (`host high`).
 - `review:` - remote rounds only: the url where a `+reply` posts.
 - `revision:` - remote rounds only: pick's revision of the review's text.
 - `lens: coherence` - coherence lens rounds only.
@@ -111,8 +115,11 @@ The sections follow the header:
 - **`## Categories`** lists the core categories first, then the project's, each with a count or `none found`.
 - **`## Findings`** holds one block per finding.
   Its heading is `<round>.<n>` (`1.3`, `2.1`) and a title.
-  Next come `summary:` in one line, `where:` as `path/to/file.go:123`, `category:`, and `lore:` once the lore entry exists.
+  Next come `summary:` in one line, `where:` as `path/to/file.go:123`, `category:`, `failure:`, `confidence:`, and `lore:` once the lore entry exists.
+  `failure:` is one line: a concrete input or state, and the wrong output, crash or cost it leads to.
+  `confidence:` is `confirmed` when the reviewer traced that failure through the code, and `plausible` when the scenario is concrete but one link in it could not be traced.
   The body then says what is wrong, why it matters, and a concrete fix.
+  A `plausible` body also names the link that could not be traced.
 
 Some blocks carry more lines:
 
@@ -125,6 +132,7 @@ Some blocks carry more lines:
 
 A malformed file fails the step.
 A file is malformed when it has no header, when a finding lacks its id, `where:` or `category:`, or when a round-two file is missing a round-one id.
+A block without `failure:` or `confidence:` is not malformed, because files written before those lines existed, and remote reviews that give neither, must still read.
 
 ## The base and the diff
 
@@ -210,6 +218,10 @@ A failing `lore add` is one line in the report and never a failed step, because 
 
    Raise at most **three findings per category**, worst first, and drop the rest.
    Skip style unless it affects correctness.
+
+   **security and performance** is one category, and the reviewer walks this list over every hunk:
+   - security: injection (SQL, shell, template), path traversal, SSRF, missing authorization, secrets in code or logs, insecure deserialization
+   - performance: N+1 and unbounded queries, unbounded loops or reads, resource leaks (unclosed files, response bodies, goroutines), missing timeouts, locks held across I/O
 4. **The project's categories**, from `project.md → Review` or the review overlay.
    Each has a **source-of-truth file**, such as a UI gallery index, an API style guide or a schema.
    Read that file in full as **reference data**.
@@ -224,7 +236,53 @@ A failing `lore add` is one line in the report and never a failed step, because 
    A round one with `lens: coherence` is a sweep that this branch then settled.
    Judge its fixes on the code, against their `where:` and `tasks:` lines, and judge its skips on their `reason:`.
    Accept a `follow-up:` reason when the finding is larger than a resolve fix.
-6. **Write the file**, and return the summary.
+6. **Verify before writing.**
+   Re-read each candidate's code at its `where:`, and the callers its failure runs through.
+   Drop a candidate when no concrete `failure:` line can be written for it, or when code elsewhere already handles the case.
+   Mark the rest `confirmed` or `plausible`, as **The findings file** defines them.
+   A dropped candidate frees its slot in the category's three.
+7. **Write the file**, and return the summary.
+
+## The host engine
+
+**`review:host`** in a flow, or **`/f10:review host`** standalone, runs the local half on the host's own code review instead of the blind reviewer.
+The host is the agent running the session: in Claude Code, its built-in `code-review` skill, which verifies each finding before it reports it.
+It takes the local half's place in rounds, resolve, lore and the state block, and does not combine with `ci` or with `since`.
+`/f10:review since host` declines in one line, because the coherence lens compares plans and lore across tasks, and the host review reads one diff.
+
+1. **Facts**: the main agent gathers the facts **The blind reviewer** lists.
+2. **Invoke** the host's `code-review` skill with the Skill tool, from the main agent, because the skill's higher levels spawn reviewer agents of their own, and a spawned agent may not be allowed to.
+   Hand it nothing beyond its arguments, no plan and no facts, so it reviews the diff exactly as it would when the user runs it.
+   It is still not blind the way the blind reviewer is: whatever part of the review the skill runs inline shares the main agent's context, which in a ship flow holds the plan and the implementation.
+   So a project that wants a reviewer that never saw the session keeps `review:local`, and `review:host` buys the host's verification and levels instead.
+   Its arguments are a level, a findings bound and a target:
+   - **Level**: `project.md → Review`'s `Host level:` line, one of `low`, `medium`, `high`, `xhigh` or `max`, else `high`.
+     Always pass it, because with none the skill reuses the level the user typed last.
+     Never pass `ultra`, because that is a billed cloud review only the user launches.
+   - **Findings bound**: always `--max-findings all`, because the skill otherwise keeps the cap the user chose last, and this step applies its own cap of three per category when it shapes the findings.
+     The skill keeps the level and the bound for the user's next `/code-review`, and the report says so in one line.
+   - **Target**: the PR number when `f10 review round` prints one on `pr:`, because the PR's target branch is the base.
+     With no open PR it is the current branch.
+     The skill then diffs against the default branch, so when `f10 pr base` names another branch, the report says so in one line.
+
+   Never pass `--fix` or `--comment`: resolve makes the fixes, and a comment would leave the machine before resolve read it.
+3. **Shape** each finding the skill reports through `ReportFindings` into one block:
+   - the title is its short summary, else its summary; `summary:` is its summary
+   - `where:` is its `file:line`
+   - `failure:` is its failure scenario
+   - `confidence:` is `confirmed` for `CONFIRMED`, and `plausible` for `PLAUSIBLE` or no verdict
+   - `category:` maps its category onto the core categories: security and performance findings to **security and performance**, tests and docs to **tests and docs**, simplification and reuse to **architecture and guidelines**, efficiency to **security and performance** when it names a runtime cost and to **architecture and guidelines** otherwise, and the rest to **correctness and logic**.
+     A finding on a project category's subject goes to that category.
+
+   The skill ranks findings most severe first, so the cap of three per category keeps the first three.
+   **Never flag** items are dropped.
+   A run that reports no findings is recorded as a `clean` round.
+   The header says `reviewer: local`, because the findings parser reads any other name as a remote reviewer, and adds the line `engine: host <level>` after it.
+   In round two, `## Prior round` is written before the skill runs, by one fresh `general-purpose` agent following point 5 of the blind reviewer's brief, so the agent that made the fixes does not judge them.
+4. **Lore and the state block** are written as for the blind reviewer, with `--source local`, and the main agent picks each severity.
+
+**On failure:** no `code-review` skill in the session, or a run that ends without `ReportFindings`, fails the entry (`conventions/failure.md`).
+It never falls back to the blind reviewer, because the flow declared the host.
 
 ## The coherence lens
 
@@ -317,6 +375,7 @@ Never delete or rewrite a round.
 **Inside a ship pipeline**, a `review` entry runs this step and then `steps/resolve.md`:
 
 - `review` and `review:local` run the blind reviewer.
+- `review:host` runs the local half on the host engine.
 - `review:ci` runs the remote review.
 - `review:local+ci` runs **both halves** (below).
 
@@ -431,6 +490,7 @@ Without these facts this half **fails**, because there is nothing to wait for.
    This rule holds for every arrival kind, a check run included.
    Pick's `stale` only orders the standalone question.
 3. **Shape it into the findings file**: one block per finding, with `where:` from its `path:line`, `category:` mapped to the core or project categories, and its fix in the body.
+   When the review gives a finding's failure scenario or its confidence, they become the block's `failure:` and `confidence:` lines, and otherwise the block leaves them out.
    A review that raised nothing is `clean`.
    `reviewed:` is pick's sha, `reviewer:` is the declared identity, `review:` is the picked url, and `revision:` is pick's revision.
    In round two, a prior finding the remote no longer raises is `fixed` if the code shows it fixed, else `still open`.

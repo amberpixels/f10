@@ -82,7 +82,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | the plan file saved, before any code, or the call handed to the task's own agent |
 | `/f10:ship [<id \| plan.md \| desc>]` | whatever is missing, then the flow | the end of the declared flow (an open PR by default), or the call handed to the task's own agent |
 | `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose rewritten for clarity, leftovers taken out of the code, each diff proven in scope (a small one gets a light pass without proofs), verify green, nothing committed |
-| `/f10:review <id \| PR \| this branch> [ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, or one read in from the CI review. With `since`, a check of how the tasks since a ref (the last tag by default) fit together, against their plans and lore |
+| `/f10:review <id \| PR \| this branch> [host \| ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, from the host's own code review with `host`, or one read in from the CI review. With `since`, a check of how the tasks since a ref (the last tag by default) fit together, against their plans and lore |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, the fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk through |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | for a change, what it was and what it is now. For a thing, what it is |
@@ -167,7 +167,7 @@ These are the terms the skills, and the rest of this README, use.
   With none declared, the flow is `plan implement pr`.
   `plan` leads a flow, and it runs only for a task with no plan file.
   `/f10:ship` runs the entries after it.
-  An entry can take an argument after a colon: `review:local`, `review:ci`, `review:local+ci` (both halves, one resolve), `cleanup:comments,prose`, `deploy:staging`.
+  An entry can take an argument after a colon: `review:local`, `review:host` (the host's own code review, shaped into the same findings), `review:ci`, `review:local+ci` (both halves, one resolve), `cleanup:comments,prose`, `deploy:staging`.
   A `judge` entry before `implement` judges the plan, and one after `implement` judges the change.
   A name with no generic step, such as `e2e`, is project-defined: its `.f10/instructions/<name>.md` *is* the step.
   `f10 start` and `f10 drive` run the `default` flow, `--local` runs `local`, and `--flow <name>` runs any other.

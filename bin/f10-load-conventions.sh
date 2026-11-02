@@ -14,11 +14,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 convs=(context latency failure gaps report voice)
 
-echo "=== f10 conventions - static, identical every run ==="
+echo "=== f10 conventions (static) ==="
 echo "carries: ${convs[*]}"
 echo
 for c in "${convs[@]}"; do
-  echo "--- convention: $c ---"
+  echo "--- $c ---"
   if [ -f "$root/conventions/$c.md" ]; then
     cat "$root/conventions/$c.md"
   else
@@ -26,4 +26,4 @@ for c in "${convs[@]}"; do
   fi
   echo
 done
-echo "=== end f10 conventions - in this context now; the hooks say when to run this again ==="
+echo "=== end f10 conventions ==="

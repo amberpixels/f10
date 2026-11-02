@@ -46,6 +46,14 @@ Commit the reports with a release. Two releases then compare by diffing their fi
 - `scenario.json`: `task`, `prompt`, the `verify` commands, the `accept` commands with the stdout each must print, the `checks` to run, and the `agents` profiles it runs on (none: one run on the kind's default). It stays outside the fixture, so the run never sees what it is checked against;
 - `repo/`: the fixture. Its `f10/` is copied to `.f10/`, because a `.f10/` inside this repo would be excluded along with f10's own.
 
+A review scenario adds three fields to `scenario.json`:
+
+- `change`: a patch, relative to the scenario's directory, committed on a branch `<task>/change` after the initial commit, so the run has a branch to review against `main`.
+- `planted`: the defects the change carries on purpose, each `{file, from, to, what}`. They stay outside the fixture, so the reviewer never sees them.
+- `max_extra`: how many findings may land outside every planted defect, 2 when absent, because a real nit is not noise.
+
+`fixture` names another scenario whose `repo/` to run in, so two scenarios review one fixture with different prompts.
+
 The checks (`cli/cmd/f10eval/checks.go`):
 
 | check | passes when |
@@ -58,8 +66,12 @@ The checks (`cli/cmd/f10eval/checks.go`):
 | `findings` | every `where:` in `.f10/reviews/<task>/*.md` names a file that exists and a line it has |
 | `verdict` | each `.f10/verdicts/<task>/*.md` carries one of the four verdicts |
 | `lore` | `f10 lore validate <task>` passes |
+| `planted` | every planted defect has a finding whose `where:` falls in its lines, and at most `max_extra` findings fall outside them; the detail gives both counts on a pass too |
 
 `feature-small` is the first scenario: it adds a flag to a one-file CLI through `/f10:plan EV-1 && /f10:ship EV-1 --driven` on a `plan implement commit` flow.
 It runs once at `opus:high` and once at `opus:medium`, so the two reports compare cost and duration on the same checks.
+`review-planted` reviews a branch that plants four defects in a small HTTP server: an off-by-one page, a file never closed, a path traversal and an unbounded body read. It runs `/f10:review EV-2 --driven`, the blind reviewer.
+Three of its four defects fall in security and performance, which keeps three findings, so a miss there can mean the reviewer ranked another real finding above a planted one: read the findings file before blaming the reviewer.
+`review-planted-host` runs the same fixture and change through `/f10:review EV-2 host --driven`, the host engine, so the two reports compare the reviewers finding for finding on the `planted` check.
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
 `go test ./cmd/f10eval` covers the checks against a canned result, with no model call.

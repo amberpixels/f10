@@ -123,12 +123,13 @@ func ShipEntries(flow []string) []string {
 	return flow
 }
 
-// ReviewHalves is which halves a review entry's argument runs: none or
-// `local` the local review, `ci` the remote one, `local+ci` both, in
-// either order. Neither for any other argument.
+// ReviewHalves is which halves a review entry's argument runs: none,
+// `local` or `host` the local review (`host` runs it on the host's own code
+// review), `ci` the remote one, `local+ci` both, in either order. Neither
+// for any other argument.
 func ReviewHalves(arg string) (bool, bool) {
 	switch strings.ToLower(arg) {
-	case "", "local":
+	case "", "local", "host":
 		return true, false
 	case "ci":
 		return false, true
@@ -183,8 +184,8 @@ func checkFlow(name string, flow []string) []string {
 		case colon && arg == "":
 			bad = append(bad, fmt.Sprintf("flows.%s: %q has a colon and no argument", name, e))
 		case step == "review" && !anyHalf(arg):
-			bad = append(bad, fmt.Sprintf("flows.%s: %q names no review half; write review:local, review:ci "+
-				"or review:local+ci", name, e))
+			bad = append(bad, fmt.Sprintf("flows.%s: %q names no review half; write review:local, review:host, "+
+				"review:ci or review:local+ci", name, e))
 		case step == "catchup":
 			bad = append(bad, fmt.Sprintf("flows.%s: catchup is never an entry: ship catches up before implement, "+
 				"pr and a change judge; the catchup key picks merge, rebase or off", name))

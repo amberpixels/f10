@@ -1,0 +1,18 @@
+{
+  "description": "a blind review of a branch with four planted defects, one per kind",
+  "task": "EV-2",
+  "prompt": "/f10:review EV-2 --driven",
+  "change": "change.patch",
+  "checks": [
+    "findings",
+    "planted",
+    "lore"
+  ],
+  "planted": [
+    {"file": "notes.go", "from": 43, "to": 46, "what": "pages start at 1, so page 1 skips the first ten notes, and a page past the end slices out of range"},
+    {"file": "notes.go", "from": 47, "to": 53, "what": "each listed note's file is opened and never closed"},
+    {"file": "notes.go", "from": 58, "to": 61, "what": "read joins the name unchecked, so ../ escapes the notes directory"},
+    {"file": "notes.go", "from": 80, "to": 91, "what": "save reads the whole body before the 1 MiB check, so a huge body is held in memory"}
+  ],
+  "max_extra": 2
+}

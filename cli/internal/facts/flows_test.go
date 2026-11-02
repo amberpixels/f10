@@ -62,7 +62,7 @@ func TestCheckFlow(t *testing.T) {
 	ok := Declared{Flows: map[string]Flow{
 		"default": {"plan", "judge", "implement", "judge", "pr"},
 		"direct":  {"implement", "judge", "push"},
-		"both":    {"plan", "implement", "pr", "review:local+ci", "review", "review:ci", "review (CI)"},
+		"both":    {"plan", "implement", "pr", "review:local+ci", "review", "review:ci", "review (CI)", "review:host"},
 	}, DriveFinish: "on"}.check()
 	if len(ok) > 0 {
 		t.Errorf("valid flows fail: %v", ok)
@@ -101,6 +101,7 @@ func TestReviewHalves(t *testing.T) {
 	for arg, want := range map[string][2]bool{
 		"":         {true, false},
 		"local":    {true, false},
+		"host":     {true, false},
 		"ci":       {false, true},
 		"CI":       {false, true},
 		"local+ci": {true, true},

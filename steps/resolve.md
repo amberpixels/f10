@@ -70,6 +70,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
    If the code a finding names no longer exists, its verdict is `skip`, and the reason says so.
 4. **Give each finding one verdict.**
    Neither agree blindly nor push back by reflex.
+   A block marked `confidence: plausible` names a link its reviewer could not trace, so check that link in the code before a `fix`, and `skip` it when the link does not hold.
    - **`fix`**: fix the problem the finding names, in the house style.
      The finding's proposed fix is only a suggestion.
    - **`skip`**: give an argued `reason:` in a line or two, because the next round's reviewer reads it.

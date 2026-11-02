@@ -5,6 +5,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,14 +23,18 @@ import (
 
 // A Scenario is one evals/scenarios/<name>/scenario.json.
 type Scenario struct {
-	Name        string   `json:"-"`
-	Description string   `json:"description"`
-	Task        string   `json:"task"`
-	Prompt      string   `json:"prompt"`
-	Verify      []string `json:"verify"`
-	Accept      []Accept `json:"accept"`
-	Checks      []string `json:"checks"`
-	Agents      []string `json:"agents"` // the profiles the scenario runs on, one run each; none is one run on the kind's default
+	Name        string    `json:"-"`
+	Description string    `json:"description"`
+	Task        string    `json:"task"`
+	Prompt      string    `json:"prompt"`
+	Verify      []string  `json:"verify"`
+	Accept      []Accept  `json:"accept"`
+	Checks      []string  `json:"checks"`
+	Agents      []string  `json:"agents"`  // the profiles the scenario runs on, one run each; none is one run on the kind's default
+	Fixture     string    `json:"fixture"` // another scenario whose repo/ this one runs in; none is its own
+	Change      string    `json:"change"`  // a patch, relative to the scenario's dir, committed on <task>/change for a review to read
+	Planted     []Planted `json:"planted"`
+	MaxExtra    *int      `json:"max_extra"` // findings allowed outside every planted defect; none is defaultMaxExtra
 
 	env []string // the run's environment, so a check that runs f10 reads the run's state
 	f10 string   // this checkout's bin/f10, the binary the run itself used
@@ -40,6 +45,15 @@ type Scenario struct {
 type Accept struct {
 	Run  string `json:"run"`
 	Want string `json:"want"`
+}
+
+// A Planted defect is one a review scenario's change carries on purpose:
+// a finding must land in File between lines From and To.
+type Planted struct {
+	File string `json:"file"`
+	From int    `json:"from"`
+	To   int    `json:"to"`
+	What string `json:"what"`
 }
 
 // A Report is one scenario's run, as written under evals/reports.
@@ -205,11 +219,21 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		defer os.RemoveAll(tmp)
 	}
 
+	scenarios := filepath.Join(root, "evals", "scenarios")
 	dir := filepath.Join(tmp, "repo")
-	if err := prepare(ctx, filepath.Join(root, "evals", "scenarios", s.Name, "repo"), dir); err != nil {
+
+	if err := prepare(ctx, filepath.Join(scenarios, cmp.Or(s.Fixture, s.Name), "repo"), dir); err != nil {
 		rep.Error = err.Error()
 
 		return rep
+	}
+
+	if s.Change != "" {
+		if err := applyChange(ctx, dir, s.Task, filepath.Join(scenarios, s.Name, s.Change)); err != nil {
+			rep.Error = err.Error()
+
+			return rep
+		}
 	}
 
 	s.env = runEnv(os.Environ(), tmp)
@@ -285,6 +309,28 @@ func prepare(ctx context.Context, src, dir string) error {
 	}
 
 	return os.WriteFile(filepath.Join(dir, ".git", "info", "exclude"), []byte(".f10/\n"), 0o600)
+}
+
+// applyChange commits the patch on a branch named for the task, so a review
+// run finds the task's branch checked out with a diff against main.
+func applyChange(ctx context.Context, dir, task, patch string) error {
+	abs, err := filepath.Abs(patch)
+	if err != nil {
+		return err
+	}
+
+	for _, args := range [][]string{
+		{"checkout", "-q", "-b", task + "/change"},
+		{"apply", abs},
+		{"add", "-A"}, // prepare already excluded .f10/, and a pathspec naming it would fail as ignored
+		{"commit", "-qm", task + ": change"},
+	} {
+		if out, err := git(ctx, dir, args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("git %s: %w: %s", args[0], err, out)
+		}
+	}
+
+	return nil
 }
 
 func git(ctx context.Context, dir string, args ...string) *exec.Cmd {

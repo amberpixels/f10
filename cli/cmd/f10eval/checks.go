@@ -29,6 +29,7 @@ var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"verify":   checkVerify,
 	"commit":   checkCommit,
 	"findings": checkFindings,
+	"planted":  checkPlanted,
 	"verdict":  checkVerdict,
 	"lore":     checkLore,
 }
@@ -114,28 +115,97 @@ func checkCommit(ctx context.Context, dir string, _ Scenario) Check {
 var whereRE = regexp.MustCompile(`^where:\s*(\S+?):(\d+)`)
 
 func checkFindings(_ context.Context, dir string, s Scenario) Check {
-	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "reviews", s.Task, "*.md"))
+	found, files := findingWheres(dir, s.Task)
 	if len(files) == 0 {
 		return result("findings", []string{"no findings file"})
 	}
 
 	var problems []string
 
+	for _, w := range found {
+		if lines, err := countLines(filepath.Join(dir, w.file)); err != nil || w.line < 1 || w.line > lines {
+			problems = append(problems, fmt.Sprintf("%s: where: %s:%d does not resolve", w.round, w.file, w.line))
+		}
+	}
+
+	return result("findings", problems)
+}
+
+// defaultMaxExtra is how many findings a review scenario allows outside its
+// planted defects when it names no max_extra: a real nit is not noise.
+const defaultMaxExtra = 2
+
+// checkPlanted passes when every planted defect has a finding in its line
+// range, and the findings outside every range stay within max_extra, the
+// scenario's bound on false positives.
+func checkPlanted(_ context.Context, dir string, s Scenario) Check {
+	found, files := findingWheres(dir, s.Task)
+	if len(files) == 0 {
+		return result("planted", []string{"no findings file"})
+	}
+
+	var problems []string
+
+	for _, p := range s.Planted {
+		if !slices.ContainsFunc(found, p.covers) {
+			problems = append(problems, fmt.Sprintf("missed %s:%d-%d (%s)", p.File, p.From, p.To, p.What))
+		}
+	}
+
+	missed := len(problems)
+
+	extra := 0
+
+	for _, w := range found {
+		if !slices.ContainsFunc(s.Planted, func(p Planted) bool { return p.covers(w) }) {
+			extra++
+		}
+	}
+
+	limit := defaultMaxExtra
+	if s.MaxExtra != nil {
+		limit = *s.MaxExtra
+	}
+
+	if extra > limit {
+		problems = append(problems,
+			fmt.Sprintf("%d findings outside the planted defects, at most %d allowed", extra, limit))
+	}
+
+	// the counts go in the detail on a pass too, so two reports compare
+	problems = append(problems,
+		fmt.Sprintf("%d of %d planted found, %d outside", len(s.Planted)-missed, len(s.Planted), extra))
+	c := result("planted", problems)
+	c.Pass = len(problems) == 1
+
+	return c
+}
+
+func (p Planted) covers(w where) bool {
+	return w.file == p.File && w.line >= p.From && w.line <= p.To
+}
+
+// A where is one finding's where: line, and the round file it came from.
+type where struct {
+	round, file string
+	line        int
+}
+
+func findingWheres(dir, task string) ([]where, []string) {
+	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "reviews", task, "*.md"))
+
+	var found []where
+
 	for _, f := range files {
 		eachLine(f, func(line string) {
-			m := whereRE.FindStringSubmatch(strings.TrimSpace(line))
-			if m == nil {
-				return
-			}
-
-			n, _ := strconv.Atoi(m[2])
-			if lines, err := countLines(filepath.Join(dir, m[1])); err != nil || n < 1 || n > lines {
-				problems = append(problems, fmt.Sprintf("%s: where: %s:%d does not resolve", filepath.Base(f), m[1], n))
+			if m := whereRE.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+				n, _ := strconv.Atoi(m[2])
+				found = append(found, where{round: filepath.Base(f), file: m[1], line: n})
 			}
 		})
 	}
 
-	return result("findings", problems)
+	return found, files
 }
 
 var verdicts = []string{"proceed", "proceed with changes", "rethink", "stop"}
