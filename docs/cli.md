@@ -113,6 +113,7 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 | `statusline` | `statusLine` in `settings.json` runs `~/.claude/f10/statusline`, and the link resolves; scoped to the status-line badge | add the segment from [the status line](statusline.md), or start a session to relink it |
 | `herdr` | `herdr` on PATH; scoped to `start`, `forward`, `drive` and `finish` | install Herdr |
 | `host` | the `gh` or `glab` the remote routes to, installed and `auth status` green for the host; `not needed here` without a remote | `<cli> auth login --hostname <host>` |
+| `driver` | the `f10-drivers` the `.f10/driver` shim runs (the shim itself, or the path or bare name its text gives): its `--version` against the oldest release this binary works with, v0.4.0, the first that takes `--set` on `task create`; a too-old one is scoped to `task create --set`; a custom driver is not compared, and a project without a driver gets no row | `go install github.com/amberpixels/f10-drivers/cmd/f10-drivers@latest` |
 | `project` | `project.md` frontmatter: no unknown keys or values; `not needed here` outside a project | edit the named `project.md`; `f10 config` shows every fact |
 
 Inside a session the plugin judged is the one on the session's PATH (a directory marketplace or `--plugin-dir` included); outside one, the install `installed_plugins.json` records.

@@ -474,6 +474,7 @@ Each entry names the key the driver knows, its allowed values, and how to choose
 The capture step reads it and passes each value to `f10 task create` as `--set <key>=<value>`, so the task is created classified in one write.
 A capture overlay (`.f10/instructions/capture.md`) can add or override entries, because overlays layer on top of `project.md`.
 The driver must take `--set` on `create`, which f10-drivers does from v0.4.0; an older one drops the property with a warning, and capture sets it with `f10 task update` instead.
+`f10 doctor` flags an older one and names the command that upgrades it.
 
 ```markdown
 ## Tracker

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -42,7 +43,8 @@ type Env struct {
 	Layout    *layout.Layout
 	Probes    *probe.Probes
 	Facts     *facts.Effective
-	Version   string // the binary's, as `f10 --version` prints it
+	Version   string         // the binary's, as `f10 --version` prints it
+	Driver    *driver.Driver // the project's tracker driver; nil when it has none
 
 	Getenv   func(string) string
 	LookPath func(string) (string, error)
@@ -62,8 +64,14 @@ func Run(ctx context.Context, env *Env) []Result {
 		checkStatusline(env, set),
 		checkHerdr(env),
 		checkHost(ctx, env),
-		checkProject(env),
 	}
+
+	// a tracker that needs no driver gets no row, not a not-needed one
+	if env.Driver != nil {
+		results = append(results, checkDriver(ctx, env))
+	}
+
+	results = append(results, checkProject(env))
 
 	for i := range results {
 		if results[i].Scope == nil {

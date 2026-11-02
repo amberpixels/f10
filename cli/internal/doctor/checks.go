@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
@@ -21,6 +23,7 @@ const (
 	CheckStatusline = "statusline"
 	CheckHerdr      = "herdr"
 	CheckHost       = "host"
+	CheckDriver     = "driver"
 	CheckProject    = "project"
 )
 
@@ -56,7 +59,7 @@ func resolvePlugin(env *Env, in *install) plugin {
 
 	if inSession(env) {
 		if path, err := env.LookPath(stateScript); err == nil {
-			root := filepath.Dir(realDir(filepath.Dir(path)))
+			root := filepath.Dir(realPath(filepath.Dir(path)))
 			if name, version := readManifest(root); name == pluginName {
 				p.Root, p.Version, p.Origin = root, version, originSession
 
@@ -490,10 +493,126 @@ func projectFile(lay *layout.Layout) string {
 	return filepath.Join(lay.Layers[len(lay.Layers)-1].Dir, "project.md")
 }
 
-func realDir(dir string) string {
-	if r, err := filepath.EvalSymlinks(dir); err == nil {
+func realPath(path string) string {
+	if r, err := filepath.EvalSymlinks(path); err == nil {
 		return r
 	}
 
-	return dir
+	return path
+}
+
+// driversName is the executable a project's .f10/driver shim runs.
+const driversName = "f10-drivers"
+
+// driverScope is what a too-old f10-drivers breaks; every other verb works.
+var driverScope = []string{"task create --set"}
+
+// versionTimeout bounds `f10-drivers --version`, so a hung executable never hangs doctor.
+const versionTimeout = 5 * time.Second
+
+// checkDriver reads the version off the f10-drivers the shim runs, not the
+// shim: released f10-drivers answers --version only as its sole argument.
+func checkDriver(ctx context.Context, env *Env) Result {
+	r := Result{Name: CheckDriver}
+	shim := env.Driver.Path
+
+	exe, named := driversExecutable(env, shim)
+	if !named {
+		r.Status, r.Detail = StatusOK, "custom driver at "+shim+"; its version is not compared"
+
+		return r
+	}
+
+	if exe == "" {
+		r.Status = StatusProblem
+		r.Detail = shim + " runs " + driversName + ", which is not found"
+		r.Remedy = driver.F10DriversInstall
+
+		return r
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
+	defer cancel()
+
+	res, err := env.Run(ctx, env.Driver.Dir, exe, "--version")
+	if err != nil || res.Code != 0 {
+		r.Status = StatusProblem
+		r.Detail = exe + " --version failed"
+		r.Remedy = driver.F10DriversInstall
+
+		return r
+	}
+
+	fields := strings.Fields(res.Stdout)
+	got := ""
+
+	if len(fields) > 1 {
+		got = fields[1]
+	}
+
+	switch {
+	case !parses(got):
+		r.Status = StatusOK
+		r.Detail = driversName + " at " + exe + " is a dev build (" + strings.TrimSpace(res.Stdout) +
+			"), not compared with " + driver.MinF10Drivers
+	case older(got, driver.MinF10Drivers):
+		r.Status = StatusProblem
+		r.Scope = driverScope
+		r.Detail = driversName + " " + got + " at " + exe + ", below " + driver.MinF10Drivers +
+			" that --set on task create needs"
+		r.Remedy = driver.F10DriversInstall
+	default:
+		r.Status, r.Detail = StatusOK, driversName+" "+got+" at "+exe
+	}
+
+	return r
+}
+
+func parses(v string) bool {
+	_, ok := core(v)
+
+	return ok
+}
+
+// driversExecutable is the f10-drivers a shim runs, or the shim itself when
+// it resolves to one. named false is a custom driver; named with no path is
+// an f10-drivers that is not installed.
+func driversExecutable(env *Env, shim string) (string, bool) {
+	if filepath.Base(realPath(shim)) == driversName {
+		return shim, true
+	}
+
+	f, err := os.Open(shim)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+
+	head := make([]byte, 4096) // a shim is a line or two; never read a binary whole
+	n, _ := io.ReadFull(f, head)
+
+	for tok := range strings.FieldsSeq(string(head[:n])) {
+		tok = os.Expand(strings.Trim(tok, `"'`), env.Getenv)
+		if filepath.Base(tok) != driversName {
+			continue
+		}
+
+		if filepath.IsAbs(tok) {
+			if _, err := os.Stat(tok); err != nil {
+				return "", true
+			}
+
+			return tok, true
+		}
+
+		// a bare name: the shim runs under this PATH
+		path, err := env.LookPath(driversName)
+		if err != nil {
+			return "", true
+		}
+
+		return path, true
+	}
+
+	return "", false
 }

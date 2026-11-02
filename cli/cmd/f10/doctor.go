@@ -47,6 +47,7 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 		Probes:    t.pb,
 		Facts:     t.eff,
 		Version:   version(debug.ReadBuildInfo()),
+		Driver:    t.driver(),
 		Getenv:    os.Getenv,
 		LookPath:  exec.LookPath,
 		Run:       shell.Capture,
