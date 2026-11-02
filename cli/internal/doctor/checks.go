@@ -507,6 +507,10 @@ const driversName = "f10-drivers"
 // driverScope is what a too-old f10-drivers breaks; every other verb works.
 var driverScope = []string{"task create --set"}
 
+// noDriverScope is what a driver-only tracker without a driver breaks; the
+// steps still read the task through project.md's fetch adapter.
+var noDriverScope = []string{"task", "start", "drive"}
+
 // versionTimeout bounds `f10-drivers --version`, so a hung executable never hangs doctor.
 const versionTimeout = 5 * time.Second
 
@@ -517,6 +521,7 @@ func checkDriver(ctx context.Context, env *Env) Result {
 
 	if env.Driver == nil {
 		r.Status = StatusProblem
+		r.Scope = noDriverScope
 		r.Detail = "the tracker reads only through a driver, and no .f10/driver was found"
 		r.Remedy = "add an executable .f10/driver (docs/driver-contract.md); for Notion, exec f10-drivers notion \"$@\""
 

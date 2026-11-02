@@ -442,7 +442,7 @@ func TestDriverCheck(t *testing.T) {
 		}, StatusProblem, true, "v0.3.0"},
 		{"tracker needs a driver, none found", func(f *fixture) {
 			f.e.NeedsDriver = true
-		}, StatusProblem, false, "no .f10/driver"},
+		}, StatusProblem, true, "no .f10/driver"},
 		{"dev build", func(f *fixture) {
 			f.shim(`exec f10-drivers notion "$@"`)
 			f.drivers = "f10-drivers dev"
@@ -481,7 +481,7 @@ func TestDriverCheck(t *testing.T) {
 			}
 
 			if c.scoped && Failed([]Result{r}) {
-				t.Error("a too-old driver failed the run")
+				t.Error("a scoped driver problem failed the run")
 			}
 		})
 	}
