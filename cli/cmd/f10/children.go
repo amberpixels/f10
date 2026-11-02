@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -491,7 +490,14 @@ func (h host) relink(ctx context.Context, parent, child string) error {
 		return err
 	}
 
-	_, err = h.Run(ctx, "api", "-X", "DELETE", "repos/{owner}/{repo}/issues/"+path.Base(iss.ParentURL)+"/sub_issue",
+	// the parent may live in another repo of the owner, so its own api path
+	// is used, never this repo's issue of the same number
+	_, apiPath, ok := strings.Cut(iss.ParentURL, "/repos/")
+	if !ok {
+		return fmt.Errorf("issue %s names its parent as %q, not an api url", child, iss.ParentURL)
+	}
+
+	_, err = h.Run(ctx, "api", "-X", "DELETE", "repos/"+apiPath+"/sub_issue",
 		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10))
 
 	return err

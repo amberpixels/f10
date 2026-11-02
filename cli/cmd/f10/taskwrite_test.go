@@ -180,7 +180,7 @@ func TestHostRelink(t *testing.T) {
 		`{"id":555,"parent_issue_url":"https://api.github.com/repos/o/r/issues/3"}`)
 	f.script("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555 -F replace_parent=true",
 		`{}`)
-	f.script("gh api -X DELETE repos/{owner}/{repo}/issues/3/sub_issue -F sub_issue_id=555", `{}`)
+	f.script("gh api -X DELETE repos/o/r/issues/3/sub_issue -F sub_issue_id=555", `{}`)
 
 	if err := gh.relink(t.Context(), "7", "12"); err != nil ||
 		!f.called("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues") {
@@ -188,7 +188,7 @@ func TestHostRelink(t *testing.T) {
 	}
 
 	if err := gh.relink(t.Context(), "", "12"); err != nil ||
-		!f.called("gh api -X DELETE repos/{owner}/{repo}/issues/3/sub_issue -F sub_issue_id=555") {
+		!f.called("gh api -X DELETE repos/o/r/issues/3/sub_issue -F sub_issue_id=555") {
 		t.Errorf("unlink: %v", err)
 	}
 
@@ -204,6 +204,39 @@ func TestHostRelink(t *testing.T) {
 		ref.Ref{ID: "FT-12", Number: "12"}, "7", false)
 	if exitCode(err) != exitNoWrite {
 		t.Errorf("glab relink: err = %v, want exit %d", err, exitNoWrite)
+	}
+}
+
+// On a GitHub tracker, with no driver or past one declining the parent,
+// update links the issue as a sub-issue by its database id, moving it from
+// a parent it has; a driver failing after the status says the status landed.
+func TestTaskUpdateParentOnHostIssues(t *testing.T) {
+	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
+		repo, calls := hostRepo(t, script)
+		gh := "#!/bin/sh\necho \"$@\" >> " + calls + "\n" +
+			"case \"$*\" in \"api repos/{owner}/{repo}/issues/12\") echo '{\"id\":555}' ;; api*) echo '{}' ;; esac\n"
+
+		if err := os.WriteFile(filepath.Join(filepath.Dir(calls), "gh"), []byte(gh), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, _, err := runWrite(t, repo, "", "update", "FT-12", "--parent", "FT-7"); err != nil {
+			t.Fatalf("%s: update: %v", name, err)
+		}
+
+		want := "api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555 -F replace_parent=true"
+		if got := readFile(t, calls); !strings.Contains(got, want) {
+			t.Errorf("%s: gh calls = %q, want %q", name, got, want)
+		}
+	}
+
+	repo := createRepo(t,
+		"case \"$*\" in *--parent*) echo 'flag provided but not defined: -parent' >&2; exit 1 ;; esac\n")
+
+	_, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-7")
+	if err == nil || !strings.Contains(err.Error(), "-parent") ||
+		!strings.Contains(err.Error(), "other properties were written") {
+		t.Errorf("failed parent: err = %v, want the driver's error and that the status landed", err)
 	}
 }
 

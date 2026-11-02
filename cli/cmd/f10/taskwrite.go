@@ -246,6 +246,10 @@ func relinkTask(
 		}
 
 		if !errors.Is(err, driver.ErrUnsupported) {
+			if wrote {
+				return fmt.Errorf("%w\n%s", err, unwritten)
+			}
+
 			return err
 		}
 	}
