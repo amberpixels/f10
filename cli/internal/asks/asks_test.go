@@ -121,7 +121,8 @@ func TestClaimFirstWins(t *testing.T) {
 
 	for _, by := range []string{ByPane, ByAsks, BySkill, ByDrive} {
 		wg.Go(func() {
-			_, err := Claim(dir, a.Key(), by, "1. yes", by == ByPane, now)
+			// undelivered, so whoever wins leaves the ask untaken for the re-raise check
+			_, err := Claim(dir, a.Key(), by, "1. yes", false, now)
 
 			mu.Lock()
 			defer mu.Unlock()

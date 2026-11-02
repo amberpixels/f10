@@ -239,16 +239,24 @@ func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, err
 			return Ask{}, err
 		}
 
-		// answered: name who did; held by a raise or a claim: wait for it
+		// held by a raise or a claim: wait for it. The hold is checked before
+		// the answer because a winner writes its answer, then drops its hold.
+		if heldElsewhere(dir, key) && i < holdTries {
+			time.Sleep(holdWait)
+
+			continue
+		}
+
 		if a, err := read(answeredPath(dir, key)); err == nil {
 			return Ask{}, ClosedError{By: a.By, At: a.AnsweredAt}
 		}
 
-		if !heldElsewhere(dir, key) || i >= holdTries {
-			return Ask{}, ClosedError{}
+		// a raise put it back: claim it again
+		if _, err := os.Stat(openPath(dir, key)); err == nil && i < holdTries {
+			continue
 		}
 
-		time.Sleep(holdWait)
+		return Ask{}, ClosedError{}
 	}
 
 	a, err := read(held)

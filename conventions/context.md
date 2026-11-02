@@ -156,8 +156,6 @@ Frontmatter `storage:` places the storage root.
 Plans, findings, verdicts, spike reports and lore are keyed by task id.
 So parallel tasks never share a file, and removing a worktree loses none of them.
 A worktree's own `.f10/` holds only its optional `instructions/` layer.
-A worktree whose `.f10/` already holds `plans/`, `reviews/`, `verdicts/` or `spikes/` predates this rule.
-It keeps its own storage root until it finishes, and the loader says so.
 
 **out-of-tree** puts it at `~/.f10/<project>/`, shared by every worktree, with nothing f10-related in the project directory.
 It declares itself by location (**Reading the project load**, point 2).
