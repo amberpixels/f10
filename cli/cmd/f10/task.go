@@ -148,7 +148,7 @@ func taskCommand() *cli.Command {
 			},
 			{
 				Name: "update",
-				Usage: "set the task's status, priority, labels, assignee or a named property " +
+				Usage: "set the task's status, priority, labels, assignee, parent or a named property " +
 					"(exit 3: this tracker takes no updates here)",
 				ArgsUsage: "[task-id]",
 				Flags: []cli.Flag{
@@ -159,6 +159,10 @@ func taskCommand() *cli.Command {
 					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
 					&cli.StringSliceFlag{Name: "label", Usage: "a label to add; repeat for several"},
 					&cli.StringFlag{Name: "assignee", Usage: "who holds the task, in the tracker's own name for them"},
+					&cli.StringFlag{
+						Name:  "parent",
+						Usage: "the task id to move it under as a subtask; \"\" takes it out from under its parent",
+					},
 					&cli.StringSliceFlag{
 						Name:  "set",
 						Usage: "`key=value` for a property the driver knows; repeat for several",

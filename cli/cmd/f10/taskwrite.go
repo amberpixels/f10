@@ -166,14 +166,19 @@ func postComment(
 }
 
 // runTaskUpdate takes absolute values, so a rerun after a failure is safe.
+// The parent link is a write of its own, after the properties, so a tracker
+// without parent links declines only the link.
 func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	p, err := readProps(cmd)
 	if err != nil {
 		return err
 	}
 
-	if p.empty() {
-		return errors.New("task update needs a property to set: --status, --priority, --label, --assignee or --set")
+	relink := cmd.IsSet("parent")
+	if p.empty() && !relink {
+		return errors.New(
+			"task update needs a property to set: --status, --priority, --label, --assignee, --parent or --set",
+		)
 	}
 
 	t, r, d, err := writeTarget(ctx, cmd, driver.VerbUpdate)
@@ -181,7 +186,81 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return updateTask(ctx, cmd.ErrWriter, t, d, r, p)
+	parent := ""
+	if relink {
+		if parent, err = parentNumber(ctx, t, r, cmd.String("parent")); err != nil {
+			return err
+		}
+	}
+
+	if !p.empty() {
+		if err := updateTask(ctx, cmd.ErrWriter, t, d, r, p); err != nil {
+			return err
+		}
+	}
+
+	if !relink {
+		return nil
+	}
+
+	return relinkTask(ctx, cmd.ErrWriter, t, d, r, parent, !p.empty())
+}
+
+// parentNumber resolves --parent before anything is written; empty means
+// "take the task out from under its parent".
+func parentNumber(ctx context.Context, t *target, r ref.Ref, raw string) (string, error) {
+	if raw = strings.TrimSpace(raw); raw == "" {
+		return "", nil
+	}
+
+	pr, err := t.reference(ctx, raw)
+	if err != nil {
+		return "", fmt.Errorf("--parent %s: %w", raw, err)
+	}
+
+	if pr.Number == r.Number {
+		return "", fmt.Errorf("--parent %s: a task cannot be its own parent; nothing was written", raw)
+	}
+
+	return pr.Number, nil
+}
+
+// relinkTask sends the parent alone, so a driver declining it has dropped
+// nothing else; wrote says the properties before it already landed.
+func relinkTask(
+	ctx context.Context, warnTo io.Writer, t *target, d *driver.Driver, r ref.Ref, parent string, wrote bool,
+) error {
+	unwritten := "nothing was written"
+	if wrote {
+		unwritten = "the other properties were written, the parent link was not"
+	}
+
+	if d != nil {
+		_, warn, err := d.RunInput(ctx, "", driver.VerbUpdate, r.Number, "--parent", parent)
+		if err == nil {
+			if warn != "" {
+				fmt.Fprintln(warnTo, warn)
+			}
+
+			return nil
+		}
+
+		if !errors.Is(err, driver.ErrUnsupported) {
+			return err
+		}
+	}
+
+	h, err := hostOrExit(t, d, driver.VerbUpdate+" --parent", unwritten)
+	if err != nil {
+		return err
+	}
+
+	err = h.relink(ctx, parent, r.Number)
+	if errors.Is(err, errGitLabNoIssueParent) {
+		return cli.Exit(fmt.Sprintf("f10: %v; %s", err, unwritten), exitNoWrite)
+	}
+
+	return err
 }
 
 func updateTask(ctx context.Context, warnTo io.Writer, t *target, d *driver.Driver, r ref.Ref, p props) error {
@@ -234,6 +313,12 @@ func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target, r
 }
 
 func writeHost(t *target, d *driver.Driver, verb string) (host, error) {
+	return hostOrExit(t, d, verb, "nothing was written")
+}
+
+// hostOrExit is writeHost with the exit message's last clause given, for a
+// write that follows another one.
+func hostOrExit(t *target, d *driver.Driver, verb, unwritten string) (host, error) {
 	if t.hostIssues() {
 		return t.host()
 	}
@@ -243,8 +328,8 @@ func writeHost(t *target, d *driver.Driver, verb string) (host, error) {
 		why = "the driver at " + d.Path + " declines `" + verb + "`"
 	}
 
-	return host{}, cli.Exit(fmt.Sprintf("f10: %s, and a %s tracker has no host-issues fallback; nothing was written",
-		why, t.eff.TrackerKind), exitNoWrite)
+	return host{}, cli.Exit(fmt.Sprintf("f10: %s, and a %s tracker has no host-issues fallback; %s",
+		why, t.eff.TrackerKind, unwritten), exitNoWrite)
 }
 
 func (h host) comment(ctx context.Context, number, body string) (string, error) {

@@ -110,17 +110,22 @@ Print the comment's url if the tracker gives one; f10 prints it back.
 
 ```
 <driver> update <n> [--status <s>] [--priority <p>] [--label <l>]... [--assignee <a>] [--set <key>=<value>]...
+<driver> update <n> --parent <m>
 ```
 
 - `--status` is the tracker's own word, as for `create`: `project.md` maps the moments f10 reports (`started`, `shipped`) to those words in `tracker.status`.
 - `--priority` is one of the contract's four levels; `--label` repeats and adds a label.
 - `--assignee` is the tracker's own name for who holds the task.
 - `--set` names a property the project's driver config knows (a Notion property, a Jira field) and the value to give it.
+- `--parent` arrives in an update of its own, after the other flags' update, as a number like `create`'s.
+  It links the task under that parent, moving it from a parent it already has, and `--parent ""` takes the task out from under its parent.
+  A driver whose tracker has no parent link exits `3` on it, rather than dropping it with a warning, because a dropped link leaves the caller no way to tell it did nothing.
 
 Every value is absolute: running the same update twice leaves the task as once.
 A property the tracker has no field for is dropped with a warning on stderr, as for `create`.
 
 Where the tracker is the host's issues, a driver that declines either verb (or no driver) leaves it to the host: `gh issue comment` / `glab issue note`, labels and assignee through `issue edit` / `issue update`, and `--status` as close or reopen, the only two states an issue has.
+`--parent` there is a GitHub sub-issue link; GitLab nests no issue under an issue, so `f10 task update --parent` exits 3.
 A priority there is the label `tracker.priority` maps the level to.
 
 ## Exit codes
