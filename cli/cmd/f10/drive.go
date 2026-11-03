@@ -37,12 +37,14 @@ func driveCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "drive",
 		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
-		ArgsUsage: "<id>[:profile]... | <id> -- <id>  [--flow NAME | --local] " +
+		ArgsUsage: "<id>[:profile]... | <id> -- <id>  [--flow NAME | --local] [--pace NAME] " +
 			"[--agent PROFILE | --model MODEL] [--parallel N] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
 			"   f10 drive --resume N [--parallel N] [--answer [ID=]TEXT ...] | list [--all] | cancel N",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
-			"then finish when drive_finish is on. A rerun keeps the flow a task's branch records.\n" +
+			"then finish when the pace's finish, else drive_finish, is on. A rerun keeps the flow a task's branch records.\n" +
+			"--pace NAME runs every task at that pace (f10 config lists them), recorded on each branch so a rerun keeps it; " +
+			"a pace skips or tunes the flow's entries and never adds one.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
 			"every task whose base branch has a commit runs, its finish waits for the base's, " +
 			"and a halt stops only its dependents.\n" +
@@ -100,14 +102,16 @@ const (
 // at the flow, which names the chain.
 var oldChainSkills = []string{"plan", "judge", "ship", "review", "resolve", "finish"}
 
-func driveChain(fl shipFlow, finish bool) []string {
+// driveChain is the skills drive prompts a task through; driveFinish is
+// the project's drive_finish, which a pace's finish word overrides.
+func driveChain(fl shipFlow, driveFinish bool) []string {
 	var chain []string
 	if fl.plans() {
 		chain = append(chain, "plan")
 	}
 
 	chain = append(chain, "ship")
-	if finish {
+	if fl.finishes(driveFinish) {
 		chain = append(chain, "finish")
 	}
 
@@ -182,7 +186,17 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		argv = rec.Args
 	}
 
-	fl, err := resolveShipFlow(t.eff, a.flow)
+	paces, err := paceSet(t.eff)
+	if err != nil {
+		return err
+	}
+
+	pace, err := activePace(ctx, paces, a.pace, "", "")
+	if err != nil {
+		return err
+	}
+
+	fl, err := resolvePacedFlow(t.eff, paces, pace.name, a.flow)
 	if err != nil {
 		return err
 	}
@@ -199,25 +213,33 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	h, hostErr := t.host()
 
 	if slices.Contains(chain, "finish") && hostErr != nil {
-		return fmt.Errorf("drive_finish is on, and finish merges through the host: %w", hostErr)
+		return fmt.Errorf("finish is on (drive_finish or the pace), and finish merges through the host: %w", hostErr)
 	}
 
 	in := &driveInput{
-		main:     main,
-		root:     t.sharedRoot(),
-		driver:   drv,
-		tracker:  t.tracker(),
-		args:     a,
-		argv:     argv,
-		chain:    chain,
-		flow:     fl,
-		resolve:  func(name string) (shipFlow, error) { return resolveShipFlow(t.eff, name) },
-		plansDir: t.sharedPlansDir(),
-		settings: claudeSettingsPath(),
-		layers:   layers,
-		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
-		started:  startedMove(t),
-		record:   recordAt,
+		main:    main,
+		root:    t.sharedRoot(),
+		driver:  drv,
+		tracker: t.tracker(),
+		args:    a,
+		argv:    argv,
+		chain:   chain,
+		flow:    fl,
+		resolve: func(name string) (shipFlow, error) { return resolvePacedFlow(t.eff, paces, pace.name, name) },
+		paced: func(fl shipFlow, p string) (shipFlow, error) {
+			if fl.byArea {
+				return resolvePacedFlow(t.eff, paces, p, "")
+			}
+
+			return resolvePacedFlow(t.eff, paces, p, fl.recorded())
+		},
+		driveFinish: t.eff.DriveFinish,
+		plansDir:    t.sharedPlansDir(),
+		settings:    claudeSettingsPath(),
+		layers:      layers,
+		title:       func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		started:     startedMove(t),
+		record:      recordAt,
 		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
 			fin, err := driveFinishInput(t, main, h, req)
 			if err != nil {
@@ -257,6 +279,7 @@ type driveArgs struct {
 	model    string   // --model as typed, kept apart so both flags on one line are refused
 	span     bool
 	flow     string   // --flow, or local for --local; "" for default
+	pace     string   // --pace, "" for the branch's or the project's
 	answers  []string // each --answer as typed: `GH-1=text` for one task, or bare text
 	every    time.Duration
 	parallel int  // --parallel: the cap on tasks running a skill at once, 0 for the record's or the default
@@ -290,7 +313,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 
 		name, value, inline := strings.Cut(tok, "=")
 		if name == "--model" || name == "--agent" || name == "--answer" || name == "--every" || name == "--flow" ||
-			name == "--resume" || name == "--parallel" {
+			name == "--resume" || name == "--parallel" || name == "--pace" {
 			if !inline {
 				rest := args[i+1:]
 				if len(rest) == 0 {
@@ -334,7 +357,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
 			return driveArgs{}, fmt.Errorf(
-				"unknown flag %s: drive takes --flow, --local, --agent, --model, --parallel, --answer, --every, --resume "+
+				"unknown flag %s: drive takes --flow, --local, --pace, --agent, --model, --parallel, --answer, --every, --resume "+
 					"and --foreground",
 				tok,
 			)
@@ -424,6 +447,19 @@ func (a *driveArgs) set(name, value string) error {
 		}
 
 		return nil
+	case "--pace":
+		value = strings.ToLower(strings.TrimSpace(value))
+
+		switch {
+		case value == "":
+			return errors.New("--pace needs a pace name")
+		case a.pace != "" && a.pace != value:
+			return fmt.Errorf("--pace %s: the run already names the %s pace", value, a.pace)
+		}
+
+		a.pace = value
+
+		return nil
 	case "--flow":
 		value = strings.ToLower(strings.TrimSpace(value))
 
@@ -498,26 +534,30 @@ func isArrow(tok string) bool {
 // driveInput is everything drive needs once the target is settled, so the
 // flow can be tested without a checkout, a clock or a wait.
 type driveInput struct {
-	main     string
-	root     string // the storage root every checkout shares, for the record and the leases; "" keeps none
-	driver   *driver.Driver
-	tracker  tracker
-	args     driveArgs
-	argv     []string // the command line as given, for the resume command
-	chain    []string
-	flow     shipFlow                            // the flow typed, or default; a task's branch may record another
-	resolve  func(name string) (shipFlow, error) // a declared flow by name
-	plansDir string                              // the plans dir every checkout shares
-	settings string                              // claude's settings file, which names the model a bad --model falls back to
-	layers   agentMap                            // the user's and the project's agents map; nil for none
-	title    func(ref.Ref) func(context.Context) (string, error)
-	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
-	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
-	stateDir string
-	session  string // the session that typed the command, inherited through the daemon's environment
-	ttl      time.Duration
-	now      func() time.Time
-	sleep    func(context.Context, time.Duration) error
+	main    string
+	root    string // the storage root every checkout shares, for the record and the leases; "" keeps none
+	driver  *driver.Driver
+	tracker tracker
+	args    driveArgs
+	argv    []string // the command line as given, for the resume command
+	chain   []string
+	flow    shipFlow                            // the flow typed, or default; a task's branch may record another
+	resolve func(name string) (shipFlow, error) // a declared flow by name, at the run's pace
+	// paced is a flow at another pace, for a branch that records one; nil
+	// keeps the run's
+	paced       func(fl shipFlow, pace string) (shipFlow, error)
+	driveFinish bool     // drive_finish, which a pace's finish word overrides
+	plansDir    string   // the plans dir every checkout shares
+	settings    string   // claude's settings file, which names the model a bad --model falls back to
+	layers      agentMap // the user's and the project's agents map; nil for none
+	title       func(ref.Ref) func(context.Context) (string, error)
+	started     func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
+	finish      func(ctx context.Context, w io.Writer, req driveFinish) error
+	stateDir    string
+	session     string // the session that typed the command, inherited through the daemon's environment
+	ttl         time.Duration
+	now         func() time.Time
+	sleep       func(context.Context, time.Duration) error
 	// record puts an event in the ledger, placed in dir; nil records nothing
 	record func(ctx context.Context, dir string, e ledger.Event)
 
@@ -1518,6 +1558,15 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		o.notes = append(o.notes, flowNote)
 	}
 
+	fl, paceNote, err := in.keepPace(ctx, o.branch, fl)
+	if err != nil {
+		return err
+	}
+
+	if paceNote != "" {
+		o.notes = append(o.notes, paceNote)
+	}
+
 	chain := in.chainFor(fl)
 
 	// status reads finish off the chain
@@ -1594,7 +1643,40 @@ func (in *driveInput) chainFor(fl shipFlow) []string {
 		return in.chain
 	}
 
-	return driveChain(fl, slices.Contains(in.chain, "finish"))
+	return driveChain(fl, in.driveFinish)
+}
+
+// keepPace: a run's --pace wins and is recorded on the branch, since a
+// rerun that slows down must be able to take finish off; with none typed,
+// the branch's record wins over the project's default.
+func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) (shipFlow, string, error) {
+	key := "branch." + branch + "." + cfgPace
+
+	recorded, err := gitx.Config(ctx, in.main, key)
+	if err != nil {
+		return shipFlow{}, "", fmt.Errorf("reading the recorded pace: %w", err)
+	}
+
+	switch {
+	case in.args.pace != "":
+		if recorded != in.args.pace {
+			if err := gitx.SetConfig(ctx, in.main, key, in.args.pace); err != nil {
+				return shipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
+			}
+		}
+
+		return fl, "", nil
+	case recorded == "" || recorded == fl.pace || in.paced == nil:
+		return fl, "", nil
+	}
+
+	kept, err := in.paced(fl, recorded)
+	if err != nil {
+		return fl, fmt.Sprintf("its branch records the %s pace, which does not resolve (%v); running %s",
+			recorded, err, cmp.Or(fl.pace, "no pace")), nil
+	}
+
+	return kept, fmt.Sprintf("kept the %s pace its branch records over %s", recorded, cmp.Or(fl.pace, "no pace")), nil
 }
 
 // position: a skill drive recorded on the branch wins; else a plan the

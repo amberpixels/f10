@@ -51,6 +51,8 @@ type Declared struct {
 	Standup        StandupDecl       `yaml:"standup,omitempty"`
 	Verify         []VerifyDecl      `yaml:"verify,omitempty"` // verify commands, each scoped to the paths it checks
 	Agents         map[string]string `yaml:"agents,omitempty"` // a step, `default` or `step.kind` to the agent profile it runs on
+	Paces          map[string]Pace   `yaml:"paces,omitempty"`  // a pace's name to its dials, laid over the built-ins key by key
+	Pace           string            `yaml:"pace,omitempty"`   // the pace a run takes when it names none
 
 	// The keys flows replaces, read and converted with a warning.
 	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
@@ -332,6 +334,14 @@ func (d Declared) check() []string {
 		}
 	}
 
+	for _, name := range slices.Sorted(maps.Keys(d.Paces)) {
+		bad = append(bad, CheckPace(name, d.Paces[name])...)
+	}
+
+	if d.Pace != "" && !flowNameRE.MatchString(d.Pace) {
+		bad = append(bad, fmt.Sprintf("pace: %q is not a lowercase name", d.Pace))
+	}
+
 	for _, name := range d.Planless {
 		if _, ok := d.Pipelines[name]; !ok {
 			bad = append(bad, fmt.Sprintf("planless: %q names no pipeline", name))
@@ -471,6 +481,24 @@ func (l *layered) merge(d Declared, label string) {
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
 	set("verify", d.Verify != nil, func() { l.Verify = d.Verify })
+	set("pace", d.Pace != "", func() { l.Pace = d.Pace })
+
+	// paces merge per pace and per key, as agents do: a worktree tuning
+	// fast's review keeps main's fast judge
+	for name, p := range d.Paces {
+		if l.Paces == nil {
+			l.Paces = map[string]Pace{}
+		}
+
+		if l.Paces[name] == nil {
+			l.Paces[name] = Pace{}
+		}
+
+		for key, dials := range p {
+			l.Paces[name][key] = dials
+			l.origin["paces."+name+"."+key] = label
+		}
+	}
 
 	// the agents map merges key by key: a worktree tuning one step keeps
 	// main's others, and each key remembers the layer that set it

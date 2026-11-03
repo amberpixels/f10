@@ -30,6 +30,7 @@ const (
 	standupConfigFile = "standup.md"   // the user's standup settings; f10 only reads it
 	boardConfigFile   = "board.md"     // the user's board settings; f10 only reads it
 	agentsConfigFile  = "agents.md"    // the user's default agent profiles; f10 only reads it
+	pacesConfigFile   = "paces.md"     // the user's paces and default pace; f10 only reads it
 )
 
 // userDirEnv names another directory than ~/.f10 for the user's files, so

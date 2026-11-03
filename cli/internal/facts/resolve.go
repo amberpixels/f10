@@ -210,6 +210,7 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 	// reviewer is declared
 	e.resolveFlows(fm, declared)
 	e.resolveAgents(fm)
+	e.resolvePaces(fm)
 
 	// one warning per file and kind, naming every fact it concerns
 	for file, keys := range groupByFile(e.proseRead) {

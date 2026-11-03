@@ -59,6 +59,8 @@ type view struct {
 	DriveFinish     bool                `json:"driveFinish"`
 	ReportBack      bool                `json:"reportBack"`
 	Agents          []agentEntry        `json:"agents,omitempty"` // the merged agents map, the user's file under the project's, each key with its origin
+	Paces           []paceEntry         `json:"paces,omitempty"`  // every pace's keys, built-ins under the user's under the project's, each with its origin
+	Pace            *paceEntry          `json:"pace,omitempty"`   // the default pace, when any layer names one
 	Facts           []facts.Fact        `json:"facts"`            // every typed value with its origin
 	Problems        []facts.Problem     `json:"problems,omitempty"`
 	Roots           []string            `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
@@ -86,6 +88,70 @@ func (v *view) withAgents(eff *facts.Effective) {
 		e := m[key]
 		v.Agents = append(v.Agents, e)
 		v.Facts = append(v.Facts, facts.Fact{Key: "agents." + key, Value: e.Value, Origin: e.Origin})
+	}
+}
+
+// A paceEntry is one pace key with its dials and the layer that set it.
+type paceEntry struct {
+	Key    string `json:"key"` // <pace>.<step>, or pace for the default
+	Value  string `json:"value"`
+	Origin string `json:"origin"`
+}
+
+// withPaces puts every pace key on the view, the user's file and the
+// built-ins included, in place of the project's paces and pace facts, and
+// each pace that breaks a flow as a problem.
+func (v *view) withPaces(eff *facts.Effective) {
+	set, err := paceSet(eff)
+	if err != nil {
+		v.Problems = append(v.Problems, facts.Problem{Error: true, Message: err.Error()})
+
+		return
+	}
+
+	v.Facts = slices.DeleteFunc(slices.Clone(v.Facts), func(f facts.Fact) bool {
+		return f.Key == "paces" || f.Key == "pace"
+	})
+
+	for _, name := range set.Names() {
+		p := set.Paces[name]
+		if len(p) == 0 {
+			e := paceEntry{
+				Key:    "paces." + name,
+				Value:  "(no dials: flows run as declared)",
+				Origin: set.Origins[name],
+			}
+			v.Paces = append(v.Paces, e)
+			v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})
+
+			continue
+		}
+
+		for _, key := range slices.Sorted(maps.Keys(p)) {
+			e := paceEntry{Key: "paces." + name + "." + key, Value: p[key].Shown(), Origin: set.Origins[name+"."+key]}
+			v.Paces = append(v.Paces, e)
+			v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})
+		}
+	}
+
+	if set.Default != "" {
+		v.Pace = &paceEntry{Key: "pace", Value: set.Default, Origin: set.DefaultOrigin}
+		v.Facts = append(v.Facts, facts.Fact{Key: "pace", Value: set.Default, Origin: set.DefaultOrigin})
+
+		if _, err := set.Lookup(set.Default); err != nil {
+			v.Problems = append(v.Problems, facts.Problem{Error: true, Message: "pace: " + err.Error()})
+		}
+	}
+
+	known := map[string]bool{}
+	for _, p := range v.Problems {
+		known[p.Message] = true
+	}
+
+	for _, bad := range set.PaceProblems(eff.Flows) {
+		if !known[bad] {
+			v.Problems = append(v.Problems, facts.Problem{Message: bad})
+		}
 	}
 }
 
@@ -173,6 +239,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	v.withAgents(eff)
+	v.withPaces(eff)
 
 	if cmd.Bool("json") {
 		enc := json.NewEncoder(cmd.Writer)

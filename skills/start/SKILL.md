@@ -1,8 +1,8 @@
 ---
 name: start
-description: "f10 start skill - start the next task without leaving this session: a worktree, a Herdr workspace and a claude agent in it, already prompted; a plan the main checkout saved for the task is shipped by the agent, read in place; a PR link picks up someone else's PR. Use when the user says \"/f10:start <task-id | PR url | #n> [--plan | --local | --flow <name> | --discuss] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>]\" or asks to start a task in a new worktree or workspace, including one to discuss before planning, one on another flow or model, or a PR handed over to continue or review."
+description: "f10 start skill - start the next task without leaving this session: a worktree, a Herdr workspace and a claude agent in it, already prompted; a plan the main checkout saved for the task is shipped by the agent, read in place; a PR link picks up someone else's PR. Use when the user says \"/f10:start <task-id | PR url | #n> [--plan | --local | --flow <name> | --discuss] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>]\" or asks to start a task in a new worktree or workspace, including one to discuss before planning, one on another flow or model, or a PR handed over to continue or review."
 allowed-tools: Bash
-argument-hint: "<task-id | PR url> [--plan | --local | --discuss]"
+argument-hint: "<task-id | PR url> [--plan | --local | --discuss] [--pace <name>]"
 ---
 
 # f10 · start
@@ -19,6 +19,7 @@ The per-user f10 daemon then watches the task while no drive owns it: a merged P
   A merged or closed PR is picked up the same way, for a post-merge review: checked out at the commit it landed as, on a local-only branch named for the task, the agent told the PR's state; `--plan` is refused on it.
 - `--plan`: stop after the plan.
 - `--local` / `--flow <name>`: the `local` flow, or any declared one (`f10 flow` lists them), instead of `default`.
+- `--pace <name>`: the pace the task runs at (`docs/project-setup.md` → Paces), recorded on its branch so a rerun keeps it; an unknown name fails with the list.
 - `--discuss`: the agent is prompted without `--driven`; it summarises the task and waits.
 - `--agent <profile>`: the agent's profile, `kind:model:effort` (`claude:opus:high`), `model:effort` or either alone, laid over the agents map's `default` (`docs/project-setup.md` → Agents); `--model <model>` is the model-only form (`opus`, `fable`, `opus-5.5`), near misses corrected.
 - `<note>`: with `--discuss` or a PR, the words after the id; the agent acts on it after its summary, then waits.
@@ -34,5 +35,5 @@ f10 start <arguments>
 3. **Exit 6 is a question**: a parent task with unfinished subtasks, named in the message.
    Read them with `f10 task children <id> --json` (unfinished rows only), then ask once with `AskUserQuestion`, header the parent id: **Drive the subtasks** first, then up to three subtasks as `Start <id>` with the title as description, depth 0 first; another subtask comes through Other.
    Drive invokes the `/f10:drive <id>` skill, carrying `--agent` or `--model` and dropping start's other flags with one line saying so.
-   A subtask reruns `f10 start <subtask>` with the original mode or flow flag and `--agent` or `--model`, dropping `--after` and `--base` with one line saying so, since the subtask's own `After:` line sets its base; relay its report under these same rules.
+   A subtask reruns `f10 start <subtask>` with the original mode or flow flag, `--pace`, and `--agent` or `--model`, dropping `--after` and `--base` with one line saying so, since the subtask's own `After:` line sets its base; relay its report under these same rules.
 4. Every other failure is final: print the message verbatim and stop.

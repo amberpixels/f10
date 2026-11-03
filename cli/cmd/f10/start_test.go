@@ -131,6 +131,11 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
+		// nor a pace, until a test says so
+		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+cfgPace) {
+			return shell.Result{}
+		}
+
 		f.t.Fatalf("unscripted call: %q\nscripted:\n  %s", key, strings.Join(f.keys(), "\n  "))
 	}
 

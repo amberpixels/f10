@@ -1,8 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // The flow verb lists the declared flows, the same list an unknown --flow
@@ -23,9 +26,14 @@ const cfgFlow = "f10-flow"
 
 func flowCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "flow",
-		Usage: "list the flows project.md declares and what selects each",
+		Name:      "flow",
+		Usage:     "list the flows project.md declares and what selects each, with their entries under the run's pace",
+		ArgsUsage: "[<name>]",
+		Description: "With a name, that flow alone, one entry per line: the entries the pace skips marked, and each " +
+			"dial with its origin; this is the list /f10:ship runs. The pace is --pace, else the branch's record, " +
+			"else the project's pace:, else the user's; with none, every flow runs as declared.",
 		Flags: []cli.Flag{
+			paceFlag(),
 			&cli.BoolFlag{Name: "json", Usage: "emit the same list as JSON"},
 		},
 		Action: runFlow,
@@ -33,12 +41,17 @@ func flowCommand() *cli.Command {
 }
 
 type flowRow struct {
-	Name     string   `json:"name"`
-	Entries  []string `json:"entries"`
-	Selected []string `json:"selectedBy"`
+	Name     string          `json:"name"`
+	Entries  []string        `json:"entries"`       // as declared
+	Run      []string        `json:"run,omitempty"` // what runs under the pace
+	Selected []string        `json:"selectedBy"`
+	Resolved *facts.Resolved `json:"resolved,omitempty"` // the entries under the pace; nil with no pace, or one that breaks the flow
+	Broken   string          `json:"broken,omitempty"`   // why the pace does not resolve on this flow
 }
 
 type flowView struct {
+	Pace        string            `json:"pace,omitempty"`
+	PaceOrigin  string            `json:"paceOrigin,omitempty"`
 	Flows       []flowRow         `json:"flows"`
 	DriveFinish bool              `json:"driveFinish"`
 	FlowByArea  map[string]string `json:"flowByArea,omitempty"`
@@ -50,7 +63,40 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	v := flowsView(t.eff)
+	paces, err := paceSet(t.eff)
+	if err != nil {
+		return err
+	}
+
+	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+
+	pace, err := activePace(ctx, paces, cmd.String("pace"), main, gitx.CurrentBranch(ctx, t.lay.CheckoutRoot))
+	if err != nil {
+		return err
+	}
+
+	v := pacedFlowsView(t.eff, paces, pace)
+
+	if name := strings.ToLower(strings.TrimSpace(cmd.Args().First())); name != "" {
+		if _, err := resolveShipFlow(t.eff, name); err != nil {
+			return err
+		}
+
+		i := slices.IndexFunc(v.Flows, func(r flowRow) bool { return strings.EqualFold(r.Name, name) })
+		if i < 0 {
+			return fmt.Errorf("no flow %s", name)
+		}
+
+		if v.Flows[i].Broken != "" {
+			return errors.New(v.Flows[i].Broken)
+		}
+
+		v.Flows = v.Flows[i : i+1]
+
+		if !cmd.Bool("json") {
+			return writeFlowEntries(cmd.Writer, v)
+		}
+	}
 
 	if cmd.Bool("json") {
 		enc := json.NewEncoder(cmd.Writer)
@@ -67,13 +113,90 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 }
 
 func flowsView(eff *facts.Effective) flowView {
-	v := flowView{DriveFinish: eff.DriveFinish, FlowByArea: eff.FlowByArea}
+	return pacedFlowsView(eff, facts.NewPaceSet(), runPace{})
+}
+
+// pacedFlowsView is every flow with its entries under pace; a flow the
+// pace breaks keeps its declared entries and says why.
+func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flowView {
+	v := flowView{DriveFinish: eff.DriveFinish, FlowByArea: eff.FlowByArea, Pace: pace.name, PaceOrigin: pace.origin}
 
 	for _, name := range eff.FlowNames() {
-		v.Flows = append(v.Flows, flowRow{Name: name, Entries: eff.Flows[name], Selected: selectors(name)})
+		row := flowRow{Name: name, Entries: eff.Flows[name], Selected: selectors(name)}
+
+		if r, err := set.ResolveFlow(name, eff.Flows[name], pace.name); err != nil {
+			row.Broken = err.Error()
+		} else if pace.name != "" {
+			row.Resolved, row.Run = &r, r.Run()
+		}
+
+		v.Flows = append(v.Flows, row)
 	}
 
 	return v
+}
+
+// writeFlowEntries is one flow, an entry per line with its dials, then the
+// pace's finish; the list /f10:ship runs.
+func writeFlowEntries(w io.Writer, v flowView) error {
+	f := v.Flows[0]
+
+	var b strings.Builder
+
+	if v.Pace != "" {
+		fmt.Fprintf(&b, "pace: %s (%s)\n", v.Pace, v.PaceOrigin)
+	}
+
+	if f.Resolved == nil {
+		for _, e := range f.Entries {
+			fmt.Fprintln(&b, e)
+		}
+
+		_, err := io.WriteString(w, b.String())
+
+		return err
+	}
+
+	width := len(facts.PaceFinishKey)
+	for _, e := range f.Resolved.Entries {
+		width = max(width, len(e.Entry))
+	}
+
+	for _, e := range f.Resolved.Entries {
+		switch {
+		case e.Skipped != "":
+			fmt.Fprintf(&b, "%-*s  skipped: off in %s\n", width, e.Entry, e.Skipped)
+		case len(e.Dials) > 0:
+			fmt.Fprintf(&b, "%-*s  %s\n", width, e.Entry, dialsShown(e.Dials))
+		default:
+			fmt.Fprintln(&b, e.Entry)
+		}
+	}
+
+	if fin := f.Resolved.Finish; fin != nil {
+		fmt.Fprintf(&b, "%-*s  %s (%s)\n", width, facts.PaceFinishKey, fin.Value, fin.Origin)
+	}
+
+	_, err := io.WriteString(w, b.String())
+
+	return err
+}
+
+// dialsShown is `rounds 1, effort low (pace fast (built-in))`, each origin
+// once after the dials it set.
+func dialsShown(dials []facts.Dial) string {
+	var parts []string
+
+	for i, d := range dials {
+		part := d.Name + " " + d.Value
+		if i == len(dials)-1 || dials[i+1].Origin != d.Origin {
+			part += " (" + d.Origin + ")"
+		}
+
+		parts = append(parts, part)
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 func selectors(name string) []string {
@@ -95,9 +218,26 @@ func writeFlows(w io.Writer, v flowView) error {
 
 	var b strings.Builder
 
+	if v.Pace != "" {
+		fmt.Fprintf(&b, "%-*s  %s (%s)\n", width, "pace", v.Pace, v.PaceOrigin)
+	}
+
 	for _, f := range v.Flows {
-		fmt.Fprintf(&b, "%-*s  %s\n%-*s  (%s)\n", width, f.Name, strings.Join(f.Entries, " "),
+		entries := f.Entries
+		if f.Run != nil {
+			entries = f.Run
+		}
+
+		fmt.Fprintf(&b, "%-*s  %s\n%-*s  (%s)\n", width, f.Name, strings.Join(entries, " "),
 			width, "", strings.Join(f.Selected, ", "))
+
+		if f.Broken != "" {
+			fmt.Fprintf(&b, "%-*s  does not run at this pace: %s\n", width, "", f.Broken)
+		}
+
+		if f.Resolved != nil && f.Resolved.Finish != nil {
+			fmt.Fprintf(&b, "%-*s  finish %s, from the pace\n", width, "", f.Resolved.Finish.Value)
+		}
 	}
 
 	finish := "off: f10 drive stops after ship"
@@ -134,6 +274,18 @@ type shipFlow struct {
 	name     string
 	planless bool
 	byArea   bool
+	pace     string // the pace it runs at, "" for none
+	finish   string // the pace's finish for a run ending at a PR: on, off, or "" to leave drive_finish
+}
+
+// finishes says whether drive ends the task with finish: the pace's word
+// when it has one, else drive_finish.
+func (f shipFlow) finishes(driveFinish bool) bool {
+	if f.finish != "" {
+		return f.finish == "on"
+	}
+
+	return driveFinish
 }
 
 func (f shipFlow) word() string {
@@ -180,8 +332,20 @@ func flowFlags(cmd *cli.Command) (string, error) {
 }
 
 func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
+	return resolvePacedFlow(eff, nil, "", name)
+}
+
+// resolvePacedFlow is the named flow under pace: an entry the pace skips
+// does not run, so `plan: off` makes the flow planless. A nil set is no pace.
+func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name string) (shipFlow, error) {
+	if set == nil {
+		set, pace = facts.NewPaceSet(), ""
+	}
+
 	if name == "" && len(eff.FlowByArea) > 0 {
-		return shipFlow{byArea: true}, nil
+		// ship picks the flow, so whether it ends at a PR, and so whether
+		// the pace's finish applies, is unknown: drive_finish decides
+		return shipFlow{byArea: true, pace: pace}, nil
 	}
 
 	lookup := strings.ToLower(name)
@@ -198,11 +362,21 @@ func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
 			strings.TrimRight(b.String(), "\n"))
 	}
 
-	if lookup == "default" {
-		lookup = ""
+	r, err := set.ResolveFlow(lookup, flow, pace)
+	if err != nil {
+		return shipFlow{}, err
 	}
 
-	return shipFlow{name: lookup, planless: facts.Planless(flow)}, nil
+	fl := shipFlow{planless: facts.Planless(r.Run()), pace: pace}
+	if r.Finish != nil {
+		fl.finish = r.Finish.Value
+	}
+
+	if lookup != "default" {
+		fl.name = lookup
+	}
+
+	return fl, nil
 }
 
 func flowFlag() cli.Flag {

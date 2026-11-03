@@ -132,7 +132,7 @@ func TestCompletingFlow(t *testing.T) {
 // planless run still plans a task whose recorded flow leads with plan.
 func TestChainForAKeptFlow(t *testing.T) {
 	direct := shipFlow{name: "direct", planless: true}
-	in := &driveInput{flow: direct, chain: driveChain(direct, true)}
+	in := &driveInput{flow: direct, chain: driveChain(direct, true), driveFinish: true}
 
 	if got := strings.Join(in.chainFor(direct), " "); got != "ship finish" {
 		t.Errorf("the run's own flow = %q", got)

@@ -2,7 +2,7 @@
 name: ship
 description: "f10 ship skill - take a task through the project's flow: implement, then whatever the project declares (review, commit, PR/MR, deploy); fetches and plans as needed, then runs the flow end to end. Use when the user says \"/f10:ship [<task-id | plan-file.md | description>]\"."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ScheduleWakeup, ExitPlanMode
-argument-hint: "[<task-id | plan.md | description>]"
+argument-hint: "[<task-id | plan.md | description>] [--pace <name>]"
 ---
 
 # f10 · ship
@@ -20,6 +20,7 @@ Deploy has its own confirmation (the **deploy** step).
   Two areas mapping to different flows: the deliverable's area wins, as for Roles, and the brief names the other.
   The area map is the project's choice, not yours: never self-select another flow, though for tiny work you may suggest one.
   Name the flow an area chose, and the area, in one line before the first step.
+- `--pace <name>`: run the flow at that pace for this run alone (**Paces**, below); without it, the pace the branch records, else the project's or the user's `pace:`.
 - `<plan.md>`: a plan file; run the flow with it.
 - `<task-id>` (project id format / id / url), or a bundle joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
@@ -43,6 +44,17 @@ Deploy has its own confirmation (the **deploy** step).
 
 **Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
 `f10 flow` lists them and what selects each.
+
+**Paces** tune the chosen flow (`docs/project-setup.md` → Paces).
+Once the flow is chosen, run `f10 flow <name> [--pace <name>]`, passing `--pace` only when the argument gave one, and run the entries it prints in its order, never the frontmatter's list.
+It prints one entry per line.
+An entry marked `skipped` does not run: say so in one line, and leave it out of the badge's `pipeline`.
+Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` to **pr**; a judge's `effort` applies only where the judge spawns an agent (`--blind`), whose profile then comes from `f10 agents judge`, with `--pace <name>` when the argument gave one; an inline judge runs on the task agent's profile.
+A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
+A `finish` line means the run ends at an open PR the pace would have merged: ship never merges it, and the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
+With no pace, the list is the declared flow, unchanged.
+An `f10 flow` too old to take a name fails on it: run the declared flow, and say in one line that the pace was not applied.
+
 An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` names the half, `review:host` runs the local half on the host's own code review, `review:local+ci` runs both into one round and one resolve, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).
 The run starts at the entry after a leading `plan`, which runs only for a task with no plan file.
 `resolve` is never named: a `review` entry runs it.
