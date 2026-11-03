@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -29,6 +30,7 @@ type fixture struct {
 	env      map[string]string
 	path     map[string]string // LookPath answers
 	authCode int
+	drivers  string // what `f10-drivers --version` prints
 	e        *Env
 }
 
@@ -89,7 +91,15 @@ func newFixture(t *testing.T) *fixture {
 
 			return "", errors.New("not found")
 		},
-		Run: func(context.Context, string, string, ...string) (shell.Result, error) {
+		Run: func(_ context.Context, _, _ string, args ...string) (shell.Result, error) {
+			if len(args) == 1 && args[0] == "--version" {
+				if f.drivers == "" {
+					return shell.Result{Code: 2}, nil
+				}
+
+				return shell.Result{Stdout: f.drivers + "\n"}, nil
+			}
+
 			return shell.Result{Code: f.authCode}, nil
 		},
 	}
@@ -367,6 +377,123 @@ func TestResultsMarshalEveryKey(t *testing.T) {
 
 		if _, ok := r["scope"].([]any); !ok {
 			t.Errorf("%v: scope = %v, want an array", r["name"], r["scope"])
+		}
+	}
+}
+
+// shim writes an executable .f10/driver with body and points the fixture at it.
+func (f *fixture) shim(body string) {
+	f.t.Helper()
+
+	path := filepath.Join(f.e.Layout.CheckoutRoot, ".f10", "driver")
+	f.write(path, "#!/bin/sh\n"+body+"\n")
+	must(f.t, os.Chmod(path, 0o755))
+	f.e.Driver = &driver.Driver{Path: path, Dir: f.e.Layout.CheckoutRoot}
+}
+
+func TestDriverCheck(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(f *fixture)
+		want   string
+		scoped bool
+		detail string
+	}{
+		{"too old", func(f *fixture) {
+			f.shim(`exec f10-drivers notion "$@"`)
+			f.drivers = "f10-drivers v0.3.0"
+		}, StatusProblem, true, "v0.3.0"},
+		{"at the minimum", func(f *fixture) {
+			f.shim(`exec f10-drivers notion "$@"`)
+			f.drivers = "f10-drivers v0.4.0"
+		}, StatusOK, false, "v0.4.0"},
+		{"newer", func(f *fixture) {
+			f.shim(`exec f10-drivers notion "$@"`)
+			f.drivers = "f10-drivers v1.0.0"
+		}, StatusOK, false, "v1.0.0"},
+		{"absolute path in the shim", func(f *fixture) {
+			exe := filepath.Join(f.t.TempDir(), "f10-drivers")
+			f.write(exe, "#!/bin/sh\n")
+			f.shim("exec " + exe + ` notion "$@"`)
+			delete(f.path, "f10-drivers")
+			f.drivers = "f10-drivers v0.3.0"
+		}, StatusProblem, true, "v0.3.0"},
+		{"not on PATH", func(f *fixture) {
+			f.shim(`exec f10-drivers notion "$@"`)
+			delete(f.path, "f10-drivers")
+		}, StatusProblem, false, "not found"},
+		{"quoted $HOME path, missing", func(f *fixture) {
+			f.env["HOME"] = f.home
+			f.shim(`exec "$HOME/go/bin/f10-drivers" notion "$@"`)
+		}, StatusProblem, false, "not found"},
+		{"quoted $HOME path, present", func(f *fixture) {
+			f.env["HOME"] = f.home
+			f.write(filepath.Join(f.home, "go", "bin", "f10-drivers"), "#!/bin/sh\n")
+			f.shim(`exec "$HOME/go/bin/f10-drivers" notion "$@"`)
+			delete(f.path, "f10-drivers")
+			f.drivers = "f10-drivers v0.4.0"
+		}, StatusOK, false, filepath.Join("go", "bin", "f10-drivers")},
+		{"predates --version", func(f *fixture) {
+			f.shim(`exec f10-drivers notion "$@"`)
+		}, StatusProblem, true, "predates --version"},
+		{"commented-out old path", func(f *fixture) {
+			f.shim("# was: exec /nope/f10-drivers notion \"$@\"\nexec f10-drivers notion \"$@\" # current")
+			f.drivers = "f10-drivers v0.3.0"
+		}, StatusProblem, true, "v0.3.0"},
+		{"tracker needs a driver, none found", func(f *fixture) {
+			f.e.NeedsDriver = true
+		}, StatusProblem, true, "no .f10/driver"},
+		{"dev build", func(f *fixture) {
+			f.shim(`exec f10-drivers notion "$@"`)
+			f.drivers = "f10-drivers dev"
+		}, StatusOK, false, "dev build"},
+		{"custom driver", func(f *fixture) {
+			f.shim(`exec my-jira-driver "$@"`)
+		}, StatusOK, false, "not compared"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.path["f10-drivers"] = "/usr/local/bin/f10-drivers"
+			c.mutate(f)
+
+			r := f.run(CheckDriver)
+			if r.Status != c.want || !strings.Contains(r.Detail, c.detail) {
+				t.Fatalf("status = %q (%s), want %q with %q", r.Status, r.Detail, c.want, c.detail)
+			}
+
+			want := driver.F10DriversInstall
+			if f.e.Driver == nil {
+				want = "docs/driver-contract.md"
+			}
+
+			if c.want == StatusProblem && !strings.Contains(r.Remedy, want) {
+				t.Errorf("remedy = %q, want it to contain %q", r.Remedy, want)
+			}
+
+			if c.want != StatusProblem && r.Remedy != "" {
+				t.Errorf("remedy on a %s check: %q", r.Status, r.Remedy)
+			}
+
+			if scoped := len(r.Scope) > 0; scoped != c.scoped {
+				t.Errorf("scope = %v, want scoped %v", r.Scope, c.scoped)
+			}
+
+			if c.scoped && Failed([]Result{r}) {
+				t.Error("a scoped driver problem failed the run")
+			}
+		})
+	}
+}
+
+func TestNoDriverPrintsNoDriverRow(t *testing.T) {
+	f := newFixture(t)
+	f.writeJSON(filepath.Join(f.claude, "settings.json"), f.settings)
+
+	for _, r := range Run(context.Background(), f.e) {
+		if r.Name == CheckDriver {
+			t.Fatalf("driver row without a driver: %+v", r)
 		}
 	}
 }

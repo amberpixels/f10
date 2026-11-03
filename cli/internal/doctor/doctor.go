@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -37,12 +38,14 @@ type Result struct {
 // Env is everything the checks read from outside, so a test can hand them
 // a temp directory and fakes instead of the real home and PATH.
 type Env struct {
-	ClaudeDir string // CLAUDE_CONFIG_DIR or ~/.claude
-	Home      string // the statusline symlink lives under ~/.claude/f10 whatever ClaudeDir is
-	Layout    *layout.Layout
-	Probes    *probe.Probes
-	Facts     *facts.Effective
-	Version   string // the binary's, as `f10 --version` prints it
+	ClaudeDir   string // CLAUDE_CONFIG_DIR or ~/.claude
+	Home        string // the statusline symlink lives under ~/.claude/f10 whatever ClaudeDir is
+	Layout      *layout.Layout
+	Probes      *probe.Probes
+	Facts       *facts.Effective
+	Version     string         // the binary's, as `f10 --version` prints it
+	Driver      *driver.Driver // the project's tracker driver; nil when it has none
+	NeedsDriver bool           // the tracker reads only through a driver, as Notion or Jira does
 
 	Getenv   func(string) string
 	LookPath func(string) (string, error)
@@ -62,8 +65,14 @@ func Run(ctx context.Context, env *Env) []Result {
 		checkStatusline(env, set),
 		checkHerdr(env),
 		checkHost(ctx, env),
-		checkProject(env),
 	}
+
+	// a tracker that needs no driver gets no row, not a not-needed one
+	if env.Driver != nil || env.NeedsDriver {
+		results = append(results, checkDriver(ctx, env))
+	}
+
+	results = append(results, checkProject(env))
 
 	for i := range results {
 		if results[i].Scope == nil {

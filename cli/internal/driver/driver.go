@@ -75,6 +75,14 @@ func (e notWrittenError) Is(target error) bool { return target == ErrNotWritten 
 
 func (e notWrittenError) Unwrap() error { return e.error }
 
+// MinF10Drivers is the oldest f10-drivers this binary works with: v0.4.0
+// first takes --set on create, and an older one drops it with only a warning.
+// Raise it whenever the binary starts passing a driver a new flag.
+const MinF10Drivers = "v0.4.0"
+
+// F10DriversInstall installs the latest f10-drivers.
+const F10DriversInstall = "go install github.com/amberpixels/f10-drivers/cmd/f10-drivers@latest"
+
 // DefaultTimeout bounds one verb when a Driver sets no Timeout.
 const DefaultTimeout = 30 * time.Second
 
