@@ -49,7 +49,7 @@ Deploy has its own confirmation (the **deploy** step).
 Once the flow is chosen, run `f10 flow <name> [--pace <name>]`, passing `--pace` only when the argument gave one, and run the entries it prints in its order, never the frontmatter's list.
 It prints one entry per line.
 An entry marked `skipped` does not run: say so in one line, and leave it out of the badge's `pipeline`.
-Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` to **pr**; a judge's `effort` reaches the judge through `f10 agents judge`.
+Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` to **pr**; a judge's `effort` applies only where the judge spawns an agent (`--blind`), whose profile then comes from `f10 agents judge`, with `--pace <name>` when the argument gave one; an inline judge runs on the task agent's profile.
 A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
 A `finish` line means the run ends at an open PR the pace would have merged: ship never merges it, and the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
 With no pace, the list is the declared flow, unchanged.

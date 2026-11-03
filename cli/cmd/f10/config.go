@@ -119,7 +119,7 @@ func (v *view) withPaces(eff *facts.Effective) {
 			e := paceEntry{
 				Key:    "paces." + name,
 				Value:  "(no dials: flows run as declared)",
-				Origin: facts.PaceOriginBuiltin,
+				Origin: set.Origins[name],
 			}
 			v.Paces = append(v.Paces, e)
 			v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})

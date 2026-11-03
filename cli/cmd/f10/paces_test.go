@@ -148,8 +148,8 @@ func TestPaceShapesTheDriveChain(t *testing.T) {
 	}
 }
 
-// A rerun of drive keeps the pace a branch records; a run's --pace on a
-// branch with none is recorded there.
+// A run's --pace wins and is recorded; a rerun naming none keeps the
+// pace its branch records.
 func TestDriveKeepsTheRecordedPace(t *testing.T) {
 	paced := func(fl shipFlow, pace string) (shipFlow, error) {
 		fl.pace = pace
@@ -163,8 +163,9 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 	}{
 		{recorded: "", flag: "fast", run: "fast", want: "fast", writes: true},
 		{recorded: "", run: "slow", want: "slow"},
-		{recorded: "fast", run: "fast", want: "fast"},
-		{recorded: "ultra", flag: "fast", run: "fast", want: "ultra", note: "kept the ultra pace"},
+		{recorded: "fast", flag: "fast", run: "fast", want: "fast"},
+		{recorded: "ultra", flag: "slow", run: "slow", want: "slow", writes: true},
+		{recorded: "ultra", run: "fast", want: "ultra", note: "kept the ultra pace"},
 	} {
 		f := newFakes(t)
 		f.script("git config --get branch.GH-1."+cfgPace, tc.recorded)
@@ -187,5 +188,49 @@ func TestDriveTakesPace(t *testing.T) {
 
 	if _, err := parseDriveArgs([]string{"GH-1", "--pace", "fast", "--pace=slow"}); err == nil {
 		t.Error("two paces were taken")
+	}
+}
+
+// f10 start --pace records the pace on the new branch, and a pace that
+// skips plan sends ship alone.
+func TestStartRecordsThePace(t *testing.T) {
+	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+
+	ultra, err := resolvePacedFlow(eff, facts.NewPaceSet(), "ultra", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := prompt(modeDefault, ultra, "GH-1", nil, "", nil, ""); strings.Contains(got, "/f10:plan") {
+		t.Errorf("ultra's prompt = %q, want ship alone", got)
+	}
+
+	f := newFakes(t)
+	f.script(refsLocal, "")
+	f.script(refsAfter, heads("GH-7/base"))
+	f.script(shaAfter, "ccc")
+	f.script(headRef, "origin/main")
+	f.script(shaMain, "bbb")
+	f.script(cfgTask, "")
+	f.script(cfgBranch, "")
+	f.script("git merge-base refs/heads/GH-1 refs/heads/GH-7/base", "ccc")
+	f.script("git config branch.GH-1."+cfgTip+" ccc", "")
+	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	f.script("git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", "")
+	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
+	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
+
+	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
+	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, ultra, "GH-1", dep, "", nil, ""), "{}")
+
+	var out bytes.Buffer
+
+	in := startInput{main: "/code/repo", task: gh1, flow: ultra, pace: "ultra", after: "GH-7"}
+	if err := start(t.Context(), &out, in); err != nil {
+		t.Fatal(err)
+	}
+
+	if !f.called("git config branch.GH-1." + cfgPace + " ultra") {
+		t.Errorf("the pace was not recorded on the branch: %v", f.calls)
 	}
 }

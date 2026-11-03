@@ -1646,8 +1646,9 @@ func (in *driveInput) chainFor(fl shipFlow) []string {
 	return driveChain(fl, in.driveFinish)
 }
 
-// keepPace prefers the pace a branch records over the run's, as keepFlow
-// does the flow; a run's --pace on a branch with none is recorded there.
+// keepPace: a run's --pace wins and is recorded on the branch, since a
+// rerun that slows down must be able to take finish off; with none typed,
+// the branch's record wins over the project's default.
 func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) (shipFlow, string, error) {
 	key := "branch." + branch + "." + cfgPace
 
@@ -1657,9 +1658,11 @@ func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) 
 	}
 
 	switch {
-	case recorded == "" && in.args.pace != "":
-		if err := gitx.SetConfig(ctx, in.main, key, in.args.pace); err != nil {
-			return shipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
+	case in.args.pace != "":
+		if recorded != in.args.pace {
+			if err := gitx.SetConfig(ctx, in.main, key, in.args.pace); err != nil {
+				return shipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
+			}
 		}
 
 		return fl, "", nil
@@ -1673,8 +1676,7 @@ func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) 
 			recorded, err, cmp.Or(fl.pace, "no pace")), nil
 	}
 
-	return kept, fmt.Sprintf("kept the %s pace its branch records; the run's %s does not apply to it",
-		recorded, cmp.Or(fl.pace, "no pace")), nil
+	return kept, fmt.Sprintf("kept the %s pace its branch records over %s", recorded, cmp.Or(fl.pace, "no pace")), nil
 }
 
 // position: a skill drive recorded on the branch wins; else a plan the

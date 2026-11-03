@@ -16,7 +16,7 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
   A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
 - `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
 - `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them); a rerun keeps the flow a task's branch already records.
-- `--pace <name>`: the pace every task runs at (`docs/project-setup.md` → Paces), recorded on each branch; a rerun keeps the pace a task's branch already records.
+- `--pace <name>`: the pace every task runs at (`docs/project-setup.md` → Paces), recorded on each branch over any earlier one; a rerun that names none keeps the pace a task's branch records.
   No chain is typed after the ids: the flow says what runs.
 - `--agent <profile>`: every agent's profile, `kind:model:effort` or a part of it, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model <model>` is the model-only form.
 - `--parallel N`: at most N tasks run a skill at once, and at most twice N agents stay open, because an idle session still holds its memory.

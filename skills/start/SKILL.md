@@ -35,5 +35,5 @@ f10 start <arguments>
 3. **Exit 6 is a question**: a parent task with unfinished subtasks, named in the message.
    Read them with `f10 task children <id> --json` (unfinished rows only), then ask once with `AskUserQuestion`, header the parent id: **Drive the subtasks** first, then up to three subtasks as `Start <id>` with the title as description, depth 0 first; another subtask comes through Other.
    Drive invokes the `/f10:drive <id>` skill, carrying `--agent` or `--model` and dropping start's other flags with one line saying so.
-   A subtask reruns `f10 start <subtask>` with the original mode or flow flag, `--pace`, and `--agent or `--model`, dropping `--after` and `--base` with one line saying so, since the subtask's own `After:` line sets its base; relay its report under these same rules.
+   A subtask reruns `f10 start <subtask>` with the original mode or flow flag, `--pace`, and `--agent` or `--model`, dropping `--after` and `--base` with one line saying so, since the subtask's own `After:` line sets its base; relay its report under these same rules.
 4. Every other failure is final: print the message verbatim and stop.

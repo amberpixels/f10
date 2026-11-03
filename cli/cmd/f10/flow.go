@@ -343,13 +343,9 @@ func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name strin
 	}
 
 	if name == "" && len(eff.FlowByArea) > 0 {
-		// ship picks the flow, so only the pace's own finish word is known
-		fl := shipFlow{byArea: true, pace: pace}
-		if p, err := set.Lookup(pace); err == nil && pace != "" {
-			fl.finish = p[facts.PaceFinishKey].Finish
-		}
-
-		return fl, nil
+		// ship picks the flow, so whether it ends at a PR, and so whether
+		// the pace's finish applies, is unknown: drive_finish decides
+		return shipFlow{byArea: true, pace: pace}, nil
 	}
 
 	lookup := strings.ToLower(name)

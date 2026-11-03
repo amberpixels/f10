@@ -285,6 +285,7 @@ func (s *PaceSet) Over(paces map[string]Pace, origin func(name, key string) stri
 	for name, p := range paces {
 		if s.Paces[name] == nil {
 			s.Paces[name] = Pace{}
+			s.Origins[name] = origin(name, "")
 		}
 
 		for key, d := range p {

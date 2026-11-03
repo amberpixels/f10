@@ -304,6 +304,7 @@ The dials are:
   `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (the `Rounds: 2` rule).
   `depth` is `full` or `light`, which gives the blind reviewer a short brief (`steps/review.md`).
 - `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it.
+  It reaches a judge that spawns an agent (`--blind`); a judge running inline stays on the task agent's profile.
 - `pr: { marker }`, a word the project's `pr` overlay gives a meaning, such as a title tag that makes CI run a short pipeline.
 - `finish: on | off`, whether `f10 drive` finishes a task whose run ends at an open PR.
 - `<step>: off` skips that entry.
@@ -321,14 +322,14 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
 1. f10's built-ins.
    `medium` has no dials, so naming it runs every flow as declared.
    `slow` reviews locally in two rounds and never finishes.
-   `fast` reviews locally in one round, judges at low effort and finishes.
+   `fast` reviews locally in one round, sets the judge's effort low and finishes.
    `ultra` skips plan, judge, cleanup and demo, reviews light, marks the PR `fast`, and finishes.
 2. `~/.f10/paces.md`, a frontmatter of `paces:` and `pace:`, the same keys, for a pace that follows you across projects.
 3. The project's `paces:`, main's then the worktree's.
 
 The run's pace is, first to last: `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`, the pace the task's branch records, the project's `pace:`, the user's `pace:`.
 With none of them, there is no pace, and every flow runs as declared.
-`f10 start --pace` and `f10 drive --pace` record the pace on the branch, so a rerun keeps it, as `--agent` is kept.
+`f10 start --pace` and `f10 drive --pace` record the pace on the branch, replacing any earlier one, so a rerun that names none keeps it.
 `/f10:ship --pace` applies to that run alone.
 An unknown name fails with the list of paces.
 
