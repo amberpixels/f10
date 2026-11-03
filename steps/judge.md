@@ -114,9 +114,10 @@ However, never agree because agreeing is cheaper.
      The words are `continue`, `folded` (folded into the plan for `implement` to build), `built` (a change judge built the changes), `refactor as agreed`, `asked`, `block`, `stop`, and fetch's `overridden`.
      A standalone run omits it.
 
-   Two sections follow the header, and nothing parses them.
-   `## Changes`, on a yellow verdict, has one line per change, numbered as in the reply.
-   `## Argument` holds the reply under the banner.
+   Two sections follow the header.
+   `## Changes`, on a yellow verdict, has one line per change, numbered as in the reply, each line opening `<n>. ` at its start, because `f10 status` counts those lines as the changes a `built` decision built.
+   In a ship run it lists only the changes the run takes, so a change the user declined at the gaps question is left out.
+   `## Argument` holds the reply under the banner, and nothing parses it.
 
    Write the file once the verdict is final for this run.
    A standalone run writes it after the reply, and a ship run writes it once the route is chosen.
@@ -195,6 +196,7 @@ With uncommitted work in the tree, the guard is skipped, and the verdict is on t
 **Building the changes** is how a change judge turns a yellow verdict, or an agreed rethink's refactor, into code, before or after `pr`:
 
 1. The ship skill folds the changes into the plan file, as for the plan judge.
+   A planless flow has no plan file, so the changes fold into its inline plan, and no plan file is created for them.
 2. Make the changes in the project's house style, following its CLAUDE.md rules and the `project.md` guardrails.
 3. Run the load's `verify:` line (`conventions/context.md` → Verify).
    Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge` when the run left anything durable, else `failed`): the changes stay uncommitted, and nothing is posted.
