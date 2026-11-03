@@ -15,6 +15,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -68,6 +69,7 @@ type rowFacts struct {
 	after    string
 	baseDone bool
 	queued   bool // its drive's cap holds it back
+	driven   bool // a running drive lists it
 }
 
 type ledgerHalt struct {
@@ -92,8 +94,11 @@ func stageOf(f rowFacts) (string, string) {
 		return stageHalted, cmp.Or(r.Leaf, furthestPhase(r))
 	case r == nil && f.queued:
 		return stageQueued, ""
-	case r == nil && f.after != "" && !f.baseDone:
+	case r == nil && f.after != "" && !f.baseDone && f.driven:
 		return stageWaiting, "after " + f.after
+	case r == nil && f.after != "" && !f.baseDone:
+		// only a drive holds a task for its base; nothing holds this one yet
+		return stageNotStarted, "after " + f.after
 	case r == nil:
 		return stageNotStarted, ""
 	}
@@ -263,6 +268,8 @@ type rowSource struct {
 	// takes it as written
 	resolve func(token string) string
 	host    *host
+	// driven holds every task id a running drive lists, bundle riders too
+	driven map[string]bool
 	// gates reads a task's gates; nil reads none
 	gates func(ctx context.Context, id, branch, root string, run *state.Run) []gate
 }
@@ -315,7 +322,12 @@ func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
 // ledger's last claim, then the PR by branch or by the url the ledger kept.
 func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts) {
 	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
-	f := rowFacts{finished: k.Finished, after: k.After, queued: k.queued}
+	f := rowFacts{
+		finished: k.Finished,
+		after:    k.After,
+		queued:   k.queued,
+		driven:   src.driven[strings.ToUpper(k.ID)],
+	}
 	lt := ledgerFor(src.events, k.ID, src.idOf)
 
 	branch, root := "", ""
@@ -639,6 +651,37 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	return &rows[0], nil
 }
 
+// drivenTasks is every task a drive lists while its driver runs, by id,
+// each bundle member on its own. A stopped drive holds nothing until it
+// resumes, as its queue does not.
+func drivenTasks(root string) map[string]bool {
+	recs, err := drives.List(root)
+	if err != nil {
+		return nil
+	}
+
+	out := map[string]bool{}
+
+	for _, r := range recs {
+		if r.Cancelled != nil || r.Done() {
+			continue
+		}
+
+		if _, running := drives.Probe(root, drives.DriveKey(r.Number)); !running {
+			continue
+		}
+
+		for _, t := range r.Tasks {
+			for member := range strings.SplitSeq(t.ID, ref.Separator) {
+				id, _ := ref.SplitSuffix(member)
+				out[strings.ToUpper(id)] = true
+			}
+		}
+	}
+
+	return out
+}
+
 // statusSource binds the row reads to this target: live runs, the ledger,
 // the checkout lookup and the host.
 func statusSource(ctx context.Context, t *target) (rowSource, error) {
@@ -694,6 +737,7 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 	}
 
 	gs := newGateSource(t, src.events, src.host)
+	src.driven = drivenTasks(gs.shared)
 	src.gates = func(ctx context.Context, id, branch, root string, run *state.Run) []gate {
 		return gs.gatesOf(ctx, id, branch, root, gs.storageFor(ctx, root, run), run)
 	}

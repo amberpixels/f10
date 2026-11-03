@@ -51,7 +51,8 @@ FT-71:     ↗ https://github.com/amberpixels/f10/issues/71
 └─ FT-73:  ↗ https://github.com/amberpixels/f10/issues/73
 ```
 
-Then `f10 status <parent> --plain` in a plain fenced block: its tree carries each title and no url, so nothing goes beneath it.
+Then `f10 task children <parent> --plain` in a plain fenced block under a line naming the parent.
+Its tree carries each title and no url, so nothing goes beneath it.
 
 Never draw the rows or the glyphs by hand, or turn them into a table.
 

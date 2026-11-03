@@ -107,7 +107,7 @@ func taskCommand() *cli.Command {
 					&cli.BoolFlag{Name: "open", Usage: "leave out finished rows too (merged, or the plan archived)"},
 					&cli.BoolFlag{
 						Name:  "plain",
-						Usage: "print the tree, each task's url beneath it, even into a pipe (for a skill to relay)",
+						Usage: "print the tree, titles and after notes and no urls, even into a pipe (for a skill to relay)",
 					},
 				},
 				Action: runTaskChildren,

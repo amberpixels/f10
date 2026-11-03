@@ -58,7 +58,7 @@ func (fx launchFixture) launch(t *testing.T, kind, value string) {
 }
 
 // drive writes a drive record over ids and launches it.
-func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...string) {
+func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...string) int {
 	t.Helper()
 
 	tg, err := targetAt(t.Context(), fx.repo, false, "status")
@@ -80,6 +80,8 @@ func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...
 	}
 
 	fx.launch(t, state.LaunchDrive, strconv.Itoa(rec.Number))
+
+	return rec.Number
 }
 
 // status runs a bare `f10 status` and returns stdout.
@@ -217,8 +219,21 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
 	git(t, fx.repo, "config", "branch.DM-5/work."+cfgAfter, "DM-3")
 
-	fx.drive(t, func(r *drives.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
+	n := fx.drive(t, func(r *drives.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
 	fx.launch(t, state.LaunchStart, "DM-5")
+
+	// only a running drive holds DM-4 for its base
+	tg, err := targetAt(t.Context(), fx.repo, false, "status")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lease, err := drives.Acquire(tg.sharedRoot(), drives.DriveKey(n), n)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(lease.Release)
 
 	rows := fx.rows(t)
 	if got, want := rowIDs(rows), "DM-3:implementing DM-4:waiting DM-5:planned"; got != want {
