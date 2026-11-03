@@ -96,6 +96,13 @@ type Effective struct {
 	// layer. Nil when none is declared.
 	Agents       map[string]string `json:"agents,omitempty"`
 	AgentsOrigin map[string]string `json:"agentsOrigin,omitempty"`
+	// Paces is the project's paces: merged across its layers per pace and
+	// key, PacesOrigin naming each <pace>.<key>'s layer; nil when none is
+	// declared. Pace is the declared default, "" for none.
+	Paces       map[string]Pace   `json:"paces,omitempty"`
+	PacesOrigin map[string]string `json:"pacesOrigin,omitempty"`
+	Pace        string            `json:"pace,omitempty"`
+	PaceOrigin  string            `json:"paceOrigin,omitempty"`
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.

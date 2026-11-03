@@ -100,6 +100,7 @@ The **header** comes first, one line per field, in this order:
 - `reviewer:` - `local`, or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`).
   A round that both halves wrote lists both, comma-separated (`local, claude[bot]`).
 - `engine:` - host engine rounds only: `host` and the level it ran at (`host high`).
+- `depth: light` - a light round only (**Depth**, under **The blind reviewer**).
 - `review:` - remote rounds only: the url where a `+reply` posts.
 - `revision:` - remote rounds only: pick's revision of the review's text.
 - `lens: coherence` - coherence lens rounds only.
@@ -155,6 +156,7 @@ The main agent first gathers these facts:
 - the round number, the prior round's path and the output path (`f10 review round`: `round:`, `latest:`, `path:`), and the `pr:` value for the header
 - each lesson that implement's hand-off in this run said it overrode, with the lesson id, its path and the reason (none when the hand-off noted none, or when the review runs standalone)
 - the review roles: the base role, where Roles replaces it, and the added roles, from the sources `conventions/context.md` → Roles ranks, the plan's `Roles` line first
+- the depth: `light` when the flow entry carries a `depth light` dial from the run's pace (**Depth**, below), else `full`
 
 It then spawns **one fresh `general-purpose` agent** and hands it those facts.
 Never use `fork`, because a fork inherits the whole conversation.
@@ -188,6 +190,17 @@ A prior block whose status takes a verdict (`still open`, `fix introduced a prob
 Its new id becomes the prior block's `lore:` line.
 A round-one block with no `lore:` line writes nothing.
 A failing `lore add` is one line in the report and never a failed step, because the findings file stays the record that `f10 status` falls back to.
+
+**Depth.** A `light` review is the pace's quick pass, for a run that trades review depth for speed.
+It keeps the brief below, with three cuts:
+
+- Only **correctness and logic** and **security and performance** are raised, because those are what break a merge.
+  The other two core categories and the project's categories are skipped, though guardrails still bind under correctness.
+- Only findings with `confidence: confirmed` are written.
+- At most two findings per category.
+
+The header adds `depth: light`, so a reader of the file knows what was not looked at.
+A `full` review is the brief as written.
 
 **The brief** the reviewer follows:
 
@@ -353,7 +366,8 @@ When that directory already holds a round, decline in one line, naming a fresh b
 ## Rounds
 
 **One round is the default.**
-Round two runs only in one of three cases:
+A `rounds` dial on the flow entry, from the run's pace, comes first: `rounds 1` means one round, whatever round one's resolve fixed, and `rounds 2` applies the `Rounds: 2` rule below.
+Without the dial, round two runs only in one of three cases:
 
 - `project.md → Review` says `Rounds: 2`.
 - Round one was heavy: its resolve fixed six or more findings.

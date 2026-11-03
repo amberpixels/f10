@@ -35,8 +35,8 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 f10 init                 # register this checkout: write project.md from detection
 f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), and old keys into flows
 f10 config [verify] [--json]   # the effective configuration, with the origin of every value; verify: the one verify line the loader prints
-f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it
-f10 flow [--json]        # the declared flows, each with what selects it, and drive_finish
+f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--pace NAME] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it; the run's pace lays its effort dials on top
+f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace, each with what selects it, and drive_finish; with a name, that flow an entry per line with its dials, the list /f10:ship runs
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
 f10 help [--all | --agent]   # the human commands; --all adds the plumbing the steps call; --agent prints one line per command for an agent's context
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
@@ -78,9 +78,9 @@ f10 standup mark --since <time> [--at <time>]      # record a standup as reporte
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
 
-f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
+f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
-f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
+f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
@@ -134,6 +134,7 @@ A scoped problem (`herdr`, `statusline`) is printed but affects only what it nam
 ## Agents
 
 `f10 agents` prints the merged agents map, `~/.f10/agents.md` under the project's `agents:`, one key per line with its value and origin.
+The run's pace (`--pace`, else the branch's record, else the project's or the user's `pace:`) lays a `judge: { effort }` dial over the `judge` key, its origin `pace <name>` ([Paces](project-setup.md#paces)).
 `f10 agents <step>...` prints each step's resolved profile: `review: claude:opus:high  (model: default (declared (user, ~/.f10/agents.md)), effort: review (declared (main, frontmatter)))  Agent tool: model opus, effort high  - the blind reviewer, a subagent`.
 A step scoped by task kind (`plan.bug`) prints a line per kind unless `--kind` picks one.
 `--agent <profile>` lays a run's profile over `default` as `f10 start --agent` does, and `--json` emits the same lines.
@@ -149,7 +150,7 @@ A key or a profile the vocabulary refuses fails the command naming the file, as 
 It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else the bare id with a note when the host returns no title), creates the worktree beside the main checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling path - opens it as a Herdr workspace, starts a claude agent in its root pane and prompts it.
 The command returns as soon as the prompt is submitted; the work happens in the new workspace.
 
-- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--flow <name>` ships through that declared flow, `/f10:ship <name>: <id>`, and `--local` is `--flow local`, so nothing is pushed; a flow with no leading `plan` sends ship alone; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
+- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--flow <name>` ships through that declared flow, `/f10:ship <name>: <id>`, and `--local` is `--flow local`, so nothing is pushed; a flow with no leading `plan` sends ship alone, and so does a pace that skips `plan`; `--pace <name>` is recorded on the branch, where ship's `f10 flow` reads it, so the prompt does not carry it; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
   Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`); a note goes only with `--discuss` or a PR pickup, and any other mode refuses one, since a driven run takes its instructions from the task.
   The three are exclusive, and `--flow` or `--local` with `--plan` or `--discuss` is refused, since both stop before ship
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 drive`; with `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, since ship picks the flow from the task's area

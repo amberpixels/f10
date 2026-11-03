@@ -45,6 +45,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      A bundle's title is the lead's, and its body links every member with its title.
    - On a host that closes issues on merge, the body carries one closing keyword per member, each on a line of its own (`Closes #12`).
      `f10 finish` later rewrites a rider's line, so the rider's issue stays open.
+   - A **marker** is a word the run's pace hands this entry as a `marker <word>` dial (`f10 flow <name>`), such as `fast`.
+     The project's `pr` overlay says what it means, for example a title tag that makes CI run a short pipeline, and the draft applies it.
+     When no overlay gives the marker a meaning, the PR opens without it, and the report says so in one line.
    - The `## Catchup` section lists the choices a catchup made on this branch, one line per file: `<path>: kept <side>, <why>`.
      Render it from the change's lore decision entries whose body opens with `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`).
      With no such entry, leave the section out.

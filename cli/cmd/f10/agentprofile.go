@@ -120,6 +120,40 @@ func (m agentMap) withBranch(ctx context.Context, main, branch string) (agentMap
 	return m.with(recorded.Short(), "recorded on branch "+branch), nil
 }
 
+// withPace lays a pace's effort dials over the step keys they name, so a
+// fast pace's judge runs at low effort on the map's judge model.
+func (m agentMap) withPace(set *facts.PaceSet, pace runPace) agentMap {
+	if pace.name == "" {
+		return m
+	}
+
+	out := maps.Clone(m)
+	if out == nil {
+		out = agentMap{}
+	}
+
+	for step, d := range set.Paces[pace.name] {
+		if d.Effort == "" || d.Off {
+			continue
+		}
+
+		value, origin := d.Effort, "pace "+pace.name+" ("+set.Origins[pace.name+"."+step]+")"
+
+		if prior, ok := out[step]; ok {
+			under, err := agentctl.ParseProfile(prior.Value)
+			over, errOver := agentctl.ParseProfile(value)
+
+			if err == nil && errOver == nil {
+				value, origin = over.Over(under).Short(), origin+" over "+prior.Origin
+			}
+		}
+
+		out[step] = agentEntry{Key: step, Value: value, Origin: origin}
+	}
+
+	return out
+}
+
 // A resolvedProfile is a step's profile with the key and layer each
 // segment came from, and the model's correction or fallback, if any.
 type resolvedProfile struct {
@@ -242,7 +276,8 @@ func agentsCommand() *cli.Command {
 		Usage:     "print the agent profile each step runs on, and where each segment came from",
 		ArgsUsage: "[<step>...]",
 		Description: "With no step, the merged agents map: the user's ~/.f10/agents.md, the project's agents:, " +
-			"later winning key by key, each value with its origin. With steps, one line per step: its profile " +
+			"later winning key by key, each value with its origin; the run's pace (--pace, the branch's, the project's) " +
+			"lays its effort dials on top. With steps, one line per step: its profile " +
 			"(kind:model:effort), the key and layer each segment came from, and what runs on it; " +
 			"a step scoped by task kind prints a line per kind unless --kind picks one.",
 		Flags: []cli.Flag{
@@ -251,6 +286,7 @@ func agentsCommand() *cli.Command {
 				Usage: "the task `KIND` (feature, bug, refactor, spike) a scoped key applies to",
 			},
 			&cli.StringFlag{Name: "agent", Usage: "a run's `PROFILE`, laid over default as f10 start --agent does"},
+			paceFlag(),
 			&cli.BoolFlag{Name: "json", Usage: "emit the same lines as JSON"},
 		},
 		Action: runAgents,
@@ -293,14 +329,28 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	branch := gitx.CurrentBranch(ctx, t.lay.CheckoutRoot)
+
 	// no flag: the branch's record is what the task agent started on, so a
 	// spawning step's subagent follows it
 	if strings.TrimSpace(cmd.String("agent")) == "" {
-		main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-		if m, err = m.withBranch(ctx, main, gitx.CurrentBranch(ctx, t.lay.CheckoutRoot)); err != nil {
+		if m, err = m.withBranch(ctx, main, branch); err != nil {
 			return err
 		}
 	}
+
+	paces, err := paceSet(t.eff)
+	if err != nil {
+		return err
+	}
+
+	pace, err := activePace(ctx, paces, cmd.String("pace"), main, branch)
+	if err != nil {
+		return err
+	}
+
+	m = m.withPace(paces, pace)
 
 	steps := cmd.Args().Slice()
 	if len(steps) == 0 {

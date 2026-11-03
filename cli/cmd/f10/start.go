@@ -38,6 +38,7 @@ func startCommand() *cli.Command {
 			},
 			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local flow: --flow local"},
 			flowFlag(),
+			paceFlag(),
 			&cli.StringFlag{
 				Name:  "after",
 				Usage: "base the branch on `TASK-ID`'s branch and record the dependency: ship rebases onto it, the PR stacks on it; default: the task body's After: line",
@@ -125,7 +126,17 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	fl, err := resolveShipFlow(t.eff, flowName)
+	paces, err := paceSet(t.eff)
+	if err != nil {
+		return err
+	}
+
+	pace, err := activePace(ctx, paces, cmd.String("pace"), "", "")
+	if err != nil {
+		return err
+	}
+
+	fl, err := resolvePacedFlow(t.eff, paces, pace.name, flowName)
 	if err != nil {
 		return err
 	}
@@ -194,6 +205,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		suffix:   suffix,
 		mode:     mode,
 		flow:     fl,
+		pace:     strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
 		base:     base,
 		plansDir: t.sharedPlansDir(),
 		title:    titleLookup(t, r.Number),
@@ -404,7 +416,8 @@ type startInput struct {
 	suffix   string
 	mode     string
 	flow     shipFlow                              // the flow ship runs; zero for default
-	flowKept bool                                  // drive records the flow itself, keeping one the branch has
+	flowKept bool                                  // drive records the flow and the pace itself, keeping what the branch has
+	pace     string                                // the --pace typed, recorded on the branch; "" records none
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	base     string                                // branch whose ref is the base, or ""
 	plansDir string                                // the plans dir every checkout shares
@@ -815,6 +828,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		if !in.flowKept && in.flow.recorded() != "" {
 			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgFlow, in.flow.recorded()); err != nil {
 				notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
+			}
+		}
+
+		if !in.flowKept && in.pace != "" {
+			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgPace, in.pace); err != nil {
+				notes = append(notes, "the pace was not recorded on the branch: "+err.Error())
 			}
 		}
 

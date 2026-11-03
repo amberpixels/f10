@@ -1,13 +1,13 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--agent <profile> | --model <model>] [--parallel N]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel N]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "<id>[:profile]... [--flow <name> | --local]"
+argument-hint: "<id>[:profile]... [--flow <name> | --local] [--pace <name>]"
 ---
 
 # f10 · drive
 
-Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the frontmatter's `drive_finish` is on (a spike is closed after ship either way: `f10 finish` closes it without a merge).
+Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the pace's `finish`, else the frontmatter's `drive_finish`, is on (a spike is closed after ship either way: `f10 finish` closes it without a merge).
 This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report; it runs no step.
 
 **Arguments**
@@ -16,6 +16,7 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
   A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
 - `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
 - `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them); a rerun keeps the flow a task's branch already records.
+- `--pace <name>`: the pace every task runs at (`docs/project-setup.md` → Paces), recorded on each branch; a rerun keeps the pace a task's branch already records.
   No chain is typed after the ids: the flow says what runs.
 - `--agent <profile>`: every agent's profile, `kind:model:effort` or a part of it, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model <model>` is the model-only form.
 - `--parallel N`: at most N tasks run a skill at once, and at most twice N agents stay open, because an idle session still holds its memory.
