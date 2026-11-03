@@ -253,9 +253,13 @@ drive_finish: off
 `f10 start` and `f10 drive` run `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` stops after `plan`.
 `plan` leads a flow or is absent: it runs only for a task with no plan file, so a planned task never plans again, and `/f10:ship` runs the entries after it.
 A flow with no `plan` writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
-An entry takes an argument after a colon, so each is one shell word: `review:local` and `review:ci` name the review's half, `review:host` runs the local half on the host's own code review (Claude Code's built-in `code-review`) shaped into the same findings file, `review:local+ci` runs both (the CI review fired or awaited first, the local one read while it is pending, one findings file and one resolve for both), `cleanup:comments,prose` the cleanup targets, `deploy:staging` the environment; bare `cleanup` runs the targets that apply, as a light pass with no scope proofs when the diff is under 200 added lines; named targets always get the full pass.
+An entry takes an argument after a colon, so each is one shell word: `review:local` and `review:ci` set the review's `by` (who reviews), `review:host` runs the local review on the host's own code review (Claude Code's built-in `code-review`) shaped into the same findings file, `review:local+ci` runs both (the CI review fired or awaited first, the local one read while it is pending, one findings file and one resolve for both), `review:local+ci?` or `review:ci?` the CI review only where it can run, `cleanup:comments,prose` the cleanup targets, `deploy:staging` the environment; bare `cleanup` runs the targets that apply, as a light pass with no scope proofs when the diff is under 200 added lines; named targets always get the full pass.
 Every `review` entry runs its resolve.
-A review argument other than `local`, `host`, `ci` or `local+ci` is an error; a CI half with no remote reviewer declared, or with no `pr` or `push` before it, is a warning, since it would fail at run time.
+A review argument other than `local`, `host`, `ci`, `local+ci` or one with an optional CI review is an error; a CI review with no remote reviewer declared, or with no `pr` or `push` before it, is a warning, since it would fail at run time.
+A `?` after `ci` makes the CI review optional, so one flow or pace serves projects with and without a remote reviewer.
+It runs when Review declares a remote reviewer and a `pr` or `push` comes before the entry, and is dropped without a warning otherwise: `review:local+ci?` then runs as `review:local`, and a `review:ci?` entry is skipped.
+`f10 flow <name>` prints the entry as it runs, with the reason when the CI review was dropped.
+Inside a `{ }` map YAML refuses a bare `?`, so quote it there: `{ review: "local+ci?" }`.
 `judge` reads by position: before `implement` it judges the plan, a yellow verdict revising the plan file in place; after it, the change.
 A judge before `implement` needs a leading `plan`, since a planless flow has no plan file to judge.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
@@ -300,7 +304,7 @@ pace: brisk
 The dials are:
 
 - `review: { by, rounds, depth }`.
-  `by` is the half a bare `review` entry runs: `local`, `host`, `ci` or `local+ci`.
+  `by` is who reviews in a bare `review` entry: `local`, `host`, `ci`, `local+ci` or `local+ci?`.
   `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (the `Rounds: 2` rule).
   `depth` is `full` or `light`, which gives the blind reviewer a short brief (`steps/review.md`).
 - `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it.
@@ -309,19 +313,19 @@ The dials are:
 - `finish: on | off`, whether `f10 drive` finishes a task whose run ends at an open PR.
 - `<step>: off` skips that entry.
 
-A scalar is shorthand: `judge: off`, `review: local` (the half), `finish: on`.
+A scalar is shorthand: `judge: off`, `review: local` (the `by`), `finish: on`.
 `implement: off` is refused, because a flow without it does no work.
 
 A pace tunes or skips the entries a flow already has, and never adds one, because adding work is the flow's job.
 A dial on a step the flow lacks does nothing.
-An entry's own argument wins for the dial it expresses: `review:local` keeps its half under a pace whose `by` is `ci`, and still takes that pace's `rounds` and `depth`.
+An entry's own argument wins for the dial it expresses: `review:local` keeps its `by` under a pace whose `by` is `ci`, and still takes that pace's `rounds` and `depth`.
 A pace that leaves a flow invalid, such as `plan: off` with a plan judge still on, is a warning in `f10 config` and an error when a run picks it.
 
 Paces come in three layers, merged per pace and per key, a later layer winning:
 
 1. f10's built-ins.
    `medium` has no dials, so naming it runs every flow as declared.
-   `slow` reviews locally in two rounds and never finishes.
+   `slow` reviews in two rounds, locally and also by CI where a remote reviewer is declared (`local+ci?`), and never finishes.
    `fast` reviews locally in one round, sets the judge's effort low and finishes.
    `ultra` skips plan, judge, cleanup and demo, reviews light, marks the PR `fast`, and finishes.
 2. `~/.f10/paces.md`, a frontmatter of `paces:` and `pace:`, the same keys, for a pace that follows you across projects.
@@ -374,7 +378,7 @@ What reaches where is explicit, and `f10 agents` prints it per step:
 - a step that spawns a subagent passes its own key's profile to the Agent tool: the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check.
   The project load (`f10-load-project.sh <step>`) prints each requested step's line, with the model family and effort word in the form the Agent tool takes;
 - every other step runs inline, on the task agent's profile.
-  Its key is accepted so a map can be written once, and `f10 agents` says no lever reaches it yet: `implement`, `plan`, `commit`, `pr`, a judge in a flow, both halves of a review's resolve.
+  Its key is accepted so a map can be written once, and `f10 agents` says no lever reaches it yet: `implement`, `plan`, `commit`, `pr`, a judge in a flow, the resolve of a local or a CI review.
 
 An agent never types `/effort` or `/model`: in a session those save the choice as your own default in Claude Code's user settings.
 The eval runner takes `-agent <profile>` and a scenario lists the profiles it measures ([docs/evals.md](evals.md)).
@@ -480,8 +484,8 @@ review:
 
 Reviewer is `bot`, `human` or `check` plus the login or check name.
 Arrives as is `issue comment`, `inline review` or `check run`.
-Trigger is `automatic`, `manual` or both, followed by how a human fires it; naming both, the manual how follows the word `manual` (`automatic, on open and on push; manual, comment \`@claude\` on the PR for a re-review`). `f10 review trigger` performs a manual how written as a comment with its text in a code span (`comment \`@claude review\` on the PR`) or as a review request with the login in a code span (`request a review from \`octocat\``); any other how stays a human's step. The Trigger decides what a flow's CI half does when no review is done: automatic waits, both waits once and then fires, manual fires. Declaring a manual how `f10 review trigger` can read is what lets a flow post it, a round two's re-review comment included; there is no flow syntax for it.
-Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci`, or the resolve of a flow's CI half, leaves once every finding has a verdict (`reaction \`<emoji>\`` or `marker "<text>"`; not resolved threads, which a human may resolve by hand); handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger, with `settled: reaction \`rocket\`` (spelled the same on GitHub and GitLab); a checkout without one declares no remote review, and a flow naming `review:ci` fails rather than waiting. The model reads the same vocabulary in `steps/review.md`.
+Trigger is `automatic`, `manual` or both, followed by how a human fires it; naming both, the manual how follows the word `manual` (`automatic, on open and on push; manual, comment \`@claude\` on the PR for a re-review`). `f10 review trigger` performs a manual how written as a comment with its text in a code span (`comment \`@claude review\` on the PR`) or as a review request with the login in a code span (`request a review from \`octocat\``); any other how stays a human's step. The Trigger decides what a flow's CI review does when no review is done: automatic waits, both waits once and then fires, manual fires. Declaring a manual how `f10 review trigger` can read is what lets a flow post it, a round two's re-review comment included; there is no flow syntax for it.
+Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci`, or the resolve of a flow's CI review, leaves once every finding has a verdict (`reaction \`<emoji>\`` or `marker "<text>"`; not resolved threads, which a human may resolve by hand); handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger, with `settled: reaction \`rocket\`` (spelled the same on GitHub and GitLab); a checkout without one declares no remote review, and a flow naming `review:ci` fails rather than waiting, where `review:ci?` is dropped. The model reads the same vocabulary in `steps/review.md`.
 
 `traces: on` makes what f10 does visible on the host, in words that never name f10.
 Every commit a step makes ends in `Task: <id>` and `Step: <step>` trailers, a resolve's fix commit also in `Review: round=<n> fixed=<n> skipped=<n>`.
@@ -489,7 +493,7 @@ The squash commit `f10 finish` lands on the default branch keeps `Task: <id>` un
 The PR body holds one hidden comment, `<!-- state {...} -->`, saying which step last ran, the review round, what is still open and what waits on someone, rewritten by `pr`, `review`, `resolve`, `judge` and `f10 finish` through `f10 trace state`.
 `docs/traces.md` is the spec, with the fixtures a reader of the history conforms to.
 A local review or a judge of a branch with an open PR or MR is visible on it too.
-The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped"; after `review:local+ci` the counts are the local half's, the CI half answered on its own thread.
+The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped"; after `review:local+ci` the counts are the local review's, the CI review answered on its own thread.
 A round that found anything also gets a PR comment listing the findings by title, each with its verdict and each skip's reason.
 The fix commit's message names what it fixed and what it skipped.
 A judge after the PR leaves a `judge` status and a comment with its verdict; a proceed with changes pushes its changes first and lists them, and a stop marks the PR "do not merge" with its reason, leaving it open.

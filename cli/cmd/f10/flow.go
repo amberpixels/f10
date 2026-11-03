@@ -45,7 +45,7 @@ type flowRow struct {
 	Entries  []string        `json:"entries"`       // as declared
 	Run      []string        `json:"run,omitempty"` // what runs under the pace
 	Selected []string        `json:"selectedBy"`
-	Resolved *facts.Resolved `json:"resolved,omitempty"` // the entries under the pace; nil with no pace, or one that breaks the flow
+	Resolved *facts.Resolved `json:"resolved,omitempty"` // the entries under the pace; nil when nothing changes them, or the pace breaks the flow
 	Broken   string          `json:"broken,omitempty"`   // why the pace does not resolve on this flow
 }
 
@@ -113,7 +113,10 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 }
 
 func flowsView(eff *facts.Effective) flowView {
-	return pacedFlowsView(eff, facts.NewPaceSet(), runPace{})
+	set := facts.NewPaceSet()
+	set.Remote = eff.Review.Remote()
+
+	return pacedFlowsView(eff, set, runPace{})
 }
 
 // pacedFlowsView is every flow with its entries under pace; a flow the
@@ -126,7 +129,7 @@ func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flow
 
 		if r, err := set.ResolveFlow(name, eff.Flows[name], pace.name); err != nil {
 			row.Broken = err.Error()
-		} else if pace.name != "" {
+		} else if pace.name != "" || r.Changed() {
 			row.Resolved, row.Run = &r, r.Run()
 		}
 
@@ -165,7 +168,7 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 	for _, e := range f.Resolved.Entries {
 		switch {
 		case e.Skipped != "":
-			fmt.Fprintf(&b, "%-*s  skipped: off in %s\n", width, e.Entry, e.Skipped)
+			fmt.Fprintf(&b, "%-*s  skipped: %s\n", width, e.Entry, e.Skipped)
 		case len(e.Dials) > 0:
 			fmt.Fprintf(&b, "%-*s  %s\n", width, e.Entry, dialsShown(e.Dials))
 		default:
@@ -340,6 +343,7 @@ func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
 func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name string) (shipFlow, error) {
 	if set == nil {
 		set, pace = facts.NewPaceSet(), ""
+		set.Remote = eff.Review.Remote()
 	}
 
 	if name == "" && len(eff.FlowByArea) > 0 {

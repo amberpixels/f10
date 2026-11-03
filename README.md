@@ -167,7 +167,7 @@ These are the terms the skills, and the rest of this README, use.
   With none declared, the flow is `plan implement pr`.
   `plan` leads a flow, and it runs only for a task with no plan file.
   `/f10:ship` runs the entries after it.
-  An entry can take an argument after a colon: `review:local`, `review:host` (the host's own code review, shaped into the same findings), `review:ci`, `review:local+ci` (both halves, one resolve), `cleanup:comments,prose`, `deploy:staging`.
+  An entry can take an argument after a colon: `review:local`, `review:host` (the host's own code review, shaped into the same findings), `review:ci`, `review:local+ci` (both, one resolve; `local+ci?` runs the CI review only where a remote reviewer is declared), `cleanup:comments,prose`, `deploy:staging`.
   A `judge` entry before `implement` judges the plan, and one after `implement` judges the change.
   A name with no generic step, such as `e2e`, is project-defined: its `.f10/instructions/<name>.md` *is* the step.
   `f10 start` and `f10 drive` run the `default` flow, `--local` runs `local`, and `--flow <name>` runs any other.

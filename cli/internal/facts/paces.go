@@ -207,11 +207,8 @@ func CheckPace(name string, p Pace) []string {
 func (d Dials) checkValues(at string) []string {
 	var bad []string
 
-	switch {
-	case strings.Contains(d.By, "?"):
-		bad = append(bad, fmt.Sprintf("%s: by %s: an optional half (?) is not supported yet", at, d.By))
-	case d.By != "" && !anyHalf(d.By):
-		bad = append(bad, fmt.Sprintf("%s: by %s is not local, host, ci or local+ci", at, d.By))
+	if d.By != "" && !validBy(d.By) {
+		bad = append(bad, fmt.Sprintf("%s: by %s is not local, host, ci, local+ci or local+ci?", at, d.By))
 	}
 
 	if d.Rounds != 0 && d.Rounds != 1 && d.Rounds != 2 {
@@ -241,7 +238,7 @@ func (d Dials) checkValues(at string) []string {
 func BuiltinPaces() map[string]Pace {
 	return map[string]Pace{
 		"slow": {
-			"review":      {By: "local", Rounds: 2},
+			"review":      {By: "local+ci?", Rounds: 2},
 			PaceFinishKey: {Finish: "off"},
 		},
 		"medium": {},
@@ -265,6 +262,7 @@ func BuiltinPaces() map[string]Pace {
 // PaceSet is every pace a run can name, merged key by key: the built-ins,
 // the user's ~/.f10/paces.md, then the project's paces.
 type PaceSet struct {
+	Remote        bool // Review declares a remote reviewer, which an optional CI review needs
 	Paces         map[string]Pace
 	Origins       map[string]string // <pace>.<key> to the layer that set it
 	Default       string            // pace: the pace a run takes when it names none; "" for none
@@ -317,10 +315,10 @@ type Dial struct {
 
 // A ResolvedEntry is one flow entry as a pace leaves it.
 type ResolvedEntry struct {
-	Entry    string `json:"entry"` // as it runs: review:local when the pace named the half
+	Entry    string `json:"entry"` // as it runs: review:local when the pace named who reviews
 	Declared string `json:"declared"`
 	Step     string `json:"step"`
-	Skipped  string `json:"skipped,omitempty"` // the origin of the off that skips it; "" when it runs
+	Skipped  string `json:"skipped,omitempty"` // why it does not run: the pace's off, or an optional CI review dropped; "" when it runs
 	Dials    []Dial `json:"dials,omitempty"`
 }
 
@@ -330,6 +328,13 @@ type Resolved struct {
 	Pace    string          `json:"pace,omitempty"`
 	Entries []ResolvedEntry `json:"entries"`
 	Finish  *Dial           `json:"finish,omitempty"` // set only when the pace says and the run ends at a PR
+}
+
+// Changed reports a resolution that differs from the declared flow.
+func (r Resolved) Changed() bool {
+	return slices.ContainsFunc(r.Entries, func(e ResolvedEntry) bool {
+		return e.Skipped != "" || e.Entry != e.Declared || len(e.Dials) > 0
+	})
 }
 
 // Run is the entries that run, in order.
@@ -373,7 +378,7 @@ func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Reso
 		switch {
 		case !ok:
 		case d.Off:
-			e.Skipped = from(step)
+			e.Skipped = "off in " + from(step)
 		default:
 			for _, ds := range dialSteps {
 				v := d.value(ds.dial)
@@ -395,6 +400,10 @@ func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Reso
 
 		if step == "review" && arg != "" && ok && d.By != "" && !d.Off {
 			e.Dials = append([]Dial{{Name: "by", Value: arg, Origin: "entry argument"}}, e.Dials...)
+		}
+
+		if step == "review" && e.Skipped == "" {
+			s.settleCI(&e, published(r.Entries))
 		}
 
 		r.Entries = append(r.Entries, e)
@@ -446,6 +455,52 @@ func (s *PaceSet) PaceProblems(flows map[string][]string) []string {
 	return bad
 }
 
+// settleCI decides an optional CI review on a review entry: the entry is
+// rewritten to what runs, or skipped when nothing does, and its by dial
+// says why.
+func (s *PaceSet) settleCI(e *ResolvedEntry, published bool) {
+	_, arg := SplitEntry(e.Entry)
+
+	by, ok := ReviewBy(arg)
+	if !ok || !by.CIOptional {
+		return
+	}
+
+	settled, why := by.Settle(s.Remote, published)
+	origin := arg
+
+	i := slices.IndexFunc(e.Dials, func(d Dial) bool { return d.Name == "by" })
+	if i >= 0 {
+		origin = e.Dials[i].Origin + ", " + arg
+	}
+
+	if why != "" {
+		origin += " (" + why + ")"
+	}
+
+	dial := Dial{Name: "by", Value: settled.Arg(), Origin: origin}
+
+	switch {
+	case settled.Arg() == "":
+		e.Skipped = origin
+	case i >= 0:
+		e.Dials[i] = dial
+	default:
+		e.Dials = append([]Dial{dial}, e.Dials...)
+	}
+
+	if settled.Arg() != "" {
+		e.Entry = "review:" + settled.Arg()
+	}
+}
+
+// published reports a pr or push among the entries that run.
+func published(entries []ResolvedEntry) bool {
+	return slices.ContainsFunc(entries, func(e ResolvedEntry) bool {
+		return e.Skipped == "" && (e.Step == "pr" || e.Step == "push")
+	})
+}
+
 // pacesShown is each pace's keys as `fast: review (by local, rounds 1), finish (on)`.
 func pacesShown(paces map[string]Pace) string {
 	var shown []string
@@ -487,6 +542,7 @@ func (e *Effective) resolvePaces(fm *layered) {
 		// the user's file may change these paces, so a run reports the
 		// final word; this catches the project's own mistakes early
 		s := NewPaceSet()
+		s.Remote = e.Review.Remote()
 		s.Over(e.Paces, func(name, key string) string { return e.PacesOrigin[name+"."+key] })
 
 		for _, bad := range s.PaceProblems(e.Flows) {

@@ -121,6 +121,19 @@ func TestGatesParkedOnTheBase(t *testing.T) {
 	checkTexts(t, gates, map[string]string{"implement": "waiting on FT-1", "cleanup": "pending"})
 }
 
+// An optional CI review with no remote reviewer declared is dropped, so
+// status shows the local review alone; with one declared, both.
+func TestGatesOptionalCI(t *testing.T) {
+	pipeline := []string{"implement", "pr", "review:local+ci?", "pr"}
+	now := time.Unix(1_800_000_000, 0)
+
+	alone := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: pipeline, now: now})
+	checkTexts(t, alone, map[string]string{"review": "local: pending"})
+
+	both := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: pipeline, remoteFlow: true, now: now})
+	checkTexts(t, both, map[string]string{"review": "local: pending · remote: pending"})
+}
+
 // One review:local+ci entry is the one review gate with both halves, each
 // moving from review to resolve once its own findings land.
 func TestGatesBothHalvesInOneEntry(t *testing.T) {
@@ -157,7 +170,7 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 		outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4)},
 	})
 	checkTexts(t, local, map[string]string{
-		"review": "local: round 1 in, waiting for the other half (in ship) · remote: round 1 running (in ship)",
+		"review": "local: round 1 in, waiting for the other review (in ship) · remote: round 1 running (in ship)",
 	})
 
 	// both halves landed: the one resolve settles them

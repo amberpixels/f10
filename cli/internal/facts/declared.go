@@ -182,6 +182,11 @@ func decodeDeclared(block []byte) (Declared, error) {
 	dec.KnownFields(true)
 
 	if err := dec.Decode(&d); err != nil && !errors.Is(err, io.EOF) {
+		// YAML refuses a plain ci? inside { }, with an error that names neither
+		if bytes.Contains(block, []byte("ci?")) {
+			err = fmt.Errorf("%w (inside { } quote an optional CI review: \"local+ci?\")", err)
+		}
+
 		return Declared{}, err
 	}
 

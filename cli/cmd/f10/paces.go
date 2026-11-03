@@ -69,6 +69,7 @@ func paceSet(eff *facts.Effective) (*facts.PaceSet, error) {
 	}
 
 	if eff != nil {
+		s.Remote = eff.Review.Remote()
 		s.Over(eff.Paces, func(name, key string) string { return eff.PacesOrigin[name+"."+key] })
 
 		if eff.Pace != "" {

@@ -7,7 +7,7 @@ argument-hint: "[<task-id | plan.md | description>] [--pace <name>]"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and for a CI half in the flow its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`, for a judge entry after `pr`, push the catchup guard's integration and its own changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
+Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and for a CI review in the flow its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`, for a judge entry after `pr`, push the catchup guard's integration and its own changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -55,7 +55,7 @@ A `finish` line means the run ends at an open PR the pace would have merged: shi
 With no pace, the list is the declared flow, unchanged.
 An `f10 flow` too old to take a name fails on it: run the declared flow, and say in one line that the pace was not applied.
 
-An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` names the half, `review:host` runs the local half on the host's own code review, `review:local+ci` runs both into one round and one resolve, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).
+An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` sets the review's `by` (who reviews), `review:host` runs the local review on the host's own code review, `review:local+ci` runs both into one round and one resolve, `review:local+ci?` runs the CI review only where it can run, and `f10 flow <name>` settles the `?` before ship sees the entry, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).
 The run starts at the entry after a leading `plan`, which runs only for a task with no plan file.
 `resolve` is never named: a `review` entry runs it.
 A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, which builds a yellow verdict's changes itself, routed as the **judge** step says before and after `pr`.
