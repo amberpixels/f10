@@ -436,7 +436,7 @@ It applies only to the tree; a run's block prints as without it.
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
 | `planned` | the plan is saved, ship not begun | faint blue |
-| `waiting` | no run yet, its `After:` base is not done, and a drive neither done nor cancelled lists it, so the drive holds it for that base | faint |
+| `waiting` | no run yet, its `After:` base is not done, and a running drive lists it (a bundle's riders included), so the drive holds it for that base | faint |
 | `not started` | nothing recorded; a task no drive lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.

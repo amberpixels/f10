@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -57,6 +58,39 @@ func TestStageOf(t *testing.T) {
 				t.Errorf("stageOf = %q %q, want %q %q", stage, step, tc.stage, tc.step)
 			}
 		})
+	}
+}
+
+// A running drive holds every member of its bundles; a stopped, cancelled
+// or done drive holds none.
+func TestDrivenTasks(t *testing.T) {
+	root := t.TempDir()
+	now := time.Now()
+
+	for _, rec := range []*drives.Record{
+		{Tasks: []drives.Task{{ID: "FT-1"}}},
+		{Cancelled: &now, Tasks: []drives.Task{{ID: "FT-5"}}},
+		{Tasks: []drives.Task{{ID: "FT-6", Outcome: &drives.Outcome{Row: "ok"}}}},
+		{Tasks: []drives.Task{{ID: "ft-2_v2+FT-3"}}},
+	} {
+		if err := drives.Create(root, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, n := range []int{2, 3, 4} {
+		lease, err := drives.Acquire(root, drives.DriveKey(n), n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(lease.Release)
+	}
+
+	got := drivenTasks(root)
+	want := map[string]bool{"FT-2": true, "FT-3": true}
+
+	if len(got) != len(want) || !got["FT-2"] || !got["FT-3"] {
+		t.Errorf("driven = %v, want %v", got, want)
 	}
 }
 
