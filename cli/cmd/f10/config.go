@@ -58,10 +58,11 @@ type view struct {
 	FlowByArea      map[string]string   `json:"flowByArea,omitempty"`
 	DriveFinish     bool                `json:"driveFinish"`
 	ReportBack      bool                `json:"reportBack"`
-	Agents          []agentEntry        `json:"agents,omitempty"` // the merged agents map, the user's file under the project's, each key with its origin
-	Paces           []paceEntry         `json:"paces,omitempty"`  // every pace's keys, built-ins under the user's under the project's, each with its origin
-	Pace            *paceEntry          `json:"pace,omitempty"`   // the default pace, when any layer names one
-	Facts           []facts.Fact        `json:"facts"`            // every typed value with its origin
+	Agents          []agentEntry        `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
+	Paces           []paceEntry         `json:"paces,omitempty"`   // every pace's keys, built-ins under the user's under the project's, each with its origin
+	Pace            *paceEntry          `json:"pace,omitempty"`    // the default pace, when any layer names one
+	Ceiling         []paceEntry         `json:"ceiling,omitempty"` // the project's cap on every pace, a key per entry, except last
+	Facts           []facts.Fact        `json:"facts"`             // every typed value with its origin
 	Problems        []facts.Problem     `json:"problems,omitempty"`
 	Roots           []string            `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
@@ -110,7 +111,7 @@ func (v *view) withPaces(eff *facts.Effective) {
 	}
 
 	v.Facts = slices.DeleteFunc(slices.Clone(v.Facts), func(f facts.Fact) bool {
-		return f.Key == "paces" || f.Key == "pace"
+		return f.Key == "paces" || f.Key == "pace" || f.Key == "ceiling"
 	})
 
 	for _, name := range set.Names() {
@@ -141,6 +142,22 @@ func (v *view) withPaces(eff *facts.Effective) {
 		if _, err := set.Lookup(set.Default); err != nil {
 			v.Problems = append(v.Problems, facts.Problem{Error: true, Message: "pace: " + err.Error()})
 		}
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(set.Ceiling)) {
+		v.Ceiling = append(v.Ceiling, paceEntry{
+			Key: "ceiling." + key, Value: set.Ceiling[key].Shown(), Origin: set.CeilingOrigins[key],
+		})
+	}
+
+	if len(set.Except) > 0 {
+		v.Ceiling = append(v.Ceiling, paceEntry{
+			Key: "ceiling.except", Value: strings.Join(set.Except, ", "), Origin: set.ExceptOrigin,
+		})
+	}
+
+	for _, e := range v.Ceiling {
+		v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})
 	}
 
 	known := map[string]bool{}

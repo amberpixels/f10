@@ -25,8 +25,9 @@ const cfgPace = "f10-pace"
 // laid over the built-ins, and the pace every project takes unless it
 // names one.
 type pacesConfig struct {
-	Paces map[string]facts.Pace `yaml:"paces"`
-	Pace  string                `yaml:"pace"`
+	Paces   map[string]facts.Pace `yaml:"paces"`
+	Pace    string                `yaml:"pace"`
+	Ceiling any                   `yaml:"ceiling"` // refused: a cap is the project's to set
 }
 
 // readPacesConfig refuses a pace the vocabulary refuses, naming the file,
@@ -40,6 +41,10 @@ func readPacesConfig() (pacesConfig, string, error) {
 	}
 
 	var bad []string
+	if cfg.Ceiling != nil {
+		bad = append(bad, "ceiling: a ceiling is the project's, declared in project.md; here it would just be a pace")
+	}
+
 	for _, name := range slices.Sorted(maps.Keys(cfg.Paces)) {
 		bad = append(bad, facts.CheckPace(name, cfg.Paces[name])...)
 	}
@@ -75,6 +80,15 @@ func paceSet(eff *facts.Effective) (*facts.PaceSet, error) {
 		if eff.Pace != "" {
 			s.Default, s.DefaultOrigin = eff.Pace, eff.PaceOrigin
 		}
+
+		s.Ceiling, s.CeilingOrigins = eff.Ceiling, eff.CeilingOrigin
+		s.Except, s.ExceptOrigin = eff.CeilingExcept, eff.CeilingExceptOrigin
+
+		for _, name := range s.Except {
+			if _, err := s.Lookup(name); err != nil {
+				return nil, fmt.Errorf("ceiling.except (%s): %w", s.ExceptOrigin, err)
+			}
+		}
 	}
 
 	return s, nil
@@ -87,8 +101,13 @@ type runPace struct {
 	origin string
 }
 
+// paceOriginDefault marks medium taken because nothing named a pace; start
+// and drive record only a typed --pace, so it never reaches a branch.
+const paceOriginDefault = "default"
+
 // activePace picks the run's pace: the flag, else what branch records,
-// else the set's default. A name the set lacks fails with the list.
+// else the set's default, else medium. A name the set lacks fails with the
+// list.
 func activePace(ctx context.Context, s *facts.PaceSet, flag, main, branch string) (runPace, error) {
 	rp := runPace{}
 
@@ -111,7 +130,7 @@ func activePace(ctx context.Context, s *facts.PaceSet, flag, main, branch string
 	}
 
 	if rp.name == "" {
-		return rp, nil
+		return runPace{name: facts.DefaultPaceName, origin: paceOriginDefault}, nil
 	}
 
 	if _, err := s.Lookup(rp.name); err != nil {

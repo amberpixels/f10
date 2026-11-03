@@ -2,10 +2,12 @@ package facts
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -43,7 +45,7 @@ func isEmpty(d Declared) bool {
 		d.Flows == nil && d.FlowByArea == nil && d.DriveFinish == "" && d.DriveEnv == nil && d.Watch == "" && d.WatchCatchup == "" &&
 		d.Pipelines == nil && d.Planless == nil && d.ByArea == nil && d.ReportBack == "" &&
 		d.DriveChain == nil && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil &&
-		d.Verify == nil
+		d.Verify == nil && d.Agents == nil && d.Paces == nil && d.Pace == "" && d.Ceiling == nil
 }
 
 // A Migration is what `f10 init --migrate` makes of one project.md, with
@@ -52,6 +54,7 @@ type Migration struct {
 	Content    string
 	Moved      []string // the frontmatter keys written
 	Superseded []string // "<key>: <where in the prose>"
+	Notes      []string // advice the move raised, such as a ceiling for drive_finish off
 }
 
 // ErrHasFrontmatter refuses a second migration.
@@ -98,7 +101,9 @@ func Migrate(data []byte, path string) (*Migration, error) {
 		flows, finish := convertLegacy(pipes, planless, chain, d.Review.Reviewer != "")
 
 		d.Flows = flows
-		d.DriveFinish = onOff(finish)
+		if !finish {
+			d.DriveFinish = "off" // the paces pass turns it into a finish dial
+		}
 
 		for _, name := range []string{"Ship pipeline(s)", "Drive chain"} {
 			if strings.TrimSpace(body(name)) != "" {
@@ -119,6 +124,26 @@ func Migrate(data []byte, path string) (*Migration, error) {
 	}
 
 	m.Content = block + string(data)
+
+	return withPaces(m, path)
+}
+
+// withPaces runs the paces pass over a migration's result and folds what it
+// moved in; nothing to move leaves the migration as it was.
+func withPaces(m *Migration, path string) (*Migration, error) {
+	paced, err := migratePaces([]byte(m.Content), path)
+
+	switch {
+	case errors.Is(err, ErrHasFrontmatter):
+		return m, nil
+	case err != nil:
+		return nil, err
+	}
+
+	m.Content = paced.Content
+	m.Moved = append(m.Moved, paced.Moved...)
+	m.Superseded = append(m.Superseded, paced.Superseded...)
+	m.Notes = append(m.Notes, paced.Notes...)
 
 	return m, nil
 }
@@ -226,6 +251,10 @@ func migrateBlock(data, block, body []byte, path string) (*Migration, error) {
 		return nil, err
 	}
 
+	if m, err = withPaces(m, path); err != nil {
+		return nil, err
+	}
+
 	lifted, err := liftProse([]byte(m.Content), path)
 
 	switch {
@@ -241,6 +270,7 @@ func migrateBlock(data, block, body []byte, path string) (*Migration, error) {
 
 	lifted.Moved = append(m.Moved, lifted.Moved...)
 	lifted.Superseded = append(m.Superseded, lifted.Superseded...)
+	lifted.Notes = append(m.Notes, lifted.Notes...)
 
 	return lifted, nil
 }
@@ -525,11 +555,10 @@ func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 
 		put("flows", flowsNode, at)
 
-		// the chain said whether a drive finishes; written either way, since
-		// the default is on and a chain without finish meant off
-		if converted && d.DriveFinish == "" {
+		// a chain without finish meant off; the paces pass turns it into a
+		// finish dial, and on is the default, so it needs nothing
+		if converted && d.DriveFinish == "" && !finish {
 			put("drive_finish", &yaml.Node{Kind: yaml.ScalarNode, Value: onOff(finish)}, nil)
-			m.Moved = append(m.Moved, "drive_finish")
 		}
 	}
 
@@ -627,4 +656,156 @@ func sortFlowKeys(n *yaml.Node) {
 	for _, p := range pairs {
 		n.Content = append(n.Content, p.k, p.v)
 	}
+}
+
+// migratePaces moves drive_finish and a Rounds line into the default pace's
+// dials, editing the block as a node so key order and comments stay. A dial
+// the pace already declares wins; nothing to move is ErrHasFrontmatter.
+func migratePaces(data []byte, path string) (*Migration, error) {
+	block, body, ok := frontmatter.Split(data)
+	if !ok {
+		return nil, ErrHasFrontmatter
+	}
+
+	d, err := decodeDeclared(block)
+	if err != nil {
+		return nil, fmt.Errorf("reading the frontmatter: %w", err)
+	}
+
+	secs, _ := parseFile(body, path, "main")
+	rounds := proseRounds(secs["Review"].body)
+	name := cmp.Or(d.Pace, DefaultPaceName)
+	review := d.Paces[name]["review"]
+	moveRounds := rounds != 0 && review.Rounds == 0 && !review.Off
+
+	if d.DriveFinish == "" && !moveRounds {
+		return nil, ErrHasFrontmatter
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(block, &doc); err != nil || len(doc.Content) == 0 ||
+		doc.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("reading the frontmatter: not a mapping")
+	}
+
+	root := doc.Content[0]
+	m := &Migration{}
+
+	// a finish the pace already runs at needs no dial: on is an unset
+	// finish's meaning, and a built-in pace keeps its own word
+	unset := cmp.Or(BuiltinPaces()[name][PaceFinishKey].Finish, "on")
+	writeFinish := d.DriveFinish != "" && d.DriveFinish != unset && d.Paces[name][PaceFinishKey].Finish == ""
+
+	if d.DriveFinish != "" && !writeFinish {
+		m.Moved = append(m.Moved, "drive_finish (removed: pace "+name+" already finishes "+d.DriveFinish+")")
+	}
+
+	if writeFinish || moveRounds {
+		m.Moved = append(m.Moved, "paces")
+	}
+
+	// paces goes where drive_finish was, so the block reads in the same order
+	at := -1
+
+	var removed *yaml.Node
+
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == "drive_finish" {
+			at, removed = i, root.Content[i]
+			root.Content = slices.Delete(root.Content, i, i+2)
+
+			break
+		}
+	}
+
+	// the comments above drive_finish stay where they were
+	if removed != nil && removed.HeadComment != "" && at < len(root.Content) {
+		next := root.Content[at]
+		next.HeadComment = strings.TrimSpace(removed.HeadComment + "\n" + next.HeadComment)
+	}
+
+	if !writeFinish && !moveRounds {
+		at = -1
+	}
+
+	if at >= 0 && keyIndex(root, "paces") < 0 {
+		key := &yaml.Node{Kind: yaml.ScalarNode, Value: "paces"}
+		if removed != nil && at < len(root.Content) {
+			key.HeadComment, root.Content[at].HeadComment = root.Content[at].HeadComment, ""
+		}
+
+		root.Content = slices.Insert(root.Content, at, key, &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"})
+	}
+
+	var pace *yaml.Node
+	if writeFinish || moveRounds {
+		pace = mappingAt(mappingAt(root, "paces"), name)
+	}
+
+	if d.DriveFinish != "" {
+		if writeFinish {
+			pace.Content = append(pace.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Value: PaceFinishKey},
+				&yaml.Node{Kind: yaml.ScalarNode, Value: d.DriveFinish})
+		}
+
+		if d.DriveFinish == "off" {
+			m.Notes = append(m.Notes, "drive_finish was off: if merges here are a human's under every pace, "+
+				"declare ceiling: { finish: off } instead of paces."+name+".finish")
+		}
+	}
+
+	if moveRounds {
+		if i := keyIndex(pace, "review"); i >= 0 && pace.Content[i+1].Kind == yaml.ScalarNode {
+			// the half shorthand becomes a map, so rounds can sit beside it
+			by := pace.Content[i+1].Value
+			pace.Content[i+1] = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Value: "by"}, {Kind: yaml.ScalarNode, Value: by},
+			}}
+		}
+
+		r := mappingAt(pace, "review")
+		r.Content = append(r.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "rounds"},
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(rounds)})
+		m.Superseded = append(m.Superseded, "paces: the Rounds: "+strconv.Itoa(rounds)+" line in the Review section")
+	}
+
+	var b bytes.Buffer
+
+	enc := yaml.NewEncoder(&b)
+	enc.SetIndent(2)
+
+	if err := enc.Encode(&doc); err != nil {
+		return nil, fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	rewritten, err := decodeDeclared(b.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("the rewritten frontmatter does not read back: %w", err)
+	}
+
+	if bad := rewritten.check(); len(bad) > 0 {
+		return nil, fmt.Errorf("drive_finish and Rounds do not migrate cleanly: %s", strings.Join(bad, "; "))
+	}
+
+	start := bytes.Index(data, block)
+	m.Content = string(data[:start]) + b.String() + string(data[start+len(block):])
+
+	return m, nil
+}
+
+// keyIndex is the index of key in a mapping node's content, -1 for none.
+func keyIndex(n *yaml.Node, key string) int {
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return i
+		}
+	}
+
+	return -1
 }

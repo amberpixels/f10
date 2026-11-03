@@ -284,12 +284,12 @@ func TestMigrateLegacyBlock(t *testing.T) {
 
 	want := "---\nmerge_method: squash\n# how tasks ship\nflows:\n" +
 		"  default: plan judge implement review:local pr\n  local: implement commit\n" +
-		"drive_finish: on\nflow_by_area: {ui: local}\ntraces: on\n---\n# demo\n"
+		"flow_by_area: {ui: local}\ntraces: on\n---\n# demo\n"
 	if m.Content != want {
 		t.Errorf("content =\n%s\nwant\n%s", m.Content, want)
 	}
 
-	if got := strings.Join(m.Moved, ","); got != "flows,drive_finish,flow_by_area,traces" {
+	if got := strings.Join(m.Moved, ","); got != "flows,flow_by_area,traces" {
 		t.Errorf("moved = %s", got)
 	}
 
@@ -298,11 +298,13 @@ func TestMigrateLegacyBlock(t *testing.T) {
 	}
 
 	// a chain without finish meant a drive that stops after ship, which the
-	// default no longer says, so the migration writes the opt-out
+	// default no longer says, so the migration writes the opt-out as the
+	// default pace's finish
 	stops, err := Migrate(
 		[]byte("---\npipelines:\n  default: implement → pr\ndrive_chain: plan → ship\n---\n"), "project.md",
 	)
-	if err != nil || !strings.Contains(stops.Content, "flows:\n  default: plan implement pr\ndrive_finish: off\n") {
+	if err != nil ||
+		!strings.Contains(stops.Content, "flows:\n  default: plan implement pr\npaces:\n  medium:\n    finish: off\n") {
 		t.Errorf("a chain without finish = %+v, %v", stops, err)
 	}
 
@@ -324,7 +326,7 @@ func TestMigrateProseUnderABlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(m.Content, "flows:\n  default: plan judge implement pr review:local\ndrive_finish: on\n") ||
+	if !strings.Contains(m.Content, "flows:\n  default: plan judge implement pr review:local\n---\n") ||
 		strings.Join(m.Superseded, ",") != "flows: the Ship pipeline(s) section" {
 		t.Errorf("migration = %+v", m)
 	}

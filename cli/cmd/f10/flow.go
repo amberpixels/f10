@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -53,6 +54,7 @@ type flowRow struct {
 type flowView struct {
 	Pace        string            `json:"pace,omitempty"`
 	PaceOrigin  string            `json:"paceOrigin,omitempty"`
+	Ceiling     string            `json:"ceiling,omitempty"` // the cap on the pace, or why it does not apply
 	Flows       []flowRow         `json:"flows"`
 	DriveFinish bool              `json:"driveFinish"`
 	FlowByArea  map[string]string `json:"flowByArea,omitempty"`
@@ -124,6 +126,7 @@ func flowsView(eff *facts.Effective) flowView {
 // pace breaks keeps its declared entries and says why.
 func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flowView {
 	v := flowView{DriveFinish: eff.DriveFinish, FlowByArea: eff.FlowByArea, Pace: pace.name, PaceOrigin: pace.origin}
+	v.Ceiling = ceilingShown(set, pace.name)
 
 	for _, name := range eff.FlowNames() {
 		row := flowRow{Name: name, Entries: eff.Flows[name], Selected: selectors(name)}
@@ -140,6 +143,25 @@ func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flow
 	return v
 }
 
+// ceilingShown is the ceiling's dials with their layers, or why it leaves
+// the pace alone; "" with no ceiling.
+func ceilingShown(set *facts.PaceSet, pace string) string {
+	if len(set.Ceiling) == 0 {
+		return ""
+	}
+
+	if set.Exempt(pace) {
+		return "not applied: pace " + pace + " is in except (" + set.ExceptOrigin + ")"
+	}
+
+	var parts []string
+	for _, key := range slices.Sorted(maps.Keys(set.Ceiling)) {
+		parts = append(parts, key+" "+set.Ceiling[key].Shown()+" ("+set.CeilingOrigins[key]+")")
+	}
+
+	return strings.Join(parts, ", ")
+}
+
 // writeFlowEntries is one flow, an entry per line with its dials, then the
 // pace's finish; the list /f10:ship runs.
 func writeFlowEntries(w io.Writer, v flowView) error {
@@ -149,6 +171,10 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 
 	if v.Pace != "" {
 		fmt.Fprintf(&b, "pace: %s (%s)\n", v.Pace, v.PaceOrigin)
+	}
+
+	if v.Ceiling != "" {
+		fmt.Fprintf(&b, "ceiling: %s\n", v.Ceiling)
 	}
 
 	if f.Resolved == nil {
@@ -178,7 +204,7 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 	}
 
 	if fin := f.Resolved.Finish; fin != nil {
-		fmt.Fprintf(&b, "%-*s  %s (%s)\n", width, facts.PaceFinishKey, fin.Value, fin.Origin)
+		fmt.Fprintf(&b, "%-*s  %s %s\n", width, facts.PaceFinishKey, fin.Value, dialSource(*fin))
 	}
 
 	_, err := io.WriteString(w, b.String())
@@ -193,14 +219,24 @@ func dialsShown(dials []facts.Dial) string {
 
 	for i, d := range dials {
 		part := d.Name + " " + d.Value
-		if i == len(dials)-1 || dials[i+1].Origin != d.Origin {
-			part += " (" + d.Origin + ")"
+		if d.Capped != "" || i == len(dials)-1 || dials[i+1].Origin != d.Origin || dials[i+1].Capped != "" {
+			part += " " + dialSource(d)
 		}
 
 		parts = append(parts, part)
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// dialSource is a dial's origin in parentheses, with what the pace had
+// when the ceiling capped it.
+func dialSource(d facts.Dial) string {
+	if d.Capped != "" {
+		return "(" + d.Origin + "; " + d.Capped + ")"
+	}
+
+	return "(" + d.Origin + ")"
 }
 
 func selectors(name string) []string {
@@ -216,6 +252,9 @@ func selectors(name string) []string {
 
 func writeFlows(w io.Writer, v flowView) error {
 	width := len("drive_finish")
+	if v.Ceiling != "" {
+		width = max(width, len("ceiling"))
+	}
 	for _, f := range v.Flows {
 		width = max(width, len(f.Name))
 	}
@@ -224,6 +263,10 @@ func writeFlows(w io.Writer, v flowView) error {
 
 	if v.Pace != "" {
 		fmt.Fprintf(&b, "%-*s  %s (%s)\n", width, "pace", v.Pace, v.PaceOrigin)
+	}
+
+	if v.Ceiling != "" {
+		fmt.Fprintf(&b, "%-*s  %s\n", width, "ceiling", v.Ceiling)
 	}
 
 	for _, f := range v.Flows {
@@ -240,7 +283,12 @@ func writeFlows(w io.Writer, v flowView) error {
 		}
 
 		if f.Resolved != nil && f.Resolved.Finish != nil {
-			fmt.Fprintf(&b, "%-*s  finish %s, from the pace\n", width, "", f.Resolved.Finish.Value)
+			from := "the pace"
+			if f.Resolved.Finish.Capped != "" {
+				from = "the ceiling; " + f.Resolved.Finish.Capped
+			}
+
+			fmt.Fprintf(&b, "%-*s  finish %s, from %s\n", width, "", f.Resolved.Finish.Value, from)
 		}
 	}
 
@@ -349,8 +397,14 @@ func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name strin
 
 	if name == "" && len(eff.FlowByArea) > 0 {
 		// ship picks the flow, so whether it ends at a PR, and so whether
-		// the pace's finish applies, is unknown: drive_finish decides
-		return shipFlow{byArea: true, pace: pace}, nil
+		// the pace's finish applies, is unknown: drive_finish decides, unless
+		// the ceiling forbids finishing, which holds whatever the flow
+		fl := shipFlow{byArea: true, pace: pace}
+		if _, caps := set.Capped(pace); caps[facts.PaceFinishKey].Value == "off" {
+			fl.finish = "off"
+		}
+
+		return fl, nil
 	}
 
 	lookup := strings.ToLower(name)

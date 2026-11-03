@@ -370,6 +370,7 @@ A `rounds` dial on the flow entry, from the run's pace, comes first: `rounds 1` 
 Without the dial, round two runs only in one of three cases:
 
 - `project.md → Review` says `Rounds: 2`.
+  This line is the older form of the dial: a flow run gets it as the default pace's `rounds 2`, so the bullet decides only a review run outside a flow.
 - Round one was heavy: its resolve fixed six or more findings.
 - Round one is a `lens: coherence` sweep whose resolve recorded a `fix`, because no diff review has read that fix.
 

@@ -74,7 +74,7 @@ func buildWith(t *testing.T, main, worktree string) *Effective {
 func TestBuildFrontmatter(t *testing.T) {
 	eff := buildWith(t, "---\n"+
 		"visibility: public\ntracker: {kind: gitlab, id: AB-###}\nmerge_method: rebase\ncatchup: merge\ncatchup_stacked: rebase\n"+
-		"flows: {default: plan implement pr, local: [implement, commit]}\ndrive_finish: on\nwatch_catchup: on\n"+
+		"flows: {default: plan implement pr, local: [implement, commit]}\nwatch_catchup: on\n"+
 		"review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n"+
 		"---\n# demo\n\n## Verify\n\n`just test`\n", "")
 
@@ -197,7 +197,7 @@ func TestMigrate(t *testing.T) {
 		strings.Join(
 			d.Flows["default"],
 			" ",
-		) != "plan judge implement pr review:ci" || d.DriveFinish != "on" || d.Review.Reviewer != "bot `claude[bot]`" ||
+		) != "plan judge implement pr review:ci" || d.DriveFinish != "" || d.Review.Reviewer != "bot `claude[bot]`" ||
 		d.Review.Settled != "reaction `rocket`" {
 		t.Errorf("migrated = %+v", d)
 	}

@@ -83,8 +83,8 @@ func TestFlowUnderAPace(t *testing.T) {
 		}
 	}
 
-	// no pace: the flow as declared, an entry per line
-	if out := runIn(t, repo, "flow", "default"); out != strings.ReplaceAll(
+	// no pace named: medium, empty, so the flow as declared, an entry per line
+	if out := runIn(t, repo, "flow", "default"); out != "pace: medium (default)\n"+strings.ReplaceAll(
 		"plan judge implement cleanup pr review:local judge pr", " ", "\n")+"\n" {
 		t.Errorf("no pace:\n%s", out)
 	}
@@ -243,5 +243,98 @@ func TestStartRecordsThePace(t *testing.T) {
 
 	if !f.called("git config branch.GH-1." + cfgPace + " ultra") {
 		t.Errorf("the pace was not recorded on the branch: %v", f.calls)
+	}
+}
+
+// f10 flow shows the ceiling and each capped dial with what the pace had;
+// an excepted pace runs uncapped and says why.
+func TestFlowUnderACeiling(t *testing.T) {
+	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr\n"+
+		"ceiling: { finish: off, judge: { effort: high }, except: [ultra] }\n", "")
+
+	out := runIn(t, repo, "flow", "default", "--pace", "fast")
+	for _, want := range []string{
+		"ceiling: finish off (declared (main, frontmatter)), judge effort high (declared (main, frontmatter))",
+		"finish        off (ceiling (declared (main, frontmatter)); pace fast said on)",
+		"effort high (ceiling (declared (main, frontmatter)); pace fast said low)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+
+	if out := runIn(
+		t,
+		repo,
+		"flow",
+		"default",
+		"--pace",
+		"ultra",
+	); !strings.Contains(
+		out,
+		"ceiling: not applied: pace ultra is in except",
+	) ||
+		!strings.Contains(out, "finish        on (pace ultra") {
+		t.Errorf("ultra:\n%s", out)
+	}
+
+	if out := runIn(t, repo, "flow", "default"); !strings.Contains(out, "finish        off (ceiling") {
+		t.Errorf("no pace named:\n%s", out)
+	}
+
+	cfg := runIn(t, repo, "config")
+	for _, want := range []string{"ceiling.finish", "ceiling.judge", "ceiling.except"} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("config misses %q:\n%s", want, cfg)
+		}
+	}
+
+	if got := runIn(t, repo, "agents", "judge", "--pace", "fast"); !strings.Contains(got, "effort high") ||
+		!strings.Contains(got, "ceiling") {
+		t.Errorf("agents judge = %q", got)
+	}
+}
+
+// An except naming no pace fails with the list; a ceiling in the user's
+// file is refused, naming project.md.
+func TestCeilingRefusedWhereItDoesNotBelong(t *testing.T) {
+	repo := paceRepo(t, "flows:\n  default: plan implement pr\nceiling: { finish: off, except: [warp] }\n", "")
+	if err := runErrIn(repo, "flow"); err == nil || !strings.Contains(err.Error(), `no pace "warp"`) {
+		t.Errorf("unknown except = %v", err)
+	}
+
+	user := paceRepo(t, "flows:\n  default: plan implement pr\n", "ceiling: { finish: off }\n")
+	if err := runErrIn(user, "flow"); err == nil || !strings.Contains(err.Error(), "project.md") {
+		t.Errorf("a user ceiling = %v", err)
+	}
+}
+
+// A ceiling's finish off keeps finish out of drive's chain under a pace
+// that finishes, unless that pace is excepted.
+func TestCeilingShapesTheDriveChain(t *testing.T) {
+	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+	set := facts.NewPaceSet()
+	set.Ceiling = facts.Pace{facts.PaceFinishKey: {Finish: "off"}}
+
+	for _, pace := range []string{"medium", "fast"} {
+		fl, err := resolvePacedFlow(eff, set, pace, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := strings.Join(driveChain(fl, true), " "); got != "plan ship" {
+			t.Errorf("%s under finish off: %q", pace, got)
+		}
+	}
+
+	set.Except = []string{"fast"}
+
+	fl, err := resolvePacedFlow(eff, set, "fast", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(driveChain(fl, false), " "); got != "plan ship finish" {
+		t.Errorf("excepted fast: %q", got)
 	}
 }

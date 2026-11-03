@@ -132,12 +132,17 @@ func (m agentMap) withPace(set *facts.PaceSet, pace runPace) agentMap {
 		out = agentMap{}
 	}
 
-	for step, d := range set.Paces[pace.name] {
+	capped, caps := set.Capped(pace.name)
+
+	for step, d := range capped {
 		if d.Effort == "" || d.Off {
 			continue
 		}
 
 		value, origin := d.Effort, "pace "+pace.name+" ("+set.Origins[pace.name+"."+step]+")"
+		if c, ok := caps[step+".effort"]; ok {
+			origin = c.Origin + "; " + c.Capped
+		}
 
 		if prior, ok := out[step]; ok {
 			under, err := agentctl.ParseProfile(prior.Value)

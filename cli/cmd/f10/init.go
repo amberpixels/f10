@@ -230,6 +230,10 @@ func runMigrate(w io.Writer, path string) error {
 		headerRow(w, label, where, limit, lipgloss.NewStyle().Faint(true))
 	}
 
+	for _, note := range m.Notes {
+		headerRow(w, "note", note, limit, lipgloss.NewStyle())
+	}
+
 	next := "delete that prose, then `f10 config` should show no warning"
 	if len(m.Superseded) == 0 {
 		next = "run `f10 config`: the moved facts should show as declared, with no warning"

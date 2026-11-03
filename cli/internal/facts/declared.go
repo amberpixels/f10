@@ -49,10 +49,11 @@ type Declared struct {
 	ReportBack     string            `yaml:"report_back,omitempty"`
 	Review         ReviewDecl        `yaml:"review,omitempty"`
 	Standup        StandupDecl       `yaml:"standup,omitempty"`
-	Verify         []VerifyDecl      `yaml:"verify,omitempty"` // verify commands, each scoped to the paths it checks
-	Agents         map[string]string `yaml:"agents,omitempty"` // a step, `default` or `step.kind` to the agent profile it runs on
-	Paces          map[string]Pace   `yaml:"paces,omitempty"`  // a pace's name to its dials, laid over the built-ins key by key
-	Pace           string            `yaml:"pace,omitempty"`   // the pace a run takes when it names none
+	Verify         []VerifyDecl      `yaml:"verify,omitempty"`  // verify commands, each scoped to the paths it checks
+	Agents         map[string]string `yaml:"agents,omitempty"`  // a step, `default` or `step.kind` to the agent profile it runs on
+	Paces          map[string]Pace   `yaml:"paces,omitempty"`   // a pace's name to its dials, laid over the built-ins key by key
+	Pace           string            `yaml:"pace,omitempty"`    // the pace a run takes when it names none
+	Ceiling        *Ceiling          `yaml:"ceiling,omitempty"` // the cap on every pace but the ones it excepts
 
 	// The keys flows replaces, read and converted with a warning.
 	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
@@ -345,6 +346,10 @@ func (d Declared) check() []string {
 		bad = append(bad, CheckPace(name, d.Paces[name])...)
 	}
 
+	if d.Ceiling != nil {
+		bad = append(bad, CheckCeiling(*d.Ceiling)...)
+	}
+
 	if d.Pace != "" && !flowNameRE.MatchString(d.Pace) {
 		bad = append(bad, fmt.Sprintf("pace: %q is not a lowercase name", d.Pace))
 	}
@@ -504,6 +509,24 @@ func (l *layered) merge(d Declared, label string) {
 		for key, dials := range p {
 			l.Paces[name][key] = dials
 			l.origin["paces."+name+"."+key] = label
+		}
+	}
+
+	// the ceiling merges key by key as paces do; except is one list, and a
+	// later layer's replaces it whole
+	if d.Ceiling != nil {
+		if l.Ceiling == nil {
+			l.Ceiling = &Ceiling{Pace: Pace{}}
+		}
+
+		for key, dials := range d.Ceiling.Pace {
+			l.Ceiling.Pace[key] = dials
+			l.origin["ceiling."+key] = label
+		}
+
+		if d.Ceiling.Except != nil {
+			l.Ceiling.Except = d.Ceiling.Except
+			l.origin["ceiling.except"] = label
 		}
 	}
 

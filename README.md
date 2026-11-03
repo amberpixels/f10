@@ -194,7 +194,7 @@ These are the terms the skills, and the rest of this README, use.
   Resolve re-verifies the fixes and puts every `ask` to you in one questionnaire.
   Your stated choice beats the reviewer.
   One round is the default.
-  A second round runs only when round one fixed six or more findings, when `project.md → Review` says `Rounds: 2`, or when you ask for it.
+  A second round runs only when round one fixed six or more findings, when the run's pace says `review: { rounds: 2 }` (or, for a review outside a flow, `project.md → Review` says `Rounds: 2`), or when you ask for it.
   The second round reports on every prior finding first.
   There is no third round, so whatever is still open goes to you.
   A review is local (before the PR) or CI or human (after it), and each flow places it or leaves it out.
@@ -671,7 +671,7 @@ Herdr says when a turn ends, and run state says how it ended.
 
 For each task, the drive sends `/f10:plan` when the flow leads with `plan` and the task has no plan file.
 Then it sends `/f10:ship`, which runs the rest of the flow.
-With `drive_finish: on`, the drive then runs `finish` itself, not through the agent.
+When the run's pace says `finish: on` and the project's ceiling allows it, the drive then runs `finish` itself, not through the agent.
 
 When an agent asks a question, `f10 drive` exits 4, and the question waits in the asks inbox.
 `/f10:drive` puts it to you, and your answers resume the drive.

@@ -33,10 +33,10 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 
 ```bash
 f10 init                 # register this checkout: write project.md from detection
-f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), and old keys into flows
+f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), old keys into flows, and drive_finish and a Rounds line into paces
 f10 config [verify] [--json]   # the effective configuration, with the origin of every value; verify: the one verify line the loader prints
 f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--pace NAME] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it; the run's pace lays its effort dials on top
-f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace, each with what selects it, and drive_finish; with a name, that flow an entry per line with its dials, an optional CI review (`ci?`) settled with the reason, the list /f10:ship runs
+f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace and the project's ceiling, each with what selects it, and drive_finish; with a name, that flow an entry per line with its dials, an optional CI review (`ci?`) settled with the reason, the list /f10:ship runs; a dial the ceiling capped names the ceiling and what the pace had
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
 f10 help [--all | --agent]   # the human commands; --all adds the plumbing the steps call; --agent prints one line per command for an agent's context
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
@@ -516,7 +516,7 @@ A cancelled record is never picked up again: the same command line starts a new 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
-   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the frontmatter's `drive_finish` is off.
+   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the run's pace says `finish: on` and the project's ceiling allows it. A pace that sets no `finish` falls back to the old `drive_finish`, `on` by default.
    A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
    `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.

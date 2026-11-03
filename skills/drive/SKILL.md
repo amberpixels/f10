@@ -7,7 +7,7 @@ argument-hint: "<id>[:profile]... [--flow <name> | --local] [--pace <name>]"
 
 # f10 · drive
 
-Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the pace's `finish`, else the frontmatter's `drive_finish`, is on (a spike is closed after ship either way: `f10 finish` closes it without a merge).
+Run tasks through a flow from here: `f10 drive` opens each task as `f10 start` does, a dependent once its base branch has a commit (its finish waits for the base's), and prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`): `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file, then `/f10:ship`, which runs every other entry, then finish when the pace's `finish` (capped by the project's `ceiling`), else the old `drive_finish`, is on (a spike is closed after ship either way: `f10 finish` closes it without a merge).
 This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report; it runs no step.
 
 **Arguments**

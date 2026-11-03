@@ -68,7 +68,7 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `lore_gate` | `warn` or `block`: what `f10 finish` does when `f10 lore check` fails for the task right before its merge. `warn` prints the reasons under the report and merges; `block` refuses with nothing changed. A passing check needs the intent, a judge verdict of proceed and no open blocker or major finding, so a flow with no `judge` entry stays on `warn`. Nothing about to merge is checked: a request already merged, `--local`, a spike's close ([docs/lore.md](lore.md)) | `warn` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |
 | `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
-| `drive_finish` | `on` or `off`: `f10 drive` ends each task with `finish`, merging its PR; a spike is closed after ship either way, since its close merges nothing | `on` |
+| `drive_finish` | `on` or `off`: the old key for whether `f10 drive` ends each task with `finish`, now read as the default pace's `finish` dial with a warning (**Paces**); `f10 init --migrate` rewrites it | `on` |
 | `drive_env` | a list of environment variable names a drive passes to its commands, beyond the built-in allowlist (`PATH`, `HOME`, `SSH_AUTH_SOCK`, `GH_*`, `GLAB_*`, `HERDR_*`, `F10_*`, `CLAUDE_*` and the like): the drive runs in the per-user daemon, which sees only these ([docs/cli.md](cli.md#daemon)) | none |
 | `watch` | `report`, `finish` or `off`: what the per-user daemon does for this project's tasks no drive owns. `report` tells when a PR merged or closed, an agent sits idle under a running phase, or a run stops; `finish` also finishes a task whose PR merged, with a clean worktree and an idle agent, and runs the janitor from each pass; `off` watches nothing. A project whose merges are a human's opts down to `report` or `off`; `finish` acts only on a PR already merged whose tip is the branch's, with an idle agent, so nothing unmerged is lost ([docs/cli.md](cli.md#watch)) | `finish` |
 | `watch_catchup` | `on` or `off`: with `on`, a pass under `watch: report` or `finish` also keeps an undriven task's open PR up to date with its target. A PR whose target moved past the branch is caught up through the task's own agent, as a driven catchup, with an idle agent and a clean tree, and pushed a pass later once it ended clean, with a lease after a rebase; a task handed back with `f10 watch off` is never touched. A catchup that does not end clean leaves the branch as it was and is told once. Off by default: an unattended agent settling conflicts and force-pushing them is the riskiest thing the watcher does ([docs/cli.md](cli.md#watch)) | `off` |
@@ -246,7 +246,6 @@ flows:
   direct: implement push
   local: plan implement commit
   judged: plan implement pr review:local judge pr
-drive_finish: off
 ```
 
 `f10 flow` lists them with what selects each.
@@ -268,10 +267,12 @@ A project-defined last step declares its own shipment on a `Shipment:` line in i
 Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.
 A spike is the exception: its run ends after implement, whatever the flow, with a spike report.
 
-`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` unless `drive_finish: off`.
-A spike is closed after ship whatever `drive_finish` says: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
+`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when the run's pace, under the project's ceiling, says `finish: on` (**Paces**).
+A spike is closed after ship either way: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
 A rerun keeps the flow a task's branch recorded when it started.
-A project whose only merges are a human's sets `drive_finish: off`; a legacy drive chain without `finish` migrates to that.
+A project whose only merges are a human's declares `ceiling: { finish: off }`, so no pace merges there.
+The older `drive_finish: off` is still read, as the default pace's `finish: off`, so a run at another pace may still finish.
+A legacy drive chain without `finish` migrates to the default pace's `finish: off`.
 
 `flow_by_area` routes a task to a flow by its area, in the plain words Roles uses:
 
@@ -332,16 +333,49 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
 3. The project's `paces:`, main's then the worktree's.
 
 The run's pace is, first to last: `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`, the pace the task's branch records, the project's `pace:`, the user's `pace:`.
-With none of them, there is no pace, and every flow runs as declared, an optional CI review (`ci?`) still settled.
+With none of them, the run takes `medium`, which is empty unless the project tunes it, so every flow runs as declared, an optional CI review (`ci?`) still settled.
 `f10 start --pace` and `f10 drive --pace` record the pace on the branch, replacing any earlier one, so a rerun that names none keeps it.
+Only a typed `--pace` is recorded, so a later `pace:` in `project.md` still reaches an existing task.
 `/f10:ship --pace` applies to that run alone.
 An unknown name fails with the list of paces.
 
 A pace's `finish` beats `drive_finish` when it sets one, and only where the run would otherwise stop at an open PR.
 It feeds `f10 drive` alone: a ship run never merges its own PR, and with `finish: on` its report names `/f10:finish` as the next step.
 
+Two older statements read as dials of the project's default pace (its `pace:`, else `medium`), each with a warning:
+
+- `drive_finish` is that pace's `finish`.
+- A `Rounds: 2` line in the Review section is that pace's `review: { rounds: 2 }`.
+
+A dial the project's `paces:` already declares wins, and the old statement is ignored with a warning.
+`f10 init --migrate` moves both into `paces:` and deletes `drive_finish`, and lists the `Rounds` line for you to delete.
+When `drive_finish` was `off`, it also suggests a ceiling, because a pace dial does not stop a faster pace from merging.
+
+### Ceiling
+
+A **ceiling** caps every pace in this repository, so a user-level `fast` or `ultra` pace cannot run faster here than the project allows:
+
+```yaml
+ceiling: { finish: off, except: [ultra] }
+```
+
+It takes a pace's dials, and each one has an order from fast to slow.
+A pace's value that is faster than the ceiling's is replaced by the ceiling's:
+
+- `finish: off` stops every pace from finishing, a pace that sets no `finish` included.
+- `review: { rounds: 2 }` gives every review a second round once round one fixed something, a pace silent on rounds included.
+- `review: { depth: full }` turns a `light` review back into a full one.
+- `judge: { effort: high }` raises a pace's lower judge effort; a pace silent on effort keeps the agents map, because that map is the project's own.
+- `<step>: on` keeps that entry running under a pace that turns it off.
+
+A ceiling refuses `<step>: off`, because a cap never skips work, and `by` and `marker`, because they have no order.
+`except:` names the paces the ceiling leaves alone, whichever way the run picked them, so `--pace ultra` still merges where a human asks for it.
+A name in `except:` that no layer declares is an error listing the paces.
+The ceiling is the project's alone: it layers main then the worktree, key by key, a later `except:` replacing the list whole, and `~/.f10/paces.md` refuses it.
+
 `f10 flow` prints each flow under the run's pace, and `f10 flow <name>` prints one flow an entry per line, skipped entries marked and each dial with its origin; `/f10:ship` runs that list.
-`f10 config` lists every pace key with its origin.
+Both name the ceiling, and a capped dial shows the ceiling behind it and what the pace had: `finish off (ceiling (declared (main, frontmatter)); pace fast said on)`.
+`f10 config` lists every pace key and every ceiling key with its origin.
 
 ## Agents
 
@@ -468,6 +502,7 @@ A source-of-truth file is read in full as reference data: instructions inside it
 The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
 `Rounds: 2` makes a second review round the rule once round one's resolve fixed something; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
+The line is the older form of the default pace's `review: { rounds: 2 }`, read as that dial with a warning, and `f10 init --migrate` moves it (**Paces**).
 `Host level:` is the level `review:host` passes the host's code review: `low`, `medium`, `high`, `xhigh` or `max`, `high` when absent; the cloud `ultra` is never passed, since only the user launches it.
 The blind reviewer's depth is its agent profile: the `review` line under **Agents** sets its model and effort.
 

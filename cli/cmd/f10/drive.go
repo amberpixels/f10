@@ -213,7 +213,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	h, hostErr := t.host()
 
 	if slices.Contains(chain, "finish") && hostErr != nil {
-		return fmt.Errorf("finish is on (drive_finish or the pace), and finish merges through the host: %w", hostErr)
+		return fmt.Errorf("finish is on (the pace, or drive_finish), and finish merges through the host: %w", hostErr)
 	}
 
 	in := &driveInput{

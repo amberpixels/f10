@@ -103,6 +103,12 @@ type Effective struct {
 	PacesOrigin map[string]string `json:"pacesOrigin,omitempty"`
 	Pace        string            `json:"pace,omitempty"`
 	PaceOrigin  string            `json:"paceOrigin,omitempty"`
+	// Ceiling caps every pace but those CeilingExcept names, merged key by
+	// key across the layers; nil when none is declared.
+	Ceiling             Pace              `json:"ceiling,omitempty"`
+	CeilingOrigin       map[string]string `json:"ceilingOrigin,omitempty"`
+	CeilingExcept       []string          `json:"ceilingExcept,omitempty"`
+	CeilingExceptOrigin string            `json:"ceilingExceptOrigin,omitempty"`
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
