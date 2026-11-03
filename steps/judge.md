@@ -2,11 +2,12 @@
 
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
-Output: a verdict in chat, the argument under it, and the **verdict file** (point 8). After `pr` in a ship run, also a pushed commit on a yellow verdict, and a status and a comment on the PR.
-Context: after `pr` only, the loader's `verify:` line, `project.md → Hosting & PR` and the frontmatter's `traces`.
+Output: a verdict in chat, the argument under it, and the **verdict file** (point 8). A change judge in a ship run also builds a yellow verdict's changes, and after `pr` pushes them and leaves a status and a comment on the PR.
+Context: for a change judge, the loader's `verify:` line; after `pr`, also `project.md → Hosting & PR` and the frontmatter's `traces`.
 
 **The judge writes only its verdict file.**
-The one exception is a `judge` entry after `pr` in a ship run: its route writes code, commits and traces on the PR, under the ship skill's authorization.
+The one exception is a change judge in a ship run (a `judge` entry after `implement`), under the ship skill's authorization.
+Its route writes code and commits, and after `pr` it also pushes and leaves traces on the PR.
 A standalone `/f10:judge` never writes any of those, even when its subject is a PR.
 
 Name a bug only where it changes the verdict.
@@ -100,7 +101,7 @@ However, never agree because agreeing is cheaper.
    reason: <the banner's line two, verbatim>
    run: ship before pr
    blind: yes
-   decision: continue
+   decision: folded
    ```
 
    - `task:` the task id, empty for an idea.
@@ -109,7 +110,8 @@ However, never agree because agreeing is cheaper.
      Anything else is recorded as a parse error.
    - `run:` `standalone`, `before plan`, `ship before pr` or `ship after pr`.
    - `blind:` `yes` on a `--blind` run, omitted otherwise.
-   - `decision:` what a ship run did with the verdict, in the words the routes below give.
+   - `decision:` what a ship run did with the verdict, in the words the routes below give, because `f10 status` shows it beside the verdict.
+     The words are `continue`, `folded` (folded into the plan for `implement` to build), `built` (a change judge built the changes), `refactor as agreed`, `asked`, `block`, `stop`, and fetch's `overridden`.
      A standalone run omits it.
 
    Two sections follow the header, and nothing parses them.
@@ -173,18 +175,36 @@ With uncommitted work in the tree, the guard is skipped, and the verdict is on t
   Then print the verdict as the report, naming any durable work, such as commits or an open PR.
 - **rethink** or **proceed with changes** - discuss it (**Discussion**, above).
   Then turn each change or objection into a gap, all in one `AskUserQuestion` (`conventions/gaps.md`), with the judge's answer first and **block the run** as a real option.
-  On **continue**, the ship skill folds the answers into the plan file (stages, Consequences and Gaps) and runs the next step.
-  On **block**, end as **stop** does, with this verdict in the note.
-  `decision:` records the answer, `continue` or `block`.
+  On **continue**, the ship skill folds the answers into the plan file (stages, Consequences and Gaps), and then the two judges differ:
+  - The plan judge runs the next step, and `implement` builds the revised plan (`decision: folded`).
+  - The change judge builds the changes first, through **Building the changes** below, and then runs the next step (`decision: built`).
+    An agreed rethink's refactor is built the same way (`decision: refactor as agreed`).
+  On **block**, end as **stop** does, with this verdict in the note (`decision: block`).
 
 **Driven** before `pr` (`modes/driven.md`):
 
-- **proceed** and **proceed with changes** continue.
-  The ship skill folds the changes in without asking, and the report gives the verdict and the changes one line each.
+- **proceed** continues.
+- **proceed with changes** continues without asking.
+  The ship skill folds the changes in, the change judge builds them (**Building the changes**), and the report gives the verdict and the changes one line each.
+  `decision:` is `folded` for the plan judge and `built` for the change judge.
 - **rethink** becomes one ask: the objections numbered, the judge's answer first, and **block the run** among the options.
   The file says `decision: asked`, and then `f10-state.sh set ship blocked judge` ends the run.
-  The answer rewrites the `decision:` line.
+  The answer rewrites the `decision:` line, and a change judge told to go on builds the agreed refactor before the next step.
 - **stop** ends blocked.
+
+**Building the changes** is how a change judge turns a yellow verdict, or an agreed rethink's refactor, into code, before or after `pr`:
+
+1. The ship skill folds the changes into the plan file, as for the plan judge.
+2. Make the changes in the project's house style, following its CLAUDE.md rules and the `project.md` guardrails.
+3. Run the load's `verify:` line (`conventions/context.md` → Verify).
+   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge` when the run left anything durable, else `failed`): the changes stay uncommitted, and nothing is posted.
+4. Commit only when the tree was clean before point 2, because an earlier entry (`commit`, `push`, `pr`) already committed implement's work.
+   Commit as `conventions/context.md` → Commits says, with `--step judge`.
+   With `traces: on`, the commit body names each change in plain words for a reader of the PR.
+   When the tree held implement's uncommitted work, leave the changes in the tree, because a commit would sweep that work into a judge commit.
+   The next committing entry then carries both, and a flow with none leaves them uncommitted, as implement would.
+
+Before `pr` the route ends there: it pushes nothing, sets no status and posts no comment.
 
 **After `pr`** (`implement → pr → review:local → judge → pr`): the code is on an open PR, so every verdict ends on the PR.
 Each route leaves a **trace** there, which **The trace** below describes: a status, a comment and the state block.
@@ -194,14 +214,10 @@ The step fails (`conventions/failure.md`, badge `partial` on `judge`) if it prin
 - **Green, proceed** - leave the trace and continue (`decision: continue`).
   The verdict is one line in the report.
 - **Yellow, proceed with changes** - the named changes are the work:
-  1. The ship skill folds them into the plan file, as before `pr`.
-  2. Make the changes in the project's house style, following its CLAUDE.md rules and the `project.md` guardrails.
-  3. Run the load's `verify:` line (`conventions/context.md` → Verify).
-     Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge`): the changes stay uncommitted, and nothing is posted.
-  4. Commit as `conventions/context.md` → Commits says, with `--step judge`.
-     With `traces: on`, the commit body names each change in plain words for a reader of the PR.
-  5. Push to the PR's branch, never forcing.
-  6. Leave the trace on the pushed commit and continue (`decision: continue`).
+  1. Build them (**Building the changes**, above).
+     The tree is always clean after `pr`, so the changes are committed.
+  2. Push to the PR's branch, never forcing.
+  3. Leave the trace on the pushed commit and continue (`decision: built`).
 
   There is no second review round.
 - **Orange, rethink** - discuss it (**Discussion**, above).

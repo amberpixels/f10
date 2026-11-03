@@ -870,3 +870,76 @@ func TestStatusReadsTheCurrentSeries(t *testing.T) {
 		t.Errorf("the finished task lost its last series: %+v", o)
 	}
 }
+
+// The judge row says what the run did with the verdict, read from the
+// verdict file's decision line; a file without one renders as before.
+func TestJudgeDecisionText(t *testing.T) {
+	for _, tc := range []struct {
+		decision string
+		changes  int
+		want     string
+	}{
+		{"", 0, "proceed with changes - why"},
+		{"continue", 0, "proceed with changes - why"},
+		{"built", 2, "proceed with changes (2 built) - why"},
+		{"built", 0, "proceed with changes (built) - why"},
+		{"refactor as agreed", 0, "proceed with changes (refactor built) - why"},
+		{"folded", 0, "proceed with changes (folded into plan) - why"},
+		{"block", 0, "proceed with changes (blocked) - why"},
+		{"stop", 0, "proceed with changes (blocked) - why"},
+		{"asked", 0, "proceed with changes (waiting on an answer) - why"},
+		{"overridden", 0, "proceed with changes (overridden by the user) - why"},
+		{"something new", 0, "proceed with changes (something new) - why"},
+	} {
+		g := gate{Step: "judge", Judged: "change", State: gateDone, Outcome: &judgeOutcome{
+			Verdict: "proceed with changes", Reason: "why", Decision: tc.decision, Changes: tc.changes,
+		}}
+
+		if got := g.stateText(); got != tc.want {
+			t.Errorf("decision %q: got %q, want %q", tc.decision, got, tc.want)
+		}
+
+		if got := g.compactState(); got != "proceed with changes" {
+			t.Errorf("decision %q: compact %q, want the bare verdict", tc.decision, got)
+		}
+	}
+}
+
+// Lore carries no decision, so a lore verdict keeps the file's decision
+// when the two agree on the verdict.
+func TestOutcomesKeepTheFileDecision(t *testing.T) {
+	storage := t.TempDir()
+	writeFile(
+		t,
+		filepath.Join(storage, "verdicts", "FT-1", "1.md"),
+		"task: FT-1\nsubject: branch x\nverdict: proceed with changes\nreason: file\ndecision: built\n\n## Changes\n\n1. A.\n2. B.\n",
+	)
+
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(storage, "verdicts", "FT-1", "1.md"), past, past); err != nil {
+		t.Fatal(err)
+	}
+
+	verdictEntry := func(outcome string) lore.Entry {
+		return lore.Entry{
+			Kind: lore.KindVerdict, Change: "FT-1", Human: "h@x", At: time.Now().UTC().Truncate(time.Second),
+			Outcome: outcome, Gate: "judge", Commit: "abcdef1", Judged: "change", Body: "from lore",
+		}
+	}
+
+	same := t.TempDir()
+	writeLore(t, same, verdictEntry("proceed with changes"))
+
+	j := readOutcomes(&lore.Store{Root: same}, storage, "FT-1").changeJudge
+	if j == nil || j.Reason != "from lore" || j.Decision != "built" || j.Changes != 2 {
+		t.Errorf("lore verdict lost the file's decision: %+v", j)
+	}
+
+	other := t.TempDir()
+	writeLore(t, other, verdictEntry("proceed"))
+
+	j = readOutcomes(&lore.Store{Root: other}, storage, "FT-1").changeJudge
+	if j == nil || j.Verdict != "proceed" || j.Decision != "" {
+		t.Errorf("a different lore verdict took the file's decision: %+v", j)
+	}
+}

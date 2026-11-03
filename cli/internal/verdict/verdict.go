@@ -1,6 +1,6 @@
 // Package verdict reads a judge's verdict file, the shape steps/judge.md
 // fixes: a header of `key: value` lines up to the first `## ` heading, then
-// prose the parser ignores.
+// prose the parser ignores except for counting the `## Changes` items.
 package verdict
 
 import (
@@ -23,6 +23,7 @@ type File struct {
 	Run      string // standalone, ship before pr, ship after pr
 	Blind    bool
 	Decision string // ship runs only
+	Changes  int    // numbered items under `## Changes`
 }
 
 // Idea reports whether the subject is an idea, which belongs to no task.
@@ -46,10 +47,22 @@ func Parse(text string) (*File, error) {
 	sc := bufio.NewScanner(strings.NewReader(text))
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
+	section := ""
+
 	for sc.Scan() {
 		line := strings.TrimRight(sc.Text(), " \t")
-		if strings.HasPrefix(line, "## ") {
-			break
+		if heading, ok := strings.CutPrefix(line, "## "); ok {
+			section = strings.TrimSpace(heading)
+
+			continue
+		}
+
+		if section != "" {
+			if section == "Changes" && numbered(line) {
+				f.Changes++
+			}
+
+			continue
 		}
 
 		key, value, ok := strings.Cut(line, ":")
@@ -89,4 +102,11 @@ func Parse(text string) (*File, error) {
 	}
 
 	return f, nil
+}
+
+// numbered reports whether a line opens a numbered list item: `1. ...`.
+func numbered(line string) bool {
+	digits := len(line) - len(strings.TrimLeft(line, "0123456789"))
+
+	return digits > 0 && strings.HasPrefix(line[digits:], ". ")
 }

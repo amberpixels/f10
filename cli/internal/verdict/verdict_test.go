@@ -32,8 +32,14 @@ verdict: stop would be wrong here.
 `,
 			File{
 				Task: "FT-76", Subject: "plan FT-76", Verdict: "proceed with changes", Reason: "two changes fold in",
-				Run: "ship before pr", Blind: true, Decision: "continue",
+				Run: "ship before pr", Blind: true, Decision: "continue", Changes: 1,
 			},
+			false,
+		},
+		{
+			"changes counted under their heading only",
+			"verdict: proceed with changes\ndecision: built\n\n## Changes\n\n1. One.\n2. Two,\n   wrapped.\n\n## Argument\n\n1. Not a change.\n",
+			File{Verdict: "proceed with changes", Decision: "built", Changes: 2},
 			false,
 		},
 		{
