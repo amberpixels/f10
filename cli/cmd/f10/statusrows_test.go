@@ -41,7 +41,8 @@ func TestStageOf(t *testing.T) {
 		{"shipped", rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}}, stageShipped, "pr"},
 		{"planning", rowFacts{run: run("skipped", "running", "pending", "")}, stagePlanning, "plan"},
 		{"planned", rowFacts{run: run("skipped", "done", "pending", "")}, stagePlanned, "plan"},
-		{"waiting", rowFacts{after: "FT-1"}, stageWaiting, "after FT-1"},
+		{"after, no drive", rowFacts{after: "FT-1"}, stageNotStarted, "after FT-1"},
+		{"waiting", rowFacts{after: "FT-1", driven: true}, stageWaiting, "after FT-1"},
 		{
 			"parked",
 			rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
@@ -113,6 +114,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 			"next":    "rebase",
 		}),
 	}}
+	src.driven = map[string]bool{"FT-6": true}
 	src.resolve = func(tok string) string {
 		if tok == "" {
 			t.Error("resolved an empty finish argument")
@@ -130,6 +132,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 		{ID: "FT-6", Title: "after board", After: "FT-5", Depth: 1},
 		{ID: "FT-7", Title: "after trailers", After: "FT-1", Depth: 1},
 		{ID: "FT-8", Title: "finished by number"},
+		{ID: "FT-10", Title: "after board, no drive", After: "FT-5", Depth: 1},
 	})
 
 	got := map[string]taskRow{}
@@ -153,6 +156,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 	check("FT-6", stageWaiting, "after FT-5")
 	check("FT-7", stageNotStarted, "")
 	check("FT-8", stageDone, "finish")
+	check("FT-10", stageNotStarted, "after FT-5")
 
 	if r := got["FT-1"]; r.PR != "https://github.com/a/b/pull/128" {
 		t.Errorf("FT-1 PR = %q, want the ledger's url", r.PR)

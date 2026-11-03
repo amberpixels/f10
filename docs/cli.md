@@ -436,8 +436,8 @@ It applies only to the tree; a run's block prints as without it.
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
 | `planned` | the plan is saved, ship not begun | faint blue |
-| `waiting` | no run yet, and its `After:` base is not done | faint |
-| `not started` | nothing recorded | faint |
+| `waiting` | no run yet, its `After:` base is not done, and a drive neither done nor cancelled lists it, so the drive holds it for that base | faint |
+| `not started` | nothing recorded; a task no drive lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
 
@@ -1136,7 +1136,7 @@ An id the tracker does not know, or a tracker that fails, prints bare with a not
 One id prints its `task`, `title` and `url` rows.
 Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
 A task with no url known prints bare, and the exit is 0.
-A parent and its subtasks report through `f10 task report <parent> <subtask ids>` for the urls and `f10 status <parent> --plain`, whose tree carries the titles.
+A parent and its subtasks report through `f10 task report <parent> <subtask ids>` for the urls and `f10 task children <parent> --plain`, whose tree carries the titles and `after` notes, and no run stages or gates, which a task just captured cannot have.
 
 ## Comment and update
 

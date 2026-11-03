@@ -94,7 +94,7 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      A subtask missing from its rows means the link was dropped, by a driver that ignores `--parent` or by a host link that create warned about.
      The report names that subtask, for the user to link by hand.
 4. **Report** per `conventions/report.md`, with a `task` row (the id in the project's format), a `title` row and a `url` row, which the fetch step reads next.
-   A split reports through `f10 task report <parent> <subtask ids>` and `f10 status <parent> --plain`, each printed verbatim (`conventions/report.md` → Several tasks).
+   A split reports through `f10 task report <parent> <subtask ids>` and `f10 task children <parent> --plain`, each printed verbatim (`conventions/report.md` → Several tasks).
    In the same call, set the badge: `f10-state.sh set capture done` and `f10-state.sh task <id> <url>`, with the parent's id for a split.
 
 Keep PII out of anything logged: write ids, not names or emails.

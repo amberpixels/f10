@@ -68,6 +68,7 @@ type rowFacts struct {
 	after    string
 	baseDone bool
 	queued   bool // its drive's cap holds it back
+	driven   bool // a drive neither done nor cancelled lists it
 }
 
 type ledgerHalt struct {
@@ -92,8 +93,11 @@ func stageOf(f rowFacts) (string, string) {
 		return stageHalted, cmp.Or(r.Leaf, furthestPhase(r))
 	case r == nil && f.queued:
 		return stageQueued, ""
-	case r == nil && f.after != "" && !f.baseDone:
+	case r == nil && f.after != "" && !f.baseDone && f.driven:
 		return stageWaiting, "after " + f.after
+	case r == nil && f.after != "" && !f.baseDone:
+		// only a drive holds a task for its base; nothing holds this one yet
+		return stageNotStarted, "after " + f.after
 	case r == nil:
 		return stageNotStarted, ""
 	}
@@ -263,6 +267,8 @@ type rowSource struct {
 	// takes it as written
 	resolve func(token string) string
 	host    *host
+	// driven holds the lead ids a drive neither done nor cancelled lists
+	driven map[string]bool
 	// gates reads a task's gates; nil reads none
 	gates func(ctx context.Context, id, branch, root string, run *state.Run) []gate
 }
@@ -315,7 +321,12 @@ func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
 // ledger's last claim, then the PR by branch or by the url the ledger kept.
 func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts) {
 	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
-	f := rowFacts{finished: k.Finished, after: k.After, queued: k.queued}
+	f := rowFacts{
+		finished: k.Finished,
+		after:    k.After,
+		queued:   k.queued,
+		driven:   src.driven[strings.ToUpper(k.ID)],
+	}
 	lt := ledgerFor(src.events, k.ID, src.idOf)
 
 	branch, root := "", ""
@@ -694,6 +705,12 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 	}
 
 	gs := newGateSource(t, src.events, src.host)
+
+	src.driven = make(map[string]bool, len(gs.driveFlows))
+	for id := range gs.driveFlows {
+		src.driven[id] = true
+	}
+
 	src.gates = func(ctx context.Context, id, branch, root string, run *state.Run) []gate {
 		return gs.gatesOf(ctx, id, branch, root, gs.storageFor(ctx, root, run), run)
 	}
