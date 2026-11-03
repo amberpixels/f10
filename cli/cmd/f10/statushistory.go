@@ -27,9 +27,13 @@ type reviewRound struct {
 	Ask     int    `json:"ask"`
 }
 
+// judgeOutcome is a verdict and, from its file, what the ship run did with
+// it: the decision line and how many changes it listed.
 type judgeOutcome struct {
-	Verdict string `json:"verdict"`
-	Reason  string `json:"reason,omitempty"`
+	Verdict  string `json:"verdict"`
+	Reason   string `json:"reason,omitempty"`
+	Decision string `json:"decision,omitempty"`
+	Changes  int    `json:"changes,omitempty"`
 }
 
 // fileOutcomes reads the task's findings and verdict files: a round is the
@@ -242,7 +246,7 @@ func judgeFiles(storageRoot, task string) []verdictFile {
 		}
 
 		out = append(out, verdictFile{
-			outcome: judgeOutcome{Verdict: v.Verdict, Reason: v.Reason},
+			outcome: judgeOutcome{Verdict: v.Verdict, Reason: v.Reason, Decision: v.Decision, Changes: v.Changes},
 			judged:  judged,
 			at:      modTime(path),
 			path:    path,

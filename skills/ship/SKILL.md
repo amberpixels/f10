@@ -46,7 +46,7 @@ Deploy has its own confirmation (the **deploy** step).
 An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` names the half, `review:host` runs the local half on the host's own code review, `review:local+ci` runs both into one round and one resolve, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).
 The run starts at the entry after a leading `plan`, which runs only for a task with no plan file.
 `resolve` is never named: a `review` entry runs it.
-A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, routed as the **judge** step says before and after `pr`.
+A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, which builds a yellow verdict's changes itself, routed as the **judge** step says before and after `pr`.
 A `pr` entry opens the branch's PR, or refreshes it when one is open, so a flow may name `pr` again after review or judge to bring the description up to date.
 A flow with no leading `plan` is **planless**: it writes no plan file, and a brief inline plan in chat stands in for it unless a saved one exists.
 The old keys (`pipelines`, `planless`, `drive_chain`) still read, converted to flows with a warning that names `f10 init --migrate`, and so does the old entry form `review (local)`.
@@ -86,8 +86,8 @@ A driven run's `next` is `run /f10:catchup --driven in the worktree, then rerun 
 
 Run the flow's entries **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
-A `judge` entry routes the run by its verdict: the plan judge as the judge step's before-`pr` route says, its changes folded into the plan file; the change judge differently before and after a `pr` entry (the **judge** step).
-After `pr`, the changes folded into the plan are built by the judge step's own route, not by a rerun of `implement`.
+A `judge` entry routes the run by its verdict: the plan judge as the judge step's before-`pr` route says, its changes folded into the plan file for `implement` to build; the change judge differently before and after a `pr` entry (the **judge** step).
+A change judge's changes, before or after `pr`, are folded into the plan and built by the judge step's own route (**Building the changes**), never by a rerun of `implement`.
 
 **Badge** (`conventions/report.md`): `f10-state.sh pipeline <entry>...` once the flow is selected, every entry after `plan` as the flow names it, one argument each (`pipeline judge implement cleanup pr review:local judge pr`), which also declares the last as final; `f10-state.sh set ship running <entry>` before each entry, named as the flow names it, in the call that loads it; `f10-state.sh set ship done` after the last.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.

@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -644,21 +645,34 @@ func seriesOutcomes(store *lore.Store, storageRoot, task string, open bool) outc
 	o.localAt, o.remoteAt = latest(o.localAt, l.localAt), latest(o.remoteAt, l.remoteAt)
 
 	if l.taskJudge != nil && !l.taskAt.Add(time.Second).Before(o.taskAt) {
-		o.taskJudge = l.taskJudge
+		o.taskJudge = withFileDecision(l.taskJudge, o.taskJudge)
 	}
 
 	if l.planJudge != nil && !l.planAt.Add(time.Second).Before(o.planAt) {
-		o.planJudge = l.planJudge
+		o.planJudge = withFileDecision(l.planJudge, o.planJudge)
 	}
 
 	if l.changeJudge != nil && !l.changeAt.Add(time.Second).Before(o.changeAt) {
-		o.changeJudge = l.changeJudge
+		o.changeJudge = withFileDecision(l.changeJudge, o.changeJudge)
 	}
 
 	o.taskAt = latest(o.taskAt, l.taskAt)
 	o.planAt, o.changeAt = latest(o.planAt, l.planAt), latest(o.changeAt, l.changeAt)
 
 	return o
+}
+
+// withFileDecision gives a lore verdict its file's decision, which lore does
+// not record; a file with another verdict is older and describes that one.
+func withFileDecision(fromLore, file *judgeOutcome) *judgeOutcome {
+	if file == nil || file.Verdict != fromLore.Verdict {
+		return fromLore
+	}
+
+	j := *fromLore
+	j.Decision, j.Changes = file.Decision, file.Changes
+
+	return &j
 }
 
 // newestSeries is the task's newest change that holds entries, else the
@@ -852,6 +866,10 @@ func (g gate) stateText() string {
 		return g.State + " " + g.Action
 	case g.State == gateDone && g.Outcome != nil:
 		text := g.Outcome.Verdict
+		if done := g.Outcome.done(); done != "" {
+			text += " (" + done + ")"
+		}
+
 		if g.Outcome.Reason != "" {
 			text += " - " + g.Outcome.Reason
 		}
@@ -860,6 +878,33 @@ func (g gate) stateText() string {
 	}
 
 	return g.State
+}
+
+// done is what the ship run did with the verdict, from the decision line;
+// continue and a file with no line say nothing, and a new word shows as is.
+func (j *judgeOutcome) done() string {
+	switch j.Decision {
+	case "", "continue":
+		return ""
+	case "built":
+		if j.Changes > 0 {
+			return strconv.Itoa(j.Changes) + " built"
+		}
+
+		return "built"
+	case "refactor as agreed":
+		return "refactor built"
+	case "folded":
+		return "folded into plan"
+	case "block", "stop":
+		return "blocked"
+	case "asked":
+		return "waiting on an answer"
+	case "overridden":
+		return "overridden by the user"
+	}
+
+	return j.Decision
 }
 
 func (h *reviewHalf) text() string {
