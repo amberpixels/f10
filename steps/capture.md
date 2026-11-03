@@ -88,6 +88,7 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      Through the create adapter, use the tracker's native parent link, or the **parent** adapter the project declares.
      A tracker with no parent link gets a checklist in the parent's body instead: one item per subtask, with its title, edited in once the subtasks exist.
      GitLab cannot nest an issue under an issue, so on GitLab `f10 task create` warns, and the checklist goes in.
+     A task that already exists becomes a subtask with `f10 task update <id> --parent <parent>`, so a parent captured over existing tasks links them the same way.
      After creating through `f10 task create`, confirm the links with `f10 task children <parent>`.
      Its exit 3 means the tracker has no parent link, so the checklist goes in.
      A subtask missing from its rows means the link was dropped, by a driver that ignores `--parent` or by a host link that create warned about.

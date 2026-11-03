@@ -454,7 +454,8 @@ func (h host) childItems(ctx context.Context, number string) ([]rawChild, error)
 	return raw, nil
 }
 
-// linkParent puts child under parent, the write beside subIssues. GitHub
+// linkParent puts child under parent, the write beside subIssues, moving it
+// from a parent it already has: GitHub gives an issue one parent. GitHub
 // links by the child's database id, not its number. GitLab nests tasks, not
 // issues, under an issue, so an issue there takes no parent.
 func (h host) linkParent(ctx context.Context, parent, child string) error {
@@ -462,18 +463,57 @@ func (h host) linkParent(ctx context.Context, parent, child string) error {
 		return errGitLabNoIssueParent
 	}
 
-	var iss struct {
-		ID int64 `json:"id"`
-	}
-
-	if err := h.Decode(ctx, &iss, "api", "repos/{owner}/{repo}/issues/"+child); err != nil {
+	iss, err := h.linkFacts(ctx, child)
+	if err != nil {
 		return err
 	}
 
-	_, err := h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
+	_, err = h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
+		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10), "-F", "replace_parent=true")
+
+	return err
+}
+
+// relink puts child under parent, or with parent "" takes it out from under
+// the parent it has; an issue with none is left alone, so a rerun is safe.
+func (h host) relink(ctx context.Context, parent, child string) error {
+	if parent != "" {
+		return h.linkParent(ctx, parent, child)
+	}
+
+	if h.GLab() {
+		return errGitLabNoIssueParent
+	}
+
+	iss, err := h.linkFacts(ctx, child)
+	if err != nil || iss.ParentURL == "" {
+		return err
+	}
+
+	// the parent may live in another repo of the owner, so its own api path
+	// is used, never this repo's issue of the same number
+	_, apiPath, ok := strings.Cut(iss.ParentURL, "/repos/")
+	if !ok {
+		return fmt.Errorf("issue %s names its parent as %q, not an api url", child, iss.ParentURL)
+	}
+
+	_, err = h.Run(ctx, "api", "-X", "DELETE", "repos/"+apiPath+"/sub_issue",
 		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10))
 
 	return err
+}
+
+type issueLink struct {
+	ID        int64  `json:"id"`
+	ParentURL string `json:"parent_issue_url"`
+}
+
+func (h host) linkFacts(ctx context.Context, number string) (issueLink, error) {
+	var iss issueLink
+
+	err := h.Decode(ctx, &iss, "api", "repos/{owner}/{repo}/issues/"+number)
+
+	return iss, err
 }
 
 var errGitLabNoIssueParent = errors.New("GitLab nests no issue under an issue; list the subtasks in the parent's body")

@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -111,6 +112,131 @@ func TestTaskUpdateThroughTheDriver(t *testing.T) {
 		err,
 	) != exitNoWrite {
 		t.Errorf("declined update: err = %v, want exit %d", err, exitNoWrite)
+	}
+}
+
+// The parent goes to the driver as a number, in an update of its own after
+// the other properties, and "" is passed through to take the link off.
+func TestTaskUpdateParentThroughTheDriver(t *testing.T) {
+	log := "echo \"$@\" >> \"$here/log\"\n"
+
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"with a status": {
+			[]string{"--status", "Done", "--parent", "FT-7"},
+			"update 12 --status Done\nupdate 12 --parent 7\n",
+		},
+		"alone":  {[]string{"--parent", "FT-7"}, "update 12 --parent 7\n"},
+		"unlink": {[]string{"--parent", ""}, "update 12 --parent \n"},
+	} {
+		repo := createRepo(t, log)
+
+		if _, _, err := runWrite(t, repo, "", append([]string{"update", "FT-12"}, tc.args...)...); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+
+		if got := readFile(t, filepath.Join(repo, ".f10", "log")); got != tc.want {
+			t.Errorf("%s: driver calls = %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
+// A driver declining the parent on a tracker that is not the host's is exit
+// 3, after the status it took; a task named as its own parent is refused
+// before the driver runs.
+func TestTaskUpdateParentDeclinedAndRefused(t *testing.T) {
+	repo := createRepo(t, "echo \"$@\" >> \"$here/log\"\ncase \"$*\" in *--parent*) exit 3 ;; esac\n")
+
+	_, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-7")
+	if exitCode(err) != exitNoWrite || !strings.Contains(err.Error(), "the parent link was not") {
+		t.Errorf("declined parent: err = %v, want exit %d naming the link", err, exitNoWrite)
+	}
+
+	if got := readFile(t, filepath.Join(repo, ".f10", "log")); !strings.HasPrefix(got, "update 12 --status Done\n") {
+		t.Errorf("driver calls = %q, want the status first", got)
+	}
+
+	repo = createRepo(t, "echo ok\n")
+	if _, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-12"); err == nil {
+		t.Error("a task was accepted as its own parent")
+	}
+
+	if _, statErr := os.Stat(filepath.Join(repo, ".f10", "args")); statErr == nil {
+		t.Error("the driver ran for a self-parent")
+	}
+}
+
+// On GitHub a re-link moves the issue from the parent it has, an unlink
+// removes it from the parent the issue names, and an issue with no parent
+// is left alone; GitLab takes no issue parent, which update answers with
+// exit 3.
+func TestHostRelink(t *testing.T) {
+	f := newFakes(t)
+	gh := newHost("gh", "")
+
+	f.script("gh api repos/{owner}/{repo}/issues/12",
+		`{"id":555,"parent_issue_url":"https://api.github.com/repos/o/r/issues/3"}`)
+	f.script("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555 -F replace_parent=true",
+		`{}`)
+	f.script("gh api -X DELETE repos/o/r/issues/3/sub_issue -F sub_issue_id=555", `{}`)
+
+	if err := gh.relink(t.Context(), "7", "12"); err != nil ||
+		!f.called("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues") {
+		t.Errorf("relink to 7: %v", err)
+	}
+
+	if err := gh.relink(t.Context(), "", "12"); err != nil ||
+		!f.called("gh api -X DELETE repos/o/r/issues/3/sub_issue -F sub_issue_id=555") {
+		t.Errorf("unlink: %v", err)
+	}
+
+	f.script("gh api repos/{owner}/{repo}/issues/13", `{"id":556}`)
+
+	before := len(f.calls)
+
+	if err := gh.relink(t.Context(), "", "13"); err != nil || len(f.calls) != before+1 {
+		t.Errorf("unlink with no parent: %v", err)
+	}
+
+	err := relinkTask(t.Context(), &bytes.Buffer{}, childTarget(t, "glab"), nil,
+		ref.Ref{ID: "FT-12", Number: "12"}, "7", false)
+	if exitCode(err) != exitNoWrite {
+		t.Errorf("glab relink: err = %v, want exit %d", err, exitNoWrite)
+	}
+}
+
+// On a GitHub tracker, with no driver or past one declining the parent,
+// update links the issue as a sub-issue by its database id, moving it from
+// a parent it has; a driver failing after the status says the status landed.
+func TestTaskUpdateParentOnHostIssues(t *testing.T) {
+	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
+		repo, calls := hostRepo(t, script)
+		gh := "#!/bin/sh\necho \"$@\" >> " + calls + "\n" +
+			"case \"$*\" in \"api repos/{owner}/{repo}/issues/12\") echo '{\"id\":555}' ;; api*) echo '{}' ;; esac\n"
+
+		if err := os.WriteFile(filepath.Join(filepath.Dir(calls), "gh"), []byte(gh), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, _, err := runWrite(t, repo, "", "update", "FT-12", "--parent", "FT-7"); err != nil {
+			t.Fatalf("%s: update: %v", name, err)
+		}
+
+		want := "api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555 -F replace_parent=true"
+		if got := readFile(t, calls); !strings.Contains(got, want) {
+			t.Errorf("%s: gh calls = %q, want %q", name, got, want)
+		}
+	}
+
+	repo := createRepo(t,
+		"case \"$*\" in *--parent*) echo 'flag provided but not defined: -parent' >&2; exit 1 ;; esac\n")
+
+	_, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-7")
+	if err == nil || !strings.Contains(err.Error(), "-parent") ||
+		!strings.Contains(err.Error(), "other properties were written") {
+		t.Errorf("failed parent: err = %v, want the driver's error and that the status landed", err)
 	}
 }
 
@@ -224,7 +350,7 @@ func TestHostCreate(t *testing.T) {
 	f.script("gh issue create --title Add it --body the body --label draft --label p1",
 		"Creating issue in o/r\n\nhttps://github.com/o/r/issues/12\n")
 	f.script("gh api repos/{owner}/{repo}/issues/12", `{"id":555,"number":12}`)
-	f.script("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555", `{}`)
+	f.script("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555 -F replace_parent=true", `{}`)
 
 	var warn bytes.Buffer
 
@@ -234,7 +360,7 @@ func TestHostCreate(t *testing.T) {
 		t.Errorf("hostCreate = %+v, %q, %v, %q", r, url, err, warn.String())
 	}
 
-	if !f.called("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555") {
+	if !f.called("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues -F sub_issue_id=555 -F replace_parent=true") {
 		t.Error("the subtask was not linked")
 	}
 }

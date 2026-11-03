@@ -51,7 +51,7 @@ f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] [--set k=v]... < task.md   # through the driver, else as a host issue; prints the new id
 f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
-f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--set k=v]...   # absolute values
+f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--parent id] [--set k=v]...   # absolute values
 f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
 f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path)
@@ -1145,6 +1145,9 @@ A parent and its subtasks report through `f10 task report <parent> <subtask ids>
 Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
 A failed comment is never retried, and its error says it may have posted.
 On the host's issues with `tracker.title` declared, an update also puts the prefix back on a title renamed by hand.
+`--parent <id>` links the task under that parent, moving it from a parent it already has, and `--parent ""` takes it out from under its parent.
+It goes to the driver as an update of its own, after the other properties, so a tracker without parent links declines only the link.
+On GitHub issues it is a sub-issue link; GitLab nests no issue under an issue, so there, as on a tracker whose driver declines it, update exits **3**.
 
 ## Retitle
 
