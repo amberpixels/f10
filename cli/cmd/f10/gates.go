@@ -116,9 +116,9 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 
 		switch base {
 		case "review":
-			// review:local+ci is one entry with both halves
-			l, r := facts.ReviewHalves(qual)
-			local, remote = local || l, remote || r
+			// review:local+ci is one entry running both reviews
+			by := in.reviewBy(entries, i, qual)
+			local, remote = local || by.Local, remote || by.CI
 
 			if review < 0 {
 				review = len(gates)
@@ -155,6 +155,9 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	}
 
 	switch {
+	case lh == nil && rh == nil && review >= 0:
+		// every review entry was a dropped ci?
+		gates[review].State = gateOff
 	case lh == nil && rh == nil:
 		gates = append(gates, gate{Step: "review", State: gateOff})
 	case review < 0:
@@ -334,6 +337,21 @@ func (in gateInput) shipDone() bool {
 	return ship >= 0 && last >= ship
 }
 
+// reviewBy is who the review entry at i runs, an optional CI review
+// settled as the flow resolution settles it.
+func (in gateInput) reviewBy(entries []string, i int, arg string) facts.By {
+	published := slices.ContainsFunc(entries[:i], func(e string) bool {
+		step, _ := facts.SplitEntry(e)
+
+		return step == "pr" || step == "push"
+	})
+
+	by, _ := facts.ReviewBy(arg)
+	by, _ = by.Settle(in.remoteFlow, published)
+
+	return by
+}
+
 func (in gateInput) half(entries, steps []string, remote, inFlow bool) *reviewHalf {
 	h := in.readHalf(entries, steps, remote)
 
@@ -360,10 +378,11 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 		}
 	}
 
-	// ship on a review entry running this half, alone or beside the other
+	// ship on a review entry running this review, alone or beside the other
 	for i, e := range entries {
 		base, qual := facts.SplitEntry(e)
-		l, r := facts.ReviewHalves(qual)
+		by := in.reviewBy(entries, i, qual)
+		l, r := by.Local, by.CI
 
 		if base != "review" || (remote && !r) || (!remote && !l) {
 			continue
@@ -916,8 +935,8 @@ func (h *reviewHalf) text() string {
 		case "resolve":
 			what = "resolve running"
 		case "await":
-			// review:local+ci: this half's round is in, the other's is not
-			what = fmt.Sprintf("round %d in, waiting for the other half", len(h.Rounds))
+			// review:local+ci: this review's round is in, the other's is not
+			what = fmt.Sprintf("round %d in, waiting for the other review", len(h.Rounds))
 		}
 
 		if h.Via != "" {

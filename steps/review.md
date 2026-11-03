@@ -7,13 +7,13 @@ Output: the **findings file** at `<storage root>/reviews/<TASK-ID>/<round>.md`, 
 `steps/resolve.md` settles it.
 Context: `project.md → Review`, which adds categories, lists what never to flag, and names who answers an `ask`.
 Badge: none.
-Inside a ship pipeline, the leaf is `review` for both halves.
+Inside a ship pipeline, the leaf is `review` for both the local and the CI review.
 
-A review has two halves.
-The local half is **the blind reviewer**: a fresh agent that reads the diff.
-**The host engine** can run the local half in its place: the host's own code review, shaped into the same file.
-The remote half is **the remote review**: the review that arrived on the PR or MR, called the CI half in a flow.
-A flow runs either half, or **both halves** into one round.
+A review is run by a local reviewer, a remote one, or both, and the review's **`by`** says which.
+The **local review** is **the blind reviewer**: a fresh agent that reads the diff.
+**The host engine** can run the local review in its place: the host's own code review, shaped into the same file.
+The **CI review** is **the remote review**: the review that arrived on the PR or MR.
+A flow runs either one, or **both** into one round.
 
 **Only the change checked out here.**
 Whatever the argument names, the change reviewed is always the current branch against its base.
@@ -98,7 +98,7 @@ The **header** comes first, one line per field, in this order:
 - `pr:` - the PR this round reviews, as `f10 review round` prints it on its `pr:` line, or `none` when the branch has no open PR yet.
   Every round writes it, local, remote and coherence lens rounds alike, because it says which series the round belongs to.
 - `reviewer:` - `local`, or the remote identity the frontmatter's `review.reviewer` declares (`claude[bot]`, `octocat`).
-  A round that both halves wrote lists both, comma-separated (`local, claude[bot]`).
+  A round that both reviews wrote lists both, comma-separated (`local, claude[bot]`).
 - `engine:` - host engine rounds only: `host` and the level it ran at (`host high`).
 - `depth: light` - a light round only (**Depth**, under **The blind reviewer**).
 - `review:` - remote rounds only: the url where a `+reply` posts.
@@ -125,7 +125,7 @@ The sections follow the header:
 Some blocks carry more lines:
 
 - A coherence lens block adds `tasks:`, the task ids the finding cites, and `size:`, which is `resolve` or `own task: <a one-line follow-up title>`.
-- In a file both halves wrote, every block carries `source:`, either `local` or `remote`.
+- In a file both reviews wrote, every block carries `source:`, either `local` or `remote`.
   A prior block carries the `source:` of its round-one block.
   A block without `source:` belongs to the one reviewer the header names.
 - Resolve appends `verdict:`, with its `+reply` or `+note` attachments, and `reason:`.
@@ -173,10 +173,10 @@ That is this round's findings, plus each prior block whose status takes a verdic
 A clean round passes `--open 0`.
 No block is written with `traces: off`, or when no PR or MR is open.
 A non-zero exit marks the run `partial` (`conventions/failure.md` rule 7), and is never a failed step.
-The remote half writes the same block once its own file is on disk (**The remote review** point 4).
+The remote review writes the same block once its own file is on disk (**The remote review** point 4).
 
-**Lore** (`docs/lore.md`) is written by either half, once its file is on disk and a task id is known.
-The remote half writes it before its ack (**The remote review** point 4).
+**Lore** (`docs/lore.md`) is written by either review, once its file is on disk and a task id is known.
+The remote review writes it before its ack (**The remote review** point 4).
 `<change>` below is what `f10 lore change` prints, run once after `f10 review round`: the task id for the task's first PR, `<id>.<n>` for a later one.
 Each finding this round adds gets one entry: `f10 lore add finding --change <change> --source <local|remote> --severity <s> --status open --anchor <where> -m <summary>`.
 `--source` is the block's `source:` line.
@@ -258,9 +258,9 @@ A `full` review is the brief as written.
 
 ## The host engine
 
-**`review:host`** in a flow, or **`/f10:review host`** standalone, runs the local half on the host's own code review instead of the blind reviewer.
+**`review:host`** in a flow, or **`/f10:review host`** standalone, runs the local review on the host's own code review instead of the blind reviewer.
 The host is the agent running the session: in Claude Code, its built-in `code-review` skill, which verifies each finding before it reports it.
-It takes the local half's place in rounds, resolve, lore and the state block, and does not combine with `ci` or with `since`.
+It takes the blind reviewer's place in rounds, resolve, lore and the state block, and does not combine with `ci` or with `since`.
 `/f10:review since host` declines in one line, because the coherence lens compares plans and lore across tasks, and the host review reads one diff.
 
 1. **Facts**: the main agent gathers the facts **The blind reviewer** lists.
@@ -357,7 +357,7 @@ When that directory already holds a round, decline in one line, naming a fresh b
    - `## Categories` lists the four categories above.
    - Each block carries `tasks:` and `size:` beside `where:` and `category:`.
    - A `## Dropped as deliberate` section follows, one plain line per drop: its tasks, its `file:line`, and the plan or lore citation.
-6. **Lore**, written as the blind reviewer's half writes it, with `--change` set to what `f10 lore change` prints for the task that keys the findings directory.
+6. **Lore**, written as the blind reviewer writes it, with `--change` set to what `f10 lore change` prints for the task that keys the findings directory.
    Write none when a branch name keys the directory.
    Then write the state block, as **The blind reviewer** describes it.
 
@@ -389,9 +389,13 @@ Never delete or rewrite a round.
 **Inside a ship pipeline**, a `review` entry runs this step and then `steps/resolve.md`:
 
 - `review` and `review:local` run the blind reviewer.
-- `review:host` runs the local half on the host engine.
+- `review:host` runs the local review on the host engine.
 - `review:ci` runs the remote review.
-- `review:local+ci` runs **both halves** (below).
+- `review:local+ci` runs **both** (below).
+- `review:local+ci?` and `review:ci?` mark the CI review optional.
+  `f10 flow <name>` settles the `?` before the entry reaches this step, keeping the CI review only when Review declares a remote reviewer and a `pr` or `push` comes before the entry.
+  So ship runs one of the forms above, or skips a `review:ci?` entry.
+  A `?` that still reaches this step, from a binary too old to settle it, is settled here by the same rule, and the report says so in one line.
 
 One resolve settles each of them.
 Round two runs the review and its resolve again only when round two applies (above), and that resolve recorded a `fix` of its own before any questionnaire.
@@ -399,9 +403,9 @@ Otherwise the first round ends the entry, and a fix chosen in the final question
 The `ask` verdicts of both rounds go to the user in resolve's one questionnaire, before the next pipeline step.
 With `traces: on`, the entry's trace on the PR is made the same way, by the entry's last resolve, a clean entry's included.
 
-## Both halves
+## Local and CI
 
-**`review:local+ci`** runs both halves into one round file, and one resolve settles it, with one commit and one report.
+**`review:local+ci`** runs the local and the CI review into one round file, and one resolve settles it, with one commit and one report.
 The CI review is fired or awaited first, so it runs while the local reviewer reads.
 
 1. **Facts first**: run `f10 review pick --json`.
@@ -417,19 +421,19 @@ The CI review is fired or awaited first, so it runs while the local reviewer rea
    It waits with `f10 review wait --since <that time> --budget 8m`, waits once more if that expires, and then fails.
    The CI blocks go under `## Findings`, numbered on from the local ones and tagged `source: remote`.
    Their counts are added to `## Categories`.
-   `verdict:` becomes `findings` when either half raised one.
+   `verdict:` becomes `findings` when either review raised one.
    The header's `reviewer:` lists both reviewers, and `review:` and `revision:` are the CI review's.
-   A stop in **Pick** or **Already written?** ends the CI half only.
+   A stop in **Pick** or **Already written?** ends the CI review only.
    Those stops are a manual trigger nobody can fire, a refused trigger, or a review already written.
-   After such a stop the header keeps `reviewer: local`, point 5 and the resolve run on the local blocks, and the report says the CI half was skipped and why.
-   The CI half adds no prior blocks, because the **Shape** point's "no longer raises" rule is for a round with the CI half alone.
+   After such a stop the header keeps `reviewer: local`, point 5 and the resolve run on the local blocks, and the report says the CI review was skipped and why.
+   The CI review adds no prior blocks, because the **Shape** point's "no longer raises" rule is for a round with the CI review alone.
 5. **Lore and ack**: write the remote blocks' lore entries with `--source remote`, then run the remote review's **Ack** (point 4 below).
-   Then write the entry's one state block, with both halves' open count.
+   Then write the entry's one state block, with both reviews' open count.
 
 ## The remote review
 
 The remote review reads the review that arrived on the PR or MR, so it is placed after `pr`.
-It runs as `review:ci` in a flow, as the CI half of `review:local+ci`, or standalone as `/f10:review ci`.
+It runs as `review:ci` in a flow, as the CI part of `review:local+ci`, or standalone as `/f10:review ci`.
 
 The frontmatter's `review:` facts are the protocol: four facts, and an optional fifth.
 `f10 review pick|wait|ack|settle|trigger` applies them over `gh` or `glab`.
@@ -455,9 +459,9 @@ Each fact has a fixed vocabulary:
 `f10 init` infers these facts from a `.github/workflows` workflow that runs the Claude Code action.
 The shell loader does not infer them, so they arrive through `project.md`, or `f10 config` shows them as detected but undeclared.
 For a value outside the vocabulary, `f10 review` refuses and names the fact.
-Without these facts this half **fails**, because there is nothing to wait for.
+Without these facts the remote review **fails**, because there is nothing to wait for.
 
-1. **Pick**, in a flow's CI half.
+1. **Pick**, in a flow's CI review.
    `f10 review pick` prints the latest unhandled review by the declared reviewer, and `--json` prints it as a struct.
    It never picks a settled review.
    A done review is the review, even when `stale: true`.
@@ -515,7 +519,7 @@ Without these facts this half **fails**, because there is nothing to wait for.
    Handled means consumed, not settled: resolve's **CI review** point 5 leaves the settled mark.
    Ack and trigger are outward-facing, and run under the run's authorization.
    In stealth mode they read as the user's own.
-   Then write the state block, as the blind reviewer's half writes it.
+   Then write the state block, as the blind reviewer writes it.
 
 **Report** per `conventions/report.md`: a `findings` row, then the verdict and the count per category, in the reviewer's words.
 

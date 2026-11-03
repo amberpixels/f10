@@ -36,18 +36,17 @@ func TestPaceShorthands(t *testing.T) {
 
 func TestPaceRefusals(t *testing.T) {
 	for yml, want := range map[string]string{
-		"paces:\n  x: { implement: off }\n":                "implement cannot be off",
-		"paces:\n  x: { judge: { rounds: 2 } }\n":          "rounds is a review dial",
-		"paces:\n  x: { review: { by: \"local+ci?\" } }\n": "not supported yet",
-		"paces:\n  x: { review: { by: remote } }\n":        "not local, host, ci or local+ci",
-		"paces:\n  x: { review: { rounds: 3 } }\n":         "rounds 3 is not 1 or 2",
-		"paces:\n  x: { review: { depth: deep } }\n":       "depth deep is not full or light",
-		"paces:\n  x: { judge: { effort: opus } }\n":       "not an effort word",
-		"paces:\n  x: { finish: yes }\n":                   "finish is on or off",
-		"paces:\n  x: { finish: { by: local } }\n":         "finish is on or off",
-		"paces:\n  x: { catchup: off }\n":                  "catchup is never a flow entry",
-		"paces:\n  x: { judge: low }\n":                    `"low" is not a shorthand`,
-		"paces:\n  Fast: { judge: off }\n":                 "not a lowercase name",
+		"paces:\n  x: { implement: off }\n":          "implement cannot be off",
+		"paces:\n  x: { judge: { rounds: 2 } }\n":    "rounds is a review dial",
+		"paces:\n  x: { review: { by: remote } }\n":  "not local, host, ci, local+ci, ci? or local+ci?",
+		"paces:\n  x: { review: { rounds: 3 } }\n":   "rounds 3 is not 1 or 2",
+		"paces:\n  x: { review: { depth: deep } }\n": "depth deep is not full or light",
+		"paces:\n  x: { judge: { effort: opus } }\n": "not an effort word",
+		"paces:\n  x: { finish: yes }\n":             "finish is on or off",
+		"paces:\n  x: { finish: { by: local } }\n":   "finish is on or off",
+		"paces:\n  x: { catchup: off }\n":            "catchup is never a flow entry",
+		"paces:\n  x: { judge: low }\n":              `"low" is not a shorthand`,
+		"paces:\n  Fast: { judge: off }\n":           "not a lowercase name",
 	} {
 		bad := strings.Join(decodePaces(t, yml).check(), "\n")
 		if !strings.Contains(bad, want) {
@@ -106,7 +105,7 @@ func TestResolveFlow(t *testing.T) {
 	}{
 		{"", "plan judge implement cleanup pr review:local judge pr", ""},
 		{"medium", "plan judge implement cleanup pr review:local judge pr", ""},
-		{"slow", "plan judge implement cleanup pr review:local judge pr", "off"},
+		{"slow", "plan judge implement cleanup pr review:local judge pr", "off"}, // the argument keeps local
 		{"fast", "plan judge implement cleanup pr review:local judge pr", "on"},
 		{"ultra", "implement pr review:local pr", "on"},
 	} {
@@ -182,5 +181,68 @@ func TestPaceThatBreaksAFlow(t *testing.T) {
 	if _, err := s.ResolveFlow("default", flows["default"], "nope"); err == nil ||
 		!strings.Contains(err.Error(), "fast, medium, noplan, slow, ultra") {
 		t.Errorf("unknown pace = %v", err)
+	}
+}
+
+// An optional CI review settles where the flow resolves: kept with a remote
+// reviewer and a PR before it, dropped otherwise, with the reason.
+func TestResolveOptionalCI(t *testing.T) {
+	for name, tc := range map[string]struct {
+		flow, pace string
+		remote     bool
+		run, why   string
+	}{
+		"slow, reviewer":       {flow: "implement pr review", pace: "slow", remote: true, run: "implement pr review:local+ci"},
+		"slow, no reviewer":    {flow: "implement pr review", pace: "slow", run: "implement pr review:local", why: "no remote reviewer declared"},
+		"argument, no pace":    {flow: "implement pr review:local+ci?", run: "implement pr review:local", why: "no remote reviewer declared"},
+		"ci alone, before pr":  {flow: "implement review:ci? pr", remote: true, run: "implement pr", why: "no pr or push before it"},
+		"ci alone, after push": {flow: "implement push review:ci?", remote: true, run: "implement push review:ci"},
+	} {
+		s := NewPaceSet()
+		s.Remote = tc.remote
+
+		r, err := s.ResolveFlow("x", strings.Fields(tc.flow), tc.pace)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+
+		if got := strings.Join(r.Run(), " "); got != tc.run {
+			t.Errorf("%s: run %q, want %q", name, got, tc.run)
+		}
+
+		var shown []string
+		for _, e := range r.Entries {
+			shown = append(shown, e.Skipped)
+			for _, d := range e.Dials {
+				shown = append(shown, d.Origin)
+			}
+		}
+
+		if joined := strings.Join(shown, "; "); tc.why != "" && !strings.Contains(joined, tc.why) {
+			t.Errorf("%s: origins %q, want %q", name, joined, tc.why)
+		}
+
+		if tc.why == "" && tc.pace == "" && r.Changed() != (tc.run != tc.flow) {
+			t.Errorf("%s: changed = %v", name, r.Changed())
+		}
+	}
+}
+
+// YAML refuses a plain ci? inside { }; the error says to quote it, and the
+// quoted form reads.
+func TestOptionalCIInFlowStyle(t *testing.T) {
+	if _, err := decodeDeclared([]byte("paces:\n  x: { review: local+ci? }\n")); err == nil ||
+		!strings.Contains(err.Error(), `quote an optional CI review`) {
+		t.Errorf("unquoted = %v", err)
+	}
+
+	if d := decodePaces(t, "paces:\n  x: { review: \"local+ci?\" }\n"); d.Paces["x"]["review"].By != "local+ci?" ||
+		len(d.check()) > 0 {
+		t.Errorf("quoted = %+v, %v", d.Paces["x"], d.check())
+	}
+	// an unknown key beside a block-style ci? is not a quoting problem
+	if _, err := decodeDeclared([]byte("flows:\n  default: implement pr review:ci?\ntrakcer: x\n")); err == nil ||
+		strings.Contains(err.Error(), "quote") {
+		t.Errorf("unknown key = %v", err)
 	}
 }

@@ -54,6 +54,17 @@ func runErrIn(dir string, args ...string) error {
 	return app.Run(context.Background(), append([]string{"f10", "-C", dir}, args...))
 }
 
+// With no pace, f10 flow <name> still settles an optional CI review, and
+// says why it was dropped.
+func TestFlowSettlesOptionalCI(t *testing.T) {
+	repo := paceRepo(t, "flows:\n  default: plan implement pr review:local+ci?\n", "")
+
+	out := runIn(t, repo, "flow", "default")
+	if want := "review:local  by local (local+ci? (no remote reviewer declared))"; !strings.Contains(out, want) {
+		t.Errorf("missing %q:\n%s", want, out)
+	}
+}
+
 // f10 flow <name> is the list ship runs: skipped entries marked, each dial
 // with its origin, and the pace's finish where the run ends at a PR.
 func TestFlowUnderAPace(t *testing.T) {

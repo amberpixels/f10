@@ -10,7 +10,7 @@ Badge: none. Inside a ship pipeline the leaf stays `review`.
 Every findings file is settled the same way, whoever wrote it, because each block says the same three things: what is wrong, where, and its fix.
 A block's **source** is the reviewer that wrote it.
 It is the block's `source:` line, or, when the block has none, the header's single `reviewer:` line (`local`, or a remote identity).
-A file that both halves of a review wrote (`review:local+ci`) is settled in one pass.
+A file that both the local and the CI review wrote (`review:local+ci`) is settled in one pass.
 Its rules for remote findings apply only to the blocks whose source is remote.
 
 ## CI review
@@ -23,7 +23,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
 1. **Latest.**
    Run `f10 review pick --latest --json`.
    If there is no review, or the newest one is not done yet, that is a normal end, and the report names `/f10:review ci`.
-   If the remote facts are missing or the host refuses them, the step fails, the same way the review step's remote half fails.
+   If the remote facts are missing or the host refuses them, the step fails, the same way the review step's remote review fails.
 2. **Settled.**
    If the pick says `settled: true`, report "nothing to resolve" and end normally.
    Nothing changes.
@@ -149,7 +149,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
     - this is the entry's last resolve, by point 7's rule: in a pipeline, a resolve that opens round two holds its trace for round two, whose trace covers both rounds.
 
     The trace follows point 9's choice: if the fixes were not pushed, nothing is posted.
-    In a file both halves wrote, the status's counts and the comment cover only the local blocks.
+    In a file both reviews wrote, the status's counts and the comment cover only the local blocks.
     The remote blocks are answered on their own thread, by `+reply` and by the settled mark.
     In round two, the counts and the comment cover both files, each finding at its last verdict, with round one's skip reasons included.
     - **Status.**

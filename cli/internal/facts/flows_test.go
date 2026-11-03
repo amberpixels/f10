@@ -50,7 +50,7 @@ func TestCheckFlow(t *testing.T) {
 		"colon without arg": {flow: Flow{"plan", "review:"}, want: "no argument"},
 		"bad step":          {flow: Flow{"plan", "Implement"}, want: "not a step name"},
 		"planless judge":    {flow: Flow{"judge", "implement", "pr"}, want: "lead with plan"},
-		"review typo":       {flow: Flow{"plan", "implement", "pr", "review:loacl"}, want: "names no review half"},
+		"review typo":       {flow: Flow{"plan", "implement", "pr", "review:loacl"}, want: "names no reviewer"},
 		"catchup entry":     {flow: Flow{"plan", "implement", "catchup", "pr"}, want: "never an entry"},
 	} {
 		bad := Declared{Flows: map[string]Flow{"default": tc.flow}}.check()
@@ -97,35 +97,68 @@ func TestFlowHelpers(t *testing.T) {
 	}
 }
 
-func TestReviewHalves(t *testing.T) {
-	for arg, want := range map[string][2]bool{
-		"":         {true, false},
-		"local":    {true, false},
-		"host":     {true, false},
-		"ci":       {false, true},
-		"CI":       {false, true},
-		"local+ci": {true, true},
-		"ci+local": {true, true},
-		"loacl":    {false, false},
+func TestReviewBy(t *testing.T) {
+	for arg, want := range map[string]By{
+		"":          {Local: true},
+		"local":     {Local: true},
+		"host":      {Local: true},
+		"ci":        {CI: true},
+		"CI":        {CI: true},
+		"ci?":       {CI: true, CIOptional: true},
+		"local+ci":  {Local: true, CI: true},
+		"ci+local":  {Local: true, CI: true},
+		"local+ci?": {Local: true, CI: true, CIOptional: true},
+		"ci?+local": {Local: true, CI: true, CIOptional: true},
 	} {
-		if local, remote := ReviewHalves(arg); local != want[0] || remote != want[1] {
-			t.Errorf("ReviewHalves(%q) = %v, %v, want %v", arg, local, remote, want)
+		if got, ok := ReviewBy(arg); !ok || got != want {
+			t.Errorf("ReviewBy(%q) = %+v, %v, want %+v", arg, got, ok, want)
+		}
+	}
+
+	for _, arg := range []string{"loacl", "local?", "local?+ci", "host+ci?", "ci??"} {
+		if _, ok := ReviewBy(arg); ok {
+			t.Errorf("ReviewBy(%q) accepted", arg)
 		}
 	}
 }
 
-// A CI half that cannot run warns: no remote reviewer, or nothing published
-// before it. Neither is an error.
-func TestRemoteHalfWarnings(t *testing.T) {
+// An optional CI review runs only with a remote reviewer and something
+// published before it; a required one is never touched.
+func TestBySettle(t *testing.T) {
+	opt := By{Local: true, CI: true, CIOptional: true}
+
+	for name, tc := range map[string]struct {
+		by                By
+		remote, published bool
+		arg, why          string
+	}{
+		"runs":           {by: opt, remote: true, published: true, arg: "local+ci"},
+		"no reviewer":    {by: opt, published: true, arg: "local", why: "no remote reviewer declared"},
+		"nothing pushed": {by: opt, remote: true, arg: "local", why: "no pr or push before it"},
+		"ci alone":       {by: By{CI: true, CIOptional: true}, arg: "", why: "no remote reviewer declared"},
+		"required":       {by: By{CI: true}, arg: "ci"},
+	} {
+		got, why := tc.by.Settle(tc.remote, tc.published)
+		if got.Arg() != tc.arg || why != tc.why {
+			t.Errorf("%s: Settle = %q, %q, want %q, %q", name, got.Arg(), why, tc.arg, tc.why)
+		}
+	}
+}
+
+// A required CI review that cannot run warns: no remote reviewer, or nothing
+// published before it. Neither is an error. An optional one never warns.
+func TestRemoteReviewWarnings(t *testing.T) {
 	const review = "review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n" +
 		"  done: posted, reaction `eyes`\n"
 
 	for name, tc := range map[string]struct {
 		block, want string
 	}{
-		"no reviewer":   {block: "flows: {default: plan implement pr review:local+ci}\n", want: "no remote reviewer"},
-		"before pr":     {block: "flows: {default: plan implement review:ci pr}\n" + review, want: "no pr or push"},
-		"runs as given": {block: "flows: {default: plan implement pr review:local+ci}\n" + review},
+		"no reviewer":           {block: "flows: {default: plan implement pr review:local+ci}\n", want: "no remote reviewer"},
+		"before pr":             {block: "flows: {default: plan implement review:ci pr}\n" + review, want: "no pr or push"},
+		"runs as given":         {block: "flows: {default: plan implement pr review:local+ci}\n" + review},
+		"optional, no reviewer": {block: "flows:\n  default: plan implement pr review:local+ci?\n"},
+		"optional, before pr":   {block: "flows:\n  default: plan implement review:ci? pr\n" + review},
 	} {
 		eff := buildWith(t, "---\n"+tc.block+"---\n", "")
 		if got := strings.Join(eff.Flows["default"], " "); !strings.Contains(got, "review:") {

@@ -123,21 +123,75 @@ func ShipEntries(flow []string) []string {
 	return flow
 }
 
-// ReviewHalves is which halves a review entry's argument runs: none,
-// `local` or `host` the local review (`host` runs it on the host's own code
-// review), `ci` the remote one, `local+ci` both, in either order. Neither
-// for any other argument.
-func ReviewHalves(arg string) (bool, bool) {
+// By is who a review entry runs: the local review, the CI review, or both.
+// CIOptional is a `ci?`, which runs only where it can (Settle).
+type By struct {
+	Local, CI, CIOptional bool
+}
+
+// ReviewBy reads a review entry's argument: none, `local` or `host` the
+// local review (`host` on the host's own code review), `ci` the CI review,
+// `local+ci` both in either order, `ci?` marking the CI review optional.
+// False for any other argument.
+func ReviewBy(arg string) (By, bool) {
 	switch strings.ToLower(arg) {
 	case "", "local", "host":
-		return true, false
+		return By{Local: true}, true
 	case "ci":
-		return false, true
+		return By{CI: true}, true
+	case "ci?":
+		return By{CI: true, CIOptional: true}, true
 	case "local+ci", "ci+local":
-		return true, true
+		return By{Local: true, CI: true}, true
+	case "local+ci?", "ci?+local":
+		return By{Local: true, CI: true, CIOptional: true}, true
 	}
 
-	return false, false
+	return By{}, false
+}
+
+// Settle decides an optional CI review: it runs when a remote reviewer is
+// declared and a pr or push comes before it, and is dropped otherwise,
+// with the reason. A required one comes back as it is.
+func (b By) Settle(remote, published bool) (By, string) {
+	if !b.CIOptional {
+		return b, ""
+	}
+
+	b.CIOptional = false
+
+	switch {
+	case !remote:
+		b.CI = false
+
+		return b, "no remote reviewer declared"
+	case !published:
+		b.CI = false
+
+		return b, "no pr or push before it"
+	}
+
+	return b, ""
+}
+
+// Arg is the argument that runs b: local, ci or local+ci, a `?` kept;
+// "" when b runs nothing.
+func (b By) Arg() string {
+	ci := "ci"
+	if b.CIOptional {
+		ci = "ci?"
+	}
+
+	switch {
+	case b.Local && b.CI:
+		return "local+" + ci
+	case b.CI:
+		return ci
+	case b.Local:
+		return "local"
+	}
+
+	return ""
 }
 
 // Planless reports a flow that writes no plan file.
@@ -183,9 +237,9 @@ func checkFlow(name string, flow []string) []string {
 			bad = append(bad, fmt.Sprintf("flows.%s: %q is not a step name", name, e))
 		case colon && arg == "":
 			bad = append(bad, fmt.Sprintf("flows.%s: %q has a colon and no argument", name, e))
-		case step == "review" && !anyHalf(arg):
-			bad = append(bad, fmt.Sprintf("flows.%s: %q names no review half; write review:local, review:host, "+
-				"review:ci or review:local+ci", name, e))
+		case step == "review" && !validBy(arg):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q names no reviewer; write review:local, review:host, "+
+				"review:ci, review:local+ci, review:ci? or review:local+ci?", name, e))
 		case step == "catchup":
 			bad = append(bad, fmt.Sprintf("flows.%s: catchup is never an entry: ship catches up before implement, "+
 				"pr and a change judge; the catchup key picks merge, rebase or off", name))
@@ -201,16 +255,17 @@ func checkFlow(name string, flow []string) []string {
 	return bad
 }
 
-func anyHalf(arg string) bool {
-	local, remote := ReviewHalves(arg)
+func validBy(arg string) bool {
+	_, ok := ReviewBy(arg)
 
-	return local || remote
+	return ok
 }
 
-// checkRemoteHalves warns about a CI half that cannot run: no remote
-// reviewer, or no pr or push before it. Warnings, since a legacy drive chain
-// converts to a trailing review:ci on a default that may open no PR.
-func (e *Effective) checkRemoteHalves() {
+// checkRemoteReview warns about a required CI review that cannot run: no
+// remote reviewer, or no pr or push before it. Warnings, since a legacy drive
+// chain converts to a trailing review:ci on a default that may open no PR. An
+// optional one (`ci?`) never warns: dropping it is what `?` asks for.
+func (e *Effective) checkRemoteReview() {
 	for _, name := range e.FlowNames() {
 		published := false
 
@@ -220,13 +275,14 @@ func (e *Effective) checkRemoteHalves() {
 				published = true
 			}
 
-			if _, remote := ReviewHalves(arg); step != "review" || !remote {
+			if by, _ := ReviewBy(arg); step != "review" || !by.CI || by.CIOptional {
 				continue
 			}
 
 			switch {
 			case !e.Review.Remote():
-				e.problem(false, "flows.%s: %s reads a CI review, and Review declares no remote reviewer", name, entry)
+				e.problem(false, "flows.%s: %s reads a CI review, and Review declares no remote reviewer; "+
+					"write ci? to run it only where one is", name, entry)
 			case !published:
 				e.problem(false, "flows.%s: %s reads a CI review on the PR, and no pr or push comes before it",
 					name, entry)
@@ -426,7 +482,7 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 
 	e.Facts = append(e.Facts, Fact{Key: "drive_finish", Value: onOff(e.DriveFinish), Origin: finishOrigin})
 
-	e.checkRemoteHalves()
+	e.checkRemoteReview()
 
 	if e.FlowByArea != nil {
 		e.Facts = append(e.Facts, Fact{
