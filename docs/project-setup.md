@@ -304,7 +304,7 @@ pace: brisk
 The dials are:
 
 - `review: { by, rounds, depth }`.
-  `by` is who reviews in a bare `review` entry: `local`, `host`, `ci`, `local+ci` or `local+ci?`.
+  `by` is who reviews in a bare `review` entry: `local`, `host`, `ci`, `local+ci`, `ci?` or `local+ci?`.
   `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (the `Rounds: 2` rule).
   `depth` is `full` or `light`, which gives the blind reviewer a short brief (`steps/review.md`).
 - `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it.
@@ -332,7 +332,7 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
 3. The project's `paces:`, main's then the worktree's.
 
 The run's pace is, first to last: `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`, the pace the task's branch records, the project's `pace:`, the user's `pace:`.
-With none of them, there is no pace, and every flow runs as declared.
+With none of them, there is no pace, and every flow runs as declared, an optional CI review (`ci?`) still settled.
 `f10 start --pace` and `f10 drive --pace` record the pace on the branch, replacing any earlier one, so a rerun that names none keeps it.
 `/f10:ship --pace` applies to that run alone.
 An unknown name fails with the list of paces.

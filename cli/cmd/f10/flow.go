@@ -31,7 +31,8 @@ func flowCommand() *cli.Command {
 		ArgsUsage: "[<name>]",
 		Description: "With a name, that flow alone, one entry per line: the entries the pace skips marked, and each " +
 			"dial with its origin; this is the list /f10:ship runs. The pace is --pace, else the branch's record, " +
-			"else the project's pace:, else the user's; with none, every flow runs as declared.",
+			"else the project's pace:, else the user's; with none, every flow runs as declared, " +
+			"an optional CI review (ci?) settled.",
 		Flags: []cli.Flag{
 			paceFlag(),
 			&cli.BoolFlag{Name: "json", Usage: "emit the same list as JSON"},

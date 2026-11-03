@@ -38,7 +38,7 @@ func TestPaceRefusals(t *testing.T) {
 	for yml, want := range map[string]string{
 		"paces:\n  x: { implement: off }\n":          "implement cannot be off",
 		"paces:\n  x: { judge: { rounds: 2 } }\n":    "rounds is a review dial",
-		"paces:\n  x: { review: { by: remote } }\n":  "not local, host, ci, local+ci or local+ci?",
+		"paces:\n  x: { review: { by: remote } }\n":  "not local, host, ci, local+ci, ci? or local+ci?",
 		"paces:\n  x: { review: { rounds: 3 } }\n":   "rounds 3 is not 1 or 2",
 		"paces:\n  x: { review: { depth: deep } }\n": "depth deep is not full or light",
 		"paces:\n  x: { judge: { effort: opus } }\n": "not an effort word",
@@ -239,5 +239,10 @@ func TestOptionalCIInFlowStyle(t *testing.T) {
 	if d := decodePaces(t, "paces:\n  x: { review: \"local+ci?\" }\n"); d.Paces["x"]["review"].By != "local+ci?" ||
 		len(d.check()) > 0 {
 		t.Errorf("quoted = %+v, %v", d.Paces["x"], d.check())
+	}
+	// an unknown key beside a block-style ci? is not a quoting problem
+	if _, err := decodeDeclared([]byte("flows:\n  default: implement pr review:ci?\ntrakcer: x\n")); err == nil ||
+		strings.Contains(err.Error(), "quote") {
+		t.Errorf("unknown key = %v", err)
 	}
 }

@@ -155,6 +155,9 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	}
 
 	switch {
+	case lh == nil && rh == nil && review >= 0:
+		// every review entry was a dropped ci?
+		gates[review].State = gateOff
 	case lh == nil && rh == nil:
 		gates = append(gates, gate{Step: "review", State: gateOff})
 	case review < 0:

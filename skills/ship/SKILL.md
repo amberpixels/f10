@@ -52,7 +52,7 @@ An entry marked `skipped` does not run: say so in one line, and leave it out of 
 Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` to **pr**; a judge's `effort` applies only where the judge spawns an agent (`--blind`), whose profile then comes from `f10 agents judge`, with `--pace <name>` when the argument gave one; an inline judge runs on the task agent's profile.
 A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
 A `finish` line means the run ends at an open PR the pace would have merged: ship never merges it, and the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
-With no pace, the list is the declared flow, unchanged.
+With no pace, the list is the declared flow, with an optional CI review (`ci?`) already settled.
 An `f10 flow` too old to take a name fails on it: run the declared flow, and say in one line that the pace was not applied.
 
 An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` sets the review's `by` (who reviews), `review:host` runs the local review on the host's own code review, `review:local+ci` runs both into one round and one resolve, `review:local+ci?` runs the CI review only where it can run, and `f10 flow <name>` settles the `?` before ship sees the entry, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).

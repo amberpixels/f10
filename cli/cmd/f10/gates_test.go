@@ -132,6 +132,22 @@ func TestGatesOptionalCI(t *testing.T) {
 
 	both := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: pipeline, remoteFlow: true, now: now})
 	checkTexts(t, both, map[string]string{"review": "local: pending · remote: pending"})
+
+	// a flow whose only review is a dropped ci? keeps one review gate, off
+	ciOnly := taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: []string{"implement", "pr", "review:ci?"}, now: now,
+	})
+
+	var reviews []gate
+	for _, g := range ciOnly {
+		if g.Step == "review" {
+			reviews = append(reviews, g)
+		}
+	}
+
+	if len(reviews) != 1 || reviews[0].State != gateOff {
+		t.Errorf("review gates = %+v", reviews)
+	}
 }
 
 // One review:local+ci entry is the one review gate with both halves, each

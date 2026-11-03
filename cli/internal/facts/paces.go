@@ -208,7 +208,7 @@ func (d Dials) checkValues(at string) []string {
 	var bad []string
 
 	if d.By != "" && !validBy(d.By) {
-		bad = append(bad, fmt.Sprintf("%s: by %s is not local, host, ci, local+ci or local+ci?", at, d.By))
+		bad = append(bad, fmt.Sprintf("%s: by %s is not local, host, ci, local+ci, ci? or local+ci?", at, d.By))
 	}
 
 	if d.Rounds != 0 && d.Rounds != 1 && d.Rounds != 2 {
@@ -355,7 +355,7 @@ var deliveringSteps = []string{"implement", "commit", "push", "pr", "deploy"}
 
 // ResolveFlow lays the named pace on a flow. An entry argument beats the
 // pace for the dial it expresses (review:local fixes by), and the pace
-// beats the step's own default. No pace ("") leaves the flow as declared.
+// beats the step's own default. No pace ("") leaves the flow as declared, an optional CI review settled.
 func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Resolved, error) {
 	r := Resolved{Flow: flowName, Pace: pace}
 

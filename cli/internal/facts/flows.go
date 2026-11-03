@@ -239,7 +239,7 @@ func checkFlow(name string, flow []string) []string {
 			bad = append(bad, fmt.Sprintf("flows.%s: %q has a colon and no argument", name, e))
 		case step == "review" && !validBy(arg):
 			bad = append(bad, fmt.Sprintf("flows.%s: %q names no reviewer; write review:local, review:host, "+
-				"review:ci, review:local+ci or review:local+ci?", name, e))
+				"review:ci, review:local+ci, review:ci? or review:local+ci?", name, e))
 		case step == "catchup":
 			bad = append(bad, fmt.Sprintf("flows.%s: catchup is never an entry: ship catches up before implement, "+
 				"pr and a change judge; the catchup key picks merge, rebase or off", name))
