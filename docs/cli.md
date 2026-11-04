@@ -159,7 +159,7 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   The report gains a `plan` row.
   A worktree from before storage moved to main's ships its own plan when main has none for the task (start rerun on it).
   `f10 drive` reads main's plan the same way, when it starts the task's agent.
-- the agent is started with an `--add-dir` for each task-file dir of the storage root (`plans`, `reviews`, `verdicts`, `spikes`, `lore`, `images`, created if missing) whenever that root lies outside the worktree, so its writes there ask no permission; `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
+- the agent is started with an `--add-dir` for each task-file dir of the storage root (`plans`, `reviews`, `verdicts`, `spikes`, `handoffs`, `lore`, `images`, created if missing) whenever that root lies outside the worktree, so its writes there ask no permission; `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
   The path is in the shared storage root (in a base worktree from before storage moved to main's, that worktree's own), and a note beneath the report says when no checkout reaches it or the plan is not written yet.

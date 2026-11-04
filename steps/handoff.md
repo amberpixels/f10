@@ -11,16 +11,21 @@ It lists the work around the merge, so the person shipping it knows what to run,
 1. **Gather the subject.**
    Run `f10 pr view [<subject>]`, which gives the branch, the base and the task.
    The subject is a PR number or url, a task id, or nothing for the current branch.
-   - `<key>` is the task id, or, for a branch with no task id, the branch name as a kebab slug.
+   - `<key>` is the task id, or, for a branch with no task id, the branch name with each `/` as `-`, the name `f10 review round` gives its findings directory.
    - `head` is `git rev-parse HEAD` for the branch checked out here, else the open PR's head sha.
 2. **Reuse a current file.**
-   Reuse `<storage root>/handoffs/<key>.md` when its `head` equals this head and the working tree is clean.
-   Print it as point 6 says, and end the step.
-   A dirty tree always writes the file again, because the diff includes uncommitted work that no sha records.
+   Reuse `<storage root>/handoffs/<key>.md` when all of these hold, then print it as point 6 says and end the step:
+   - Its `head` equals this head.
+   - The working tree is clean, because the diff includes uncommitted work that no sha records.
+   - No findings or verdict file that point 3 reads changed after its `written` time, because a resolve that only skips, or a judge run, changes Debt in prod without a commit.
+
+   Otherwise write the file again.
    A dry run's `would produce` row says `write or reuse <path>`.
 3. **Read the change.**
    Read the full diff from `f10 pr diff [<subject>]`, never a summary of it.
-   Read the findings under `<storage root>/reviews/<key>/` and the verdict files under `<storage root>/verdicts/<key>/`, when they exist.
+   Read the findings under `<storage root>/reviews/<key>/`, when they exist.
+   Read the verdict files under `<storage root>/verdicts/<key>/` that changed after the committer date of `git merge-base HEAD <base>`.
+   An older verdict judged an earlier PR on the same task, because the judge never archives its files per PR.
 4. **Classify.**
    An item is anything that touches prod state or a consumer, even when it runs by itself, such as a migration.
    A pure code change is never an item.
