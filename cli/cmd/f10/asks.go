@@ -355,15 +355,20 @@ func answersFor(a asks.Ask, values []string) (string, error) {
 // watches, resume restarts a stopped drive, and live says whether a drive
 // still runs.
 type deliverer struct {
-	prompt func(ctx context.Context, a asks.Ask) error
+	prompt func(ctx context.Context, w io.Writer, a asks.Ask) error
 	resume func(ctx context.Context, w io.Writer, a asks.Ask) error
 	live   func(a asks.Ask) bool
 }
 
 func liveDeliver() deliverer {
 	return deliverer{
-		prompt: func(ctx context.Context, a asks.Ask) error {
-			return promptAgent(ctx, a.Worktree, a.Task, a.Suffix, a.Answer)
+		prompt: func(ctx context.Context, w io.Writer, a asks.Ask) error {
+			note, err := promptChecked(ctx, a.Worktree, a.Task, a.Suffix, a.Answer)
+			if note != "" {
+				fmt.Fprintln(w, note)
+			}
+
+			return err
 		},
 		resume: resumeAskDrive,
 		live: func(a asks.Ask) bool {
@@ -389,7 +394,7 @@ func (d deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.
 		return nil
 	}
 
-	if err := d.prompt(ctx, a); err != nil {
+	if err := d.prompt(ctx, w, a); err != nil {
 		return fmt.Errorf("sending the answer to %s's agent: %w; type it in its pane: %s", a.Task, err, a.Answer)
 	}
 

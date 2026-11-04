@@ -647,8 +647,8 @@ type driveRun struct {
 	// skill it reports, not the one the drive meant to send, says how it ended
 	attached bool
 	end      *driveResult
-	// freshAt is when this drive started the agent: run state older than it
-	// was written by an agent that is gone, and is not read
+	// freshAt is when this drive opened the task to start its agent: run
+	// state older than it was written by an agent that is gone, and is not read
 	freshAt time.Time
 	// lastCatchup is the catchup this drive last sent for the task, so a
 	// conflict after it is judged by progress, not counted: the drive
@@ -668,6 +668,12 @@ type driveRun struct {
 	// queued is set while the drive's cap holds the task: unopened, or
 	// open with its next skill unsent
 	queued bool
+	// typed is the last send's text when it went through the agent's input
+	// box, "" when it went on the command line, and typedTo the agent that
+	// took it; enterRetried is set once the poll checked that box
+	typed        string
+	typedTo      string
+	enterRetried bool
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -2472,6 +2478,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 	run = r.current(run)
 	r.skill, r.sentAt, r.begun, r.idleSince, r.attached = skill, in.now(), false, time.Time{}, false
+	r.typed, r.enterRetried = "", false
 
 	// a skill after the catchup may push the branch itself
 	if c := r.lastCatchup; c != nil && skill != "catchup" {
@@ -2528,7 +2535,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		// drive's own answer as one typed there
 		in.claimSent(r, answer)
 
-		if err := promptAgent(ctx, r.o.path, id, r.task.suffix, answer); err != nil {
+		if err := in.deliver(ctx, r, answer); err != nil {
 			return err
 		}
 
@@ -2571,13 +2578,43 @@ func (in *driveInput) prompt(
 	}
 
 	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, slices.Contains(r.chain, "finish")), steering)
-	if err := promptAgent(ctx, r.o.path, id, r.task.suffix, p); err != nil {
+	if err := in.deliver(ctx, r, p); err != nil {
 		return err
 	}
 
 	fmt.Fprintf(w, "%s %s: sent\n", in.id(id), skill)
 
 	return nil
+}
+
+// deliver sends text to the task's agent, the first text starting it, and
+// keeps the text when it was typed, for the poll's Enter check.
+func (in *driveInput) deliver(ctx context.Context, r *driveRun, text string) error {
+	name, typed, err := r.o.deliver(ctx, r.task.ref.ID, r.task.suffix, text)
+	if err != nil {
+		return err
+	}
+
+	if typed {
+		r.typed, r.typedTo = text, name
+	}
+
+	return nil
+}
+
+// retryEnter checks, once and enterRetry after a typed send, that the text
+// left the agent's input box, pressing Enter again if it did not. A failed
+// check is printed, and the start window still decides.
+func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) {
+	if r.typed == "" || r.enterRetried || in.now().Sub(r.sentAt) < enterRetry {
+		return
+	}
+
+	r.enterRetried = true
+
+	if note := retryEnter(ctx, agents(r.o.path), r.typedTo, r.typed); note != "" {
+		fmt.Fprintf(w, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
+	}
 }
 
 // resumeAt is the steering that resumes a ship the catchup guard stopped,
@@ -2752,6 +2789,8 @@ func (in *driveInput) poll(
 	}
 
 	if !r.begun && !recent {
+		in.retryEnter(ctx, w, r)
+
 		if now.Sub(r.sentAt) > startWindow {
 			in.end(
 				ctx,

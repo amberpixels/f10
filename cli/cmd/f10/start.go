@@ -481,12 +481,17 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	}
 
 	if o.fresh {
-		if err := agents(o.path).Prompt(
-			ctx,
-			agentctl.AgentName(in.task.ID, in.suffix, o.path),
-			prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note),
-		); err != nil {
+		text := prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note)
+
+		sent := time.Now()
+
+		name, typed, err := o.deliver(ctx, in.task.ID, in.suffix, text)
+		if err != nil {
 			return err
+		}
+
+		if typed {
+			o.notes = appendNote(o.notes, watchEnter(ctx, agents(o.path), o.path, name, text, sent))
 		}
 
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
@@ -651,8 +656,8 @@ func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
 	return nil
 }
 
-// An openedTask is what openTask leaves behind; fresh says this call started
-// the agent, which so waits for its first prompt.
+// An openedTask is what openTask leaves behind; fresh says this call is to
+// start the agent, which deliver does with its first prompt.
 type openedTask struct {
 	task   ref.Ref // the task, with the riders its branch ships
 	branch string
@@ -665,9 +670,50 @@ type openedTask struct {
 	// profile is what the agent was started on, when fresh; a report names
 	// it when it is not the kind's default
 	profile agentctl.Profile
+	// launch is the agent still to start, when fresh: it starts with the
+	// first text deliver sends, so that text never goes through its input box
+	launch *pendingLaunch
 }
 
-// openTask runs everything start does short of the prompt. Every lookup
+// A pendingLaunch is an agent openTask decided to start.
+type pendingLaunch struct {
+	agent   string
+	profile agentctl.Profile
+	args    []string
+	waiting func(waited, limit time.Duration)
+}
+
+// deliver sends text to the task's agent, starting it when its launch is
+// pending: on its command line when the kind takes a first prompt, else
+// typed right after. It names the agent that took the text, and typed says
+// the text went through the input box, where its Enter can be lost.
+func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (string, bool, error) {
+	l := o.launch
+	if l == nil {
+		name, err := promptAgentAs(ctx, o.path, id, suffix, text)
+
+		return name, true, err
+	}
+
+	// the prompt goes first: --add-dir takes every argument after it
+	first, argv := l.profile.PromptArgs(text)
+
+	args := slices.Concat(first, l.args)
+	if err := agents(o.path).StartAgent(ctx, o.ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
+		return "", false, err
+	}
+
+	o.launch = nil
+
+	if argv {
+		return l.agent, false, nil
+	}
+
+	return l.agent, true, agents(o.path).Prompt(ctx, l.agent, text)
+}
+
+// openTask runs everything start does short of starting and prompting the
+// agent, which deliver does with the first text. Every lookup
 // that can refuse runs before the first thing is created, the worktree;
 // drive adopts main's plan too but prompts the agent itself, skill by skill.
 func openTask(ctx context.Context, in startInput) (openedTask, error) {
@@ -809,17 +855,12 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 			}
 		}
 
-		if err := agents(path).StartAgent(
-			ctx,
-			ws,
-			agent,
-			profile.Kind,
-			agentArgs(profile, in.plansDir, path),
-			shellWait(in.progress, ws.Slot),
-		); err != nil {
-			return openedTask{}, err
+		o.launch = &pendingLaunch{
+			agent:   agent,
+			profile: profile,
+			args:    agentArgs(profile, in.plansDir, path),
+			waiting: shellWait(in.progress, ws.Slot),
 		}
-
 		o.fresh = true
 		o.profile = profile
 
@@ -1155,14 +1196,23 @@ func recordTip(ctx context.Context, dir, branch, base string) error {
 // promptAgent prompts the task's agent in the worktree at path, falling back
 // to the bare name an agent started before the path hash still answers to.
 func promptAgent(ctx context.Context, path, id, suffix, text string) error {
-	agent := agents(path)
-
-	err := agent.Prompt(ctx, agentctl.AgentName(id, suffix, path), text)
-	if errors.Is(err, agentctl.ErrAgentNotFound) {
-		return agent.Prompt(ctx, agentctl.BareAgentName(id, suffix), text)
-	}
+	_, err := promptAgentAs(ctx, path, id, suffix, text)
 
 	return err
+}
+
+// promptAgentAs is promptAgent, also naming the agent that took the text.
+func promptAgentAs(ctx context.Context, path, id, suffix, text string) (string, error) {
+	agent := agents(path)
+	name := agentctl.AgentName(id, suffix, path)
+
+	err := agent.Prompt(ctx, name, text)
+	if errors.Is(err, agentctl.ErrAgentNotFound) {
+		name = agentctl.BareAgentName(id, suffix)
+		err = agent.Prompt(ctx, name, text)
+	}
+
+	return name, err
 }
 
 // prompt is what the agent is told. A saved plan, or a flow with no plan

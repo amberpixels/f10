@@ -194,6 +194,34 @@ func Prompt(ctx context.Context, dir, name, text string) error {
 	return err
 }
 
+// Screen is the named agent's visible screen, as text: `agent read`
+// prints the terminal itself, not a JSON envelope.
+func Screen(ctx context.Context, dir, name string) (string, error) {
+	args := []string{"agent", "read", name, "--source", "visible"}
+
+	res, err := shell.Capture(ctx, dir, "herdr", args...)
+	if err != nil {
+		return "", fmt.Errorf("running herdr agent read: %w", err)
+	}
+
+	if res.Code != 0 {
+		if he := failure("herdr agent read", cmp.Or(res.Stderr, res.Stdout)); he != nil {
+			return "", he
+		}
+
+		return "", fmt.Errorf("herdr agent read: %s", cmp.Or(res.Stderr, fmt.Sprintf("exit %d", res.Code)))
+	}
+
+	return res.Stdout, nil
+}
+
+// SendKeys presses keys in the named agent's terminal, by herdr's key names.
+func SendKeys(ctx context.Context, dir, name string, keys ...string) error {
+	_, err := call(ctx, dir, append([]string{"agent", "send-keys", name}, keys...)...)
+
+	return err
+}
+
 // A Listed is one workspace as `workspace list` reports it. Path is the
 // checkout the workspace shows, or "" for a workspace with no worktree.
 type Listed struct {
