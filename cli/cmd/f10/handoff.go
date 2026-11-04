@@ -81,13 +81,23 @@ func handoffLines(path, id string, tip func() string) []string {
 	}
 
 	lines := strings.Split(h.body, "\n")
-	if at := tip(); at != "" && h.head != at {
+	if at := tip(); at != "" && !sameCommit(h.head, at) {
 		stale := fmt.Sprintf("the handoff was written at %s, the branch merged at %s: "+
 			"it does not cover the later commits, so check them before deploying", shortSHA(h.head), shortSHA(at))
 		lines = append([]string{stale}, lines...)
 	}
 
 	return lines
+}
+
+// sameCommit takes an abbreviated sha as its full one, so a handoff whose
+// head was copied short is not reported stale against its own commit.
+func sameCommit(a, b string) bool {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+
+	return len(a) >= 7 && strings.HasPrefix(b, a)
 }
 
 // branchTip is the local branch's commit, which the handoff step records as
@@ -105,22 +115,37 @@ func branchTip(ctx context.Context, main, branch string, p pull) func() string {
 // archiveHandoff moves the handoff to handoffs/archive/, numbered as plans
 // are, so the task's next PR writes its own; a missing file archives nothing.
 func archiveHandoff(main, plansDir, id string) (string, error) {
+	src, target := handoffTarget(main, plansDir, id)
+
+	return target, moveHandoff(src, target)
+}
+
+// handoffTarget names where the handoff will be archived, "" with none.
+// Finish names it for its report and moves the file only after printing it,
+// so a failure before the report leaves the file for the rerun to print.
+func handoffTarget(main, plansDir, id string) (string, string) {
 	src := taskHandoff(main, plansDir, id)
 	if !exists(src) {
-		return "", nil
+		return src, ""
 	}
 
-	dst := filepath.Join(filepath.Dir(src), "archive")
-	if err := os.MkdirAll(dst, 0o750); err != nil {
-		return "", fmt.Errorf("archiving the handoff at %s: %w", src, err)
+	return src, freeArchiveName(filepath.Join(filepath.Dir(src), "archive"), id)
+}
+
+func moveHandoff(src, target string) error {
+	if target == "" {
+		return nil
 	}
 
-	target := freeArchiveName(dst, id)
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		return fmt.Errorf("archiving the handoff at %s: %w", src, err)
+	}
+
 	if err := os.Rename(src, target); err != nil {
-		return "", fmt.Errorf("archiving the handoff at %s: %w", src, err)
+		return fmt.Errorf("archiving the handoff at %s: %w", src, err)
 	}
 
-	return target, nil
+	return nil
 }
 
 // writeHandoff prints the lines apart from the notes, so the body's

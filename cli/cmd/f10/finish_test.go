@@ -2731,3 +2731,31 @@ func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
 		t.Errorf("--local printed or kept the handoff:\n%s", out)
 	}
 }
+
+// A rerun after the worktree went prints and archives the handoff as a
+// full finish does, comparing it with the branch still held here.
+func TestFinishMergedWithoutWorktreePrintsTheHandoff(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(worktrees, porcelain())
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
+
+	src := taskHandoff(fx.main, "", "GH-1")
+	writeHandoffFile(t, src, "abc1234567")
+
+	var handed []string
+
+	fx.in.handoff = func(lines []string) { handed = lines }
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	archived := filepath.Join(filepath.Dir(src), "archive", "GH-1.md")
+	if exists(src) || !exists(archived) || !strings.Contains(out, "handoff:") || !strings.Contains(out, archived) ||
+		!strings.Contains(out, "\n\n"+handoffBody+"\n") || strings.Join(handed, "\n") != handoffBody {
+		t.Errorf("handed = %q, report:\n%s", handed, out)
+	}
+}

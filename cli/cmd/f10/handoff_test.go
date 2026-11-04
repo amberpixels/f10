@@ -38,6 +38,15 @@ func TestHandoffLines(t *testing.T) {
 		t.Errorf("stale = %q", got)
 	}
 
+	// a head copied short is its own commit, not a stale one
+	writeHandoffFile(t, path, "abc1234")
+
+	if got := strings.Join(handoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != handoffBody {
+		t.Errorf("short head = %q, want the body alone", got)
+	}
+
+	writeHandoffFile(t, path, "abc1234567")
+
 	// no tip to compare against prints the body as it is
 	if got := strings.Join(handoffLines(path, "GH-1", tipOf("")), "\n"); got != handoffBody {
 		t.Errorf("no tip = %q", got)

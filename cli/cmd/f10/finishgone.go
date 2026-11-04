@@ -64,7 +64,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		}
 	}
 
-	// read before the merge, while the branch tip it was written at still exists
+	// the PR already merged; the local branch still holds the tip the handoff was written at
 	hand := handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
 
 	p, notes, err := landPull(ctx, in, name, def, p)
@@ -100,10 +100,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
-	handed, err := archiveHandoff(in.main, in.plansDir, in.task.ID)
-	if err != nil {
-		return err
-	}
+	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
 
 	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID),
 		seriesEnd{pr: pullNumber(p.url()), head: p.sha()})
@@ -137,6 +134,10 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	if err := writeHandoff(w, hand); err != nil {
 		return err
+	}
+
+	if err := moveHandoff(handoffSrc, handed); err != nil {
+		return fmt.Errorf("%s merged, but %w", p.url(), err)
 	}
 
 	if in.handoff != nil {

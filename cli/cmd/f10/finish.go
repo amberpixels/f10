@@ -549,10 +549,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
-	handed, err := archiveHandoff(in.main, in.plansDir, in.task.ID)
-	if err != nil {
-		return err
-	}
+	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
 
 	var reviews string
 
@@ -643,6 +640,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	if err := writeHandoff(w, hand); err != nil {
 		return err
+	}
+
+	if err := moveHandoff(handoffSrc, handed); err != nil {
+		return fmt.Errorf("%s, but %w", ended, err)
 	}
 
 	if in.handoff != nil && hand != nil {
