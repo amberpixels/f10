@@ -1,6 +1,6 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into the subtasks the user picks. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel N]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
+description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into its subtasks, the user picking only when a draft is among them. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel N]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "<id>[:profile]... [--flow <name> | --local] [--pace <name>]"
 ---
@@ -12,7 +12,7 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
-- `<id>`: a task to drive; a parent id expands into the subtasks the user picks (**Parents** below).
+- `<id>`: a task to drive; a parent id expands into its unfinished subtasks (**Parents** below).
   A bundle, `ABC-1+ABC-2`, is one entry: one branch and agent, driven as one task under its lead; its finish leaves every rider open, named in the report.
 - `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
 - `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them); a rerun keeps the flow a task's branch already records.
@@ -26,7 +26,9 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
   A rerun or `--resume` keeps the drive's cap unless it passes a new one.
 - Everything else goes to `f10 drive` verbatim.
 
-**Parents**: a task id whose task has subtasks is never driven itself; the user picks which subtasks run, every time, with no silent default.
+**Parents**: a task id whose task has subtasks is never driven itself; its unfinished subtasks run instead.
+The user picks which ones only when a candidate is a draft (a `draft` label), because a draft is an idea not ready to plan.
+With no draft among them, every candidate runs, because naming the parent already asked for all of its subtasks.
 
 1. **Find the parents, in one Bash call**: `f10 task children <id> --json` for each listed id; not a range's ends or flags.
    Strip a `:profile` suffix (`:opus`, `:opus:high`) for the lookup and keep it.
@@ -35,17 +37,19 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
    A parent whose rows are all finished is dropped from the list with one line saying so.
 2. **Show each parent's tree**: a line `<parent id>`, then the output of `f10 task children <id> --open --plain` verbatim, in one plain fenced block per parent.
    Never redraw it; the rows, glyphs and urls are the binary's.
-3. **Ask once, in one `AskUserQuestion`**: multi-select questions, header the parent id.
+3. **No draft among a parent's candidates**: every candidate is chosen, with no question; say so in one line under its tree (`driving FT-397, FT-398 and FT-399`).
+   Points 4 and 5 apply only to a parent with a draft candidate.
+4. **Ask once, in one `AskUserQuestion`**: multi-select questions, header the parent id, for every parent with a draft candidate.
    An option is one candidate: label `<id> <title>`, cut to fit; description `after <after>`, or `first in its chain`.
    Non-draft candidates are marked recommended, draft ones are not.
    Packing: take the top-level chains (a `depth` 0 row and the rows under it) in order; keep a chain in one question when it fits in four options, fill a question with whole chains, and split a longer chain over consecutive questions in order.
    Past four questions, ask the rest in a further `AskUserQuestion` of up to four.
    A parent with one candidate gets a single-select question instead, `[include <id> | leave it out]`, since multi-select needs two options.
-4. **Check for a broken chain**: a chosen candidate whose `after` is an unfinished sibling left out.
+5. **Check for a broken chain**: a chosen candidate whose `after` is an unfinished sibling left out.
    Name each (`FT-75 is after FT-74, which you left out`) and ask once more, in one `AskUserQuestion`, a question per break: `[include FT-74 | drop FT-75]`.
    Apply the answers and check again; never fix a break silently.
    A base outside the siblings is not checked here: `f10 drive` refuses an unfinished one itself.
-5. **Build the arguments**: each parent replaced in place by its chosen subtasks, in the rows' order, each carrying the parent's `:profile` suffix; other ids and flags as given.
+6. **Build the arguments**: each parent replaced in place by its chosen subtasks, in the rows' order, each carrying the parent's `:profile` suffix; other ids and flags as given.
    Nothing left to drive: say so in one line and stop.
 
 Run it **in the background** (`run_in_background`): a list can take hours, and the command's exit wakes this session.

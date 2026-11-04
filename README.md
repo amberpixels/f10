@@ -95,7 +95,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:read [id \| id+id]` | nothing: it runs `f10 task read` | the task, its comments and every image it links, opened in context, with nothing planned or started |
 | `/f10:board [<window>] [--state] [--remote] [-C <checkout>]` | nothing: it runs `f10 board` | what changed today (else the last working day), by group. With `--state`, every task's stage and next action, and your own next moves offered one per line (the `next` group as one line, for its first task), none of them run |
 | `/f10:start <id \| PR url \| #n> [--plan \| --local \| --discuss] [--after <id> \| --base <branch>] [--task <id>] [--agent <profile> \| --model <model>]` | nothing: it runs `f10 start` | a new worktree, Herdr workspace and prompted agent, or, for a PR, its branch picked up |
-| `/f10:drive <ids[:profile] \| id -- id> [--flow <name> \| --local] [--agent <profile> \| --model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first. A parent id expands into the subtasks you pick. Agents' questions are relayed |
+| `/f10:drive <ids[:profile] \| id -- id> [--flow <name> \| --local] [--agent <profile> \| --model <model>]` | nothing: it runs `f10 drive` in the background | every task through its chain (plan, judge, ship, review, resolve, finish by default), bases first. A parent id expands into its subtasks, and you pick only when one is a draft. Agents' questions are relayed |
 | `/f10:finish [<id>] [--yes] [--merge \| --local]` | nothing: it runs `f10 finish` | the PR merged (someone else's only when you say so), the plan archived, the workspace closed, the worktree and branch gone, main pulled |
 
 ## Install
