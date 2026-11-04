@@ -83,7 +83,7 @@ f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the
 f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
-f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge
+f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
@@ -255,6 +255,9 @@ The notes also carry one line on the change's lore (`docs/lore.md`): its intent,
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
 A finish that stopped halfway is finished by a rerun: a task with no branch whose plan is in the archive reports `already finished` and exits 0, and a branch whose worktree is gone but whose PR merged is cleaned up without one (dependents released, default branch pulled, plan archived, only the branch deleted, no workspace closed).
 A branch with no worktree and no merged PR is still refused.
+A parent task delivered through its subtasks has no branch or plan of its own, so finish checks its subtasks instead: once every one is closed with no branch left, here or on origin, it closes the parent on the host's issues and names the subtasks in the report.
+On any other tracker it only checks them, and the note says to close the parent there.
+A subtask still open or still holding a branch is named in the refusal, and the parent stays open.
 Once a finish succeeds, it marks the task finished in every stopped drive record that lists it, so `f10 drive list` needs no rerun of the drive.
 It takes each drive's own lease without waiting, so a running drive's record is left to that drive.
 Only the attempt finish acted on is marked: the suffix typed, else the one its branch ends in, so finishing `<id>-b` leaves an `<id>` row as it was.

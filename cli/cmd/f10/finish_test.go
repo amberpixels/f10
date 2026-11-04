@@ -2532,3 +2532,87 @@ func TestFinishLoreGate(t *testing.T) {
 		}
 	})
 }
+
+// A parent delivered through its subtasks has no branch and no plan of its
+// own: finish closes it once every subtask is closed and branchless.
+func TestFinishParentClosesWhenSubtasksAreDone(t *testing.T) {
+	fx := newParentFixture(t, childRow{ID: "GH-2", State: "closed"}, childRow{ID: "GH-3", State: "CLOSED"})
+	fx.f.script("gh issue close 1", "")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatalf("err = %v, out:\n%s", err, out)
+	}
+
+	if !fx.f.called("gh issue close 1") {
+		t.Error("the parent was not closed")
+	}
+
+	if !strings.Contains(out, "GH-2, GH-3") {
+		t.Errorf("the report does not name the subtasks:\n%s", out)
+	}
+}
+
+// A subtask open, or closed with a branch left, keeps the parent open, and
+// the refusal names it; a stale tracking ref is named so it can be pruned.
+func TestFinishParentRefusesUnfinishedSubtasks(t *testing.T) {
+	fx := newParentFixture(t, childRow{ID: "GH-2", State: "open"}, childRow{ID: "GH-3", State: "closed"})
+	fx.f.script("git for-each-ref --format=%(refname) refs/remotes/origin/GH-3 refs/remotes/origin/GH-3-* "+
+		"refs/remotes/origin/GH-3+* refs/remotes/origin/GH-3+*/*", "refs/remotes/origin/GH-3")
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "GH-2 is open") ||
+		!strings.Contains(err.Error(), "GH-3 still has branch origin/GH-3") {
+		t.Errorf("err = %v", err)
+	}
+
+	if fx.f.called("gh issue close") {
+		t.Error("the parent was closed")
+	}
+}
+
+// No subtasks, or no parent link, keeps today's refusal.
+func TestFinishNoBranchNoSubtasksRefuses(t *testing.T) {
+	for name, kids := range map[string]func(context.Context, ref.Ref) ([]childRow, error){
+		"none":           func(context.Context, ref.Ref) ([]childRow, error) { return nil, nil },
+		"no parent link": func(context.Context, ref.Ref) ([]childRow, error) { return nil, errNoParentLink },
+	} {
+		fx := newParentFixture(t)
+		fx.in.subtasks = kids
+
+		if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "nothing to finish") {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}
+
+// A tracker that is not the host closes nothing: the note says where to.
+func TestFinishParentOnAnotherTracker(t *testing.T) {
+	fx := newParentFixture(t, childRow{ID: "GH-2", State: "closed"})
+	fx.in.closeTask = nil
+
+	out, err := fx.run(t)
+	if err != nil || !strings.Contains(out, "close GH-1 there") {
+		t.Errorf("err = %v, out:\n%s", err, out)
+	}
+
+	if fx.f.called("gh issue close") {
+		t.Error("an issue was closed")
+	}
+}
+
+func newParentFixture(t *testing.T, kids ...childRow) *finishFixture {
+	t.Helper()
+
+	fx := newFinishFixture(t)
+	fx.f.script(refsLocal, "")
+	fx.in.plansDir = filepath.Join(t.TempDir(), "plans")
+	fx.in.subtasks = func(context.Context, ref.Ref) ([]childRow, error) { return kids, nil }
+	fx.in.closeTask = func(ctx context.Context, r ref.Ref) error { return fx.in.host.closeIssue(ctx, r.Number) }
+
+	for _, k := range kids {
+		fx.f.script(strings.ReplaceAll(refsLocal, "GH-1", k.ID), "")
+	}
+
+	return fx
+}

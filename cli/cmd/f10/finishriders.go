@@ -168,3 +168,9 @@ func (h host) reopenIssue(ctx context.Context, number string) error {
 
 	return err
 }
+
+func (h host) closeIssue(ctx context.Context, number string) error {
+	_, err := h.Run(ctx, "issue", "close", number)
+
+	return err
+}
