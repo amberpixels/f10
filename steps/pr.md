@@ -65,6 +65,8 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    The handoff runs after the commit, so its file records the commit that ships.
    It runs before the push, so a failed handoff leaves nothing on origin.
    With a skill adapter, run the handoff before calling the skill, and pass the section with the draft.
+   The skill commits after that, so the file records the commit before it and is written again on every later `pr` entry.
+   The body is still correct, because the handoff reads the uncommitted work too.
    A skill that takes no body text leaves the section out, and the report says so in one line.
    `--label` and `--assignee` follow `project.md`.
    `f10 pr create` prints the new PR's url.
@@ -90,7 +92,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      `## Catchup` is owned by the **catchup** step in the same way, with one difference: when the old body has no `## Catchup`, render it from lore as point 5 says.
      Read the old body for owned sections only.
    - **Write it** through the PR adapter.
-     A skill adapter refreshes the PR through that skill.
+     A skill adapter refreshes the PR through that skill, and gets the new `## Handoff` section the way point 6 passes it.
      A skill with no way to refresh fails the step (`conventions/failure.md` rule 4).
      With the plain commands, run `f10 pr edit --title … --body-file <file>`, with the draft in a temp file outside the repo.
      The base, labels and assignee stay as they are.
