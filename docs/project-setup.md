@@ -280,7 +280,8 @@ The last entry names what a run ships: an open PR, a pushed branch, a running de
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
 Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.
 A spike is the exception: its run ends after implement, whatever the flow, with a spike report.
-A `handoff` entry writes the handoff file, which lists what the change leaves for whoever ships it, so a flow with no `pr` lists the entry to get that file.
+A `handoff` entry writes the handoff file, which lists what the change leaves for whoever ships it.
+Every `pr` entry runs the handoff too and puts its body in the PR under `## Handoff`, so only a flow with no `pr` lists the entry to get that file.
 The entry adds a `handoff` row to the report and never changes the shipment.
 
 `f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when the run's pace, under the project's ceiling, says `finish: on` (**Paces**).
@@ -329,6 +330,7 @@ The dials are:
 - `pr: { marker }`, a word the project's `pr` overlay gives a meaning, such as a title tag that makes CI run a short pipeline.
 - `finish: on | off`, whether `f10 drive` finishes a task whose run ends at an open PR.
 - `<step>: off` skips that entry, `handoff: off` among them.
+  `handoff: off` also reaches every `pr` entry as a dial, so the PR carries no `## Handoff` section.
 
 A scalar is shorthand: `judge: off`, `review: local` (the `by`), `finish: on`.
 `implement: off` is refused, because a flow without it does no work.

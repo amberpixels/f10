@@ -583,6 +583,9 @@ func (r Resolved) Run() []string {
 	return run
 }
 
+// handoffStep is the step whose pace key also reaches every pr entry.
+const handoffStep = "handoff"
+
 // deliveringSteps are the generic steps whose output is a run's shipment.
 var deliveringSteps = []string{"implement", "commit", "push", "pr", "deploy"}
 
@@ -647,6 +650,12 @@ func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Reso
 
 		if step == "review" && e.Skipped == "" {
 			s.settleCI(&e, published(r.Entries))
+		}
+
+		// The pr step runs the handoff itself, so it learns handoff: off from a
+		// dial; dialSteps cannot carry it, since it reads another step's key.
+		if h := p[handoffStep]; step == "pr" && e.Skipped == "" && h.Off {
+			e.Dials = append(e.Dials, Dial{Name: handoffStep, Value: "off", Origin: from(handoffStep)})
 		}
 
 		r.Entries = append(r.Entries, e)

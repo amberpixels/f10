@@ -2,7 +2,7 @@
 
 Role: a **senior engineer** opening a PR someone else will have to review.
 Input: verified changes (`implement` and any earlier review steps done), and the branch's PR if one is open.
-Context: `project.md → Hosting & PR` (the PR adapter).
+Context: `project.md → Hosting & PR` (the PR adapter), and the `handoff` overlay, because this step runs the **handoff** step.
 
 The **PR adapter** is how the project opens and edits PRs.
 It is a skill when `project.md → Hosting & PR` names one.
@@ -48,13 +48,26 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    - A **marker** is a word the run's pace hands this entry as a `marker <word>` dial (`f10 flow <name>`), such as `fast`.
      The project's `pr` overlay says what it means, for example a title tag that makes CI run a short pipeline, and the draft applies it.
      When no overlay gives the marker a meaning, the PR opens without it, and the report says so in one line.
+   - The `## Handoff` section holds what the change leaves for whoever ships it, from the **handoff** step run after the commit (points 6 and 7).
+     It is the handoff file's body without its frontmatter, the nothing line included, and each group heading moves down one level (`### Data`) so it nests under the section.
+     That heading shift is the only change to the body.
+     The section is always present, so a PR without it shows that the step did not run.
+     It names no handoff file and no `.f10/` path, because the body is written for text that leaves the machine.
+     It sits after the description of the change and before `## Catchup` and the closing keyword lines.
+     With a `handoff off` dial on this entry, the handoff does not run and the section is left out.
    - The `## Catchup` section lists the choices a catchup made on this branch, one line per file: `<path>: kept <side>, <why>`.
      Render it from the change's lore decision entries whose body opens with `catchup:` (`f10 lore show <id> --json`, `docs/lore.md`).
      With no such entry, leave the section out.
      On a refresh, the old body's section is copied instead (point 7).
 6. **Open it** through the PR adapter.
    A skill adapter opens the PR itself.
-   With the plain commands, commit, run `git push -u origin <branch>`, then run `f10 pr create --title … --body-file <file>`.
+   With the plain commands, commit, run the **handoff** step and put its body into the draft, run `git push -u origin <branch>`, then run `f10 pr create --title … --body-file <file>`.
+   The handoff runs after the commit, so its file records the commit that ships.
+   It runs before the push, so a failed handoff leaves nothing on origin.
+   With a skill adapter, run the handoff before calling the skill, and pass the section with the draft.
+   The skill commits after that, so the file records the commit before it and is written again on every later `pr` entry.
+   The body is still correct, because the handoff reads the uncommitted work too.
+   A skill that takes no body text leaves the section out, and the report says so in one line.
    `--label` and `--assignee` follow `project.md`.
    `f10 pr create` prints the new PR's url.
    It refuses to open a PR when origin does not hold the branch at `HEAD`.
@@ -62,13 +75,15 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
 7. **Refresh it.**
    A later `pr` entry in the flow refreshes the PR, so its description covers what review, resolve or judge changed since it opened.
    - **Push first.**
-     Commit what the tree holds through the adapter, then push, never forcing.
+     Commit what the tree holds through the adapter, run the **handoff** step as point 6 does, then push, never forcing.
+     Someone else's PR (below) skips the handoff, because its body stays as it is.
      The push comes first so the description never covers code the PR lacks.
    - **Someone else's PR** is one whose `mine:` line in `f10 pr view` says anything but `yes`, `unknown` included.
      Stop after the push, and leave its title and body as they are.
    - **Rewrite from scratch.**
      Draft the title and body as point 5 says, and never patch the old body ("also adds…").
      Draft from the task, the plan and `f10 pr diff`, which shows the change against the PR's own base as just pushed.
+     `## Handoff` comes from the handoff just run, never from the old body.
      The title keeps its task id.
      Links to other tasks come from `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
    - **Owned sections** are sections the overlay names as maintained elsewhere, such as a screenshots section a script regenerates.
@@ -77,7 +92,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      `## Catchup` is owned by the **catchup** step in the same way, with one difference: when the old body has no `## Catchup`, render it from lore as point 5 says.
      Read the old body for owned sections only.
    - **Write it** through the PR adapter.
-     A skill adapter refreshes the PR through that skill.
+     A skill adapter refreshes the PR through that skill, and gets the new `## Handoff` section the way point 6 passes it.
      A skill with no way to refresh fails the step (`conventions/failure.md` rule 4).
      With the plain commands, run `f10 pr edit --title … --body-file <file>`, with the draft in a temp file outside the repo.
      The base, labels and assignee stay as they are.
@@ -93,8 +108,10 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    On a refresh, a block the old body already holds comes over as it is.
    A non-zero exit from `f10 trace state` marks the run `partial` (`conventions/failure.md` rule 7), and is never a failed step.
 9. **Never merge** unless project.md explicitly says otherwise.
-10. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab) carrying the url, then one line saying whether the PR was opened, refreshed, or only pushed to.
+10. **Report** per `conventions/report.md`: a `branch` row and a `pr` row (`mr` on GitLab) carrying the url, and a `handoff` row with the handoff file's path when the handoff ran.
+    Then one line says whether the PR was opened, refreshed, or only pushed to.
 
-**On failure:** the PR adapter errors.
+**On failure:** the PR adapter errors, or the handoff fails.
+A failed handoff fails the step before the push, so no PR opens or refreshes without its section, and the commit the step made stays local (`partial`).
 Report whether the branch was pushed (`conventions/failure.md`).
 A refresh that fails after its push leaves the new commits on the PR under a stale description, and the report says so.

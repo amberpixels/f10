@@ -156,6 +156,46 @@ func TestBuiltinPacesKeepHandoff(t *testing.T) {
 		if !slices.Contains(r.Run(), "handoff") {
 			t.Errorf("%s: run %v drops handoff", pace, r.Run())
 		}
+
+		if got := dialValue(r.Entries[3].Dials, "handoff"); got != "" {
+			t.Errorf("%s: pr carries handoff %q", pace, got)
+		}
+	}
+}
+
+// handoff: off reaches every pr entry as a dial, because the pr step runs the
+// handoff; a ceiling's handoff: on keeps the dial off them.
+func TestPaceHandoffOffReachesPR(t *testing.T) {
+	d := decodePaces(t, "paces:\n  quiet:\n    handoff: off\n")
+
+	s := NewPaceSet()
+	s.Over(d.Paces, func(string, string) string { return "test" })
+
+	r, err := s.ResolveFlow("default", strings.Fields("implement pr review:local pr"), "quiet")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, e := range r.Entries {
+		got := dialValue(e.Dials, "handoff")
+		if want := map[bool]string{true: "off"}[e.Step == "pr"]; got != want {
+			t.Errorf("%s: handoff dial %q, want %q", e.Entry, got, want)
+		}
+
+		if e.Step == "pr" && !strings.Contains(e.Dials[0].Origin, "pace quiet") {
+			t.Errorf("%s: origin %q", e.Entry, e.Dials[0].Origin)
+		}
+	}
+
+	s.Ceiling = Pace{"handoff": {On: true}}
+
+	r, err = s.ResolveFlow("default", strings.Fields("implement pr"), "quiet")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := dialValue(r.Entries[1].Dials, "handoff"); got != "" {
+		t.Errorf("under a handoff: on ceiling, pr carries handoff %q", got)
 	}
 }
 
