@@ -61,6 +61,27 @@ func TestStartTypesAPromptWithANewline(t *testing.T) {
 	}
 }
 
+// A drive's fresh task gets its first skill on the agent's command line,
+// never typed into the pane.
+func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "judge")
+	fx.task("GH-1", taskInfo{body: "first"}, "")
+	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.expects("GH-1", "judge")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	want := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:1 -- " +
+		skillPrompt("judge", "GH-1", nil, shipFlow{}, false)
+	if len(fx.f.launches) != 1 || fx.f.launches[0] != want {
+		t.Errorf("launches = %q, want %q", fx.f.launches, want)
+	}
+}
+
 const (
 	boxRule  = "────────────────────────────────────────"
 	sentText = "/f10:ship GH-1 resume at pr (entry 4) --driven"
@@ -75,19 +96,23 @@ func TestHoldsPrompt(t *testing.T) {
 		screen string
 		want   bool
 	}{
-		"the prompt in the box":     {screenWith("❯ " + sentText), true},
-		"the prompt wrapped":        {screenWith("❯ /f10:ship GH-1 resume\n  at pr (entry 4) --driven"), true},
-		"an empty box":              {screenWith("❯ "), false},
-		"the user's own text":       {screenWith("❯ what about the tests"), false},
-		"a pasted-text placeholder": {screenWith("❯ [Pasted text #1 +12 lines]"), true},
-		"no box on screen":          {"❯ " + sentText + "\n", false},
-		"the prompt above the box":  {"❯ " + sentText + "\n" + boxRule + "\n❯ \n" + boxRule + "\n", false},
+		"the prompt in the box":    {screenWith("❯ " + sentText), true},
+		"the prompt wrapped":       {screenWith("❯ /f10:ship GH-1 resume\n  at pr (entry 4) --driven"), true},
+		"an empty box":             {screenWith("❯ "), false},
+		"the user's own text":      {screenWith("❯ what about the tests"), false},
+		"the user's own paste":     {screenWith("❯ [Pasted text #1 +12 lines]"), false},
+		"no box on screen":         {"❯ " + sentText + "\n", false},
+		"the prompt above the box": {"❯ " + sentText + "\n" + boxRule + "\n❯ \n" + boxRule + "\n", false},
 	}
 
 	for name, c := range cases {
 		if got := holdsPrompt(c.screen, sentText); got != c.want {
 			t.Errorf("%s: holdsPrompt = %v, want %v", name, got, c.want)
 		}
+	}
+
+	if !holdsPrompt(screenWith("❯ [Pasted text #1 +2 lines]"), "first\nsecond") {
+		t.Error("a multi-line prompt pasted as a block reads as submitted")
 	}
 }
 

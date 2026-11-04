@@ -669,9 +669,10 @@ type driveRun struct {
 	// open with its next skill unsent
 	queued bool
 	// typed is the last send's text when it went through the agent's input
-	// box, "" when it went on the command line; enterRetried is set once
-	// the poll checked that box for a lost Enter
+	// box, "" when it went on the command line, and typedTo the agent that
+	// took it; enterRetried is set once the poll checked that box
 	typed        string
+	typedTo      string
 	enterRetried bool
 }
 
@@ -2589,13 +2590,13 @@ func (in *driveInput) prompt(
 // deliver sends text to the task's agent, the first text starting it, and
 // keeps the text when it was typed, for the poll's Enter check.
 func (in *driveInput) deliver(ctx context.Context, r *driveRun, text string) error {
-	typed, err := r.o.deliver(ctx, r.task.ref.ID, r.task.suffix, text)
+	name, typed, err := r.o.deliver(ctx, r.task.ref.ID, r.task.suffix, text)
 	if err != nil {
 		return err
 	}
 
 	if typed {
-		r.typed = text
+		r.typed, r.typedTo = text, name
 	}
 
 	return nil
@@ -2611,8 +2612,7 @@ func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) 
 
 	r.enterRetried = true
 
-	name := agentctl.AgentName(r.task.ref.ID, r.task.suffix, r.o.path)
-	if note := retryEnter(ctx, agents(r.o.path), name, r.typed); note != "" {
+	if note := retryEnter(ctx, agents(r.o.path), r.typedTo, r.typed); note != "" {
 		fmt.Fprintf(w, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
 	}
 }

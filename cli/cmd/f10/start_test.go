@@ -38,6 +38,8 @@ type fakes struct {
 	// absent answers a call with a key under one of these prefixes, and no
 	// script of its own, the way git answers a ref or config it lacks
 	absent []string
+	// launches are the agent starts argvLaunch answered for a test
+	launches []string
 }
 
 func newFakes(t *testing.T) *fakes {
@@ -162,14 +164,20 @@ func (f *fakes) answer(key string) shell.Result {
 // argvLaunch answers an agent started with its first prompt as the start
 // a test scripted without it, followed by that prompt submitted, unless the
 // test scripted the launch itself: the agent takes the prompt either way.
+// The real call goes to launches, so a test can still tell the two apart.
 func (f *fakes) argvLaunch(name string, args []string) (shell.Result, bool) {
 	sep := slices.Index(args, "--")
 	if name != "herdr" || len(args) < 3 || args[0] != "agent" || args[1] != "start" || sep < 0 || sep+1 >= len(args) {
 		return shell.Result{}, false
 	}
 
+	launch := name + " " + strings.Join(args, " ")
+
 	f.mu.Lock()
-	_, scripted := f.answers[name+" "+strings.Join(args, " ")]
+	_, scripted := f.answers[launch]
+	if !scripted {
+		f.launches = append(f.launches, launch)
+	}
 	f.mu.Unlock()
 
 	if scripted {

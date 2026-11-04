@@ -483,14 +483,15 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	if o.fresh {
 		text := prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note)
 
-		typed, err := o.deliver(ctx, in.task.ID, in.suffix, text)
+		sent := time.Now()
+
+		name, typed, err := o.deliver(ctx, in.task.ID, in.suffix, text)
 		if err != nil {
 			return err
 		}
 
 		if typed {
-			o.notes = appendNote(o.notes,
-				watchEnter(ctx, agents(o.path), agentctl.AgentName(in.task.ID, in.suffix, o.path), text))
+			o.notes = appendNote(o.notes, watchEnter(ctx, agents(o.path), o.path, name, text, sent))
 		}
 
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
@@ -684,12 +685,14 @@ type pendingLaunch struct {
 
 // deliver sends text to the task's agent, starting it when its launch is
 // pending: on its command line when the kind takes a first prompt, else
-// typed right after. typed says the text went through the input box, where
-// its Enter can be lost.
-func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (bool, error) {
+// typed right after. It names the agent that took the text, and typed says
+// the text went through the input box, where its Enter can be lost.
+func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (string, bool, error) {
 	l := o.launch
 	if l == nil {
-		return true, promptAgent(ctx, o.path, id, suffix, text)
+		name, err := promptAgentAs(ctx, o.path, id, suffix, text)
+
+		return name, true, err
 	}
 
 	// the prompt goes first: --add-dir takes every argument after it
@@ -697,16 +700,16 @@ func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (bool
 
 	args := slices.Concat(first, l.args)
 	if err := agents(o.path).StartAgent(ctx, o.ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
-		return false, err
+		return "", false, err
 	}
 
 	o.launch = nil
 
 	if argv {
-		return false, nil
+		return l.agent, false, nil
 	}
 
-	return true, agents(o.path).Prompt(ctx, l.agent, text)
+	return l.agent, true, agents(o.path).Prompt(ctx, l.agent, text)
 }
 
 // openTask runs everything start does short of starting and prompting the

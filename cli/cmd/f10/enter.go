@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // A typed prompt's Enter can arrive while the input box is still busy with
@@ -13,7 +14,9 @@ import (
 // that before Enter is pressed again, once.
 var (
 	enterRetry = 10 * time.Second
-	enterPoll  = 2 * time.Second
+	enterPoll  = 500 * time.Millisecond
+	// promptMarks is where the UserPromptSubmit hook leaves its marks
+	promptMarks = state.Dir
 )
 
 // promptKey is how much of a prompt identifies it in the input box: enough
@@ -29,7 +32,9 @@ func holdsPrompt(screen, text string) bool {
 		return false
 	}
 
-	if strings.Contains(box, "[Pasted text #") {
+	// only a multi-line prompt is pasted as a block; a placeholder after a
+	// one-line prompt is the user's own paste
+	if strings.Contains(text, "\n") && strings.Contains(box, "[Pasted text #") {
 		return true
 	}
 
@@ -87,48 +92,42 @@ func retryEnter(ctx context.Context, b agentctl.Backend, name, text string) stri
 	return "Enter resent: the prompt was still in the agent's input box"
 }
 
-// promptChecked types text into the task's agent, then watches its input
-// box for up to enterRetry and presses Enter once if the text is still
-// there. The note says what the check did; it is never an error, since the
-// prompt itself went out.
+// promptChecked types text into the task's agent, then waits up to
+// enterRetry for the agent's prompt mark and presses Enter once if the text
+// is still in its input box. The note says what the check did; it is never
+// an error, since the prompt itself went out.
 func promptChecked(ctx context.Context, path, id, suffix, text string) (string, error) {
+	sent := time.Now()
+
 	name, err := promptAgentAs(ctx, path, id, suffix, text)
 	if err != nil {
 		return "", err
 	}
 
-	return watchEnter(ctx, agents(path), name, text), nil
+	return watchEnter(ctx, agents(path), path, name, text, sent), nil
 }
 
-// watchEnter is promptChecked's wait, for a prompt already typed.
-func watchEnter(ctx context.Context, b agentctl.Backend, name, text string) string {
-	for waited := time.Duration(0); ; {
-		step := min(enterPoll, enterRetry-waited)
-		if step > 0 {
-			timer := time.NewTimer(step)
+// watchEnter is promptChecked's wait, for a prompt typed at sent into the
+// agent in the checkout at root. Only the prompt mark ends it early: an
+// empty input box may be one that has not drawn the text yet.
+func watchEnter(ctx context.Context, b agentctl.Backend, root, name, text string, sent time.Time) string {
+	since := sent.Truncate(time.Second) // marks keep whole seconds
 
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-
-				return ""
-			case <-timer.C:
-			}
-
-			waited += step
-		}
-
-		if waited >= enterRetry {
-			return retryEnter(ctx, b, name, text)
-		}
-
-		screen, err := b.Screen(ctx, name)
-		if err != nil {
-			return "could not read the agent's screen to check the prompt was submitted: " + err.Error()
-		}
-
-		if !holdsPrompt(screen, text) {
+	for deadline := sent.Add(enterRetry); time.Now().Before(deadline); {
+		if p, ok := state.LastPrompt(promptMarks(), root); ok && !p.At.Before(since) {
 			return ""
 		}
+
+		timer := time.NewTimer(min(enterPoll, time.Until(deadline)))
+
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+
+			return ""
+		case <-timer.C:
+		}
 	}
+
+	return retryEnter(ctx, b, name, text)
 }
