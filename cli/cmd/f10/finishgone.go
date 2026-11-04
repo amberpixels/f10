@@ -156,8 +156,15 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 	for _, k := range kids {
 		ids = append(ids, k.ID)
 
+		// drive counts an open subtask with its plan archived as finished, so
+		// the refusal says only the tracker disagrees
 		if !strings.EqualFold(k.State, "closed") {
-			unfinished = append(unfinished, k.ID+" is open")
+			reason := k.ID + " is open"
+			if k.Finished {
+				reason += " in the tracker though its plan is archived"
+			}
+
+			unfinished = append(unfinished, reason)
 
 			continue
 		}

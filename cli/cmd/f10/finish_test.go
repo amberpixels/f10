@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -2598,6 +2599,38 @@ func TestFinishParentOnAnotherTracker(t *testing.T) {
 
 	if fx.f.called("gh issue close") {
 		t.Error("an issue was closed")
+	}
+}
+
+// An open subtask drive already counts as finished is still refused, and
+// a close the host rejects fails the finish.
+func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
+	fx := newParentFixture(t, childRow{ID: "GH-2", State: "open", Finished: true})
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "open in the tracker though its plan is archived") {
+		t.Errorf("err = %v", err)
+	}
+
+	fx = newParentFixture(t, childRow{ID: "GH-2", State: "closed"})
+	fx.f.answers["gh issue close 1"] = []shell.Result{{Code: 1, Stderr: "boom"}}
+
+	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "closing GH-1") {
+		t.Errorf("a failed close: err = %v", err)
+	}
+}
+
+// Only the host's issues get a close; a declared tracker of another kind gets nil.
+func TestCloseTaskFor(t *testing.T) {
+	tg := childTarget(t, "gh")
+	if closeTaskFor(tg, newHost("gh", tg.dir)) == nil {
+		t.Error("host issues: no close")
+	}
+
+	tg.eff.TrackerKind = "Jira"
+	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: "declared"})
+
+	if closeTaskFor(tg, newHost("gh", tg.dir)) != nil {
+		t.Error("a Jira tracker: a close was bound")
 	}
 }
 
