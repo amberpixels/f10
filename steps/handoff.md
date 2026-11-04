@@ -24,7 +24,7 @@ It lists the work around the merge, so the person shipping it knows what to run,
 3. **Read the change.**
    Read the full diff from `f10 pr diff [<subject>]`, never a summary of it.
    Read the findings under `<storage root>/reviews/<key>/`, when they exist.
-   Read the verdict files under `<storage root>/verdicts/<key>/` that changed after the committer date of `git merge-base HEAD <base>`.
+   Read the verdict files under `<storage root>/verdicts/<key>/` that changed after the committer date of `git merge-base <head> <base>`, with `head` from point 1.
    An older verdict judged an earlier PR on the same task, because the judge never archives its files per PR.
 4. **Classify.**
    An item is anything that touches prod state or a consumer, even when it runs by itself, such as a migration.
@@ -42,7 +42,7 @@ It lists the work around the merge, so the person shipping it knows what to run,
    The overlay's locations come first, and a category it adds goes where it says, else after the built-in groups.
    Leave out a group with no item.
 5. **Write the file** to `<storage root>/handoffs/<key>.md`, creating `handoffs/` if it is missing.
-   The file opens with frontmatter of plain `key: value` lines, because the binary reads them:
+   The file opens with frontmatter of plain `key: value` lines, so a tool can read them without a YAML parser:
 
    ```
    ---
