@@ -64,6 +64,9 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		}
 	}
 
+	// the PR already merged; the local branch still holds the tip the handoff was written at
+	hand := handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
+
 	p, notes, err := landPull(ctx, in, name, def, p)
 	if err != nil {
 		return err
@@ -97,6 +100,8 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
+	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
+
 	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID),
 		seriesEnd{pr: pullNumber(p.url()), head: p.sha()})
 	if err != nil {
@@ -113,6 +118,10 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
+	if handed != "" {
+		rows = append(rows, fact{label: "handoff", value: handed})
+	}
+
 	if reviews != "" {
 		rows = append(rows, fact{label: "reviews", value: reviews})
 	}
@@ -121,6 +130,18 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	if err := writeReport(w, rows, notes); err != nil {
 		return err
+	}
+
+	if err := writeHandoff(w, hand); err != nil {
+		return err
+	}
+
+	if err := moveHandoff(handoffSrc, handed); err != nil {
+		return fmt.Errorf("%s merged, but %w", p.url(), err)
+	}
+
+	if in.handoff != nil {
+		in.handoff(hand)
 	}
 
 	in.step("deleting " + name)

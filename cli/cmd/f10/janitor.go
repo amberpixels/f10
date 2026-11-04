@@ -621,6 +621,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		case j.in.dry:
 			j.say("would archive %s", plan)
 			j.archiveReviews(id, ends[id])
+			j.archiveHandoff(id)
 
 			continue
 		default:
@@ -636,6 +637,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 
 		if len(left[id]) == 0 {
 			j.archiveReviews(id, ends[id])
+			j.archiveHandoff(id)
 		}
 
 		if len(left[id]) == 0 && !j.in.dry {
@@ -663,6 +665,26 @@ func (j *sweeper) archiveReviews(id string, end seriesEnd) {
 			j.say("%v", err)
 		case archived != "":
 			j.say("archived %s's findings to %s", id, archived)
+		}
+	}
+}
+
+// archiveHandoff moves a merged task's handoff aside, so its next PR
+// writes its own.
+func (j *sweeper) archiveHandoff(id string) {
+	src := taskHandoff(j.in.main, j.in.plansDir, id)
+
+	switch {
+	case j.in.dry:
+		if exists(src) {
+			j.say("would archive %s", src)
+		}
+	default:
+		switch archived, err := archiveHandoff(j.in.main, j.in.plansDir, id); {
+		case err != nil:
+			j.say("%v", err)
+		case archived != "":
+			j.say("archived %s's handoff to %s", id, archived)
 		}
 	}
 }

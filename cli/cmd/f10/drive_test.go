@@ -1320,6 +1320,7 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	fx.in.finish = func(_ context.Context, w io.Writer, req driveFinish) error {
 		finished = append(finished, req.task.ID)
 		fmt.Fprintln(w, "task:  "+req.task.ID)
+		req.handoff(strings.Split(handoffBody, "\n"))
 
 		return nil
 	}
@@ -1329,6 +1330,18 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	}
 
 	out := fx.out.String()
+	// the handoff waits for the report, beneath its rows
+	report := out[strings.LastIndex(out, "GH-1:    already finished"):]
+	for _, want := range []string{"GH-2:    finished", "GH-2 handoff:\n  ## Config\n  - set"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("report lacks %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Count(out, "GH-2 handoff:") != 1 {
+		t.Errorf("the handoff printed more than once:\n%s", out)
+	}
+
 	for _, want := range []string{"GH-1:    already finished", "GH-2:    finished", "  task:  GH-2"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)

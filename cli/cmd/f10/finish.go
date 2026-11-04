@@ -230,6 +230,8 @@ type finishInput struct {
 	sweep func(context.Context)
 	// progress names each action as it starts, for drive's record; nil for none
 	progress func(string)
+	// handoff takes the lines a merge prints under its report, for drive's report; nil for none
+	handoff func([]string)
 	// mergedOnly refuses all but an already merged request: the watcher never merges
 	mergedOnly bool
 	// subtasks is every subtask, closed ones kept, for a parent with no branch;
@@ -410,7 +412,11 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		ended = name + " merged into " + def
 	}
 
-	var kept string
+	var (
+		kept string
+		// set only on a merge, since a PR left open or a spike's close ships nothing
+		hand []string
+	)
 
 	switch {
 	case closeSpike:
@@ -461,6 +467,9 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 				}
 			}
 		}
+
+		// read before the merge, while the branch tip it was written at still exists
+		hand = handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
 
 		var sha string
 
@@ -540,6 +549,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
+	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
+
 	var reviews string
 
 	if end != nil {
@@ -564,6 +575,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived})
+	}
+
+	if handed != "" && hand != nil {
+		rows = append(rows, fact{label: "handoff", value: handed})
 	}
 
 	if reviews != "" {
@@ -621,6 +636,18 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	if err := writeReport(w, rows, notes); err != nil {
 		return err
+	}
+
+	if err := writeHandoff(w, hand); err != nil {
+		return err
+	}
+
+	if err := moveHandoff(handoffSrc, handed); err != nil {
+		return fmt.Errorf("%s, but %w", ended, err)
+	}
+
+	if in.handoff != nil && hand != nil {
+		in.handoff(hand)
 	}
 
 	if onMain {

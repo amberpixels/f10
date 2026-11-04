@@ -320,9 +320,17 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A worktree from before storage moved to main's still holds its own `.f10/plans/<ID>.md`: it moves to main's archive, its older archived versions first.
    No plan is a note.
    A plan that cannot be moved is an error and nothing is removed, since such a worktree holds the only copy.
+   **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
+   A merge reports the archived path as a `handoff` row.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
+   A merge prints the handoff's body under the report.
+   Finish reads the file before the merge, while the branch's tip still exists to compare its `head` with.
+   A handoff written at an older commit gets a line saying it does not cover the later commits.
+   A missing handoff gets a line naming what to check before deploying, and `/f10:handoff` for the next finish.
+   Neither line refuses the finish.
+   A PR left open and a spike's close ship nothing, so they archive the handoff without printing it.
 
 Before the merge lands, finish also measures the branch for `f10 stats`: lines added plus deleted against the base it forked from (its `--after` base branch, else `origin/<default>`, else the local default branch for a branch never pushed), lockfiles, generated code and snapshots left out, with the markdown share.
 Measured after landing, a local merge would read zero.
@@ -365,7 +373,7 @@ A branch with no request, or any branch when the checkout has no host CLI, goes 
 A host that fails to answer for a branch keeps it, with a line.
 
 Removal, per branch: a merged request's dependents are released as finish releases them; origin's copy is deleted through the host's API with its local tracking ref, but only for a request the signed-in user opened (someone else's keeps its origin branch, with a line, and one only on origin is not touched); then the local branch (`git branch -D`).
-Once every branch of a task is gone, a bundle's riders included, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering, and its images are dropped.
+Once every branch of a task is gone, a bundle's riders included, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering, its handoff to `handoffs/archive/` the same way, and its images are dropped.
 A task with another branch left, such as a second attempt still in a worktree, keeps both, with a line; so does a plan written after the request merged or closed (for a branch never pushed, after its last commit), since the task was planned again.
 A step failing keeps that branch, with a line, and the run goes on to the next.
 
@@ -570,6 +578,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); the driver clears it on any other end, an interrupt included.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
+   Each finished task's handoff, the body finish printed under its report, repeats beneath the drive's report as `<id> handoff:` with the body indented, so the driving session relays every merged task's list at once.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` in the chain ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
 5. **Catchup when the base or the target moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.

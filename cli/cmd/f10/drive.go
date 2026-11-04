@@ -2337,6 +2337,7 @@ type driveFinish struct {
 	branch   string // the run's branch, "" to look it up by task and suffix
 	pr       string // the answer to a foreign PR: finishMerge, finishLocal or ""
 	progress func(string)
+	handoff  func([]string)
 }
 
 func driveFinishInput(t *target, main string, h host, req driveFinish) (finishInput, error) {
@@ -2349,7 +2350,7 @@ func driveFinishInput(t *target, main string, h host, req driveFinish) (finishIn
 
 	in.suffix, in.branch = req.suffix, req.branch
 	in.merge, in.local = req.pr == finishMerge, req.pr == finishLocal
-	in.progress = req.progress
+	in.progress, in.handoff = req.progress, req.handoff
 	// a driven finish asks no second question, since a resume carries only
 	// the latest answer: a bundle's riders stay open, the reversible choice,
 	// and the report names them
@@ -2370,7 +2371,10 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	fmt.Fprintf(w, "%s finish: running\n", in.id(id))
 
-	var buf bytes.Buffer
+	var (
+		buf  bytes.Buffer
+		hand []string
+	)
 
 	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
 
@@ -2382,6 +2386,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		progress: func(action string) {
 			in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
 		},
+		handoff: func(lines []string) { hand = lines },
 	})
 
 	sc := bufio.NewScanner(&buf)
@@ -2408,7 +2413,22 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		in.record(ctx, in.main, finishedEvent(id, "", in.now()))
 	}
 
-	return driveResult{row: rowFinished}
+	return driveResult{row: rowFinished, lines: handoffBlock(id, hand)}
+}
+
+// handoffBlock heads a finished task's handoff with its id and indents it,
+// so several tasks' lists stay apart beneath the drive's report.
+func handoffBlock(id string, lines []string) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+
+	block := []string{id + " handoff:"}
+	for _, l := range lines {
+		block = append(block, strings.TrimRight("  "+l, " "))
+	}
+
+	return block
 }
 
 // finishStep records finish's progress on the branch for status; a failed
@@ -2992,7 +3012,9 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 		in.recordHalt(ctx, r, res)
 	}
 
-	if len(res.lines) == 0 {
+	// a finished task's lines are its handoff, which finish's report just
+	// printed; they wait for the drive's report
+	if len(res.lines) == 0 || res.row == rowFinished {
 		fmt.Fprintf(w, "%s: %s\n", in.id(r.task.ref.ID), res.row)
 
 		return

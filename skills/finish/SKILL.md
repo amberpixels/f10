@@ -23,6 +23,7 @@ f10 finish <arguments>
 ```
 
 1. Run it, then print the command's report block in a fenced `yaml` block (`conventions/report.md`) and any line beneath it, and stop.
+   After a merge the lines end in the change's handoff, which is markdown: relay it verbatim beneath the block, outside the fence.
 2. **The own-workspace refusal is a question** (the message names the workspace; a bare call inside the task's workspace hits it too): ask the user once with `AskUserQuestion`, close this workspace and finish, or stop.
    On yes, rerun the same command with `--yes` appended and relay its report; the workspace then closes, ending this session.
    On no, stop.
