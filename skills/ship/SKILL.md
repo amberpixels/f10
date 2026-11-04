@@ -40,7 +40,7 @@ Deploy has its own confirmation (the **deploy** step).
    The flow is declared in the `project.md` it prints; a planless one loads `plan` but never runs it.
 2. Follow those steps in the order the Arguments item gives.
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
-   A `review` entry loads `review resolve`; the catchup guard (below) adds `catchup` to the load of each entry it guards.
+   A `review` entry loads `review resolve`, and a `pr` entry loads `pr handoff` unless its `handoff off` dial is set, because the pr step runs the handoff; the catchup guard (below) adds `catchup` to the load of each entry it guards.
 
 **Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
 `f10 flow` lists them and what selects each.
@@ -49,7 +49,7 @@ Deploy has its own confirmation (the **deploy** step).
 Once the flow is chosen, run `f10 flow <name> [--pace <name>]`, passing `--pace` only when the argument gave one, and run the entries it prints in its order, never the frontmatter's list.
 It prints one entry per line.
 An entry marked `skipped` does not run: say so in one line, and leave it out of the badge's `pipeline`.
-Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` to **pr**; a judge's `effort` applies only where the judge spawns an agent (`--blind`), whose profile then comes from `f10 agents judge`, with `--pace <name>` when the argument gave one; an inline judge runs on the task agent's profile.
+Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` and `handoff` to **pr**; a judge's `effort` applies only where the judge spawns an agent (`--blind`), whose profile then comes from `f10 agents judge`, with `--pace <name>` when the argument gave one; an inline judge runs on the task agent's profile.
 A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
 A `finish` line means the run ends at an open PR the pace would have merged: ship never merges it, and the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
 With no pace, the list is the declared flow, with an optional CI review (`ci?`) already settled.
@@ -134,4 +134,4 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report, a handoff file) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.
+- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report, a handoff file from a `handoff` entry or a `pr` entry, printed once) and a `comment` row with the url report back got, then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.
