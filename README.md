@@ -29,6 +29,7 @@ The other skills are optional, and each has its place around the chain:
 - **judge** runs at any point.
 - **review** and **resolve** run before the PR.
 - **demo** and **explain** run after the PR.
+- **handoff** runs before the merge, listing what the change leaves for whoever ships it.
 - **catchup** runs whenever the base branch moved.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app or a Terraform repo.
@@ -67,7 +68,7 @@ flowchart LR
 ```
 
 Solid arrows are the default flow, and dashed arrows are optional.
-`brainstorm`, `debug`, `judge`, `demo`, `explain` and `catchup` run when you ask for them.
+`brainstorm`, `debug`, `judge`, `demo`, `explain`, `handoff` and `catchup` run when you ask for them.
 The other dashed steps run where a project declares them.
 Ship also catches up on its own when the base moved.
 
@@ -85,6 +86,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:review <id \| PR \| this branch> [host \| ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, from the host's own code review with `host`, or one read in from the CI review. With `since`, a check of how the tasks since a ref (the last tag by default) fit together, against their plans and lore |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, the fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk through |
+| `/f10:handoff [<id \| PR \| this branch>]` | handoff | a file listing what the change leaves after merge: data changes, jobs to run by hand, settings, deploy order, breaks for consumers and accepted debt, rewritten only when the branch head moves |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | for a change, what it was and what it is now. For a thing, what it is |
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task. It is printed, and drafted wherever your settings or the project's overlay name a delivery adapter. The next report starts where this one ended |
@@ -308,8 +310,8 @@ These are the terms the skills, and the rest of this README, use.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,debug,capture,plan,ship,judge,cleanup,review,resolve,demo,explain,catchup,standup}"]
-        gsteps["steps/{brainstorm,debug,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,deploy,standup}.md"]
+        skills2["skills/{brainstorm,debug,capture,plan,ship,judge,cleanup,review,resolve,demo,handoff,explain,catchup,standup}"]
+        gsteps["steps/{brainstorm,debug,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,handoff,deploy,standup}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/{help,dry-run,driven,forward}.md"]
     end
@@ -651,7 +653,7 @@ An answer to a question the agent stopped on goes through the asks inbox instead
 If the task's branch is checked out here, or nowhere, `f10 forward` exits 3 and the skill runs locally.
 An agent that is idle while its run says running is waiting on something f10 cannot see, such as a permission dialog.
 In that case, forward names the workspace and sends nothing.
-Judge, demo and explain are never forwarded, because they can read another worktree's branch and they write nothing.
+Judge, demo, handoff and explain are never forwarded, because they can read another worktree's branch and write nothing in it.
 
 ### Drive
 

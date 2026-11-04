@@ -2,6 +2,7 @@ package facts
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -137,6 +138,45 @@ func TestResolveFlow(t *testing.T) {
 
 	if r, _ := s.ResolveFlow("x", []string{"implement", "pr", "review"}, "remote"); r.Run()[2] != "review:ci" {
 		t.Errorf("bare review under remote = %v", r.Run())
+	}
+}
+
+// Every built-in pace keeps handoff, ultra included: an auto-merged run is
+// where the list of what to do after merge matters most.
+func TestBuiltinPacesKeepHandoff(t *testing.T) {
+	flow := strings.Fields("plan implement handoff pr")
+	s := NewPaceSet()
+
+	for _, pace := range s.Names() {
+		r, err := s.ResolveFlow("default", flow, pace)
+		if err != nil {
+			t.Fatalf("%s: %v", pace, err)
+		}
+
+		if !slices.Contains(r.Run(), "handoff") {
+			t.Errorf("%s: run %v drops handoff", pace, r.Run())
+		}
+	}
+}
+
+// handoff: off skips the entry like any step key, naming the pace.
+func TestPaceHandoffOff(t *testing.T) {
+	d := decodePaces(t, "paces:\n  quiet:\n    handoff: off\n")
+
+	s := NewPaceSet()
+	s.Over(d.Paces, func(string, string) string { return "test" })
+
+	r, err := s.ResolveFlow("default", strings.Fields("implement handoff pr"), "quiet")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(r.Run(), " "); got != "implement pr" {
+		t.Errorf("run = %q, want implement pr", got)
+	}
+
+	if e := r.Entries[1]; e.Step != "handoff" || !strings.Contains(e.Skipped, "pace quiet") {
+		t.Errorf("handoff entry = %+v", e)
 	}
 }
 

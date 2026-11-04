@@ -27,7 +27,8 @@ var (
 // and nonFlowSteps, so a new one fails until its author says which.
 var (
 	flowSteps = []string{
-		"catchup", "cleanup", "commit", "demo", "deploy", "implement", "judge", "pr", "push", "resolve", "review",
+		"catchup", "cleanup", "commit", "demo", "deploy", "handoff", "implement", "judge", "pr", "push", "resolve",
+		"review",
 	}
 	nonFlowSteps = []string{"brainstorm", "capture", "debug", "explain", "fetch", "plan", "standup"}
 	guardedSteps = []string{"implement", "pr", "judge"}

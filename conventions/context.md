@@ -9,7 +9,7 @@ Every f10 run starts by loading it.
 - **skill** - an entry point the user invokes (`/f10:*`).
   A skill runs one or more steps.
   `/f10:start`, `/f10:drive`, `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:asks` run the binary and no step.
-- **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `deploy`, `standup`.
+- **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `handoff`, `deploy`, `standup`.
   The skill owns the invocation: argument, modes, authorization and where the session stops.
   The step owns the work.
   Where they disagree, the skill wins on the invocation and the step on the work.
@@ -34,6 +34,7 @@ Every f10 run starts by loading it.
 - **verdict file** - `<storage root>/verdicts/<key>/<n>.md`, one per judge run (`steps/judge.md` point 8).
   `<key>` is the task id, or for an idea, a kebab slug of it.
 - **spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's answer (`steps/implement.md`).
+- **handoff file** - `<storage root>/handoffs/<key>.md`, what a change leaves for whoever ships it.
 - **shipment** - what the ship flow leaves, decided by its **last delivering entry**:
   - `implement`: verified code, in prose.
   - `commit`: local commits, a sha.
@@ -44,8 +45,7 @@ Every f10 run starts by loading it.
 
   It declares that output on a `Shipment:` line in its overlay, naming each row, its label and what it holds (`Shipment: report - the published report's url`).
   It needs no explicit selection as `push` does, because naming it in a declared flow is the selection.
-  A `judge` or `demo` after it adds rows (a demo's report path or url) and never replaces them.
-  So a flow ending `pr judge demo` ships the PR.
+  A `judge`, `demo` or `handoff` after it adds rows and never replaces them, so a flow ending `pr judge demo` ships the PR.
   A spike's shipment is its spike report, whatever the flow.
 
 ## Reading the project load

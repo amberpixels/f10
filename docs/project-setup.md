@@ -134,6 +134,20 @@ Adapters are named in that prose, never as frontmatter keys, which `f10 standup`
 `cleanup.md` adds a project's rules to the cleanup step: its comment conventions, code or comments never to remove, more development-artifact patterns, typography.
 Cleanup replaces em and en dashes by default; a project that keeps them says so here.
 
+`handoff.md` says where the project keeps what a handoff lists: data changes, jobs to run by hand, settings.
+Without it, the step looks where the stack usually keeps them, which misses anything a project keeps elsewhere.
+It may also add a category, with where it goes among the built-in groups (Data, Run by hand, Config, Deploy order, Breaks for consumers, Debt in prod), else after them.
+For a Rails app:
+
+```markdown
+# Handoff
+
+- **Data**: migrations in `db/migrate`; backfills are after_party tasks in `lib/tasks/deployment`, which run on deploy, so list each with the records it touches.
+- **Run by hand**: rake tasks in `lib/tasks` that no deploy hook runs.
+- **Config**: settings in `app/models/setting.rb` and secrets in `config/credentials`; say whether each is set before or after the deploy.
+- **Sidekiq queues** (a category, after Config): a new or renamed queue, which the worker config must list before the deploy.
+```
+
 `pr.md` sets the PR's title shape, body shape and labels.
 It may name **owned sections**, headings whose content something else maintains (a screenshots section a script regenerates): a `pr` entry that refreshes an open PR rewrites the rest of the description from the full diff and copies those sections verbatim.
 
@@ -266,6 +280,8 @@ The last entry names what a run ships: an open PR, a pushed branch, a running de
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
 Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.
 A spike is the exception: its run ends after implement, whatever the flow, with a spike report.
+A `handoff` entry writes the handoff file, which lists what the change leaves for whoever ships it, so a flow with no `pr` lists the entry to get that file.
+The entry adds a `handoff` row to the report and never changes the shipment.
 
 `f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when the run's pace, under the project's ceiling, says `finish: on` (**Paces**).
 A spike is closed after ship either way: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
@@ -312,7 +328,7 @@ The dials are:
   It reaches a judge that spawns an agent (`--blind`); a judge running inline stays on the task agent's profile.
 - `pr: { marker }`, a word the project's `pr` overlay gives a meaning, such as a title tag that makes CI run a short pipeline.
 - `finish: on | off`, whether `f10 drive` finishes a task whose run ends at an open PR.
-- `<step>: off` skips that entry.
+- `<step>: off` skips that entry, `handoff: off` among them.
 
 A scalar is shorthand: `judge: off`, `review: local` (the `by`), `finish: on`.
 `implement: off` is refused, because a flow without it does no work.
@@ -329,6 +345,7 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
    `slow` reviews in two rounds, locally and also by CI where a remote reviewer is declared (`local+ci?`), and never finishes.
    `fast` reviews locally in one round, sets the judge's effort low and finishes.
    `ultra` skips plan, judge, cleanup and demo, reviews light, marks the PR `fast`, and finishes.
+   Every built-in keeps `handoff` on, `ultra` included, because an auto-merged run is where the list of what to do after merge matters most.
 2. `~/.f10/paces.md`, a frontmatter of `paces:` and `pace:`, the same keys, for a pace that follows you across projects.
 3. The project's `paces:`, main's then the worktree's.
 
