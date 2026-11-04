@@ -133,7 +133,8 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 
 	text := driven(in.text)
 
-	if err := promptAgent(ctx, path, in.task.ID, in.suffix, text); err != nil {
+	note, err := promptChecked(ctx, path, in.task.ID, in.suffix, text)
+	if err != nil {
 		return err
 	}
 
@@ -141,7 +142,7 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 		taskFact(ctx, w, in.main, in.task.ID),
 		{label: "workspace", value: ws.ID},
 		{label: "sent", value: text},
-	}, nil)
+	}, appendNote(nil, note))
 }
 
 func hereReason(in forwardInput, name, path string) string {

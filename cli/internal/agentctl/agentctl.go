@@ -80,6 +80,10 @@ type Backend interface {
 	) error
 	// Prompt submits text to the named agent and returns once submitted.
 	Prompt(ctx context.Context, name, text string) error
+	// Screen is the named agent's visible screen as text.
+	Screen(ctx context.Context, name string) (string, error)
+	// SendEnter presses Enter alone in the named agent's terminal.
+	SendEnter(ctx context.Context, name string) error
 	// Focus brings the workspace to the front.
 	Focus(ctx context.Context, id string) error
 	// Close closes the workspace and whatever agent ran in it.

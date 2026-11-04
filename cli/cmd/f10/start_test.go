@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -54,7 +55,15 @@ func newFakes(t *testing.T) *fakes {
 		"git rev-list --ancestry-path --merges",
 		// no base tip is recorded until a test says so
 		"git merge-base refs/heads/",
+		// an agent's screen shows no input box until a test says so, so no
+		// typed prompt is taken for unsubmitted
+		"herdr agent read ",
 	}
+
+	prevRetry, prevPoll := enterRetry, enterPoll
+	enterRetry, enterPoll = 0, 0
+
+	t.Cleanup(func() { enterRetry, enterPoll = prevRetry, prevPoll })
 
 	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, projectOf
 
@@ -73,6 +82,10 @@ func newFakes(t *testing.T) *fakes {
 	}
 
 	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+		if res, ok := f.argvLaunch(filepath.Base(name), args); ok {
+			return res, nil
+		}
+
 		return f.answer(filepath.Base(name) + " " + strings.Join(args, " ")), nil
 	}
 
@@ -144,6 +157,36 @@ func (f *fakes) answer(key string) shell.Result {
 	}
 
 	return queue[0]
+}
+
+// argvLaunch answers an agent started with its first prompt as the start
+// a test scripted without it, followed by that prompt submitted, unless the
+// test scripted the launch itself: the agent takes the prompt either way.
+func (f *fakes) argvLaunch(name string, args []string) (shell.Result, bool) {
+	sep := slices.Index(args, "--")
+	if name != "herdr" || len(args) < 3 || args[0] != "agent" || args[1] != "start" || sep < 0 || sep+1 >= len(args) {
+		return shell.Result{}, false
+	}
+
+	f.mu.Lock()
+	_, scripted := f.answers[name+" "+strings.Join(args, " ")]
+	f.mu.Unlock()
+
+	if scripted {
+		return shell.Result{}, false
+	}
+
+	start := slices.Concat(args[:sep], args[sep+2:])
+	if sep+2 < len(args) {
+		start = slices.Concat(args[:sep+1], args[sep+2:])
+	}
+
+	res := f.answer(name + " " + strings.Join(start, " "))
+	if res.Code != 0 {
+		return res, true
+	}
+
+	return f.answer(name + " agent prompt " + args[2] + " " + args[sep+1]), true
 }
 
 func (f *fakes) keys() []string {

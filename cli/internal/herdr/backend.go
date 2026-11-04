@@ -149,6 +149,14 @@ func (b Backend) Prompt(ctx context.Context, name, text string) error {
 	return Prompt(ctx, b.Dir, name, text)
 }
 
+func (b Backend) Screen(ctx context.Context, name string) (string, error) {
+	return Screen(ctx, b.Dir, name)
+}
+
+func (b Backend) SendEnter(ctx context.Context, name string) error {
+	return SendKeys(ctx, b.Dir, name, "Enter")
+}
+
 func (b Backend) Focus(ctx context.Context, id string) error {
 	return FocusWorkspace(ctx, b.Dir, id)
 }

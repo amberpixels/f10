@@ -158,3 +158,18 @@ func TestProfileRenderings(t *testing.T) {
 		t.Errorf("an old model record reads as %+v", got)
 	}
 }
+
+// Claude takes a first prompt as one argument; a control character, which
+// herdr refuses in an argument, leaves it to be typed.
+func TestPromptArgs(t *testing.T) {
+	p := Profile{}.Over(Profile{})
+
+	const text = "/f10:ship GH-1 --driven"
+	if args, ok := p.PromptArgs(text); !ok || len(args) != 1 || args[0] != text {
+		t.Errorf("PromptArgs = %q, %v", args, ok)
+	}
+
+	if args, ok := p.PromptArgs("line one\nline two"); ok || args != nil {
+		t.Errorf("a prompt with a newline = %q, %v, want none", args, ok)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/amberpixels/f10/cli/internal/model"
 )
@@ -32,6 +33,9 @@ type Kind struct {
 	args func(model, effort string) []string
 	// toolModel is the model as the Agent tool names one, "" for none
 	toolModel func(model string) string
+	// prompt is a first prompt as command-line arguments, nil for a kind
+	// that takes none and so has it typed
+	prompt func(text string) []string
 }
 
 // Kinds is every backend kind a profile may name.
@@ -52,6 +56,7 @@ var Kinds = map[string]Kind{
 			return out
 		},
 		toolModel: toolFamily,
+		prompt:    func(text string) []string { return []string{text} },
 	},
 }
 
@@ -170,6 +175,18 @@ func (p Profile) Resolve() (Profile, string, bool) {
 // Args is the command line p puts on the agent's start, through its kind.
 func (p Profile) Args() []string {
 	return Kinds[p.kind()].args(p.Model, p.Effort)
+}
+
+// PromptArgs is text as a first prompt on p's command line, false when the
+// kind takes none or text holds a control character, which herdr refuses
+// in an argument: the caller then types it.
+func (p Profile) PromptArgs(text string) ([]string, bool) {
+	k := Kinds[p.kind()]
+	if k.prompt == nil || strings.ContainsFunc(text, unicode.IsControl) {
+		return nil, false
+	}
+
+	return k.prompt(text), true
 }
 
 // Tool is p as the Agent tool takes it: the model's family and the effort

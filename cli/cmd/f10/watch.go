@@ -226,7 +226,12 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 	if b := reachableAgents(main); b != nil {
 		in.agents = b
 		in.prompt = func(ctx context.Context, task watchedTask, text string) error {
-			return promptAgent(ctx, task.path, task.id, "", text)
+			note, err := promptChecked(ctx, task.path, task.id, "", text)
+			if note != "" {
+				in.warn(task.id + ": " + note)
+			}
+
+			return err
 		}
 	}
 

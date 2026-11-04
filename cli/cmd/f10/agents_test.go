@@ -17,7 +17,29 @@ import (
 type memAgents struct {
 	workspaces []agentctl.Workspace
 	started    []string // agent names
+	args       map[string][]string
 	prompts    map[string][]string
+	screens    []string // what Screen answers, in turn, the last one repeated
+	enters     []string // agents SendEnter pressed Enter in
+}
+
+func (m *memAgents) Screen(context.Context, string) (string, error) {
+	if len(m.screens) == 0 {
+		return "", nil
+	}
+
+	s := m.screens[0]
+	if len(m.screens) > 1 {
+		m.screens = m.screens[1:]
+	}
+
+	return s, nil
+}
+
+func (m *memAgents) SendEnter(_ context.Context, name string) error {
+	m.enters = append(m.enters, name)
+
+	return nil
 }
 
 func (m *memAgents) Name() string                        { return "memory" }
@@ -43,10 +65,16 @@ func (m *memAgents) StartAgent(
 	_ context.Context,
 	_ agentctl.Opened,
 	name, _ string,
-	_ []string,
+	args []string,
 	_ func(waited, limit time.Duration),
 ) error {
 	m.started = append(m.started, name)
+
+	if m.args == nil {
+		m.args = map[string][]string{}
+	}
+
+	m.args[name] = args
 
 	return nil
 }
@@ -74,8 +102,8 @@ func useAgents(t *testing.T) *memAgents {
 }
 
 // start and forward reach the agent only through the backend: another
-// backend gets the workspace, the agent and both prompts, and Herdr is
-// never called.
+// backend gets the workspace, the agent and both prompts, the first on the
+// agent's command line and the forward typed, and Herdr is never called.
 func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 	f := newFakes(t)
 	m := useAgents(t)
@@ -90,8 +118,9 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 	}
 
 	agent := agentOf("GH-1")
-	if !slices.Equal(m.started, []string{agent}) || len(m.prompts[agent]) != 1 {
-		t.Fatalf("started %q, prompts %q", m.started, m.prompts)
+	if !slices.Equal(m.started, []string{agent}) || len(m.prompts[agent]) != 0 ||
+		len(m.args[agent]) == 0 || !strings.HasPrefix(m.args[agent][0], "/f10:") {
+		t.Fatalf("started %q with %q, prompts %q", m.started, m.args, m.prompts)
 	}
 
 	m.workspaces[0].Status = agentctl.StatusWorking
@@ -103,7 +132,7 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := m.prompts[agent]; len(got) != 2 || got[1] != fwdText+" --driven" {
+	if got := m.prompts[agent]; len(got) != 1 || got[0] != fwdText+" --driven" {
 		t.Errorf("prompts = %q", got)
 	}
 

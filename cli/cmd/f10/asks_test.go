@@ -27,7 +27,7 @@ type fakeDeliver struct {
 
 func (f *fakeDeliver) deliverer() deliverer {
 	return deliverer{
-		prompt: func(_ context.Context, a asks.Ask) error {
+		prompt: func(_ context.Context, _ io.Writer, a asks.Ask) error {
 			f.prompted = append(f.prompted, a.Task+": "+a.Answer)
 
 			return nil
