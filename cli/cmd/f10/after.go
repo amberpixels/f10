@@ -190,27 +190,35 @@ func finishedTask(info taskInfo, archive []string, id string, hasBranch bool) bo
 }
 
 func hasTaskBranch(ctx context.Context, dir, id string) (bool, error) {
+	branch, err := anyTaskBranch(ctx, dir, id)
+
+	return branch != "", err
+}
+
+// anyTaskBranch is the first branch of the task, linked, local or origin's
+// (`origin/<name>`), or "" for none.
+func anyTaskBranch(ctx context.Context, dir, id string) (string, error) {
 	linked, err := linkedBranches(ctx, dir, id)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
 	if len(linked) > 0 {
-		return true, nil
+		return linked[0], nil
 	}
 
 	for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
 		refs, err := branchesFor(ctx, dir, root, id, "")
 		if err != nil {
-			return false, err
+			return "", err
 		}
 
 		if len(refs) > 0 {
-			return true, nil
+			return refs[0], nil
 		}
 	}
 
-	return false, nil
+	return "", nil
 }
 
 // bodyAfter is the base the body's After: line gives start when no flag

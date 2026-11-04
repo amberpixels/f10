@@ -232,6 +232,12 @@ type finishInput struct {
 	progress func(string)
 	// mergedOnly refuses all but an already merged request: the watcher never merges
 	mergedOnly bool
+	// subtasks is every subtask, closed ones kept, for a parent with no branch;
+	// nil, like errNoParentLink, is a tracker with no parent link
+	subtasks func(context.Context, ref.Ref) ([]childRow, error)
+	// closeTask closes a parent its subtasks delivered; nil where the tracker is
+	// not the host, which f10 has no "done" word for
+	closeTask func(context.Context, ref.Ref) error
 }
 
 // finishInputFor fills what comes from the task and the project's settings,
@@ -253,7 +259,18 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 		gate:       t.eff.LoreGate,
 		plansDir:   t.sharedPlansDir(),
 		title:      titleLookup(t, task.Number),
+		subtasks:   t.tracker().allChildren,
+		closeTask:  closeTaskFor(t, h.at(main)),
 	}
+}
+
+// closeTaskFor treats a driver as settleRiders does: not the host, so nil.
+func closeTaskFor(t *target, h host) func(context.Context, ref.Ref) error {
+	if t.driver() != nil || !t.hostIssues() {
+		return nil
+	}
+
+	return func(ctx context.Context, task ref.Ref) error { return h.closeIssue(ctx, task.Number) }
 }
 
 // processPlace is this process's directory and workspace, for finish's
