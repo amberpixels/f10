@@ -34,7 +34,7 @@ Every f10 run starts by loading it.
 - **verdict file** - `<storage root>/verdicts/<key>/<n>.md`, one per judge run (`steps/judge.md` point 8).
   `<key>` is the task id, or for an idea, a kebab slug of it.
 - **spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's answer (`steps/implement.md`).
-- **handoff file** - `<storage root>/handoffs/<key>.md`, what a change leaves for whoever ships it.
+- **handoff file** - `<storage root>/handoffs/<TASK-ID>.md`, what a change leaves for whoever ships it.
 - **shipment** - what the ship flow leaves, decided by its **last delivering entry**:
   - `implement`: verified code, in prose.
   - `commit`: local commits, a sha.
