@@ -2649,3 +2649,85 @@ func newParentFixture(t *testing.T, kids ...childRow) *finishFixture {
 
 	return fx
 }
+
+// A merge prints a current handoff under its report, hands it to the caller
+// and archives it beside the plan.
+func TestFinishPrintsAndArchivesTheHandoff(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
+
+	src := taskHandoff(fx.main, "", "GH-1")
+	writeHandoffFile(t, src, "abc1234567")
+
+	var handed []string
+
+	fx.in.handoff = func(lines []string) { handed = lines }
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	archived := filepath.Join(filepath.Dir(src), "archive", "GH-1.md")
+	if exists(src) || !exists(archived) {
+		t.Errorf("handoff not archived to %s:\n%s", archived, out)
+	}
+
+	if !strings.Contains(out, "handoff:") || !strings.Contains(out, archived) ||
+		!strings.Contains(out, "\n\n"+handoffBody+"\n") || strings.Contains(out, "written at") {
+		t.Errorf("report:\n%s", out)
+	}
+
+	if strings.Join(handed, "\n") != handoffBody {
+		t.Errorf("handed = %q", handed)
+	}
+}
+
+// A stale handoff says so, and a missing one names what to check; neither
+// stops the finish.
+func TestFinishCompletesOnAStaleOrMissingHandoff(t *testing.T) {
+	for name, want := range map[string]string{
+		"stale":   "written at abc1234, the branch merged at def7654",
+		"missing": "no handoff for GH-1:",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.openPR()
+
+			if name == "stale" {
+				fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "def7654321")
+				writeHandoffFile(t, taskHandoff(fx.main, "", "GH-1"), "abc1234567")
+			}
+
+			out, err := fx.run(t)
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			if !strings.Contains(out, want) || !fx.f.called("git branch -D GH-1") {
+				t.Errorf("want %q and a finished task:\n%s", want, out)
+			}
+		})
+	}
+}
+
+// A PR left open ships nothing: its handoff is archived and not printed.
+func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, prOpenBy("alice"))
+	fx.f.script(unpushed, "")
+	fx.in.local = true
+
+	src := taskHandoff(fx.main, "", "GH-1")
+	writeHandoffFile(t, src, "abc")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if exists(src) || strings.Contains(out, handoffBody) || strings.Contains(out, "handoff") {
+		t.Errorf("--local printed or kept the handoff:\n%s", out)
+	}
+}

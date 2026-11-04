@@ -58,6 +58,7 @@ It lists the work around the merge, so the person shipping it knows what to run,
    The body runs 2-3 lines for a typical change and 5-10 for a big one, always under a screen.
    With nothing to report, the body is the single line `Nothing to do after merge: no data, config or consumer changes.`
    The body is written for text that leaves the machine, so it follows Stealth mode and Task references (`conventions/context.md`).
+   `f10 finish` reads the file before it merges, prints the body under its report and archives it, so keep the frontmatter in this shape.
 6. **Report** with the rows `task`, `title`, `url` and `handoff` (the file's path), then the body beneath the block.
    In a ship flow the entry adds its `handoff` row to the final report and never replaces the shipment's rows.
 

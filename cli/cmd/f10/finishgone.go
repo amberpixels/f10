@@ -64,6 +64,9 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		}
 	}
 
+	// read before the merge, while the branch tip it was written at still exists
+	hand := handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
+
 	p, notes, err := landPull(ctx, in, name, def, p)
 	if err != nil {
 		return err
@@ -97,6 +100,11 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	notes = appendNote(notes, note)
 	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
 
+	handed, err := archiveHandoff(in.main, in.plansDir, in.task.ID)
+	if err != nil {
+		return err
+	}
+
 	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID),
 		seriesEnd{pr: pullNumber(p.url()), head: p.sha()})
 	if err != nil {
@@ -113,6 +121,10 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		rows = append(rows, fact{label: "plan", value: archived})
 	}
 
+	if handed != "" {
+		rows = append(rows, fact{label: "handoff", value: handed})
+	}
+
 	if reviews != "" {
 		rows = append(rows, fact{label: "reviews", value: reviews})
 	}
@@ -121,6 +133,14 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	if err := writeReport(w, rows, notes); err != nil {
 		return err
+	}
+
+	if err := writeHandoff(w, hand); err != nil {
+		return err
+	}
+
+	if in.handoff != nil {
+		in.handoff(hand)
 	}
 
 	in.step("deleting " + name)

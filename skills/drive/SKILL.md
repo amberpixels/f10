@@ -61,6 +61,7 @@ f10 drive <arguments>
    When it exits, read its output and act on the exit code.
 2. **Exit 0**: every task went through its flow.
    Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
+   A finished task's `<id> handoff:` lines are markdown: relay them verbatim beneath the block, outside the fence.
 3. **Exit 4**: one or more agents asked, and the other tasks went as far as they can; each ask waits in the asks inbox from the moment it was asked, so it can also be answered in the agent's pane, with `f10 asks` or from another session.
    Follow `${CLAUDE_PLUGIN_ROOT}/skills/asks/SKILL.md` for this drive's asking tasks: the questions in one `AskUserQuestion`, then `f10 asks answer`, which resumes the drive through the daemon.
    Then rerun the same arguments in the background to follow the resumed drive, and act on its exit as above; an ask already answered elsewhere resumes the drive the same way.
