@@ -43,7 +43,7 @@ A step never names the skill that runs it, except where its behavior differs by 
 
 ## Edge cases
 
-- **Routing the subject goes in the step** when a pipeline also runs that step (judge, review, resolve, demo): in a pipeline there is no skill to route it.
+- **Routing the subject goes in the step** when a pipeline also runs that step (judge, review, resolve, demo, handoff): in a pipeline there is no skill to route it.
   The skill keeps only the flags and the no-argument default.
 - **Authorization is granted once, in the skill.**
   The step says the action is outward-facing; `ship/SKILL.md` grants the push and the PR, `resolve/SKILL.md` asks before a `+reply`, and before landing fixes on an open PR unless driven.
