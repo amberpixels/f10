@@ -713,6 +713,10 @@ type driveRun struct {
 	// agent catches up was printed
 	verifying   *verifyJob
 	toldCatchup bool
+	// catchupPlan is the base the drive's own catchup integrated, and
+	// catchupLeft what git showed unsettled after the agent's last turn
+	catchupPlan *catchupPlan
+	catchupLeft string
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }

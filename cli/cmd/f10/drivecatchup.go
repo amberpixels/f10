@@ -120,6 +120,15 @@ func (in *driveInput) catchupHere(
 ) error {
 	id, dir := r.task.ref.ID, r.o.path
 
+	// an idle agent on a run still running may sit on a dialog over files
+	// git is about to rewrite, so it halts here as a prompt would
+	fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
+	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, dir), dir); err != nil {
+		in.end(ctx, w, r, halted(id, "catchup", err.Error()))
+
+		return nil
+	}
+
 	op, err := gitx.InProgress(ctx, dir)
 	if err != nil {
 		in.end(ctx, w, r, halted(id, "catchup", err.Error()))
@@ -129,6 +138,15 @@ func (in *driveInput) catchupHere(
 
 	if op.Kind != "" {
 		return in.catchupPrompt(ctx, w, r, ws, in.inProgressSteering(ctx, r, op))
+	}
+
+	// what the last turn left (markers, uncommitted paths) goes back to the
+	// agent: integrating again would find the base held and verify past it
+	if left := r.catchupLeft; left != "" {
+		r.catchupLeft = ""
+
+		return in.catchupPrompt(ctx, w, r, ws, "the last catchup turn left it unsettled: "+left+
+			": settle it in place, keeping both sides, and commit")
 	}
 
 	if dirty, err := gitx.Status(ctx, dir); err != nil || len(dirty) > 0 {
@@ -156,6 +174,8 @@ func (in *driveInput) catchupHere(
 	if r.lastCatchup != nil && p.base != "" {
 		r.lastCatchup.base = p.base
 	}
+
+	r.catchupPlan = &p
 
 	if stopped {
 		paths, _ := gitx.Unmerged(ctx, dir)
@@ -185,6 +205,12 @@ func (in *driveInput) catchupHere(
 			fmt.Fprintf(w, "%s catchup: %s already holds %s\n", in.id(id), r.o.branch, cmp.Or(p.base, "its base"))
 
 			return in.next(ctx, w, r)
+		}
+
+		// origin was read after whatever rewrote the branch, so the record
+		// cannot lease a force-push: only a fast-forward goes out
+		if r.lastCatchup != nil {
+			r.lastCatchup.held = false
 		}
 	}
 
@@ -267,6 +293,7 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 	case reason != "" && !retry:
 		in.end(ctx, w, r, catchupHalt(r, "the catchup did not end clean: "+reason))
 	case reason != "":
+		r.catchupLeft = reason
 		in.failed(ctx, w, r, catchupHalt(r, "the catchup did not end clean: "+reason))
 	default:
 		fmt.Fprintf(w, "%s catchup: %s settled, verifying\n", in.id(id), dir)
@@ -331,9 +358,15 @@ func (in *driveInput) catchupLeft(ctx context.Context, r *driveRun) (string, err
 	return "", nil
 }
 
-// catchupBase is the base the marks name, read as f10 pr catchup reads it,
-// without a fetch: the one the catchup brought in.
+// catchupBase is the base the catchup brought in: the one this drive
+// integrated, else, for a drive that did not (resumed), the one the marks
+// name, read as f10 pr catchup reads it without a fetch. Re-reading after a
+// turn would move it to the base branch's newer tip once a mark is cleared.
 func (in *driveInput) catchupBase(ctx context.Context, r *driveRun) (catchupPlan, error) {
+	if r.catchupPlan != nil {
+		return *r.catchupPlan, nil
+	}
+
 	ci := in.catchup.policy
 	ci.dir, ci.main = r.o.path, in.main
 
@@ -375,6 +408,21 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 			"%s came in cleanly and verify is red: `%s` failed, its output is in %s: fix it by the branch's "+
 				"intent, verify, and commit the fix", p.base, job.res.failed, job.res.log))
 	}
+
+	// the agent may have committed since verify started, so git is read again
+	reason, err := in.catchupLeft(ctx, r)
+	if err == nil && reason != "" {
+		r.catchupLeft = reason
+		err = fmt.Errorf("the catchup did not end clean: %s", reason)
+	}
+
+	if err != nil {
+		in.failed(ctx, w, r, catchupHalt(r, err.Error()))
+
+		return nil
+	}
+
+	r.catchupPlan = nil
 
 	if err := clearMarks(ctx, in.main, r.o.branch, p); err != nil {
 		in.end(ctx, w, r, halted(id, "catchup", err.Error()))

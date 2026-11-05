@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // binaryCatchupFake is the drive's own catchup with git's integration and
@@ -251,6 +252,95 @@ func TestDrivePromptsTheAgentOnlyForAConflict(t *testing.T) {
 
 			if err != nil || strings.Contains(out, "halted") ||
 				!strings.Contains(out, "caught up with main, verify green") ||
+				!strings.Contains(out, "GH-1:    done: ship") {
+				t.Errorf("err = %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+// A turn that concludes the rebase but leaves a marker or uncommitted paths
+// is prompted again naming what is left, never integrated past and pushed.
+func TestDrivePromptsAgainForWhatATurnLeft(t *testing.T) {
+	markers := "git grep -l -I -z -E ^(<<<<<<<|>>>>>>>)( |$) -- a.go"
+
+	cases := map[string]struct {
+		leave, settle func(fx *driveFixture)
+		left          string
+	}{
+		"a marker": {
+			leave: func(fx *driveFixture) {
+				fx.f.script("git diff --name-only --diff-filter=d -z main0...HEAD", "a.go")
+				fx.f.script(markers, "a.go")
+			},
+			settle: func(fx *driveFixture) { fx.f.fail(markers, shell.Result{Code: 1}) },
+			left:   "conflict markers left in a.go",
+		},
+		"uncommitted paths": {
+			leave:  func(fx *driveFixture) { fx.f.script("git status --porcelain", " M a.go") },
+			settle: func(fx *driveFixture) { fx.f.script("git status --porcelain", "") },
+			left:   "1 uncommitted paths in /code/repo.GH-1",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+
+			gitDir := t.TempDir()
+			stops := &binaryCatchupFake{stops: []bool{true}, onStop: func() { startRebase(t, gitDir) }}
+			fx.binaryCatchup(t, stops, gitDir)
+			fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+			again := "/f10:catchup the last catchup turn left it unsettled: " + tc.left +
+				": settle it in place, keeping both sides, and commit --driven"
+
+			for _, p := range []string{
+				"/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+					"settle them in place, keeping both sides, then conclude the rebase --driven",
+				again, resumeGH1,
+			} {
+				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
+			}
+
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+			turns := 0
+			fx.agent(t, func(prompt string) {
+				if prompt == resumeGH1 {
+					fx.writeRun(t, "done", "", "", "")
+
+					return
+				}
+
+				turns++
+
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.reports(t, fx.clock)
+
+				// the first turn concludes the rebase but leaves something behind
+				_ = os.RemoveAll(filepath.Join(gitDir, "rebase-merge"))
+
+				if turns == 1 {
+					tc.leave(fx)
+				} else {
+					tc.settle(fx)
+				}
+			})
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if !fx.f.called("herdr agent prompt " + agentOf("GH-1") + " " + again) {
+				t.Errorf("no prompt naming what was left: %q\n%s", fx.f.calls, out)
+			}
+
+			if stops.integrals != 1 {
+				t.Errorf("integrated %d times, want once", stops.integrals)
+			}
+
+			if err != nil || !strings.Contains(out, "caught up with main, verify green") ||
 				!strings.Contains(out, "GH-1:    done: ship") {
 				t.Errorf("err = %v\n%s", err, out)
 			}

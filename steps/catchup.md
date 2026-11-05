@@ -122,7 +122,8 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
    Any other mark stays set, because the drive reads a cleared mark as that base brought in, and the report names it.
 
    The `done catchup` signal is how `f10 drive` knows the turn ended.
-   Git, not the signal, then tells the drive whether the catchup settled: nothing in progress, no conflict marker, the base in the branch, and verify green when the drive runs it.
+   For a catchup the drive integrated itself (**Sent by `f10 drive`**, below), git then tells the drive whether it settled: nothing in progress, no conflict marker, the base in the branch, and verify green when the drive runs it.
+   For a whole catchup the drive sent with no steering, it also halts a task whose signal sits beside a mark still set.
    Every run writes the signal, a run by hand included.
 
 6. **Report** per `conventions/report.md`, with `branch`, `base` and `commit` (the new HEAD) rows.
@@ -171,14 +172,18 @@ On entry, note the ship status with `f10-state.sh show`.
 The method is point 3's.
 The sender pushes the branch itself once this run ends clean.
 
-**Sent by `f10 drive`**: the drive integrates and verifies the branch itself, and prompts this step only for what git or verify could not settle.
-The steering says which of two cases it is:
+**Sent by `f10 drive`** with steering: the drive integrated the branch itself and prompts this step only for what git or verify could not settle.
+A prompt with no steering is a whole catchup, sent because the project's verify is prose the drive cannot run, and every point above applies, point 5's marks included.
+The steering says which of three cases it is:
 
 - **A merge or rebase is in progress**, with its conflicted files named.
   Point 1's operation-in-progress path settles it in place, and a rebase continues through its remaining commits.
 - **The base came in cleanly and verify is red**, with the failing command and a log of its output named.
   Skip points 1 to 4, and fix it as point 5's semantic conflict.
+- **The last turn left it unsettled**, naming what is left: conflict markers, uncommitted paths, or the base missing from the branch.
+  Settle that in place and commit it.
 
+In these three cases, leave the marks as they are, because the drive clears them once its own verify is green.
 Never abort the operation or reset the branch on a failure, because the drive reads the state the run leaves and prompts again naming what is left.
 After the turn, the drive checks the branch from git, runs verify itself, clears the marks and pushes.
 The watcher starts from a clean tree, so a run it sends never meets an operation already in progress.
