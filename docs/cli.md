@@ -606,15 +606,19 @@ A cancelled record is never picked up again: the same command line starts a new 
    A drive with no such record (resumed, or rerun after a halt) never force-pushes a caught-up branch, and halts instead.
    A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
    `finish` marks each branch that depended on the finished task `f10-landed`.
-   Before a marked task's next skill, the driver sends it `/f10:catchup --driven`; the driver never interrupts a turn.
+   Before a marked task's next skill, the driver catches the branch up itself, never interrupting a turn: it fetches, merges or rebases by the method `f10 pr catchup` prints, runs verify, clears the marks and pushes as above, with no agent turn.
+   It runs verify when the frontmatter declares a `verify` list, when verify is detected, or when the Verify heading is backticked commands joined by ` / `, as `f10 init` writes it; a heading in any other prose sends the whole catchup to the agent as `/f10:catchup --driven`, and the drive says why once.
+   A conflict leaves the merge or rebase in progress and prompts `/f10:catchup --driven` naming the base and the conflicted files; a red verify after a clean integration prompts it naming the failing command and a log of its output.
+   After that turn git decides: no merge or rebase in progress, no conflict marker in a path the branch changes, the branch holding its base, and verify green when the driver runs it again.
+   Anything left is a failed attempt, so the next prompt names what is left, such as a rebase still at commit 2 of 3.
    Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
    Once it ends clean, the push above reaches origin and then finish merges.
    A branch that conflicts again after a catchup is judged by progress, not counted: the default branch moved since the catchup and other files conflict, it is caught up again; the catchup left the branch unchanged, the default branch has not moved, or the same files conflict twice in a row, it is a failed attempt naming the files, so the third such catchup in a row halts the task.
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.
-   The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt.
-   An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: the task halts, as a stalled ship or plan turn does.
+   The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt, and git, not the signal, says whether it settled.
+   An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: a catchup git shows settled goes on to verify, and any other halts, as a stalled ship or plan turn does.
    The chain resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails, or makes no progress, counts as a failed attempt.
 6. **Waiting.**

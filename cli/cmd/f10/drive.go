@@ -266,6 +266,17 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in.sleep = in.wake
 	in.resume = in.resumeSelf
 
+	if spec, why := verifySpecOf(t.eff); why == "" {
+		in.catchup = newBinaryCatchup(catchupInput{
+			catchup:        t.eff.Catchup,
+			stacked:        t.eff.CatchupStacked,
+			catchupDefault: factDefault(t.eff, "catchup"),
+			stackedDefault: factDefault(t.eff, "catchup_stacked"),
+		}, spec, t.eff.Traces, main)
+	} else {
+		in.catchupWhy = why
+	}
+
 	if drain != nil {
 		go func() {
 			for range drain {
@@ -569,6 +580,10 @@ type driveInput struct {
 	// pull reads a branch's PR on the host when the drive reconciles a
 	// task; nil, with no host, reads none
 	pull func(ctx context.Context, branch string) (pull, error)
+	// catchup is the catchup the drive runs itself; nil sends the whole
+	// catchup to the agent, for catchupWhy
+	catchup    *binaryCatchup
+	catchupWhy string
 
 	answer   string                      // a bare --answer, until the first task stopped on a question takes it
 	answers  map[string]string           // --answer ID=text, by task id, until that task takes it
@@ -693,6 +708,11 @@ type driveRun struct {
 	attempts []attempt
 	resend   bool
 	retry    bool
+	// verifying is the verify the drive runs after its own catchup, polled
+	// in place of the agent; toldCatchup is set once the line saying why the
+	// agent catches up was printed
+	verifying   *verifyJob
+	toldCatchup bool
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -2563,6 +2583,11 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	answeredAt, answered := in.answeredIn[id]
 	delete(in.answeredIn, id)
 
+	if skill == "catchup" && in.catchup == nil && in.catchupWhy != "" && !r.toldCatchup {
+		r.toldCatchup = true
+		fmt.Fprintf(w, "%s catchup: %s, so the agent catches up\n", in.id(id), in.catchupWhy)
+	}
+
 	switch {
 	case ws.Status == agentctl.StatusWorking:
 		r.begun, r.attached = true, true
@@ -2580,6 +2605,10 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
 		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
+	case skill == "catchup" && in.catchup != nil:
+		// git integrates and verify runs here; the agent gets only what they
+		// could not settle, a resend included
+		return in.catchupHere(ctx, w, r, ws, run)
 	case r.retry:
 		// an attempt failed: the action goes again, whatever the run says
 		return in.prompt(ctx, w, r, ws, skill, "")
@@ -2826,6 +2855,16 @@ func (in *driveInput) poll(
 		return in.next(ctx, w, r)
 	}
 
+	if job := r.verifying; job != nil {
+		if !job.finished() {
+			return nil
+		}
+
+		r.verifying = nil
+
+		return in.verified(ctx, w, r, job)
+	}
+
 	if r.resend {
 		r.resend, r.retry = false, true
 
@@ -2947,6 +2986,10 @@ func (in *driveInput) poll(
 	}
 
 	fmt.Fprintf(w, "%s %s: done\n", in.id(id), skill)
+
+	if skill == "catchup" && in.catchup != nil {
+		return in.catchupSettled(ctx, w, r, true)
+	}
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {

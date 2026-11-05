@@ -204,7 +204,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 			)
 		}
 
-		field := fieldNamed(eff.Fields, "Verify")
+		field := verifyFieldIn(eff.Fields)
 
 		line := verifyLine(field)
 		if eff.Verify != nil {
@@ -274,7 +274,9 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func fieldNamed(fields []facts.Field, name string) facts.Field {
+func verifyFieldIn(fields []facts.Field) facts.Field {
+	const name = "Verify"
+
 	for _, f := range fields {
 		if f.Name == name {
 			return f
@@ -317,14 +319,17 @@ const verifyRerun = "; run `f10 config verify` again right before verify runs, s
 // commits, staged and unstaged work, and untracked files, so a new file
 // counts before it is committed. Local refs only, since the load runs it.
 func verifyDiff(ctx context.Context, lay *layout.Layout) (string, []string, error) {
-	dir := lay.CheckoutRoot
+	return branchDiff(ctx, lay.CheckoutRoot, cmp.Or(lay.MainRoot, lay.CheckoutRoot))
+}
 
+// branchDiff is verifyDiff for the checkout at dir, main the main checkout.
+func branchDiff(ctx context.Context, dir, main string) (string, []string, error) {
 	branch := gitx.CurrentBranch(ctx, dir)
 	if branch == "" {
 		return "", nil, errors.New("HEAD is detached")
 	}
 
-	base, err := prBase(ctx, io.Discard, cmp.Or(lay.MainRoot, dir), branch)
+	base, err := prBase(ctx, io.Discard, main, branch)
 	if err != nil {
 		return "", nil, err
 	}
