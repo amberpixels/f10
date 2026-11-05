@@ -250,9 +250,10 @@ func TestTaskStateShipped(t *testing.T) {
 	}
 }
 
-// A catchup's attempts compare the conflict it left, not the branch: a
-// catchup that merges moves the head every time without settling anything,
-// so the third with the same conflict halts, and a new conflict starts over.
+// A catchup's attempts compare the conflict it left, not the branch or the
+// reason's wording: a catchup that merges moves the head every time without
+// settling anything, so the third with the same conflict halts, and a new
+// conflict starts over.
 func TestCatchupAttemptsCountTheConflict(t *testing.T) {
 	in := &driveInput{now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
@@ -261,22 +262,22 @@ func TestCatchupAttemptsCountTheConflict(t *testing.T) {
 
 	same := "GH-1 still conflicts with main after a catchup: the same files conflict with main the same way again: a.go"
 	for i := range 2 {
-		if res := in.catchupAttempt(&out, r, "ship", same); res != nil {
+		if res := in.catchupAttempt(&out, r, "ship", same, "a.go"); res != nil {
 			t.Fatalf("attempt %d halted: %+v", i+1, res)
 		}
 	}
 
-	if res := in.catchupAttempt(&out, r, "ship", "a new conflict: b.go"); res != nil {
+	if res := in.catchupAttempt(&out, r, "ship", "a new conflict: b.go", "b.go"); res != nil {
 		t.Fatalf("a new conflict halted: %+v", res)
 	}
 
 	for i := range 2 {
-		if res := in.catchupAttempt(&out, r, "ship", same); res != nil {
+		if res := in.catchupAttempt(&out, r, "ship", same, "a.go"); res != nil {
 			t.Fatalf("attempt %d after the new conflict halted: %+v", i+1, res)
 		}
 	}
 
-	res := in.catchupAttempt(&out, r, "ship", same)
+	res := in.catchupAttempt(&out, r, "ship", same, "a.go")
 	if res == nil || res.code != exitHalted || len(res.attempts) != 3 {
 		t.Fatalf("the third same conflict in a row did not halt: %+v\n%s", res, out.String())
 	}

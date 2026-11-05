@@ -70,7 +70,7 @@ Otherwise the task halts, because an idle agent on a running run may be waiting 
 ## When a drive halts
 
 The drive reads how far a turn got from the branch, the PR and the task's files, whoever prompted the turn.
-A turn that stopped `failed` or `partial`, or never took its prompt, is a failed attempt, and the drive sends the step again.
+A turn that stopped `failed` or `partial` is a failed attempt, and the drive sends the step again.
 The task halts only in these cases:
 
 - **An ask.** The task waits for the answer (**The answer**, below).
@@ -78,7 +78,7 @@ The task halts only in these cases:
   The halt names the action and lists every attempt with its reason.
   A failure after which the state moved starts the count over.
 - **A decision.** A run stopped `blocked` without an ask, such as a judge's stop or a stale task's verdict, halts at once, because sending the step again would roll the decision again.
-- **A stall the branch does not explain** (**A turn ends at its report**, above).
+- **A stall the branch does not explain** (**A turn ends at its report**, above), or a prompt the agent never took, because typing into a pane that may hold a dialog could answer it.
 - **The drive's own environment fails**, because sending the step again cannot fix it: a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
 
 ## The answer

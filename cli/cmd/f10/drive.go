@@ -1954,27 +1954,27 @@ func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string
 	return defaultTarget(ctx, in.main)
 }
 
-// conflictAgain says why a conflict after the catchup this drive sent halts
-// the task, or "" to catch up again; the files conflicting now are named
-// either way.
-func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string) (string, error) {
+// conflictAgain says why a conflict after the catchup this drive sent makes
+// no progress, or "" to catch up again, and the conflict as attempts compare
+// it; the files conflicting now are named either way.
+func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string) (string, string, error) {
 	if r.lastCatchup == nil {
-		return "", nil
+		return "", "", nil
 	}
 
 	target, base, err := in.catchupTarget(ctx, r, key)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
 	if err != nil {
-		return "", fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
+		return "", "", fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
 	}
 
 	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
 	if err != nil {
-		return "", fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
+		return "", "", fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
 	}
 
 	reason := r.lastCatchup.halts(target, head, conflicts, base)
@@ -1986,13 +1986,13 @@ func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string
 		reason = r.o.branch + " still conflicts with " + base + " after a catchup: " + reason
 	}
 
-	return reason, nil
+	return reason, conflictWay(conflicts), nil
 }
 
 // catchupAttempt counts a catchup that did not bring the branch up to date,
 // and on the limit halts with the way to settle it by hand.
-func (in *driveInput) catchupAttempt(w io.Writer, r *driveRun, skill, reason string) *driveResult {
-	res := in.attemptAt(w, r, "catchup", reason, halted(r.task.ref.ID, skill, reason))
+func (in *driveInput) catchupAttempt(w io.Writer, r *driveRun, skill, reason, conflict string) *driveResult {
+	res := in.attemptAt(w, r, "catchup", conflict, halted(r.task.ref.ID, skill, reason))
 	if res != nil {
 		res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
 	}
@@ -2172,7 +2172,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return nil
 	}
 
-	reason, err := in.conflictAgain(ctx, r, cfgLanded)
+	reason, conflict, err := in.conflictAgain(ctx, r, cfgLanded)
 
 	switch {
 	case err != nil:
@@ -2180,7 +2180,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 
 		return &res
 	case reason != "":
-		if res := in.catchupAttempt(w, r, "finish", reason); res != nil {
+		if res := in.catchupAttempt(w, r, "finish", reason, conflict); res != nil {
 			return res
 		}
 	}
@@ -2846,8 +2846,9 @@ func (in *driveInput) poll(
 		in.retryEnter(ctx, w, r)
 
 		if now.Sub(r.sentAt) > startWindow {
+			// a prompt never taken may sit under a startup dialog, so it is not typed again
 			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf(
-				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)), true)
+				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)), false)
 		}
 
 		return nil
@@ -2917,7 +2918,7 @@ func (in *driveInput) poll(
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
-			if res := in.catchupAttempt(w, r, "catchup", "the catchup did not end clean: "+reason); res != nil {
+			if res := in.catchupAttempt(w, r, "catchup", "the catchup did not end clean: "+reason, reason); res != nil {
 				in.end(ctx, w, r, *res)
 
 				return nil
@@ -2962,7 +2963,7 @@ func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) 
 		return nil
 	}
 
-	reason, err := in.conflictAgain(ctx, r, key)
+	reason, conflict, err := in.conflictAgain(ctx, r, key)
 
 	switch {
 	case err != nil:
@@ -2970,7 +2971,7 @@ func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) 
 
 		return &res
 	case reason != "":
-		return in.catchupAttempt(w, r, "ship", reason)
+		return in.catchupAttempt(w, r, "ship", reason, conflict)
 	}
 
 	return nil

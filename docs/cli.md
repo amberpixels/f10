@@ -606,7 +606,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
    A turn has begun once Herdr shows the agent working, the run reports after the prompt, or the agent's session left a prompt mark after it: the `UserPromptSubmit` hook writes `<session>.prompted` beside the run file, naming the checkout and the time, so a turn that began and ended between two looks still counts as taken once the mark is five seconds old.
    Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
-   No sign within two minutes is a failed attempt (**When a turn fails**, below), and a workspace that still shows no agent status by then halts the task.
+   No sign within two minutes halts the task, because a prompt never taken may sit under a startup dialog that typing it again could answer; so does a workspace that still shows no agent status by then.
    Once the agent is idle again, the run says how the turn ended:
    - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      The driver keeps driving every other task: a guard stop still gets its catchup, a base still releases its dependents.

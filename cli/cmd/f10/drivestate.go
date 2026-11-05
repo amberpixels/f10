@@ -207,8 +207,9 @@ func (in *driveInput) attempt(
 	return in.attemptAt(w, r, action, in.readState(ctx, r, r.current(run)).fingerprint(), halt)
 }
 
-// attemptAt is attempt with the state to compare given: a catchup's is its
-// conflict, since a catchup that merges moves the head without progress.
+// attemptAt is attempt with the state to compare given: a catchup's is the
+// conflict it left, since a catchup that merges moves the head without
+// progress, and the reason it gives changes wording between catchups.
 func (in *driveInput) attemptAt(w io.Writer, r *driveRun, action, fp string, halt driveResult) *driveResult {
 	reason := halt.reason
 

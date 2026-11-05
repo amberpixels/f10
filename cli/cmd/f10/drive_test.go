@@ -699,6 +699,8 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 		code     int
 		want     []string
 		catchups int
+		// full runs at the default attempt limit, not one attempt
+		full bool
 	}{
 		"settled": {
 			after: restored,
@@ -751,6 +753,22 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			},
 			catchups: 1,
 		},
+		"conflicts again three times, main did not move": {
+			// a clean catchup between the conflicts does not clear the count
+			after: restored,
+			again: conflictsAgain("main0", aOneWay),
+			later: []func(fx *driveFixture, t *testing.T){
+				restored, conflictsAgain("main0", aOneWay), restored, conflictsAgain("main0", aOneWay),
+			},
+			code: exitHalted,
+			full: true,
+			want: []string{
+				"catchup failed 3 times in a row with nothing changed",
+				"attempt 3 at",
+				"next: settle it with /f10:catchup in /code/repo.GH-1, then rerun the drive",
+			},
+			catchups: 3,
+		},
 		"conflicts again on the same files the same way": {
 			after: restored,
 			again: conflictsAgain("main1", aOneWay),
@@ -786,7 +804,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
-			if tc.code == exitHalted {
+			if tc.code == exitHalted && !tc.full {
 				fx.oneAttempt(t)
 			}
 
@@ -801,7 +819,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			// then a second catchup's and a second resume's
 			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
 			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle, idle, working, idle,
-				idle, working, idle, idle, working, idle)
+				idle, working, idle, idle, working, idle, idle, working, idle, idle, working, idle)
 			tick := 2
 
 			if tc.rerun {
