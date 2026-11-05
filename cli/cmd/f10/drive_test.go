@@ -48,7 +48,9 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	fx.f.has["wt"] = true
 	// no base branch has a commit or a head until a test says so
 	fx.f.absent = append(fx.f.absent, "git rev-list --count ", "git rev-parse -q --verify refs/heads/",
-		"git rev-parse -q --verify refs/remotes/origin/", "git reflog show ")
+		"git rev-parse -q --verify refs/remotes/origin/", "git reflog show ",
+		// the state a reconcile reads: no merge or rebase in progress, a clean tree
+		"git rev-parse -q --verify MERGE_HEAD", "git rev-parse -q --verify REBASE_HEAD", "git status --porcelain")
 	// a catchup the drive sends records where it starts from: the default
 	// branch is main, local only, and the branch merges with it cleanly
 	// until a test says otherwise
@@ -119,6 +121,17 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	}
 
 	return fx
+}
+
+// oneAttempt halts a task on its first failed attempt, for a test whose
+// subject is the reason a failure gives, not the attempt rule.
+func (fx *driveFixture) oneAttempt(t *testing.T) {
+	t.Helper()
+
+	prev := attemptLimit
+	attemptLimit = 1
+
+	t.Cleanup(func() { attemptLimit = prev })
 }
 
 func (fx *driveFixture) drive(t *testing.T) error {
@@ -556,6 +569,10 @@ func TestDriveResumesAShipStopACatchupSettled(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
+			if tc.again {
+				fx.oneAttempt(t)
+			}
+
 			fx.adoptsGH1()
 			fx.writeShipStop(t, tc.status, tc.leaf, tc.at, catchupNext)
 
@@ -769,6 +786,10 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
+			if tc.code == exitHalted {
+				fx.oneAttempt(t)
+			}
+
 			fx.adoptsGH1()
 			fx.f.script(catchup, "{}")
 			fx.f.script(resume, "{}")
@@ -1074,6 +1095,10 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
+			if tc.unclean {
+				fx.oneAttempt(t)
+			}
+
 			fx.adoptsGH1()
 			fx.f.script(resume, "{}")
 			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
@@ -1214,6 +1239,7 @@ func TestDriveAnswersASettledCatchupStop(t *testing.T) {
 // and the task after it is halted with it. The record keeps GH-2's base.
 func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge")
+	fx.oneAttempt(t)
 	fx.in.root = t.TempDir()
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
@@ -1257,6 +1283,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 // stopped without reporting: the drive halts naming the workspace.
 func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.oneAttempt(t)
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -1960,6 +1987,7 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 func TestDriveScopesAStopToItsDependents(t *testing.T) {
 	ids := []string{"GH-12", "GH-13", "GH-14", "GH-15"}
 	fx := wave(t, "GH-11", "GH-12", "GH-13", "GH-14", "GH-15", "judge", "ship")
+	fx.oneAttempt(t)
 	fx.infos["GH-11"] = taskInfo{closed: true}
 
 	fx.f.script(wsList,
@@ -2002,6 +2030,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 	for _, clean := range []bool{true, false} {
 		t.Run(fmt.Sprintf("clean=%v", clean), func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "GH-2", "judge", "finish")
+			fx.oneAttempt(t)
 			fx.task("GH-1", taskInfo{body: "base"}, "")
 			fx.task("GH-2", taskInfo{body: "dependent"}, heads("GH-2"))
 			fx.f.script("git config --get branch.GH-2."+cfgAfter, "GH-1")
@@ -2112,6 +2141,10 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "finish")
+			if tc.halt != "" {
+				fx.oneAttempt(t)
+			}
+
 			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -2464,6 +2497,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 // catchup goes out, since ship could not resume from it, and the stop halts.
 func TestDriveHaltsAShipThatFailedUnderAWatcherMark(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.oneAttempt(t)
 	fx.adoptsGH1()
 	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 	ship := skillPrompt("ship", "GH-1", nil, shipFlow{}, false)
@@ -2965,6 +2999,7 @@ func TestDriveHoldsADependentUntilItsBaseCommits(t *testing.T) {
 // next boundary, and the dependent's next skill is never sent.
 func TestDriveHaltsADependentWhenItsBaseHaltsAfterRelease(t *testing.T) {
 	fx := chained(t, "GH-1", "GH-2", "judge", "ship")
+	fx.oneAttempt(t)
 	fx.expects("GH-1", "judge")
 	fx.expects("GH-2", "judge")
 
@@ -3059,6 +3094,7 @@ func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
 // created at, so a squash-merged grandparent's commits never release it.
 func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
+	fx.oneAttempt(t)
 	fx.f.script(headRef, "origin/main")
 	b := &driveRun{opened: true, o: openedTask{branch: "GH-2"}}
 
@@ -3107,6 +3143,10 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			clean := mode == "clean"
 			fx := newDriveFixture(t, "GH-1", "finish")
+			if mode == "again" {
+				fx.oneAttempt(t)
+			}
+
 			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")

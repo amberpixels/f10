@@ -74,8 +74,10 @@ f10 drive <arguments>
    Print the report block and those lines verbatim, and stop.
    A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 drive list` shows it and `f10 drive cancel <n>` stops it.
    The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
-   A task whose run stopped (a `next:` line under its halt) is prompted again only when it stopped for a catchup (its `next:` names `/f10:catchup`, or a catchup failed) and a later catchup ended clean; any other needs steering through `--answer`.
-   A ship stopped by its catchup guard gets a catchup from the drive each time its base moves and resumes without a halt; it halts here when a catchup made no progress or did not end clean.
+   The drive reads each task's state from git, its PR and its files, so a turn typed by hand, a turn shorter than a poll, or an agent that never reported does not halt it.
+   A task halts only when the same action failed three times in a row with nothing changed, and the lines list each attempt; a failure of the drive's own environment (a git read, a workspace gone, a base that halted) halts at once.
+   A task whose run stopped (a `next:` line under its halt) is prompted again on a rerun only when it stopped for a catchup (its `next:` names `/f10:catchup`, or a catchup failed) and a later catchup ended clean; any other needs steering through `--answer`.
+   A ship stopped by its catchup guard gets a catchup from the drive each time its base moves and resumes without a halt.
    A task whose branch is on origin is caught up whenever its PR's target moves, at its next skill boundary, and the drive pushes the caught-up branch.
 5. **Any other exit**: the command refused; its message names the cause.
    `drive <n> is running` means another session drives the same list: point at `f10 drive list`, and at `f10 drive cancel <n>` if the user wants to take it over.

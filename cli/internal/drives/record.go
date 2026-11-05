@@ -45,6 +45,17 @@ type Task struct {
 	Skill   string   `yaml:"skill,omitempty"`  // in flight, "" for none
 	Queued  bool     `yaml:"queued,omitempty"` // held back by the drive's cap
 	Outcome *Outcome `yaml:"outcome,omitempty"`
+	// Attempts are the failures in a row of the action in flight, kept so a
+	// drained drive resumes the count; an ended task keeps none
+	Attempts []Attempt `yaml:"attempts,omitempty"`
+}
+
+// An Attempt is one failure of an action, with the state it left.
+type Attempt struct {
+	Action string    `yaml:"action"`
+	State  string    `yaml:"state"`
+	Reason string    `yaml:"reason"`
+	At     time.Time `yaml:"at"`
 }
 
 // An Outcome is a task's row in the drive's report and its exit code.

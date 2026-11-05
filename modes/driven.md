@@ -57,13 +57,27 @@ Four kinds of open question never become an ask:
 
 The drive and the watcher read an idle agent as a turn that has ended.
 So a turn that ends before its report looks like one that stopped without reporting.
-After a minute's grace the task halts, and a report that lands later finds the drive gone.
+After a minute's grace the drive reads where the task stands from git, the PR and the task's files, and a report that lands later is not read.
+If the branch shows the step done, the drive moves on.
+Otherwise the turn counts as a failed attempt, and the drive sends the step again.
 
 - Run verify, and every other long command, in the foreground.
   Raise the `timeout` where the default is too short.
 - If a command must run in the background, wait for it in the same turn with a Monitor until-loop on its exit.
   Never end the turn expecting to be woken when it reports.
 - A driven turn ends in only three ways: the step's report, an ask or a failure.
+
+## When a drive halts
+
+The drive halts a task in two cases only, because the branch, the PR and the task's files show how far a turn got, whoever prompted it:
+
+- **An ask.** The task waits for the answer (**The answer**, below).
+- **No progress.** The same action failed three times in a row, and git, the PR and the task's files did not change between the failures.
+  The halt names the action and lists every attempt with its reason.
+  A failure after which the state moved starts the count over.
+
+A failure of the drive's own environment still halts at once, because sending the step again cannot fix it.
+Examples are a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
 
 ## The answer
 

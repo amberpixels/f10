@@ -264,6 +264,26 @@ func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
 	})
 }
 
+// recordedAttempts are the failures a drained drive counted for a task it
+// had not ended; a task ended, by a halt among others, starts over.
+func (in *driveInput) recordedAttempts(r *driveRun) []drives.Attempt {
+	if in.rec == nil {
+		return nil
+	}
+
+	for _, id := range []string{r.task.ref.Label() + suffixOf(r.task.suffix), r.task.ref.ID + suffixOf(r.task.suffix)} {
+		if t := in.rec.Task(id); t != nil {
+			if t.Outcome != nil {
+				return nil
+			}
+
+			return slices.Clone(t.Attempts)
+		}
+	}
+
+	return nil
+}
+
 func (in *driveInput) savePending(taken *drives.Answer) {
 	in.save(func(rec *drives.Record) {
 		rec.Answers = map[string]string{}

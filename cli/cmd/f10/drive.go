@@ -216,8 +216,14 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("finish is on (the pace, or drive_finish), and finish merges through the host: %w", hostErr)
 	}
 
+	var pullOf func(context.Context, string) (pull, error)
+	if hostErr == nil {
+		pullOf = h.pull
+	}
+
 	in := &driveInput{
 		main:    main,
+		pull:    pullOf,
 		root:    t.sharedRoot(),
 		driver:  drv,
 		tracker: t.tracker(),
@@ -560,6 +566,9 @@ type driveInput struct {
 	sleep       func(context.Context, time.Duration) error
 	// record puts an event in the ledger, placed in dir; nil records nothing
 	record func(ctx context.Context, dir string, e ledger.Event)
+	// pull reads a branch's PR on the host when the drive reconciles a
+	// task; nil, with no host, reads none
+	pull func(ctx context.Context, branch string) (pull, error)
 
 	answer   string                      // a bare --answer, until the first task stopped on a question takes it
 	answers  map[string]string           // --answer ID=text, by task id, until that task takes it
@@ -626,6 +635,8 @@ type driveResult struct {
 	drives bool
 	// ask is the question an exitAsk end waits on, for the inbox
 	ask string
+	// attempts are the failures a halt on the attempt rule counted
+	attempts []drives.Attempt
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -674,6 +685,12 @@ type driveRun struct {
 	typed        string
 	typedTo      string
 	enterRetried bool
+	// attempts are the failures in a row of the action in flight; resend
+	// sends it again at the next poll, and retry marks that send, so it
+	// prompts whatever the run says
+	attempts []drives.Attempt
+	resend   bool
+	retry    bool
 }
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
@@ -799,6 +816,8 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 	for _, i := range order {
 		r := &driveRun{task: tasks[i]}
+		r.attempts = in.recordedAttempts(r)
+
 		if r.task.finished {
 			in.end(ctx, w, r, driveResult{row: rowAlreadyFinished})
 		}
@@ -1972,11 +1991,13 @@ func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string
 	return reason, nil
 }
 
-func catchupHalt(r *driveRun, skill, reason string) driveResult {
-	res := halted(r.task.ref.ID, skill, reason)
-	res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
+// catchupAttempt counts a catchup that did not bring the branch up to date,
+// and on the limit halts with the way to settle it by hand.
+func (in *driveInput) catchupAttempt(ctx context.Context, w io.Writer, r *driveRun, skill, reason string) *driveResult {
+	halt := halted(r.task.ref.ID, skill, reason)
+	halt.lines = append(halt.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
 
-	return res
+	return in.attempt(ctx, w, r, "catchup", halt)
 }
 
 // spikeDone: a spike report on a branch never pushed closes without a merge;
@@ -2159,9 +2180,9 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 
 		return &res
 	case reason != "":
-		res := catchupHalt(r, "finish", reason)
-
-		return &res
+		if res := in.catchupAttempt(ctx, w, r, "finish", reason); res != nil {
+			return res
+		}
 	}
 
 	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+cfgLanded, def); err != nil {
@@ -2527,6 +2548,9 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
 		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
+	case r.retry:
+		// an attempt failed: the action goes again, whatever the run says
+		return in.prompt(ctx, w, r, ws, skill, "")
 	case run != nil && skill == "catchup" && heldStop(run):
 		// the ship stop is the one this catchup settles
 		return in.prompt(ctx, w, r, ws, skill, "")
@@ -2590,8 +2614,13 @@ func (in *driveInput) prompt(
 ) error {
 	id := r.task.ref.ID
 
+	retry := r.retry
+	r.retry = false
+
 	fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
+	// a run left running by a turn this drive never sent may be a question in
+	// that pane, so only a retry of the drive's own turn types over it
+	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil && !retry {
 		in.end(ctx, w, r, halted(id, skill, err.Error()))
 
 		return nil
@@ -2766,6 +2795,12 @@ func (in *driveInput) poll(
 		return in.next(ctx, w, r)
 	}
 
+	if r.resend {
+		r.resend, r.retry = false, true
+
+		return in.send(ctx, w, r, r.skill)
+	}
+
 	ws := workspaceByID(wss, r.o.ws.ID)
 	if ws == nil {
 		return in.workspaceGone(r)
@@ -2812,13 +2847,8 @@ func (in *driveInput) poll(
 		in.retryEnter(ctx, w, r)
 
 		if now.Sub(r.sentAt) > startWindow {
-			in.end(
-				ctx,
-				w,
-				r,
-				halted(id, skill, fmt.Sprintf("the agent in workspace %s did not take the prompt within %s",
-					workspaceName(ws), startWindow)),
-			)
+			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf(
+				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)))
 		}
 
 		return nil
@@ -2843,7 +2873,7 @@ func (in *driveInput) poll(
 		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
 			// the stop the guard leaves names the catchup ship resumes from; a
 			// mark on a ship that failed elsewhere is the watcher's, not the guard's
-			if res := in.guardAgain(ctx, r); res != nil {
+			if res := in.guardAgain(ctx, w, r); res != nil {
 				in.end(ctx, w, r, *res)
 
 				return nil
@@ -2852,10 +2882,14 @@ func (in *driveInput) poll(
 			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
 			return in.next(ctx, w, r)
-		default:
+		case run.Ask != "":
 			in.end(ctx, w, r, in.verdict(r.task, skill, run))
 
 			return nil
+		default:
+			// the run may be a turn the drive did not send, as a ship typed by
+			// hand while it followed plan: the branch says how far it got
+			return in.settle(ctx, w, r, run, in.verdict(r.task, skill, run))
 		}
 	}
 
@@ -2864,15 +2898,13 @@ func (in *driveInput) poll(
 			r.idleSince = now
 		}
 
+		// a turn that ends without its report is read from the branch
 		if stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), stallGrace) {
-			in.end(
-				ctx,
-				w,
-				r,
-				halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
-					"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
-					workspaceName(ws), idleWhile(run, skill))),
-			)
+			r.idleSince = time.Time{}
+
+			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
+				"it stopped without reporting", agentctl.AgentName(id, r.task.suffix, r.o.path),
+				workspaceName(ws), idleWhile(run, skill))))
 		}
 
 		return nil
@@ -2882,12 +2914,18 @@ func (in *driveInput) poll(
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
-			res := halted(id, skill, "the catchup did not end clean: "+reason)
-			res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
-			in.end(ctx, w, r, res)
+			if res := in.catchupAttempt(ctx, w, r, "catchup", "the catchup did not end clean: "+reason); res != nil {
+				in.end(ctx, w, r, *res)
+
+				return nil
+			}
+
+			r.resend = true
 
 			return nil
 		}
+
+		in.clearAttempts(r)
 
 		if res := in.pushCatchup(ctx, w, r); res != nil {
 			in.end(ctx, w, r, *res)
@@ -2902,6 +2940,7 @@ func (in *driveInput) poll(
 		return fmt.Errorf("recording %s done: %w", skill, err)
 	}
 
+	in.clearAttempts(r)
 	r.pos++
 
 	return in.next(ctx, w, r)
@@ -2909,7 +2948,7 @@ func (in *driveInput) poll(
 
 // guardAgain halts a ship whose guard conflicted again without progress, or
 // nil to catch up again; a mark git cannot read is left to next, which halts.
-func (in *driveInput) guardAgain(ctx context.Context, r *driveRun) *driveResult {
+func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
 	if r.lastCatchup == nil {
 		return nil
 	}
@@ -2927,9 +2966,7 @@ func (in *driveInput) guardAgain(ctx context.Context, r *driveRun) *driveResult 
 
 		return &res
 	case reason != "":
-		res := catchupHalt(r, "ship", reason)
-
-		return &res
+		return in.catchupAttempt(ctx, w, r, "ship", reason)
 	}
 
 	return nil
@@ -2951,7 +2988,8 @@ func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
 	return branchUnsettled(ctx, in.main, r.o.path, r.o.branch)
 }
 
-// verdict reads a stopped run: an ask goes to the user, anything else halts.
+// verdict reads a stopped run: an ask goes to the user, anything else is the
+// halt it gives, at once on a rerun, or once its attempts run out in a poll.
 func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveResult {
 	id := task.ref.ID
 
@@ -2996,7 +3034,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	}
 
 	in.saveTask(r, func(t *drives.Task) {
-		t.Skill, t.Queued, t.Outcome = "", false, &drives.Outcome{Row: res.row, Code: res.code}
+		t.Skill, t.Queued, t.Outcome, t.Attempts = "", false, &drives.Outcome{Row: res.row, Code: res.code}, nil
 	})
 	// an asking task stays leased until the drive exits, since the drive
 	// runs on and resumes for its answer; another drive must not claim it
@@ -3047,8 +3085,24 @@ func (in *driveInput) recordHalt(ctx context.Context, r *driveRun, res driveResu
 		Task:    r.task.ref.ID,
 		Kind:    ledger.TaskHalted,
 		Source:  ledger.Observed,
-		Payload: ledger.NewPayload(ledger.Payload{"skill": res.skill, "reason": res.reason}),
+		Payload: ledger.NewPayload(haltPayload(res)),
 	})
+}
+
+// haltPayload is a halt's ledger payload: the attempts it counted, if any.
+func haltPayload(res driveResult) ledger.Payload {
+	p := ledger.Payload{"skill": res.skill, "reason": res.reason}
+
+	if len(res.attempts) > 0 {
+		reasons := make([]string, 0, len(res.attempts))
+		for _, a := range res.attempts {
+			reasons = append(reasons, a.Reason)
+		}
+
+		p["attempts"] = reasons
+	}
+
+	return p
 }
 
 func recordAt(ctx context.Context, dir string, e ledger.Event) {
