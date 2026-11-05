@@ -119,7 +119,7 @@ func TestScopedVerify(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := scopedVerifyLine(eff, fieldNamed(eff.Fields, "Verify"), base, changed, nil)
+			got := scopedVerifyLine(eff, verifyFieldIn(eff.Fields), base, changed, nil)
 
 			for _, w := range tc.want {
 				if !strings.Contains(got, w) {

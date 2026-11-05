@@ -31,7 +31,7 @@ Then set `.f10-base-tip` to the `sha` row when `found` is `f10-after-branch`.
 Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 
 1. **Check the preconditions.**
-   An **operation already in progress** is a merge or a rebase the user started by hand, and this step settles it in place.
+   An **operation already in progress** is a merge or a rebase the user started by hand, or one `f10 drive` started and stopped on a conflict, and this step settles it in place.
    The loader prints an `in progress:` line above this step when there is one.
    Without that line, look under `git rev-parse --git-dir`: a `MERGE_HEAD` there is a merge, and a `rebase-merge/` directory or a `rebase-apply/rebasing` file is a rebase.
    The operation's other side is the base, and ours and theirs follow point 4's rule for that operation.
@@ -121,8 +121,9 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
    For `f10-base-moved`, it is the sha the mark holds, or a commit containing it.
    Any other mark stays set, because the drive reads a cleared mark as that base brought in, and the report names it.
 
-   The `done catchup` signal is how `f10 drive` knows a catchup ended.
-   The drive halts an idle agent without the signal after a minute, and it also halts a task whose signal sits beside a mark still set.
+   The `done catchup` signal is how `f10 drive` knows the turn ended.
+   For a catchup the drive integrated itself (**Sent by `f10 drive`**, below), git then tells the drive whether it settled: nothing in progress, no conflict marker, the base in the branch, and verify green when the drive runs it.
+   For a whole catchup the drive sent with no steering, it also halts a task whose signal sits beside a mark still set.
    Every run writes the signal, a run by hand included.
 
 6. **Report** per `conventions/report.md`, with `branch`, `base` and `commit` (the new HEAD) rows.
@@ -169,8 +170,23 @@ The guard differs from the run above in these ways:
 **Driven** (`modes/driven.md`): a driven run is one sent by `f10 drive`, or by the watcher under `watch_catchup: on`.
 On entry, note the ship status with `f10-state.sh show`.
 The method is point 3's.
-A drive and the watcher start from a clean tree, so a driven run never meets an operation already in progress.
 The sender pushes the branch itself once this run ends clean.
+
+**Sent by `f10 drive`** with steering: the drive integrated the branch itself and prompts this step only for what git or verify could not settle.
+A prompt with no steering is a whole catchup, sent because the project's verify is prose the drive cannot run, and every point above applies, point 5's marks included.
+The steering says which of three cases it is:
+
+- **A merge or rebase is in progress**, with its conflicted files named.
+  Point 1's operation-in-progress path settles it in place, and a rebase continues through its remaining commits.
+- **The base came in cleanly and verify is red**, with the failing command and a log of its output named.
+  Skip points 1 to 4, and fix it as point 5's semantic conflict.
+- **The last turn left it unsettled**, naming what is left: conflict markers, uncommitted paths, or the base missing from the branch.
+  Settle that in place and commit it.
+
+In these three cases, leave the marks as they are, because the drive clears them once its own verify is green.
+Never abort the operation or reset the branch on a failure, because the drive reads the state the run leaves and prompts again naming what is left.
+After the turn, the drive checks the branch from git, runs verify itself, clears the marks and pushes.
+The watcher starts from a clean tree, so a run it sends never meets an operation already in progress.
 The run never asks: no `AskUserQuestion` and no `f10-state.sh ask`.
 Verify runs in the foreground, or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
 `f10 drive` reads point 5's `done catchup` signal as the run's end, while the watcher reads only the mark and the tree.

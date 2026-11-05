@@ -277,6 +277,11 @@ func (in *driveInput) settle(
 	halt driveResult,
 	retry bool,
 ) error {
+	// git, not the turn, says whether the drive's own catchup settled
+	if r.skill == "catchup" && in.catchup != nil {
+		return in.catchupSettled(ctx, w, r, retry)
+	}
+
 	if r.skill != "catchup" {
 		passed, err := in.reconcile(ctx, w, r, in.readState(ctx, r, run))
 		if err != nil {
