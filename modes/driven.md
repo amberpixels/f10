@@ -59,7 +59,7 @@ The drive and the watcher read an idle agent as a turn that has ended.
 So a turn that ends before its report looks like one that stopped without reporting.
 After a minute's grace the drive reads where the task stands from git, the PR and the task's files, and a report that lands later is not read.
 If the branch shows the step done, the drive moves on.
-Otherwise the turn counts as a failed attempt, and the drive sends the step again.
+Otherwise the task halts, because an idle agent on a running run may be waiting on a permission dialog that a new prompt could answer.
 
 - Run verify, and every other long command, in the foreground.
   Raise the `timeout` where the default is too short.
@@ -69,15 +69,17 @@ Otherwise the turn counts as a failed attempt, and the drive sends the step agai
 
 ## When a drive halts
 
-The drive halts a task in two cases only, because the branch, the PR and the task's files show how far a turn got, whoever prompted it:
+The drive reads how far a turn got from the branch, the PR and the task's files, whoever prompted the turn.
+A turn that stopped `failed` or `partial`, or never took its prompt, is a failed attempt, and the drive sends the step again.
+The task halts only in these cases:
 
 - **An ask.** The task waits for the answer (**The answer**, below).
 - **No progress.** The same action failed three times in a row, and git, the PR and the task's files did not change between the failures.
   The halt names the action and lists every attempt with its reason.
   A failure after which the state moved starts the count over.
-
-A failure of the drive's own environment still halts at once, because sending the step again cannot fix it.
-Examples are a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
+- **A decision.** A run stopped `blocked` without an ask, such as a judge's stop or a stale task's verdict, halts at once, because sending the step again would roll the decision again.
+- **A stall the branch does not explain** (**A turn ends at its report**, above).
+- **The drive's own environment fails**, because sending the step again cannot fix it: a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
 
 ## The answer
 

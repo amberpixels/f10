@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -139,6 +138,11 @@ func (s taskState) shipped() bool {
 		}
 	}
 
+	// a tree mid-build or mid-merge is not what the PR carries
+	if s.busy != "" {
+		return false
+	}
+
 	pushed := s.code && s.origin != "" && s.origin == s.head
 
 	switch deliver {
@@ -147,7 +151,7 @@ func (s taskState) shipped() bool {
 	case "push":
 		return pushed
 	case "commit":
-		return s.code && s.busy == ""
+		return s.code
 	}
 
 	// implement leaves nothing on the branch, and a deploy nothing it can read
@@ -181,6 +185,12 @@ func (in *driveInput) reconcile(ctx context.Context, w io.Writer, r *driveRun, s
 	return passed, nil
 }
 
+// An attempt is one failure of an action, with the state it left.
+type attempt struct {
+	Action, State, Reason string
+	At                    time.Time
+}
+
 // attempt records a failure of action, halt being the end it gives, and
 // halts the task once attemptLimit failures in a row left the state
 // unchanged; nil means try again. A failure after which the state moved
@@ -192,17 +202,21 @@ func (in *driveInput) attempt(
 	action string,
 	halt driveResult,
 ) *driveResult {
-	reason := halt.reason
-
 	run, _ := in.run(r.o.path) // a run the state dir cannot give leaves the run out
-	fp := in.readState(ctx, r, r.current(run)).fingerprint()
+
+	return in.attemptAt(w, r, action, in.readState(ctx, r, r.current(run)).fingerprint(), halt)
+}
+
+// attemptAt is attempt with the state to compare given: a catchup's is its
+// conflict, since a catchup that merges moves the head without progress.
+func (in *driveInput) attemptAt(w io.Writer, r *driveRun, action, fp string, halt driveResult) *driveResult {
+	reason := halt.reason
 
 	if n := len(r.attempts); n > 0 && (r.attempts[n-1].Action != action || r.attempts[n-1].State != fp) {
 		r.attempts = nil
 	}
 
-	r.attempts = append(r.attempts, drives.Attempt{Action: action, State: fp, Reason: reason, At: in.now()})
-	in.saveTask(r, func(t *drives.Task) { t.Attempts = slices.Clone(r.attempts) })
+	r.attempts = append(r.attempts, attempt{Action: action, State: fp, Reason: reason, At: in.now()})
 
 	if len(r.attempts) < attemptLimit {
 		fmt.Fprintf(w, "%s %s: attempt %d of %d failed, trying again: %s\n",
@@ -247,19 +261,21 @@ func (in *driveInput) failed(ctx context.Context, w io.Writer, r *driveRun, halt
 }
 
 // clearAttempts starts the count over: the task moved.
-func (in *driveInput) clearAttempts(r *driveRun) {
-	if len(r.attempts) == 0 {
-		return
-	}
-
+func (*driveInput) clearAttempts(r *driveRun) {
 	r.attempts = nil
-	in.saveTask(r, func(t *drives.Task) { t.Attempts = nil })
 }
 
 // settle reads the state at a turn's end its run did not explain: a chain
 // element the branch shows done moves the task on, anything else is a failed
-// attempt of the action in flight.
-func (in *driveInput) settle(ctx context.Context, w io.Writer, r *driveRun, run *state.Run, halt driveResult) error {
+// attempt of the action in flight, or with retry false, halt at once.
+func (in *driveInput) settle(
+	ctx context.Context,
+	w io.Writer,
+	r *driveRun,
+	run *state.Run,
+	halt driveResult,
+	retry bool,
+) error {
 	if r.skill != "catchup" {
 		passed, err := in.reconcile(ctx, w, r, in.readState(ctx, r, run))
 		if err != nil {
@@ -269,6 +285,12 @@ func (in *driveInput) settle(ctx context.Context, w io.Writer, r *driveRun, run 
 		if passed > 0 {
 			return in.next(ctx, w, r)
 		}
+	}
+
+	if !retry {
+		in.end(ctx, w, r, halt)
+
+		return nil
 	}
 
 	in.failed(ctx, w, r, halt)

@@ -636,7 +636,7 @@ type driveResult struct {
 	// ask is the question an exitAsk end waits on, for the inbox
 	ask string
 	// attempts are the failures a halt on the attempt rule counted
-	attempts []drives.Attempt
+	attempts []attempt
 }
 
 // A driveRun is one task on its way through the drive: pending until its
@@ -688,7 +688,7 @@ type driveRun struct {
 	// attempts are the failures in a row of the action in flight; resend
 	// sends it again at the next poll, and retry marks that send, so it
 	// prompts whatever the run says
-	attempts []drives.Attempt
+	attempts []attempt
 	resend   bool
 	retry    bool
 }
@@ -816,8 +816,6 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 	for _, i := range order {
 		r := &driveRun{task: tasks[i]}
-		r.attempts = in.recordedAttempts(r)
-
 		if r.task.finished {
 			in.end(ctx, w, r, driveResult{row: rowAlreadyFinished})
 		}
@@ -1993,11 +1991,13 @@ func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string
 
 // catchupAttempt counts a catchup that did not bring the branch up to date,
 // and on the limit halts with the way to settle it by hand.
-func (in *driveInput) catchupAttempt(ctx context.Context, w io.Writer, r *driveRun, skill, reason string) *driveResult {
-	halt := halted(r.task.ref.ID, skill, reason)
-	halt.lines = append(halt.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
+func (in *driveInput) catchupAttempt(w io.Writer, r *driveRun, skill, reason string) *driveResult {
+	res := in.attemptAt(w, r, "catchup", reason, halted(r.task.ref.ID, skill, reason))
+	if res != nil {
+		res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
+	}
 
-	return in.attempt(ctx, w, r, "catchup", halt)
+	return res
 }
 
 // spikeDone: a spike report on a branch never pushed closes without a merge;
@@ -2180,7 +2180,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 
 		return &res
 	case reason != "":
-		if res := in.catchupAttempt(ctx, w, r, "finish", reason); res != nil {
+		if res := in.catchupAttempt(w, r, "finish", reason); res != nil {
 			return res
 		}
 	}
@@ -2614,13 +2614,12 @@ func (in *driveInput) prompt(
 ) error {
 	id := r.task.ref.ID
 
-	retry := r.retry
 	r.retry = false
 
+	// an idle agent on a run still running waits on something in its pane,
+	// a permission dialog among others: text typed there could answer it
 	fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-	// a run left running by a turn this drive never sent may be a question in
-	// that pane, so only a retry of the drive's own turn types over it
-	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil && !retry {
+	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
 		in.end(ctx, w, r, halted(id, skill, err.Error()))
 
 		return nil
@@ -2848,7 +2847,7 @@ func (in *driveInput) poll(
 
 		if now.Sub(r.sentAt) > startWindow {
 			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf(
-				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)))
+				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)), true)
 		}
 
 		return nil
@@ -2882,14 +2881,16 @@ func (in *driveInput) poll(
 			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
 			return in.next(ctx, w, r)
-		case run.Ask != "":
+		case run.Ask != "" || blockedRun(run):
+			// blocked is a decision, a judge's stop or a stale task's verdict:
+			// sending the skill again would roll it again
 			in.end(ctx, w, r, in.verdict(r.task, skill, run))
 
 			return nil
 		default:
 			// the run may be a turn the drive did not send, as a ship typed by
 			// hand while it followed plan: the branch says how far it got
-			return in.settle(ctx, w, r, run, in.verdict(r.task, skill, run))
+			return in.settle(ctx, w, r, run, in.verdict(r.task, skill, run), true)
 		}
 	}
 
@@ -2898,13 +2899,15 @@ func (in *driveInput) poll(
 			r.idleSince = now
 		}
 
-		// a turn that ends without its report is read from the branch
+		// a turn that ends without its report is read from the branch; one the
+		// branch does not get past halts, since the agent may wait on a
+		// permission dialog that typing the skill again could answer
 		if stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), stallGrace) {
 			r.idleSince = time.Time{}
 
 			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
-				"it stopped without reporting", agentctl.AgentName(id, r.task.suffix, r.o.path),
-				workspaceName(ws), idleWhile(run, skill))))
+				"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
+				workspaceName(ws), idleWhile(run, skill))), false)
 		}
 
 		return nil
@@ -2914,7 +2917,7 @@ func (in *driveInput) poll(
 
 	if skill == "catchup" {
 		if reason := in.unsettled(ctx, r); reason != "" {
-			if res := in.catchupAttempt(ctx, w, r, "catchup", "the catchup did not end clean: "+reason); res != nil {
+			if res := in.catchupAttempt(w, r, "catchup", "the catchup did not end clean: "+reason); res != nil {
 				in.end(ctx, w, r, *res)
 
 				return nil
@@ -2925,7 +2928,8 @@ func (in *driveInput) poll(
 			return nil
 		}
 
-		in.clearAttempts(r)
+		// the count of a conflict's catchups clears only once the entry it
+		// guarded goes through, or a conflict that never settles loops
 
 		if res := in.pushCatchup(ctx, w, r); res != nil {
 			in.end(ctx, w, r, *res)
@@ -2966,7 +2970,7 @@ func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) 
 
 		return &res
 	case reason != "":
-		return in.catchupAttempt(ctx, w, r, "ship", reason)
+		return in.catchupAttempt(w, r, "ship", reason)
 	}
 
 	return nil
@@ -3034,7 +3038,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	}
 
 	in.saveTask(r, func(t *drives.Task) {
-		t.Skill, t.Queued, t.Outcome, t.Attempts = "", false, &drives.Outcome{Row: res.row, Code: res.code}, nil
+		t.Skill, t.Queued, t.Outcome = "", false, &drives.Outcome{Row: res.row, Code: res.code}
 	})
 	// an asking task stays leased until the drive exits, since the drive
 	// runs on and resumes for its answer; another drive must not claim it
@@ -3110,6 +3114,11 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 	e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, place.Branch
 
 	ledger.Record(e)
+}
+
+// blockedRun reports a phase of run stopped blocked: a decision, never breakage.
+func blockedRun(run *state.Run) bool {
+	return slices.ContainsFunc(state.Phases, func(p string) bool { return run.Status(p) == "blocked" })
 }
 
 // guardStop reports a ship stop shaped like the catchup guard's: failed

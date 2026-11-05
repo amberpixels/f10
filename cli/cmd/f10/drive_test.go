@@ -1239,7 +1239,6 @@ func TestDriveAnswersASettledCatchupStop(t *testing.T) {
 // and the task after it is halted with it. The record keeps GH-2's base.
 func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge")
-	fx.oneAttempt(t)
 	fx.in.root = t.TempDir()
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
@@ -1283,7 +1282,6 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 // stopped without reporting: the drive halts naming the workspace.
 func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.oneAttempt(t)
 	fx.task("GH-1", taskInfo{body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -1987,7 +1985,6 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 func TestDriveScopesAStopToItsDependents(t *testing.T) {
 	ids := []string{"GH-12", "GH-13", "GH-14", "GH-15"}
 	fx := wave(t, "GH-11", "GH-12", "GH-13", "GH-14", "GH-15", "judge", "ship")
-	fx.oneAttempt(t)
 	fx.infos["GH-11"] = taskInfo{closed: true}
 
 	fx.f.script(wsList,
@@ -2999,7 +2996,6 @@ func TestDriveHoldsADependentUntilItsBaseCommits(t *testing.T) {
 // next boundary, and the dependent's next skill is never sent.
 func TestDriveHaltsADependentWhenItsBaseHaltsAfterRelease(t *testing.T) {
 	fx := chained(t, "GH-1", "GH-2", "judge", "ship")
-	fx.oneAttempt(t)
 	fx.expects("GH-1", "judge")
 	fx.expects("GH-2", "judge")
 

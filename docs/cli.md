@@ -599,14 +599,14 @@ A cancelled record is never picked up again: the same command line starts a new 
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.
    The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt.
-   An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: it counts as a failed attempt (**When a turn fails**, below).
+   An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: the task halts, as a stalled ship or plan turn does.
    The chain resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails, or makes no progress, counts as a failed attempt.
 6. **Waiting.**
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
    A turn has begun once Herdr shows the agent working, the run reports after the prompt, or the agent's session left a prompt mark after it: the `UserPromptSubmit` hook writes `<session>.prompted` beside the run file, naming the checkout and the time, so a turn that began and ended between two looks still counts as taken once the mark is five seconds old.
    Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
-   No sign within two minutes is a failed attempt, and a workspace that still shows no agent status by then halts the task.
+   No sign within two minutes is a failed attempt (**When a turn fails**, below), and a workspace that still shows no agent status by then halts the task.
    Once the agent is idle again, the run says how the turn ended:
    - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      The driver keeps driving every other task: a guard stop still gets its catchup, a base still releases its dependents.
@@ -614,19 +614,22 @@ A cancelled record is never picked up again: the same command line starts a new 
    - **blocked waiting on its base** (`f10 state wait`, a driven ship that found its base without code) - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
      Once the base is released and its branch head has moved past the one the ship found, ship is sent again with `resume at implement`; the same head never sends it twice.
      A wait on a base this drive does not run, or one already through, halts the task with the run's note;
-   - **blocked without one** (a judge stop), **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan): each chain element the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
+   - **blocked without one** (a judge stop, a stale task's verdict) - a decision, not breakage: the task halts with the run's note and next, since sending the skill again would only roll the decision again;
+   - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan): each chain element the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
      A stop the branch does not get past is a failed attempt of the skill in flight;
-   - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting; the driver reads the branch the same way, so a branch with its plan, commits of its own and an open PR carrying them counts as shipped, and anything less is a failed attempt.
-     Found at prompt time on an agent the driver did not start, a run still running halts at once and says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
+   - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting; the driver reads the branch the same way, so a branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
+     Anything less halts the task naming the workspace, because the agent is usually waiting on a permission dialog in its pane, and typing the skill again could answer it.
+     Found at prompt time, a run still running halts the same way and says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
 
    **When a turn fails.**
    A failed attempt sends the same action again at the next look.
    Three failures in a row of one action, with nothing changed between them (the branch, origin's copy, the marks, a merge or rebase in progress, the plan file, the PR, the review rounds and change verdicts, the run's phases), halt the task with the last reason and a line per attempt; the halt and its attempts go to the ledger.
    A failure after which any of those moved starts the count over, and so does a step that goes through.
+   A catchup's attempts compare the conflict it leaves instead, because a catchup that merges moves the branch every time; a clean catchup does not clear them, only the entry it guarded going through does.
    A halted task halts every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
    Every other task runs on, and the driver exits **5** once nothing can move.
-   The count is kept in the drive's record, so a drive drained for an upgrade resumes it; a task that ended, by a halt or otherwise, starts over on a rerun.
+   The count lives in the running drive only, so a rerun or a resumed drive starts it over.
 
    **Every prompt checks first.**
    An agent working is attached to, not prompted.

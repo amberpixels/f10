@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -244,5 +247,41 @@ func TestTaskStateShipped(t *testing.T) {
 	failed := taskState{head: "c", origin: "c", code: true, pr: "7", run: &state.Run{Ship: "failed"}}
 	if failed.has("ship") {
 		t.Error("an explicit ship stop read as shipped")
+	}
+}
+
+// A catchup's attempts compare the conflict it left, not the branch: a
+// catchup that merges moves the head every time without settling anything,
+// so the third with the same conflict halts, and a new conflict starts over.
+func TestCatchupAttemptsCountTheConflict(t *testing.T) {
+	in := &driveInput{now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
+
+	var out bytes.Buffer
+
+	same := "GH-1 still conflicts with main after a catchup: the same files conflict with main the same way again: a.go"
+	for i := range 2 {
+		if res := in.catchupAttempt(&out, r, "ship", same); res != nil {
+			t.Fatalf("attempt %d halted: %+v", i+1, res)
+		}
+	}
+
+	if res := in.catchupAttempt(&out, r, "ship", "a new conflict: b.go"); res != nil {
+		t.Fatalf("a new conflict halted: %+v", res)
+	}
+
+	for i := range 2 {
+		if res := in.catchupAttempt(&out, r, "ship", same); res != nil {
+			t.Fatalf("attempt %d after the new conflict halted: %+v", i+1, res)
+		}
+	}
+
+	res := in.catchupAttempt(&out, r, "ship", same)
+	if res == nil || res.code != exitHalted || len(res.attempts) != 3 {
+		t.Fatalf("the third same conflict in a row did not halt: %+v\n%s", res, out.String())
+	}
+
+	if last := res.lines[len(res.lines)-1]; !strings.HasPrefix(last, "next: settle it with /f10:catchup") {
+		t.Errorf("halt lines = %q", res.lines)
 	}
 }
