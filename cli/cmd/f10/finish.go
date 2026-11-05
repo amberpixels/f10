@@ -627,11 +627,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			return nil
 		}
 
-		if err := archiveSpike(spike, spikeDst); err != nil {
-			return fmt.Errorf("%s, but %w", ended, err)
-		}
-
-		return nil
+		return archiveSpike(spike, spikeDst)
 	}
 
 	switch {
@@ -667,6 +663,11 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		in.handoff(hand)
 	}
 
+	// a rerun finds the task by its branch, so a step that failed keeps it
+	if after.keep == "" && len(after.failed) > 0 {
+		after.keep = "the worktree and branch stay for the rerun"
+	}
+
 	if after.keep != "" {
 		return after.done(in.task.ID, ended)
 	}
@@ -676,8 +677,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			return fmt.Errorf("%s, but %w", ended, err)
 		}
 
+		after.removed = true
+
 		if err := after.check("archiving the spike report", archiveLate()); err != nil {
-			return err
+			return fmt.Errorf("%s, but archiving the spike report failed: %w", ended, err)
 		}
 
 		finishRecords(w, in, name)
@@ -694,8 +697,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
+	after.removed = err == nil
+
 	if err := after.check("archiving the spike report", archiveLate()); err != nil {
-		return err
+		return fmt.Errorf("%s, but archiving the spike report failed: %w", ended, err)
 	}
 
 	// before the close, which ends the process on the self-close path
@@ -704,6 +709,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	// closing its own workspace would end this process before the error prints
 	if self && len(after.failed) > 0 {
+		after.keep = "this workspace stays open"
+
 		return after.done(in.task.ID, ended)
 	}
 
@@ -725,12 +732,15 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 }
 
 // afterMerge collects the failures of the steps after a merge: the merge
-// has landed, so each step runs on and a rerun completes what failed.
+// has landed, so each step runs on. A rerun completes what failed only while
+// the branch exists, so a failure before its removal keeps it.
 type afterMerge struct {
 	on     bool     // the merge landed
 	failed []string // "<step>: <error>"
-	// keep, when set, says what stays for a rerun and why
+	// keep, when set, says what stays and why
 	keep string
+	// removed: the branch is gone, so a rerun reads the task as finished
+	removed bool
 }
 
 // check returns err before the merge, and collects it after, under step
@@ -757,6 +767,10 @@ func (a *afterMerge) done(id, ended string) error {
 	msg := ended + ", but " + strings.Join(a.failed, "; ")
 	if a.keep != "" {
 		msg += "; " + a.keep
+	}
+
+	if a.removed {
+		return fmt.Errorf("%s: the task is finished, so settle what failed by hand", msg)
 	}
 
 	return fmt.Errorf("%s: rerun f10 finish %s to complete", msg, id)

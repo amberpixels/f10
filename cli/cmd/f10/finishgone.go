@@ -126,7 +126,16 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		rows = append(rows, fact{label: "reviews", value: reviews})
 	}
 
-	notes = append(notes, name+" had no worktree left: only the branch is deleted, no workspace closed")
+	// a rerun finds the task by its branch, so a step that failed keeps it
+	if after.keep == "" && len(after.failed) > 0 {
+		after.keep = "the branch stays for the rerun"
+	}
+
+	if after.keep != "" {
+		notes = append(notes, name+" had no worktree left, and "+after.keep)
+	} else {
+		notes = append(notes, name+" had no worktree left: only the branch is deleted, no workspace closed")
+	}
 
 	if err := writeReport(w, rows, notes); err != nil {
 		return err
@@ -144,7 +153,10 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	ended := p.url() + " merged"
 
-	// the branch is what a rerun finds the task by
+	if after.keep == "" && len(after.failed) > 0 {
+		after.keep = "the branch stays for the rerun"
+	}
+
 	if after.keep != "" {
 		return after.done(in.task.ID, ended)
 	}

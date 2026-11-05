@@ -339,10 +339,11 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A PR left open and a spike's close ship nothing, so they archive the handoff without printing it.
 
 Once the merge has landed, a failing step does not stop the ones after it.
-Releasing dependents, archiving the plan, the reviews and the handoff, removing the worktree and branch, and closing the workspace each run, and finish then exits non-zero naming every step that failed and `rerun f10 finish <id>`.
-Each step finds its own work done on a rerun, so the rerun completes the rest.
-Two steps hold back the rest when they fail: archiving the plan and copying a spike report out.
-The worktree and branch stay, the workspace stays open, and stopped drive records are not marked finished until the rerun, because a rerun finds the task by its branch and the worktree may hold the only copy.
+Releasing dependents and archiving the plan, the reviews and the handoff each run, and finish then exits non-zero naming every step that failed.
+A rerun finds the task by its branch, so a failure in any of these steps keeps the worktree and branch, leaves the workspace open and leaves stopped drive records unmarked, and the error ends in `rerun f10 finish <id>`.
+Each step finds its own work done on that rerun, so it completes the rest.
+Archiving the plan and copying a spike report out matter twice over, because the worktree may hold the only copy.
+Once the worktree and branch are removed, a rerun reads the task as finished, so a failure after that (archiving a spike report kept outside the worktree, focusing or closing a workspace) ends in "settle what failed by hand" instead.
 A finish closing its own workspace (`--yes` from inside it) leaves it open when a step failed, so the error stays on screen.
 
 Before the merge lands, finish also measures the branch for `f10 stats`: lines added plus deleted against the base it forked from (its `--after` base branch, else `origin/<default>`, else the local default branch for a branch never pushed), lockfiles, generated code and snapshots left out, with the markdown share.

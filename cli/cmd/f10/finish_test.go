@@ -829,8 +829,11 @@ func TestFinishRunsOnPastAFailedClose(t *testing.T) {
 	fx.openPR()
 	fx.f.fail("herdr workspace close ws:9", shell.Result{Code: 1, Stderr: "no such workspace"})
 
+	// past the branch's removal a rerun would read the task as finished, so
+	// the error says to settle it by hand
 	_, err := fx.run(t)
-	if err == nil || !strings.Contains(err.Error(), "closing workspace ws:9 failed") {
+	if err == nil || !strings.Contains(err.Error(), "closing workspace ws:9 failed") ||
+		!strings.Contains(err.Error(), "settle what failed by hand") || strings.Contains(err.Error(), "rerun") {
 		t.Fatalf("err = %v", err)
 	}
 
@@ -2920,6 +2923,38 @@ func TestFinishRerunsAfterAFailedRemoval(t *testing.T) {
 	}
 
 	if fx.f.called("gh pr merge") || !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("git branch -D GH-1") {
+		t.Errorf("rerun calls: %v", fx.f.calls)
+	}
+}
+
+// A step that fails before the removal keeps the worktree and branch, so the
+// rerun finds the task and redoes it.
+func TestFinishKeepsTheWorktreeWhenAStepFails(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.fail(cfgDeps, shell.Result{Code: 2, Stderr: "fatal: bad config"})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "releasing dependents failed") ||
+		!strings.Contains(err.Error(), "the worktree and branch stay for the rerun") {
+		t.Fatalf("err = %v", err)
+	}
+
+	for _, p := range []string{"git worktree remove", "git branch -D", "herdr workspace close"} {
+		if fx.f.called(p) {
+			t.Errorf("%q ran although a step failed", p)
+		}
+	}
+
+	fx.f.calls = nil
+	fx.f.script(ghView, prMerged)
+	fx.f.script(cfgDeps, "")
+
+	if out, err := fx.run(t); err != nil {
+		t.Fatalf("rerun: %v\n%s", err, out)
+	}
+
+	if !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("herdr workspace close ws:9") {
 		t.Errorf("rerun calls: %v", fx.f.calls)
 	}
 }
