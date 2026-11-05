@@ -1287,8 +1287,13 @@ func deferredPullNote(err error, main, def string) string {
 
 	switch {
 	case gitx.Diverged(err):
+		// the switch is spelled out: the main checkout may be on another branch
 		return fmt.Sprintf("%s not pulled: the local %s has commits origin/%s lacks; "+
-			"settle it with git -C %s rebase origin/%s %s, or push them%s", def, def, def, main, def, def, retry)
+			"settle it with git -C %s switch %s && git -C %s rebase origin/%s, or push them%s",
+			def, def, def, main, def, main, def, retry)
+	case gitx.StaleRef(err):
+		return fmt.Sprintf("%s not pulled: a stale origin ref is in the way; "+
+			"settle it with git -C %s remote prune origin%s", def, main, retry)
 	case gitx.RefLocked(err), errors.Is(err, errPullBusy):
 		return fmt.Sprintf("%s not pulled: another git held origin's refs%s, "+
 			"or run git -C %s pull --ff-only", def, retry, main)

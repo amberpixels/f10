@@ -485,9 +485,20 @@ func retryRefLock(ctx context.Context, dir string, args ...string) error {
 // exists, or the ref moved between git's read and its write.
 var refLockMarks = []string{"cannot lock ref", "unable to update local ref", "some local refs could not be updated"}
 
-// RefLocked reports whether git failed for want of a ref's lock.
+// RefLocked reports whether git failed for want of a ref's lock. A stale
+// ref says the same words, but no wait clears it (StaleRef).
 func RefLocked(err error) bool {
-	return stderrHas(err, refLockMarks)
+	return stderrHas(err, refLockMarks) && !StaleRef(err)
+}
+
+// staleRefMarks are git's words for a remote-tracking ref in the way of a
+// new one, as when origin replaced foo with foo/bar: only a prune clears it.
+var staleRefMarks = []string{"exists; cannot create", "remote prune"}
+
+// StaleRef reports whether git failed on a remote-tracking ref that only
+// `git remote prune origin` removes.
+func StaleRef(err error) bool {
+	return stderrHas(err, staleRefMarks)
 }
 
 // divergedMarks are git's refusals to move a branch that is not behind:

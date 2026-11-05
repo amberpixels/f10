@@ -537,7 +537,9 @@ func TestRefLockedAndDiverged(t *testing.T) {
 	}{
 		{"error: cannot lock ref 'refs/remotes/origin/main': is at abc but expected def", true, false},
 		{"error: unable to update local ref 'refs/remotes/origin/main'", true, false},
-		{"error: some local refs could not be updated; try running 'git remote prune origin'", true, false},
+		{"error: some local refs could not be updated", true, false},
+		{"error: some local refs could not be updated; try running 'git remote prune origin'", false, false},
+		{"error: cannot lock ref 'refs/remotes/origin/foo/bar': 'refs/remotes/origin/foo' exists; cannot create", false, false},
 		{"fatal: Not possible to fast-forward, aborting.", false, true},
 		{"hint: Diverging branches can't be fast-forwarded, you need to either:", false, true},
 		{" ! [rejected]        main       -> main  (non-fast-forward)", false, true},
@@ -550,6 +552,10 @@ func TestRefLockedAndDiverged(t *testing.T) {
 		if got := Diverged(exit(c.stderr)); got != c.diverged {
 			t.Errorf("Diverged(%q) = %v, want %v", c.stderr, got, c.diverged)
 		}
+	}
+
+	if !StaleRef(exit("error: 'refs/remotes/origin/foo' exists; cannot create 'refs/remotes/origin/foo/bar'")) {
+		t.Error("a ref in the way is not a stale ref")
 	}
 
 	if RefLocked(errors.New("cannot lock ref")) || Diverged(errors.New("non-fast-forward")) {

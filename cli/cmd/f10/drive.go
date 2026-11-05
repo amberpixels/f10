@@ -593,7 +593,8 @@ type driveInput struct {
 	// it: the drive follows that turn instead of sending the skill again
 	answeredIn map[string]time.Time
 	inboxNotes []string
-	pullLine   string // the last line retryPull printed
+	pullLine   string // the last line retryPull printed, or a finish's deferred note
+	ranFinish  bool   // a finish ran here, so this drive may pull main
 
 	// parallel caps the tasks running a skill at once, and twice it the
 	// agents open; 0 caps nothing. defaultParallel is the cap with none given.
@@ -2396,6 +2397,8 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	fmt.Fprintf(w, "%s finish: running\n", in.id(id))
 
+	in.ranFinish = true
+
 	var (
 		buf    bytes.Buffer
 		hand   []string
@@ -2413,7 +2416,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 			in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
 		},
 		handoff:  func(lines []string) { hand = lines },
-		deferred: func(note string) { pulled = note },
+		deferred: func(note string) { pulled, in.pullLine = note, note },
 	})
 
 	sc := bufio.NewScanner(&buf)
@@ -2449,9 +2452,14 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 	return driveResult{row: rowFinished, lines: append(lines, handoffBlock(id, hand)...)}
 }
 
-// retryPull retries a pull a finish deferred, once a tick; a line already
-// printed is not printed again, so a diverged main is said once.
+// retryPull retries a pull a finish deferred, once a tick, in a drive that
+// ran a finish, since pulling is an act; a line already printed is not
+// printed again, so a diverged main is said once.
 func (in *driveInput) retryPull(ctx context.Context, w io.Writer) {
+	if !in.ranFinish {
+		return
+	}
+
 	line, _ := retryPendingPull(ctx, in.root, in.main)
 	if line == "" || line == in.pullLine {
 		return

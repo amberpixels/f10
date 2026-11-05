@@ -718,7 +718,7 @@ func TestFinishDefersAFailedPull(t *testing.T) {
 	}
 
 	if !strings.Contains(out, "main not pulled: the local main has commits origin/main lacks") ||
-		!strings.Contains(out, "git -C "+fx.main+" rebase origin/main main") {
+		!strings.Contains(out, "git -C "+fx.main+" switch main && git -C "+fx.main+" rebase origin/main") {
 		t.Errorf("report:\n%s", out)
 	}
 
@@ -767,6 +767,10 @@ func TestDeferredPullNote(t *testing.T) {
 		{lock, "main not pulled: another git held origin's refs; f10 retries the pull"},
 		{fmt.Errorf("%w: lease", errPullBusy), "another git held origin's refs"},
 		{errors.New("boom"), "main not pulled: boom; settle it with git -C /m pull --ff-only; f10 retries the pull"},
+		{
+			&gitx.ExitError{Args: []string{"pull"}, Code: 1, Stderr: "error: 'refs/remotes/origin/foo' exists; cannot create"},
+			"a stale origin ref is in the way; settle it with git -C /m remote prune origin",
+		},
 	} {
 		if got := deferredPullNote(c.err, "/m", "main"); !strings.Contains(got, c.want) {
 			t.Errorf("deferredPullNote(%v) = %q, want %q in it", c.err, got, c.want)
@@ -2838,5 +2842,84 @@ func TestFinishMergedWithoutWorktreePrintsTheHandoff(t *testing.T) {
 	if exists(src) || !exists(archived) || !strings.Contains(out, "handoff:") || !strings.Contains(out, archived) ||
 		!strings.Contains(out, "\n\n"+handoffBody+"\n") || strings.Join(handed, "\n") != handoffBody {
 		t.Errorf("handed = %q, report:\n%s", handed, out)
+	}
+}
+
+// With no worktree left, a deferred pull and a plan that cannot be archived
+// both run on: the branch stays for the rerun, which completes.
+func TestFinishMergedWithoutWorktreeRunsOnAndKeepsTheBranch(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(worktrees, porcelain())
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+	fx.f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
+
+	plans := filepath.Join(fx.main, ".f10", "plans")
+	if err := os.MkdirAll(plans, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(plans, "GH-1.md"), []byte("# plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	blocker := filepath.Join(plans, "archive")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "archiving the plan failed") ||
+		!strings.Contains(err.Error(), "the branch stays") || !strings.Contains(err.Error(), "rerun f10 finish GH-1") {
+		t.Fatalf("err = %v, want the archive named, the branch kept and a rerun", err)
+	}
+
+	if fx.f.called("git branch -D") || !strings.Contains(out, "main not pulled") {
+		t.Errorf("calls: %v\nreport:\n%s", fx.f.calls, out)
+	}
+
+	if err := os.Remove(blocker); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.f.calls = nil
+	fx.f.script("git pull --ff-only", "")
+
+	if out, err := fx.run(t); err != nil {
+		t.Fatalf("rerun: %v\n%s", err, out)
+	}
+
+	if !fx.f.called("git branch -D GH-1") || !planArchivedIn(plans, "GH-1") {
+		t.Errorf("rerun calls: %v", fx.f.calls)
+	}
+}
+
+// A worktree git will not remove is named, the workspace still closes, and
+// the rerun on the merged PR removes it.
+func TestFinishRerunsAfterAFailedRemoval(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.fail("git worktree remove "+fx.wt, shell.Result{Code: 1, Stderr: "fatal: busy"})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "removing the worktree failed") ||
+		!strings.Contains(err.Error(), "rerun f10 finish GH-1") {
+		t.Fatalf("err = %v", err)
+	}
+
+	if !fx.f.called("herdr workspace close ws:9") {
+		t.Errorf("the workspace did not close: %v", fx.f.calls)
+	}
+
+	fx.f.calls = nil
+	fx.f.script(ghView, prMerged)
+	fx.f.script("git worktree remove "+fx.wt, "")
+
+	if out, err := fx.run(t); err != nil {
+		t.Fatalf("rerun: %v\n%s", err, out)
+	}
+
+	if fx.f.called("gh pr merge") || !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("git branch -D GH-1") {
+		t.Errorf("rerun calls: %v", fx.f.calls)
 	}
 }

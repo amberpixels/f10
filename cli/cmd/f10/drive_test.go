@@ -3734,18 +3734,32 @@ func TestDrivePushesACaughtUpBranchOnlyOverWhatTheCatchupSaw(t *testing.T) {
 	}
 }
 
-// A finish that deferred its pull is finished all the same, and the drive's
-// report carries the note.
+// A finish that deferred its pull is finished all the same, the drive's
+// report carries the note, and the next tick does not say it again.
 func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
+	const note = "main not pulled: the local main has commits origin/main lacks"
+
 	in := &driveInput{
 		answers: map[string]string{},
 		now:     time.Now,
+		root:    t.TempDir(),
 		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-			req.deferred("main not pulled: the local main has commits origin/main lacks")
+			req.deferred(note)
 
 			return nil
 		},
 	}
+
+	if in.pullLine != "" {
+		t.Fatal("pullLine set before any finish")
+	}
+
+	defer func() {
+		if in.pullLine != note || !in.ranFinish {
+			t.Errorf("after the finish pullLine = %q, ranFinish = %v; want the note, so a tick says it once",
+				in.pullLine, in.ranFinish)
+		}
+	}()
 
 	res := in.runFinish(t.Context(), io.Discard, &driveRun{task: driveTask{ref: gh1}})
 	if res.row != rowFinished || res.code != 0 || len(res.lines) != 1 ||
@@ -3771,6 +3785,14 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 
 	var out bytes.Buffer
 
+	// a drive that ran no finish never pulls main
+	in.retryPull(t.Context(), &out)
+
+	if f.called("git pull") {
+		t.Fatal("a drive that ran no finish pulled main")
+	}
+
+	in.ranFinish = true
 	in.retryPull(t.Context(), &out)
 	in.retryPull(t.Context(), &out)
 
