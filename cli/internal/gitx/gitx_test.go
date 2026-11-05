@@ -591,3 +591,67 @@ func TestPullFFOnADivergedBranchIsDiverged(t *testing.T) {
 		t.Errorf("PullFF on a diverged main = %v, want a divergence", err)
 	}
 }
+
+// A rebase that stopped on a conflict and was continued to the end leaves
+// REBASE_HEAD behind; only the state directory says a rebase is running.
+func TestInProgressIgnoresALeftoverRebaseHead(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+
+		if _, err := Exec(t.Context(), dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(body string) {
+		t.Helper()
+
+		if err := os.WriteFile(filepath.Join(dir, "f"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rebasing := func() bool {
+		t.Helper()
+
+		op, err := InProgress(t.Context(), dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return op.Kind == "rebase"
+	}
+
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "t@t")
+	run("config", "user.name", "t")
+	write("base\n")
+	run("add", "f")
+	run("commit", "-qm", "base")
+	run("checkout", "-qb", "side")
+	write("side\n")
+	run("commit", "-qam", "side")
+	run("checkout", "-q", "main")
+	write("main\n")
+	run("commit", "-qam", "main")
+	run("checkout", "-q", "side")
+
+	if _, err := Exec(t.Context(), dir, "rebase", "main"); err == nil {
+		t.Fatal("rebase did not stop on the conflict")
+	}
+
+	if !rebasing() {
+		t.Error("a rebase stopped on a conflict reads as not in progress")
+	}
+
+	write("both\n")
+	run("add", "f")
+	run("-c", "core.editor=true", "rebase", "--continue")
+
+	if sha, _ := Ref(t.Context(), dir, "REBASE_HEAD"); sha == "" {
+		t.Skip("this git removes REBASE_HEAD at the end of a rebase")
+	}
+
+	if rebasing() {
+		t.Error("a finished rebase whose REBASE_HEAD was left behind reads as in progress")
+	}
+}

@@ -57,7 +57,8 @@ type Operation struct {
 }
 
 // InProgress reads the merge or rebase in progress in dir from the git dir,
-// since REBASE_HEAD exists only while a rebase is stopped on a commit.
+// not REBASE_HEAD, which git leaves behind once a rebase that stopped on a
+// conflict is continued to the end.
 func InProgress(ctx context.Context, dir string) (Operation, error) {
 	merge, err := Ref(ctx, dir, "MERGE_HEAD")
 	if err != nil {

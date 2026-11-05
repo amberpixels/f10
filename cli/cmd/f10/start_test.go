@@ -151,6 +151,11 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
+		// no rebase's state directory exists until a test says so
+		if name, ok := strings.CutPrefix(key, "git rev-parse --git-path "); ok {
+			return shell.Result{Stdout: "/nonexistent/" + name}
+		}
+
 		f.t.Fatalf("unscripted call: %q\nscripted:\n  %s", key, strings.Join(f.keys(), "\n  "))
 	}
 

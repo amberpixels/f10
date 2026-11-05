@@ -32,7 +32,7 @@ func scriptTarget(fx *janitorFixture) {
 	f.script("git rev-parse -q --verify refs/remotes/origin/main", "m2")
 	f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
 	f.script("git rev-parse -q --verify MERGE_HEAD", "")
-	f.script("git rev-parse -q --verify REBASE_HEAD", "")
+	f.script("git rev-parse --git-path rebase-merge", "/nonexistent/rebase-merge")
 	f.script("git status --porcelain", "")
 	f.fail("git merge-base --is-ancestor m2 refs/heads/GH-1/x", shell.Result{Code: 1})
 	f.script("git rev-parse -q --verify HEAD", "p1")
@@ -291,7 +291,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 			fx.f.script("git config --get branch.GH-1/x."+cfgLanded, "main")
 		}, kind: watchCatchup, kept: true, failed: true},
 		"rebase left open": {script: func(fx *janitorFixture) {
-			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "rh")
+			fx.f.script("git rev-parse --git-path rebase-merge", fx.f.t.TempDir())
 		}, kind: watchCatchup, kept: true, failed: true},
 		"lease held": {held: true},
 		"push rejected": {script: func(fx *janitorFixture) {
@@ -382,7 +382,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 				fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m3")
 				fx.f.fail("git merge-base --is-ancestor m3 main0", shell.Result{Code: 1})
 				fx.f.fail("git merge-base --is-ancestor m3 refs/heads/GH-1/x", shell.Result{Code: 1})
-				fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
+				fx.f.script("git rev-parse --git-path rebase-merge", "/nonexistent/rebase-merge")
 
 				if out := catchupPass(t, in, []watchedTask{task}, store); len(out) != 1 || prompts != 1 {
 					t.Errorf("a moved target did not send a new catchup: %+v, %d", out, prompts)

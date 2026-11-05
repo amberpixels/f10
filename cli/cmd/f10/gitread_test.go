@@ -23,7 +23,6 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 			fx.f.script("git config --get branch.GH-1."+cfgLanded, "")
 			fx.f.script("git config --get branch.GH-1."+cfgMoved, "")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail(failing, broken)
 

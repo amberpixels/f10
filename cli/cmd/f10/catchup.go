@@ -131,15 +131,13 @@ func branchUnsettled(ctx context.Context, main, dir, branch string) string {
 }
 
 func treeBusy(ctx context.Context, dir string) string {
-	for _, head := range []struct{ ref, what string }{{"MERGE_HEAD", "merge"}, {"REBASE_HEAD", "rebase"}} {
-		sha, err := gitx.Ref(ctx, dir, head.ref)
+	op, err := gitx.InProgress(ctx, dir)
 
-		switch {
-		case err != nil:
-			return fmt.Sprintf("could not tell whether a %s is in progress in %s: %v", head.what, dir, err)
-		case sha != "":
-			return fmt.Sprintf("a %s is still in progress in %s", head.what, dir)
-		}
+	switch {
+	case err != nil:
+		return fmt.Sprintf("could not tell whether a merge or rebase is in progress in %s: %v", dir, err)
+	case op.Kind != "":
+		return fmt.Sprintf("a %s is still in progress in %s", op.Kind, dir)
 	}
 
 	dirty, err := gitx.Status(ctx, dir)

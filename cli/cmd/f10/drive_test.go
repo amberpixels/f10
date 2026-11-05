@@ -50,7 +50,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	fx.f.absent = append(fx.f.absent, "git rev-list --count ", "git rev-parse -q --verify refs/heads/",
 		"git rev-parse -q --verify refs/remotes/origin/", "git reflog show ",
 		// the state a reconcile reads: no merge or rebase in progress, a clean tree
-		"git rev-parse -q --verify MERGE_HEAD", "git rev-parse -q --verify REBASE_HEAD", "git status --porcelain")
+		"git rev-parse -q --verify MERGE_HEAD", "git status --porcelain")
 	// a catchup the drive sends records where it starts from: the default
 	// branch is main, local only, and the branch merges with it cleanly
 	// until a test says otherwise
@@ -546,7 +546,6 @@ func (fx *driveFixture) adoptsGH1() {
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
 	fx.f.script("herdr agent get pane:1", agentFound)
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
 }
 
@@ -2056,7 +2055,6 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.expects("GH-2", "judge")
 			fx.f.script("herdr agent prompt "+agentOf("GH-2")+" /f10:catchup --driven", "{}")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
 			fx.mergeable("GH-1", "GH-2")
 
@@ -2181,7 +2179,6 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git config --get branch.GH-1."+cfgLanded, landed...)
 			fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup --driven", "{}")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor old HEAD", shell.Result{Code: 1})
 			fx.f.script("git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1", "")
@@ -2390,7 +2387,6 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			fx.f.script("git merge-tree --write-tree --no-messages "+target+" HEAD", "tree")
 			fx.f.script("git rev-parse -q --verify HEAD", "head0", "head1")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-			fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
 			fx.f.script("git rev-parse -q --verify origin/GH-1", tc.pushed)
@@ -3063,7 +3059,6 @@ func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
 	fx.f.script("git merge-tree --write-tree --no-messages b2 HEAD", "tree")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" /f10:catchup --driven", "{}")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
 	fx.onTick[3] = func() { fx.f.script(moved, "b2") }           // what the drive set
 	fx.onTick[4] = func() { fx.f.script(moved, "") }             // the catchup cleared it
@@ -3193,7 +3188,6 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 				}
 
 				fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-				fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 				fx.f.script("git status --porcelain", "")
 				fx.f.script(wsList,
 					unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -3531,7 +3525,6 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 	// the head the park read, then the commit that releases it
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1", "a2")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
 	fx.in.asksDir = t.TempDir()
 
@@ -3589,7 +3582,6 @@ func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
 		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at implement"), "{}")
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
-	fx.f.script("git rev-parse -q --verify REBASE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
 
 	fx.f.script(wsList,
