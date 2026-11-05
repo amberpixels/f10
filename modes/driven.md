@@ -57,13 +57,29 @@ Four kinds of open question never become an ask:
 
 The drive and the watcher read an idle agent as a turn that has ended.
 So a turn that ends before its report looks like one that stopped without reporting.
-After a minute's grace the task halts, and a report that lands later finds the drive gone.
+After a minute's grace the drive reads where the task stands from git, the PR and the task's files, and a report that lands later is not read.
+If the branch shows the step done, the drive moves on.
+Otherwise the task halts, because an idle agent on a running run may be waiting on a permission dialog that a new prompt could answer.
 
 - Run verify, and every other long command, in the foreground.
   Raise the `timeout` where the default is too short.
 - If a command must run in the background, wait for it in the same turn with a Monitor until-loop on its exit.
   Never end the turn expecting to be woken when it reports.
 - A driven turn ends in only three ways: the step's report, an ask or a failure.
+
+## When a drive halts
+
+The drive reads how far a turn got from the branch, the PR and the task's files, whoever prompted the turn.
+A turn that stopped `failed` or `partial` is a failed attempt, and the drive sends the step again.
+The task halts only in these cases:
+
+- **An ask.** The task waits for the answer (**The answer**, below).
+- **No progress.** The same action failed three times in a row, and git, the PR and the task's files did not change between the failures.
+  The halt names the action and lists every attempt with its reason.
+  A failure after which the state moved starts the count over.
+- **A decision.** A run stopped `blocked` without an ask, such as a judge's stop or a stale task's verdict, halts at once, because sending the step again would roll the decision again.
+- **A stall the branch does not explain** (**A turn ends at its report**, above), or a prompt the agent never took, because typing into a pane that may hold a dialog could answer it.
+- **The drive's own environment fails**, because sending the step again cannot fix it: a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
 
 ## The answer
 
