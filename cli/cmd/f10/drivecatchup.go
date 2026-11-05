@@ -177,6 +177,10 @@ func (in *driveInput) catchupHere(
 
 	r.catchupPlan = &p
 
+	if p.method != methodNone && p.method != methodSkip && r.lastCatchup != nil {
+		r.lastCatchup.integrated = true
+	}
+
 	if stopped {
 		paths, _ := gitx.Unmerged(ctx, dir)
 
@@ -207,9 +211,9 @@ func (in *driveInput) catchupHere(
 			return in.next(ctx, w, r)
 		}
 
-		// origin was read after whatever rewrote the branch, so the record
-		// cannot lease a force-push: only a fast-forward goes out
-		if r.lastCatchup != nil {
+		// a rewrite this catchup did not make (an earlier drive's) predates
+		// the origin read, so that record cannot lease a force-push
+		if r.lastCatchup != nil && !r.lastCatchup.integrated {
 			r.lastCatchup.held = false
 		}
 	}
@@ -293,7 +297,12 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 	case reason != "" && !retry:
 		in.end(ctx, w, r, catchupHalt(r, "the catchup did not end clean: "+reason))
 	case reason != "":
-		r.catchupLeft = reason
+		// a branch that lost its base is integrated again by the drive, by the
+		// declared method; anything else goes back to the agent
+		if !strings.Contains(reason, notHeld) {
+			r.catchupLeft = reason
+		}
+
 		in.failed(ctx, w, r, catchupHalt(r, "the catchup did not end clean: "+reason))
 	default:
 		fmt.Fprintf(w, "%s catchup: %s settled, verifying\n", in.id(id), dir)
@@ -343,7 +352,7 @@ func (in *driveInput) catchupLeft(ctx context.Context, r *driveRun) (string, err
 	}
 
 	if !held {
-		return fmt.Sprintf("%s does not hold %s (%s)", r.o.branch, p.base, short(p.sha)), nil
+		return fmt.Sprintf("%s%s%s (%s)", r.o.branch, notHeld, p.base, short(p.sha)), nil
 	}
 
 	markers, err := gitx.Markers(ctx, dir, p.sha)
@@ -357,6 +366,9 @@ func (in *driveInput) catchupLeft(ctx context.Context, r *driveRun) (string, err
 
 	return "", nil
 }
+
+// notHeld marks catchupLeft's reason for a branch that lost its base.
+const notHeld = " does not hold "
 
 // catchupBase is the base the catchup brought in: the one this drive
 // integrated, else, for a drive that did not (resumed), the one the marks
@@ -398,6 +410,20 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 
 	if job.res.failed != "" {
 		fmt.Fprintf(w, "%s catchup: verify is red: %s\n", in.id(id), job.res.failed)
+
+		// a red the agent cannot fix counts like any failed catchup: the same
+		// command red on the same head three times halts
+		head, _ := gitx.Ref(ctx, r.o.path, "HEAD")
+		halt := catchupHalt(
+			r,
+			"verify is red after the catchup: "+job.res.failed+" failed, its output is in "+job.res.log,
+		)
+
+		if res := in.attemptAt(w, r, "catchup", head+"|"+job.res.failed, halt); res != nil {
+			in.end(ctx, w, r, *res)
+
+			return nil
+		}
 
 		ws, _, err := in.look(ctx, r)
 		if err != nil {

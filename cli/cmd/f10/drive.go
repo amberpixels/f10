@@ -732,6 +732,9 @@ type catchupSent struct {
 	// made it stale
 	pushed string
 	held   bool
+	// integrated is set once this catchup rewrote the branch itself, after
+	// pushed was read, so the lease stays sound on a resend
+	integrated bool
 }
 
 // halts says why a conflict after this catchup halts the task, or "" when

@@ -13,8 +13,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
-// verifyLimit bounds one verify command the drive runs itself.
-var verifyLimit = 30 * time.Minute
+// verifyLimit bounds one verify command the drive runs itself, and
+// verifyWaitDelay how long its output is read once it was killed.
+var (
+	verifyLimit     = 30 * time.Minute
+	verifyWaitDelay = 5 * time.Second
+)
 
 // A verifySpec is the verify the drive can run without a model: the
 // frontmatter list, scoped to the branch's diff, or a fixed set of commands.
@@ -112,6 +116,10 @@ func runVerify(ctx context.Context, dir string, cmds []string, log string) (veri
 		cctx, cancel := context.WithTimeout(ctx, verifyLimit)
 		cmd := exec.CommandContext(cctx, "sh", "-c", c)
 		cmd.Dir = dir
+		// the limit kills the whole group, and the wait stops reading a pipe
+		// an orphan still holds, or a hung test would outlive the limit
+		killGroup(cmd)
+		cmd.WaitDelay = verifyWaitDelay
 
 		out, err := cmd.CombinedOutput()
 

@@ -619,7 +619,9 @@ A cancelled record is never picked up again: the same command line starts a new 
    A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.
    The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt, and git, not the signal, says whether it settled.
    An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: a catchup git shows settled goes on to verify, and any other halts, as a stalled ship or plan turn does.
-   The chain resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
+   The drive's own catchup resumes the chain once git shows it settled and the driver's verify is green; the driver clears the marks then.
+   A red verify the agent's turns do not fix counts as a failed attempt, so the same command red on the same head three times halts.
+   When the agent catches up whole (a prose Verify heading), the chain resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails, or makes no progress, counts as a failed attempt.
 6. **Waiting.**
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.

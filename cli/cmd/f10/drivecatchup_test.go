@@ -19,6 +19,7 @@ type binaryCatchupFake struct {
 	mu        sync.Mutex
 	stops     []bool   // integrate: stopped on a conflict
 	onStop    func()   // what a stop leaves in the git dir
+	method    string   // integrate's method, rebase when ""
 	reds      []string // verify: the failing command, "" for green
 	integrals int
 	verifies  int
@@ -51,7 +52,12 @@ func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebase
 				b.onStop()
 			}
 
-			return plan, stopped, nil
+			p := plan
+			if b.method != "" {
+				p.method = b.method
+			}
+
+			return p, stopped, nil
 		},
 		verify: func(_ context.Context, _, log string) (verifyRun, error) {
 			b.mu.Lock()
@@ -420,6 +426,80 @@ func TestDrivePromptsTheAgentOnRedVerify(t *testing.T) {
 	if err != nil || !strings.Contains(out, "caught up with main, verify green") ||
 		!strings.Contains(out, "GH-1:    done: ship") {
 		t.Errorf("err = %v\n%s", err, out)
+	}
+}
+
+// A red verify no turn fixes halts on the third red with the head unchanged.
+func TestDriveHaltsARedVerifyNoTurnFixes(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	reds := []string{"just test", "just test", "just test"}
+	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}, reds: reds}, t.TempDir())
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup main came in cleanly and verify is red: "+
+		"`just test` failed, its output is in "+filepath.Join(fx.in.root, "catchup", "GH-1.log")+
+		": fix it by the branch's intent, verify, and commit the fix --driven", "{}")
+
+	fx.agent(t, func(string) {
+		fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+		fx.reports(t, fx.clock)
+	})
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != exitHalted || !strings.Contains(out, "attempt 3 at") ||
+		!strings.Contains(out, "verify is red after the catchup: just test failed") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+}
+
+// An idle agent on a run still running halts the catchup before git moves.
+func TestDriveHaltsACatchupUnderAStalledAgent(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+
+	b := &binaryCatchupFake{stops: []bool{false}}
+	fx.binaryCatchup(t, b, t.TempDir())
+	fx.writeShipStop(t, "running", "pr", 4, "")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"))
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != exitHalted || !strings.Contains(out, "is idle while its run says ship") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+
+	if b.integrals != 0 {
+		t.Errorf("integrated %d times under a stalled agent, want none", b.integrals)
+	}
+}
+
+// A rerun that finds the base already held, its branch rewritten by an
+// earlier drive, never leases a force-push off an origin tip read after it.
+func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}, method: methodNone}, t.TempDir())
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p1")
+	fx.f.script("git fetch origin", "")
+	fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
+	fx.f.script("git merge-base --is-ancestor main0 refs/remotes/origin/main", "")
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"))
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != exitHalted ||
+		!strings.Contains(out, "the drive did not read origin/GH-1 when the catchup went out") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+
+	if fx.f.called("git push") {
+		t.Errorf("pushed a rewrite the drive did not make: %q", fx.f.calls)
 	}
 }
 
