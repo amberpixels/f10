@@ -593,6 +593,8 @@ type driveInput struct {
 	// it: the drive follows that turn instead of sending the skill again
 	answeredIn map[string]time.Time
 	inboxNotes []string
+	pullLine   string // the last line retryPull printed, or a finish's deferred note
+	ranFinish  bool   // a finish ran here, so this drive may pull main
 
 	// parallel caps the tasks running a skill at once, and twice it the
 	// agents open; 0 caps nothing. defaultParallel is the cap with none given.
@@ -881,6 +883,8 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 			break
 		}
+
+		in.retryPull(ctx, w)
 
 		wss, live, err := in.lookAll(ctx)
 		if err != nil {
@@ -2359,6 +2363,7 @@ type driveFinish struct {
 	pr       string // the answer to a foreign PR: finishMerge, finishLocal or ""
 	progress func(string)
 	handoff  func([]string)
+	deferred func(string)
 }
 
 func driveFinishInput(t *target, main string, h host, req driveFinish) (finishInput, error) {
@@ -2371,7 +2376,7 @@ func driveFinishInput(t *target, main string, h host, req driveFinish) (finishIn
 
 	in.suffix, in.branch = req.suffix, req.branch
 	in.merge, in.local = req.pr == finishMerge, req.pr == finishLocal
-	in.progress, in.handoff = req.progress, req.handoff
+	in.progress, in.handoff, in.deferred = req.progress, req.handoff, req.deferred
 	// a driven finish asks no second question, since a resume carries only
 	// the latest answer: a bundle's riders stay open, the reversible choice,
 	// and the report names them
@@ -2392,9 +2397,12 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	fmt.Fprintf(w, "%s finish: running\n", in.id(id))
 
+	in.ranFinish = true
+
 	var (
-		buf  bytes.Buffer
-		hand []string
+		buf    bytes.Buffer
+		hand   []string
+		pulled string
 	)
 
 	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
@@ -2407,7 +2415,8 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		progress: func(action string) {
 			in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
 		},
-		handoff: func(lines []string) { hand = lines },
+		handoff:  func(lines []string) { hand = lines },
+		deferred: func(note string) { pulled, in.pullLine = note, note },
 	})
 
 	sc := bufio.NewScanner(&buf)
@@ -2434,7 +2443,30 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		in.record(ctx, in.main, finishedEvent(id, "", in.now()))
 	}
 
-	return driveResult{row: rowFinished, lines: handoffBlock(id, hand)}
+	var lines []string
+	if pulled != "" {
+		// finished all the same: the merge is on origin, and the drive retries the pull
+		lines = append(lines, id+" finished; "+pulled)
+	}
+
+	return driveResult{row: rowFinished, lines: append(lines, handoffBlock(id, hand)...)}
+}
+
+// retryPull retries a pull a finish deferred, once a tick, in a drive that
+// ran a finish, since pulling is an act; a line already printed is not
+// printed again, so a diverged main is said once.
+func (in *driveInput) retryPull(ctx context.Context, w io.Writer) {
+	if !in.ranFinish {
+		return
+	}
+
+	line, _ := retryPendingPull(ctx, in.root, in.main)
+	if line == "" || line == in.pullLine {
+		return
+	}
+
+	in.pullLine = line
+	fmt.Fprintln(w, line)
 }
 
 // handoffBlock heads a finished task's handoff with its id and indents it,

@@ -469,7 +469,7 @@ func PullFF(ctx context.Context, dir string) error {
 func retryRefLock(ctx context.Context, dir string, args ...string) error {
 	for i := 0; ; i++ {
 		_, err := Exec(ctx, dir, args...)
-		if err == nil || i >= len(pullLockWaits) || !refLocked(err) {
+		if err == nil || i >= len(pullLockWaits) || !RefLocked(err) {
 			return err
 		}
 
@@ -481,12 +481,43 @@ func retryRefLock(ctx context.Context, dir string, args ...string) error {
 	}
 }
 
-// refLocked reports whether git failed for want of a ref's lock: the file
+// refLockMarks are git's words for a ref it could not take: the lock file
 // exists, or the ref moved between git's read and its write.
-func refLocked(err error) bool {
-	exit, ok := errors.AsType[*ExitError](err)
+var refLockMarks = []string{"cannot lock ref", "unable to update local ref", "some local refs could not be updated"}
 
-	return ok && strings.Contains(exit.Stderr, "cannot lock ref")
+// RefLocked reports whether git failed for want of a ref's lock. A stale
+// ref says the same words, but no wait clears it (StaleRef).
+func RefLocked(err error) bool {
+	return stderrHas(err, refLockMarks) && !StaleRef(err)
+}
+
+// staleRefMarks are git's words for a remote-tracking ref in the way of a
+// new one, as when origin replaced foo with foo/bar: only a prune clears it.
+var staleRefMarks = []string{"exists; cannot create", "remote prune"}
+
+// StaleRef reports whether git failed on a remote-tracking ref that only
+// `git remote prune origin` removes.
+func StaleRef(err error) bool {
+	return stderrHas(err, staleRefMarks)
+}
+
+// divergedMarks are git's refusals to move a branch that is not behind:
+// pull --ff-only's, old and new, and a fetch into a branch's.
+var divergedMarks = []string{"Not possible to fast-forward", "Diverging branches", "non-fast-forward"}
+
+// Diverged reports whether git refused a fast-forward because the local
+// branch holds commits its upstream lacks.
+func Diverged(err error) bool {
+	return stderrHas(err, divergedMarks)
+}
+
+func stderrHas(err error, marks []string) bool {
+	exit, ok := errors.AsType[*ExitError](err)
+	if !ok {
+		return false
+	}
+
+	return slices.ContainsFunc(marks, func(m string) bool { return strings.Contains(exit.Stderr, m) })
 }
 
 // FetchInto updates local branch from origin's branch of the same name

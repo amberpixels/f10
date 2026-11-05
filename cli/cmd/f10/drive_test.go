@@ -3733,3 +3733,84 @@ func TestDrivePushesACaughtUpBranchOnlyOverWhatTheCatchupSaw(t *testing.T) {
 		})
 	}
 }
+
+// A finish that deferred its pull is finished all the same, the drive's
+// report carries the note, and the next tick does not say it again.
+func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
+	const note = "main not pulled: the local main has commits origin/main lacks"
+
+	in := &driveInput{
+		answers: map[string]string{},
+		now:     time.Now,
+		root:    t.TempDir(),
+		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+			req.deferred(note)
+
+			return nil
+		},
+	}
+
+	if in.pullLine != "" {
+		t.Fatal("pullLine set before any finish")
+	}
+
+	defer func() {
+		if in.pullLine != note || !in.ranFinish {
+			t.Errorf("after the finish pullLine = %q, ranFinish = %v; want the note, so a tick says it once",
+				in.pullLine, in.ranFinish)
+		}
+	}()
+
+	res := in.runFinish(t.Context(), io.Discard, &driveRun{task: driveTask{ref: gh1}})
+	if res.row != rowFinished || res.code != 0 || len(res.lines) != 1 ||
+		!strings.Contains(res.lines[0], "GH-1 finished; main not pulled") {
+		t.Errorf("runFinish = %+v, want finished with the note", res)
+	}
+}
+
+// The drive retries a deferred pull each tick, saying a cause once, and
+// says when it lands.
+func TestDriveRetriesADeferredPull(t *testing.T) {
+	f := newFakes(t)
+	main, root := t.TempDir(), t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(root, pendingPullFile), []byte("main m3rge\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	f.script(curBr, "main")
+	f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
+
+	in := &driveInput{main: main, root: root}
+
+	var out bytes.Buffer
+
+	// a drive that ran no finish never pulls main
+	in.retryPull(t.Context(), &out)
+
+	if f.called("git pull") {
+		t.Fatal("a drive that ran no finish pulled main")
+	}
+
+	in.ranFinish = true
+	in.retryPull(t.Context(), &out)
+	in.retryPull(t.Context(), &out)
+
+	if n := strings.Count(out.String(), "main not pulled"); n != 1 {
+		t.Errorf("a diverged main was said %d times:\n%s", n, out.String())
+	}
+
+	f.script("git pull --ff-only", "")
+	f.script("git merge-base --is-ancestor m3rge main", "")
+	out.Reset()
+
+	in.retryPull(t.Context(), &out)
+
+	if !strings.Contains(out.String(), "pulled main up to m3rge") {
+		t.Errorf("retry after the pull lands:\n%s", out.String())
+	}
+
+	if def, _ := readPendingPull(root); def != "" {
+		t.Error("the pending pull outlived the pull")
+	}
+}

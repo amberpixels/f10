@@ -307,9 +307,15 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A branch the merge already removed (glab's `--remove-source-branch`, GitHub's automatic delete) leaves nothing to retarget: the host did it.
 5. **Main is pulled** with `--ff-only` when the main checkout is on the default branch, else the default branch is fetched into without touching the checkout, and a note says so.
    A main checkout on the task's branch has the default branch fetched into without a note, and stays on the task's branch until after the report, so a failure before then leaves a rerun the same checkout to find.
-   Either way the merge commit must be in the local default branch, or the run stops here with nothing removed.
-   Finishes that share a main checkout pull one at a time: a finish waits up to two minutes for another's pull, then stops naming the holder.
+   Either way the merge commit must then be in the local default branch.
+   Finishes that share a main checkout pull one at a time: a finish waits up to two minutes for another's pull.
    A pull or fetch that loses a ref's lock to another git retries for a few seconds, because the ref is busy only while that git runs.
+   A stale remote-tracking ref in the way of a new one says the same words but is not retried, because only a prune clears it.
+   A pull that still fails does not stop the finish, because the merge is already on origin.
+   It becomes a note naming the cause and the command that settles it: a local default branch with commits origin lacks (`git -C <main> switch <default> && git -C <main> rebase origin/<default>`, or push them), a stale origin ref in the way (`git -C <main> remote prune origin`), a ref lock or a busy pull, or git's own error.
+   Finish never rebases or resets the default branch.
+   The deferred pull is recorded in `<storage root>/pending-pull`, and a later finish, each tick of an `f10 drive` that ran a finish, and each pass of the watcher under `watch: finish` retry it until the merge commit is in the default branch.
+   A pending pull keeps the project watched until it lands.
 6. **Dependents are released.**
    A branch another task started with `--after` on this one has `branch.<name>.f10-after` and `.f10-after-branch` in local config.
    Both are cleared, since the base is in the default branch now and the dependent's pr targets it from here.
@@ -319,7 +325,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
 7. **The plan is archived**: `<storage root>/plans/<ID>.md` moves to `<storage root>/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken), within main's `.f10/` or the out-of-tree root.
    A worktree from before storage moved to main's still holds its own `.f10/plans/<ID>.md`: it moves to main's archive, its older archived versions first.
    No plan is a note.
-   A plan that cannot be moved is an error and nothing is removed, since such a worktree holds the only copy.
+   A plan that cannot be moved keeps the worktree and its branch, since such a worktree may hold the only copy and a rerun finds the task by its branch.
    **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
    A merge reports the archived path as a `handoff` row.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
@@ -331,6 +337,14 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A missing handoff gets a line naming what to check before deploying, and `/f10:handoff` for the next finish.
    Neither line refuses the finish.
    A PR left open and a spike's close ship nothing, so they archive the handoff without printing it.
+
+Once the merge has landed, a failing step does not stop the ones after it.
+Releasing dependents and archiving the plan, the reviews and the handoff each run, and finish then exits non-zero naming every step that failed.
+A rerun finds the task by its branch, so a failure in any of these steps keeps the worktree and branch, leaves the workspace open and leaves stopped drive records unmarked, and the error ends in `rerun f10 finish <id>`.
+Each step finds its own work done on that rerun, so it completes the rest.
+Archiving the plan and copying a spike report out matter twice over, because the worktree may hold the only copy.
+Once the worktree and branch are removed, a rerun reads the task as finished, so a failure after that (archiving a spike report kept outside the worktree, focusing or closing a workspace) ends in "settle what failed by hand" instead.
+A finish closing its own workspace (`--yes` from inside it) leaves it open when a step failed, so the error stays on screen.
 
 Before the merge lands, finish also measures the branch for `f10 stats`: lines added plus deleted against the base it forked from (its `--after` base branch, else `origin/<default>`, else the local default branch for a branch never pushed), lockfiles, generated code and snapshots left out, with the markdown share.
 Measured after landing, a local merge would read zero.
@@ -472,6 +486,7 @@ ship            running: review:local
   A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote review's, and inside ship that review reads `resolve running` once a round lands after ship entered the review.
   The remote review is in the flow when an entry names it (`review:ci`, or both in one `review:local+ci`, which shows both on the one review row; a `ci?` only where it would run), or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
 - **Finish** in a chain `f10 drive` runs reads `pending` until ship is done, then `queued (drive)`, then `running (drive): <action>` while the driver's finish works (`merging #204`, `pulling main`, `removing worktree`), and `done`; a finish held for its base reads `queued (drive): waiting for <id>`.
+  A finish whose pull was deferred is `done` and the task `finished`, with the note under it in the drive's report; a drive that ran a finish retries the pull each tick and prints a cause once.
   The driver records this on the branch as `branch.<name>.f10-finish`: `queued` or `running: <action>`.
   Whether the driver still runs is the task's lease (**Drive**, below), never the record: a record whose lease nobody holds is ignored, so a killed driver leaves the row `pending`.
   A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`drive: merging #204`, `drive finishes it`) in place of `f10 finish`.

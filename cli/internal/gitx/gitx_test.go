@@ -2,6 +2,7 @@ package gitx
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -523,5 +524,70 @@ func TestFetchIntoRetriesALostRefLock(t *testing.T) {
 
 	if err := FetchInto(t.Context(), "/repo", "main"); err != nil || calls != 2 {
 		t.Errorf("FetchInto = %v after %d calls, want success on the retry", err, calls)
+	}
+}
+
+// Every way git words a lost ref lock retries, and only those.
+func TestRefLockedAndDiverged(t *testing.T) {
+	exit := func(stderr string) error { return &ExitError{Args: []string{"pull"}, Code: 1, Stderr: stderr} }
+
+	for _, c := range []struct {
+		stderr           string
+		locked, diverged bool
+	}{
+		{"error: cannot lock ref 'refs/remotes/origin/main': is at abc but expected def", true, false},
+		{"error: unable to update local ref 'refs/remotes/origin/main'", true, false},
+		{"error: some local refs could not be updated", true, false},
+		{"error: some local refs could not be updated; try running 'git remote prune origin'", false, false},
+		{"error: cannot lock ref 'refs/remotes/origin/foo/bar': 'refs/remotes/origin/foo' exists; cannot create", false, false},
+		{"fatal: Not possible to fast-forward, aborting.", false, true},
+		{"hint: Diverging branches can't be fast-forwarded, you need to either:", false, true},
+		{" ! [rejected]        main       -> main  (non-fast-forward)", false, true},
+		{"fatal: unable to access 'https://example.com/': Could not resolve host", false, false},
+	} {
+		if got := RefLocked(exit(c.stderr)); got != c.locked {
+			t.Errorf("RefLocked(%q) = %v, want %v", c.stderr, got, c.locked)
+		}
+
+		if got := Diverged(exit(c.stderr)); got != c.diverged {
+			t.Errorf("Diverged(%q) = %v, want %v", c.stderr, got, c.diverged)
+		}
+	}
+
+	if !StaleRef(exit("error: 'refs/remotes/origin/foo' exists; cannot create 'refs/remotes/origin/foo/bar'")) {
+		t.Error("a ref in the way is not a stale ref")
+	}
+
+	if RefLocked(errors.New("cannot lock ref")) || Diverged(errors.New("non-fast-forward")) {
+		t.Error("an error that is no git exit matched")
+	}
+}
+
+// A pull --ff-only on a branch both ahead of and behind origin is a
+// divergence, against a real git.
+func TestPullFFOnADivergedBranchIsDiverged(t *testing.T) {
+	root := t.TempDir()
+	origin, clone := filepath.Join(root, "origin"), filepath.Join(root, "clone")
+	run := func(dir string, args ...string) {
+		t.Helper()
+
+		if _, err := Exec(t.Context(), dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	commit := func(dir, msg string) {
+		t.Helper()
+		run(dir, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", msg)
+	}
+
+	run(root, "init", "-q", "-b", "main", origin)
+	commit(origin, "a")
+	run(root, "clone", "-q", origin, clone)
+	commit(origin, "b")
+	commit(clone, "local")
+
+	err := PullFF(t.Context(), clone)
+	if !Diverged(err) {
+		t.Errorf("PullFF on a diverged main = %v, want a divergence", err)
 	}
 }

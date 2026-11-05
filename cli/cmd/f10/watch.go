@@ -49,6 +49,8 @@ const (
 	watchRefused  = "refused"  // the watcher's finish was refused
 	// the host did not answer for a task's request
 	watchUnanswered = "unanswered"
+	// a pull of the default branch a finish deferred, which the watcher retries
+	watchUnpulled = "unpulled"
 	// a catchup the watcher sent, pushed, or did not end clean
 	watchCatchup = "catchup"
 	// behind its target, and the watcher cannot catch it up
@@ -427,13 +429,48 @@ func watchPass(ctx context.Context, in watchInput) (bool, error) {
 
 	in.reconcile(ctx, tasks, store)
 	in.hostTrouble(tasks, store)
+	pending := in.retryPull(ctx, store)
 
 	if err := saveWatchStore(in.root, store); err != nil {
 		return false, err
 	}
 
-	// a branch with no worktree is the janitor's, which only finish runs
-	return len(tasks) > 0 || (in.mode == "finish" && branches > 0), nil
+	// a branch with no worktree is the janitor's, which only finish runs;
+	// a deferred pull keeps the project until it lands
+	return len(tasks) > 0 || (in.mode == "finish" && (branches > 0 || pending)), nil
+}
+
+// watchPullKey is the store's entry for a deferred pull, about the project,
+// not one task.
+const watchPullKey = "pull"
+
+// retryPull retries a pull a finish deferred, under watch: finish alone,
+// since pulling is an act. A cause already told is not told again.
+func (in watchInput) retryPull(ctx context.Context, store map[string]watchReport) bool {
+	if in.mode != "finish" {
+		return false
+	}
+
+	line, pending := retryPendingPull(ctx, in.root, in.main)
+	if !pending {
+		if line != "" {
+			in.warnf("%s", line)
+		}
+
+		delete(store, watchPullKey)
+
+		return false
+	}
+
+	if store[watchPullKey].Key == line {
+		return true
+	}
+
+	rep := watchReport{Task: watchPullKey, Kind: watchUnpulled, Text: line, Key: line, At: in.now()}
+	in.out.report(rep)
+	store[watchPullKey] = rep
+
+	return true
 }
 
 // watchHostKey is the store's entry for the host not answering, about the
@@ -496,7 +533,8 @@ func (in watchInput) reconcile(ctx context.Context, tasks []watchedTask, store m
 	}
 
 	for id, r := range store {
-		if !seen[id] && id != watchHostKey && (r.Kind != watchFinished || now.Sub(r.At) > 24*time.Hour) {
+		project := id == watchHostKey || id == watchPullKey
+		if !seen[id] && !project && (r.Kind != watchFinished || now.Sub(r.At) > 24*time.Hour) {
 			delete(store, id)
 		}
 	}
