@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -402,5 +404,56 @@ func TestCollectWatchedSkipsAnUnreadableMark(t *testing.T) {
 
 	if rep, _ := decideWatch(tasks[0], "finish", time.Now()); rep != nil {
 		t.Errorf("a task whose mark is unreadable got a report: %+v", rep)
+	}
+}
+
+// Under watch: finish a deferred pull is retried each pass, told once, and
+// keeps the project watched until it lands.
+func TestWatchRetriesADeferredPull(t *testing.T) {
+	f := newFakes(t)
+	main, root := t.TempDir(), t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(root, pendingPullFile), []byte("main m3rge\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	f.script(curBr, "main")
+	f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
+
+	var (
+		out  collected
+		said []string
+	)
+
+	in := watchInput{
+		mode: "finish", main: main, root: root, out: &out,
+		now:  func() time.Time { return watchNow },
+		warn: func(l string) { said = append(said, l) },
+	}
+	store := map[string]watchReport{}
+
+	for range 2 {
+		if !in.retryPull(t.Context(), store) {
+			t.Fatal("a deferred pull left the project unwatched")
+		}
+	}
+
+	if len(out) != 1 || out[0].Kind != watchUnpulled {
+		t.Errorf("reports = %+v, want one unpulled", out)
+	}
+
+	f.script("git pull --ff-only", "")
+	f.script("git merge-base --is-ancestor m3rge main", "")
+
+	if in.retryPull(t.Context(), store) {
+		t.Error("a landed pull still keeps the project")
+	}
+
+	if _, ok := store[watchPullKey]; ok || len(said) != 1 {
+		t.Errorf("store %v, said %q; want the entry gone and the pull said", store, said)
+	}
+
+	if (watchInput{mode: "report", root: root, main: main}).retryPull(t.Context(), store) {
+		t.Error("watch: report pulled")
 	}
 }

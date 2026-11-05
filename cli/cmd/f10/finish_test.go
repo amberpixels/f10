@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -695,43 +696,142 @@ func TestFinishRetargetsAfterEarlierMerge(t *testing.T) {
 	}
 }
 
-// A pull that fails after the merge leaves the task as it was, under the
-// main-pull lease, and a rerun on the merged PR finishes from the pull.
-func TestFinishRerunsAfterAFailedPull(t *testing.T) {
+// A pull that fails after the merge is a note: the rest of the cleanup
+// runs, the main-pull lease is released, and the deferred pull is recorded
+// for a retry that clears it once the pull goes through.
+func TestFinishDefersAFailedPull(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.root = t.TempDir()
 	fx.openPR()
+	fx.plan(t, "GH-1.md", "# plan")
 	fx.f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
 
-	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "Not possible to fast-forward") {
-		t.Fatalf("first run = %v, want the pull's error", err)
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatalf("finish = %v, want the pull deferred", err)
 	}
 
-	for _, p := range []string{"git worktree remove", "git branch -D", "herdr workspace close"} {
-		if fx.f.called(p) {
-			t.Errorf("%q ran after the pull failed", p)
+	for _, p := range []string{"git worktree remove " + fx.wt, "git branch -D GH-1", "herdr workspace close ws:9"} {
+		if !fx.f.called(p) {
+			t.Errorf("%q did not run after the pull failed", p)
 		}
+	}
+
+	if !strings.Contains(out, "main not pulled: the local main has commits origin/main lacks") ||
+		!strings.Contains(out, "git -C "+fx.main+" rebase origin/main main") {
+		t.Errorf("report:\n%s", out)
+	}
+
+	if _, err := os.Stat(filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.md")); err != nil {
+		t.Errorf("the plan was not archived: %v", err)
 	}
 
 	if _, ok := drives.Probe(fx.in.root, mainPullKey); ok {
 		t.Error("the main-pull lease outlived the failed pull")
 	}
 
+	if def, sha := readPendingPull(fx.in.root); def != "main" || sha != "m3rge" {
+		t.Fatalf("pending pull = %q %q, want main m3rge", def, sha)
+	}
+
 	fx.f.calls = nil
-	fx.f.script(ghView, prMerged)
 	fx.f.script("git pull --ff-only", "")
 
-	out, err := fx.run(t)
-	if err != nil {
+	line, pending := retryPendingPull(t.Context(), fx.in.root, fx.main)
+	if pending || !strings.Contains(line, "pulled main") {
+		t.Errorf("retry = %q, %v, want it pulled", line, pending)
+	}
+
+	if def, _ := readPendingPull(fx.in.root); def != "" {
+		t.Error("the pending pull outlived its retry")
+	}
+
+	if line, pending := retryPendingPull(t.Context(), fx.in.root, fx.main); line != "" || pending {
+		t.Errorf("retry with nothing pending = %q, %v", line, pending)
+	}
+}
+
+// A lock that outlasts the pull's own waits, or another finish's lease,
+// names the lock; anything else carries git's words.
+func TestDeferredPullNote(t *testing.T) {
+	lock := &gitx.ExitError{
+		Args:   []string{"pull"},
+		Code:   1,
+		Stderr: "error: cannot lock ref 'refs/remotes/origin/main'",
+	}
+
+	for _, c := range []struct {
+		err  error
+		want string
+	}{
+		{lock, "main not pulled: another git held origin's refs; f10 retries the pull"},
+		{fmt.Errorf("%w: lease", errPullBusy), "another git held origin's refs"},
+		{errors.New("boom"), "main not pulled: boom; settle it with git -C /m pull --ff-only; f10 retries the pull"},
+	} {
+		if got := deferredPullNote(c.err, "/m", "main"); !strings.Contains(got, c.want) {
+			t.Errorf("deferredPullNote(%v) = %q, want %q in it", c.err, got, c.want)
+		}
+	}
+}
+
+// A plan that cannot be archived keeps the worktree and branch, since a
+// rerun finds the task by them, and the rerun completes.
+func TestFinishKeepsTheWorktreeWhenThePlanIsNotArchived(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.plan(t, "GH-1.md", "# plan")
+
+	blocker := filepath.Join(fx.main, ".f10", "plans", "archive")
+	if err := os.MkdirAll(filepath.Dir(blocker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "archiving the plan failed") ||
+		!strings.Contains(err.Error(), "rerun f10 finish GH-1") {
+		t.Fatalf("err = %v, want the archive named and a rerun", err)
+	}
+
+	for _, p := range []string{"git worktree remove", "git branch -D", "herdr workspace close"} {
+		if fx.f.called(p) {
+			t.Errorf("%q ran although the plan is not archived", p)
+		}
+	}
+
+	if err := os.Remove(blocker); err != nil {
+		t.Fatal(err)
+	}
+
+	fx.f.calls = nil
+	fx.f.script(ghView, prMerged)
+
+	if _, err := fx.run(t); err != nil {
 		t.Fatal(err)
 	}
 
 	if fx.f.called("gh pr merge") || !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("git branch -D GH-1") {
-		t.Errorf("calls:\n%s", strings.Join(fx.f.calls, "\n"))
+		t.Errorf("rerun calls:\n%s", strings.Join(fx.f.calls, "\n"))
+	}
+}
+
+// A workspace that will not close does not undo the rest: the worktree is
+// gone and the error names the close.
+func TestFinishRunsOnPastAFailedClose(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.f.fail("herdr workspace close ws:9", shell.Result{Code: 1, Stderr: "no such workspace"})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "closing workspace ws:9 failed") {
+		t.Fatalf("err = %v", err)
 	}
 
-	if !strings.Contains(out, "was already merged") {
-		t.Errorf("report:\n%s", out)
+	if !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("git branch -D GH-1") {
+		t.Errorf("calls:\n%s", strings.Join(fx.f.calls, "\n"))
 	}
 }
 
@@ -905,26 +1005,27 @@ func TestFinishFetchesWhenMainIsParked(t *testing.T) {
 	}
 }
 
-// A merge the local default branch does not contain stops everything local.
-func TestFinishStopsWhenMergeIsNotInMain(t *testing.T) {
+// A merge the local default branch still lacks after a pull is a deferred
+// pull: the cleanup runs on, since the host holds the merge.
+func TestFinishDefersWhenMergeIsNotInMain(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.fail("git merge-base --is-ancestor m3rge main", shell.Result{Code: 1})
 	fx.openPR()
 	fx.plan(t, "GH-1.md", "# plan")
 
-	_, err := fx.run(t)
-	if err == nil || !strings.Contains(err.Error(), "not in main after pulling") {
-		t.Fatalf("err = %v", err)
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out, "merge commit m3rge is not in main after pulling") {
+		t.Errorf("report:\n%s", out)
 	}
 
 	for _, p := range []string{"herdr workspace close", "git worktree remove", "git branch -D"} {
-		if fx.f.called(p) {
-			t.Errorf("%q ran although the merge is not in main", p)
+		if !fx.f.called(p) {
+			t.Errorf("%q did not run", p)
 		}
-	}
-
-	if _, err := os.Stat(filepath.Join(fx.wt, ".f10", "plans", "GH-1.md")); err != nil {
-		t.Error("the plan was moved although the merge is not in main")
 	}
 }
 
@@ -1517,49 +1618,29 @@ func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	}
 }
 
-// A failure after the merge and before the report leaves main on the task's
-// branch, so a rerun finds the same checkout, reads the PR as merged and
-// completes.
-func TestFinishFromTheMainCheckoutRerunsAfterAFailure(t *testing.T) {
+// From the main checkout a fetch that fails is a deferred pull too: main
+// still switches to the default branch and the task's branch goes.
+func TestFinishFromTheMainCheckoutDefersAFailedFetch(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	plan := fx.onMain(t, "# plan")
 	fx.f.fail("git fetch origin main:main", shell.Result{Code: 1, Stderr: "fatal: refusing to fetch"})
-
-	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "refusing to fetch") {
-		t.Fatalf("err = %v, want the fetch failure", err)
-	}
-
-	for _, ran := range []string{"git switch", "git branch -D"} {
-		if fx.f.called(ran) {
-			t.Errorf("%q ran although the fetch failed", ran)
-		}
-	}
-
-	if _, err := os.Stat(plan); err != nil {
-		t.Error("the plan was moved although the fetch failed")
-	}
-
-	fx.f.calls = nil
-	fx.f.script(ghView, prMerged)
-	fx.f.script(lsRem, "")
-	fx.f.script("git fetch origin main:main", "")
 
 	out, err := fx.run(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if fx.f.called("gh pr merge") || !fx.f.called("git switch main") || !fx.f.called("git branch -D GH-1") {
-		t.Errorf("rerun calls: %v", fx.f.calls)
+	if !fx.f.called("git switch main") || !fx.f.called("git branch -D GH-1") {
+		t.Errorf("calls: %v", fx.f.calls)
 	}
 
-	if !strings.Contains(out, "was already merged") {
-		t.Errorf("rerun report:\n%s", out)
+	if !strings.Contains(out, "main not pulled: git fetch: fatal: refusing to fetch") {
+		t.Errorf("report:\n%s", out)
 	}
 
-	if _, err := os.Stat(filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.md")); err != nil {
-		t.Errorf("the rerun did not archive the plan: %v", err)
+	if _, err := os.Stat(plan); err == nil {
+		t.Error("the plan was not archived")
 	}
 }
 
@@ -1585,7 +1666,7 @@ func TestFinishFromTheMainCheckoutTailFails(t *testing.T) {
 	fx.onMain(t, "# plan")
 	fx.f.fail("git branch -D GH-1", shell.Result{Code: 1, Stderr: "error: ref locked"})
 
-	want = "https://gh/pr/9 merged and main is on main, but deleting GH-1 failed (git branch -D GH-1)"
+	want = "https://gh/pr/9 merged, but main is on main, and deleting GH-1 failed (git branch -D GH-1)"
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("err = %v", err)
 	}

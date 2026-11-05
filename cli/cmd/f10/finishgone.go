@@ -76,25 +76,27 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	in.step("pulling " + def)
 
-	note, err := pullMain(ctx, in.root, in.main, def, p.sha())
-	if err != nil {
-		return err
-	}
+	// the merge has landed: each step from here runs on past a failure
+	after := &afterMerge{on: true}
 
+	note, deferred := pullMain(ctx, in.root, in.main, def, p.sha())
 	notes = appendNote(notes, note)
 
-	released, err := releaseDependents(ctx, in.main, name, def, true)
-	if err != nil {
-		return err
+	if deferred && in.deferred != nil {
+		in.deferred(note)
 	}
+
+	released, err := releaseDependents(ctx, in.main, name, def, true)
+	_ = after.check("releasing dependents", err)
 
 	notes = append(notes, released...)
 
 	in.step("archiving the plan")
 
 	archived, note, err := archivePlan(in.main, in.main, in.plansDir, in.task.ID)
+	_ = after.check("archiving the plan", err)
 	if err != nil {
-		return err
+		after.keep = "the branch stays, since the plan is not archived"
 	}
 
 	notes = appendNote(notes, note)
@@ -104,9 +106,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID),
 		seriesEnd{pr: pullNumber(p.url()), head: p.sha()})
-	if err != nil {
-		return err
-	}
+	_ = after.check("archiving the reviews", err)
 
 	rows := []fact{
 		taskFact(ctx, w, in.main, in.task.Label()),
@@ -136,23 +136,26 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 		return err
 	}
 
-	if err := moveHandoff(handoffSrc, handed); err != nil {
-		return fmt.Errorf("%s merged, but %w", p.url(), err)
-	}
+	_ = after.check("", moveHandoff(handoffSrc, handed))
 
 	if in.handoff != nil {
 		in.handoff(hand)
 	}
 
+	ended := p.url() + " merged"
+
+	// the branch is what a rerun finds the task by
+	if after.keep != "" {
+		return after.done(in.task.ID, ended)
+	}
+
 	in.step("deleting " + name)
 
-	if err := gitx.DeleteBranch(ctx, in.main, name); err != nil {
-		return err
-	}
+	_ = after.check("deleting branch "+name, gitx.DeleteBranch(ctx, in.main, name))
 
 	finishRecords(w, in, name)
 
-	return nil
+	return after.done(in.task.ID, ended)
 }
 
 // finishParent closes a parent its subtasks delivered: it never had a branch

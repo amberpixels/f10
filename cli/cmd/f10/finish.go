@@ -232,6 +232,8 @@ type finishInput struct {
 	progress func(string)
 	// handoff takes the lines a merge prints under its report, for drive's report; nil for none
 	handoff func([]string)
+	// deferred takes a deferred pull's note, for drive's report; nil for none
+	deferred func(string)
 	// mergedOnly refuses all but an already merged request: the watcher never merges
 	mergedOnly bool
 	// subtasks is every subtask, closed ones kept, for a parent with no branch;
@@ -415,7 +417,8 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	var (
 		kept string
 		// set only on a merge, since a PR left open or a spike's close ships nothing
-		hand []string
+		hand  []string
+		after = &afterMerge{}
 	)
 
 	switch {
@@ -496,13 +499,13 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			// then leaves a rerun the same shape to find
 			in.step("pulling " + def)
 
-			note, err := pullMain(ctx, in.root, in.main, def, p.sha())
-			if err != nil {
-				return err
+			note, deferred := pullMain(ctx, in.root, in.main, def, p.sha())
+			if !onMain || deferred {
+				notes = appendNote(notes, note)
 			}
 
-			if !onMain {
-				notes = appendNote(notes, note)
+			if deferred && in.deferred != nil {
+				in.deferred(note)
 			}
 
 			sha = p.sha()
@@ -519,8 +522,12 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			recordSize(ctx, in.main, name, in.task.ID, size)
 		}
 
+		// the merge has landed: a failing step from here is collected and the
+		// rest still run, so a rerun finds only what is left
+		after.on = true
+
 		released, err := releaseDependents(ctx, in.main, name, def, true)
-		if err != nil {
+		if err := after.check("releasing dependents", err); err != nil {
 			return err
 		}
 
@@ -542,8 +549,14 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	in.step("archiving the plan")
 
 	archived, note, err := archivePlan(path, in.main, in.plansDir, in.task.ID)
-	if err != nil {
+	if err := after.check("archiving the plan", err); err != nil {
 		return err
+	}
+
+	if err != nil {
+		// a branch gone with its plan live reads as no task to a rerun, and a
+		// plan in the worktree's own .f10/ would go with it
+		after.keep = "the worktree and branch stay, since the plan is not archived"
 	}
 
 	notes = appendNote(notes, note)
@@ -559,7 +572,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		reviews, err = archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID), seriesEnd{})
 	}
 
-	if err != nil {
+	if err := after.check("archiving the reviews", err); err != nil {
 		return err
 	}
 
@@ -592,21 +605,25 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	early := spike != "" && !onMain && inside(spike, path)
 
 	if spike != "" {
-		if spikeDst, err = spikeArchiveName(in.main, in.plansDir, in.task.ID); err != nil {
+		spikeDst, err = spikeArchiveName(in.main, in.plansDir, in.task.ID)
+		if err == nil && early {
+			err = copySpike(spike, spikeDst)
+		}
+
+		if err := after.check("archiving the spike report", err); err != nil {
 			return err
 		}
 
-		if early {
-			if err := copySpike(spike, spikeDst); err != nil {
-				return err
-			}
+		if err != nil {
+			// removing the worktree would delete the report's only copy
+			after.keep = "the worktree and branch stay, since the spike report is not archived"
+		} else {
+			rows = append(rows, fact{label: "spike", value: spikeDst})
 		}
-
-		rows = append(rows, fact{label: "spike", value: spikeDst})
 	}
 
 	archiveLate := func() error {
-		if spike == "" || early {
+		if spike == "" || early || spikeDst == "" {
 			return nil
 		}
 
@@ -642,7 +659,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	if err := moveHandoff(handoffSrc, handed); err != nil {
+	if err := after.check("", moveHandoff(handoffSrc, handed)); err != nil {
 		return fmt.Errorf("%s, but %w", ended, err)
 	}
 
@@ -650,29 +667,34 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		in.handoff(hand)
 	}
 
+	if after.keep != "" {
+		return after.done(in.task.ID, ended)
+	}
+
 	if onMain {
-		if err := switchMain(ctx, in.main, def, name, kept, ended); err != nil {
-			return err
+		if err := after.check("", switchMain(ctx, in.main, def, name, kept)); err != nil {
+			return fmt.Errorf("%s, but %w", ended, err)
 		}
 
-		if err := archiveLate(); err != nil {
+		if err := after.check("archiving the spike report", archiveLate()); err != nil {
 			return err
 		}
 
 		finishRecords(w, in, name)
 		in.sweepNow(ctx)
 
-		return nil
+		return after.done(in.task.ID, ended)
 	}
 
 	// last: removing the checkout deletes the branch, and the record with it
 	in.step("removing worktree")
 
-	if err := removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike); err != nil {
+	err = removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike)
+	if err := after.check("removing the worktree", err); err != nil {
 		return err
 	}
 
-	if err := archiveLate(); err != nil {
+	if err := after.check("archiving the spike report", archiveLate()); err != nil {
 		return err
 	}
 
@@ -680,17 +702,64 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	finishRecords(w, in, name)
 	in.sweepNow(ctx)
 
+	// closing its own workspace would end this process before the error prints
+	if self && len(after.failed) > 0 {
+		return after.done(in.task.ID, ended)
+	}
+
 	if self && mainWS != nil {
-		if err := agents(in.main).Focus(ctx, mainWS.ID); err != nil {
+		err := agents(in.main).Focus(ctx, mainWS.ID)
+		if err := after.check("focusing the main workspace", err); err != nil {
 			return err
 		}
 	}
 
 	if ws != nil {
-		return agents(in.main).Close(ctx, ws.ID)
+		err := agents(in.main).Close(ctx, ws.ID)
+		if err := after.check("closing workspace "+ws.ID, err); err != nil {
+			return err
+		}
 	}
 
+	return after.done(in.task.ID, ended)
+}
+
+// afterMerge collects the failures of the steps after a merge: the merge
+// has landed, so each step runs on and a rerun completes what failed.
+type afterMerge struct {
+	on     bool     // the merge landed
+	failed []string // "<step>: <error>"
+	// keep, when set, says what stays for a rerun and why
+	keep string
+}
+
+// check returns err before the merge, and collects it after, under step
+// unless the error names its step itself (step "").
+func (a *afterMerge) check(step string, err error) error {
+	if err == nil || !a.on {
+		return err
+	}
+
+	if step != "" {
+		err = fmt.Errorf("%s failed: %w", step, err)
+	}
+
+	a.failed = append(a.failed, err.Error())
+
 	return nil
+}
+
+func (a *afterMerge) done(id, ended string) error {
+	if len(a.failed) == 0 {
+		return nil
+	}
+
+	msg := ended + ", but " + strings.Join(a.failed, "; ")
+	if a.keep != "" {
+		msg += "; " + a.keep
+	}
+
+	return fmt.Errorf("%s: rerun f10 finish %s to complete", msg, id)
 }
 
 // finishRecords marks the task finished in every stopped drive record that
@@ -801,22 +870,22 @@ func (in finishInput) sweepNow(ctx context.Context) {
 
 // switchMain ends a finish on the main checkout; each error names what
 // already happened to the PR (ended) and what is left to do by hand.
-func switchMain(ctx context.Context, main, def, branch, kept, ended string) error {
+func switchMain(ctx context.Context, main, def, branch, kept string) error {
 	if err := gitx.Switch(ctx, main, def); err != nil {
-		return fmt.Errorf("%s, but switching the main checkout to %s failed: %w", ended, def, err)
+		return fmt.Errorf("switching the main checkout to %s failed: %w", def, err)
 	}
 
 	if kept != "" {
 		if err := keepBranch(ctx, main, branch, kept); err != nil {
-			return fmt.Errorf("%s and main is on %s, but %w", ended, def, err)
+			return fmt.Errorf("main is on %s, and %w", def, err)
 		}
 
 		return nil
 	}
 
 	if err := gitx.DeleteBranch(ctx, main, branch); err != nil {
-		return fmt.Errorf("%s and main is on %s, but deleting %s failed (git branch -D %s): %w",
-			ended, def, branch, branch, err)
+		return fmt.Errorf("main is on %s, and deleting %s failed (git branch -D %s): %w",
+			def, branch, branch, err)
 	}
 
 	return nil
@@ -1148,13 +1217,39 @@ const mainPullKey = "main-pull"
 // mainPullWait bounds the wait for another finish's pull.
 const mainPullWait = 2 * time.Minute
 
-// pullMain brings the local default branch up to the merge; the merge commit
-// must then be in it, or nothing local is removed.
-func pullMain(ctx context.Context, root, main, def, sha string) (string, error) {
+// pullMain brings the local default branch up to the merge. The merge has
+// landed on origin by then, so a pull that fails defers to a later retry
+// (retryPendingPull) and comes back as a note naming the cause; it never
+// rebases or resets the branch.
+func pullMain(ctx context.Context, root, main, def, sha string) (string, bool) {
+	note, err := pullDefault(ctx, root, main, def, sha)
+	if err == nil {
+		clearPendingPull(ctx, root, main, def)
+
+		return note, false
+	}
+
+	note = deferredPullNote(err, main, def)
+
+	if root == "" {
+		return note + "; nothing records the retry here, so pull it by hand", true
+	}
+
+	if err := os.WriteFile(filepath.Join(root, pendingPullFile), []byte(def+" "+sha+"\n"), 0o600); err != nil {
+		note += fmt.Sprintf("; recording the retry failed (%v), so pull it by hand", err)
+	}
+
+	return note, true
+}
+
+// errPullBusy is another finish holding the pull's lease past mainPullWait.
+var errPullBusy = errors.New("another finish held the pull")
+
+func pullDefault(ctx context.Context, root, main, def, sha string) (string, error) {
 	if root != "" {
 		lease, err := drives.Await(ctx, root, mainPullKey, drives.Holder{}, mainPullWait)
 		if err != nil {
-			return "", fmt.Errorf("waiting to pull %s: %w", def, err)
+			return "", fmt.Errorf("%w: %w", errPullBusy, err)
 		}
 		defer lease.Release()
 	}
@@ -1176,14 +1271,78 @@ func pullMain(ctx context.Context, root, main, def, sha string) (string, error) 
 
 	merged, err := gitx.IsAncestor(ctx, main, sha, def)
 	if err != nil {
-		return "", fmt.Errorf("could not tell whether merge commit %s is in %s: %w: nothing removed", sha, def, err)
+		return "", fmt.Errorf("could not tell whether merge commit %s is in %s: %w", sha, def, err)
 	}
 
 	if !merged {
-		return "", fmt.Errorf("merge commit %s is not in %s after pulling: nothing removed", sha, def)
+		return "", fmt.Errorf("merge commit %s is not in %s after pulling", sha, def)
 	}
 
 	return note, nil
+}
+
+// deferredPullNote names why the pull failed and what settles it.
+func deferredPullNote(err error, main, def string) string {
+	const retry = "; f10 retries the pull"
+
+	switch {
+	case gitx.Diverged(err):
+		return fmt.Sprintf("%s not pulled: the local %s has commits origin/%s lacks; "+
+			"settle it with git -C %s rebase origin/%s %s, or push them%s", def, def, def, main, def, def, retry)
+	case gitx.RefLocked(err), errors.Is(err, errPullBusy):
+		return fmt.Sprintf("%s not pulled: another git held origin's refs%s, "+
+			"or run git -C %s pull --ff-only", def, retry, main)
+	default:
+		return fmt.Sprintf("%s not pulled: %v; settle it with git -C %s pull --ff-only%s", def, err, main, retry)
+	}
+}
+
+// pendingPullFile, in the storage root every checkout shares, records a
+// deferred pull as "<default branch> <merge sha>". Only the newest sha
+// matters, since origin's branch holds every earlier merge too.
+const pendingPullFile = "pending-pull"
+
+func readPendingPull(root string) (string, string) {
+	if root == "" {
+		return "", ""
+	}
+
+	b, err := os.ReadFile(filepath.Join(root, pendingPullFile))
+	if err != nil {
+		return "", ""
+	}
+
+	def, sha, _ := strings.Cut(strings.TrimSpace(string(b)), " ")
+
+	return def, sha
+}
+
+// clearPendingPull drops the record once its merge is in the branch.
+func clearPendingPull(ctx context.Context, root, main, def string) {
+	branch, sha := readPendingPull(root)
+	if branch != def || sha == "" {
+		return
+	}
+
+	if in, err := gitx.IsAncestor(ctx, main, sha, def); err == nil && in {
+		_ = os.Remove(filepath.Join(root, pendingPullFile)) // a retry that finds it gone has nothing to do
+	}
+}
+
+// retryPendingPull retries a pull a finish deferred. It reports "" with no
+// pull pending, else what happened, and whether the pull is still pending.
+func retryPendingPull(ctx context.Context, root, main string) (string, bool) {
+	def, sha := readPendingPull(root)
+	if def == "" || sha == "" {
+		return "", false
+	}
+
+	note, deferred := pullMain(ctx, root, main, def, sha)
+	if deferred {
+		return note, true
+	}
+
+	return "pulled " + def + " up to " + shortSHA(sha) + ", which a finish had deferred", false
 }
 
 // releaseDependents clears other branches' `start --after` dependency on the
