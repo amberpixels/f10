@@ -284,11 +284,12 @@ var plainIDPrint = regexp.MustCompile(
 // machineRead are prints of a bare id that agents or scripts parse, by file
 // and a piece of the line, so they stay plain on purpose.
 var machineRead = map[string]string{
-	"host.go":        `"# %s: %s\n\n"`,   // the task as markdown, for an agent
-	"reviewround.go": `"  %s %s - %s\n"`, // a declined round, read by the review step
-	"review.go":      `"%s  %s  %s\n"`,   // review pick, parsed
-	"pr.go":          `"task: %s\n"`,     // pr view, parsed
-	"taskref.go":     `"f10: %s: %v\n"`,  // a warning on stderr
+	"host.go":        `"# %s: %s\n\n"`,                       // the task as markdown, for an agent
+	"reviewround.go": `"  %s %s - %s\n"`,                     // a declined round, read by the review step
+	"review.go":      `"%s  %s  %s\n"`,                       // review pick, parsed
+	"pr.go":          `"task: %s\n"`,                         // pr view, parsed
+	"taskref.go":     `"f10: %s: %v\n"`,                      // a warning on stderr
+	"taskreport.go":  `"f10: %s: %v: no subtasks to list\n"`, // a warning on stderr
 }
 
 // The render table above covers the commands that exist; this scan catches a

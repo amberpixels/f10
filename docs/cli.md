@@ -44,7 +44,7 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
-f10 task report <id>...  # a report's facts block: one task's rows, else a row per task
+f10 task report <id>... [--children]  # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
 f10 task stale [id] [--created YYYY-MM-DD]   # fetch's stale check: fresh, judged <verdict file>, needs judge or undated
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
@@ -1149,7 +1149,9 @@ An id the tracker does not know, or a tracker that fails, prints bare with a not
 One id prints its `task`, `title` and `url` rows.
 Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
 A task with no url known prints bare, and the exit is 0.
-A parent and its subtasks report through `f10 task report <parent> <subtask ids>` for the urls and `f10 task children <parent> --plain`, whose tree carries the titles and `after` notes, and no run stages or gates, which a task just captured cannot have.
+`--children` takes one parent and hangs its open subtasks under it, nested by `After:` as `f10 task children` orders them, each row with its title and url.
+A tracker with no parent link prints the parent's facts with a note on stderr, and the exit is 0 either way.
+It shows no run stages or gates, which a task just captured cannot have.
 
 ## Comment and update
 

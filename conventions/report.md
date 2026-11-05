@@ -43,16 +43,17 @@ Print them with `f10 task report <ids>`, verbatim, in the fenced `yaml` block.
 Ids go in `After:` order, a task outside the chain last.
 Titles go in the prose beneath.
 
-A parent and its subtasks take two blocks, first `f10 task report <parent> <subtask ids>` for the urls:
+A parent and its subtasks take one block, from `f10 task report --children <parent>`.
+It draws the parent, then its open subtasks nested by `After:`, each with title and url:
 
-```yaml
-FT-71:     ↗ https://github.com/amberpixels/f10/issues/71
-├─ FT-72:  ↗ https://github.com/amberpixels/f10/issues/72
-└─ FT-73:  ↗ https://github.com/amberpixels/f10/issues/73
+```
+FT-71        Rate limits    ↗ https://tracker.example/71
+├─ FT-72     Count per key  ↗ https://tracker.example/72
+│  └─ FT-73  Reject excess  ↗ https://tracker.example/73
 ```
 
-Then `f10 task children <parent> --plain` in a plain fenced block under a line naming the parent.
-Its tree carries each title and no url, so nothing goes beneath it.
+Titles break the highlighting, so it prints untagged.
+Its rows carry the titles, so nothing goes beneath it.
 
 Never draw the rows or the glyphs by hand, or turn them into a table.
 

@@ -67,8 +67,12 @@ func taskCommand() *cli.Command {
 				Category: plumbingCategory,
 				Usage: "print a report's facts block for the tasks: one task's task, title and url rows, else a row " +
 					"per task; from the titles f10 already read",
-				ArgsUsage: "<task-id>...",
-				Action:    runTaskReport,
+				ArgsUsage: "<task-id>... | --children <parent-id>",
+				Flags: []cli.Flag{&cli.BoolFlag{
+					Name:  "children",
+					Usage: "draw the parent with its open subtasks under it, in After: order, each with its title and url",
+				}},
+				Action: runTaskReport,
 			},
 			{
 				Name:     "stale",
