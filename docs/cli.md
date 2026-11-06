@@ -54,7 +54,7 @@ f10 task comment [id] < comment.md   # a comment on the task; prints its url whe
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--parent id] [--set k=v]...   # absolute values
 f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
 f10 plan read [id]       # the plan saved for that task
-f10 plan open [id]       # in your editor (--link writes the path)
+f10 plan open [id]       # in your editor (--link writes the path, a file:// link on a terminal)
 f10 demo open [id]       # the demo report, in the browser (--link writes the path)
 f10 pr open [n | id]     # the PR or MR: a number is one, a task id its open one, else its last; none, their list; gh or glab decided by the remote (--link, --print as for task)
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
@@ -328,6 +328,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A plan that cannot be moved keeps the worktree and its branch, since such a worktree may hold the only copy and a rerun finds the task by its branch.
    **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
    A merge reports the archived path as a `handoff` row.
+   On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8), as `f10 start`'s `plan` row, the `plan` row of `f10 status <id>` and the `wrote` row of `f10 init` do, and a drive's copy of the report links when the drive writes to a terminal.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.

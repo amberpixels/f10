@@ -115,11 +115,11 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	}
 
 	if archived != "" {
-		rows = append(rows, fact{label: "plan", value: archived})
+		rows = append(rows, fact{label: "plan", value: archived, path: true})
 	}
 
 	if handed != "" {
-		rows = append(rows, fact{label: "handoff", value: handed})
+		rows = append(rows, fact{label: "handoff", value: handed, path: true})
 	}
 
 	if reviews != "" {

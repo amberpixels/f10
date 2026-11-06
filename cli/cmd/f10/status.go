@@ -215,7 +215,7 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 			return true, encodeJSON(cmd.Writer, fb)
 		}
 
-		fb.render(cmd.Writer, termWidth(cmd.Writer))
+		fb.render(cmd.Writer, termWidth(cmd.Writer), linksFor(cmd.Writer, cmd.Bool("plain")).on)
 
 		return true, nil
 	}
@@ -393,7 +393,7 @@ func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run) 
 	return fb
 }
 
-func (fb fallback) render(w io.Writer, limit int) {
+func (fb fallback) render(w io.Writer, limit int, link bool) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
@@ -405,7 +405,12 @@ func (fb fallback) render(w io.Writer, limit int) {
 	}
 
 	if fb.Plan != "" {
-		headerRow(w, "plan", fb.Plan, limit, plain)
+		target := ""
+		if link {
+			target = fileURL(fb.Plan)
+		}
+
+		linkedHeaderRow(w, "plan", fb.Plan, target, limit, plain)
 	}
 
 	if fb.PR != "" {

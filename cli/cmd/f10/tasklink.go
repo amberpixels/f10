@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"regexp"
@@ -21,7 +22,21 @@ type taskLinks struct {
 }
 
 // linkTerminal is swapped in tests, which write to a buffer.
-var linkTerminal = isTerminal
+var linkTerminal = func(w io.Writer) bool {
+	if b, ok := w.(*linkBuffer); ok {
+		return b.links
+	}
+
+	return isTerminal(w)
+}
+
+// linkBuffer holds output its caller copies on to another writer, so it
+// links when that writer would.
+type linkBuffer struct {
+	bytes.Buffer
+
+	links bool
+}
 
 // linksFor links only on a terminal: piped output, --plain and --json are
 // parsed by agents and scripts, which escape codes would break.

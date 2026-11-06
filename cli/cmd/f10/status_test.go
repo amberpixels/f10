@@ -55,7 +55,7 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 	capture := &state.Run{Capture: "running", Plan: "pending", Ship: "pending"}
 
 	var out bytes.Buffer
-	taskFallback(t.Context(), in, []*state.Run{capture}).render(&out, 0)
+	taskFallback(t.Context(), in, []*state.Run{capture}).render(&out, 0, false)
 
 	for _, want := range []string{
 		"none for GH-1 in " + root,
@@ -81,7 +81,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	fb := taskFallback(t.Context(), in, nil)
 
 	var out bytes.Buffer
-	fb.render(&out, 0)
+	fb.render(&out, 0, false)
 
 	for _, absent := range []string{"agent", "plan", "pr "} {
 		if strings.Contains(out.String(), absent) {

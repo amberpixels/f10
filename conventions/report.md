@@ -33,7 +33,7 @@ If a value would break the highlighting, print it untagged.
    A ship run prints the shipment rows its last step declares (`conventions/context.md` → shipment).
    A pipeline ending in a project-defined `publish`, for example, prints its `report` url and no branch, PR or sha rows.
 4. **Most identifying rows first**: the task, its title, its url, then this step's artifacts.
-5. **The marker means "a url you can open"**, so it never marks a path, a sha or a branch.
+5. **The marker means "a url a browser opens"**, so it never marks a path, a sha or a branch.
    It is `↗` (U+2197), not the double-width `🔗`.
 
 ### Several tasks

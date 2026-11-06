@@ -508,7 +508,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	}
 
 	if o.plan != "" {
-		rows = append(rows, fact{label: "plan", value: o.plan})
+		rows = append(rows, fact{label: "plan", value: o.plan, path: true})
 	}
 
 	if o.fresh && !o.profile.IsDefault() {

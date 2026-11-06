@@ -574,13 +574,20 @@ func renderProblems(w io.Writer, problems []facts.Problem) {
 }
 
 func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style) {
+	linkedHeaderRow(w, label, value, "", limit, style)
+}
+
+// linkedHeaderRow links each wrapped line to target, since wrapping a value
+// that already holds a link's escapes would cut them apart.
+func linkedHeaderRow(w io.Writer, label, value, target string, limit int, style lipgloss.Style) {
 	faint := lipgloss.NewStyle().Faint(true)
 
 	segments := wrap(value, limit-headerIndent)
-	fmt.Fprintf(w, "%s%s\n", faint.Render(fmt.Sprintf("%-*s", headerIndent, label)), style.Render(segments[0]))
+	fmt.Fprintf(w, "%s%s\n", faint.Render(fmt.Sprintf("%-*s", headerIndent, label)),
+		hyperlink(target, style.Render(segments[0])))
 
 	for _, s := range segments[1:] {
-		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", style.Render(s))
+		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", hyperlink(target, style.Render(s)))
 	}
 }
 

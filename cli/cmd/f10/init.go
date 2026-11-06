@@ -173,7 +173,7 @@ func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	faint := lipgloss.NewStyle().Faint(true)
 	limit := termWidth(w)
 
-	headerRow(w, "wrote", path, limit, plain)
+	linkedHeaderRow(w, "wrote", path, wroteLink(w, path), limit, plain)
 	headerRow(w, "sections", strings.Join(d.Sections, ", "), limit, plain)
 
 	if excluded != "" {
@@ -218,7 +218,7 @@ func runMigrate(w io.Writer, path string) error {
 		return err
 	}
 
-	headerRow(w, "wrote", path, limit, lipgloss.NewStyle())
+	linkedHeaderRow(w, "wrote", path, wroteLink(w, path), limit, lipgloss.NewStyle())
 	headerRow(w, "moved", strings.Join(m.Moved, ", "), limit, lipgloss.NewStyle())
 
 	for i, where := range m.Superseded {
@@ -256,4 +256,13 @@ func rewrite(path, content string, mode os.FileMode) error {
 	}
 
 	return f.Close()
+}
+
+// wroteLink is the file:// url of the written project.md, on a terminal only.
+func wroteLink(w io.Writer, path string) string {
+	if !linkTerminal(w) {
+		return ""
+	}
+
+	return fileURL(path)
 }
