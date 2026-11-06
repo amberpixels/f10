@@ -3,6 +3,7 @@ package lookaround
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 )
@@ -40,5 +41,13 @@ func TestFinishedFromTakesFinishsArgument(t *testing.T) {
 
 	if l.Finished["FT-9"] || len(l.Finished) != 3 {
 		t.Errorf("finished = %v, want FT-12, FT-8 and FT-3 only", l.Finished)
+	}
+}
+
+// A task re-planned after its finish is pending work, not finished.
+func TestDeriveLeavesARePlannedTaskUnfinished(t *testing.T) {
+	l := &Local{Finished: map[string]bool{"FT-1": true, "FT-2": true}, Plans: map[string]time.Time{"FT-2": time.Now()}}
+	if !finishedNow(l, "FT-1") || finishedNow(l, "FT-2") {
+		t.Errorf("FT-1 %v, FT-2 %v; want finished and pending", finishedNow(l, "FT-1"), finishedNow(l, "FT-2"))
 	}
 }

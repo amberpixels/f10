@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -638,7 +639,8 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 
 	lt := ledgerFor(src.events, r.ID, src.idOf)
 
-	if !finishedTask(info, tr.plans, r.ID, false) && !lt.finished {
+	// a ledger finish counts only while no live plan says the task came back
+	if !finishedTask(info, tr.plans, r.ID, false) && (!lt.finished || exists(filepath.Join(tr.plans, r.ID+".md"))) {
 		return nil, nil
 	}
 

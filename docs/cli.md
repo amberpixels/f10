@@ -557,7 +557,9 @@ Lock files are never deleted.
 
 **List and cancel.**
 `f10 drive list` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
-A drive that is not running, a cancelled one included, has each row not yet finished checked against its task: a task with no branch here or on origin and its plan archived reads `finished`, the same test finish uses to report `already finished`.
+A drive that is not running, a cancelled one included, has each row not yet finished checked against its task by the rule drive and status use: a task with no branch here or on origin, no live plan, and either its plan archived or its issue closed reads `finished`.
+The tracker is asked only when the plans dir leaves it open.
+Finish's own `already finished` is narrower, because it asks whether finish got as far as archiving the plan.
 The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
 A row only ever moves to finished, because only a rerun knows a drive's next step for a halt settled halfway.
 `f10 drive cancel <n>` marks the record cancelled: a running driver stops at its next poll, after any finish it is in the middle of, ends every task still going with the row `cancelled` and exits **5**; nothing more is prompted, and worktrees, branches and agents stay as they are.
@@ -1172,7 +1174,7 @@ A subtask that is itself a parent is listed, not expanded.
 | `title`, `url`, `state` | as the tracker holds them |
 | `labels` | label names; `[]` for none |
 | `after` | the id its body's `After:` line names, absent when none |
-| `finished` | no branch, and its plan archived, as drive decides it |
+| `finished` | no branch, no live plan, and its plan archived, as drive decides it |
 | `depth` | 0 directly under the parent, one more per `After:` step |
 
 A task with no subtasks prints `[]`.

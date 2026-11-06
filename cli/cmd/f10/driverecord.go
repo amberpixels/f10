@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -492,17 +493,31 @@ func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 		}
 
 		head := r.Head()
+		seen[id] = finishedLazily(tr.plans, head.ID,
+			func() (bool, error) { return hasTaskBranch(ctx, main, head.ID) },
+			func() taskInfo {
+				info, _ := tr.info(ctx, head) // an unread tracker leaves the archive to decide
 
-		branched, err := hasTaskBranch(ctx, main, head.ID)
-		if err != nil || branched {
-			return false
-		}
-
-		info, _ := tr.info(ctx, head) // an unread tracker leaves the archive to decide
-		seen[id] = finishedTask(info, tr.plans, head.ID, false)
+				return info
+			})
 
 		return seen[id]
 	}
+}
+
+// finishedLazily is finishedTask with its reads made lazily: the tracker is
+// asked only when no branch, live plan or archived plan already decides.
+func finishedLazily(plans, id string, branched func() (bool, error), info func() taskInfo) bool {
+	if b, err := branched(); err != nil || b {
+		return false
+	}
+
+	var ti taskInfo
+	if !exists(filepath.Join(plans, id+".md")) && !planArchivedIn(plans, id) {
+		ti = info()
+	}
+
+	return finishedTask(ti, plans, id, false)
 }
 
 func taskStanding(t drives.Task, running bool) string {

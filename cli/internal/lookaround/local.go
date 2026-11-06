@@ -315,6 +315,14 @@ func readLedger(ctx context.Context, path, project string, resolve func(string) 
 	return nil
 }
 
+// finishedNow is a ledger finish still standing: a live plan means the task
+// was re-planned after it, so it is pending work again.
+func finishedNow(l *Local, id string) bool {
+	_, live := l.Plans[id]
+
+	return l.Finished[id] && !live
+}
+
 // finishedFrom marks each task a finish row names; resolve turns the
 // argument as typed into an id, nil keeping it as typed.
 func finishedFrom(events []ledger.Event, resolve func(string) string, l *Local) {

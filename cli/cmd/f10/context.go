@@ -159,7 +159,8 @@ func (t *target) idOf(ctx context.Context) func(string) string {
 		}
 
 		id := token
-		if r, err := t.reference(ctx, token); err == nil {
+		bare, _ := ref.SplitSuffix(token) // a suffixed worktree finishes its task
+		if r, err := t.reference(ctx, bare); err == nil {
 			id = r.ID
 		}
 

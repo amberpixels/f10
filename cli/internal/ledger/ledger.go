@@ -76,8 +76,13 @@ func (Event) TableName() string { return "events" }
 func (e Event) FinishedTask() string {
 	args, _ := e.Payload.Val["args"].([]any)
 
-	for _, a := range args {
-		if s, ok := a.(string); ok && s != "" && !strings.HasPrefix(s, "-") {
+	for i := 0; i < len(args); i++ {
+		s, _ := args[i].(string)
+
+		switch {
+		case s == "--close" || s == "-close":
+			i++ // its value names the riders to close, not the task
+		case s != "" && !strings.HasPrefix(s, "-"):
 			return s
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -529,5 +530,43 @@ func TestTaskStandingQueued(t *testing.T) {
 
 	if got := taskStanding(drives.Task{Queued: true}, false); got != "not reached" {
 		t.Errorf("a queued task in a stopped drive stands %q", got)
+	}
+}
+
+// drive list decides a row by finishedTask, asking the tracker only when the
+// branch and the plans dir leave it open.
+func TestFinishedLazily(t *testing.T) {
+	cases := []struct {
+		name                     string
+		branched, archived, live bool
+		closed, wantInfo, want   bool
+	}{
+		{name: "closed, nothing on disk", closed: true, wantInfo: true, want: true},
+		{name: "open, nothing on disk", wantInfo: true},
+		{name: "branched", branched: true, closed: true},
+		{name: "archived", archived: true, want: true},
+		{name: "re-planned", archived: true, live: true, closed: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plans := t.TempDir()
+			if c.archived {
+				writePlan(t, filepath.Join(plans, "archive", "GH-1.md"))
+			}
+
+			if c.live {
+				writePlan(t, filepath.Join(plans, "GH-1.md"))
+			}
+
+			asked := false
+			got := finishedLazily(plans, "GH-1",
+				func() (bool, error) { return c.branched, nil },
+				func() taskInfo { asked = true; return taskInfo{closed: c.closed} })
+
+			if got != c.want || asked != c.wantInfo {
+				t.Errorf("finishedLazily = %v, tracker asked %v; want %v, %v", got, asked, c.want, c.wantInfo)
+			}
+		})
 	}
 }
