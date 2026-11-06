@@ -279,9 +279,12 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipme
 }
 
 // shipment is the facts block a ship report opens with, reprinted from what
-// f10 holds locally, so status never waits on the host or the tracker.
+// f10 holds locally; only a pushed task with no PR recorded asks the host.
 type shipment struct {
 	task, title, url, branch, pr, commit, plan, handoff string
+
+	prState string // the PR's state, when the host was asked
+	pulled  bool   // the host was asked for the PR, so the fallback asks no more
 
 	verdicts []verdictPath
 	reviews  []reviewPath
@@ -353,8 +356,9 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 	// a PR opened by a script around the host CLI leaves no pr_opened; only a
 	// pushed task asks the host, so a status before the PR stays local
 	if s.pr == "" && lt.pushed && in.host != nil && in.branch != "" {
+		s.pulled = true
 		if p, err := in.host.pull(ctx, in.branch); err == nil {
-			s.pr = p.url()
+			s.pr, s.prState = p.url(), p.status()
 		}
 	}
 
@@ -511,9 +515,7 @@ func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	var own, others []*state.Run
 
 	for _, r := range runs {
-		// a run from before the skill was recorded keeps the old rule
-		phased := r.Skill == "" || state.OpensPhase(r.Skill)
-		fresh := r.Task == "" && phased && (r.Capture == "pending" || r.Capture == "skipped")
+		fresh := r.Task == "" && state.OpensPhase(r.Skill) && (r.Capture == "pending" || r.Capture == "skipped")
 
 		if strings.EqualFold(r.Task, id) || fresh {
 			own = append(own, r)
@@ -556,7 +558,10 @@ func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run, 
 		fb.Plan = in.plan
 	}
 
-	if in.host != nil {
+	switch {
+	case ship.pulled:
+		fb.PRState = ship.prState
+	case in.host != nil:
 		if p, err := in.host.pull(ctx, in.branch); err == nil && p.url() != "" {
 			fb.PR, fb.PRState = p.url(), p.status()
 		}

@@ -18,12 +18,13 @@ import (
 
 func TestTaskRuns(t *testing.T) {
 	ship := &state.Run{Session: "ship", Task: "gh-1", Capture: "prior", Plan: "done", Ship: "blocked", Ask: "1. Merge?"}
-	fresh := &state.Run{Session: "fresh", Capture: "pending", Plan: "pending", Ship: "pending"}
-	fetching := &state.Run{Session: "fetching", Capture: "skipped", Plan: "running", Ship: "pending"}
+	fresh := &state.Run{Session: "fresh", Skill: "ship", Capture: "pending", Plan: "pending", Ship: "pending"}
+	fetching := &state.Run{Session: "fetching", Skill: "ship", Capture: "skipped", Plan: "running", Ship: "pending"}
 	capture := &state.Run{Session: "capture", Capture: "running", Plan: "pending", Ship: "pending"}
 	other := &state.Run{Session: "other", Task: "GH-7", Capture: "done", Plan: "running", Ship: "pending"}
-	// a later session in the worktree that only caught up: no task, no phase
-	catchup := &state.Run{Session: "catchup", Skill: "catchup", Capture: "pending", Plan: "pending", Ship: "pending"}
+	// a later session in the worktree that only caught up: `state done` starts
+	// its run fresh, with no skill, since the hook seeds phase skills alone
+	catchup := &state.Run{Session: "catchup", Capture: "pending", Plan: "pending", Ship: "pending", Done: "catchup"}
 	planning := &state.Run{Session: "planning", Skill: "plan", Capture: "pending", Plan: "running", Ship: "pending"}
 
 	own, others := taskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
@@ -129,6 +130,10 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 	set := func(phase, status string) func(r *state.Run) {
 		return func(r *state.Run) { _ = r.Set(phase, status, "") }
 	}
+	// what `f10 state done <step>` writes into a session's fresh run
+	done := func(step string) func(r *state.Run) {
+		return func(r *state.Run) { _ = r.SetDone(step, time.Now()) }
+	}
 
 	for _, tc := range []struct {
 		name  string
@@ -145,11 +150,7 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 			seed("ship", "local: GH-1"),
 		}, true},
 		{"capture", []func(*state.Run){seed("capture", "add a retry to the client")}, false},
-		{"catchup after the ship", []func(*state.Run){
-			seed("ship", "GH-1"),
-			set("ship", "done"),
-			seed("catchup", ""),
-		}, false},
+		{"catchup alone", []func(*state.Run){done("catchup")}, false},
 		{"plan a bare number", []func(*state.Run){seed("plan", "1")}, true},
 		{"ship a description", []func(*state.Run){seed("ship", "add a retry to the client")}, false},
 	} {
@@ -417,8 +418,16 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 		t.Error("status asked the host for a task that never pushed")
 	}
 
-	if s := readShipment(t.Context(), in, pushed, ledger.TaskRef{}); s.pr != "https://gh/pr/9" {
+	s := readShipment(t.Context(), in, pushed, ledger.TaskRef{})
+	if s.pr != "https://gh/pr/9" {
 		t.Errorf("pr = %q, want the branch's PR", s.pr)
+	}
+
+	// the fallback reuses that answer rather than asking the host again
+	f.script(ghView)
+
+	if fb := taskFallback(t.Context(), in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
+		t.Errorf("fallback pr = %q (%s), want the shipment's PR and its state", fb.PR, fb.PRState)
 	}
 }
 
