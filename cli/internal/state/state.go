@@ -47,11 +47,14 @@ type Run struct {
 	// names twice (`judge`, `pr`) is told apart; 0 is unknown
 	At    int    `json:"at,omitempty"`
 	Final string `json:"final,omitempty"` // the ship pipeline's declared last step
-	// the ship pipeline's steps as declared, in order
+	// the ship pipeline's steps as declared, in order, labels cut
 	Pipeline []string `json:"pipeline,omitempty"`
-	Note     string   `json:"note,omitempty"` // why the run stopped
-	Next     string   `json:"next,omitempty"` // what unblocks it
-	Ask      string   `json:"ask,omitempty"`  // the question a driven run stopped on, options included
+	// Labels is each Pipeline entry's display name by index ("" for none);
+	// nil when no entry has one. Nothing matches on it, only shows it
+	Labels []string `json:"labels,omitempty"`
+	Note   string   `json:"note,omitempty"` // why the run stopped
+	Next   string   `json:"next,omitempty"` // what unblocks it
+	Ask    string   `json:"ask,omitempty"`  // the question a driven run stopped on, options included
 	// Wait is the base task a driven ship stopped for, its branch without
 	// code yet: a drive parks the task and sends ship again once it has some
 	Wait string `json:"wait,omitempty"`
@@ -175,6 +178,8 @@ func Load(path string) (*Run, error) {
 			r.Final = value
 		case "pipeline":
 			r.Pipeline = SplitPipeline(value)
+		case "labels":
+			r.Labels = splitLabels(value)
 		case "note":
 			r.Note = value
 		case "next":
@@ -220,6 +225,77 @@ func SplitPipeline(s string) []string {
 	}
 
 	return steps
+}
+
+// SplitLabel cuts an entry's trailing `[label]`, a display name only:
+// `pr[pr-polish]` is pr and pr-polish. An entry with none has label "".
+func SplitLabel(e string) (string, string) {
+	e = strings.TrimSpace(e)
+
+	i := strings.Index(e, "[")
+	if i < 0 || !strings.HasSuffix(e, "]") {
+		return e, ""
+	}
+
+	return strings.TrimSpace(e[:i]), e[i+1 : len(e)-1]
+}
+
+// Labeled is the entry as written, its label in brackets after it.
+func Labeled(entry, label string) string {
+	if label == "" {
+		return entry
+	}
+
+	return entry + "[" + label + "]"
+}
+
+// LabelAt is labels[i], or "" when the flow has none there.
+func LabelAt(labels []string, i int) string {
+	if i < 0 || i >= len(labels) {
+		return ""
+	}
+
+	return labels[i]
+}
+
+// noLabel holds an unlabelled entry's place in the state file's labels line.
+const noLabel = "-"
+
+func joinLabels(labels []string) string {
+	shown := make([]string, len(labels))
+	for i, l := range labels {
+		shown[i] = cmp.Or(l, noLabel)
+	}
+
+	return strings.Join(shown, PipelineSep)
+}
+
+func splitLabels(s string) []string {
+	labels := SplitPipeline(s)
+	for i, l := range labels {
+		if l == noLabel {
+			labels[i] = ""
+		}
+	}
+
+	return labels
+}
+
+// LabelAt is the label of the pipeline's at-th entry, counted from 1.
+func (r *Run) LabelAt(at int) string { return LabelAt(r.Labels, at-1) }
+
+// LeafShown is the leaf as a person reads it: its entry's label, else the
+// step itself.
+func (r *Run) LeafShown() string { return cmp.Or(r.LabelAt(r.At), r.Leaf) }
+
+// FinalShown is the final step as a person reads it: the last entry's label,
+// else the step itself.
+func (r *Run) FinalShown() string {
+	if n := len(r.Pipeline); n > 0 && r.Pipeline[n-1] == r.Final {
+		return cmp.Or(r.LabelAt(n), r.Final)
+	}
+
+	return r.Final
 }
 
 // Live reports whether the run was updated within ttl of now.
@@ -290,9 +366,9 @@ func (r *Run) PhaseText(phase string) string {
 	case r.Leaf == "" || (phase != "ship" && (phase != "plan" || r.Leaf != "judge")):
 		return status
 	case status == "running":
-		return status + ": " + r.Leaf
+		return status + ": " + r.LeafShown()
 	case Stopped(status):
-		return status + " at " + r.Leaf
+		return status + " at " + r.LeafShown()
 	default:
 		return status
 	}

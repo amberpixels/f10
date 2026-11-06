@@ -276,6 +276,11 @@ Inside a `{ }` map YAML refuses a bare `?`, so quote it there: `{ review: "local
 `judge` reads by position: before `implement` it judges the plan, a yellow verdict revising the plan file in place; after it, the change.
 A judge before `implement` needs a leading `plan`, since a planless flow has no plan file to judge.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
+An entry may end in a label in brackets, a display name for an entry the flow repeats: `judged: plan implement pr review:local judge pr[pr-polish]`.
+`f10 status`, the parent tree, `f10 flow`, the drive's `resume at` line and `f10 stats <id>` show `pr-polish` where they would show `pr`, and `--json` keeps `step` as the bare step beside a `label`.
+The label changes nothing that runs: the entry is still `pr`, and every claim and match uses the bare entry.
+A label is lower kebab-case, unique within its flow, never the name of a step (a generic one, `finish`, or any step a declared flow names), and never on the old `review (local)` form.
+A shell reads `[...]` as a pattern, so quote a labelled entry on a command line: `f10-state.sh pipeline implement pr 'pr[pr-polish]'`.
 The last entry names what a run ships: an open PR, a pushed branch, a running deploy.
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
 Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.

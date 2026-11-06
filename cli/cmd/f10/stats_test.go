@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -115,5 +116,49 @@ func TestStatsSteps(t *testing.T) {
 		if got := strings.Join(strings.Fields(lines[i]), " "); got != w {
 			t.Errorf("line %d = %q, want %q", i, got, w)
 		}
+	}
+}
+
+// Two pr entries, the second labelled, are two rows: the claim's labels and
+// place name the entry, and the step group still sums both.
+func TestStatsStepsByLabel(t *testing.T) {
+	day := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	at := func(n int) time.Time { return day.Add(time.Duration(n) * time.Minute) }
+	labels := []any{"", "", "", "pr-polish"}
+	set := func(n int, leaf string, place float64) ledger.Event {
+		return statEvent(at(n), "s1", "FT-1", ledger.StateSet,
+			ledger.Payload{"args": []any{"ship", "running", leaf}, "labels": labels, "at": place})
+	}
+
+	events := []ledger.Event{
+		statEvent(at(0), "s1", "", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
+		set(0, "implement", 1),
+		statEvent(at(1), "s1", "FT-1", ledger.WaitStarted, ledger.Payload{"reason": "question"}),
+		statEvent(at(2), "s1", "FT-1", ledger.WaitEnded, ledger.Payload{"reason": "question"}),
+		set(10, "pr", 2),
+		set(13, "review:local", 3),
+		set(15, "pr[pr-polish]", 4),
+		statEvent(at(20), "s1", "FT-1", ledger.StateSet, ledger.Payload{"args": []any{"ship", "done"}}),
+	}
+
+	rows := statRows(events, "FT-1", day)
+	if len(rows) != 1 {
+		t.Fatalf("rows %+v", rows)
+	}
+
+	if d := rows[0].steps["pr"]; d != 8*time.Minute {
+		t.Errorf("pr step = %v, want both entries' 8m", d)
+	}
+
+	var out bytes.Buffer
+	if err := writeSteps(&out, rows[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	got := strings.Fields(out.String())
+	pr, polish := slices.Index(got, "pr"), slices.Index(got, "pr-polish")
+
+	if pr < 0 || polish != pr+2 || got[pr+1] != "3.0m" || got[polish+1] != "5.0m" {
+		t.Errorf("breakdown:\n%s", out.String())
 	}
 }

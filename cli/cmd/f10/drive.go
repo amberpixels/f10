@@ -2633,7 +2633,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 					why = "its base has code now"
 				}
 
-				fmt.Fprintf(w, "%s %s: %s: %s\n", in.id(id), skill, why, at)
+				fmt.Fprintf(w, "%s %s: %s: %s\n", in.id(id), skill, why, resumeShown(run, at))
 
 				return in.prompt(ctx, w, r, ws, skill, at)
 			}
@@ -2765,6 +2765,16 @@ func resumeAt(skill string, run *state.Run) string {
 	}
 
 	return s
+}
+
+// resumeShown is resumeAt's steering as a person reads it: the resumed
+// entry by its label, when the flow gives it one.
+func resumeShown(run *state.Run, at string) string {
+	if label := run.LabelAt(run.At); label != "" {
+		return "resume at " + label
+	}
+
+	return at
 }
 
 // guardedSteps are the entries ship's catchup guard runs before.

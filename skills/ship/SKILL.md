@@ -57,6 +57,7 @@ An `f10 flow` too old to take a name fails on it: run the declared flow, and say
 
 An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` sets the review's `by` (who reviews), `review:host` runs the local review on the host's own code review, `review:local+ci` runs both into one round and one resolve, `review:local+ci?` runs the CI review only where it can run, and `f10 flow <name>` settles the `?` before ship sees the entry, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).
 The run starts at the entry after a leading `plan`, which runs only for a task with no plan file.
+An entry may end in a `[label]` (`pr[pr-polish]`), a display name only: run the step before the bracket, as if the label were absent.
 `resolve` is never named: a `review` entry runs it.
 A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, which builds a yellow verdict's changes itself, routed as the **judge** step says before and after `pr`.
 A `pr` entry opens the branch's PR, or refreshes it when one is open, so a flow may name `pr` again after review or judge to bring the description up to date.
@@ -102,6 +103,7 @@ A `judge` entry routes the run by its verdict: the plan judge as the judge step'
 A change judge's changes, before or after `pr`, are folded into the plan and built by the judge step's own route (**Building the changes**), never by a rerun of `implement`.
 
 **Badge** (`conventions/report.md`): `f10-state.sh pipeline <entry>...` once the flow is selected, every entry after `plan` as the flow names it, one argument each (`pipeline judge implement cleanup pr review:local judge pr`), which also declares the last as final; `f10-state.sh set ship running <entry>` before each entry, named as the flow names it, in the call that loads it; `f10-state.sh set ship done` after the last.
+Pass each entry as `f10 flow` prints it, a label included, and single-quote a labelled one (`'pr[pr-polish]'`), because zsh reads an unquoted bracket as a glob and fails with `no matches found` before the command runs.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 

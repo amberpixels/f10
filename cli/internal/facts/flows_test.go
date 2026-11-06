@@ -2,9 +2,12 @@ package facts
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 func TestDecodeFlows(t *testing.T) {
@@ -31,7 +34,7 @@ func TestDecodeFlows(t *testing.T) {
 		t.Errorf("a valid block fails its check: %v", bad)
 	}
 
-	if got, _ := normalizeFlow(d.Flows["default"]); got[5] != "review:ci" {
+	if got, _, _ := normalizeFlow(d.Flows["default"]); got[5] != "review:ci" {
 		t.Errorf("paren form normalised to %q", got[5])
 	}
 
@@ -70,6 +73,83 @@ func TestCheckFlow(t *testing.T) {
 
 	if bad := (Declared{Flows: map[string]Flow{"Fast": {"implement"}}}).check(); len(bad) != 1 {
 		t.Errorf("an uppercase flow name passed: %v", bad)
+	}
+}
+
+func TestFlowLabels(t *testing.T) {
+	if step, arg := SplitEntry("review:ci[review-final]"); step != "review" || arg != "ci" {
+		t.Errorf("SplitEntry kept the label: %q %q", step, arg)
+	}
+
+	for name, tc := range map[string]struct {
+		flow Flow
+		want string
+	}{
+		"a step's name":    {flow: Flow{"plan", "implement", "pr", "pr[review]"}, want: "is a step's name"},
+		"a flow's step":    {flow: Flow{"plan", "implement", "e2e", "pr[e2e]"}, want: "is a step's name"},
+		"not kebab-case":   {flow: Flow{"plan", "implement", "pr", "pr[Polish]"}, want: "not lower kebab-case"},
+		"repeated":         {flow: Flow{"plan", "implement[build]", "pr[build]"}, want: "names two entries"},
+		"on the old form":  {flow: Flow{"plan", "implement", "review (local)[check]"}, want: "takes no label"},
+		"a trailing dash":  {flow: Flow{"plan", "implement", "pr[polish-]"}, want: "not lower kebab-case"},
+		"an empty bracket": {flow: Flow{"plan", "implement", "pr[]"}, want: "a name in brackets"},
+		"unclosed":         {flow: Flow{"plan", "implement", "pr[polish"}, want: "a name in brackets"},
+	} {
+		bad := Declared{Flows: map[string]Flow{"default": tc.flow}}.check()
+		if !slices.ContainsFunc(bad, func(b string) bool { return strings.Contains(b, tc.want) }) {
+			t.Errorf("%s: check = %v, want %q", name, bad, tc.want)
+		}
+	}
+
+	eff := buildWith(t, "---\nflows:\n  default: plan implement pr review:local pr[pr-polish]\n"+
+		"  direct: [implement, 'review:local[check]', push]\n---\n", "")
+	for _, p := range eff.Problems {
+		t.Errorf("a labelled flow has a problem: %s", p.Message)
+	}
+
+	if got := strings.Join(eff.Flows["default"], " "); got != "plan implement pr review:local pr" {
+		t.Errorf("entries = %q, want them bare", got)
+	}
+
+	if got := eff.FlowLabels["default"]; len(got) != 5 || got[4] != "pr-polish" || got[2] != "" {
+		t.Errorf("labels = %q", got)
+	}
+
+	if got := eff.FlowLabels["direct"]; state.LabelAt(got, 1) != "check" {
+		t.Errorf("direct labels = %q", got)
+	}
+
+	if got := LabeledEntries(eff.Flows["default"], eff.FlowLabels["default"]); got[4] != "pr[pr-polish]" {
+		t.Errorf("labelled entries = %q", got)
+	}
+
+	plain := buildWith(t, "---\nflows:\n  default: plan implement pr\n---\n", "")
+	if plain.FlowLabels != nil {
+		t.Errorf("a flow with no label has labels: %v", plain.FlowLabels)
+	}
+
+	m, err := Migrate([]byte("---\nflows:\n  default: plan implement review (CI) pr[pr-polish]\n---\n"), "project.md")
+	if err != nil || m.Content != "---\nflows:\n  default: plan implement review:ci pr[pr-polish]\n---\n" {
+		t.Errorf("a migration dropped the label: %+v, %v", m, err)
+	}
+}
+
+// GenericSteps tracks the plugin's step files, so a label can never take
+// a generic step's name once a step is added.
+func TestGenericStepsMatchStepFiles(t *testing.T) {
+	files, err := filepath.Glob("../../../steps/*.md")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no step files: %v", err)
+	}
+
+	want := []string{"finish"}
+	for _, f := range files {
+		want = append(want, strings.TrimSuffix(filepath.Base(f), ".md"))
+	}
+
+	slices.Sort(want)
+
+	if got := slices.Sorted(slices.Values(GenericSteps)); !slices.Equal(got, want) {
+		t.Errorf("GenericSteps = %v, want the steps/ files plus finish: %v", got, want)
 	}
 }
 

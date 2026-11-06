@@ -157,6 +157,15 @@ func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, 
 		payload["pipeline"] = r.Pipeline
 	}
 
+	// labels and the place show a finished task's steps by their names
+	if r.Labels != nil {
+		payload["labels"] = r.Labels
+	}
+
+	if r.At > 0 {
+		payload["at"] = r.At
+	}
+
 	cwd, _ := os.Getwd()
 	place := ledger.Where(ctx, cwd)
 

@@ -56,6 +56,7 @@ var remoteTimeout = 5 * time.Second
 // A gate is one row of a task's flow: a plain step, its review or a judge.
 type gate struct {
 	Step    string        `json:"step"`
+	Label   string        `json:"label,omitempty"`  // the entry's display name, shown in place of Step
 	State   string        `json:"state,omitempty"`  // plain steps and judges
 	Via     string        `json:"via,omitempty"`    // a running gate: in ship, driven or manual
 	Action  string        `json:"action,omitempty"` // drive's finish: what it is doing
@@ -87,6 +88,7 @@ type gateInput struct {
 	driven   string          // the last chain skill drive saw finish
 	finish   ref.DriveFinish // drive's record of running finish, zero for none or a drive gone
 	pipeline []string        // ship's entries of the branch's flow, when the run recorded none
+	labels   []string        // pipeline's display labels by index; nil when none
 	// remoteFlow is a remote reviewer declared: it reviews every PR
 	remoteFlow bool
 
@@ -97,7 +99,7 @@ type gateInput struct {
 
 // taskGates builds the gates, nil when nothing declares a flow.
 func taskGates(ctx context.Context, in gateInput) []gate {
-	entries, firstShip, shipLen := in.flow()
+	entries, labels, firstShip, shipLen := in.flow()
 	if len(entries) == 0 {
 		return nil
 	}
@@ -138,7 +140,7 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 				isPR = true
 			}
 
-			g := gate{Step: e, State: steps[i]}
+			g := gate{Step: e, Label: state.LabelAt(labels, i), State: steps[i]}
 			if g.State == gateWaiting {
 				g.Action = "on " + in.run.Wait
 			}
@@ -198,20 +200,20 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	return gates
 }
 
-// flow is the entries the task runs through, the index of ship's first one
-// and how many are ship's. plan and resolve are no gates: the plan phase row
-// shows the one, a review gate folds in the other.
-func (in gateInput) flow() ([]string, int, int) {
-	pipeline := in.pipeline
+// flow is the entries the task runs through, their labels by index, the
+// index of ship's first one and how many are ship's. plan and resolve are no
+// gates: the plan phase row shows the one, a review gate folds in the other.
+func (in gateInput) flow() ([]string, []string, int, int) {
+	pipeline, labels := in.pipeline, in.labels
 	if in.run != nil && len(in.run.Pipeline) > 0 {
-		pipeline = in.run.Pipeline
+		pipeline, labels = in.run.Pipeline, in.run.Labels
 	}
 
 	if len(in.chain) == 0 {
-		return pipeline, 0, len(pipeline)
+		return pipeline, labels, 0, len(pipeline)
 	}
 
-	var entries []string
+	var entries, chainLabels []string
 
 	firstShip, shipLen := -1, 0
 
@@ -220,9 +222,13 @@ func (in gateInput) flow() ([]string, int, int) {
 		case "plan", "resolve":
 		case "ship":
 			firstShip, shipLen = len(entries), len(pipeline)
+			for i := range pipeline {
+				chainLabels = append(chainLabels, state.LabelAt(labels, i))
+			}
+
 			entries = append(entries, pipeline...)
 		default:
-			entries = append(entries, c)
+			entries, chainLabels = append(entries, c), append(chainLabels, "")
 		}
 	}
 
@@ -230,7 +236,7 @@ func (in gateInput) flow() ([]string, int, int) {
 		firstShip = len(entries)
 	}
 
-	return entries, firstShip, shipLen
+	return entries, chainLabels, firstShip, shipLen
 }
 
 // stepStates follows the claims ship's session made: steps before the one
@@ -819,7 +825,7 @@ func gateLines(gates []gate) [][2]string {
 	out := make([][2]string, len(gates))
 
 	for i, g := range gates {
-		out[i] = [2]string{"  " + g.Step, g.text()}
+		out[i] = [2]string{"  " + g.shown(), g.text()}
 	}
 
 	return out
@@ -853,6 +859,9 @@ func (g gate) style() string {
 
 	return "pending"
 }
+
+// shown is the gate's name as a person reads it: its label, else its step.
+func (g gate) shown() string { return cmp.Or(g.Label, g.Step) }
 
 func (g gate) text() string {
 	switch {
@@ -1041,6 +1050,7 @@ type gateSource struct {
 	events []ledger.Event
 	main   string // where the branch config lives
 	flows  map[string][]string
+	labels map[string][]string // each flow's entry labels, as Effective.FlowLabels
 	review facts.Review
 	store  *lore.Store
 	host   *host
@@ -1136,11 +1146,11 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		}
 	}
 
-	if entries, ok := src.flows[flow]; ok {
-		in.pipeline = facts.ShipEntries(entries)
-	} else {
-		in.pipeline = facts.ShipEntries(src.flows["default"])
+	if _, ok := src.flows[flow]; !ok {
+		flow = "default"
 	}
+
+	in.pipeline, in.labels = facts.ShipEntries(src.flows[flow]), facts.ShipLabels(src.flows[flow], src.labels[flow])
 
 	if src.host != nil && branch != "" && src.review.Remote() {
 		h := *src.host

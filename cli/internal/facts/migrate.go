@@ -475,7 +475,7 @@ func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 	paren := false
 
 	for _, f := range d.Flows {
-		_, old := normalizeFlow(f)
+		_, _, old := normalizeFlow(f)
 		paren = paren || old
 	}
 
@@ -521,8 +521,8 @@ func migrateFlows(data, block, body []byte, path string) (*Migration, error) {
 
 	normalized := map[string]Flow{}
 	for name, f := range flows {
-		entries, _ := normalizeFlow(f)
-		normalized[name] = entries
+		entries, labels, _ := normalizeFlow(f)
+		normalized[name] = LabeledEntries(entries, labels)
 	}
 
 	flowsNode := &yaml.Node{}

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // A flow is every step a task runs through: a leading `plan` runs only for a
@@ -78,9 +80,10 @@ func splitFlow(text string) Flow {
 	return out
 }
 
-// normalizeEntry is an entry in the colon form, and whether it was written
-// in the old parenthesised one: `review (CI)` is `review:ci`.
+// normalizeEntry is an entry in the colon form, its label cut, and whether
+// it was written in the old parenthesised one: `review (CI)` is `review:ci`.
 func normalizeEntry(e string) (string, bool) {
+	e, _ = state.SplitLabel(e)
 	step, rest, paren := strings.Cut(e, "(")
 	if !paren {
 		return strings.TrimSpace(e), false
@@ -91,18 +94,25 @@ func normalizeEntry(e string) (string, bool) {
 	return strings.TrimSpace(step) + ":" + arg, true
 }
 
-// normalizeFlow is every entry in the colon form, and whether any was not.
-func normalizeFlow(f []string) ([]string, bool) {
+// normalizeFlow is every entry in the colon form, their labels by index
+// (nil when none has one), and whether any entry was not in that form.
+func normalizeFlow(f []string) ([]string, []string, bool) {
 	out := make([]string, 0, len(f))
-	legacy := false
+	labels := make([]string, len(f))
+	legacy, labeled := false, false
 
-	for _, e := range f {
+	for i, e := range f {
 		n, old := normalizeEntry(e)
+		_, labels[i] = state.SplitLabel(e)
 		out = append(out, n)
-		legacy = legacy || old
+		legacy, labeled = legacy || old, labeled || labels[i] != ""
 	}
 
-	return out, legacy
+	if !labeled {
+		labels = nil
+	}
+
+	return out, labels, legacy
 }
 
 // SplitEntry is an entry's step and its argument, in either form:
@@ -121,6 +131,15 @@ func ShipEntries(flow []string) []string {
 	}
 
 	return flow
+}
+
+// ShipLabels is labels cut as ShipEntries cuts their flow.
+func ShipLabels(flow, labels []string) []string {
+	if len(flow) > 0 && flow[0] == "plan" && len(labels) > 0 {
+		return labels[1:]
+	}
+
+	return labels
 }
 
 // By is who a review entry runs: the local review, the CI review, or both.
@@ -210,13 +229,23 @@ func JudgeKind(flow []string, i int) string {
 }
 
 var (
-	flowNameRE = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	stepNameRE = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	flowNameRE  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	stepNameRE  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	labelNameRE = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 )
 
+// GenericSteps is every generic step a flow entry may name, plus finish, which
+// drive runs. A label never takes one of these names, so status and stats
+// never show a step that did not run.
+var GenericSteps = []string{
+	"brainstorm", "capture", "catchup", "cleanup", "commit", "debug", "demo", "deploy", "explain", "fetch",
+	"finish", "handoff", "implement", "judge", "plan", "pr", "push", "resolve", "review", "standup",
+}
+
 // checkFlow reports what is wrong with one flow. Step names are not checked
-// against a vocabulary: a project-defined step is any overlay's name.
-func checkFlow(name string, flow []string) []string {
+// against a vocabulary: a project-defined step is any overlay's name. others
+// is every step the declared flows name, which no label may take.
+func checkFlow(name string, flow []string, others ...string) []string {
 	var bad []string
 
 	if !flowNameRE.MatchString(name) {
@@ -227,7 +256,8 @@ func checkFlow(name string, flow []string) []string {
 		return append(bad, fmt.Sprintf("flows.%s: no entries", name))
 	}
 
-	entries, _ := normalizeFlow(flow)
+	entries, labels, _ := normalizeFlow(flow)
+	bad = append(bad, checkLabels(name, flow, entries, labels, others)...)
 
 	for i, e := range entries {
 		step, arg, colon := strings.Cut(e, ":")
@@ -253,6 +283,55 @@ func checkFlow(name string, flow []string) []string {
 	}
 
 	return bad
+}
+
+// checkLabels reports a label that is not lower kebab-case, repeats in its
+// flow, names a step, or sits on the old `review (local)` form.
+func checkLabels(name string, flow, entries, labels, others []string) []string {
+	var bad []string
+
+	seen := map[string]bool{}
+
+	for i := range flow {
+		label, written := state.LabelAt(labels, i), strings.TrimSpace(flow[i])
+
+		switch {
+		case label == "" && strings.ContainsAny(written, "[]"):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q: a label is a name in brackets after the entry, "+
+				"as pr[pr-polish]", name, written))
+		case label == "":
+			continue
+		case strings.Contains(written, "("):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q: the old `step (arg)` form takes no label; "+
+				"write %s[%s]", name, written, entries[i], label))
+		case !labelNameRE.MatchString(label):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q: label %q is not lower kebab-case", name, written, label))
+		case slices.Contains(GenericSteps, label) || slices.Contains(others, label):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q: label %q is a step's name, "+
+				"so status would show a step that did not run", name, written, label))
+		case seen[label]:
+			bad = append(bad, fmt.Sprintf("flows.%s: label %q names two entries", name, label))
+		}
+
+		seen[label] = true
+	}
+
+	return bad
+}
+
+// FlowSteps is every step the flows name, their labels cut.
+func FlowSteps[F ~[]string](flows map[string]F) []string {
+	var steps []string
+
+	for _, f := range flows {
+		for _, e := range f {
+			if step, _ := SplitEntry(e); !slices.Contains(steps, step) {
+				steps = append(steps, step)
+			}
+		}
+	}
+
+	return steps
 }
 
 func validBy(arg string) bool {
@@ -310,7 +389,7 @@ func legacyFlows(pipes map[string][]string, planless, chain []string, remote boo
 			f = append(f, "plan")
 		}
 
-		entries, _ := normalizeFlow(steps)
+		entries, _, _ := normalizeFlow(steps)
 		flows[name] = append(f, entries...)
 	}
 
@@ -363,10 +442,20 @@ func (e *Effective) Flow(name string) ([]string, bool) {
 	return nil, false
 }
 
-func flowsShown(flows map[string][]string, names []string) string {
+// LabeledEntries is entries as written, each with its label.
+func LabeledEntries(entries, labels []string) []string {
+	out := make([]string, len(entries))
+	for i, e := range entries {
+		out[i] = state.Labeled(e, state.LabelAt(labels, i))
+	}
+
+	return out
+}
+
+func flowsShown(flows, labels map[string][]string, names []string) string {
 	shown := make([]string, 0, len(names))
 	for _, name := range names {
-		shown = append(shown, name+": "+strings.Join(flows[name], " "))
+		shown = append(shown, name+": "+strings.Join(LabeledEntries(flows[name], labels[name]), " "))
 	}
 
 	return strings.Join(shown, "; ")
@@ -407,8 +496,16 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 		var old []string
 
 		for name, f := range fm.Flows {
-			entries, paren := normalizeFlow(f)
+			entries, labels, paren := normalizeFlow(f)
 			e.Flows[name] = entries
+
+			if labels != nil {
+				if e.FlowLabels == nil {
+					e.FlowLabels = map[string][]string{}
+				}
+
+				e.FlowLabels[name] = labels
+			}
 
 			if paren {
 				old = append(old, name)
@@ -436,7 +533,7 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 		}
 
 		e.Facts = append(e.Facts, Fact{
-			Key: "flows", Value: flowsShown(e.Flows, e.FlowNames()),
+			Key: "flows", Value: flowsShown(e.Flows, e.FlowLabels, e.FlowNames()),
 			Origin: "declared (" + fm.origin["flows"] + ", frontmatter)",
 		})
 		e.FlowByArea = fm.FlowByArea
@@ -467,7 +564,7 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 		from := strings.Join(append(legacy, prose...), ", ")
 		e.problem(false, "%s converted to flows; f10 init --migrate rewrites them", from)
 		e.Facts = append(e.Facts, Fact{
-			Key: "flows", Value: flowsShown(e.Flows, e.FlowNames()), Origin: "converted from " + from,
+			Key: "flows", Value: flowsShown(e.Flows, e.FlowLabels, e.FlowNames()), Origin: "converted from " + from,
 		})
 		e.FlowByArea = cmpMap(fm.FlowByArea, fm.ByArea)
 	default:

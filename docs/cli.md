@@ -36,7 +36,7 @@ f10 init                 # register this checkout: write project.md from detecti
 f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), old keys into flows, and drive_finish and a Rounds line into paces
 f10 config [verify] [--json]   # the effective configuration, with the origin of every value; verify: the one verify line the loader prints
 f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--pace NAME] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it; the run's pace lays its effort dials on top
-f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace and the project's ceiling, each with what selects it, and drive_finish; with a name, that flow an entry per line with its dials, an optional CI review (`ci?`) settled with the reason, the list /f10:ship runs; a dial the ceiling capped names the ceiling and what the pace had
+f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace and the project's ceiling, each with what selects it, and drive_finish; with a name, that flow an entry per line with its dials and a labelled entry as written (`pr[pr-polish]`), an optional CI review (`ci?`) settled with the reason, the list /f10:ship runs; a dial the ceiling capped names the ceiling and what the pace had
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
 f10 help [--all | --agent]   # the human commands; --all adds the plumbing the steps call; --agent prints one line per command for an agent's context
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing

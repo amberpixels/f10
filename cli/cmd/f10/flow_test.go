@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // runIn runs f10 with -C dir and returns what it printed.
@@ -175,5 +176,47 @@ func TestFlowByArea(t *testing.T) {
 	if kept, note, err := in.keepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
 		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "git config branch.") }) {
 		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
+	}
+}
+
+// f10 flow prints a labelled entry as written, the list ship runs and
+// passes to its badge, with or without a pace; JSON keeps entries bare.
+func TestFlowPrintsEntryLabels(t *testing.T) {
+	isolateEnv(t)
+
+	repo := mkRepo(t)
+	path := filepath.Join(repo, ".f10", "instructions", "project.md")
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte("---\nflows:\n  default: plan implement pr review:local pr[pr-polish]\n---\n"),
+		0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(runIn(t, repo, "flow", "default")), "\n")
+	if last := lines[len(lines)-1]; last != "pr[pr-polish]" {
+		t.Errorf("f10 flow default ends %q, want pr[pr-polish]:\n%s", last, strings.Join(lines, "\n"))
+	}
+
+	if paced := runIn(t, repo, "flow", "default", "--pace", "fast"); !strings.Contains(paced, "pr[pr-polish]") {
+		t.Errorf("under a pace the label is gone:\n%s", paced)
+	}
+
+	if all := runIn(t, repo, "flow"); !strings.Contains(all, "plan implement pr review:local pr[pr-polish]") {
+		t.Errorf("f10 flow:\n%s", all)
+	}
+
+	var v flowView
+	if err := json.Unmarshal([]byte(runIn(t, repo, "flow", "--json")), &v); err != nil {
+		t.Fatal(err)
+	}
+
+	f := v.Flows[0]
+	if got := strings.Join(f.Entries, " "); got != "plan implement pr review:local pr" ||
+		state.LabelAt(f.Labels, 4) != "pr-polish" {
+		t.Errorf("json flow = %+v", f)
 	}
 }

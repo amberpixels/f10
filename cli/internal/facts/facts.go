@@ -79,6 +79,7 @@ type Effective struct {
 	StaleAfter     string              `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
 	DriverTimeout  time.Duration       `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
 	Flows          map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
+	FlowLabels     map[string][]string `json:"flowLabels,omitempty"`  // a flow's name to its entries' display labels by index; only flows with one
 	FlowByArea     map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
 	DriveFinish    bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
 	DriveEnv       []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones

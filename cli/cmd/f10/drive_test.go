@@ -3806,3 +3806,26 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 		t.Error("the pending pull outlived the pull")
 	}
 }
+
+// The drive's resume line names a labelled entry by its label, while the
+// steering it sends keeps the bare entry and its place, which ship matches.
+func TestResumeShownUsesTheLabel(t *testing.T) {
+	run := &state.Run{
+		Ship: "partial", Leaf: "pr", At: 4, Next: "run /f10:catchup --driven in the worktree, then rerun the drive",
+		Pipeline: []string{"implement", "pr", "review:local", "pr"}, Labels: []string{"", "", "", "pr-polish"},
+	}
+
+	at := resumeAt("ship", run)
+	if at != "resume at pr (entry 4)" {
+		t.Fatalf("resumeAt = %q", at)
+	}
+
+	if got := resumeShown(run, at); got != "resume at pr-polish" {
+		t.Errorf("resumeShown = %q, want resume at pr-polish", got)
+	}
+
+	run.Labels = nil
+	if got := resumeShown(run, at); got != at {
+		t.Errorf("unlabelled resumeShown = %q, want %q", got, at)
+	}
+}

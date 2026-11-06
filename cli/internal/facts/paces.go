@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/mdline"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // A pace is how fast a project delivers: dials keyed by step, laid over
@@ -551,6 +552,7 @@ type ResolvedEntry struct {
 	Entry    string `json:"entry"` // as it runs: review:local when the pace named who reviews
 	Declared string `json:"declared"`
 	Step     string `json:"step"`
+	Label    string `json:"label,omitempty"`   // the entry's display name, from its [label]
 	Skipped  string `json:"skipped,omitempty"` // why it does not run: the pace's off, or an optional CI review dropped; "" when it runs
 	Dials    []Dial `json:"dials,omitempty"`
 }
@@ -581,6 +583,32 @@ func (r Resolved) Run() []string {
 	}
 
 	return run
+}
+
+// Labeled is the entries that run as written, each with its label: the
+// list /f10:ship runs and passes to its badge.
+func (r Resolved) Labeled() []string {
+	var run []string
+
+	for _, e := range r.Entries {
+		if e.Skipped == "" {
+			run = append(run, state.Labeled(e.Entry, e.Label))
+		}
+	}
+
+	return run
+}
+
+// WithLabels is r with each entry given its label, by index.
+func (r Resolved) WithLabels(labels []string) Resolved {
+	entries := slices.Clone(r.Entries)
+	for i := range entries {
+		entries[i].Label = state.LabelAt(labels, i)
+	}
+
+	r.Entries = entries
+
+	return r
 }
 
 // handoffStep is the step whose pace key also reaches every pr entry.
