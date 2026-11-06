@@ -285,8 +285,15 @@ func splitLabels(s string) []string {
 func (r *Run) LabelAt(at int) string { return LabelAt(r.Labels, at-1) }
 
 // LeafShown is the leaf as a person reads it: its entry's label, else the
-// step itself.
-func (r *Run) LeafShown() string { return cmp.Or(r.LabelAt(r.At), r.Leaf) }
+// step itself. A leaf the pipeline does not hold (catchup) keeps the place
+// of the entry it guards, so it never borrows that entry's label.
+func (r *Run) LeafShown() string {
+	if r.At > 0 && r.At <= len(r.Pipeline) && r.Pipeline[r.At-1] == r.Leaf {
+		return cmp.Or(r.LabelAt(r.At), r.Leaf)
+	}
+
+	return r.Leaf
+}
 
 // FinalShown is the final step as a person reads it: the last entry's label,
 // else the step itself.

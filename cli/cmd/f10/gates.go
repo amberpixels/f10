@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
 // A task's gates are every step its flow declares with its state, read from
@@ -519,8 +520,7 @@ func (in gateInput) claimedAt(session, step string) time.Time {
 			continue
 		}
 
-		args, _ := e.Payload.Val["args"].([]any)
-		if len(args) >= 3 && args[0] == "ship" && args[1] == "running" && args[2] == step {
+		if phase, status, leaf := timing.Claim(e); phase == "ship" && status == "running" && leaf == step {
 			at = e.At
 		}
 	}

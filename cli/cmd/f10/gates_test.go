@@ -1024,3 +1024,14 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		t.Errorf("gates = %+v, want pr-polish pending", gates)
 	}
 }
+
+// A labelled review claim still marks when ship entered the review, so a
+// round written before it does not read as this review's.
+func TestClaimedAtCutsTheLabel(t *testing.T) {
+	at := time.Unix(1_800_000_000, 0)
+	in := gateInput{events: []ledger.Event{shipClaim(at, "s1", "review:local[review-final]")}}
+
+	if got := in.claimedAt("s1", "review:local"); !got.Equal(at) {
+		t.Errorf("claimedAt = %v, want %v", got, at)
+	}
+}

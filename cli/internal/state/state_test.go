@@ -774,6 +774,15 @@ func TestPipelineLabels(t *testing.T) {
 		t.Errorf("a resent pr moved: at %d shown %q", r.At, r.LeafShown())
 	}
 
+	// a catchup guarding the labelled entry stops as catchup
+	if err := r.Set("ship", "failed", "catchup"); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.At != 4 || r.PhaseText("ship") != "failed at catchup" {
+		t.Errorf("catchup stop: at %d text %q", r.At, r.PhaseText("ship"))
+	}
+
 	plain := Fresh("plain")
 	if err := plain.SetPipeline([]string{"implement", "pr"}); err != nil {
 		t.Fatal(err)
