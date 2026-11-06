@@ -2,40 +2,23 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/urfave/cli/v3"
-
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
-
-func runWrite(t *testing.T, repo, stdin string, args ...string) (string, string, error) {
-	t.Helper()
-
-	var out, errOut bytes.Buffer
-
-	app := newApp()
-	app.Reader = strings.NewReader(stdin)
-	app.Writer, app.ErrWriter = &out, &errOut
-	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
-
-	err := app.Run(t.Context(), append([]string{"f10", "-C", repo, "task"}, args...))
-
-	return out.String(), errOut.String(), err
-}
 
 // The comment goes to the driver on stdin with the task's number, and the
 // url it prints comes back.
 func TestTaskCommentThroughTheDriver(t *testing.T) {
 	repo := createRepo(t, "echo https://notion.so/c1\n")
 
-	out, _, err := runWrite(t, repo, "\nShipped: https://reports.example/q3\n", "comment", "FT-12")
+	out, _, err := runAppStdin(t, strings.NewReader("\nShipped: https://reports.example/q3\n"), "-C", repo,
+		"task", "comment", "FT-12").streams()
 	if err != nil {
 		t.Fatalf("comment: %v", err)
 	}
@@ -58,19 +41,22 @@ func TestTaskCommentThroughTheDriver(t *testing.T) {
 // exit 3, and a failed comment says it may have posted.
 func TestTaskCommentDeclinedAndFailed(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
-		_, _, err := runWrite(t, createRepo(t, script), "hi\n", "comment", "FT-12")
+		_, _, err := runAppStdin(t, strings.NewReader("hi\n"), "-C", createRepo(t, script), "task", "comment",
+			"FT-12").streams()
 		if exitCode(err) != exitNoWrite || !strings.Contains(err.Error(), "nothing was written") {
 			t.Errorf("%s: err = %v, want exit %d", name, err, exitNoWrite)
 		}
 	}
 
-	_, _, err := runWrite(t, createRepo(t, "echo 'notion: 504' >&2\nexit 1\n"), "hi\n", "comment", "FT-12")
+	_, _, err := runAppStdin(t, strings.NewReader("hi\n"), "-C",
+		createRepo(t, "echo 'notion: 504' >&2\nexit 1\n"), "task", "comment", "FT-12").streams()
 	if err == nil || !strings.Contains(err.Error(), "notion: 504") || !strings.Contains(err.Error(), mayPosted) {
 		t.Errorf("failed comment: err = %v, want the driver's stderr and the may-posted warning", err)
 	}
 
 	repo := createRepo(t, "echo ok\n")
-	if _, _, err := runWrite(t, repo, " \n", "comment", "FT-12"); err == nil {
+	_, _, err = runAppStdin(t, strings.NewReader(" \n"), "-C", repo, "task", "comment", "FT-12").streams()
+	if err == nil {
 		t.Error("an empty comment was accepted")
 	}
 
@@ -83,9 +69,9 @@ func TestTaskCommentDeclinedAndFailed(t *testing.T) {
 func TestTaskUpdateThroughTheDriver(t *testing.T) {
 	repo := createRepo(t, "echo 'no assignee field' >&2\n")
 
-	_, warn, err := runWrite(t, repo, "", "update", "FT-12",
-		"--status", "Published", "--priority", "High", "--label", "q3", "--label", "web",
-		"--assignee", "ann", "--set", "Report=https://r.example/q3")
+	_, warn, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "update", "FT-12", "--status",
+		"Published", "--priority", "High", "--label", "q3", "--label", "web", "--assignee", "ann", "--set",
+		"Report=https://r.example/q3").streams()
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -100,15 +86,8 @@ func TestTaskUpdateThroughTheDriver(t *testing.T) {
 		t.Errorf("stderr = %q, want the driver's warning", warn)
 	}
 
-	if _, _, err := runWrite(
-		t,
-		createRepo(t, "exit 3\n"),
-		"",
-		"update",
-		"FT-12",
-		"--status",
-		"Done",
-	); exitCode(
+	if _, _, err := runAppStdin(t, strings.NewReader(""), "-C", createRepo(t, "exit 3\n"), "task", "update",
+		"FT-12", "--status", "Done").streams(); exitCode(
 		err,
 	) != exitNoWrite {
 		t.Errorf("declined update: err = %v, want exit %d", err, exitNoWrite)
@@ -133,7 +112,9 @@ func TestTaskUpdateParentThroughTheDriver(t *testing.T) {
 	} {
 		repo := createRepo(t, log)
 
-		if _, _, err := runWrite(t, repo, "", append([]string{"update", "FT-12"}, tc.args...)...); err != nil {
+		_, _, err := runAppStdin(t, strings.NewReader(""),
+			append([]string{"-C", repo, "task"}, append([]string{"update", "FT-12"}, tc.args...)...)...).streams()
+		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 
@@ -149,7 +130,8 @@ func TestTaskUpdateParentThroughTheDriver(t *testing.T) {
 func TestTaskUpdateParentDeclinedAndRefused(t *testing.T) {
 	repo := createRepo(t, "echo \"$@\" >> \"$here/log\"\ncase \"$*\" in *--parent*) exit 3 ;; esac\n")
 
-	_, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-7")
+	_, _, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "update", "FT-12", "--status",
+		"Done", "--parent", "FT-7").streams()
 	if exitCode(err) != exitNoWrite || !strings.Contains(err.Error(), "the parent link was not") {
 		t.Errorf("declined parent: err = %v, want exit %d naming the link", err, exitNoWrite)
 	}
@@ -159,7 +141,9 @@ func TestTaskUpdateParentDeclinedAndRefused(t *testing.T) {
 	}
 
 	repo = createRepo(t, "echo ok\n")
-	if _, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-12"); err == nil {
+	_, _, err = runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "update", "FT-12", "--status",
+		"Done", "--parent", "FT-12").streams()
+	if err == nil {
 		t.Error("a task was accepted as its own parent")
 	}
 
@@ -220,7 +204,9 @@ func TestTaskUpdateParentOnHostIssues(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, _, err := runWrite(t, repo, "", "update", "FT-12", "--parent", "FT-7"); err != nil {
+		_, _, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "update", "FT-12", "--parent",
+			"FT-7").streams()
+		if err != nil {
 			t.Fatalf("%s: update: %v", name, err)
 		}
 
@@ -233,7 +219,8 @@ func TestTaskUpdateParentOnHostIssues(t *testing.T) {
 	repo := createRepo(t,
 		"case \"$*\" in *--parent*) echo 'flag provided but not defined: -parent' >&2; exit 1 ;; esac\n")
 
-	_, _, err := runWrite(t, repo, "", "update", "FT-12", "--status", "Done", "--parent", "FT-7")
+	_, _, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "update", "FT-12", "--status",
+		"Done", "--parent", "FT-7").streams()
 	if err == nil || !strings.Contains(err.Error(), "-parent") ||
 		!strings.Contains(err.Error(), "other properties were written") {
 		t.Errorf("failed parent: err = %v, want the driver's error and that the status landed", err)
@@ -251,7 +238,9 @@ func TestTaskUpdateRefusesBadInput(t *testing.T) {
 	} {
 		repo := createRepo(t, "echo ok\n")
 
-		if _, _, err := runWrite(t, repo, "", append([]string{"update", "FT-12"}, args...)...); err == nil {
+		_, _, err := runAppStdin(t, strings.NewReader(""),
+			append([]string{"-C", repo, "task"}, append([]string{"update", "FT-12"}, args...)...)...).streams()
+		if err == nil {
 			t.Errorf("%v: accepted", args)
 		}
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,16 +140,12 @@ func TestTaskStaleCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var out bytes.Buffer
-
-		app := newApp()
-		app.Writer, app.ErrWriter = &out, &out
-
-		if err := app.Run(t.Context(), append([]string{"f10", "task", "stale"}, args...)); err != nil {
-			t.Fatalf("task stale %v: %v\n%s", args, err, out.String())
+		r := runApp(t, append([]string{"task", "stale"}, args...)...)
+		if r.err != nil {
+			t.Fatalf("task stale %v: %v\n%s", args, r.err, r.combined)
 		}
 
-		return strings.TrimSpace(out.String())
+		return strings.TrimSpace(r.combined)
 	}
 
 	if got := run(""); got != staleFresh {

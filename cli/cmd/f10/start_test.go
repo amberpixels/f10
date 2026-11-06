@@ -1735,12 +1735,7 @@ func TestStartRefusesOutsideHerdr(t *testing.T) {
 	f := newFakes(t)
 	t.Setenv("HERDR_ENV", "")
 
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-
-	err := app.Run(t.Context(), []string{"f10", "start", "42"})
+	err := runApp(t, "start", "42").err
 	if !errors.Is(err, herdr.ErrNotInside) {
 		t.Fatalf("err = %v, want ErrNotInside", err)
 	}
@@ -1758,9 +1753,9 @@ func TestStartModesAreExclusive(t *testing.T) {
 	newFakes(t)
 
 	for _, flags := range [][]string{{"--plan", "--local"}, {"--discuss", "--plan"}, {"--local", "--discuss"}} {
-		args := append(append([]string{"f10", "start"}, flags...), "42")
+		args := append(append([]string{"start"}, flags...), "42")
 
-		err := newApp().Run(t.Context(), args)
+		err := runApp(t, args...).err
 		if err == nil || !strings.Contains(err.Error(), "exclusive") {
 			t.Errorf("%v: err = %v, want the flags refused together", flags, err)
 		}
@@ -1770,7 +1765,7 @@ func TestStartModesAreExclusive(t *testing.T) {
 func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 	f := newFakes(t)
 
-	err := newApp().Run(t.Context(), []string{"f10", "start", "--base", "main", "--after", "7", "42"})
+	err := runApp(t, "start", "--base", "main", "--after", "7", "42").err
 	if err == nil || !strings.Contains(err.Error(), "exclusive") {
 		t.Errorf("err = %v, want the flags refused together", err)
 	}

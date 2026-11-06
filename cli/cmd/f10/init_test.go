@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,7 +16,7 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 
 	repo := mkRepo(t)
 
-	out, err := runInitIn(t, repo)
+	out, err := runApp(t, "-C", repo, "init").outErr()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -51,7 +49,7 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 		t.Errorf("git sees .f10 after init: %q", status)
 	}
 
-	if _, err := runInitIn(t, repo); err == nil {
+	if _, err := runApp(t, "-C", repo, "init").outErr(); err == nil {
 		t.Fatal("second init succeeded; it must refuse rather than overwrite")
 	}
 
@@ -71,7 +69,7 @@ func TestInitDoesNotDuplicateTheExcludeEntry(t *testing.T) {
 		t.Fatalf("seeding exclude: %v", err)
 	}
 
-	if _, err := runInitIn(t, repo); err != nil {
+	if _, err := runApp(t, "-C", repo, "init").outErr(); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -89,7 +87,7 @@ func TestInitRefusesInALinkedWorktree(t *testing.T) {
 	wt := filepath.Join(t.TempDir(), "feature")
 	git(t, repo, "worktree", "add", "-q", "-b", "feature", wt)
 
-	_, err := runInitIn(t, wt)
+	_, err := runApp(t, "-C", wt, "init").outErr()
 	if err == nil {
 		t.Fatal("init in a linked worktree succeeded")
 	}
@@ -108,7 +106,7 @@ func TestInitRefusesOutsideGit(t *testing.T) {
 
 	dir := canonical(t, t.TempDir())
 
-	if _, err := runInitIn(t, dir); err == nil {
+	if _, err := runApp(t, "-C", dir, "init").outErr(); err == nil {
 		t.Fatal("init outside a git checkout succeeded")
 	}
 }
@@ -122,7 +120,7 @@ func TestInitWritesOutOfTreeWithoutTouchingTheRepo(t *testing.T) {
 		t.Fatalf("creating the out-of-tree root: %v", err)
 	}
 
-	if _, err := runInitIn(t, repo); err != nil {
+	if _, err := runApp(t, "-C", repo, "init").outErr(); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -137,19 +135,6 @@ func TestInitWritesOutOfTreeWithoutTouchingTheRepo(t *testing.T) {
 	if strings.Contains(readExclude(t, repo), ".f10/") {
 		t.Error("out-of-tree storage wrote an exclude entry it does not need")
 	}
-}
-
-func runInitIn(t *testing.T, dir string, flags ...string) (string, error) {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-
-	err := app.Run(context.Background(), append([]string{"f10", "-C", dir, "init"}, flags...))
-
-	return out.String(), err
 }
 
 // isolateEnv keeps the probes off the developer's own machine: both the
@@ -169,31 +154,10 @@ func isolateEnv(t *testing.T) string {
 func mkRepo(t *testing.T) string {
 	t.Helper()
 
-	dir := filepath.Join(t.TempDir(), "demo")
-	if err := os.Mkdir(dir, 0o750); err != nil {
-		t.Fatal(err)
-	}
+	r := initRepo(t, canonical(t, t.TempDir())+"/demo", "master")
+	r.git("remote", "add", "origin", "git@github.com:amberpixels/demo.git")
 
-	dir = canonical(t, dir)
-
-	git(t, dir, "init", "-q")
-	git(t, dir, "remote", "add", "origin", "git@github.com:amberpixels/demo.git")
-
-	return dir
-}
-
-func git(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-	}
-
-	return string(out)
+	return r.dir
 }
 
 func readExclude(t *testing.T, repo string) string {
@@ -228,7 +192,7 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 
 	bare := mkRepo(t)
 
-	out, err := runInitIn(t, bare)
+	out, err := runApp(t, "-C", bare, "init").outErr()
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -255,7 +219,7 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := runInitIn(t, repo); err != nil {
+	if _, err := runApp(t, "-C", repo, "init").outErr(); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 
@@ -291,7 +255,7 @@ func TestInitMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := runInitIn(t, repo, "--migrate")
+	out, err := runApp(t, "-C", repo, "init", "--migrate").outErr()
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -307,7 +271,8 @@ func TestInitMigrate(t *testing.T) {
 		}
 	}
 
-	if _, err := runInitIn(t, repo, "--migrate"); err == nil || !strings.Contains(err.Error(), "already has") {
+	if _, err := runApp(t, "-C", repo, "init", "--migrate").outErr(); err == nil ||
+		!strings.Contains(err.Error(), "already has") {
 		t.Errorf("a second migrate = %v", err)
 	}
 }
@@ -330,7 +295,7 @@ func TestInitMigrateRenamesTraces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := runInitIn(t, repo, "--migrate")
+	out, err := runApp(t, "-C", repo, "init", "--migrate").outErr()
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -363,13 +328,7 @@ func TestDeclarationErrorStopsCommands(t *testing.T) {
 	}
 
 	run := func(args ...string) (string, error) {
-		var out bytes.Buffer
-
-		app := newApp()
-		app.Writer = &out
-		err := app.Run(context.Background(), append([]string{"f10", "-C", repo}, args...))
-
-		return out.String(), err
+		return runApp(t, append([]string{"-C", repo}, args...)...).outErr()
 	}
 
 	if _, err := run("task", "read", "1"); err == nil || !strings.Contains(err.Error(), "merge_method") {

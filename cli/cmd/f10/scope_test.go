@@ -16,23 +16,16 @@ import (
 func scopeRepo(t *testing.T, parent, name string) string {
 	t.Helper()
 
-	dir := filepath.Join(parent, name)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	r := initRepo(t, filepath.Join(parent, name), "main")
+	r.git("commit", "-q", "--allow-empty", "-m", "init")
 
-	git(t, dir, "init", "-q", "-b", "main")
-	git(t, dir, "config", "user.email", "me@x.io")
-	git(t, dir, "config", "user.name", "me")
-	git(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
-
-	return dir
+	return r.dir
 }
 
 func standupJSON(t *testing.T, args ...string) standup.Standup {
 	t.Helper()
 
-	out, err := runStandupApp(t, append(args, "standup", "--json", "--week")...)
+	out, err := runApp(t, append(args, "standup", "--json", "--week")...).outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,12 +85,12 @@ func TestOtherCommandsTakeOneCheckout(t *testing.T) {
 	root := canonical(t, t.TempDir())
 	a, b := scopeRepo(t, root, "a"), scopeRepo(t, root, "b")
 
-	if _, err := runStandupApp(t, "-C", a, "-C", b, "config"); err == nil ||
+	if _, err := runApp(t, "-C", a, "-C", b, "config").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "(got 2)") || !strings.Contains(err.Error(), "take several") {
 		t.Errorf("err = %v, want two -C refused with the count and who takes several", err)
 	}
 
-	if _, err := runStandupApp(t, "-C", a, "-C", b, "board", "--json"); err != nil {
+	if _, err := runApp(t, "-C", a, "-C", b, "board", "--json").outErr(); err != nil {
 		t.Errorf("board with two -C: %v, want accepted", err)
 	}
 }
@@ -119,7 +112,7 @@ func TestStandupGroups(t *testing.T) {
 	writeUserFile(t, home, standupConfigFile,
 		"---\ngroups:\n  work: ["+root+"/acme-*]\n  broken: ["+root+"/acme-notes]\n---\n")
 
-	out, err := runStandupApp(t, "standup", "--json", "--week", "--group", "work")
+	out, err := runApp(t, "standup", "--json", "--week", "--group", "work").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,12 +126,12 @@ func TestStandupGroups(t *testing.T) {
 		t.Errorf("repos = %q, want %q", got, want)
 	}
 
-	if _, err := runStandupApp(t, "standup", "--week", "--group", "broken"); err == nil ||
+	if _, err := runApp(t, "standup", "--week", "--group", "broken").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "not a git checkout") {
 		t.Errorf("err = %v, want the non-checkout path named", err)
 	}
 
-	if _, err := runStandupApp(t, "standup", "--week", "--group", "play"); err == nil ||
+	if _, err := runApp(t, "standup", "--week", "--group", "play").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "declared: broken, work") {
 		t.Errorf("err = %v, want the declared groups listed", err)
 	}
@@ -149,7 +142,7 @@ func TestStandupAllNeedsRoots(t *testing.T) {
 	isolateEnv(t)
 	t.Setenv(projects.RootsEnv, "")
 
-	if _, err := runStandupApp(t, "standup", "--week", "--all"); err == nil ||
+	if _, err := runApp(t, "standup", "--week", "--all").outErr(); err == nil ||
 		!strings.Contains(err.Error(), projects.RootsEnv) {
 		t.Errorf("err = %v, want %s named", err, projects.RootsEnv)
 	}
@@ -159,7 +152,7 @@ func TestStandupAllNeedsRoots(t *testing.T) {
 	scopeRepo(t, root, "r2")
 	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
 
-	out, err := runStandupApp(t, "standup", "--json", "--week", "--all")
+	out, err := runApp(t, "standup", "--json", "--week", "--all").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}

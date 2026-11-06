@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,27 +9,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/urfave/cli/v3"
-
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 func runState(t *testing.T, args ...string) (string, int) {
 	t.Helper()
 
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &out
-	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
-
-	err := app.Run(context.Background(), append([]string{"f10", "state"}, args...))
-	if err == nil {
-		return out.String(), 0
+	r := runApp(t, append([]string{"state"}, args...)...)
+	if r.err == nil {
+		return r.combined, 0
 	}
 
 	// the exit handler prints the message; the test's handler keeps it in err
-	return out.String() + err.Error(), exitCode(err)
+	return r.combined + r.err.Error(), exitCode(r.err)
 }
 
 func TestStateCommand(t *testing.T) {

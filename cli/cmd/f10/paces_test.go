@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,19 +46,12 @@ func paceRepo(t *testing.T, frontmatter, user string) string {
 	return repo
 }
 
-func runErrIn(dir string, args ...string) error {
-	app := newApp()
-	app.Writer, app.ErrWriter = &bytes.Buffer{}, &bytes.Buffer{}
-
-	return app.Run(context.Background(), append([]string{"f10", "-C", dir}, args...))
-}
-
 // With no pace, f10 flow <name> still settles an optional CI review, and
 // says why it was dropped.
 func TestFlowSettlesOptionalCI(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan implement pr review:local+ci?\n", "")
 
-	out := runIn(t, repo, "flow", "default")
+	out := runApp(t, "-C", repo, "flow", "default").must(t)
 	if want := "review:local  by local (local+ci? (no remote reviewer declared))"; !strings.Contains(out, want) {
 		t.Errorf("missing %q:\n%s", want, out)
 	}
@@ -70,7 +62,7 @@ func TestFlowSettlesOptionalCI(t *testing.T) {
 func TestFlowUnderAPace(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr\n", "")
 
-	out := runIn(t, repo, "flow", "default", "--pace", "ultra")
+	out := runApp(t, "-C", repo, "flow", "default", "--pace", "ultra").must(t)
 	for _, want := range []string{
 		"pace: ultra (--pace)",
 		"plan          skipped: off in pace ultra (built-in)",
@@ -84,12 +76,12 @@ func TestFlowUnderAPace(t *testing.T) {
 	}
 
 	// no pace named: medium, empty, so the flow as declared, an entry per line
-	if out := runIn(t, repo, "flow", "default"); out != "pace: medium (default)\n"+strings.ReplaceAll(
+	if out := runApp(t, "-C", repo, "flow", "default").must(t); out != "pace: medium (default)\n"+strings.ReplaceAll(
 		"plan judge implement cleanup pr review:local judge pr", " ", "\n")+"\n" {
 		t.Errorf("no pace:\n%s", out)
 	}
 
-	err := runErrIn(repo, "flow", "--pace", "brisk")
+	err := runApp(t, "-C", repo, "flow", "--pace", "brisk").err
 	if err == nil || !strings.Contains(err.Error(), "the paces are fast, medium, slow, ultra") {
 		t.Errorf("an unknown pace = %v", err)
 	}
@@ -102,20 +94,20 @@ func TestPaceLayers(t *testing.T) {
 		"flows:\n  default: plan judge implement pr\npaces:\n  brisk: { judge: { effort: high } }\npace: brisk\n",
 		"paces:\n  brisk: { judge: off, review: { rounds: 1 } }\npace: fast\n")
 
-	out := runIn(t, repo, "flow", "default")
+	out := runApp(t, "-C", repo, "flow", "default").must(t)
 	if !strings.Contains(out, "pace: brisk (declared (main, frontmatter))") ||
 		!strings.Contains(out, "judge      effort high (pace brisk (declared (main, frontmatter)))") {
 		t.Errorf("the project's brisk over the user's:\n%s", out)
 	}
 
-	cfg := runIn(t, repo, "config")
+	cfg := runApp(t, "-C", repo, "config").must(t)
 	for _, want := range []string{"paces.brisk.judge", "paces.brisk.review", "paces.medium", ".f10/paces.md"} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("config misses %q:\n%s", want, cfg)
 		}
 	}
 
-	if got := runIn(t, repo, "agents", "judge"); !strings.Contains(got, "effort high") ||
+	if got := runApp(t, "-C", repo, "agents", "judge").must(t); !strings.Contains(got, "effort high") ||
 		!strings.Contains(got, "pace brisk") {
 		t.Errorf("agents judge = %q", got)
 	}
@@ -125,7 +117,7 @@ func TestPaceLayers(t *testing.T) {
 func TestPaceUserFileRefused(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan implement pr\n", "paces:\n  bad: { implement: off }\n")
 
-	if err := runErrIn(repo, "flow"); err == nil || !strings.Contains(err.Error(), "paces.md") ||
+	if err := runApp(t, "-C", repo, "flow").err; err == nil || !strings.Contains(err.Error(), "paces.md") ||
 		!strings.Contains(err.Error(), "implement cannot be off") {
 		t.Errorf("err = %v", err)
 	}
@@ -252,7 +244,7 @@ func TestFlowUnderACeiling(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr\n"+
 		"ceiling: { finish: off, judge: { effort: high }, except: [ultra] }\n", "")
 
-	out := runIn(t, repo, "flow", "default", "--pace", "fast")
+	out := runApp(t, "-C", repo, "flow", "default", "--pace", "fast").must(t)
 	for _, want := range []string{
 		"ceiling: finish off (declared (main, frontmatter)), judge effort high (declared (main, frontmatter))",
 		"finish        off (ceiling (declared (main, frontmatter)); pace fast said on)",
@@ -263,14 +255,7 @@ func TestFlowUnderACeiling(t *testing.T) {
 		}
 	}
 
-	if out := runIn(
-		t,
-		repo,
-		"flow",
-		"default",
-		"--pace",
-		"ultra",
-	); !strings.Contains(
+	if out := runApp(t, "-C", repo, "flow", "default", "--pace", "ultra").must(t); !strings.Contains(
 		out,
 		"ceiling: not applied: pace ultra is in except",
 	) ||
@@ -278,19 +263,19 @@ func TestFlowUnderACeiling(t *testing.T) {
 		t.Errorf("ultra:\n%s", out)
 	}
 
-	if out := runIn(t, repo, "flow", "default"); !strings.Contains(out, "finish        off (ceiling") {
+	if out := runApp(t, "-C", repo, "flow", "default").must(t); !strings.Contains(out, "finish        off (ceiling") {
 		t.Errorf("no pace named:\n%s", out)
 	}
 
-	cfg := runIn(t, repo, "config")
+	cfg := runApp(t, "-C", repo, "config").must(t)
 	for _, want := range []string{"ceiling.finish", "ceiling.judge", "ceiling.except"} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("config misses %q:\n%s", want, cfg)
 		}
 	}
 
-	if got := runIn(t, repo, "agents", "judge", "--pace", "fast"); !strings.Contains(got, "effort high") ||
-		!strings.Contains(got, "ceiling") {
+	got := runApp(t, "-C", repo, "agents", "judge", "--pace", "fast").must(t)
+	if !strings.Contains(got, "effort high") || !strings.Contains(got, "ceiling") {
 		t.Errorf("agents judge = %q", got)
 	}
 }
@@ -299,12 +284,12 @@ func TestFlowUnderACeiling(t *testing.T) {
 // file is refused, naming project.md.
 func TestCeilingRefusedWhereItDoesNotBelong(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan implement pr\nceiling: { finish: off, except: [warp] }\n", "")
-	if err := runErrIn(repo, "flow"); err == nil || !strings.Contains(err.Error(), `no pace "warp"`) {
+	if err := runApp(t, "-C", repo, "flow").err; err == nil || !strings.Contains(err.Error(), `no pace "warp"`) {
 		t.Errorf("unknown except = %v", err)
 	}
 
 	user := paceRepo(t, "flows:\n  default: plan implement pr\n", "ceiling: { finish: off }\n")
-	if err := runErrIn(user, "flow"); err == nil || !strings.Contains(err.Error(), "project.md") {
+	if err := runApp(t, "-C", user, "flow").err; err == nil || !strings.Contains(err.Error(), "project.md") {
 		t.Errorf("a user ceiling = %v", err)
 	}
 }

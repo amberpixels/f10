@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,14 +21,7 @@ func newCatchupRepo(t *testing.T) gitRepo {
 		t.Skip("no git")
 	}
 
-	root := t.TempDir()
-	origin := filepath.Join(root, "origin.git")
-	r := gitRepo{t, filepath.Join(root, "work")}
-
-	gitRepo{t, root}.at(before, "init", "-q", "--bare", "--initial-branch=main", origin)
-	gitRepo{t, root}.at(before, "clone", "-q", origin, r.dir)
-	r.at(before, "config", "user.email", "me@x.io")
-	r.at(before, "config", "user.name", "Me")
+	r := cloneRepo(t, "work")
 	r.at(before, "checkout", "-q", "-b", "main")
 	r.commit(before, "main.go", "package main\n", "init")
 	r.at(before, "push", "-q", "-u", "origin", "main")
@@ -420,13 +412,7 @@ func TestCatchupBaseCommand(t *testing.T) {
 	}
 
 	run := func(args ...string) (string, error) {
-		var out bytes.Buffer
-
-		app := newApp()
-		app.Writer = &out
-		err := app.Run(t.Context(), append([]string{"f10", "-C", r.dir, "pr", "catchup", "--no-fetch"}, args...))
-
-		return out.String(), err
+		return runApp(t, append([]string{"-C", r.dir, "pr", "catchup", "--no-fetch"}, args...)...).outErr()
 	}
 
 	for _, guard := range [][]string{nil, {"--guard", "judge"}} {

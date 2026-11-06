@@ -1,27 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/urfave/cli/v3"
 )
-
-func runHelpOutput(t *testing.T, args ...string) string {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-
-	if err := app.Run(t.Context(), append([]string{"f10"}, args...)); err != nil {
-		t.Fatalf("f10 %s: %v", strings.Join(args, " "), err)
-	}
-
-	return out.String()
-}
 
 // listed reports whether a help listing has a command row named name.
 func listed(help, name string) bool {
@@ -43,8 +27,8 @@ func walkCommands(c *cli.Command, path string, fn func(path string, c *cli.Comma
 }
 
 func TestHelpTiers(t *testing.T) {
-	human := runHelpOutput(t, "--help")
-	all := runHelpOutput(t, "help", "--all")
+	human := runApp(t, "--help").must(t)
+	all := runApp(t, "help", "--all").must(t)
 
 	for _, c := range newApp().Commands {
 		switch {
@@ -95,7 +79,7 @@ func TestPlumbingMarkedWhole(t *testing.T) {
 }
 
 func TestAgentReference(t *testing.T) {
-	ref := runHelpOutput(t, "help", "--agent")
+	ref := runApp(t, "help", "--agent").must(t)
 
 	lines := map[string]bool{}
 	for line := range strings.SplitSeq(ref, "\n") {

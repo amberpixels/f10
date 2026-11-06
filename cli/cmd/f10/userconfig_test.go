@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -13,20 +11,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
-
-// runStandupApp runs `f10 [args...]` through the real command tree.
-func runStandupApp(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-
-	err := app.Run(context.Background(), append([]string{"f10"}, args...))
-
-	return out.String(), err
-}
 
 func writeUserFile(t *testing.T, home, name, body string) {
 	t.Helper()
@@ -124,7 +108,7 @@ func TestReadWorkdays(t *testing.T) {
 func TestStandupMark(t *testing.T) {
 	isolateEnv(t)
 
-	if _, err := runStandupApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z"); err != nil {
+	if _, err := runApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z").outErr(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -138,14 +122,13 @@ func TestStandupMark(t *testing.T) {
 	}
 
 	future := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
-	if _, err := runStandupApp(t, "standup", "mark", "--since", future); err == nil {
+	if _, err := runApp(t, "standup", "mark", "--since", future).outErr(); err == nil {
 		t.Error("mark took a start in the future")
 	}
 
 	// the next standup starts when this one was read, not when it was marked
-	if _, err := runStandupApp(
-		t, "standup", "mark", "--since", "2026-10-09T07:00:00Z", "--at", "2026-10-12T06:30:00Z",
-	); err != nil {
+	_, err = runApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z", "--at", "2026-10-12T06:30:00Z").outErr()
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,9 +136,8 @@ func TestStandupMark(t *testing.T) {
 		t.Errorf("stored %+v, %v, want at = --at", last, err)
 	}
 
-	if _, err := runStandupApp(
-		t, "standup", "mark", "--since", "2026-10-12T07:00:00Z", "--at", "2026-10-12T06:30:00Z",
-	); err == nil {
+	_, err = runApp(t, "standup", "mark", "--since", "2026-10-12T07:00:00Z", "--at", "2026-10-12T06:30:00Z").outErr()
+	if err == nil {
 		t.Error("mark took a start after the read")
 	}
 }
@@ -169,17 +151,11 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 	git(t, dir, "init", "-q")
 	git(t, dir, "config", "user.email", "me@x.io")
 
-	if _, err := runStandupApp(t, "-C", dir, "standup", "--json", "--week"); err != nil {
+	if _, err := runApp(t, "-C", dir, "standup", "--json", "--week").outErr(); err != nil {
 		t.Errorf("--week: %v, want standup.md unread", err)
 	}
 
-	if _, err := runStandupApp(
-		t,
-		"-C",
-		dir,
-		"standup",
-		"--json",
-	); err == nil ||
+	if _, err := runApp(t, "-C", dir, "standup", "--json").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "monday") {
 		t.Errorf("fallback: err = %v, want the bad day named", err)
 	}
@@ -188,7 +164,7 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 func TestStandupSinceAndWeekConflict(t *testing.T) {
 	isolateEnv(t)
 
-	if _, err := runStandupApp(t, "standup", "--since", "2026-10-09", "--week"); err == nil ||
+	if _, err := runApp(t, "standup", "--since", "2026-10-09", "--week").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "--week") {
 		t.Errorf("err = %v, want --since and --week refused together", err)
 	}
@@ -218,7 +194,7 @@ func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 		t.Fatalf("git commit: %v\n%s", err, out)
 	}
 
-	out, err := runStandupApp(t, "-C", dir, "standup", "--json")
+	out, err := runApp(t, "-C", dir, "standup", "--json").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}

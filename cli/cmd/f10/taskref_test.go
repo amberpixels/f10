@@ -142,7 +142,8 @@ create) echo 1043 ;;
 esac
 `)
 
-	out, _, err := runCreate(t, repo, "# Add the index\n\nbody\n\nAfter: FT-1041\n")
+	out, _, err := runAppStdin(t, strings.NewReader("# Add the index\n\nbody\n\nAfter: FT-1041\n"), "-C",
+		repo, "task", "create").streams()
 	if err != nil || out != "FT-1043\n" {
 		t.Fatalf("create = %q, %v", out, err)
 	}
@@ -177,7 +178,8 @@ func TestTaskRefCommand(t *testing.T) {
 esac
 `)
 
-	out, warn, err := runWrite(t, repo, "", "ref", "--md", "FT-7", "109", "FT-1+FT-2")
+	out, warn, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "ref", "--md", "FT-7", "109",
+		"FT-1+FT-2").streams()
 	if err != nil {
 		t.Fatalf("ref: %v", err)
 	}
@@ -190,7 +192,7 @@ esac
 		t.Errorf("stderr = %q, want a note for FT-7 alone", warn)
 	}
 
-	out, _, err = runWrite(t, repo, "", "ref", "FT-109")
+	out, _, err = runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "ref", "FT-109").streams()
 	if err != nil || out != "FT-109 (Base)\n" {
 		t.Errorf("plain ref = %q, %v", out, err)
 	}
@@ -210,7 +212,7 @@ func TestTaskReportCommand(t *testing.T) {
 esac
 `)
 
-	out, _, err := runWrite(t, repo, "", "report", "FT-109")
+	out, _, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "report", "FT-109").streams()
 	if err != nil {
 		t.Fatalf("report: %v", err)
 	}
@@ -219,7 +221,7 @@ esac
 		t.Errorf("one task = %q, want %q", out, want)
 	}
 
-	out, _, err = runWrite(t, repo, "", "report", "FT-109", "110", "FT-7")
+	out, _, err = runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "report", "FT-109", "110", "FT-7").streams()
 	if err != nil {
 		t.Fatalf("report: %v", err)
 	}
@@ -246,7 +248,7 @@ func TestTaskReportChildren(t *testing.T) {
 esac
 `)
 
-	out, _, err := runWrite(t, repo, "", "report", "--children", "FT-71")
+	out, _, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "report", "--children", "FT-71").streams()
 	if err != nil {
 		t.Fatalf("report: %v", err)
 	}

@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -25,21 +23,9 @@ func TestLoreOutcomesAreVerdicts(t *testing.T) {
 func runLore(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 
-	return runLoreAt(t, append([]string{"--root", ".lore"}, args...)...)
-}
+	r := runApp(t, append([]string{"lore", "--root", ".lore"}, args...)...)
 
-// runLoreAt adds no --root.
-func runLoreAt(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &out
-
-	err := app.Run(t.Context(), append([]string{"f10", "lore"}, args...))
-
-	return out.String(), err
+	return r.combined, r.err
 }
 
 func TestLoreVerbs(t *testing.T) {
@@ -54,12 +40,7 @@ func TestLoreVerbs(t *testing.T) {
 	git := func(args ...string) {
 		t.Helper()
 
-		cmd := exec.CommandContext(t.Context(), "git", args...)
-		cmd.Dir = dir
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		git(t, dir, args...)
 	}
 
 	git("init", "-q")
@@ -187,12 +168,7 @@ func TestLoreWhyNoRecord(t *testing.T) {
 		{"init", "-q"},
 		{"-c", "user.email=a@b.c", "-c", "user.name=A", "commit", "-q", "--allow-empty", "-m", "empty"},
 	} {
-		cmd := exec.CommandContext(t.Context(), "git", args...)
-		cmd.Dir = dir
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		git(t, dir, args...)
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "new.go"), []byte("x\n"), 0o644); err != nil {
@@ -223,17 +199,13 @@ func TestLoreLocalRootIsMains(t *testing.T) {
 		{"commit", "-q", "--allow-empty", "-m", "root"},
 		{"worktree", "add", "-q", "-b", "FT-1/x", wt},
 	} {
-		cmd := exec.CommandContext(t.Context(), "git", args...)
-		cmd.Dir = main
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		git(t, main, args...)
 	}
 
 	t.Chdir(wt)
 
-	out, err := runLoreAt(t, "add", "intent", "--change", "FT-1", "-m", "why")
+	r := runApp(t, "lore", "add", "intent", "--change", "FT-1", "-m", "why")
+	out, err := r.combined, r.err
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -256,12 +228,7 @@ func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
 
 	dir := t.TempDir()
 
-	cmd := exec.CommandContext(t.Context(), "git", "init", "-q")
-	cmd.Dir = dir
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v\n%s", err, out)
-	}
+	git(t, dir, "init", "-q")
 
 	t.Chdir(dir)
 
@@ -284,10 +251,7 @@ func TestLoreStepCommands(t *testing.T) {
 		{"config", "user.email", "dev@example.com"},
 		{"config", "user.name", "Dev"},
 	} {
-		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).
-			CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		git(t, dir, args...)
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("a\nb\n"), 0o644); err != nil {
@@ -295,10 +259,7 @@ func TestLoreStepCommands(t *testing.T) {
 	}
 
 	for _, args := range [][]string{{"add", "."}, {"commit", "-q", "-m", "a"}} {
-		if out, err := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...).
-			CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		git(t, dir, args...)
 	}
 
 	t.Chdir(dir)
@@ -327,11 +288,7 @@ func TestLoreStepCommands(t *testing.T) {
 		"--resolution", "house style", "-m", "house style")
 
 	// judge
-	head := strings.TrimSpace(func() string {
-		out, _ := exec.CommandContext(t.Context(), "git", "-C", dir, "rev-parse", "HEAD").Output()
-
-		return string(out)
-	}())
+	head := strings.TrimSpace(git(t, dir, "rev-parse", "HEAD"))
 	must("add", "verdict", "--change", "FT-1", "--outcome", "proceed", "--gate", "judge",
 		"--commit", head, "--judged", "change", "-m", "sound")
 
@@ -459,12 +416,7 @@ func TestLoreAgentFromSession(t *testing.T) {
 	dir := t.TempDir()
 
 	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "dev@example.com"}} {
-		cmd := exec.CommandContext(t.Context(), "git", args...)
-		cmd.Dir = dir
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		git(t, dir, args...)
 	}
 
 	t.Chdir(dir)

@@ -116,7 +116,8 @@ func TestTitleChangesAll(t *testing.T) {
 
 // retitle needs a template, and the host's issues to write it on.
 func TestTaskRetitleRefuses(t *testing.T) {
-	_, errOut, err := runWrite(t, createRepo(t, ""), "", "retitle", "FT-12")
+	_, errOut, err := runAppStdin(t, strings.NewReader(""), "-C", createRepo(t, ""), "task", "retitle",
+		"FT-12").streams()
 	if err != nil || !strings.Contains(errOut, "declares no tracker.title") {
 		t.Errorf("no template: err = %v, stderr %q", err, errOut)
 	}
@@ -128,7 +129,8 @@ func TestTaskRetitleRefuses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := runWrite(t, repo, "", "retitle", "--all"); exitCode(err) != exitNoWrite {
+	_, _, err = runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "retitle", "--all").streams()
+	if exitCode(err) != exitNoWrite {
 		t.Errorf("notion tracker: err = %v, want exit %d", err, exitNoWrite)
 	}
 }

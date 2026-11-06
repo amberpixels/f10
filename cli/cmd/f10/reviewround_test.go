@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -18,17 +16,11 @@ import (
 func runRound(t *testing.T, repo string, args ...string) (string, error) {
 	t.Helper()
 
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &out
-	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
-
 	t.Chdir(repo)
 
-	err := app.Run(t.Context(), append([]string{"f10", "review", "round"}, args...))
+	r := runApp(t, append([]string{"review", "round"}, args...)...)
 
-	return out.String(), err
+	return r.combined, r.err
 }
 
 func writeRound(t *testing.T, repo, name, body string) {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -23,7 +22,7 @@ func tracedRepo(t *testing.T, branch, traces string) string {
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
 
 	repo := mkRepo(t)
-	git(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+	git(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
 	git(t, repo, "checkout", "-q", "-b", branch)
 
 	block := "---\ntracker:\n  id: DM-###\n"
@@ -46,22 +45,9 @@ func tracedRepo(t *testing.T, branch, traces string) string {
 func runTrace(t *testing.T, repo string, args ...string) (string, error) {
 	t.Helper()
 
-	out, _, err := runTraceVerb(t, repo, "trailers", args...)
+	out, _, err := runApp(t, append([]string{"-C", repo, "trace", "trailers"}, args...)...).streams()
 
 	return out, err
-}
-
-func runTraceVerb(t *testing.T, repo, verb string, args ...string) (string, string, error) {
-	t.Helper()
-
-	var out, errOut bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-	app.ErrWriter = &errOut
-	err := app.Run(context.Background(), append([]string{"f10", "-C", repo, "trace", verb}, args...))
-
-	return out.String(), errOut.String(), err
 }
 
 func TestTraceTrailers(t *testing.T) {
@@ -305,7 +291,8 @@ func TestTraceState(t *testing.T) {
 
 			gh := fakeGH(t, c.branch, c.view)
 
-			if _, _, err := runTraceVerb(t, repo, "state", c.args...); err != nil {
+			_, _, err := runApp(t, append([]string{"-C", repo, "trace", "state"}, c.args...)...).streams()
+			if err != nil {
 				t.Fatal(err)
 			}
 
@@ -320,7 +307,7 @@ func TestTraceStateOffMakesNoHostCall(t *testing.T) {
 	repo := tracedRepo(t, "DM-7/thing", "off")
 	gh := fakeGH(t, "DM-7/thing", openPR("Adds the thing.\n"))
 
-	if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr"); err != nil {
+	if _, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -344,7 +331,8 @@ func TestTraceStateOffBodyFileCarriesTheBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr", "--body-file", draft); err != nil {
+	_, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr", "--body-file", draft).streams()
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -365,7 +353,7 @@ func TestTraceStateGlab(t *testing.T) {
 		view := `{"state":"opened","web_url":"https://gl/mr/9","description":"Adds the thing.\n","author":{"username":"me"}}`
 		gl := fakeGlab(t, branch, view)
 
-		if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr"); err != nil {
+		if _, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams(); err != nil {
 			t.Fatal(err)
 		}
 
@@ -379,7 +367,7 @@ func TestTraceStateGlab(t *testing.T) {
 		repo := glabRepo(t, branch, "on")
 		gl := fakeGlab(t, branch, "ERR:no open merge request available for \"DM-7/thing\"")
 
-		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "pr")
+		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams()
 		if err != nil || gl.edited != "" || !strings.Contains(errOut, "no PR for DM-7/thing yet") {
 			t.Errorf("err %v, edited %q, stderr %q", err, gl.edited, errOut)
 		}
@@ -393,7 +381,7 @@ func TestTraceStateDeclines(t *testing.T) {
 		repo := tracedRepo(t, branch, "on")
 		gh := fakeGH(t, branch, `{"state":"MERGED","url":"https://gh/pr/9","body":"x","author":{"login":"me"}}`)
 
-		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "pr")
+		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams()
 		if err != nil || gh.edited != "" || !strings.Contains(errOut, "is merged") {
 			t.Errorf("err %v, edited %q, stderr %q", err, gh.edited, errOut)
 		}
@@ -403,7 +391,8 @@ func TestTraceStateDeclines(t *testing.T) {
 		repo := tracedRepo(t, branch, "on")
 		gh := fakeGH(t, branch, `ERR:no pull requests found for branch "DM-7/thing"`)
 
-		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "review", "--round", "1", "--open", "2")
+		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "review", "--round", "1",
+			"--open", "2").streams()
 		if err != nil || gh.edited != "" || !strings.Contains(errOut, "no PR for DM-7/thing yet") {
 			t.Errorf("err %v, edited %q, stderr %q", err, gh.edited, errOut)
 		}
@@ -413,7 +402,7 @@ func TestTraceStateDeclines(t *testing.T) {
 		repo := tracedRepo(t, branch, "on")
 		fakeGH(t, branch, "ERR:rate limited")
 
-		if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr"); err == nil ||
+		if _, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams(); err == nil ||
 			!strings.Contains(err.Error(), "rate limited") {
 			t.Errorf("err = %v, want the host's words", err)
 		}
@@ -423,7 +412,7 @@ func TestTraceStateDeclines(t *testing.T) {
 		repo := tracedRepo(t, branch, "on")
 		gh := fakeGH(t, branch, `{"state":"OPEN","url":"https://gh/pr/9","body":"x","author":{"login":"someone"}}`)
 
-		_, errOut, err := runTraceVerb(t, repo, "state", "--step", "pr")
+		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams()
 		if err != nil || gh.edited != "" || !strings.Contains(errOut, "opened by someone") {
 			t.Errorf("err %v, edited %q, stderr %q", err, gh.edited, errOut)
 		}
@@ -444,7 +433,8 @@ func TestTraceStateBodyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := runTraceVerb(t, repo, "state", "--step", "pr", "--body-file", draft); err != nil {
+	_, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr", "--body-file", draft).streams()
+	if err != nil {
 		t.Fatal(err)
 	}
 

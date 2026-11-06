@@ -1371,10 +1371,7 @@ func TestFinishRefusesOutsideHerdr(t *testing.T) {
 	f := newFakes(t)
 	t.Setenv("HERDR_ENV", "")
 
-	app := newApp()
-	app.Writer = &bytes.Buffer{}
-
-	err := app.Run(t.Context(), []string{"f10", "finish", "42"})
+	err := runApp(t, "finish", "42").err
 	if !errors.Is(err, herdr.ErrNotInside) {
 		t.Fatalf("err = %v, want ErrNotInside", err)
 	}
