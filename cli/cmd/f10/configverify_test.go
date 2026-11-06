@@ -30,11 +30,10 @@ Never run ` + "`just eval`" + `.
 func verifyRepo(t *testing.T) (*layout.Layout, *facts.Effective) {
 	t.Helper()
 
-	repo := t.TempDir()
-	git(t, repo, "init", "-q", "-b", "main")
+	repo := initRepo(t, t.TempDir(), "main").dir
 	writeTestFile(t, filepath.Join(repo, "README.md"), "x\n")
 	git(t, repo, "add", ".")
-	git(t, repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "root")
+	git(t, repo, "commit", "-q", "-m", "root")
 	git(t, repo, "update-ref", "refs/remotes/origin/main", "HEAD")
 	git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	git(t, repo, "switch", "-q", "-c", "feature")
@@ -144,7 +143,7 @@ func TestScopedVerifyReadsBothSidesOfARename(t *testing.T) {
 
 	writeTestFile(t, filepath.Join(root, "cli", "a.go"), "package a\n")
 	git(t, root, "add", ".")
-	git(t, root, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "a")
+	git(t, root, "commit", "-q", "-m", "a")
 	git(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
 	git(t, root, "mv", "cli/a.go", "a.go")
 
@@ -165,7 +164,7 @@ func TestScopedVerifyReadsCommits(t *testing.T) {
 
 	writeTestFile(t, filepath.Join(lay.CheckoutRoot, "bin", "tool"), "#!/bin/sh\n")
 	git(t, lay.CheckoutRoot, "add", ".")
-	git(t, lay.CheckoutRoot, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "tool")
+	git(t, lay.CheckoutRoot, "commit", "-q", "-m", "tool")
 
 	_, changed, err := verifyDiff(t.Context(), lay)
 	if err != nil {

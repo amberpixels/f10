@@ -25,7 +25,7 @@ func TestBoardAllNeedsRoots(t *testing.T) {
 	isolateEnv(t)
 	t.Setenv(projects.RootsEnv, "")
 
-	if _, err := runStandupApp(t, "board", "--all"); err == nil || !strings.Contains(err.Error(), projects.RootsEnv) {
+	if _, err := runApp(t, "board", "--all").outErr(); err == nil || !strings.Contains(err.Error(), projects.RootsEnv) {
 		t.Errorf("err = %v, want %s named", err, projects.RootsEnv)
 	}
 }
@@ -55,7 +55,7 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 
 	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
 
-	out, err := runStandupApp(t, "board", "--all", "--json")
+	out, err := runApp(t, "board", "--all", "--json").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 
 	// the glance: a line per project, the broken one failed, the good one
 	// local only with no failed source, its feed its branch committed today
-	text, err := runStandupApp(t, "board", "--all", "--state")
+	text, err := runApp(t, "board", "--all", "--state").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 		t.Errorf("summary =\n%s", text)
 	}
 
-	feed, err := runStandupApp(t, "board", "--all")
+	feed, err := runApp(t, "board", "--all").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestBoardCheckoutsExpand(t *testing.T) {
 	root := canonical(t, t.TempDir())
 	a, b := scopeRepo(t, root, "a"), scopeRepo(t, root, "b")
 
-	out, err := runStandupApp(t, "-C", a, "-C", b, "board")
+	out, err := runApp(t, "-C", a, "-C", b, "board").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestBoardCheckoutsExpand(t *testing.T) {
 	}
 
 	// one -C is one project: one document, no array
-	one, err := runStandupApp(t, "-C", a, "board", "--json")
+	one, err := runApp(t, "-C", a, "board", "--json").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,14 +136,7 @@ func TestBoardCheckoutsExpand(t *testing.T) {
 		t.Errorf("one -C --json = %v, %.80s, want one board for a", err, one)
 	}
 
-	if _, err := runStandupApp(
-		t,
-		"-C",
-		a,
-		"board",
-		"--by",
-		"team",
-	); err == nil ||
+	if _, err := runApp(t, "-C", a, "board", "--by", "team").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "person") {
 		t.Errorf("--by team: err = %v, want person named", err)
 	}
@@ -274,7 +267,7 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 		}
 	}
 
-	out, err := runStandupApp(t, "board", "--all", "--json", "--state")
+	out, err := runApp(t, "board", "--all", "--json", "--state").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +302,7 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	// and finds the task created today
 	calls = nil
 
-	out, err = runStandupApp(t, "board", "--all", "--json")
+	out, err = runApp(t, "board", "--all", "--json").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,11 +337,11 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	// a repository entry that does not parse fails only the run that reads it
 	writeUserFile(t, home, boardConfigFile, "---\nrepos: [git.example.com/acme/x]\n---\n")
 
-	if _, err := runStandupApp(t, "-C", good, "board", "--json"); err != nil {
+	if _, err := runApp(t, "-C", good, "board", "--json").outErr(); err != nil {
 		t.Errorf("one checkout with a bad repos entry: %v, want it unread", err)
 	}
 
-	if _, err := runStandupApp(t, "board", "--all"); err == nil || !strings.Contains(err.Error(), "repos") {
+	if _, err := runApp(t, "board", "--all").outErr(); err == nil || !strings.Contains(err.Error(), "repos") {
 		t.Errorf("--all with a bad repos entry: %v, want it named", err)
 	}
 }

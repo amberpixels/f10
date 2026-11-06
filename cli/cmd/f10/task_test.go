@@ -13,8 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/urfave/cli/v3"
-
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -349,9 +347,7 @@ func createRepo(t *testing.T, script string) string {
 	t.Helper()
 
 	repo := t.TempDir()
-	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
-	}
+	git(t, repo, "init", "-q")
 
 	dir := filepath.Join(repo, ".f10", "instructions")
 	if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -375,21 +371,6 @@ func createRepo(t *testing.T, script string) string {
 	return repo
 }
 
-func runCreate(t *testing.T, repo, doc string, args ...string) (string, string, error) {
-	t.Helper()
-
-	var out, errOut bytes.Buffer
-
-	app := newApp()
-	app.Reader = strings.NewReader(doc)
-	app.Writer, app.ErrWriter = &out, &errOut
-	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
-
-	err := app.Run(t.Context(), append([]string{"f10", "-C", repo, "task", "create"}, args...))
-
-	return out.String(), errOut.String(), err
-}
-
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 
@@ -408,7 +389,8 @@ func TestTaskCreateThroughTheDriver(t *testing.T) {
 	repo := createRepo(t, "echo 'no labels on this tracker' >&2\necho 1043\n")
 	doc := "# Add the index\n\nbody\n\nAfter: FT-1041\n"
 
-	out, warn, err := runCreate(t, repo, doc, "--priority", "High", "--label", "draft", "--parent", "FT-1040")
+	out, warn, err := runAppStdin(t, strings.NewReader(doc), "-C", repo, "task", "create", "--priority",
+		"High", "--label", "draft", "--parent", "FT-1040").streams()
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -440,7 +422,9 @@ func TestTaskCreateThroughTheDriver(t *testing.T) {
 func TestTaskCreateSetsProperties(t *testing.T) {
 	repo := createRepo(t, "echo 1043\n")
 
-	if _, _, err := runCreate(t, repo, "# A\n", "--set", "Kind=Bug", "--set", "Scope=CLI tools"); err != nil {
+	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create", "--set", "Kind=Bug",
+		"--set", "Scope=CLI tools").streams()
+	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -455,7 +439,8 @@ func TestTaskCreateSetsProperties(t *testing.T) {
 func TestTaskCreateTitleOnTheFirstLine(t *testing.T) {
 	repo := createRepo(t, "echo 1\n")
 
-	if _, _, err := runCreate(t, repo, "\n\n# A\n\nbody\n"); err != nil {
+	_, _, err := runAppStdin(t, strings.NewReader("\n\n# A\n\nbody\n"), "-C", repo, "task", "create").streams()
+	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -466,7 +451,8 @@ func TestTaskCreateTitleOnTheFirstLine(t *testing.T) {
 
 // A prefixed id from the driver passes as it is.
 func TestTaskCreatePrefixedID(t *testing.T) {
-	out, _, err := runCreate(t, createRepo(t, "echo FT-1043\n"), "# A\n")
+	out, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, "echo FT-1043\n"), "task",
+		"create").streams()
 	if err != nil || out != "FT-1043\n" {
 		t.Errorf("create = %q, %v; want FT-1043", out, err)
 	}
@@ -477,7 +463,7 @@ func TestTaskCreatePrefixedID(t *testing.T) {
 // input the driver would refuse still reaches the adapter.
 func TestTaskCreateDeclined(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
-		_, _, err := runCreate(t, createRepo(t, script), "# A\n")
+		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create").streams()
 		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
 			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
 		}
@@ -489,7 +475,8 @@ func TestTaskCreateDeclined(t *testing.T) {
 			doc = "no title\n"
 		}
 
-		_, _, err := runCreate(t, createRepo(t, ""), doc, args...)
+		_, _, err := runAppStdin(t, strings.NewReader(doc),
+			append([]string{"-C", createRepo(t, ""), "task", "create"}, args...)...).streams()
 		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
 			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
 		}
@@ -510,7 +497,8 @@ func TestTaskCreateRefusesBadInput(t *testing.T) {
 	} {
 		repo := createRepo(t, "echo 1\n")
 
-		_, _, err := runCreate(t, repo, tc.doc, tc.args...)
+		_, _, err := runAppStdin(t, strings.NewReader(tc.doc),
+			append([]string{"-C", repo, "task", "create"}, tc.args...)...).streams()
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%q %v: err = %v, want %q", tc.doc, tc.args, err, tc.want)
 		}
@@ -528,7 +516,7 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 		"echo 'notion: 504 gateway timeout' >&2\nexit 1\n": "notion: 504 gateway timeout",
 		"echo created it\n": "not one task id",
 	} {
-		_, _, err := runCreate(t, createRepo(t, script), "# A\n")
+		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create").streams()
 		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), mayExist) {
 			t.Errorf("%q: err = %v, want %q and the may-exist warning", script, err, want)
 		}
@@ -540,7 +528,8 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 func TestTaskCreateNotWrittenDropsMayExist(t *testing.T) {
 	script := "echo '--label \"bug\" is not an option of \"Tags\"' >&2\nexit 4\n"
 
-	_, _, err := runCreate(t, createRepo(t, script), "# A\n", "--label", "bug")
+	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create",
+		"--label", "bug").streams()
 	if err == nil || !strings.Contains(err.Error(), `is not an option of "Tags"`) ||
 		strings.Contains(err.Error(), mayExist) {
 		t.Errorf("err = %v, want the driver's stderr and no may-exist warning", err)
@@ -559,12 +548,7 @@ func (r failingReader) Read([]byte) (int, error) {
 // With no driver, create exits 3 without reading stdin, so a run with
 // nothing piped in never waits on a terminal.
 func TestTaskCreateNoDriverLeavesStdin(t *testing.T) {
-	app := newApp()
-	app.Reader = failingReader{t}
-	app.Writer, app.ErrWriter = &bytes.Buffer{}, &bytes.Buffer{}
-	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
-
-	err := app.Run(t.Context(), []string{"f10", "-C", createRepo(t, ""), "task", "create"})
+	err := runAppStdin(t, failingReader{t}, "-C", createRepo(t, ""), "task", "create").err
 	if exitCode(err) != exitNoCreate {
 		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
 	}
@@ -585,18 +569,14 @@ func TestTaskCurrent(t *testing.T) {
 				sessionTask(t, tc.session)
 			}
 
-			var out bytes.Buffer
-
-			app := newApp()
-			app.Writer, app.ErrWriter = &out, &out
-
-			err := app.Run(t.Context(), []string{"f10", "task", "current"})
+			r := runApp(t, "task", "current")
+			out, err := r.combined, r.err
 
 			switch {
 			case tc.want == "" && (err == nil || !strings.Contains(err.Error(), "no current task")):
-				t.Errorf("printed %q, %v; want no current task", out.String(), err)
-			case tc.want != "" && (err != nil || strings.TrimSpace(out.String()) != tc.want):
-				t.Errorf("got %q, %v; want %s", out.String(), err, tc.want)
+				t.Errorf("printed %q, %v; want no current task", out, err)
+			case tc.want != "" && (err != nil || strings.TrimSpace(out) != tc.want):
+				t.Errorf("got %q, %v; want %s", out, err, tc.want)
 			}
 		})
 	}
@@ -640,7 +620,8 @@ func TestTaskCreateOnHostIssues(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
 		repo, calls := hostRepo(t, script)
 
-		out, _, err := runCreate(t, repo, "# Add it\n\nbody\n", "--label", "draft")
+		out, _, err := runAppStdin(t, strings.NewReader("# Add it\n\nbody\n"), "-C", repo, "task", "create",
+			"--label", "draft").streams()
 		if err != nil || out != "FT-12\n" {
 			t.Errorf("%s: create = %q, %v; want FT-12", name, out, err)
 		}
@@ -657,7 +638,8 @@ func TestTaskCreateOnHostIssuesRefusesSet(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
 		repo, calls := hostRepo(t, script)
 
-		_, _, err := runCreate(t, repo, "# A\n", "--set", "Kind=Bug")
+		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create", "--set",
+			"Kind=Bug").streams()
 		if err == nil || !strings.Contains(err.Error(), "nothing was created") ||
 			strings.Contains(err.Error(), mayExist) {
 			t.Errorf("%s: err = %v, want a refusal saying nothing was created", name, err)
@@ -677,7 +659,8 @@ func TestTaskCreateNoHostCLI(t *testing.T) {
 		t.Fatalf("git remote: %v %s", err, out)
 	}
 
-	if _, _, err := runCreate(t, repo, "# A\n"); exitCode(err) != exitNoCreate {
+	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create").streams()
+	if exitCode(err) != exitNoCreate {
 		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
 	}
 }

@@ -125,16 +125,18 @@ func TestStatusOnceLeavesTheSameAlone(t *testing.T) {
 func TestPRWritesNeedAnOpenPR(t *testing.T) {
 	dir := prRepo(t)
 
-	if _, _, err := runPR(t, dir, "edit", "--title", "x"); err == nil || err.Error() != "no open PR for main" {
+	_, _, err := runApp(t, "-C", dir, "pr", "edit", "--title", "x").streams()
+	if err == nil || err.Error() != "no open PR for main" {
 		t.Errorf("edit: err = %v", err)
 	}
 
-	if _, _, err := runPR(t, dir, "edit"); err == nil || !strings.Contains(err.Error(), "--title, --body-file") {
+	_, _, err = runApp(t, "-C", dir, "pr", "edit").streams()
+	if err == nil || !strings.Contains(err.Error(), "--title, --body-file") {
 		t.Errorf("edit with nothing: err = %v", err)
 	}
 
-	if _, _, err := runPR(t, dir, "status", "--name", "judge", "--state", "green", "-m", "x"); err == nil ||
-		!strings.Contains(err.Error(), "success or failure") {
+	err = runApp(t, "-C", dir, "pr", "status", "--name", "judge", "--state", "green", "-m", "x").err
+	if err == nil || !strings.Contains(err.Error(), "success or failure") {
 		t.Errorf("status with a bad state: err = %v", err)
 	}
 }
@@ -230,14 +232,14 @@ func TestPRCreateNeedsBothOnOrigin(t *testing.T) {
 	git(t, dir, "switch", "-q", "-c", "feat")
 	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "base")
 
-	if _, _, err := runPR(t, dir, "create", "--title", "T", "--body-file", body); err == nil ||
+	if _, _, err := runApp(t, "-C", dir, "pr", "create", "--title", "T", "--body-file", body).streams(); err == nil ||
 		!strings.Contains(err.Error(), "base base is not on origin") {
 		t.Errorf("unpushed base: err = %v", err)
 	}
 
 	git(t, dir, "push", "-q", "origin", "base")
 
-	if _, _, err := runPR(t, dir, "create", "--title", "T", "--body-file", body); err == nil ||
+	if _, _, err := runApp(t, "-C", dir, "pr", "create", "--title", "T", "--body-file", body).streams(); err == nil ||
 		!strings.Contains(err.Error(), "git push -u origin feat") {
 		t.Errorf("unpushed head: err = %v", err)
 	}
@@ -245,12 +247,12 @@ func TestPRCreateNeedsBothOnOrigin(t *testing.T) {
 	git(t, dir, "push", "-q", "origin", "feat")
 	commitFile(t, dir, "feat.txt")
 
-	if _, _, err := runPR(t, dir, "create", "--title", "T", "--body-file", body); err == nil ||
+	if _, _, err := runApp(t, "-C", dir, "pr", "create", "--title", "T", "--body-file", body).streams(); err == nil ||
 		!strings.Contains(err.Error(), "at HEAD") {
 		t.Errorf("head ahead of origin: err = %v", err)
 	}
 
-	if _, _, err := runPR(t, dir, "create", "--body-file", body); err == nil ||
+	if _, _, err := runApp(t, "-C", dir, "pr", "create", "--body-file", body).streams(); err == nil ||
 		!strings.Contains(err.Error(), "title") {
 		t.Errorf("no title: err = %v", err)
 	}

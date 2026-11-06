@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,22 +11,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
-
-// runIn runs f10 with -C dir and returns what it printed.
-func runIn(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-
-	if err := app.Run(context.Background(), append([]string{"f10", "-C", dir}, args...)); err != nil {
-		t.Fatalf("f10 %v: %v", args, err)
-	}
-
-	return out.String()
-}
 
 // f10 flow and f10 config read the same flows, and the human list names
 // what selects each.
@@ -48,12 +30,12 @@ func TestFlowAndConfigAgree(t *testing.T) {
 	}
 
 	var flows flowView
-	if err := json.Unmarshal([]byte(runIn(t, repo, "flow", "--json")), &flows); err != nil {
+	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "flow", "--json").must(t)), &flows); err != nil {
 		t.Fatal(err)
 	}
 
 	var config view
-	if err := json.Unmarshal([]byte(runIn(t, repo, "config", "--json")), &config); err != nil {
+	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "config", "--json").must(t)), &config); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,7 +49,7 @@ func TestFlowAndConfigAgree(t *testing.T) {
 		}
 	}
 
-	human := runIn(t, repo, "flow")
+	human := runApp(t, "-C", repo, "flow").must(t)
 	for _, want := range []string{
 		"(f10 start, f10 drive)", "(--local, --flow local)", "(--flow direct)",
 		"drive_finish  on: f10 drive ends each task with finish",
@@ -77,7 +59,8 @@ func TestFlowAndConfigAgree(t *testing.T) {
 		}
 	}
 
-	if cfg := runIn(t, repo, "config"); strings.Contains(cfg, "Ship pipeline") || strings.Contains(cfg, "Drive chain") {
+	if cfg := runApp(t, "-C", repo, "config").must(t); strings.Contains(cfg, "Ship pipeline") ||
+		strings.Contains(cfg, "Drive chain") {
 		t.Errorf("config still lists the old sections:\n%s", cfg)
 	}
 }
@@ -196,21 +179,23 @@ func TestFlowPrintsEntryLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(runIn(t, repo, "flow", "default")), "\n")
+	lines := strings.Split(strings.TrimSpace(runApp(t, "-C", repo, "flow", "default").must(t)), "\n")
 	if last := lines[len(lines)-1]; last != "pr[pr-polish]" {
 		t.Errorf("f10 flow default ends %q, want pr[pr-polish]:\n%s", last, strings.Join(lines, "\n"))
 	}
 
-	if paced := runIn(t, repo, "flow", "default", "--pace", "fast"); !strings.Contains(paced, "pr[pr-polish]") {
+	paced := runApp(t, "-C", repo, "flow", "default", "--pace", "fast").must(t)
+	if !strings.Contains(paced, "pr[pr-polish]") {
 		t.Errorf("under a pace the label is gone:\n%s", paced)
 	}
 
-	if all := runIn(t, repo, "flow"); !strings.Contains(all, "plan implement pr review:local pr[pr-polish]") {
+	all := runApp(t, "-C", repo, "flow").must(t)
+	if !strings.Contains(all, "plan implement pr review:local pr[pr-polish]") {
 		t.Errorf("f10 flow:\n%s", all)
 	}
 
 	var v flowView
-	if err := json.Unmarshal([]byte(runIn(t, repo, "flow", "--json")), &v); err != nil {
+	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "flow", "--json").must(t)), &v); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,9 +1,7 @@
 package main
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,40 +11,6 @@ import (
 // The git half of the upkeep rules against real git: a merge of main, a
 // go.sum-only bump, code, then a rebase and an amend for range-diff to pair.
 // The recorded fixtures cover real histories; this covers what none holds.
-
-// gitRepo runs git with a fixed author and committer date.
-type gitRepo struct {
-	t   *testing.T
-	dir string
-}
-
-func (r gitRepo) at(when string, args ...string) string {
-	r.t.Helper()
-
-	cmd := exec.CommandContext(r.t.Context(), "git", args...)
-	cmd.Dir = r.dir
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_DATE="+when, "GIT_COMMITTER_DATE="+when,
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		r.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-	}
-
-	return strings.TrimSpace(string(out))
-}
-
-func (r gitRepo) commit(when, file, content, msg string) {
-	r.t.Helper()
-
-	if err := os.WriteFile(filepath.Join(r.dir, file), []byte(content), 0o644); err != nil {
-		r.t.Fatal(err)
-	}
-
-	r.at(when, "add", file)
-	r.at(when, "commit", "-q", "-m", msg)
-}
 
 const (
 	before = "2026-10-10T10:00:00Z"
@@ -61,14 +25,7 @@ func newStandupRepo(t *testing.T) gitRepo {
 		t.Skip("no git")
 	}
 
-	root := t.TempDir()
-	origin := gitRepo{t, filepath.Join(root, "origin.git")}
-	r := gitRepo{t, filepath.Join(root, "work")}
-
-	gitRepo{t, root}.at(before, "init", "-q", "--bare", "--initial-branch=main", origin.dir)
-	gitRepo{t, root}.at(before, "clone", "-q", origin.dir, r.dir)
-	r.at(before, "config", "user.email", "me@x.io")
-	r.at(before, "config", "user.name", "Me")
+	r := cloneRepo(t, "work")
 	r.at(before, "checkout", "-q", "-b", "main")
 
 	r.commit(before, "main.go", "package main\n", "init")

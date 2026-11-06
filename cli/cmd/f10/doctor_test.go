@@ -1,14 +1,10 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/doctor"
 )
@@ -36,20 +32,14 @@ func TestDoctorReportsABrokenProjectAndExitsNonZero(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-	app.ExitErrHandler = func(context.Context, *cli.Command, error) {} // keep the exit code, not the exit
-
-	err := app.Run(context.Background(), []string{"f10", "-C", dir, "doctor", "--json"})
+	out, err := runApp(t, "-C", dir, "doctor", "--json").outErr()
 	if code := exitCode(err); code != 1 {
 		t.Fatalf("exit code %d (%v), want 1", code, err)
 	}
 
 	var results []doctor.Result
-	if err := json.Unmarshal(out.Bytes(), &results); err != nil {
-		t.Fatalf("output is not a JSON array of checks: %v\n%s", err, out.String())
+	if err := json.Unmarshal([]byte(out), &results); err != nil {
+		t.Fatalf("output is not a JSON array of checks: %v\n%s", err, out)
 	}
 
 	for _, r := range results {

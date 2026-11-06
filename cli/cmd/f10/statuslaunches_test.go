@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -88,16 +87,7 @@ func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...
 func (fx launchFixture) status(t *testing.T, args ...string) string {
 	t.Helper()
 
-	var out, errOut bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &errOut
-
-	if err := app.Run(t.Context(), append([]string{"f10", "status"}, args...)); err != nil {
-		t.Fatalf("status: %v\n%s%s", err, out.String(), errOut.String())
-	}
-
-	return out.String()
+	return runApp(t, append([]string{"status"}, args...)...).must(t)
 }
 
 func (fx launchFixture) rows(t *testing.T) []taskRow {

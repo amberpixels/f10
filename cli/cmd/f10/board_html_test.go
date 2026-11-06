@@ -435,7 +435,7 @@ func TestBoardFormatFlags(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := newApp().Run(t.Context(), append([]string{"f10", "board"}, c.args...))
+			err := runApp(t, append([]string{"board"}, c.args...)...).err
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Errorf("got %v, want an error naming %q", err, c.want)
 			}

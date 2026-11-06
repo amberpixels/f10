@@ -246,9 +246,7 @@ func TestPaneAnswered(t *testing.T) {
 	t.Setenv("F10_ASKS_DIR", dir)
 
 	repo := t.TempDir()
-	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
-	}
+	git(t, repo, "init", "-q")
 
 	root := layout.Locate(context.Background(), repo).CheckoutRoot
 	a := raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: root})

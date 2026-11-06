@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,14 +14,7 @@ import (
 func prRepo(t *testing.T) string {
 	t.Helper()
 
-	root := t.TempDir()
-	origin := filepath.Join(root, "origin.git")
-	git(t, root, "init", "-q", "--bare", "-b", "main", origin)
-
-	dir := filepath.Join(root, "repo")
-	git(t, root, "clone", "-q", origin, dir)
-	git(t, dir, "config", "user.email", "me@x.io")
-	git(t, dir, "config", "user.name", "me")
+	dir := cloneRepo(t, "repo").dir
 	commitFile(t, dir, "main.txt")
 	git(t, dir, "push", "-q", "origin", "main")
 	git(t, dir, "remote", "set-head", "origin", "-a")
@@ -57,36 +48,23 @@ func stacked(t *testing.T) string {
 	return dir
 }
 
-func runPR(t *testing.T, dir string, args ...string) (string, string, error) {
-	t.Helper()
-
-	var out, errOut bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &errOut
-
-	err := app.Run(context.Background(), append([]string{"f10", "-C", dir, "pr"}, args...))
-
-	return out.String(), errOut.String(), err
-}
-
 func TestPRBase(t *testing.T) {
 	dir := stacked(t)
 
-	if out, _, err := runPR(t, dir, "base"); err != nil || out != "base\n" {
+	if out, _, err := runApp(t, "-C", dir, "pr", "base").streams(); err != nil || out != "base\n" {
 		t.Errorf("stacked: base = %q, %v; want base", out, err)
 	}
 
 	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "gone")
 
-	out, errOut, err := runPR(t, dir, "base")
+	out, errOut, err := runApp(t, "-C", dir, "pr", "base").streams()
 	if err != nil || out != "main\nfound: "+foundGone+"\n" || errOut != "" {
 		t.Errorf("gone: base = %q, %q, %v; want main and the typed found line, nothing on stderr", out, errOut, err)
 	}
 
 	git(t, dir, "config", "--unset", "branch.feat."+cfgAfterBranch)
 
-	if out, _, err := runPR(t, dir, "base"); err != nil || out != "main\n" {
+	if out, _, err := runApp(t, "-C", dir, "pr", "base").streams(); err != nil || out != "main\n" {
 		t.Errorf("unrecorded: base = %q, %v; want main", out, err)
 	}
 }
@@ -99,7 +77,8 @@ func TestPRBaseOriginRefusesALocalBase(t *testing.T) {
 	git(t, dir, "switch", "-q", "-c", "feat")
 	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "base")
 
-	if _, _, err := runPR(t, dir, "base", "--origin"); err == nil || !strings.Contains(err.Error(), "not on origin") {
+	_, _, err := runApp(t, "-C", dir, "pr", "base", "--origin").streams()
+	if err == nil || !strings.Contains(err.Error(), "not on origin") {
 		t.Errorf("err = %v, want the base named as not on origin", err)
 	}
 }
@@ -113,7 +92,7 @@ func TestPRDiffStacked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, _, err := runPR(t, dir, "diff", "--name-only")
+	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "feat.txt\nmain.txt\n" {
 		t.Errorf("diff = %q, %v; want feat.txt and the uncommitted main.txt", out, err)
 	}
@@ -129,7 +108,7 @@ func TestPRDiffForksFromTheNewerBase(t *testing.T) {
 	commitFile(t, dir, "feat2.txt")
 	git(t, dir, "config", "branch.feat2."+cfgAfterBranch, "base")
 
-	out, _, err := runPR(t, dir, "diff", "--name-only")
+	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "feat2.txt\n" {
 		t.Errorf("diff = %q, %v; want feat2.txt alone", out, err)
 	}
@@ -138,7 +117,7 @@ func TestPRDiffForksFromTheNewerBase(t *testing.T) {
 func TestPRViewWithNoPR(t *testing.T) {
 	dir := stacked(t)
 
-	out, _, err := runPR(t, dir, "view")
+	out, _, err := runApp(t, "-C", dir, "pr", "view").streams()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,22 +188,25 @@ func TestPRSubjectByTaskID(t *testing.T) {
 	commitFile(t, dir, "eight.txt")
 	git(t, dir, "switch", "-q", "main")
 
-	out, _, err := runPR(t, dir, "view", "REPO-8")
+	out, _, err := runApp(t, "-C", dir, "pr", "view", "REPO-8").streams()
 	if err != nil || !strings.Contains(out, "branch: REPO-8\n") || !strings.Contains(out, "task: REPO-8\n") {
 		t.Errorf("local branch: view = %q, %v", out, err)
 	}
 
-	if out, _, err := runPR(t, dir, "diff", "REPO-8", "--name-only"); err != nil || out != "eight.txt\n" {
+	out, _, err = runApp(t, "-C", dir, "pr", "diff", "REPO-8", "--name-only").streams()
+	if err != nil || out != "eight.txt\n" {
 		t.Errorf("local branch: diff = %q, %v; want its commits alone", out, err)
 	}
 
 	git(t, dir, "branch", "-q", "-D", "REPO-7")
 
-	if out, _, err := runPR(t, dir, "diff", "REPO-7", "--name-only"); err != nil || out != "seven.txt\n" {
+	out, _, err = runApp(t, "-C", dir, "pr", "diff", "REPO-7", "--name-only").streams()
+	if err != nil || out != "seven.txt\n" {
 		t.Errorf("origin-only branch: diff = %q, %v; want seven.txt", out, err)
 	}
 
-	if _, _, err := runPR(t, dir, "view", "REPO-9"); err == nil || !strings.Contains(err.Error(), "start it first") {
+	_, _, err = runApp(t, "-C", dir, "pr", "view", "REPO-9").streams()
+	if err == nil || !strings.Contains(err.Error(), "start it first") {
 		t.Errorf("no branch: err = %v, want the task named as one to start", err)
 	}
 }
@@ -287,7 +269,7 @@ func TestPRDiffShowsOnlyCommitsAfterASquashMerge(t *testing.T) {
 	git(t, dir, "switch", "-q", "feat")
 	commitFile(t, dir, "second.txt")
 
-	out, _, err := runPR(t, dir, "diff", "--name-only")
+	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "second.txt\n" {
 		t.Errorf("diff = %q, %v; want second.txt alone", out, err)
 	}
@@ -305,7 +287,7 @@ func TestPRDiffOfAMergedBranchShowsItsChange(t *testing.T) {
 	git(t, dir, "push", "-q", "origin", "main")
 	git(t, dir, "switch", "-q", "feat")
 
-	out, _, err := runPR(t, dir, "diff", "--name-only")
+	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "first.txt\n" {
 		t.Errorf("diff = %q, %v; want first.txt", out, err)
 	}

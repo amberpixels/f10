@@ -302,18 +302,14 @@ func TestBareTaskID(t *testing.T) {
 func runStatusJSON(t *testing.T, args ...string) []runJSON {
 	t.Helper()
 
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &out
-
-	if err := app.Run(t.Context(), append([]string{"f10", "status", "--json"}, args...)); err != nil {
-		t.Fatalf("status %v: %v\n%s", args, err, out.String())
+	r := runApp(t, append([]string{"status", "--json"}, args...)...)
+	if r.err != nil {
+		t.Fatalf("status %v: %v\n%s", args, r.err, r.combined)
 	}
 
 	var runs []runJSON
-	if err := json.Unmarshal(out.Bytes(), &runs); err != nil {
-		t.Fatalf("status %v: not a run list: %v\n%s", args, err, out.String())
+	if err := json.Unmarshal([]byte(r.combined), &runs); err != nil {
+		t.Fatalf("status %v: not a run list: %v\n%s", args, err, r.combined)
 	}
 
 	return runs

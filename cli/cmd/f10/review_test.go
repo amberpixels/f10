@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -390,10 +389,7 @@ func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			app := newApp()
-			app.Writer = &bytes.Buffer{}
-
-			err := app.Run(t.Context(), []string{"f10", "-C", repo, "review", "pick"})
+			err := runApp(t, "-C", repo, "review", "pick").err
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Errorf("err = %v, want %q", err, c.want)
 			}

@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,20 +10,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
-
-// runStandupApp runs `f10 [args...]` through the real command tree.
-func runStandupApp(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer = &out
-
-	err := app.Run(context.Background(), append([]string{"f10"}, args...))
-
-	return out.String(), err
-}
 
 func writeUserFile(t *testing.T, home, name, body string) {
 	t.Helper()
@@ -124,7 +107,7 @@ func TestReadWorkdays(t *testing.T) {
 func TestStandupMark(t *testing.T) {
 	isolateEnv(t)
 
-	if _, err := runStandupApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z"); err != nil {
+	if _, err := runApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z").outErr(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -138,14 +121,13 @@ func TestStandupMark(t *testing.T) {
 	}
 
 	future := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
-	if _, err := runStandupApp(t, "standup", "mark", "--since", future); err == nil {
+	if _, err := runApp(t, "standup", "mark", "--since", future).outErr(); err == nil {
 		t.Error("mark took a start in the future")
 	}
 
 	// the next standup starts when this one was read, not when it was marked
-	if _, err := runStandupApp(
-		t, "standup", "mark", "--since", "2026-10-09T07:00:00Z", "--at", "2026-10-12T06:30:00Z",
-	); err != nil {
+	_, err = runApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z", "--at", "2026-10-12T06:30:00Z").outErr()
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,9 +135,8 @@ func TestStandupMark(t *testing.T) {
 		t.Errorf("stored %+v, %v, want at = --at", last, err)
 	}
 
-	if _, err := runStandupApp(
-		t, "standup", "mark", "--since", "2026-10-12T07:00:00Z", "--at", "2026-10-12T06:30:00Z",
-	); err == nil {
+	_, err = runApp(t, "standup", "mark", "--since", "2026-10-12T07:00:00Z", "--at", "2026-10-12T06:30:00Z").outErr()
+	if err == nil {
 		t.Error("mark took a start after the read")
 	}
 }
@@ -165,21 +146,13 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 	home := isolateEnv(t)
 	writeUserFile(t, home, standupConfigFile, "---\nworkdays: [monday]\n---\n")
 
-	dir := canonical(t, t.TempDir())
-	git(t, dir, "init", "-q")
-	git(t, dir, "config", "user.email", "me@x.io")
+	dir := initRepo(t, canonical(t, t.TempDir()), "master").dir
 
-	if _, err := runStandupApp(t, "-C", dir, "standup", "--json", "--week"); err != nil {
+	if _, err := runApp(t, "-C", dir, "standup", "--json", "--week").outErr(); err != nil {
 		t.Errorf("--week: %v, want standup.md unread", err)
 	}
 
-	if _, err := runStandupApp(
-		t,
-		"-C",
-		dir,
-		"standup",
-		"--json",
-	); err == nil ||
+	if _, err := runApp(t, "-C", dir, "standup", "--json").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "monday") {
 		t.Errorf("fallback: err = %v, want the bad day named", err)
 	}
@@ -188,7 +161,7 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 func TestStandupSinceAndWeekConflict(t *testing.T) {
 	isolateEnv(t)
 
-	if _, err := runStandupApp(t, "standup", "--since", "2026-10-09", "--week"); err == nil ||
+	if _, err := runApp(t, "standup", "--since", "2026-10-09", "--week").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "--week") {
 		t.Errorf("err = %v, want --since and --week refused together", err)
 	}
@@ -200,25 +173,16 @@ func TestStandupSinceAndWeekConflict(t *testing.T) {
 func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 	isolateEnv(t)
 
-	dir := canonical(t, t.TempDir())
-	git(t, dir, "init", "-q")
-	git(t, dir, "config", "user.email", "me@x.io")
-	git(t, dir, "config", "user.name", "me")
+	r := initRepo(t, canonical(t, t.TempDir()), "master")
+	dir := r.dir
 
 	now := time.Now()
 	day := standup.LastWorkingDay(now, standup.DefaultWorkdays(), nil)
 	worked := day.Add(10 * time.Hour)
 
-	commit := exec.Command("git", "commit", "-q", "--allow-empty", "-m", "work")
-	commit.Dir = dir
-	commit.Env = append(os.Environ(),
-		"GIT_AUTHOR_DATE="+worked.Format(time.RFC3339), "GIT_COMMITTER_DATE="+worked.Format(time.RFC3339))
+	r.at(worked.Format(time.RFC3339), "commit", "-q", "--allow-empty", "-m", "work")
 
-	if out, err := commit.CombinedOutput(); err != nil {
-		t.Fatalf("git commit: %v\n%s", err, out)
-	}
-
-	out, err := runStandupApp(t, "-C", dir, "standup", "--json")
+	out, err := runApp(t, "-C", dir, "standup", "--json").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}

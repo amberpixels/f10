@@ -1,55 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 )
-
-// Every test here runs commands that record to the ledger; none may reach
-// the real ~/.f10.
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "f10-ledger-")
-	if err != nil {
-		panic(err)
-	}
-
-	_ = os.Setenv(ledger.PathEnv, filepath.Join(dir, "f10.db"))
-	// no test's ask reaches the user's inbox
-	_ = os.Setenv("F10_ASKS_DIR", filepath.Join(dir, "asks"))
-	askNotifier = nil
-
-	// a start or a drive run here hands nothing to a real daemon
-	watchProject = func(context.Context, io.Writer, *target) {}
-
-	code := m.Run()
-
-	_ = os.RemoveAll(dir)
-
-	os.Exit(code)
-}
-
-func runLedger(t *testing.T, args ...string) string {
-	t.Helper()
-
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &out
-
-	if err := app.Run(context.Background(), append([]string{"f10", "ledger"}, args...)); err != nil {
-		t.Fatalf("%q: %v\n%s", args, err, out.String())
-	}
-
-	return out.String()
-}
 
 func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
@@ -76,7 +34,8 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 
 	var kinds []string
 
-	for line := range strings.SplitSeq(strings.TrimSpace(runLedger(t, "dump", "--json", "--session", "s1")), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(runApp(t, "ledger", "dump", "--json", "--session",
+		"s1").must(t)), "\n") {
 		var e ledger.Event
 		if err := json.Unmarshal([]byte(line), &e); err != nil {
 			t.Fatalf("%v: %s", err, line)
@@ -99,12 +58,7 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		t.Errorf("kinds %q, want %q", got, want)
 	}
 
-	if out := runLedger(
-		t,
-		"dump",
-		"--task",
-		"GH-7",
-	); strings.Count(out, "\n") != 5 ||
+	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 5 ||
 		!strings.Contains(out, "claimed") {
 		t.Errorf("dump by task:\n%s", out)
 	}
@@ -113,7 +67,7 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 func TestDumpWithNoDatabasePrintsNothing(t *testing.T) {
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 
-	if out := runLedger(t, "dump"); out != "" {
+	if out := runApp(t, "ledger", "dump").must(t); out != "" {
 		t.Errorf("dump printed %q", out)
 	}
 }
