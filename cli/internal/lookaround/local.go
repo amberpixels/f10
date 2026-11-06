@@ -31,6 +31,8 @@ type LocalInputs struct {
 	LedgerPath string           // "" reads no ledger
 	ProjectID  string           // the ledger's project id
 	Agents     agentctl.Backend // the agent backend, when reachable: read its workspaces; nil reads none
+	// Resolve turns a task as typed (`117`, a url) into its id; nil keeps it
+	Resolve func(string) string
 }
 
 // collectLocal reads this machine's facts. Git failing fails the source; a
@@ -161,7 +163,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	}
 
 	if in.LedgerPath != "" {
-		notes = append(notes, readLedger(ctx, in.LedgerPath, in.ProjectID, l)...)
+		notes = append(notes, readLedger(ctx, in.LedgerPath, in.ProjectID, in.Resolve, l)...)
 	}
 
 	if in.Agents != nil {
@@ -289,7 +291,7 @@ func readRoot(root string, l *Local) []string {
 	return notes
 }
 
-func readLedger(ctx context.Context, path, project string, l *Local) []string {
+func readLedger(ctx context.Context, path, project string, resolve func(string) string, l *Local) []string {
 	_ = ledger.SyncAt(ctx, path) // a failed replay still reads what the database holds
 
 	db, err := ledger.OpenRead(ctx, path)
@@ -308,13 +310,32 @@ func readLedger(ctx context.Context, path, project string, l *Local) []string {
 		return []string{"ledger not read: " + err.Error()}
 	}
 
-	for _, e := range events {
-		if e.Task != "" {
-			l.Finished[e.Task] = true
-		}
-	}
+	finishedFrom(events, resolve, l)
 
 	return nil
+}
+
+// finishedNow is a ledger finish still standing: a live plan means the task
+// was re-planned after it, so it is pending work again.
+func finishedNow(l *Local, id string) bool {
+	_, live := l.Plans[id]
+
+	return l.Finished[id] && !live
+}
+
+// finishedFrom marks each task a finish row names; resolve turns the
+// argument as typed into an id, nil keeping it as typed.
+func finishedFrom(events []ledger.Event, resolve func(string) string, l *Local) {
+	for _, e := range events {
+		id := e.FinishedTask()
+		if id != "" && resolve != nil {
+			id = resolve(id)
+		}
+
+		if id != "" {
+			l.Finished[id] = true
+		}
+	}
 }
 
 func latest(dir string) (string, int) {

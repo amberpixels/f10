@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/amberpixels/r3"
@@ -68,6 +69,26 @@ type Event struct {
 }
 
 func (Event) TableName() string { return "events" }
+
+// FinishedTask is the task a task_finished row names, as typed: finish's
+// first non-flag argument, else the row's task, which the observer takes from
+// the session's run and so names another task when finish ran from elsewhere.
+func (e Event) FinishedTask() string {
+	args, _ := e.Payload.Val["args"].([]any)
+
+	for i := 0; i < len(args); i++ {
+		s, _ := args[i].(string)
+
+		switch {
+		case s == "--close" || s == "-close":
+			i++ // its value names the riders to close, not the task
+		case s != "" && !strings.HasPrefix(s, "-"):
+			return s
+		}
+	}
+
+	return e.Task
+}
 
 //go:embed migrations/*.sql
 var migrations embed.FS

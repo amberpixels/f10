@@ -756,11 +756,6 @@ func sharedRootOf(lay *layout.Layout) string {
 	return lay.StorageRoot
 }
 
-// asksTold is the mark of the asks a session was told, beside its run file.
-func asksTold(stateDir, session string) string {
-	return strings.TrimSuffix(state.Path(stateDir, session), filepath.Ext(state.Path(stateDir, session))) + ".asks"
-}
-
 // runAsksHook prints, as context, the open asks this session has not been
 // told, leaving out the asking agent's own session.
 func runAsksHook(ctx context.Context, cmd *cli.Command) error {
@@ -809,7 +804,7 @@ func asksContext(dir, stateDir, session, event, root string) []byte {
 		return nil
 	}
 
-	markPath := asksTold(stateDir, session)
+	markPath := state.AsksPath(stateDir, session)
 	raw, _ := os.ReadFile(markPath)
 	told := strings.Fields(string(raw))
 

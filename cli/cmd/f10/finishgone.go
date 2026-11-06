@@ -268,16 +268,3 @@ func planArchivedIn(plans, id string) bool {
 
 	return len(older) > 0
 }
-
-// taskFinished is finish's own "already finished", which drive list shares so
-// the two never disagree: no task branch here or on origin, and the plan
-// archived. A git error reads as unfinished, since a wrong yes hides a halt.
-func taskFinished(ctx context.Context, main, plans, id string) bool {
-	if !planArchivedIn(plans, id) {
-		return false
-	}
-
-	branched, err := hasTaskBranch(ctx, main, id)
-
-	return err == nil && !branched
-}

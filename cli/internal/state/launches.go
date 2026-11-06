@@ -10,7 +10,10 @@ import (
 	"strings"
 )
 
-const launchesExt = ".launches"
+const (
+	launchesExt = ".launches"
+	asksExt     = ".asks"
+)
 
 // Launch kinds: a task `f10 start` opened, or a drive by its number.
 const (
@@ -22,6 +25,11 @@ const (
 type Launch struct {
 	Kind  string
 	Value string // the task as typed for start, the drive's number for drive
+}
+
+// AsksPath marks the asks a session was told, so each is told once.
+func AsksPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+asksExt)
 }
 
 // LaunchesPath lists what a session launched, so a bare status in the main

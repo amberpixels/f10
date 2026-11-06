@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -171,7 +173,7 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 	in := &driveInput{root: root, argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"}, now: time.Now}
 	in.args.answers = []string{"GH-2=2. maybe"}
 
-	if err := in.openRecord(nil); err != nil {
+	if err := in.openRecord(answerTasks("GH-1", "GH-2")); err != nil {
 		t.Fatal(err)
 	}
 	defer in.releaseAll()
@@ -185,6 +187,43 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
 		t.Errorf("second openRecord = %v", err)
 	}
+}
+
+// A bare answer whose text holds "=" stays bare: the rerun's replaces the
+// kept one, or takeAnswers sees two bare answers and refuses.
+func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
+	root := t.TempDir()
+
+	rec := &drives.Record{Args: []string{"GH-1"}, Answers: map[string]string{"": "1. old"}}
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	in := &driveInput{root: root, argv: []string{"GH-1", "--answer", "use x=1"}, now: time.Now}
+	in.args.answers = []string{"use x=1"}
+
+	tasks := answerTasks("GH-1")
+	if err := in.openRecord(tasks); err != nil {
+		t.Fatal(err)
+	}
+	defer in.releaseAll()
+
+	if want := []string{"use x=1"}; !slices.Equal(in.args.answers, want) {
+		t.Errorf("answers = %q, want %q", in.args.answers, want)
+	}
+
+	if err := in.takeAnswers(tasks); err != nil || in.answer != "use x=1" {
+		t.Errorf("takeAnswers = %v, answer %q", err, in.answer)
+	}
+}
+
+func answerTasks(ids ...string) []driveTask {
+	tasks := make([]driveTask, len(ids))
+	for i, id := range ids {
+		tasks[i] = driveTask{ref: ref.Ref{ID: id}}
+	}
+
+	return tasks
 }
 
 // The agent got past a skill before the drive could send it, as after a
@@ -491,5 +530,43 @@ func TestTaskStandingQueued(t *testing.T) {
 
 	if got := taskStanding(drives.Task{Queued: true}, false); got != "not reached" {
 		t.Errorf("a queued task in a stopped drive stands %q", got)
+	}
+}
+
+// drive list decides a row by finishedTask, asking the tracker only when the
+// branch and the plans dir leave it open.
+func TestFinishedLazily(t *testing.T) {
+	cases := []struct {
+		name                     string
+		branched, archived, live bool
+		closed, wantInfo, want   bool
+	}{
+		{name: "closed, nothing on disk", closed: true, wantInfo: true, want: true},
+		{name: "open, nothing on disk", wantInfo: true},
+		{name: "branched", branched: true, closed: true},
+		{name: "archived", archived: true, want: true},
+		{name: "re-planned", archived: true, live: true, closed: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plans := t.TempDir()
+			if c.archived {
+				writePlan(t, filepath.Join(plans, "archive", "GH-1.md"))
+			}
+
+			if c.live {
+				writePlan(t, filepath.Join(plans, "GH-1.md"))
+			}
+
+			asked := false
+			got := finishedLazily(plans, "GH-1",
+				func() (bool, error) { return c.branched, nil },
+				func() taskInfo { asked = true; return taskInfo{closed: c.closed} })
+
+			if got != c.want || asked != c.wantInfo {
+				t.Errorf("finishedLazily = %v, tracker asked %v; want %v, %v", got, asked, c.want, c.wantInfo)
+			}
+		})
 	}
 }

@@ -55,7 +55,7 @@ func claudeDefaultModel(path string) string {
 // taskFileDirs are the storage root's dirs an agent writes task files to.
 // Instructions and the driver stay out: a worktree's agent never edits
 // what every checkout's next run loads.
-var taskFileDirs = []string{"plans", "reviews", "verdicts", "spikes", "handoffs", "lore", "images"}
+var taskFileDirs = []string{"plans", "reviews", "verdicts", "spikes", "handoffs", "lore", "images", "demo"}
 
 // agentArgs is the agent's command line: the profile's flags through its
 // kind, and each task-file dir of the storage root when that root sits

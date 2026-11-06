@@ -136,11 +136,11 @@ func TestChildrenFromGitHub(t *testing.T) {
 
 	tr := tg.tracker()
 
-	if err := os.MkdirAll(tr.archive[0], 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(tr.plans, "archive"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tr.archive[0], "FT-75.md"), nil, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tr.plans, "archive", "FT-75.md"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
