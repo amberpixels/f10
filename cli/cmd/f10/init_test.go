@@ -82,7 +82,7 @@ func TestInitRefusesInALinkedWorktree(t *testing.T) {
 	isolateEnv(t)
 
 	repo := mkRepo(t)
-	git(t, repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "root")
+	git(t, repo, "commit", "-q", "--allow-empty", "-m", "root")
 
 	wt := filepath.Join(t.TempDir(), "feature")
 	git(t, repo, "worktree", "add", "-q", "-b", "feature", wt)

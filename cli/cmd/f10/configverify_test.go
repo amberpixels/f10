@@ -143,7 +143,7 @@ func TestScopedVerifyReadsBothSidesOfARename(t *testing.T) {
 
 	writeTestFile(t, filepath.Join(root, "cli", "a.go"), "package a\n")
 	git(t, root, "add", ".")
-	git(t, root, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "a")
+	git(t, root, "commit", "-q", "-m", "a")
 	git(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
 	git(t, root, "mv", "cli/a.go", "a.go")
 
@@ -164,7 +164,7 @@ func TestScopedVerifyReadsCommits(t *testing.T) {
 
 	writeTestFile(t, filepath.Join(lay.CheckoutRoot, "bin", "tool"), "#!/bin/sh\n")
 	git(t, lay.CheckoutRoot, "add", ".")
-	git(t, lay.CheckoutRoot, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "tool")
+	git(t, lay.CheckoutRoot, "commit", "-q", "-m", "tool")
 
 	_, changed, err := verifyDiff(t.Context(), lay)
 	if err != nil {

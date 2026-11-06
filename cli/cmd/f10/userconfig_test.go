@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -147,9 +146,7 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 	home := isolateEnv(t)
 	writeUserFile(t, home, standupConfigFile, "---\nworkdays: [monday]\n---\n")
 
-	dir := canonical(t, t.TempDir())
-	git(t, dir, "init", "-q")
-	git(t, dir, "config", "user.email", "me@x.io")
+	dir := initRepo(t, canonical(t, t.TempDir()), "master").dir
 
 	if _, err := runApp(t, "-C", dir, "standup", "--json", "--week").outErr(); err != nil {
 		t.Errorf("--week: %v, want standup.md unread", err)
@@ -176,23 +173,14 @@ func TestStandupSinceAndWeekConflict(t *testing.T) {
 func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 	isolateEnv(t)
 
-	dir := canonical(t, t.TempDir())
-	git(t, dir, "init", "-q")
-	git(t, dir, "config", "user.email", "me@x.io")
-	git(t, dir, "config", "user.name", "me")
+	r := initRepo(t, canonical(t, t.TempDir()), "master")
+	dir := r.dir
 
 	now := time.Now()
 	day := standup.LastWorkingDay(now, standup.DefaultWorkdays(), nil)
 	worked := day.Add(10 * time.Hour)
 
-	commit := exec.Command("git", "commit", "-q", "--allow-empty", "-m", "work")
-	commit.Dir = dir
-	commit.Env = append(os.Environ(),
-		"GIT_AUTHOR_DATE="+worked.Format(time.RFC3339), "GIT_COMMITTER_DATE="+worked.Format(time.RFC3339))
-
-	if out, err := commit.CombinedOutput(); err != nil {
-		t.Fatalf("git commit: %v\n%s", err, out)
-	}
+	r.at(worked.Format(time.RFC3339), "commit", "-q", "--allow-empty", "-m", "work")
 
 	out, err := runApp(t, "-C", dir, "standup", "--json").outErr()
 	if err != nil {

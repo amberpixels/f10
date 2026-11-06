@@ -22,7 +22,8 @@ var testRoot string
 // otherwise leak into the tests. The dir overrides among it are cleared, not
 // pinned, so they follow HOME and a test that moves HOME moves them too.
 var cleared = []string{
-	"F10_STATE_DIR", userDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
+	"XDG_CONFIG_HOME", "F10_STATE_DIR", userDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
+	daemon.NumberFileEnv, "F10_AGENT_MODEL", "F10_AGENT_VIA", "F10_AGENT_SESSION",
 	"F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE",
 	"HERDR_ENV", "HERDR_WORKSPACE_ID",
 	"F10_ROOTS", "F10_STATE_TTL", "F10_STATE_DEBUG",
@@ -56,11 +57,10 @@ func TestMain(m *testing.M) {
 	}
 
 	for name, value := range map[string]string{
-		"HOME":            home,
-		"XDG_CONFIG_HOME": filepath.Join(home, ".config"),
-		ledger.PathEnv:    filepath.Join(testRoot, "f10.db"),
-		"F10_ASKS_DIR":    filepath.Join(testRoot, "asks"),
-		"F10_RUN_DIR":     runDir,
+		"HOME":         home,
+		ledger.PathEnv: filepath.Join(testRoot, "f10.db"),
+		"F10_ASKS_DIR": filepath.Join(testRoot, "asks"),
+		"F10_RUN_DIR":  runDir,
 		// the developer's git config never shapes a fixture
 		"GIT_CONFIG_GLOBAL":   os.DevNull,
 		"GIT_CONFIG_NOSYSTEM": "1",

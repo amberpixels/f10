@@ -29,8 +29,6 @@ func runLore(t *testing.T, args ...string) (string, error) {
 }
 
 func TestLoreVerbs(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("F10_AGENT_MODEL", "")
 	t.Setenv("F10_AGENT_SESSION", "")
 	t.Setenv("F10_SESSION_ID", "")
@@ -159,9 +157,6 @@ func TestLoreVerbs(t *testing.T) {
 }
 
 func TestLoreWhyNoRecord(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
 	dir := t.TempDir()
 
 	for _, args := range [][]string{
@@ -186,9 +181,6 @@ func TestLoreWhyNoRecord(t *testing.T) {
 // An entry added from a task's worktree lands in main's storage root, so
 // removing the worktree when the task finishes keeps it.
 func TestLoreLocalRootIsMains(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
 	main := t.TempDir()
 	wt := filepath.Join(t.TempDir(), "wt")
 
@@ -223,9 +215,6 @@ func TestLoreLocalRootIsMains(t *testing.T) {
 }
 
 func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
 	dir := t.TempDir()
 
 	git(t, dir, "init", "-q")
@@ -241,9 +230,6 @@ func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
 // The lore commands the review, resolve and judge steps run, as they spell
 // them: a settle names only the new status, and validate passes on the lot.
 func TestLoreStepCommands(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
 	dir := t.TempDir()
 
 	for _, args := range [][]string{
@@ -398,8 +384,6 @@ func TestLoreChangeAndShowSeries(t *testing.T) {
 // With no agent flags or F10_AGENT_* set, an entry written inside a Claude
 // Code session names that session and the model its SessionStart recorded.
 func TestLoreAgentFromSession(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("F10_AGENT_MODEL", "")
 	t.Setenv("F10_AGENT_VIA", "")
 	t.Setenv("F10_AGENT_SESSION", "")
