@@ -271,3 +271,12 @@ func TestWithBranchReadsTheRecord(t *testing.T) {
 		t.Errorf("no branch leaves the map: %v %v", got, err)
 	}
 }
+
+// demo writes <storage>/demo/<id>/report.html, so a worktree agent needs it
+// added or every demo asks for permission.
+func TestAgentArgsAddsDemo(t *testing.T) {
+	got := strings.Join(agentArgs(agentctl.Profile{}, "/code/repo/.f10/plans", "/code/repo.GH-1"), " ")
+	if !strings.Contains(got, "--add-dir /code/repo/.f10/demo") {
+		t.Fatalf("agentArgs = %q, want the demo dir added", got)
+	}
+}

@@ -141,6 +141,34 @@ func (t *target) reference(ctx context.Context, explicit string) (ref.Ref, error
 	return ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir}.Find(ctx, explicit)
 }
 
+// idOf turns a task as typed (`117`, a url) into its id, a token that names
+// no task kept as typed. Lookups may start git and every finish row asks, so
+// each token is looked up once, safely across concurrent readers.
+func (t *target) idOf(ctx context.Context) func(string) string {
+	var (
+		mu  sync.Mutex
+		ids = map[string]string{}
+	)
+
+	return func(token string) string {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if id, ok := ids[token]; ok {
+			return id
+		}
+
+		id := token
+		if r, err := t.reference(ctx, token); err == nil {
+			id = r.ID
+		}
+
+		ids[token] = id
+
+		return id
+	}
+}
+
 // host is the CLI the probe settled on; a wrong guess opens the wrong site,
 // so "unknown" refuses rather than picking.
 func (t *target) host() (host, error) {

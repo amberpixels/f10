@@ -193,7 +193,11 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	for _, key := range slices.Sorted(maps.Keys(in.rec.Answers)) {
 		text := in.rec.Answers[key]
 		if key == "" {
-			if !slices.ContainsFunc(in.args.answers, func(a string) bool { return !strings.Contains(a, "=") }) {
+			if !slices.ContainsFunc(in.args.answers, func(a string) bool {
+				_, _, keyed := keyedAnswer(a, tasks)
+
+				return !keyed
+			}) {
 				kept = append(kept, text)
 			}
 
@@ -201,9 +205,9 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		}
 
 		if !slices.ContainsFunc(in.args.answers, func(a string) bool {
-			k, _, ok := strings.Cut(a, "=")
+			id, _, keyed := keyedAnswer(a, tasks)
 
-			return ok && strings.EqualFold(strings.TrimSpace(k), key)
+			return keyed && strings.EqualFold(id, key)
 		}) {
 			kept = append(kept, key+"="+text)
 		}
@@ -466,10 +470,12 @@ func driveList(
 	return nil
 }
 
-// rowFinishedFor checks a record's row, an id as typed, against the task's
-// branches and plan; a row that names no task reads as unfinished.
+// rowFinishedFor checks a record's row, an id as typed, by finishedTask, as
+// drive and status do; a row that names no task, or a git error, reads as
+// unfinished, since a wrong yes hides a halt.
 func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	tr := t.tracker()
 	seen := map[string]bool{} // a task several records list is checked once
 
 	return func(row string) bool {
@@ -478,8 +484,22 @@ func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 			return done
 		}
 
+		seen[id] = false
+
 		r, err := t.reference(ctx, id)
-		seen[id] = err == nil && taskFinished(ctx, main, t.sharedPlansDir(), r.Head().ID)
+		if err != nil {
+			return false
+		}
+
+		head := r.Head()
+
+		branched, err := hasTaskBranch(ctx, main, head.ID)
+		if err != nil || branched {
+			return false
+		}
+
+		info, _ := tr.info(ctx, head) // an unread tracker leaves the archive to decide
+		seen[id] = finishedTask(info, tr.plans, head.ID, false)
 
 		return seen[id]
 	}

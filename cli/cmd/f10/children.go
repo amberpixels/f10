@@ -214,7 +214,7 @@ func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild,
 			return nil, err
 		}
 
-		row.Finished = finishedTask(taskInfo{}, tr.archive, r.ID, branched)
+		row.Finished = finishedTask(taskInfo{}, tr.plans, r.ID, branched)
 		rows = append(rows, row)
 	}
 

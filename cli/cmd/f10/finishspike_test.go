@@ -201,9 +201,9 @@ func TestKeptName(t *testing.T) {
 // An archived spike report counts the task finished, as a plan does.
 func TestFinishedTaskBySpikeReport(t *testing.T) {
 	dir := t.TempDir()
-	writePlan(t, filepath.Join(dir, "GH-1.spike.md"))
+	writePlan(t, filepath.Join(dir, "archive", "GH-1.spike.md"))
 
-	if !finishedTask(taskInfo{}, []string{dir}, "GH-1", false) {
+	if !finishedTask(taskInfo{}, dir, "GH-1", false) {
 		t.Error("an archived spike report did not count")
 	}
 }

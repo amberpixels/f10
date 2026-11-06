@@ -184,7 +184,7 @@ func ledgerFor(events []ledger.Event, id string, resolve func(string) string) le
 		case e.Kind == ledger.TaskFinished:
 			// finish runs from the main checkout, whose session may be on
 			// another task: the id it was given decides
-			if strings.EqualFold(resolve(finishedArg(p, e.Task)), id) {
+			if strings.EqualFold(resolve(e.FinishedTask()), id) {
 				lt.finished = true
 			}
 		case !onTask(e, id):
@@ -203,20 +203,6 @@ func ledgerFor(events []ledger.Event, id string, resolve func(string) string) le
 	}
 
 	return lt
-}
-
-// finishedArg is the task a recorded `f10 finish` named: its first
-// argument that is not a flag, else the session's task.
-func finishedArg(p ledger.Payload, task string) string {
-	args, _ := p["args"].([]any)
-
-	for _, a := range args {
-		if s, ok := a.(string); ok && s != "" && !strings.HasPrefix(s, "-") {
-			return s
-		}
-	}
-
-	return task
 }
 
 // claimRun reads a recorded `f10 state` call back as the run it left.
@@ -652,7 +638,7 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 
 	lt := ledgerFor(src.events, r.ID, src.idOf)
 
-	if !finishedTask(info, tr.archive, r.ID, false) && !lt.finished {
+	if !finishedTask(info, tr.plans, r.ID, false) && !lt.finished {
 		return nil, nil
 	}
 
@@ -724,30 +710,7 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 		return name, root
 	}
 
-	// each finish event is resolved once per child: cache the lookups, which
-	// may start git, across the concurrent gathers
-	var (
-		mu  sync.Mutex
-		ids = map[string]string{}
-	)
-
-	src.resolve = func(token string) string {
-		mu.Lock()
-		defer mu.Unlock()
-
-		if id, ok := ids[token]; ok {
-			return id
-		}
-
-		id := token
-		if r, err := t.reference(ctx, token); err == nil {
-			id = r.ID
-		}
-
-		ids[token] = id
-
-		return id
-	}
+	src.resolve = t.idOf(ctx)
 
 	if h, err := t.host(); err == nil {
 		src.host = &h
