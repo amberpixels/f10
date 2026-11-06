@@ -56,6 +56,10 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("link") {
+		if linkTerminal(cmd.Writer) {
+			path = fileLink(path)
+		}
+
 		_, err := fmt.Fprintln(cmd.Writer, path)
 
 		return err

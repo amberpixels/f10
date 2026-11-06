@@ -587,11 +587,11 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if archived != "" {
-		rows = append(rows, fact{label: "plan", value: archived})
+		rows = append(rows, fact{label: "plan", value: archived, path: true})
 	}
 
 	if handed != "" && hand != nil {
-		rows = append(rows, fact{label: "handoff", value: handed})
+		rows = append(rows, fact{label: "handoff", value: handed, path: true})
 	}
 
 	if reviews != "" {
@@ -618,7 +618,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 			// removing the worktree would delete the report's only copy
 			after.keep = "the worktree and branch stay, since the spike report is not archived"
 		} else {
-			rows = append(rows, fact{label: "spike", value: spikeDst})
+			rows = append(rows, fact{label: "spike", value: spikeDst, path: true})
 		}
 	}
 
