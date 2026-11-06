@@ -214,14 +214,12 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 	ship := readShipment(ctx, *in, events, known)
 
 	if len(runs) == 0 {
-		fb := taskFallback(ctx, *in, others)
-		fb.PR = cmp.Or(fb.PR, ship.pr)
+		fb := taskFallback(ctx, *in, others, ship)
 
 		if cmd.Bool("json") {
 			return true, encodeJSON(cmd.Writer, fb)
 		}
 
-		fb.ship = ship
 		fb.render(cmd.Writer, termWidth(cmd.Writer), linksFor(cmd.Writer, cmd.Bool("plain")).on)
 
 		return true, nil
@@ -249,6 +247,9 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipme
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
 			out[i] = runJSON{Run: r, Agent: agent, Gates: gates[i]}
+			if head != nil {
+				out[i].Verdicts, out[i].Reviews = head.verdicts, head.reviews
+			}
 		}
 
 		return encodeJSON(cmd.Writer, out)
@@ -278,11 +279,29 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipme
 }
 
 // shipment is the facts block a ship report opens with, reprinted from what
-// f10 holds locally, so status never waits on the host or the tracker.
+// f10 holds locally; only a pushed task with no PR recorded asks the host.
 type shipment struct {
 	task, title, url, branch, pr, commit, plan, handoff string
 
-	link bool // the plan and handoff paths link on a terminal; off for --plain
+	prState string // the PR's state, when the host was asked
+	pulled  bool   // the host was asked for the PR, so the fallback asks no more
+
+	verdicts []verdictPath
+	reviews  []reviewPath
+
+	link bool // the file paths link on a terminal; off for --plain
+}
+
+// verdictPath is a judge verdict file the facts block links, by its subject.
+type verdictPath struct {
+	Subject string `json:"subject"` // task, plan or change
+	Path    string `json:"path"`
+}
+
+// reviewPath is a findings file the facts block links, by its round.
+type reviewPath struct {
+	Round string `json:"round"`
+	Path  string `json:"path"`
 }
 
 // facts is the block's rows in the ship report's order, empty ones left out.
@@ -298,6 +317,25 @@ func (s shipment) facts() []fact {
 		{label: "handoff", value: s.handoff, path: s.link},
 	}
 
+	// a subject judged twice takes each file's number, so every label names one file
+	seen := map[string]int{}
+	for _, v := range s.verdicts {
+		seen[v.Subject]++
+	}
+
+	for _, v := range s.verdicts {
+		label := "judge " + v.Subject
+		if seen[v.Subject] > 1 {
+			label += " " + strings.TrimSuffix(filepath.Base(v.Path), ".md")
+		}
+
+		rows = append(rows, fact{label: label, value: v.Path, path: s.link})
+	}
+
+	for _, r := range s.reviews {
+		rows = append(rows, fact{label: "review " + r.Round, value: r.Path, path: s.link})
+	}
+
 	return slices.DeleteFunc(rows, func(f fact) bool { return f.value == "" })
 }
 
@@ -305,12 +343,27 @@ func (s shipment) facts() []fact {
 // the storage root. The commit row waits for a commit of the task's own:
 // before one, HEAD is the base's.
 func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event, known ledger.TaskRef) shipment {
+	lt := ledgerFor(events, in.id, func(token string) string { return token })
+
 	s := shipment{
 		task:   in.id,
 		title:  known.Title,
 		url:    known.URL,
 		branch: in.branch,
-		pr:     ledgerFor(events, in.id, func(token string) string { return token }).pr,
+		pr:     lt.pr,
+	}
+
+	// a PR opened by a script around the host CLI leaves no pr_opened; only a
+	// pushed task asks the host, so a status before the PR stays local
+	if s.pr == "" && lt.pushed && in.host != nil && in.branch != "" {
+		s.pulled = true
+		if p, err := in.host.pull(ctx, in.branch); err == nil {
+			s.pr, s.prState = p.url(), p.status()
+		}
+	}
+
+	if in.storage != "" {
+		s.verdicts, s.reviews = shipFiles(in.storage, in.id)
 	}
 
 	if in.main != "" && in.branch != "" {
@@ -330,6 +383,30 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 	return s
 }
 
+// shipFiles is the task's verdict and findings files. Verdicts from before
+// the open series are an earlier PR's, dropped as the judge row drops them.
+func shipFiles(storage, id string) ([]verdictPath, []reviewPath) {
+	reviews := filepath.Join(storage, "reviews", id)
+	since := seriesStart(reviews)
+
+	var (
+		verdicts []verdictPath
+		rounds   []reviewPath
+	)
+
+	for _, v := range judgeFiles(storage, id) {
+		if !v.at.Before(since) {
+			verdicts = append(verdicts, verdictPath{Subject: v.judged, Path: v.path})
+		}
+	}
+
+	for _, path := range numbered(reviews) {
+		rounds = append(rounds, reviewPath{Round: strings.TrimSuffix(filepath.Base(path), ".md"), Path: path})
+	}
+
+	return verdicts, rounds
+}
+
 // taskStatusInput is what `status <id>` knows about a task before reading
 // any run.
 type taskStatusInput struct {
@@ -339,6 +416,7 @@ type taskStatusInput struct {
 	main    string // the main checkout, where the branch's refs and config live
 	plan    string // where the task's plan would be
 	handoff string // where the task's handoff would be
+	storage string // the storage root holding the task's verdicts and findings
 	host    *host  // nil without a host CLI: no PR row
 	agent   string // the profile the branch records, as typed; "" for the kind's default
 }
@@ -413,6 +491,7 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 		main:    main,
 		plan:    taskPlan(path, t.sharedPlansDir(), r.ID),
 		handoff: taskHandoff(main, t.sharedPlansDir(), r.ID),
+		storage: filepath.Dir(taskPlansDir(main, t.sharedPlansDir())),
 	}
 
 	if h, err := t.host(); err == nil {
@@ -430,12 +509,13 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 
 // taskRuns splits the checkout's runs into the task's own and the rest,
 // since every skill call reseeds its run and the agent may be on another
-// task by now; an empty task is the task's only while fetch has not named it.
+// task by now; an empty task is the task's only in a phase skill's run that
+// fetch has not named yet, since a catchup's run names no task either.
 func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	var own, others []*state.Run
 
 	for _, r := range runs {
-		fresh := r.Task == "" && (r.Capture == "pending" || r.Capture == "skipped")
+		fresh := r.Task == "" && state.OpensPhase(r.Skill) && (r.Capture == "pending" || r.Capture == "skipped")
 
 		if strings.EqualFold(r.Task, id) || fresh {
 			own = append(own, r)
@@ -457,13 +537,19 @@ type fallback struct {
 	PR      string       `json:"pr,omitempty"`
 	PRState string       `json:"pr_state,omitempty"`
 
+	Verdicts []verdictPath `json:"verdicts,omitempty"`
+	Reviews  []reviewPath  `json:"reviews,omitempty"`
+
 	ship shipment // the facts block render opens with; the JSON keeps its keys
 }
 
-// taskFallback gathers the fallback. Status only reads, so a host that
-// cannot answer drops the PR rather than failing the report.
-func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run) fallback {
-	fb := fallback{Task: in.id, Root: in.root, Others: others}
+// taskFallback gathers the fallback around the task's shipment. Status only
+// reads, so a host that cannot answer drops the PR rather than failing the report.
+func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run, ship shipment) fallback {
+	fb := fallback{
+		Task: in.id, Root: in.root, Others: others, PR: ship.pr,
+		Verdicts: ship.verdicts, Reviews: ship.reviews, ship: ship,
+	}
 	if fb.Others == nil {
 		fb.Others = []*state.Run{} // an empty list, not null, for a JSON reader
 	}
@@ -472,7 +558,10 @@ func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run) 
 		fb.Plan = in.plan
 	}
 
-	if in.host != nil {
+	switch {
+	case ship.pulled:
+		fb.PRState = ship.prState
+	case in.host != nil:
 		if p, err := in.host.pull(ctx, in.branch); err == nil && p.url() != "" {
 			fb.PR, fb.PRState = p.url(), p.status()
 		}
@@ -599,6 +688,10 @@ type runJSON struct {
 
 	Agent string `json:"agent,omitempty"`
 	Gates []gate `json:"gates,omitempty"`
+
+	// the task's files, repeated per run as the agent is
+	Verdicts []verdictPath `json:"verdicts,omitempty"`
+	Reviews  []reviewPath  `json:"reviews,omitempty"`
 }
 
 // runGates is each of the task's runs' gates, from the ledger's events.

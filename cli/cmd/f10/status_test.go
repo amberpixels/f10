@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,19 +18,23 @@ import (
 
 func TestTaskRuns(t *testing.T) {
 	ship := &state.Run{Session: "ship", Task: "gh-1", Capture: "prior", Plan: "done", Ship: "blocked", Ask: "1. Merge?"}
-	fresh := &state.Run{Session: "fresh", Capture: "pending", Plan: "pending", Ship: "pending"}
-	fetching := &state.Run{Session: "fetching", Capture: "skipped", Plan: "running", Ship: "pending"}
+	fresh := &state.Run{Session: "fresh", Skill: "ship", Capture: "pending", Plan: "pending", Ship: "pending"}
+	fetching := &state.Run{Session: "fetching", Skill: "ship", Capture: "skipped", Plan: "running", Ship: "pending"}
 	capture := &state.Run{Session: "capture", Capture: "running", Plan: "pending", Ship: "pending"}
 	other := &state.Run{Session: "other", Task: "GH-7", Capture: "done", Plan: "running", Ship: "pending"}
+	// a later session in the worktree that only caught up: `state done` starts
+	// its run fresh, with no skill, since the hook seeds phase skills alone
+	catchup := &state.Run{Session: "catchup", Capture: "pending", Plan: "pending", Ship: "pending", Done: "catchup"}
+	planning := &state.Run{Session: "planning", Skill: "plan", Capture: "pending", Plan: "running", Ship: "pending"}
 
-	own, others := taskRuns([]*state.Run{capture, ship, other, fresh, fetching}, "GH-1")
+	own, others := taskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
 
-	if got := sessions(own); got != "ship fresh fetching" {
+	if got := sessions(own); got != "ship fresh fetching planning" {
 		t.Errorf("own = %q, want the matching task and the runs fetch has not named yet, in order", got)
 	}
 
-	if got := sessions(others); got != "capture other" {
-		t.Errorf("others = %q, want the capture and the other task", got)
+	if got := sessions(others); got != "catchup capture other" {
+		t.Errorf("others = %q, want the catchup, the capture and the other task", got)
 	}
 }
 
@@ -56,7 +61,7 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 	capture := &state.Run{Capture: "running", Plan: "pending", Ship: "pending"}
 
 	var out bytes.Buffer
-	taskFallback(t.Context(), in, []*state.Run{capture}).render(&out, 0, false)
+	taskFallback(t.Context(), in, []*state.Run{capture}, shipment{}).render(&out, 0, false)
 
 	for _, want := range []string{
 		"none for GH-1 in " + root,
@@ -80,7 +85,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	h := newHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: filepath.Join(root, "GH-1.md"), host: &h}
 
-	fb := taskFallback(t.Context(), in, nil)
+	fb := taskFallback(t.Context(), in, nil, shipment{})
 
 	var out bytes.Buffer
 	fb.render(&out, 0, false)
@@ -125,6 +130,10 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 	set := func(phase, status string) func(r *state.Run) {
 		return func(r *state.Run) { _ = r.Set(phase, status, "") }
 	}
+	// what `f10 state done <step>` writes into a session's fresh run
+	done := func(step string) func(r *state.Run) {
+		return func(r *state.Run) { _ = r.SetDone(step, time.Now()) }
+	}
 
 	for _, tc := range []struct {
 		name  string
@@ -141,6 +150,8 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 			seed("ship", "local: GH-1"),
 		}, true},
 		{"capture", []func(*state.Run){seed("capture", "add a retry to the client")}, false},
+		{"catchup alone", []func(*state.Run){done("catchup")}, false},
+		{"plan a bare number", []func(*state.Run){seed("plan", "1")}, true},
 		{"ship a description", []func(*state.Run){seed("ship", "add a retry to the client")}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -384,8 +395,127 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 		task: "GH-1", title: "Add a retry", url: "https://gh/issues/1", branch: "GH-1",
 		pr: "https://gh/pr/9", plan: plan,
 	}
-	if s != want {
+	if !reflect.DeepEqual(s, want) {
 		t.Errorf("shipment = %+v, want %+v", s, want)
+	}
+}
+
+// A PR opened by a script around gh leaves only pushes in the ledger: the
+// PR row comes from the host by branch. With no push the host is not asked.
+func TestReadShipmentPRByBranch(t *testing.T) {
+	f := newFakes(t)
+	f.script(ghView, prOpen)
+
+	h := newHost("gh", t.TempDir())
+	in := taskStatusInput{id: "GH-1", branch: "GH-1", host: &h}
+	pushed := []ledger.Event{{Kind: ledger.Pushed, Task: "GH-1", Payload: ledger.NewPayload(ledger.Payload{})}}
+
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.pr != "" {
+		t.Errorf("an unpushed task has pr %q, want none", s.pr)
+	}
+
+	if f.called(ghView) {
+		t.Error("status asked the host for a task that never pushed")
+	}
+
+	s := readShipment(t.Context(), in, pushed, ledger.TaskRef{})
+	if s.pr != "https://gh/pr/9" {
+		t.Errorf("pr = %q, want the branch's PR", s.pr)
+	}
+
+	// the fallback reuses that answer rather than asking the host again
+	f.script(ghView)
+
+	if fb := taskFallback(t.Context(), in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
+		t.Errorf("fallback pr = %q (%s), want the shipment's PR and its state", fb.PR, fb.PRState)
+	}
+}
+
+// Every verdict of the open series and every findings file gets a row; an
+// earlier PR's verdict stays out, and a subject judged twice takes numbers.
+func TestShipFiles(t *testing.T) {
+	storage := t.TempDir()
+	verdicts := filepath.Join(storage, "verdicts", "FT-1")
+
+	writeFile(t, filepath.Join(verdicts, "1.md"), "task: FT-1\nsubject: task FT-1\nverdict: proceed\nreason: old\n")
+
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(verdicts, "1.md"), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), seriesEnd{pr: "#7"}); err != nil {
+		t.Fatal(err)
+	}
+
+	writeFile(t, filepath.Join(verdicts, "2.md"), "task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: a\n")
+	writeFile(t, filepath.Join(verdicts, "3.md"), "task: FT-1\nsubject: branch x\nverdict: proceed\nreason: b\n")
+	writeFile(t, filepath.Join(verdicts, "4.md"), "task: FT-1\nsubject: pr 9\nverdict: proceed\nreason: c\n")
+	writeFile(t, filepath.Join(storage, "reviews", "FT-1", "1.md"), "# Review\n")
+	writeFile(t, filepath.Join(storage, "reviews", "FT-1", "2.md"), "# Review\n")
+
+	s := shipment{task: "FT-1"}
+	s.verdicts, s.reviews = shipFiles(storage, "FT-1")
+
+	var out bytes.Buffer
+	if err := writeReport(&out, s.facts(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "task:              FT-1\n" +
+		"judge plan:        " + filepath.Join(verdicts, "2.md") + "\n" +
+		"judge change 3:    " + filepath.Join(verdicts, "3.md") + "\n" +
+		"judge change 4:    " + filepath.Join(verdicts, "4.md") + "\n" +
+		"review 1:          " + filepath.Join(storage, "reviews", "FT-1", "1.md") + "\n" +
+		"review 2:          " + filepath.Join(storage, "reviews", "FT-1", "2.md") + "\n"
+	if out.String() != want {
+		t.Errorf("block =\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// --json carries the same files: on each run under a shipment, and on the
+// fallback.
+func TestStatusJSONCarriesTheFiles(t *testing.T) {
+	head := shipment{
+		task:     "GH-1",
+		verdicts: []verdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
+		reviews:  []reviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
+	}
+
+	var out bytes.Buffer
+
+	cmd := statusCommand()
+	cmd.Writer = &out
+
+	if err := cmd.Set("json", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "done"}
+	if err := writeRuns(cmd, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	var runs []runJSON
+	if err := json.Unmarshal(out.Bytes(), &runs); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(runs) != 1 || !reflect.DeepEqual(runs[0].Verdicts, head.verdicts) ||
+		!reflect.DeepEqual(runs[0].Reviews, head.reviews) {
+		t.Errorf("run JSON lacks the files:\n%s", out.String())
+	}
+
+	out.Reset()
+
+	fb := fallback{Task: "GH-1", Others: []*state.Run{}, Verdicts: head.verdicts, Reviews: head.reviews}
+	if err := encodeJSON(&out, fb); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "/s/verdicts/GH-1/1.md") || !strings.Contains(got, "/s/reviews/GH-1/1.md") {
+		t.Errorf("fallback JSON lacks the files:\n%s", got)
 	}
 }
 

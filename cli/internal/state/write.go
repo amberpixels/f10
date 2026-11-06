@@ -584,6 +584,12 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	return true
 }
 
+// OpensPhase reports whether the skill runs a phase (debug captures), so its
+// run may be a task's before fetch names one.
+func OpensPhase(skill string) bool {
+	return skill == "debug" || slices.Contains(Phases, skill)
+}
+
 func settled(status string) bool {
 	return status == "done" || status == "prior" || status == "partial"
 }
