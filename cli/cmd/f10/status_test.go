@@ -63,7 +63,7 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		"- · capture running",
 		plan,
 		"pr:    ↗ https://gh/pr/9",
-		"open",
+		"pr state        open",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
@@ -410,5 +410,26 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 
 	if strings.Count(got, "GH-1") != 1 {
 		t.Errorf("the task prints more than once:\n%s", got)
+	}
+}
+
+// The commit row waits for a commit of the branch's own: a fresh branch's
+// HEAD is its base's, and a sha there would name nothing the task made.
+func TestReadShipmentCommitRow(t *testing.T) {
+	r := newCatchupRepo(t)
+
+	r.at(before, "checkout", "-q", "-b", "FT-2/b", "origin/main")
+
+	in := taskStatusInput{id: "FT-2", branch: "FT-2/b", main: r.dir}
+
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.commit != "" {
+		t.Errorf("a fresh branch has commit %q, want none", s.commit)
+	}
+
+	r.commit(during, "c.go", "package main // c\n", "c")
+
+	want := r.at(during, "rev-parse", "--short", "HEAD")
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.commit != want {
+		t.Errorf("commit = %q, want the branch head %q", s.commit, want)
 	}
 }

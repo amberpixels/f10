@@ -47,6 +47,6 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
    Stop.
 4. No `ask` row: the status is the whole answer.
    Stop.
-   A task with no live run of its own prints the facts block, with its `plan` and `pr` rows where they exist, then `run none for <id>` and what the agent in its checkout is on now (`agent`).
+   A task with no live run of its own prints the facts block, with its `plan` and `pr` rows where they exist, then `run none for <id>`, what the agent in its checkout is on now (`agent`), and the PR's state (`pr state`).
    That block never carries an `ask` row.
    A finished task, its branch gone, prints a one-row tree, `done` with the merged PR, its gates as lines under it.

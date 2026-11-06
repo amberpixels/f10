@@ -475,9 +475,9 @@ task:      FT-414
 title:     Show the shipment facts block in f10 status and relay it as yaml
 url:     ↗ https://github.com/amberpixels/f10/issues/414
 branch:    FT-414/show-the-shipment-facts-block-in-f10
-pr:      ↗ https://github.com/amberpixels/f10/pull/415
+pr:      ↗ https://github.com/amberpixels/f10/pull/416
 commit:    1a2b3c4
-plan:      ~/code/f10/.f10/plans/FT-414.md
+plan:      /home/me/code/f10/.f10/plans/FT-414.md
 ```
 
 Every row is read locally, and a row with no value is left out: the title and the url from the task refs f10 already read (a run that lost its url gets it back from there, in `--json` too), the PR from the ledger's `pr_opened` event, the head's short sha once the branch has a commit of its own, and the plan and the handoff when their files exist.

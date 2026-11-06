@@ -497,7 +497,7 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 	}
 
 	if fb.PRState != "" {
-		headerRow(w, "pr", fb.PRState, limit, plain)
+		headerRow(w, "pr state", fb.PRState, limit, plain)
 	}
 }
 
