@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -61,7 +62,8 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		"none for GH-1 in " + root,
 		"- · capture running",
 		plan,
-		"https://gh/pr/9 (open)",
+		"pr:    ↗ https://gh/pr/9",
+		"pr state        open",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
@@ -83,7 +85,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	var out bytes.Buffer
 	fb.render(&out, 0, false)
 
-	for _, absent := range []string{"agent", "plan", "pr "} {
+	for _, absent := range []string{"agent", "plan", "pr"} {
 		if strings.Contains(out.String(), absent) {
 			t.Errorf("output has a %q row:\n%s", absent, out.String())
 		}
@@ -327,5 +329,107 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 		if got := checkoutTaskID(t.Context(), tg); got != want {
 			t.Errorf("checkoutTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
 		}
+	}
+}
+
+// The ship report's rows in its order, each only when it has a value, the
+// marker on the two urls alone.
+func TestShipmentFacts(t *testing.T) {
+	s := shipment{
+		task:   "GH-1",
+		title:  "Add a retry",
+		url:    "https://gh/issues/1",
+		branch: "GH-1/add-a-retry",
+		pr:     "https://gh/pr/9",
+		plan:   "/store/plans/GH-1.md",
+	}
+
+	var out bytes.Buffer
+	if err := writeReport(&out, s.facts(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "task:      GH-1\n" +
+		"title:     Add a retry\n" +
+		"url:     ↗ https://gh/issues/1\n" +
+		"branch:    GH-1/add-a-retry\n" +
+		"pr:      ↗ https://gh/pr/9\n" +
+		"plan:      /store/plans/GH-1.md\n"
+	if out.String() != want {
+		t.Errorf("block =\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// The url and PR come from the ledger, the plan and handoff only when their
+// files exist, and no commit row without the main checkout's refs to read.
+func TestReadShipmentFromTheLedger(t *testing.T) {
+	dir := t.TempDir()
+	plan := filepath.Join(dir, "GH-1.md")
+
+	if err := os.WriteFile(plan, []byte("# GH-1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	in := taskStatusInput{id: "GH-1", branch: "GH-1", plan: plan, handoff: filepath.Join(dir, "none.md")}
+	events := []ledger.Event{{
+		Kind:    ledger.PROpened,
+		Task:    "GH-1",
+		Payload: ledger.NewPayload(ledger.Payload{"url": "https://gh/pr/9"}),
+	}}
+
+	known := ledger.TaskRef{ID: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1"}
+	s := readShipment(t.Context(), in, events, known)
+
+	want := shipment{
+		task: "GH-1", title: "Add a retry", url: "https://gh/issues/1", branch: "GH-1",
+		pr: "https://gh/pr/9", plan: plan,
+	}
+	if s != want {
+		t.Errorf("shipment = %+v, want %+v", s, want)
+	}
+}
+
+// A headed run prints the block once and drops its own task and url rows.
+func TestWriteRunsUnderTheShipment(t *testing.T) {
+	r := &state.Run{Task: "GH-1", URL: "https://gh/issues/1", Capture: "prior", Plan: "done", Ship: "done"}
+	head := shipment{task: "GH-1", url: "https://gh/issues/1"}
+
+	var out bytes.Buffer
+
+	cmd := statusCommand()
+	cmd.Writer = &out
+
+	if err := writeRuns(cmd, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if !strings.HasPrefix(got, "task:    GH-1\nurl:   ↗ https://gh/issues/1\n\n") {
+		t.Errorf("output does not open with the block:\n%s", got)
+	}
+
+	if strings.Count(got, "GH-1") != 1 {
+		t.Errorf("the task prints more than once:\n%s", got)
+	}
+}
+
+// The commit row waits for a commit of the branch's own: a fresh branch's
+// HEAD is its base's, and a sha there would name nothing the task made.
+func TestReadShipmentCommitRow(t *testing.T) {
+	r := newCatchupRepo(t)
+
+	r.at(before, "checkout", "-q", "-b", "FT-2/b", "origin/main")
+
+	in := taskStatusInput{id: "FT-2", branch: "FT-2/b", main: r.dir}
+
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.commit != "" {
+		t.Errorf("a fresh branch has commit %q, want none", s.commit)
+	}
+
+	r.commit(during, "c.go", "package main // c\n", "c")
+
+	want := r.at(during, "rev-parse", "--short", "HEAD")
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.commit != want {
+		t.Errorf("commit = %q, want the branch head %q", s.commit, want)
 	}
 }

@@ -328,7 +328,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A plan that cannot be moved keeps the worktree and its branch, since such a worktree may hold the only copy and a rerun finds the task by its branch.
    **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
    A merge reports the archived path as a `handoff` row.
-   On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8), as `f10 start`'s `plan` row, the `plan` row of `f10 status <id>` and the `wrote` row of `f10 init` do, and a drive's copy of the report links when the drive writes to a terminal.
+   On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8), as `f10 start`'s `plan` row, the `plan` and `handoff` rows of `f10 status <id>` and the `wrote` row of `f10 init` do, and a drive's copy of the report links when the drive writes to a terminal.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
@@ -467,6 +467,21 @@ It applies only to the tree; a run's block prints as without it.
 | `not started` | nothing recorded; a task no drive lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
+
+A task's run block, and the `run none for` block of a task whose checkout's agent is on something else, opens with the ship report's facts block, so a shipped task's facts can be printed again after the conversation moves on:
+
+```
+task:      FT-414
+title:     Show the shipment facts block in f10 status and relay it as yaml
+url:     ↗ https://github.com/amberpixels/f10/issues/414
+branch:    FT-414/show-the-shipment-facts-block-in-f10
+pr:      ↗ https://github.com/amberpixels/f10/pull/416
+commit:    1a2b3c4
+plan:      /home/me/code/f10/.f10/plans/FT-414.md
+```
+
+Every row is read locally, and a row with no value is left out: the title and the url from the task refs f10 already read (a run that lost its url gets it back from there, in `--json` too), the PR from the ledger's `pr_opened` event, the head's short sha once the branch has a commit of its own, and the plan and the handoff when their files exist.
+The run's step rows follow it after a blank line, and `--plain` prints the same block.
 
 `f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the one `done` row of a task with no branch left prints them as lines under it:
 

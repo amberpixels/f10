@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -137,7 +138,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	return writeRuns(cmd, runs, make([][]gate, len(runs)), showRoot, "", now)
+	return writeRuns(cmd, runs, make([][]gate, len(runs)), nil, showRoot, "", now)
 }
 
 // sessionTaskID is the task the session's run names, "" for none.
@@ -208,24 +209,42 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 
 	runs, others := taskRuns(inRoot(live, in.root), in.id)
 
+	events := readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot))
+	known := ledger.LookupRefs(ctx, t.refProject(ctx), []string{in.id})[in.id]
+	ship := readShipment(ctx, *in, events, known)
+
 	if len(runs) == 0 {
 		fb := taskFallback(ctx, *in, others)
+		fb.PR = cmp.Or(fb.PR, ship.pr)
 
 		if cmd.Bool("json") {
 			return true, encodeJSON(cmd.Writer, fb)
 		}
 
+		fb.ship = ship
 		fb.render(cmd.Writer, termWidth(cmd.Writer), linksFor(cmd.Writer, cmd.Bool("plain")).on)
 
 		return true, nil
 	}
 
-	return true, writeRuns(cmd, runs, runGates(ctx, t, *in, runs), true, in.agent, now)
+	// every skill call reseeds its run, which drops the url fetch recorded
+	for _, r := range runs {
+		r.URL = cmp.Or(r.URL, known.URL)
+	}
+
+	ship.url = cmp.Or(runs[0].URL, ship.url)
+	ship.link = linksFor(cmd.Writer, cmd.Bool("plain")).on
+
+	return true, writeRuns(cmd, runs, runGates(ctx, t, *in, events, runs), &ship, true, in.agent, now)
 }
 
 // writeRuns prints runs, each with its gates, or encodes them under --json.
-// agent is the profile the task's branch records, "" for the kind's default.
-func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot bool, agent string, now time.Time) error {
+// head is the task's shipment, printed once above the runs in place of each
+// run's task and url rows; nil for runs listed without a task. agent is the
+// profile the task's branch records, "" for the kind's default.
+func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipment, showRoot bool, agent string,
+	now time.Time,
+) error {
 	if cmd.Bool("json") {
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
@@ -237,26 +256,91 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, showRoot boo
 
 	limit := termWidth(cmd.Writer)
 
+	if head != nil {
+		if err := writeReport(cmd.Writer, head.facts(), nil); err != nil {
+			return err
+		}
+	}
+
 	for i, r := range runs {
-		if i > 0 {
+		if i > 0 || head != nil {
 			fmt.Fprintln(cmd.Writer)
 		}
 
-		renderRun(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
+		if head != nil {
+			renderRunRows(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
+		} else {
+			renderRun(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
+		}
 	}
 
 	return nil
 }
 
+// shipment is the facts block a ship report opens with, reprinted from what
+// f10 holds locally, so status never waits on the host or the tracker.
+type shipment struct {
+	task, title, url, branch, pr, commit, plan, handoff string
+
+	link bool // the plan and handoff paths link on a terminal; off for --plain
+}
+
+// facts is the block's rows in the ship report's order, empty ones left out.
+func (s shipment) facts() []fact {
+	rows := []fact{
+		{label: "task", value: s.task},
+		{label: "title", value: s.title},
+		{label: "url", value: s.url, url: true},
+		{label: "branch", value: s.branch},
+		{label: "pr", value: s.pr, url: true},
+		{label: "commit", value: s.commit},
+		{label: "plan", value: s.plan, path: s.link},
+		{label: "handoff", value: s.handoff, path: s.link},
+	}
+
+	return slices.DeleteFunc(rows, func(f fact) bool { return f.value == "" })
+}
+
+// readShipment fills the shipment from the ledger's task ref and PR, git and
+// the storage root. The commit row waits for a commit of the task's own:
+// before one, HEAD is the base's.
+func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event, known ledger.TaskRef) shipment {
+	s := shipment{
+		task:   in.id,
+		title:  known.Title,
+		url:    known.URL,
+		branch: in.branch,
+		pr:     ledgerFor(events, in.id, func(token string) string { return token }).pr,
+	}
+
+	if in.main != "" && in.branch != "" {
+		if def, err := localDefault(ctx, in.main); err == nil && baseHasCode(ctx, in.main, in.branch, def) {
+			s.commit = gitx.Out(ctx, in.main, "rev-parse", "--short", "refs/heads/"+in.branch)
+		}
+	}
+
+	if exists(in.plan) {
+		s.plan = in.plan
+	}
+
+	if exists(in.handoff) {
+		s.handoff = in.handoff
+	}
+
+	return s
+}
+
 // taskStatusInput is what `status <id>` knows about a task before reading
 // any run.
 type taskStatusInput struct {
-	id     string
-	branch string
-	root   string // the checkout holding branch
-	plan   string // where the task's plan would be
-	host   *host  // nil without a host CLI: no PR row
-	agent  string // the profile the branch records, as typed; "" for the kind's default
+	id      string
+	branch  string
+	root    string // the checkout holding branch
+	main    string // the main checkout, where the branch's refs and config live
+	plan    string // where the task's plan would be
+	handoff string // where the task's handoff would be
+	host    *host  // nil without a host CLI: no PR row
+	agent   string // the profile the branch records, as typed; "" for the kind's default
 }
 
 // taskRoute is what `status <id>` can report on a task, read lazily.
@@ -323,10 +407,12 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 	}
 
 	in := taskStatusInput{
-		id:     r.ID,
-		branch: name,
-		root:   path,
-		plan:   taskPlan(path, t.sharedPlansDir(), r.ID),
+		id:      r.ID,
+		branch:  name,
+		root:    path,
+		main:    main,
+		plan:    taskPlan(path, t.sharedPlansDir(), r.ID),
+		handoff: taskHandoff(main, t.sharedPlansDir(), r.ID),
 	}
 
 	if h, err := t.host(); err == nil {
@@ -370,6 +456,8 @@ type fallback struct {
 	Plan    string       `json:"plan,omitempty"`
 	PR      string       `json:"pr,omitempty"`
 	PRState string       `json:"pr_state,omitempty"`
+
+	ship shipment // the facts block render opens with; the JSON keeps its keys
 }
 
 // taskFallback gathers the fallback. Status only reads, so a host that
@@ -397,24 +485,19 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
-	headerRow(w, "task", fb.Task, limit, plain)
+	s := fb.ship
+	s.task, s.plan, s.pr, s.link = fb.Task, fb.Plan, cmp.Or(fb.PR, s.pr), link
+	_ = writeReport(w, s.facts(), nil)
+
+	fmt.Fprintln(w)
 	headerRow(w, "run", "none for "+fb.Task+" in "+fb.Root, limit, faint)
 
 	for _, r := range fb.Others {
 		headerRow(w, "agent", valueOr(r.Task)+" · "+currentPhase(r), limit, plain)
 	}
 
-	if fb.Plan != "" {
-		target := ""
-		if link {
-			target = fileURL(fb.Plan)
-		}
-
-		linkedHeaderRow(w, "plan", fb.Plan, target, limit, plain)
-	}
-
-	if fb.PR != "" {
-		headerRow(w, "pr", fb.PR+" ("+fb.PRState+")", limit, plain)
+	if fb.PRState != "" {
+		headerRow(w, "pr state", fb.PRState, limit, plain)
 	}
 }
 
@@ -518,9 +601,9 @@ type runJSON struct {
 	Gates []gate `json:"gates,omitempty"`
 }
 
-// runGates is each of the task's runs' gates, the ledger read once.
-func runGates(ctx context.Context, t *target, in taskStatusInput, runs []*state.Run) [][]gate {
-	src := newGateSource(t, readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)), in.host)
+// runGates is each of the task's runs' gates, from the ledger's events.
+func runGates(ctx context.Context, t *target, in taskStatusInput, events []ledger.Event, runs []*state.Run) [][]gate {
+	src := newGateSource(t, events, in.host)
 	out := make([][]gate, len(runs))
 
 	for i, r := range runs {
@@ -553,10 +636,17 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 // only when listing: for one session it is the directory you are in.
 func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
-	faint := lipgloss.NewStyle().Faint(true)
 
 	headerRow(w, "task", valueOr(r.Task), limit, plain)
 	headerRow(w, "url", valueOr(r.URL), limit, plain)
+	renderRunRows(w, r, gates, showRoot, agent, now, limit)
+}
+
+// renderRunRows is a run's rows after its task and url: the step rows a
+// shipment block heads.
+func renderRunRows(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
+	plain := lipgloss.NewStyle()
+	faint := lipgloss.NewStyle().Faint(true)
 
 	if agent != "" {
 		headerRow(w, "agent", agent, limit, faint)
