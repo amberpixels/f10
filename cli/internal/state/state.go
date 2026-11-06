@@ -27,6 +27,7 @@ const (
 	sessionEnv       = "F10_SESSION_ID"
 	claudeSessionEnv = "CLAUDE_CODE_SESSION_ID"
 	fileExt          = ".state"
+	lockExt          = ".lock" // beside the session's .state, which Update holds
 )
 
 // Phases in the order the badge draws them.

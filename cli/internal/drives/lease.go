@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/flock"
 )
 
 // Dir is the drives directory under a storage root.
@@ -88,15 +90,15 @@ func AcquireAs(root, key string, h Holder) (*Lease, error) {
 	}
 
 	for i := 0; ; i++ {
-		err = lockExclusive(f)
-		if err == nil || !errors.Is(err, errHeld) || i >= retries {
+		err = flock.Exclusive(f)
+		if err == nil || !errors.Is(err, flock.ErrHeld) || i >= retries {
 			break
 		}
 
 		time.Sleep(retryDelay)
 	}
 
-	if errors.Is(err, errHeld) {
+	if errors.Is(err, flock.ErrHeld) {
 		h := readHolder(path)
 		_ = f.Close()
 
@@ -154,7 +156,7 @@ func (l *Lease) Release() {
 		return
 	}
 
-	_ = unlock(l.f)
+	_ = flock.Unlock(l.f)
 	_ = l.f.Close()
 	l.f = nil
 }
@@ -170,15 +172,15 @@ func Probe(root, key string) (Holder, bool) {
 	}
 	defer f.Close()
 
-	if err := lockShared(f); err != nil {
-		if errors.Is(err, errHeld) {
+	if err := flock.Shared(f); err != nil {
+		if errors.Is(err, flock.ErrHeld) {
 			return readHolder(path), true
 		}
 
 		return Holder{}, false
 	}
 
-	_ = unlock(f)
+	_ = flock.Unlock(f)
 
 	return Holder{}, false
 }

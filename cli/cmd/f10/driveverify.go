@@ -165,17 +165,20 @@ func writeLog(path string, out []byte) error {
 // take minutes and the loop polls every task.
 type verifyJob struct {
 	done chan struct{}
+	stop context.CancelFunc // ends the verify when its run ends first
 	res  verifyRun
 	err  error
 }
 
-func startVerifyJob(run func() (verifyRun, error)) *verifyJob {
-	job := &verifyJob{done: make(chan struct{})}
+func startVerifyJob(ctx context.Context, run func(context.Context) (verifyRun, error)) *verifyJob {
+	ctx, stop := context.WithCancel(ctx)
+	job := &verifyJob{done: make(chan struct{}), stop: stop}
 
 	go func() {
 		defer close(job.done)
+		defer stop()
 
-		job.res, job.err = run()
+		job.res, job.err = run(ctx)
 	}()
 
 	return job

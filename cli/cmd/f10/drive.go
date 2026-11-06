@@ -3137,6 +3137,11 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
 	r.end, r.queued = &res, false
 
+	// a cancelled or halted run takes its catchup's verify with it
+	if r.verifying != nil {
+		r.verifying.stop()
+	}
+
 	// a finished task's branch took the record with it
 	if res.row != rowFinished {
 		in.clearFinish(ctx, r)

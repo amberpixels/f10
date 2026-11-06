@@ -655,3 +655,32 @@ func TestInProgressIgnoresALeftoverRebaseHead(t *testing.T) {
 		t.Error("a finished rebase whose REBASE_HEAD was left behind reads as in progress")
 	}
 }
+
+// Branch tells a detached HEAD, which is no branch, from a git that failed.
+func TestBranchTellsDetachedFromFailed(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"},
+		{"-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init"},
+	} {
+		if _, err := Exec(t.Context(), dir, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got, err := Branch(t.Context(), dir); got != "main" || err != nil {
+		t.Errorf("on main = %q, %v", got, err)
+	}
+
+	if _, err := Exec(t.Context(), dir, "checkout", "-q", "--detach"); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := Branch(t.Context(), dir); got != "" || err != nil {
+		t.Errorf("detached = %q, %v; want no branch and no error", got, err)
+	}
+
+	if _, err := Branch(t.Context(), filepath.Join(dir, "missing")); err == nil {
+		t.Error("a directory git cannot read gave no error")
+	}
+}

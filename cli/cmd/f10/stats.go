@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"text/tabwriter"
@@ -42,9 +41,20 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		return cli.Exit("f10 stats: --since: "+err.Error(), 2)
 	}
 
-	cwd, err := os.Getwd()
+	t, err := targetFor(ctx, cmd)
 	if err != nil {
-		return fmt.Errorf("stats: %w", err)
+		return err
+	}
+
+	// resolved before the ledger is read, so 414 matches FT-414 and a typo errors
+	var task string
+	if arg := strings.TrimSpace(cmd.Args().First()); arg != "" {
+		r, err := t.reference(ctx, arg)
+		if err != nil {
+			return fmt.Errorf("stats: %w", err)
+		}
+
+		task = r.ID
 	}
 
 	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
@@ -60,12 +70,11 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 
 	defer l.Close()
 
-	events, err := l.List(ctx, ledger.Filter{Project: ledger.Where(ctx, cwd).Project})
+	events, err := l.List(ctx, ledger.Filter{Project: ledger.Where(ctx, t.dir).Project})
 	if err != nil {
 		return err
 	}
 
-	task := strings.TrimSpace(cmd.Args().First())
 	rows := statRows(events, task, time.Now().Add(-since))
 
 	if err := writeStats(cmd.Writer, rows); err != nil || task == "" || len(rows) == 0 {

@@ -136,22 +136,24 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			return nil
 		}
 
-		r, err := state.Load(state.Path(env.StateDir, sid))
-		if err != nil {
-			return nil
-		}
+		var stop *observe.SessionStopped
 
-		// read before the backstop: the ledger keeps where the run stopped,
-		// never the done the backstop infers
-		stop := stopped(r)
+		_ = state.Update(env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, loaded bool) (bool, error) {
+			if !loaded {
+				return false, nil
+			}
 
-		if r.Backstop() {
-			_ = r.Save(env.StateDir, env.now())
+			// read before the backstop: the ledger keeps where the run stopped,
+			// never the done the backstop infers
+			stop = stopped(r)
 
-			if stop != nil {
+			backstop := r.Backstop()
+			if backstop && stop != nil {
 				stop.Backstop = true
 			}
-		}
+
+			return backstop, nil
+		})
 
 		if stop != nil {
 			notify(ctx, env, sid, p.Cwd, stop)
@@ -244,15 +246,19 @@ func stopped(r *state.Run) *observe.SessionStopped {
 	return &observe.SessionStopped{Task: r.Task, Phase: phase, Status: r.Status(phase), Leaf: r.Leaf}
 }
 
+// hookLockWait bounds a hook's wait on another writer of its session; the
+// badge is best-effort, so a hook that waits it out drops its one update
+// rather than saving over a newer one.
+const hookLockWait = 2 * time.Second
+
 func seed(env *Env, sid, skill, args, cwd string) {
 	if skill == "" || sid == "" {
 		return
 	}
 
-	r, _ := state.LoadOrFresh(env.StateDir, sid)
-	if r.Seed(skill, args, cwd) {
-		_ = r.Save(env.StateDir, env.now())
-	}
+	_ = state.Update(env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, _ bool) (bool, error) {
+		return r.Seed(skill, args, cwd), nil
+	})
 }
 
 // observed turns a PostToolUse payload into observations.

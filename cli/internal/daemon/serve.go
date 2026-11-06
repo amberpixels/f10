@@ -496,7 +496,12 @@ func (s *Server) shutdown(mode stopMode) {
 			}
 		}
 
-		s.Log.Printf("drive %d did not drain: stopping it", c.Drive)
+		// numbered may write the number while the drain waits
+		s.mu.Lock()
+		n := c.Drive
+		s.mu.Unlock()
+
+		s.Log.Printf("drive %d did not drain: stopping it", n)
 		_ = c.cmd.Process.Signal(syscall.SIGTERM)
 		<-c.done
 	}

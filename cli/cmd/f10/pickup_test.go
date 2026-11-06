@@ -658,3 +658,26 @@ func TestSyncPickup(t *testing.T) {
 		})
 	}
 }
+
+// Pickup reads a closing keyword exactly where finish rewrites one, so a
+// task finish keeps open is the task pickup finds.
+func TestClosingKeywordsAgree(t *testing.T) {
+	for _, body := range []string{
+		"Closes #12", "closed #12", "Closing #12", "Fixes #12", "fixing #12", "Resolves: #12",
+		"Resolving #12", "Implements #12", "implemented #12",
+		"Closes https://github.com/o/r/issues/12", "Resolves https://gitlab.com/o/r/-/work_items/12",
+	} {
+		rewritten := keepOpen(body, "12") != body
+
+		host := "https://github.com/o/r/pull/30"
+		if strings.Contains(body, "gitlab") {
+			host = "https://gitlab.com/o/r/-/merge_requests/30"
+		}
+
+		picked := pickupTask("GH", true, pull{URL: host, Body: body, HeadRefName: "x"}) == "GH-12"
+
+		if !rewritten || !picked {
+			t.Errorf("%q: finish rewrites %v, pickup finds %v; want both", body, rewritten, picked)
+		}
+	}
+}

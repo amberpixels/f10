@@ -637,6 +637,8 @@ func TestSeedRecordsTheTask(t *testing.T) {
 		{"ship", "FT-1+FT-2 focus on the retry", "FT-1"},
 		{"plan", "FT-4 && /f10:ship FT-4 --driven", "FT-4"},
 		{"ship", "plans/FT-5.md", "FT-5"},
+		{"plan", "K8S-12", "K8S-12"},
+		{"ship", "k8s-3 extra steering", "K8S-3"},
 		{"plan", "195", ""},
 		{"plan", "https://github.com/acme/widgets/issues/9", ""},
 		{"ship", "add a retry to the client", ""},
@@ -655,6 +657,19 @@ func TestSeedRecordsTheTask(t *testing.T) {
 				t.Errorf("Capture = running for a reference")
 			}
 		})
+	}
+}
+
+// Plan then ship on an id whose prefix holds a digit keeps the plan phase,
+// as it does for a letter-only prefix.
+func TestSeedChainsADigitPrefix(t *testing.T) {
+	r := Fresh("s")
+	r.Seed("plan", "K8S-12", "")
+	r.Plan = "done"
+	r.Seed("ship", "K8S-12", "")
+
+	if r.Task != "K8S-12" || r.Plan != "done" {
+		t.Errorf("task %q plan %q, want K8S-12 and the plan kept done", r.Task, r.Plan)
 	}
 }
 

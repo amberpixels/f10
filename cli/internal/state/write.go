@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/flock"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -64,6 +65,47 @@ var fallbackRoot = func() string {
 	}
 
 	return wd
+}
+
+// ErrBusy is a session lock another writer held for the whole wait.
+var ErrBusy = errors.New("state: the session is being written")
+
+// Update loads the session's run, applies change and saves it, all under
+// the session's lock, so the hooks and f10 state, separate processes, never
+// save a stale copy over each other. change reports whether to save; loaded
+// says a file was read. A lock not taken within wait is ErrBusy.
+func Update(
+	dir, session string,
+	wait time.Duration,
+	now time.Time,
+	change func(r *Run, loaded bool) (bool, error),
+) error {
+	if dir == "" || session == "" {
+		return errors.New("state: no directory or session to update")
+	}
+
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("state: %w", err)
+	}
+
+	release, err := flock.Wait(Path(dir, session)+lockExt, wait)
+	if errors.Is(err, flock.ErrHeld) {
+		return ErrBusy
+	}
+
+	if err != nil {
+		return fmt.Errorf("state: %w", err)
+	}
+	defer release()
+
+	r, loaded := LoadOrFresh(dir, session)
+
+	save, err := change(r, loaded)
+	if err != nil || !save {
+		return err
+	}
+
+	return r.Save(dir, now)
 }
 
 // Save writes the run as the status line's bash renderer reads it, through a
@@ -189,7 +231,9 @@ func Prune(dir string, now time.Time) {
 		name := e.Name()
 		if e.IsDir() ||
 			!slices.ContainsFunc(
-				[]string{fileExt, ".conventions", ".started", ".model", ".wait", promptExt, launchesExt, asksExt},
+				[]string{
+					fileExt, lockExt, ".conventions", ".started", ".model", ".wait", promptExt, launchesExt, asksExt,
+				},
 				func(ext string) bool { return strings.HasSuffix(name, ext) },
 			) {
 			continue
@@ -440,7 +484,7 @@ func (r *Run) Backstop() bool {
 }
 
 var (
-	idToken       = regexp.MustCompile(`^[A-Za-z]+-\d+$`)
+	idToken       = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*-\d+$`)
 	numberToken   = regexp.MustCompile(`^\d+$`)
 	pipelineWord  = regexp.MustCompile(`^\s*[A-Za-z][A-Za-z0-9_-]*:\s+(.*)$`)
 	dryRunPattern = "--dry-run"

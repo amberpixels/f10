@@ -8,6 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -86,10 +87,21 @@ func planFile(ctx context.Context, cmd *cli.Command) (*target, string, error) {
 		return nil, "", err
 	}
 
-	path := filepath.Join(t.pb.PlansDir, r.ID+".md")
+	// a bundle's plan is the lead's file, whichever member was named
+	path := filepath.Join(t.pb.PlansDir, r.Head().ID+".md")
 	if _, err := os.Stat(path); err != nil {
-		return nil, "", fmt.Errorf("no plan for %s at %s", r.ID, path)
+		return nil, "", fmt.Errorf("no plan for %s at %s", memberLabel(r), path)
 	}
 
 	return t, path, nil
+}
+
+// memberLabel names what was typed, and the lead it was read through when
+// that was a rider.
+func memberLabel(r ref.Ref) string {
+	if lead := r.Head().ID; lead != r.ID {
+		return r.ID + " (bundle lead " + lead + ")"
+	}
+
+	return r.ID
 }
