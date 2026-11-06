@@ -531,6 +531,7 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 		events: events,
 		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
 		flows:  t.eff.Flows,
+		labels: t.eff.FlowLabels,
 		review: t.eff.Review,
 		store:  &lore.Store{Root: loreRootFor(t)},
 		host:   h,
@@ -565,7 +566,7 @@ func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent str
 	}
 
 	for _, g := range gates {
-		headerRow(w, "  "+g.Step, g.text(), limit, statusStyle(g.style()))
+		headerRow(w, "  "+g.shown(), g.text(), limit, statusStyle(g.style()))
 	}
 
 	if r.Note != "" {

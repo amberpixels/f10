@@ -30,6 +30,7 @@ type Window struct {
 	Task    string
 	Session string
 	Step    string
+	Label   string // the flow entry's display name, "" for none
 	From    time.Time
 	To      time.Time
 	Active  time.Duration
@@ -53,7 +54,10 @@ func Claim(e ledger.Event) (string, string, string) {
 		words[i], _ = args[i].(string)
 	}
 
-	return words[0], words[1], words[2]
+	// a leaf's [label] only names the entry for a person
+	leaf, _ := state.SplitLabel(words[2])
+
+	return words[0], words[1], leaf
 }
 
 // Windows is every bounded step window and glue window, oldest first by end.
@@ -211,6 +215,7 @@ func windows(evs []ledger.Event) []Window {
 					}
 
 					step, entry = open(e, name), leaf
+					step.Label = claimedLabel(e)
 				}
 			case phase == "ship" && slices.Contains([]string{"done", "failed", "partial", "blocked"}, status):
 				leave(e)
@@ -219,6 +224,21 @@ func windows(evs []ledger.Event) []Window {
 	}
 
 	return out
+}
+
+// claimedLabel is the label of the entry a claim placed the run on, from
+// the labels and place the claim records.
+func claimedLabel(e ledger.Event) string {
+	raw, _ := e.Payload.Val["labels"].([]any)
+	at, _ := e.Payload.Val["at"].(float64)
+
+	if i := int(at) - 1; i >= 0 && i < len(raw) {
+		label, _ := raw[i].(string)
+
+		return label
+	}
+
+	return ""
 }
 
 // segments is every closed stretch of a plan or ship run, as glue windows. It

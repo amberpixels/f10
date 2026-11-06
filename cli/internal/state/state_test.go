@@ -724,3 +724,79 @@ func TestRenderRecordsModel(t *testing.T) {
 		}
 	}
 }
+
+// A labelled pipeline records its steps bare and its labels beside them: a
+// label places a repeated entry, shows as the leaf, and survives a save.
+func TestPipelineLabels(t *testing.T) {
+	dir := t.TempDir()
+	r := Fresh("labels")
+
+	if err := r.SetPipeline([]string{"implement", "pr", "review:local", "pr[pr-polish]"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"implement", "pr", "review:local", "pr"}; !reflect.DeepEqual(r.Pipeline, want) {
+		t.Fatalf("pipeline %q, want %q", r.Pipeline, want)
+	}
+
+	if want := []string{"", "", "", "pr-polish"}; !reflect.DeepEqual(r.Labels, want) || r.FinalShown() != "pr-polish" {
+		t.Fatalf("labels %q final %q", r.Labels, r.FinalShown())
+	}
+
+	// the label picks the place even before the run reached it
+	if err := r.Set("ship", "running", "pr[pr-polish]"); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.Leaf != "pr" || r.At != 4 || r.LeafShown() != "pr-polish" || r.PhaseText("ship") != "running: pr-polish" {
+		t.Errorf("leaf %q at %d shown %q text %q", r.Leaf, r.At, r.LeafShown(), r.PhaseText("ship"))
+	}
+
+	if err := r.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load(Path(dir, "labels"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(got.Labels, r.Labels) || got.LeafShown() != "pr-polish" {
+		t.Errorf("loaded labels %q shown %q", got.Labels, got.LeafShown())
+	}
+
+	// a bare pr on the first entry shows as itself
+	if err := r.Set("ship", "running", "pr"); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.At != 4 || r.LeafShown() != "pr-polish" {
+		t.Errorf("a resent pr moved: at %d shown %q", r.At, r.LeafShown())
+	}
+
+	// a catchup guarding the labelled entry stops as catchup
+	if err := r.Set("ship", "failed", "catchup"); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.At != 4 || r.PhaseText("ship") != "failed at catchup" {
+		t.Errorf("catchup stop: at %d text %q", r.At, r.PhaseText("ship"))
+	}
+
+	plain := Fresh("plain")
+	if err := plain.SetPipeline([]string{"implement", "pr"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if plain.Labels != nil {
+		t.Errorf("an unlabelled pipeline has labels %q", plain.Labels)
+	}
+
+	if err := plain.Save(dir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	if b, _ := os.ReadFile(Path(dir, "plain")); strings.Contains(string(b), "labels") {
+		t.Errorf("an unlabelled run writes a labels line:\n%s", b)
+	}
+}

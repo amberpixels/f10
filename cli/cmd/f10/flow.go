@@ -16,6 +16,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The flow verb lists the declared flows, the same list an unknown --flow
@@ -44,8 +45,9 @@ func flowCommand() *cli.Command {
 
 type flowRow struct {
 	Name     string          `json:"name"`
-	Entries  []string        `json:"entries"`       // as declared
-	Run      []string        `json:"run,omitempty"` // what runs under the pace
+	Entries  []string        `json:"entries"`          // as declared, labels cut
+	Labels   []string        `json:"labels,omitempty"` // each entry's display label by index; nil when none has one
+	Run      []string        `json:"run,omitempty"`    // what runs under the pace
 	Selected []string        `json:"selectedBy"`
 	Resolved *facts.Resolved `json:"resolved,omitempty"` // the entries under the pace; nil when nothing changes them, or the pace breaks the flow
 	Broken   string          `json:"broken,omitempty"`   // why the pace does not resolve on this flow
@@ -129,11 +131,13 @@ func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flow
 	v.Ceiling = ceilingShown(set, pace.name)
 
 	for _, name := range eff.FlowNames() {
-		row := flowRow{Name: name, Entries: eff.Flows[name], Selected: selectors(name)}
+		labels := eff.FlowLabels[name]
+		row := flowRow{Name: name, Entries: eff.Flows[name], Labels: labels, Selected: selectors(name)}
 
 		if r, err := set.ResolveFlow(name, eff.Flows[name], pace.name); err != nil {
 			row.Broken = err.Error()
 		} else if pace.name != "" || r.Changed() {
+			r = r.WithLabels(labels)
 			row.Resolved, row.Run = &r, r.Run()
 		}
 
@@ -178,7 +182,7 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 	}
 
 	if f.Resolved == nil {
-		for _, e := range f.Entries {
+		for _, e := range facts.LabeledEntries(f.Entries, f.Labels) {
 			fmt.Fprintln(&b, e)
 		}
 
@@ -189,17 +193,19 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 
 	width := len(facts.PaceFinishKey)
 	for _, e := range f.Resolved.Entries {
-		width = max(width, len(e.Entry))
+		width = max(width, len(state.Labeled(e.Entry, e.Label)))
 	}
 
 	for _, e := range f.Resolved.Entries {
+		entry := state.Labeled(e.Entry, e.Label)
+
 		switch {
 		case e.Skipped != "":
-			fmt.Fprintf(&b, "%-*s  skipped: %s\n", width, e.Entry, e.Skipped)
+			fmt.Fprintf(&b, "%-*s  skipped: %s\n", width, entry, e.Skipped)
 		case len(e.Dials) > 0:
-			fmt.Fprintf(&b, "%-*s  %s\n", width, e.Entry, dialsShown(e.Dials))
+			fmt.Fprintf(&b, "%-*s  %s\n", width, entry, dialsShown(e.Dials))
 		default:
-			fmt.Fprintln(&b, e.Entry)
+			fmt.Fprintln(&b, entry)
 		}
 	}
 
@@ -270,9 +276,9 @@ func writeFlows(w io.Writer, v flowView) error {
 	}
 
 	for _, f := range v.Flows {
-		entries := f.Entries
-		if f.Run != nil {
-			entries = f.Run
+		entries := facts.LabeledEntries(f.Entries, f.Labels)
+		if f.Resolved != nil {
+			entries = f.Resolved.Labeled()
 		}
 
 		fmt.Fprintf(&b, "%-*s  %s\n%-*s  (%s)\n", width, f.Name, strings.Join(entries, " "),

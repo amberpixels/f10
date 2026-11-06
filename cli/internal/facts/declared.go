@@ -360,8 +360,9 @@ func (d Declared) check() []string {
 		}
 	}
 
+	steps := FlowSteps(d.Flows)
 	for _, name := range slices.Sorted(maps.Keys(d.Flows)) {
-		bad = append(bad, checkFlow(name, d.Flows[name])...)
+		bad = append(bad, checkFlow(name, d.Flows[name], steps...)...)
 	}
 
 	for _, moment := range slices.Sorted(maps.Keys(d.Tracker.Status)) {

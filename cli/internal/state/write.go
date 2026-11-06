@@ -99,6 +99,11 @@ func (r *Run) Save(dir string, now time.Time) error {
 		signal = append([][2]string{{"wait", r.Wait}}, signal...)
 	}
 
+	// and labels, which only a flow that names its entries has
+	if r.Labels != nil {
+		signal = append([][2]string{{"labels", joinLabels(r.Labels)}}, signal...)
+	}
+
 	for _, kv := range slices.Concat([][2]string{
 		{"task", r.Task},
 		{"url", r.URL},
@@ -235,6 +240,9 @@ func (r *Run) Set(phase, status, leaf string) error {
 		return usagef("unknown status '%s'", status)
 	}
 
+	// a label names the entry for a person; the run records the step
+	leaf, label := SplitLabel(leaf)
+
 	r.backfill(phase)
 	r.setStatus(phase, status)
 
@@ -253,7 +261,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 	// only ship's leaves are pipeline entries
 	at := 0
 	if phase == "ship" {
-		at = r.place(r.Leaf)
+		at = r.place(r.Leaf, label)
 	}
 
 	r.At = at
@@ -261,12 +269,17 @@ func (r *Run) Set(phase, status, leaf string) error {
 	return nil
 }
 
-// place is leaf's place in the pipeline from 1: where the run is, else the
-// next entry by that name, else the first. An unnamed leaf (catchup's guard
-// stopping) keeps the place, so a judge resumed after it is still the second.
-func (r *Run) place(leaf string) int {
+// place is leaf's place in the pipeline from 1: the entry its label names,
+// else where the run is, else the next entry by that name, else the first.
+// An unnamed leaf (catchup's guard stopping) keeps the place, so a judge
+// resumed after it is still the second.
+func (r *Run) place(leaf, label string) int {
 	if leaf == "" {
 		return 0
+	}
+
+	if k := slices.Index(r.Labels, label); label != "" && k >= 0 && k < len(r.Pipeline) && r.Pipeline[k] == leaf {
+		return k + 1
 	}
 
 	at := min(max(r.At, 0), len(r.Pipeline))
@@ -368,17 +381,27 @@ func (r *Run) SetFinal(step string) error {
 // SetPipeline declares the ship pipeline's steps, in order; its last is the
 // final step.
 func (r *Run) SetPipeline(steps []string) error {
-	var kept []string
+	var kept, labels []string
+
+	labeled := false
 
 	for _, s := range steps {
-		kept = append(kept, SplitPipeline(s)...)
+		for _, e := range SplitPipeline(s) {
+			entry, label := SplitLabel(e)
+			kept, labels = append(kept, entry), append(labels, label)
+			labeled = labeled || label != ""
+		}
 	}
 
 	if len(kept) == 0 {
 		return usagef("pipeline needs at least one step")
 	}
 
-	r.Pipeline = kept
+	if !labeled {
+		labels = nil
+	}
+
+	r.Pipeline, r.Labels = kept, labels
 	r.Final = kept[len(kept)-1]
 	r.At = 0
 
@@ -497,7 +520,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	r.Skill = skill
 	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait = "", "", "", "", "", ""
 	r.Done, r.DoneAt = "", time.Time{}
-	r.Pipeline, r.At = nil, 0
+	r.Pipeline, r.Labels, r.At = nil, nil, 0
 	r.Ship = "pending"
 
 	// so a terminal with no session id can still find its runs
@@ -581,7 +604,7 @@ func (r *Run) Show(w io.Writer, now time.Time) {
 		row(p, Glyph(r.Status(p))+" "+r.PhaseText(p))
 	}
 
-	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}, {"final", r.Final}} {
+	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}, {"final", r.FinalShown()}} {
 		if kv[1] != "" {
 			row(kv[0], kv[1])
 		}

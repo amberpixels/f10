@@ -79,11 +79,19 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 
 // statRow is one task's numbers; a step absent, or a nil, was never recorded.
 type statRow struct {
-	task   string
-	steps  map[string]time.Duration
+	task  string
+	steps map[string]time.Duration
+	// shown is the breakdown's rows: a step, or a labelled entry of one by
+	// its label, so two pr entries read as pr and pr-polish
+	shown  map[string]shownStep
 	lines  *int
 	md     int
 	latest time.Time
+}
+
+type shownStep struct {
+	step   string
+	active time.Duration
 }
 
 // The table's step groups: the review loop, and every other named step.
@@ -158,10 +166,13 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 
 		r := row(w.Task, w.To)
 		if r.steps == nil {
-			r.steps = map[string]time.Duration{}
+			r.steps, r.shown = map[string]time.Duration{}, map[string]shownStep{}
 		}
 
 		r.steps[w.Step] += w.Active
+
+		key := cmp.Or(w.Label, w.Step)
+		r.shown[key] = shownStep{step: w.Step, active: r.shown[key].active + w.Active}
 	}
 
 	// the latest size stands: a rerun of finish records again
@@ -255,7 +266,7 @@ var stepOrder = []string{
 
 // writeSteps is one task's active time per step, with a total.
 func writeSteps(w io.Writer, r statRow) error {
-	steps := slices.Collect(maps.Keys(r.steps))
+	steps := slices.Collect(maps.Keys(r.shown))
 	slices.SortFunc(steps, func(a, b string) int {
 		rank := func(s string) int {
 			if i := slices.Index(stepOrder, s); i >= 0 {
@@ -269,7 +280,18 @@ func writeSteps(w io.Writer, r statRow) error {
 			return len(stepOrder)
 		}
 
-		return cmp.Or(cmp.Compare(rank(a), rank(b)), strings.Compare(a, b))
+		// a step's own row before its labelled entries
+		sa, sb := r.shown[a].step, r.shown[b].step
+		labelled := func(key, step string) int {
+			if key == step {
+				return 0
+			}
+
+			return 1
+		}
+
+		return cmp.Or(cmp.Compare(rank(sa), rank(sb)), strings.Compare(sa, sb),
+			cmp.Compare(labelled(a, sa), labelled(b, sb)), strings.Compare(a, b))
 	})
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
@@ -278,8 +300,9 @@ func writeSteps(w io.Writer, r statRow) error {
 	var total time.Duration
 
 	for _, s := range steps {
-		total += r.steps[s]
-		fmt.Fprintf(tw, "%s\t%s\t\n", s, fmtMinutes(r.steps[s].Minutes()))
+		d := r.shown[s].active
+		total += d
+		fmt.Fprintf(tw, "%s\t%s\t\n", s, fmtMinutes(d.Minutes()))
 	}
 
 	fmt.Fprintf(tw, "total\t%s\t\n", fmtMinutes(total.Minutes()))

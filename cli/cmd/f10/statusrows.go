@@ -85,13 +85,13 @@ func stageOf(f rowFacts) (string, string) {
 	case f.finished || f.merged:
 		return stageDone, "finish"
 	case r != nil && r.Ask != "":
-		return stageAsking, cmp.Or(r.Leaf, furthestPhase(r))
+		return stageAsking, cmp.Or(r.LeafShown(), furthestPhase(r))
 	case f.halt != nil:
 		return stageHalted, f.halt.skill
 	case r != nil && r.Wait != "" && stoppedRun(r):
 		return stageWaiting, "on " + r.Wait
 	case r != nil && stoppedRun(r):
-		return stageHalted, cmp.Or(r.Leaf, furthestPhase(r))
+		return stageHalted, cmp.Or(r.LeafShown(), furthestPhase(r))
 	case r == nil && f.queued:
 		return stageQueued, ""
 	case r == nil && f.after != "" && !f.baseDone && f.driven:
@@ -107,16 +107,16 @@ func stageOf(f rowFacts) (string, string) {
 	case "running":
 		switch r.Leaf {
 		case "review":
-			return stageReviewing, r.Leaf
+			return stageReviewing, r.LeafShown()
 		case "resolve":
-			return stageResolving, r.Leaf
+			return stageResolving, r.LeafShown()
 		case "judge":
-			return stageJudging, r.Leaf
+			return stageJudging, r.LeafShown()
 		default:
-			return stageImplementing, cmp.Or(r.Leaf, "ship")
+			return stageImplementing, cmp.Or(r.LeafShown(), "ship")
 		}
 	case "done":
-		return stageShipped, cmp.Or(r.Final, "ship")
+		return stageShipped, cmp.Or(r.FinalShown(), "ship")
 	}
 
 	switch {
@@ -230,6 +230,8 @@ func claimRun(e ledger.Event) *state.Run {
 		Leaf:     payloadString(p, "leaf"),
 		Final:    payloadString(p, "final"),
 		Pipeline: payloadStrings(p, "pipeline"),
+		Labels:   payloadStrings(p, "labels"),
+		At:       payloadInt(p, "at"),
 		Note:     payloadString(p, "note"),
 		Next:     payloadString(p, "next"),
 		Ask:      payloadString(p, "ask"),
@@ -250,6 +252,18 @@ func payloadStrings(p ledger.Payload, key string) []string {
 	}
 
 	return out
+}
+
+// payloadInt is a number the payload holds; JSON gives it as a float.
+func payloadInt(p ledger.Payload, key string) int {
+	switch n := p[key].(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	}
+
+	return 0
 }
 
 func payloadString(p ledger.Payload, key string) string {

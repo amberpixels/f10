@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -970,5 +971,67 @@ func TestOutcomesKeepTheFileDecision(t *testing.T) {
 	j = readOutcomes(&lore.Store{Root: other}, storage, "FT-1").changeJudge
 	if j == nil || j.Verdict != "proceed" || j.Decision != "" {
 		t.Errorf("a different lore verdict took the file's decision: %+v", j)
+	}
+}
+
+// A labelled entry shows by its label, in the gates and their JSON, while
+// the claims still match it as the bare step it runs.
+func TestGatesShowEntryLabels(t *testing.T) {
+	t0 := time.Unix(1_800_000_000, 0)
+	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
+
+	events := []ledger.Event{
+		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship", "args": "FT-1"}),
+		shipClaim(at(1), "s1", "implement"),
+		shipClaim(at(2), "s1", "pr"),
+		shipClaim(at(3), "s1", "review:local"),
+		shipClaim(at(4), "s1", "pr[pr-polish]"),
+	}
+
+	run := &state.Run{
+		Session: "s1", Task: "FT-1", Ship: "running", Leaf: "pr", At: 4,
+		Pipeline: []string{"implement", "pr", "review:local", "pr"}, Labels: []string{"", "", "", "pr-polish"},
+	}
+
+	gates := taskGates(context.Background(), gateInput{task: "FT-1", run: run, events: events, now: at(5)})
+
+	var polish *gate
+
+	for i, g := range gates {
+		if g.Label == "pr-polish" {
+			polish = &gates[i]
+		}
+	}
+
+	if polish == nil || polish.Step != "pr" || polish.State != "running" || polish.shown() != "pr-polish" {
+		t.Fatalf("gates = %+v, want the second pr running and shown as pr-polish", gates)
+	}
+
+	if b, _ := json.Marshal(polish); !strings.Contains(string(b), `"step":"pr","label":"pr-polish"`) {
+		t.Errorf("json = %s", b)
+	}
+
+	if rows := gateLines(gates); !slices.ContainsFunc(rows, func(r [2]string) bool { return r[0] == "  pr-polish" }) {
+		t.Errorf("rows = %v, want a pr-polish row", rows)
+	}
+
+	// with no run yet, the branch's flow gives the labels
+	gates = taskGates(context.Background(), gateInput{
+		task: "FT-1", pipeline: run.Pipeline, labels: run.Labels, now: at(5),
+	})
+	if i := slices.IndexFunc(gates, func(g gate) bool { return g.shown() == "pr-polish" }); i < 0 ||
+		gates[i].State != gatePending {
+		t.Errorf("gates = %+v, want pr-polish pending", gates)
+	}
+}
+
+// A labelled review claim still marks when ship entered the review, so a
+// round written before it does not read as this review's.
+func TestClaimedAtCutsTheLabel(t *testing.T) {
+	at := time.Unix(1_800_000_000, 0)
+	in := gateInput{events: []ledger.Event{shipClaim(at, "s1", "review:local[review-final]")}}
+
+	if got := in.claimedAt("s1", "review:local"); !got.Equal(at) {
+		t.Errorf("claimedAt = %v, want %v", got, at)
 	}
 }
