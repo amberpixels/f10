@@ -95,7 +95,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 				return info, nil
 			},
-			archive: []string{t.TempDir()},
+			plans: t.TempDir(),
 		},
 		args:     a,
 		argv:     args,
@@ -1881,25 +1881,39 @@ func TestBodyAfter(t *testing.T) {
 	}
 }
 
-// A plan archived by finish marks a task finished even when the tracker
-// left it open.
-func TestFinishedTaskByArchive(t *testing.T) {
-	dir := t.TempDir()
-
-	if finishedTask(taskInfo{}, []string{dir}, "GH-1", false) {
-		t.Error("finished with nothing archived")
+// One rule decides a finished task for drive, status, children and drive
+// list: no branch, no live plan, and closed or archived.
+func TestFinishedTask(t *testing.T) {
+	cases := []struct {
+		name               string
+		closed, branched   bool
+		archived, livePlan bool
+		want               bool
+	}{
+		{name: "nothing"},
+		{name: "archived", archived: true, want: true},
+		{name: "closed", closed: true, want: true},
+		{name: "archived, re-planned", archived: true, livePlan: true},
+		{name: "closed, re-planned", closed: true, livePlan: true},
+		{name: "closed with a branch", closed: true, branched: true},
+		{name: "archived with a branch", archived: true, branched: true},
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "GH-1.2.md"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plans := t.TempDir()
+			if c.archived {
+				writePlan(t, filepath.Join(plans, "archive", "GH-1.2.md"))
+			}
 
-	if !finishedTask(taskInfo{}, []string{dir}, "GH-1", false) {
-		t.Error("an archived plan does not count")
-	}
+			if c.livePlan {
+				writePlan(t, filepath.Join(plans, "GH-1.md"))
+			}
 
-	if finishedTask(taskInfo{closed: true}, nil, "GH-1", true) {
-		t.Error("a task with a branch counted as finished")
+			if got := finishedTask(taskInfo{closed: c.closed}, plans, "GH-1", c.branched); got != c.want {
+				t.Errorf("finishedTask = %v, want %v", got, c.want)
+			}
+		})
 	}
 }
 

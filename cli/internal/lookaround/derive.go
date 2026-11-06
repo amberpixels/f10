@@ -278,7 +278,9 @@ func local(f Facts, find func(string) *row, all func() []*row) {
 	}
 
 	for id := range l.Finished {
-		find(id).finished = true
+		if finishedNow(l, id) {
+			find(id).finished = true
+		}
 	}
 
 	for _, r := range all() {

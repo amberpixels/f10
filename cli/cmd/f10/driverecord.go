@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -193,7 +194,11 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	for _, key := range slices.Sorted(maps.Keys(in.rec.Answers)) {
 		text := in.rec.Answers[key]
 		if key == "" {
-			if !slices.ContainsFunc(in.args.answers, func(a string) bool { return !strings.Contains(a, "=") }) {
+			if !slices.ContainsFunc(in.args.answers, func(a string) bool {
+				_, _, keyed := keyedAnswer(a, tasks)
+
+				return !keyed
+			}) {
 				kept = append(kept, text)
 			}
 
@@ -201,9 +206,9 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		}
 
 		if !slices.ContainsFunc(in.args.answers, func(a string) bool {
-			k, _, ok := strings.Cut(a, "=")
+			id, _, keyed := keyedAnswer(a, tasks)
 
-			return ok && strings.EqualFold(strings.TrimSpace(k), key)
+			return keyed && strings.EqualFold(id, key)
 		}) {
 			kept = append(kept, key+"="+text)
 		}
@@ -466,10 +471,12 @@ func driveList(
 	return nil
 }
 
-// rowFinishedFor checks a record's row, an id as typed, against the task's
-// branches and plan; a row that names no task reads as unfinished.
+// rowFinishedFor checks a record's row, an id as typed, by finishedTask, as
+// drive and status do; a row that names no task, or a git error, reads as
+// unfinished, since a wrong yes hides a halt.
 func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	tr := t.tracker()
 	seen := map[string]bool{} // a task several records list is checked once
 
 	return func(row string) bool {
@@ -478,11 +485,39 @@ func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 			return done
 		}
 
+		seen[id] = false
+
 		r, err := t.reference(ctx, id)
-		seen[id] = err == nil && taskFinished(ctx, main, t.sharedPlansDir(), r.Head().ID)
+		if err != nil {
+			return false
+		}
+
+		head := r.Head()
+		seen[id] = finishedLazily(tr.plans, head.ID,
+			func() (bool, error) { return hasTaskBranch(ctx, main, head.ID) },
+			func() taskInfo {
+				info, _ := tr.info(ctx, head) // an unread tracker leaves the archive to decide
+
+				return info
+			})
 
 		return seen[id]
 	}
+}
+
+// finishedLazily is finishedTask with its reads made lazily: the tracker is
+// asked only when no branch, live plan or archived plan already decides.
+func finishedLazily(plans, id string, branched func() (bool, error), info func() taskInfo) bool {
+	if b, err := branched(); err != nil || b {
+		return false
+	}
+
+	var ti taskInfo
+	if !exists(filepath.Join(plans, id+".md")) && !planArchivedIn(plans, id) {
+		ti = info()
+	}
+
+	return finishedTask(ti, plans, id, false)
 }
 
 func taskStanding(t drives.Task, running bool) string {

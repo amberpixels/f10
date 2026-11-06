@@ -85,3 +85,29 @@ func TestPruneReclaimsLaunches(t *testing.T) {
 		t.Fatalf("new launches pruned: %v", err)
 	}
 }
+
+func TestPruneReclaimsAsks(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	old := now.Add(-pruneAge - time.Hour)
+
+	for _, session := range []string{"old", "new"} {
+		if err := os.WriteFile(AsksPath(dir, session), []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := os.Chtimes(AsksPath(dir, "old"), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	Prune(dir, now)
+
+	if _, err := os.Stat(AsksPath(dir, "old")); !os.IsNotExist(err) {
+		t.Fatalf("old asks mark kept: %v", err)
+	}
+
+	if _, err := os.Stat(AsksPath(dir, "new")); err != nil {
+		t.Fatalf("new asks mark pruned: %v", err)
+	}
+}

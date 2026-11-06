@@ -118,7 +118,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 	)
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	archive := t.tracker().archive
+	plans := t.tracker().plans
 	bases := map[string]string{} // siblings share a base: resolve it once
 
 	for _, tok := range tokens {
@@ -141,7 +141,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 
 		// a finished task reads nothing further: its row would only drop
 		branched, err := hasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, archive, r.ID, branched)) {
+		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, plans, r.ID, branched)) {
 			continue
 		}
 
@@ -191,7 +191,7 @@ func launchBase(
 		out = r.Head().ID
 
 		has, err := hasTaskBranch(ctx, main, out)
-		if err != nil || finishedTask(taskInfo{}, t.tracker().archive, out, has) {
+		if err != nil || finishedTask(taskInfo{}, t.tracker().plans, out, has) {
 			out = ""
 		}
 	}

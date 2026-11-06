@@ -1236,14 +1236,10 @@ func (in *driveInput) takeAnswers(tasks []driveTask) error {
 	in.answer, in.answers = "", map[string]string{}
 
 	for _, a := range in.args.answers {
-		if key, text, ok := strings.Cut(a, "="); ok {
-			if i := slices.IndexFunc(tasks, func(t driveTask) bool {
-				return strings.EqualFold(t.ref.ID, strings.TrimSpace(key))
-			}); i >= 0 {
-				in.answers[tasks[i].ref.ID] = strings.TrimSpace(text)
+		if id, text, ok := keyedAnswer(a, tasks); ok {
+			in.answers[id] = text
 
-				continue
-			}
+			continue
 		}
 
 		if in.answer != "" {
@@ -1254,6 +1250,22 @@ func (in *driveInput) takeAnswers(tasks []driveTask) error {
 	}
 
 	return nil
+}
+
+// keyedAnswer splits an --answer that names one of the drive's tasks into
+// its id and text; any other answer is bare, an "=" in its text included.
+func keyedAnswer(a string, tasks []driveTask) (string, string, bool) {
+	key, text, ok := strings.Cut(a, "=")
+	if !ok {
+		return "", "", false
+	}
+
+	i := slices.IndexFunc(tasks, func(t driveTask) bool { return strings.EqualFold(t.ref.ID, strings.TrimSpace(key)) })
+	if i < 0 {
+		return "", "", false
+	}
+
+	return tasks[i].ref.ID, strings.TrimSpace(text), true
 }
 
 // report exits with an ask over a halt, since answering the ask is what
@@ -1429,7 +1441,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			}
 		}
 
-		task.finished = finishedTask(info, in.tracker.archive, r.ID, branched)
+		task.finished = finishedTask(info, in.tracker.plans, r.ID, branched)
 
 		if !ranged && !task.finished && !branched {
 			for _, m := range r.MemberRefs() {
@@ -1563,7 +1575,7 @@ func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error)
 		return false, fmt.Errorf("%s: %w", base.ID, err)
 	}
 
-	return finishedTask(info, in.tracker.archive, base.ID, false), nil
+	return finishedTask(info, in.tracker.plans, base.ID, false), nil
 }
 
 func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error {

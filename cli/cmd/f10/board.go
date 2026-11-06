@@ -385,6 +385,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			ProjectID:  place.Project,
 			Agents:     reachableAgents(main),
 			SharedRoot: t.sharedRoot(),
+			Resolve:    t.idOf(ctx),
 		}
 	}
 
