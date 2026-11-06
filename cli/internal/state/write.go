@@ -584,6 +584,17 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	return true
 }
 
+// OpensPhase reports whether the skill runs capture, plan or ship, so its run
+// may be a task's before fetch names one; keep it in step with Seed's switch.
+func OpensPhase(skill string) bool {
+	switch skill {
+	case "capture", "debug", "plan", "ship":
+		return true
+	}
+
+	return false
+}
+
 func settled(status string) bool {
 	return status == "done" || status == "prior" || status == "partial"
 }

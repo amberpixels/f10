@@ -147,6 +147,7 @@ type ledgerTask struct {
 	claim    *state.Run
 	finished bool
 	pr       string
+	pushed   bool // a push on the task: its PR may exist though no pr_opened says so
 	halt     *ledgerHalt
 }
 
@@ -194,6 +195,8 @@ func ledgerFor(events []ledger.Event, id string, resolve func(string) string) le
 			}
 		case e.Kind == ledger.PROpened:
 			lt.pr = cmp.Or(payloadString(p, "url"), lt.pr)
+		case e.Kind == ledger.Pushed:
+			lt.pushed = true
 		case e.Kind == ledger.TaskHalted:
 			lt.halt = &ledgerHalt{skill: payloadString(p, "skill"), reason: payloadString(p, "reason"), at: e.At}
 		}
