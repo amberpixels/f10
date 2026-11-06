@@ -107,3 +107,20 @@ func withTerminal(t *testing.T, on bool) {
 
 	linkTerminal = func(io.Writer) bool { return on }
 }
+
+// A drive copies finish's report out of a buffer, which links as the drive's
+// own writer would.
+func TestLinkBufferLinksAsItsWriter(t *testing.T) {
+	rows := []fact{{label: "plan", value: "/tmp/plans/FT-1.md", path: true}}
+
+	for _, on := range []bool{true, false} {
+		buf := &linkBuffer{links: on}
+		if err := writeReport(buf, rows, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		if linked := linkSpan.MatchString(buf.String()); linked != on {
+			t.Errorf("links %v: report linked %v:\n%q", on, linked, buf.String())
+		}
+	}
+}

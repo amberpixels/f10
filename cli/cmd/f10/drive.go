@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -2427,14 +2426,15 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 	in.ranFinish = true
 
 	var (
-		buf    bytes.Buffer
 		hand   []string
 		pulled string
 	)
 
+	buf := &linkBuffer{links: linkTerminal(w)}
+
 	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
 
-	err = in.finish(ctx, &buf, driveFinish{
+	err = in.finish(ctx, buf, driveFinish{
 		task:   task.ref,
 		suffix: task.suffix,
 		branch: r.o.branch,
@@ -2446,7 +2446,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		deferred: func(note string) { pulled, in.pullLine = note, note },
 	})
 
-	sc := bufio.NewScanner(&buf)
+	sc := bufio.NewScanner(buf)
 	for sc.Scan() {
 		fmt.Fprintf(w, "  %s\n", sc.Text())
 	}
