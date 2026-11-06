@@ -74,21 +74,18 @@ func TestWriteReportLinksPaths(t *testing.T) {
 	}
 }
 
+// The plan row sits in the facts block, which links it once and never wraps.
 func TestStatusFallbackLinksPlan(t *testing.T) {
 	fb := fallback{Task: "GH-1", Root: "/tmp", Plan: "/tmp/.f10/plans/GH-1.md"}
+
+	withTerminal(t, true)
 
 	var out bytes.Buffer
 	fb.render(&out, 30, true)
 
 	spans := linkSpan.FindAllStringSubmatch(out.String(), -1)
-	if len(spans) < 2 {
-		t.Fatalf("a wrapped plan path should link every line:\n%q", out.String())
-	}
-
-	for _, s := range spans {
-		if s[1] != "file:///tmp/.f10/plans/GH-1.md" {
-			t.Errorf("plan line links to %q", s[1])
-		}
+	if len(spans) != 1 || spans[0][1] != "file:///tmp/.f10/plans/GH-1.md" {
+		t.Fatalf("want one link, on the plan row:\n%q", out.String())
 	}
 
 	out.Reset()

@@ -11,6 +11,9 @@ Where a run is, in words: the task, the three phases, the step a stopped run sto
 The status-line badge draws the same facts as three glyphs.
 This skill runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`); it runs no step.
 
+**Relay the output verbatim, never redrawn.**
+Never reorder it, summarise it, or turn it into a table, because the binary already aligned it and a redraw drops rows and colors.
+
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - No argument: the answer is below, already run: the current task's (the session's, else the branch's), as `f10 status <task-id>` prints it, or the session's run when no task is named.
@@ -23,8 +26,9 @@ This skill runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/
 !`command -v f10 >/dev/null 2>&1 && f10 status --plain || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
 
 1. Run `f10 status <task-id> --plain`.
-   Print the output verbatim in a plain fenced block, whatever it is: a parent's tree, a finished task's tree, or a run's block.
-   Never redraw, reorder or turn it into a table.
+   Print the output verbatim in a fenced block, as the rule above says.
+   A run's block, and the `run none for <id>` block, open with the facts block (`task:`, `title:`, `url:` and so on), so they go in a ```` ```yaml ```` fence, which colors them as the ship report is colored.
+   A tree (a parent's, a finished task's, `launched here`) goes in a plain fence, because its titles break the highlighting.
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
    Put it to the user in **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the choices, the first as recommended.
@@ -43,6 +47,6 @@ This skill runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/
    Stop.
 4. No `ask` row: the status is the whole answer.
    Stop.
-   A task with no live run of its own prints `run none for <id>` instead: what the agent in its checkout is on now (`agent`), and its `plan` and `pr` where they exist.
+   A task with no live run of its own prints the facts block, with its `plan` and `pr` rows where they exist, then `run none for <id>` and what the agent in its checkout is on now (`agent`).
    That block never carries an `ask` row.
    A finished task, its branch gone, prints a one-row tree, `done` with the merged PR, its gates as lines under it.
