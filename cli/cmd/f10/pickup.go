@@ -59,9 +59,8 @@ func digits(s string) bool {
 	return s != "" && strings.Trim(s, "0123456789") == ""
 }
 
-// closingRE reads `Closes #12` and `fixes: https://…/issues/12` as both hosts do.
-var closingRE = regexp.MustCompile(
-	`(?i)(?:^|[^a-z0-9])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(#\d+|https?://\S+?/issues/\d+)`)
+// closingRE reads any closing keyword before any issue number.
+var closingRE = regexp.MustCompile(fmt.Sprintf(closingKeyword, `\d+`))
 
 // pickupTask prefers a closing keyword's issue (this repository's only) on a
 // host-issues tracker, else an id in the body, title or branch, in that order.

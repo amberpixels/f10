@@ -136,6 +136,7 @@ type staleBranch struct {
 	name                string
 	ids                 []string // the tasks it ships, a bundle's lead first
 	localSHA, originSHA string   // "" where the branch is not
+	unread              error    // the local tip git failed to read, which keeps the branch
 }
 
 // janitor reports a line per removal, and per branch kept for a reason worth
@@ -180,9 +181,15 @@ func janitorDefault(ctx context.Context, main string) (string, error) {
 		return def, nil
 	}
 
-	if gitx.Out(ctx, main, "remote", "get-url", "origin") == "" {
-		if cur := gitx.CurrentBranch(ctx, main); cur != "" {
-			return cur, nil
+	// a git failure is not "no origin": the current branch would pass for the default
+	origin, err := gitx.Config(ctx, main, "remote.origin.url")
+	if err != nil {
+		return "", fmt.Errorf("reading origin: %w", err)
+	}
+
+	if origin == "" {
+		if cur, err := gitx.Branch(ctx, main); err != nil || cur != "" {
+			return cur, err
 		}
 	}
 
@@ -278,7 +285,8 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 
 	for _, name := range locals {
 		if b := add(name, true); b != nil {
-			b.localSHA = gitx.Out(ctx, in.main, "rev-parse", "-q", "--verify", "refs/heads/"+name)
+			// a failed read is not an absent branch, which would let origin's copy go unchecked
+			b.localSHA, b.unread = gitx.Ref(ctx, in.main, "refs/heads/"+name)
 		}
 	}
 
@@ -318,6 +326,12 @@ func (j *sweeper) sweep(ctx context.Context, b staleBranch) (time.Time, bool) {
 		p   *forge.PR
 		err error
 	)
+
+	if b.unread != nil {
+		j.say("kept %s: reading its tip failed: %v", b.name, b.unread)
+
+		return time.Time{}, false
+	}
 
 	if j.in.host != nil {
 		if p, err = j.request(ctx, b); err != nil {

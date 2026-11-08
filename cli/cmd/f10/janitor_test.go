@@ -25,7 +25,8 @@ type janitorFixture struct {
 
 const (
 	lsHeads   = "git ls-remote --heads origin"
-	originURL = "git remote get-url origin"
+	originURL = "git config --get remote.origin.url"
+	remoteURL = "git remote get-url origin"
 	ghLogin   = "gh api user"
 )
 
@@ -44,6 +45,7 @@ func newJanitorFixture(t *testing.T) *janitorFixture {
 	f := fx.f
 	f.script(headRef, "origin/main")
 	f.script(originURL, "git@x:a/b.git")
+	f.script(remoteURL, "git@x:a/b.git")
 	f.script(worktrees, porcelain())
 	f.script(cfgDeps, "")
 	f.script(ghLogin, `{"login":"me"}`)
@@ -614,5 +616,25 @@ func TestDeleteRemoteBranchEscapesTheName(t *testing.T) {
 		if err := newHost(name, "/code/repo").deleteRemoteBranch(t.Context(), "GH-1/a#b"); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// A local tip git fails to read is not a branch with no local copy: the
+// branch stays for this pass, origin's copy included.
+func TestJanitorKeepsABranchWhoseTipItCannotRead(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})
+	fx.request("GH-1/x", "MERGED", "abc", "me")
+	fx.f.fail("git rev-parse -q --verify refs/heads/GH-1/x", shell.Result{Code: 128, Stderr: "fatal: bad object"})
+
+	out := fx.run(t)
+
+	if fx.f.called("gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1/x") ||
+		fx.f.called("git branch -D GH-1/x") {
+		t.Errorf("deleted a branch whose tip it could not read:\n%s", out)
+	}
+
+	if !strings.Contains(out, "kept GH-1/x") {
+		t.Errorf("out = %q, want the branch kept with the reason", out)
 	}
 }

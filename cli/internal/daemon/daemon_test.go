@@ -3,9 +3,13 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	stdlog "log"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -574,5 +578,51 @@ func TestDrainDeadlineStopsEveryDrive(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("a second drive that ignores the drain kept the daemon up")
+	}
+}
+
+// A drive that prints its number while a drain waits on it is logged by the
+// number it printed, read under the lock that guards it (run with -race).
+func TestDrainReadsADriveNumberedLate(t *testing.T) {
+	dir := runDir(t)
+
+	var logged bytes.Buffer
+
+	s := &Server{
+		Dir: dir, Version: "v1", Child: shell, DrainWait: 600 * time.Millisecond, Log: stdlog.New(&logged, "", 0),
+	}
+	done := serve(t, s)
+
+	trapped := filepath.Join(t.TempDir(), "trapped")
+	script := `trap '' USR1; : > '` + trapped + `'; sleep 0.3; echo 7 > "$` + NumberFileEnv +
+		`"; while :; do sleep 0.05; done`
+	run := Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/a"}
+	if _, err := Call(t.Context(), dir, run, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// a drain signal landing before the trap would kill the shell
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(trapped); err == nil {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("the drive never set its trap")
+		}
+	}
+
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the drive that ignores the drain kept the daemon up")
+	}
+
+	if !strings.Contains(logged.String(), "drive 7 did not drain") {
+		t.Errorf("log:\n%s", logged.String())
 	}
 }

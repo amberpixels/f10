@@ -190,6 +190,29 @@ func TestRenderRunKeepsTheAsk(t *testing.T) {
 	}
 }
 
+// The run block shows what `f10 state show` shows: the final entry by its
+// label, and the base task a driven ship waits on.
+func TestRenderRunRowsMatchesShow(t *testing.T) {
+	r := &state.Run{
+		Task: "GH-1", Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement",
+		Pipeline: []string{"implement", "pr", "review", "pr"}, Labels: []string{"", "", "", "pr-polish"},
+		Final: "pr", Wait: "GH-0",
+	}
+
+	var out bytes.Buffer
+	renderRunRows(&out, r, nil, false, "", time.Now(), 0)
+
+	got := out.String()
+
+	if !strings.Contains(got, "pr-polish") {
+		t.Errorf("the final row shows the bare step, not its label:\n%s", got)
+	}
+
+	if !strings.Contains(got, "wait") || !strings.Contains(got, "GH-0") {
+		t.Errorf("output lacks the wait row:\n%s", got)
+	}
+}
+
 func TestCurrentPhase(t *testing.T) {
 	for _, tc := range []struct {
 		run  state.Run

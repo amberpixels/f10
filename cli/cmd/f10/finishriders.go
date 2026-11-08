@@ -144,7 +144,8 @@ func refIDs(refs []ref.Ref) []string {
 }
 
 // closingKeyword is GitHub's and GitLab's closing keywords before an issue,
-// by `#n` or by its url; the issue number goes in place of %s.
+// by `#n` or by its url; the issue number's pattern goes in place of %s.
+// Pickup reads with the same pattern, so what finish keeps open is what it finds.
 const closingKeyword = `(?i)\b(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving|` +
 	`implement(?:s|ed|ing)?):?\s+(#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`
 

@@ -433,3 +433,19 @@ func TestLoreAgentFromSession(t *testing.T) {
 		}
 	}
 }
+
+// Work no task names keys its change by the branch, as review round keys
+// the same findings directory.
+func TestLoreChangeOnABranchWithNoTask(t *testing.T) {
+	repo := tracedRepo(t, "feat/thing", "on")
+	t.Chdir(repo)
+
+	out, err := runLore(t, "change")
+	if err != nil {
+		t.Fatalf("lore change: %v\n%s", err, out)
+	}
+
+	if got := strings.TrimSpace(out); got != "feat-thing" {
+		t.Errorf("change = %q, want feat-thing", got)
+	}
+}

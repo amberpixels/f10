@@ -279,7 +279,9 @@ func catchupHalt(r *driveRun, reason string) driveResult {
 func (in *driveInput) startVerify(ctx context.Context, r *driveRun) {
 	dir, log := r.o.path, filepath.Join(cmp.Or(in.root, os.TempDir()), "catchup", r.task.ref.ID+".log")
 
-	r.verifying = startVerifyJob(func() (verifyRun, error) { return in.catchup.verify(ctx, dir, log) })
+	r.verifying = startVerifyJob(ctx, func(ctx context.Context) (verifyRun, error) {
+		return in.catchup.verify(ctx, dir, log)
+	})
 }
 
 // catchupSettled reads from git whether the agent's turn settled the

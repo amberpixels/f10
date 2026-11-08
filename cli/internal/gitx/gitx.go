@@ -244,6 +244,13 @@ func Status(ctx context.Context, dir string) ([]string, error) {
 	return strings.Split(out, "\n"), nil
 }
 
+// Branch is the branch checked out in dir, "" with no error on a detached
+// HEAD; unlike CurrentBranch, a git failure is an error, for a caller that
+// acts on the answer.
+func Branch(ctx context.Context, dir string) (string, error) {
+	return Exec(ctx, dir, "branch", "--show-current")
+}
+
 // CurrentBranch is the branch dir has checked out, or "" when detached.
 func CurrentBranch(ctx context.Context, dir string) string {
 	return Out(ctx, dir, "branch", "--show-current")

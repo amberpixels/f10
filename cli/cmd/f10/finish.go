@@ -476,9 +476,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		var sha string
 
-		// recorded only once it landed, and only when there was something to measure
-		size, sized := measureBranch(ctx, in.main, name, def, local)
-		sized = sized && size.files > 0
+		recordLanded := sizeRecorder(ctx, in, name, def, local)
 
 		if local {
 			in.step("merging " + name + " into " + def)
@@ -518,9 +516,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		notes = appendNote(notes, loreNote)
 
-		if sized {
-			recordSize(ctx, in.main, name, in.task.ID, size)
-		}
+		recordLanded()
 
 		// the merge has landed: a failing step from here is collected and the
 		// rest still run, so a rerun finds only what is left
@@ -540,10 +536,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 		rows = append(rows, fact{label: "merge", value: sha})
 
-		// a tracker that is not the host closes nothing on merge
-		if len(in.close) > 0 && in.driver == nil && !local {
-			rows = append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
-		}
+		rows = appendClosed(rows, in, local)
 	}
 
 	in.step("archiving the plan")
@@ -576,15 +569,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		return err
 	}
 
-	if end != nil {
-		if change, ok := closedChange(taskReviews(in.main, in.plansDir, in.task.ID), *end); ok {
-			in.change = change
-		}
-	}
-
-	if in.loreStore != nil {
-		notes = appendNote(notes, loreNote(in.loreStore, in.loreChange()))
-	}
+	notes = appendNote(notes, seriesLore(&in, end))
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived, path: true})
@@ -774,6 +759,43 @@ func (a *afterMerge) done(id, ended string) error {
 	}
 
 	return fmt.Errorf("%s: rerun f10 finish %s to complete", msg, id)
+}
+
+// sizeRecorder measures the branch while it still differs from its base and
+// returns what records it, run only once the merge has landed.
+func sizeRecorder(ctx context.Context, in finishInput, branch, def string, local bool) func() {
+	size, sized := measureBranch(ctx, in.main, branch, def, local)
+	if !sized || size.files == 0 {
+		return func() {}
+	}
+
+	return func() { recordSize(ctx, in.main, branch, in.task.ID, size) }
+}
+
+// appendClosed adds the riders the merge closed; a tracker that is not the
+// host closes nothing on merge.
+func appendClosed(rows []fact, in finishInput, local bool) []fact {
+	if len(in.close) == 0 || in.driver != nil || local {
+		return rows
+	}
+
+	return append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
+}
+
+// seriesLore sets in.change to the lore change the closed series names, then
+// returns the report's lore line ("" with no store).
+func seriesLore(in *finishInput, end *seriesEnd) string {
+	if end != nil {
+		if change, ok := closedChange(taskReviews(in.main, in.plansDir, in.task.ID), *end); ok {
+			in.change = change
+		}
+	}
+
+	if in.loreStore == nil {
+		return ""
+	}
+
+	return loreNote(in.loreStore, in.loreChange())
 }
 
 // finishRecords marks the task finished in every stopped drive record that

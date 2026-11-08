@@ -3843,3 +3843,44 @@ func TestResumeShownUsesTheLabel(t *testing.T) {
 		t.Errorf("unlabelled resumeShown = %q, want %q", got, at)
 	}
 }
+
+// A run that ends while its catchup's verify runs stops the verify, so a
+// cancelled drive leaves no test suite running behind it.
+func TestDriveEndStopsARunningVerify(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	r := &driveRun{opened: true, chain: []string{"ship"}, o: openedTask{branch: "GH-1"}}
+
+	log := filepath.Join(t.TempDir(), "verify.log")
+	r.verifying = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
+		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
+	})
+
+	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "cancelled", code: exitHalted, drives: true})
+
+	select {
+	case <-r.verifying.done:
+		if !errors.Is(r.verifying.err, context.Canceled) {
+			t.Errorf("verify ended with %v, want it cancelled", r.verifying.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the verify still runs after its run ended")
+	}
+}
+
+// Every way out of the drive loop, a drain included, waits out the kill of a
+// verify still running, since the process exits right after.
+func TestLeaveRunsHaltsAVerifyBeforeReturning(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+
+	log := filepath.Join(t.TempDir(), "verify.log")
+	r.verifying = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
+		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
+	})
+
+	fx.in.leaveRuns(t.Context(), []*driveRun{r})
+
+	if !r.verifying.finished() {
+		t.Fatal("leaveRuns returned with the verify still running")
+	}
+}

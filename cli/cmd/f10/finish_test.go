@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -1213,6 +1214,42 @@ func TestFinishMergedWithoutWorktree(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// A rerun with the worktree gone records what a whole finish records: the
+// branch size stats reads, the lore line and the riders the merge closed.
+func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(worktrees, porcelain())
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+	fx.f.script("git diff --numstat --no-renames origin/main...refs/heads/GH-1", "10\t2\tcli/stats.go")
+	fx.in.task, fx.in.close = bundle12, []string{"GH-2"}
+	fx.in.loreStore = &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}
+
+	var sized []branchSize
+
+	prev := recordSize
+	recordSize = func(_ context.Context, _, _, _ string, s branchSize) { sized = append(sized, s) }
+
+	t.Cleanup(func() { recordSize = prev })
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	if len(sized) != 1 || sized[0].files != 1 {
+		t.Errorf("sizes %+v, want the branch's one file", sized)
+	}
+
+	if !strings.Contains(out, "lore: no entries for GH-1") {
+		t.Errorf("report lacks the lore line:\n%s", out)
+	}
+
+	if !regexp.MustCompile(`(?m)^closed:\s+GH-2$`).MatchString(out) {
+		t.Errorf("report lacks the closed row:\n%s", out)
 	}
 }
 
@@ -2953,5 +2990,21 @@ func TestFinishKeepsTheWorktreeWhenAStepFails(t *testing.T) {
 
 	if !fx.f.called("git worktree remove "+fx.wt) || !fx.f.called("herdr workspace close ws:9") {
 		t.Errorf("rerun calls: %v", fx.f.calls)
+	}
+}
+
+// A bare finish on a detached HEAD has no branch to name a task, so it
+// refuses rather than finishing a branch named HEAD.
+func TestFinishRefOnADetachedHead(t *testing.T) {
+	repo := tracedRepo(t, "DM-5/fix", "")
+	git(t, repo, "checkout", "-q", "--detach")
+
+	tg, err := targetAt(t.Context(), repo, false, "finish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r, _, branch, err := finishRef(t.Context(), tg, ""); err == nil || branch == "HEAD" {
+		t.Errorf("detached = %q on %q, %v; want a refusal", r.ID, branch, err)
 	}
 }

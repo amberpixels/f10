@@ -880,14 +880,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		return err
 	}
 
-	// an interrupted drive leaves no finish record claiming it still runs
-	defer func() {
-		for _, r := range runs {
-			if r.active() {
-				in.clearFinish(context.WithoutCancel(ctx), r)
-			}
-		}
-	}()
+	defer in.leaveRuns(context.WithoutCancel(ctx), runs)
 
 	for !stopping(runs) {
 		if err := in.sleep(ctx, in.args.every); err != nil {
@@ -3134,8 +3127,28 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 
 // end prints the result now, so a halt or an ask is on screen when it
 // happens, and puts a halt in the ledger for status to read after the exit.
+// leaveRuns runs on every way out of the loop, drained and failed included:
+// an interrupted drive leaves no finish record claiming it still runs, and
+// no catchup verify running in its own process group.
+func (in *driveInput) leaveRuns(ctx context.Context, runs []*driveRun) {
+	for _, r := range runs {
+		if r.active() {
+			in.clearFinish(ctx, r)
+		}
+
+		if r.verifying != nil {
+			r.verifying.halt()
+		}
+	}
+}
+
 func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
 	r.end, r.queued = &res, false
+
+	// a cancelled or halted run takes its catchup's verify with it
+	if r.verifying != nil {
+		r.verifying.stop()
+	}
 
 	// a finished task's branch took the record with it
 	if res.row != rowFinished {

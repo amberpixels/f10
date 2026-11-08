@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -101,25 +102,44 @@ func stateCommand() *cli.Command {
 	}
 }
 
+// stateLockWait is how long f10 state waits on a hook's write of the same
+// session before it errors.
+const stateLockWait = 5 * time.Second
+
 func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r *state.Run, a cli.Args) error) error {
 	// a typo fails even without a session, or step prose would hide it
 	// until the first real run
-	r, _ := state.LoadOrFresh(state.Dir(), state.Session())
+	var (
+		r        *state.Run
+		applyErr error
+		now      = time.Now()
+	)
 
-	if err := apply(r, cmd.Args()); err != nil {
-		if ue, ok := errors.AsType[*state.UsageError](err); ok {
-			return cli.Exit("f10-state: "+ue.Error(), 2)
-		}
+	change := func(got *state.Run, _ bool) (bool, error) {
+		r, applyErr = got, apply(got, cmd.Args())
 
+		return applyErr == nil && got.Session != "", nil
+	}
+
+	// a hook writing the same session holds the lock for an instant
+	var err error
+	if session := state.Session(); session == "" {
+		_, err = change(state.Fresh(""), false)
+	} else {
+		err = state.Update(state.Dir(), session, stateLockWait, now, change)
+	}
+
+	if ue, ok := errors.AsType[*state.UsageError](applyErr); ok {
+		return cli.Exit("f10-state: "+ue.Error(), 2)
+	}
+
+	if err := cmp.Or(applyErr, err); err != nil {
 		return err
 	}
 
 	if r.Session == "" {
 		return nil
 	}
-
-	now := time.Now()
-	_ = r.Save(state.Dir(), now)
 
 	recordClaim(ctx, r, kind, cmd.Args().Slice(), now)
 

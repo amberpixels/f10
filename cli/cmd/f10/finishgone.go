@@ -67,10 +67,15 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	// the PR already merged; the local branch still holds the tip the handoff was written at
 	hand := handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
 
+	// measured before the land, as finish does, while the branch still differs
+	recordLanded := sizeRecorder(ctx, in, name, def, false)
+
 	p, notes, err := landPull(ctx, in, name, def, p)
 	if err != nil {
 		return err
 	}
+
+	recordLanded()
 
 	notes = append(notes, riderNotes...)
 
@@ -104,15 +109,18 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
 
-	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID),
-		seriesEnd{pr: pullNumber(p.url()), head: p.sha()})
+	end := seriesEnd{pr: pullNumber(p.url()), head: p.sha()}
+
+	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID), end)
 	_ = after.check("archiving the reviews", err)
 
-	rows := []fact{
+	notes = appendNote(notes, seriesLore(&in, &end))
+
+	rows := appendClosed([]fact{
 		taskFact(ctx, w, in.main, in.task.Label()),
 		{label: "pr", value: p.url(), url: true},
 		{label: "merge", value: p.sha()},
-	}
+	}, in, false)
 
 	if archived != "" {
 		rows = append(rows, fact{label: "plan", value: archived, path: true})

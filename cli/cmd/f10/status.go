@@ -769,8 +769,12 @@ func renderRunRows(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent
 		headerRow(w, "ask", r.Ask, limit, plain)
 	}
 
-	if r.Final != "" {
-		headerRow(w, "final", r.Final, limit, faint)
+	if r.Wait != "" {
+		headerRow(w, "wait", r.Wait, limit, plain)
+	}
+
+	if final := r.FinalShown(); final != "" {
+		headerRow(w, "final", final, limit, faint)
 	}
 
 	age := ago(now, r.Updated)

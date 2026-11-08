@@ -18,5 +18,9 @@ func watchDrain(fore bool) (<-chan os.Signal, func()) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 
-	return ch, func() { signal.Stop(ch) }
+	// Stop guarantees no further send, so closing ends a loop ranging over ch
+	return ch, func() {
+		signal.Stop(ch)
+		close(ch)
+	}
 }
