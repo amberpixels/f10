@@ -50,3 +50,38 @@ func writeField(t *testing.T, dir, field, value string) {
 		t.Error(err)
 	}
 }
+
+// A clear waits for a writer holding the session's lock, so the writer's
+// save lands first and the clear removes it.
+func TestClearWaitsForAWriter(t *testing.T) {
+	dir := t.TempDir()
+	saving, cleared := make(chan struct{}), make(chan struct{})
+
+	go func() {
+		<-saving
+		Clear(dir, "s")
+		close(cleared)
+	}()
+
+	err := Update(dir, "s", time.Second, time.Now(), func(r *Run, _ bool) (bool, error) {
+		r.Note = "written"
+		close(saving)
+
+		select {
+		case <-cleared:
+			t.Error("Clear ran while the update held the lock")
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-cleared
+
+	if _, err := Load(Path(dir, "s")); err == nil {
+		t.Error("the update's save outlived the clear that came after it")
+	}
+}

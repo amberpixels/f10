@@ -3866,3 +3866,21 @@ func TestDriveEndStopsARunningVerify(t *testing.T) {
 		t.Fatal("the verify still runs after its run ended")
 	}
 }
+
+// Every way out of the drive loop, a drain included, waits out the kill of a
+// verify still running, since the process exits right after.
+func TestLeaveRunsHaltsAVerifyBeforeReturning(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+
+	log := filepath.Join(t.TempDir(), "verify.log")
+	r.verifying = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
+		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
+	})
+
+	fx.in.leaveRuns(t.Context(), []*driveRun{r})
+
+	if !r.verifying.finished() {
+		t.Fatal("leaveRuns returned with the verify still running")
+	}
+}

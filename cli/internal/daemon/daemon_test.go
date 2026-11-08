@@ -7,6 +7,7 @@ import (
 	"context"
 	stdlog "log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -592,13 +593,24 @@ func TestDrainReadsADriveNumberedLate(t *testing.T) {
 	}
 	done := serve(t, s)
 
-	script := `trap '' USR1; sleep 0.3; echo 7 > "$` + NumberFileEnv + `"; while :; do sleep 0.05; done`
+	trapped := filepath.Join(t.TempDir(), "trapped")
+	script := `trap '' USR1; : > '` + trapped + `'; sleep 0.3; echo 7 > "$` + NumberFileEnv +
+		`"; while :; do sleep 0.05; done`
 	run := Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/a"}
 	if _, err := Call(t.Context(), dir, run, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	time.Sleep(100 * time.Millisecond) // the trap is set before the drain signal lands
+	// a drain signal landing before the trap would kill the shell
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(trapped); err == nil {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("the drive never set its trap")
+		}
+	}
 
 	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
 		t.Fatal(err)

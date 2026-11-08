@@ -184,6 +184,17 @@ func startVerifyJob(ctx context.Context, run func(context.Context) (verifyRun, e
 	return job
 }
 
+// halt stops the job and waits for its kill to land, bounded as the verify's
+// own wait is, since the process may exit right after.
+func (j *verifyJob) halt() {
+	j.stop()
+
+	select {
+	case <-j.done:
+	case <-time.After(verifyWaitDelay):
+	}
+}
+
 // finished says the job is through, without waiting for it.
 func (j *verifyJob) finished() bool {
 	select {

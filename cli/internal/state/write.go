@@ -201,10 +201,18 @@ func atText(at int) string {
 
 func oneLine(s string) string { return strings.ReplaceAll(s, "\n", " ") }
 
-// Clear drops a session's state file. Absent is fine.
+// Clear drops a session's state file under the session's lock, so a writer
+// mid-update cannot save the cleared run back. Absent is fine; a lock held
+// past the wait still clears.
 func Clear(dir, session string) {
+	if release, err := flock.Wait(Path(dir, session)+lockExt, clearWait); err == nil {
+		defer release()
+	}
+
 	_ = os.Remove(Path(dir, session))
 }
+
+const clearWait = 2 * time.Second
 
 // RootOf is the checkout root a cwd is in; outside git, the cwd itself.
 func RootOf(cwd string) string {
@@ -484,7 +492,9 @@ func (r *Run) Backstop() bool {
 }
 
 var (
-	idToken       = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*-\d+$`)
+	// a prefix holding digits counts only upper-case (K8S-12), so a word like
+	// x86-64 that opens a description stays a description
+	idToken       = regexp.MustCompile(`^(?:[A-Za-z]+|[A-Z][A-Z0-9]*)-\d+$`)
 	numberToken   = regexp.MustCompile(`^\d+$`)
 	pipelineWord  = regexp.MustCompile(`^\s*[A-Za-z][A-Za-z0-9_-]*:\s+(.*)$`)
 	dryRunPattern = "--dry-run"
