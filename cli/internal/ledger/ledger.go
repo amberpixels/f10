@@ -20,6 +20,8 @@ import (
 	r3sqlite3 "github.com/amberpixels/r3/drivers/sqlite3"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // the cgo-free database/sql driver, registered as "sqlite"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // PathEnv overrides the database's path; the spool and machine id live
@@ -104,7 +106,7 @@ func Path() string {
 		return ""
 	}
 
-	return filepath.Join(home, ".f10", "f10.db")
+	return filepath.Join(storage.UserDir(home), "f10.db")
 }
 
 // A Ledger is an open database.

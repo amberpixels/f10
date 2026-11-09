@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A Scenario is one evals/scenarios/<name>/scenario.json.
@@ -291,7 +292,7 @@ func prepare(ctx context.Context, src, dir string) error {
 		return err
 	}
 
-	if err := os.Rename(filepath.Join(dir, "f10"), filepath.Join(dir, ".f10")); err != nil &&
+	if err := os.Rename(filepath.Join(dir, "f10"), storage.InRepo(dir).Path()); err != nil &&
 		!errors.Is(err, fs.ErrNotExist) {
 		return err
 	}

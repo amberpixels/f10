@@ -41,17 +41,13 @@ type driveFlow struct {
 }
 
 // storageFor is where a task's findings and verdicts are: its checkout's
-// storage root, else where its last run left them.
-func (src gateSource) storageFor(ctx context.Context, root string, run *state.Run) string {
+// storage root, else the shared one.
+func (src gateSource) storageFor(ctx context.Context, root string) string {
 	if root != "" {
-		return layout.Locate(ctx, root).StorageRoot
+		return layout.Locate(ctx, root).StorageRoot.Path()
 	}
 
-	if run == nil {
-		return src.shared
-	}
-
-	return finishedStorage(src.shared, run.Root)
+	return src.shared
 }
 
 // driveFlows maps each task of a drive neither cancelled nor done to the

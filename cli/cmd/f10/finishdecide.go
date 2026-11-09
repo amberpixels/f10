@@ -18,7 +18,7 @@ import (
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	// read before the merge archives the series, which raises the count
 	if in.change == "" {
-		in.change = changeOf(taskReviews(in.main, in.plansDir, in.task.ID))
+		in.change = changeOf(in.storage.Reviews(in.task.ID))
 	}
 
 	name, path, onMain, err := finishTarget(ctx, in)
@@ -32,7 +32,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	// a spike's worktree holds its experiment uncommitted, which the close
 	// discards; main's tree may hold anything, so it stays refused
-	spike := taskSpike(path, in.plansDir, in.task.ID)
+	spike := taskSpike(path, in.storage, in.task.ID)
 
 	switch {
 	case in.keep && spike == "":
@@ -54,7 +54,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	if !onMain {
 		ws, mainWS = workspaceAt(wss, path), workspaceAt(wss, in.main)
-		self = inside(in.cwd, path) || (ws != nil && in.workspace != "" && in.workspace == ws.ID)
+		self = gitx.Inside(in.cwd, path) || (ws != nil && in.workspace != "" && in.workspace == ws.ID)
 	}
 
 	if self && !in.yes {
@@ -179,7 +179,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 		}
 
 		// read before the merge, while the branch tip it was written at still exists
-		hand = handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
+		hand = handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
 
 		var sha string
 
@@ -248,7 +248,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 
 	in.step("archiving the plan")
 
-	archived, note, err := archivePlan(path, in.main, in.plansDir, in.task.ID)
+	archived, note, err := archivePlan(in.storage, in.task.ID)
 	if err := after.check("archiving the plan", err); err != nil {
 		return err
 	}
@@ -259,16 +259,16 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	notes = appendNote(notes, note)
-	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
+	notes = appendNote(notes, removeImages(in.storage, in.task.ID))
 
-	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
+	handoffSrc, handed := handoffTarget(in.storage, in.task.ID)
 
 	var reviews string
 
 	if end != nil {
-		reviews, err = closeSeries(taskReviews(in.main, in.plansDir, in.task.ID), *end)
+		reviews, err = closeSeries(in.storage.Reviews(in.task.ID), *end)
 	} else {
-		reviews, err = archiveReviews(taskReviews(in.main, in.plansDir, in.task.ID), seriesEnd{})
+		reviews, err = archiveReviews(in.storage.Reviews(in.task.ID), seriesEnd{})
 	}
 
 	if err := after.check("archiving the reviews", err); err != nil {
@@ -293,10 +293,10 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	// it, so a rerun after a failed removal still finds the spike
 	var spikeDst string
 
-	early := spike != "" && !onMain && inside(spike, path)
+	early := spike != "" && !onMain && gitx.Inside(spike, path)
 
 	if spike != "" {
-		spikeDst, err = spikeArchiveName(in.main, in.plansDir, in.task.ID)
+		spikeDst, err = spikeArchiveName(in.storage, in.task.ID)
 		if err == nil && early {
 			err = copySpike(spike, spikeDst)
 		}

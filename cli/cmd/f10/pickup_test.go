@@ -359,7 +359,11 @@ func TestStartPicksUpAPR(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, pick: pickGH}); err != nil {
+	if err := start(
+		t.Context(),
+		&out,
+		startInput{main: "/code/repo", storage: testStorage, task: gh1, pick: pickGH},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -405,7 +409,13 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", task: gh1, pick: pickMerged, title: titled("Fix login", nil)}
+	in := startInput{
+		main:    "/code/repo",
+		storage: testStorage,
+		task:    gh1,
+		pick:    pickMerged,
+		title:   titled("Fix login", nil),
+	}
 	if err := start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +459,13 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", task: gh1, pick: pickMerged, title: titled("Fix login", nil)}
+	in := startInput{
+		main:    "/code/repo",
+		storage: testStorage,
+		task:    gh1,
+		pick:    pickMerged,
+		title:   titled("Fix login", nil),
+	}
 	if err := start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +511,11 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 		"{}",
 	)
 
-	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: "/code/repo", task: gh1}); err != nil {
+	if err := start(
+		t.Context(),
+		&bytes.Buffer{},
+		startInput{main: "/code/repo", storage: testStorage, task: gh1},
+	); err != nil {
 		t.Fatal(err)
 	}
 

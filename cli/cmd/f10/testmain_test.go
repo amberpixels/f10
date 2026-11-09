@@ -12,11 +12,17 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // testRoot holds every user-level dir for the run, so a test that sets
 // nothing still never reads or writes the developer's own HOME.
 var testRoot string
+
+// testStorage is the storage root of a fixture that names none. The fakes
+// drop the agent grants it adds, so a test that does not care about storage
+// scripts the agent start without them.
+var testStorage storage.Root
 
 // cleared is the environment the developer's shell may set, which would
 // otherwise leak into the tests. The dir overrides among it are cleared, not
@@ -51,6 +57,7 @@ func TestMain(m *testing.M) {
 	}
 
 	home := filepath.Join(testRoot, "home")
+	testStorage = storage.Root(filepath.Join(testRoot, "storage"))
 
 	for _, name := range cleared {
 		_ = os.Unsetenv(name)

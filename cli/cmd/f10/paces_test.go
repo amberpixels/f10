@@ -222,12 +222,12 @@ func TestStartRecordsThePace(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
-	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: testStorage.Plan("GH-7")}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, ultra, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", task: gh1, flow: ultra, pace: "ultra", after: "GH-7"}
+	in := startInput{main: "/code/repo", storage: testStorage, task: gh1, flow: ultra, pace: "ultra", after: "GH-7"}
 	if err := start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}

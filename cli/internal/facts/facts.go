@@ -444,14 +444,14 @@ func storageField(name string, lay *layout.Layout) Field {
 		if l.Label == "out-of-tree" {
 			return Field{
 				Name:   name,
-				Value:  "out-of-tree (" + lay.StorageRoot + ")",
+				Value:  "out-of-tree (" + string(lay.StorageRoot) + ")",
 				Origin: OriginDetected,
 				Source: l.Dir,
 			}
 		}
 	}
 
-	return Field{Name: name, Value: "in-repo (" + lay.StorageRoot + ")", Origin: OriginDefault}
+	return Field{Name: name, Value: "in-repo (" + string(lay.StorageRoot) + ")", Origin: OriginDefault}
 }
 
 // parseFile splits one project.md into contract sections, opened by a

@@ -530,25 +530,9 @@ func TestOutcomesRoundTwo(t *testing.T) {
 
 func TestStorageFor(t *testing.T) {
 	shared := t.TempDir()
-	checkout := t.TempDir()
-	writeFile(t, filepath.Join(checkout, ".f10", "verdicts", "FT-1", "1.md"), "task: FT-1\nverdict: proceed\n")
 
-	run := &state.Run{Root: checkout}
-
-	if got := (gateSource{shared: shared}).storageFor(context.Background(), "", run); got != shared {
-		t.Errorf("out-of-tree: %q, want %q", got, shared)
-	}
-
-	if got := (gateSource{}).storageFor(context.Background(), "", run); got != filepath.Join(checkout, ".f10") {
-		t.Errorf("in-repo, checkout on disk: %q", got)
-	}
-
-	if got := (gateSource{}).storageFor(
-		context.Background(),
-		"",
-		&state.Run{Root: filepath.Join(checkout, "gone")},
-	); got != "" {
-		t.Errorf("in-repo, checkout gone: %q", got)
+	if got := (gateSource{shared: shared}).storageFor(context.Background(), ""); got != shared {
+		t.Errorf("no checkout: %q, want %q", got, shared)
 	}
 }
 

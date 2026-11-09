@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -321,7 +320,7 @@ func (t *target) imagesDir(ctx context.Context, id string) string {
 		_, _ = excludeF10(ctx, t.lay.CheckoutRoot)
 	}
 
-	return filepath.Join(t.lay.StorageRoot, "images", strings.ToUpper(id))
+	return t.lay.StorageRoot.Images(strings.ToUpper(id))
 }
 
 // githubAuth sends the gh token only to GitHub's own hosts over https,

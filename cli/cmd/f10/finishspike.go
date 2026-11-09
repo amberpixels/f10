@@ -9,30 +9,24 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A spike's run ends at its report with the experiment uncommitted and no
 // PR, so finish closes it without a merge.
 
-func taskSpikesDir(checkout, plansDir string) string {
-	if plansDir != "" {
-		return filepath.Join(filepath.Dir(plansDir), "spikes")
-	}
-
-	return filepath.Join(checkout, ".f10", "spikes")
-}
-
-// taskSpike is the task's spike report, "" for none. A plan that is not a
-// spike's wins over a report, so a report left from an earlier spike never
-// closes a task planned again as something else.
-func taskSpike(checkout, plansDir, id string) string {
-	for _, dir := range []string{taskSpikesDir(checkout, plansDir), filepath.Join(checkout, ".f10", "spikes")} {
+// taskSpike is the task's spike report, "" for none: the shared one, else
+// one the checkout keeps in its own storage. A plan that is not a spike's
+// wins over a report, so a report left from an earlier spike never closes a
+// task planned again as something else.
+func taskSpike(checkout string, root storage.Root, id string) string {
+	for _, dir := range []string{root.Spikes(), storage.InRepo(checkout).Spikes()} {
 		p := filepath.Join(dir, id+".md")
 		if !exists(p) {
 			continue
 		}
 
-		if plan := taskPlan(checkout, plansDir, id); exists(plan) && !spikePlan(plan) {
+		if plan := root.Plan(id); exists(plan) && !spikePlan(plan) {
 			return ""
 		}
 
@@ -63,11 +57,8 @@ func spikePlan(path string) bool {
 
 // spikeArchiveName is <id>.spike.md in the plans archive, which also counts
 // the task finished for a spike planned inline with no plan file.
-func spikeArchiveName(main, plansDir, id string) (string, error) {
-	dst := filepath.Join(main, ".f10", "plans", "archive")
-	if plansDir != "" {
-		dst = filepath.Join(plansDir, "archive")
-	}
+func spikeArchiveName(root storage.Root, id string) (string, error) {
+	dst := root.Archive()
 
 	if err := os.MkdirAll(dst, 0o750); err != nil {
 		return "", fmt.Errorf("archiving the spike report: %w", err)

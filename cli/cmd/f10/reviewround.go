@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -38,7 +37,7 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	dir := filepath.Join(t.lay.StorageRoot, "reviews", name)
+	dir := t.lay.StorageRoot.Reviews(name)
 
 	var series roundSeries
 
