@@ -66,7 +66,7 @@
   "traces": true,
   "lore": "committed",
   "loreGate": "block",
-  "staleAfter": "2w",
+  "staleAfter": "14d",
   "driverTimeout": "2m0s",
   "flows": {
     "default": [

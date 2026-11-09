@@ -67,7 +67,7 @@ type Effective struct {
 	Traces         bool                 `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
 	Lore           string               `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
 	LoreGate       string               `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
-	StaleAfter     StaleAfter           `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; zero is off
+	StaleAfter     StaleAfter           `json:"staleAfter,omitzero"`   // stale_after: a task older than this is judged before it is planned; zero is off
 	DriverTimeout  time.Duration        `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
 	Flows          map[string]flow.Flow `json:"flows"`                 // a flow's name to its entries, written as declared
 	FlowByArea     map[string]string    `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
@@ -199,8 +199,8 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 
 	eff := &Effective{
 		Layering:   lay.Layering,
-		Visibility: "stealth",
-		Storage:    "in-repo",
+		Visibility: scalarNamed("visibility").def,
+		Storage:    scalarNamed("storage").def,
 		Problems:   problems,
 	}
 

@@ -45,7 +45,7 @@ type view struct {
 	Traces          bool                 `json:"traces"`
 	Lore            string               `json:"lore"`
 	LoreGate        string               `json:"loreGate"`
-	StaleAfter      facts.StaleAfter     `json:"staleAfter,omitempty"`
+	StaleAfter      facts.StaleAfter     `json:"staleAfter,omitzero"`
 	DriverTimeout   string               `json:"driverTimeout"` // driver_timeout, as a Go duration
 	Flows           map[string]flow.Flow `json:"flows"`
 	FlowByArea      map[string]string    `json:"flowByArea,omitempty"`

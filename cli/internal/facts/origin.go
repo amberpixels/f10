@@ -158,40 +158,43 @@ func (k *TrackerKind) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// StaleAfter is the age past which a task is judged before it is planned;
-// zero is off.
-type StaleAfter time.Duration
-
-const week = 7 * 24 * time.Hour
-
-// String is the value in the frontmatter's form: whole weeks as `3w`,
-// anything else as days.
-func (s StaleAfter) String() string {
-	d := time.Duration(s)
-
-	switch {
-	case d <= 0:
-		return ""
-	case d%week == 0:
-		return fmt.Sprintf("%dw", d/week)
-	default:
-		return fmt.Sprintf("%dd", d/(24*time.Hour))
-	}
+// StaleAfter is the age past which a task is judged before it is planned,
+// kept with the word that declared it, since the stale mark quotes the
+// user's `14d` back rather than an equal `2w`. The zero value is off.
+type StaleAfter struct {
+	Duration time.Duration
+	declared string
 }
 
-// MarshalText keeps the JSON the frontmatter's form.
-func (s StaleAfter) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+// NewStaleAfter reads a stale_after value, `10d` or `3w`.
+func NewStaleAfter(value string) (StaleAfter, error) {
+	d, err := ParseStaleAfter(value)
+	if err != nil {
+		return StaleAfter{}, err
+	}
 
-// UnmarshalText reads the frontmatter's form.
+	return StaleAfter{Duration: d, declared: value}, nil
+}
+
+// On says a stale_after is in force.
+func (s StaleAfter) On() bool { return s.Duration > 0 }
+
+// String is the value as declared; "" when off.
+func (s StaleAfter) String() string { return s.declared }
+
+// MarshalText keeps the JSON the declared form.
+func (s StaleAfter) MarshalText() ([]byte, error) { return []byte(s.declared), nil }
+
+// UnmarshalText reads the declared form.
 func (s *StaleAfter) UnmarshalText(text []byte) error {
 	if len(text) == 0 {
-		*s = 0
+		*s = StaleAfter{}
 
 		return nil
 	}
 
-	d, err := ParseStaleAfter(string(text))
-	*s = StaleAfter(d)
+	v, err := NewStaleAfter(string(text))
+	*s = v
 
 	return err
 }

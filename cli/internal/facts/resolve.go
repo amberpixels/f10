@@ -101,7 +101,7 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 
 	// out-of-tree declares itself by location, so finding it there is
 	// detection, not the registry's default
-	storageDefault := Fact{Key: "storage", Value: "in-repo", Origin: OriginOf(OriginDefault)}
+	storageDefault := Fact{Key: "storage", Value: scalarNamed("storage").def, Origin: OriginOf(OriginDefault)}
 	if outOfTree(lay) {
 		storageDefault = Fact{Key: "storage", Value: "out-of-tree", Origin: OriginOf(OriginDetected)}
 		e.Storage = "out-of-tree"
@@ -263,9 +263,9 @@ func (e *Effective) resolveHosting(fm *layered) {
 	e.Lore = e.scalar(fm, "lore")
 	e.LoreGate = e.scalar(fm, "lore_gate")
 
-	// the default, off, does not parse, and leaves the duration zero
-	if d, err := ParseStaleAfter(e.scalar(fm, "stale_after")); err == nil {
-		e.StaleAfter = StaleAfter(d)
+	// the default, off, does not parse, and leaves stale_after off
+	if s, err := NewStaleAfter(e.scalar(fm, "stale_after")); err == nil {
+		e.StaleAfter = s
 	}
 
 	// a bad value is already a problem that stops the command; the default

@@ -199,7 +199,7 @@ func (h host) issueCreated(ctx context.Context, number string) (time.Time, error
 // staleAt is task read's stale mark and task stale's age check in one place,
 // so the two never disagree; an undeclared or bad stale_after is never stale.
 func staleAt(created time.Time, staleAfter facts.StaleAfter, now time.Time) bool {
-	return staleAfter > 0 && !created.IsZero() && now.Sub(created) > time.Duration(staleAfter)
+	return staleAfter.On() && !created.IsZero() && now.Sub(created) > staleAfter.Duration
 }
 
 func (h host) issueURL(ctx context.Context, number string) (string, error) {

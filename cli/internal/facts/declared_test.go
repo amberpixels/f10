@@ -425,7 +425,7 @@ func TestStaleAfter(t *testing.T) {
 		t,
 		none,
 		"stale_after",
-	); none.StaleAfter != 0 || f.Origin.Kind != OriginDefault ||
+	); none.StaleAfter.On() || f.Origin.Kind != OriginDefault ||
 		f.Value != "off" {
 		t.Errorf("undeclared = %q, %+v", none.StaleAfter, f)
 	}

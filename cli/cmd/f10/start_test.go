@@ -485,7 +485,7 @@ func TestHostRefusesPullRequests(t *testing.T) {
 		t.Context(),
 		"FT-35",
 		"35",
-		0,
+		facts.StaleAfter{},
 	); err == nil ||
 		!strings.Contains(err.Error(), "#35 is a pull request") {
 		t.Errorf("issueDoc = %v", err)
