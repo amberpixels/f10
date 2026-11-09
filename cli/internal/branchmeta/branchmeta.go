@@ -39,12 +39,15 @@ const (
 	// Agent is the whole profile (kind:model:effort) a start or drive gave
 	// the branch's agent, read back on a rerun; absent for the kind's default.
 	Agent Key = "f10-agent"
-	// Finish is `f10 drive`'s record of where its finish of the branch
-	// stands. Whether the drive still runs is its task's lease, never this.
+	// Finish is `f10 drive`'s record that it finishes the branch, and where
+	// that finish stands. Whether the drive still runs is its task's lease,
+	// never this: finish removes it with the branch, and a drive that stops
+	// short sets it back to queued.
 	Finish Key = "f10-finish"
-	// Drive is the last chain skill drive saw the task finish.
+	// Drive is the last skill drive saw the task finish: plan, ship or finish.
 	Drive Key = "f10-drive"
-	// Chain is the chain drive runs the task through, space-joined.
+	// Chain is the skills an older drive ran the task through, space-joined.
+	// Drive no longer writes it, and removes one it finds.
 	Chain Key = "f10-chain"
 	// Flow and Pace are what a started task runs, for status and a rerun.
 	Flow Key = "f10-flow"

@@ -21,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -937,10 +938,10 @@ func TestSiblingPathAndAgentName(t *testing.T) {
 }
 
 func TestResolveShipFlow(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string][]string{
-		"default": {"plan", "implement", "review:local", "pr"},
-		"local":   {"plan", "implement", "commit"},
-		"direct":  {"implement", "push"},
+	eff := &facts.Effective{Flows: map[string]flow.Flow{
+		"default": flow.Of([]string{"plan", "implement", "review:local", "pr"}),
+		"local":   flow.Of([]string{"plan", "implement", "commit"}),
+		"direct":  flow.Of([]string{"implement", "push"}),
 	}}
 
 	for name, want := range map[string]shipFlow{

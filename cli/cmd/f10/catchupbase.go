@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -82,7 +83,7 @@ type catchupInput struct {
 
 func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 	guard := cmd.String("guard")
-	if guard != "" && !slices.Contains([]string{"implement", "pr", "judge"}, guard) {
+	if guard != "" && !slices.Contains(flow.Guarded, guard) {
 		return fmt.Errorf("--guard %q: want implement, pr or judge", guard)
 	}
 

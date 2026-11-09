@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -22,8 +23,7 @@ import (
 type gateSource struct {
 	events []ledger.Event
 	main   string // where the branch config lives
-	flows  map[string][]string
-	labels map[string][]string // each flow's entry labels, as Effective.FlowLabels
+	flows  map[string]flow.Flow
 	review facts.Review
 	store  *lore.Store
 	host   *host
@@ -96,30 +96,32 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	// the branch's record, else the drive that will open the task: a
 	// stopped drive's record speaks only for a task with no branch yet,
 	// since a branch it never recorded may have been started another way
-	flow := "default"
+	name := "default"
 	if d := src.driveFlows[strings.ToUpper(id)]; d.running || branch == "" {
-		flow = cmp.Or(d.name, flow)
+		name = cmp.Or(d.name, name)
 	}
 
 	if branch != "" && src.main != "" {
-		in.chain = strings.Fields(branchmeta.Out(ctx, src.main, branch, branchmeta.Chain))
 		in.driven = branchmeta.Out(ctx, src.main, branch, branchmeta.Drive)
-		// the record outlives a killed drive; the lease does not
-		if _, held := drives.Probe(src.shared, id); held {
-			rec := branchmeta.Out(ctx, src.main, branch, branchmeta.Finish)
-			in.finish, _ = branchmeta.ParseDriveFinish(rec)
+		// the record says drive finishes the branch, and outlives a halted or
+		// killed drive; what finish is doing counts only under the lease
+		rec, ok := branchmeta.ParseDriveFinish(branchmeta.Out(ctx, src.main, branch, branchmeta.Finish))
+		if _, held := drives.Probe(src.shared, id); ok && held {
+			in.finish = rec
 		}
+
+		in.finishes = ok
 
 		if recorded := branchmeta.Out(ctx, src.main, branch, branchmeta.Flow); recorded != "" {
-			flow = recorded
+			name = recorded
 		}
 	}
 
-	if _, ok := src.flows[flow]; !ok {
-		flow = "default"
+	if _, ok := src.flows[name]; !ok {
+		name = "default"
 	}
 
-	in.pipeline, in.labels = facts.ShipEntries(src.flows[flow]), facts.ShipLabels(src.flows[flow], src.labels[flow])
+	in.pipeline = src.flows[name].Ship()
 
 	if src.host != nil && branch != "" && src.review.Remote() {
 		h := *src.host

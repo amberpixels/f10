@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // A run reads only the steps f10-load-project.sh prints, so a step a skill
@@ -31,7 +33,7 @@ var (
 		"review",
 	}
 	nonFlowSteps = []string{"brainstorm", "capture", "debug", "explain", "fetch", "plan", "standup"}
-	guardedSteps = []string{"implement", "pr", "judge"}
+	guardedSteps = flow.Guarded
 )
 
 func shipLoads() [][]string {

@@ -12,49 +12,50 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/projects"
 )
 
 // A view is the one model both outputs render - the human table and --json
 // marshal the same struct, so they cannot disagree.
 type view struct {
-	CheckoutRoot    string              `json:"checkoutRoot"`
-	StorageRoot     string              `json:"storageRoot"`
-	Instructions    string              `json:"instructions"` // source description, f10-load-project.sh wording
-	NestedIgnored   string              `json:"nestedIgnored,omitempty"`
-	Remote          string              `json:"remote,omitempty"`
-	PlansDir        string              `json:"plansDir"`
-	Plans           []string            `json:"plans,omitempty"`
-	Fields          []facts.Field       `json:"fields"`
-	Unrecognized    []facts.Field       `json:"unrecognized,omitempty"`
-	Layering        string              `json:"layering"`
-	Visibility      string              `json:"visibility"`
-	Storage         string              `json:"storage"`
-	TrackerKind     string              `json:"trackerKind,omitempty"`
-	IDPrefix        string              `json:"idPrefix,omitempty"`
-	IDPrefixOrigin  string              `json:"idPrefixOrigin,omitempty"`
-	IDPrefixDerived bool                `json:"idPrefixDerived,omitempty"`
-	PriorityLabels  map[string]string   `json:"priorityLabels,omitempty"` // host label to priority level, from tracker.priority
-	TrackerStatus   map[string]string   `json:"trackerStatus,omitempty"`  // started and shipped to the tracker's words, from tracker.status
-	TitleTemplate   string              `json:"titleTemplate,omitempty"`  // tracker.title, the template task titles are written through
-	Review          facts.Review        `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
-	MergeMethod     string              `json:"mergeMethod,omitempty"`
-	Catchup         string              `json:"catchup"`
-	CatchupStacked  string              `json:"catchupStacked"`
-	Traces          bool                `json:"traces"`
-	Lore            string              `json:"lore"`
-	LoreGate        string              `json:"loreGate"`
-	StaleAfter      string              `json:"staleAfter,omitempty"`
-	Flows           map[string][]string `json:"flows"`
-	FlowByArea      map[string]string   `json:"flowByArea,omitempty"`
-	ReportBack      bool                `json:"reportBack"`
-	Agents          []agentEntry        `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
-	Paces           []paceEntry         `json:"paces,omitempty"`   // every pace's keys, built-ins under the user's under the project's, each with its origin
-	Pace            *paceEntry          `json:"pace,omitempty"`    // the default pace, when any layer names one
-	Ceiling         []paceEntry         `json:"ceiling,omitempty"` // the project's cap on every pace, a key per entry, except last
-	Facts           []facts.Fact        `json:"facts"`             // every typed value with its origin
-	Problems        []facts.Problem     `json:"problems,omitempty"`
-	Roots           []string            `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
+	CheckoutRoot    string               `json:"checkoutRoot"`
+	StorageRoot     string               `json:"storageRoot"`
+	Instructions    string               `json:"instructions"` // source description, f10-load-project.sh wording
+	NestedIgnored   string               `json:"nestedIgnored,omitempty"`
+	Remote          string               `json:"remote,omitempty"`
+	PlansDir        string               `json:"plansDir"`
+	Plans           []string             `json:"plans,omitempty"`
+	Fields          []facts.Field        `json:"fields"`
+	Unrecognized    []facts.Field        `json:"unrecognized,omitempty"`
+	Layering        string               `json:"layering"`
+	Visibility      string               `json:"visibility"`
+	Storage         string               `json:"storage"`
+	TrackerKind     string               `json:"trackerKind,omitempty"`
+	IDPrefix        string               `json:"idPrefix,omitempty"`
+	IDPrefixOrigin  string               `json:"idPrefixOrigin,omitempty"`
+	IDPrefixDerived bool                 `json:"idPrefixDerived,omitempty"`
+	PriorityLabels  map[string]string    `json:"priorityLabels,omitempty"` // host label to priority level, from tracker.priority
+	TrackerStatus   map[string]string    `json:"trackerStatus,omitempty"`  // started and shipped to the tracker's words, from tracker.status
+	TitleTemplate   string               `json:"titleTemplate,omitempty"`  // tracker.title, the template task titles are written through
+	Review          facts.Review         `json:"review,omitzero"`          // the remote review's four facts, zero when none is declared
+	MergeMethod     string               `json:"mergeMethod,omitempty"`
+	Catchup         string               `json:"catchup"`
+	CatchupStacked  string               `json:"catchupStacked"`
+	Traces          bool                 `json:"traces"`
+	Lore            string               `json:"lore"`
+	LoreGate        string               `json:"loreGate"`
+	StaleAfter      string               `json:"staleAfter,omitempty"`
+	Flows           map[string]flow.Flow `json:"flows"`
+	FlowByArea      map[string]string    `json:"flowByArea,omitempty"`
+	ReportBack      bool                 `json:"reportBack"`
+	Agents          []agentEntry         `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
+	Paces           []paceEntry          `json:"paces,omitempty"`   // every pace's keys, built-ins under the user's under the project's, each with its origin
+	Pace            *paceEntry           `json:"pace,omitempty"`    // the default pace, when any layer names one
+	Ceiling         []paceEntry          `json:"ceiling,omitempty"` // the project's cap on every pace, a key per entry, except last
+	Facts           []facts.Fact         `json:"facts"`             // every typed value with its origin
+	Problems        []facts.Problem      `json:"problems,omitempty"`
+	Roots           []string             `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
 
 // withAgents puts the merged agents map on the view: one row per key in

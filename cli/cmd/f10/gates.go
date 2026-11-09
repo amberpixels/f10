@@ -9,6 +9,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/timing"
@@ -76,11 +77,10 @@ type gateInput struct {
 
 	run      *state.Run // live, or the ledger's last claim; nil for none
 	events   []ledger.Event
-	chain    []string               // drive's chain recorded on the branch
-	driven   string                 // the last chain skill drive saw finish
+	driven   string                 // the last skill drive saw finish: plan, ship or finish
+	finishes bool                   // drive finishes the branch: its finish record is there
 	finish   branchmeta.DriveFinish // drive's record of running finish, zero for none or a drive gone
-	pipeline []string               // ship's entries of the branch's flow, when the run recorded none
-	labels   []string               // pipeline's display labels by index; nil when none
+	pipeline flow.Flow              // ship's entries of the branch's flow, when the run recorded none
 	// remoteFlow is a remote reviewer declared: it reviews every PR
 	remoteFlow bool
 
@@ -91,12 +91,12 @@ type gateInput struct {
 
 // taskGates builds the gates, nil when nothing declares a flow.
 func taskGates(ctx context.Context, in gateInput) []gate {
-	entries, labels, firstShip, shipLen := in.flow()
+	entries := in.flow()
 	if len(entries) == 0 {
 		return nil
 	}
 
-	steps := in.stepStates(entries, firstShip, shipLen)
+	steps := in.stepStates(entries)
 
 	var (
 		gates               []gate
@@ -106,12 +106,10 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	)
 
 	for i, e := range entries {
-		base, qual := facts.SplitEntry(e)
-
-		switch base {
+		switch e.Step {
 		case "review":
 			// review:local+ci is one entry running both reviews
-			by := in.reviewBy(entries, i, qual)
+			by := in.reviewBy(entries, i)
 			local, remote = local || by.Local, remote || by.CI
 
 			if review < 0 {
@@ -119,7 +117,7 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 				gates = append(gates, gate{Step: "review"})
 			}
 		case "judge":
-			judged := facts.JudgeKind(entries, i)
+			judged := entries.JudgeKind(i)
 
 			if _, ok := judges[judged]; !ok {
 				judges[judged] = len(gates)
@@ -128,11 +126,11 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 		case "finish":
 			gates = append(gates, in.finishGate(steps[i]))
 		default:
-			if base == "pr" {
+			if e.Step == "pr" {
 				isPR = true
 			}
 
-			g := gate{Step: e, Label: state.LabelAt(labels, i), State: steps[i]}
+			g := gate{Step: e.String(), Label: e.Label, State: steps[i]}
 			if g.State == gateWaiting {
 				g.Action = "on " + in.run.Wait
 			}
@@ -192,61 +190,46 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 	return gates
 }
 
-// flow is the entries the task runs through, their labels by index, the
-// index of ship's first one and how many are ship's. plan and resolve are no
-// gates: the plan phase row shows the one, a review gate folds in the other.
-func (in gateInput) flow() ([]string, []string, int, int) {
-	pipeline, labels := in.pipeline, in.labels
+// flow is the entries the task runs through: ship's, then finish when
+// drive finishes the branch. plan and resolve are no gates: the plan phase
+// row shows the one, a review gate folds in the other.
+func (in gateInput) flow() flow.Flow {
+	entries := in.pipeline
 	if in.run != nil && len(in.run.Pipeline) > 0 {
-		pipeline, labels = in.run.Pipeline, in.run.Labels
+		entries = in.run.Entries()
 	}
 
-	if len(in.chain) == 0 {
-		return pipeline, labels, 0, len(pipeline)
+	if in.finishes {
+		entries = append(slices.Clip(entries), flow.Entry{Step: "finish"})
 	}
 
-	var entries, chainLabels []string
-
-	firstShip, shipLen := -1, 0
-
-	for _, c := range in.chain {
-		switch c {
-		case "plan", "resolve":
-		case "ship":
-			firstShip, shipLen = len(entries), len(pipeline)
-			for i := range pipeline {
-				chainLabels = append(chainLabels, state.LabelAt(labels, i))
-			}
-
-			entries = append(entries, pipeline...)
-		default:
-			entries, chainLabels = append(entries, c), append(chainLabels, "")
-		}
-	}
-
-	if firstShip < 0 {
-		firstShip = len(entries)
-	}
-
-	return entries, chainLabels, firstShip, shipLen
+	return entries
 }
 
 // stepStates follows the claims ship's session made: steps before the one
 // it is on are done, that one has the run's status, the rest are pending.
-func (in gateInput) stepStates(entries []string, firstShip, shipLen int) []string {
+// finish is done once drive recorded it.
+func (in gateInput) stepStates(entries flow.Flow) []string {
 	states := make([]string, len(entries))
 	for i := range states {
 		states[i] = gatePending
 	}
 
-	in.chainStates(entries, states, shipLen)
+	shipLen := len(entries)
+	if in.finishes {
+		shipLen--
+
+		if in.driven == "finish" {
+			states[shipLen] = gateDone
+		}
+	}
 
 	r := in.run
 	if r == nil || shipLen == 0 || r.Ship == "pending" || r.Ship == "" || r.Ship == "skipped" {
 		return states
 	}
 
-	ship := entries[firstShip : firstShip+shipLen]
+	ship := entries[:shipLen].Strings()
 	at, j := -1, 0
 
 	for _, step := range shipSteps(in.events, r.Session, in.now) {
@@ -277,36 +260,10 @@ func (in gateInput) stepStates(entries []string, firstShip, shipLen int) []strin
 			s = gatePending
 		}
 
-		states[firstShip+k] = s
+		states[k] = s
 	}
 
 	return states
-}
-
-func (in gateInput) chainStates(entries, states []string, shipLen int) {
-	last := slices.Index(in.chain, in.driven)
-	if last < 0 {
-		return
-	}
-
-	i := 0
-
-	for ci, c := range in.chain {
-		switch c {
-		case "plan", "resolve":
-			continue
-		case "ship":
-			i += shipLen
-
-			continue
-		}
-
-		if i < len(entries) && ci <= last {
-			states[i] = gateDone
-		}
-
-		i++
-	}
 }
 
 func (in gateInput) finishGate(st string) gate {
@@ -330,27 +287,19 @@ func (in gateInput) shipDone() bool {
 		return true
 	}
 
-	ship, last := slices.Index(in.chain, "ship"), slices.Index(in.chain, in.driven)
-
-	return ship >= 0 && last >= ship
+	return in.driven == "ship" || in.driven == "finish"
 }
 
 // reviewBy is who the review entry at i runs, an optional CI review
 // settled as the flow resolution settles it.
-func (in gateInput) reviewBy(entries []string, i int, arg string) facts.By {
-	published := slices.ContainsFunc(entries[:i], func(e string) bool {
-		step, _ := facts.SplitEntry(e)
-
-		return step == "pr" || step == "push"
-	})
-
-	by, _ := facts.ReviewBy(arg)
-	by, _ = by.Settle(in.remoteFlow, published)
+func (in gateInput) reviewBy(entries flow.Flow, i int) facts.By {
+	by, _ := facts.ReviewBy(entries[i].Arg)
+	by, _ = by.Settle(in.remoteFlow, entries.PublishedBefore(i))
 
 	return by
 }
 
-func (in gateInput) half(entries, steps []string, remote, inFlow bool) *reviewHalf {
+func (in gateInput) half(entries flow.Flow, steps []string, remote, inFlow bool) *reviewHalf {
 	h := in.readHalf(entries, steps, remote)
 
 	// a half the flow does not declare shows once something ran it
@@ -361,7 +310,7 @@ func (in gateInput) half(entries, steps []string, remote, inFlow bool) *reviewHa
 	return h
 }
 
-func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
+func (in gateInput) readHalf(entries flow.Flow, steps []string, remote bool) *reviewHalf {
 	rounds, last := in.outcomes.local, in.outcomes.localAt
 	if remote {
 		rounds, last = in.outcomes.remote, in.outcomes.remoteAt
@@ -378,11 +327,10 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 
 	// ship on a review entry running this review, alone or beside the other
 	for i, e := range entries {
-		base, qual := facts.SplitEntry(e)
-		by := in.reviewBy(entries, i, qual)
+		by := in.reviewBy(entries, i)
 		l, r := by.Local, by.CI
 
-		if base != "review" || (remote && !r) || (!remote && !l) {
+		if e.Step != "review" || (remote && !r) || (!remote && !l) {
 			continue
 		}
 
@@ -393,7 +341,7 @@ func (in gateInput) readHalf(entries, steps []string, remote bool) *reviewHalf {
 			// a round written since ship entered the review is being resolved;
 			// with both halves in the entry, only once both have landed
 			if in.run != nil {
-				since := in.claimedAt(in.run.Session, e)
+				since := in.claimedAt(in.run.Session, e.String())
 
 				own, other := last.After(since), true
 				if l && r {
@@ -447,7 +395,7 @@ func (in gateInput) hostHalf(ctx context.Context, h *reviewHalf) {
 	}
 }
 
-func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
+func (in gateInput) judge(g *gate, judged string, entries flow.Flow, steps []string) {
 	out, last := in.outcomes.changeJudge, in.outcomes.changeAt
 	if judged == "plan" {
 		out, last = in.outcomes.planJudge, in.outcomes.planAt
@@ -459,7 +407,7 @@ func (in gateInput) judge(g *gate, judged string, entries, steps []string) {
 	}
 
 	for i, e := range entries {
-		if base, _ := facts.SplitEntry(e); base != "judge" {
+		if e.Step != "judge" {
 			continue
 		}
 

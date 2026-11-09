@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -62,8 +63,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	fx.f.script("git rev-parse -q --verify HEAD", "head0")
 	fx.f.script("git merge-tree --write-tree --no-messages main0 HEAD", "tree")
 
-	// a test names the chain after the ids to run the machinery on any
-	// skill; drive itself derives the chain from the flow
+	// a test names the skills after the ids to run the machinery on any
+	// skill; drive itself reads them off the flow
 	testChainSkills := []string{"plan", "judge", "ship", "review", "resolve", "finish"}
 
 	var chain, rest []string
@@ -105,7 +106,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		},
 		args:     a,
 		argv:     args,
-		chain:    chain,
+		sequence: func(shipFlow) []string { return chain },
 		stateDir: t.TempDir(),
 		ttl:      state.DefaultTTL,
 		now:      func() time.Time { return fx.clock },
@@ -185,7 +186,7 @@ func (fx *driveFixture) opensOn(id, ws, pane, profile string) {
 
 // expects scripts the prompt for one skill and the record of it done.
 func (fx *driveFixture) expects(id, skill string) {
-	prompt := skillPrompt(skill, id, nil, shipFlow{}, slices.Contains(fx.in.chain, "finish"))
+	prompt := skillPrompt(skill, id, nil, shipFlow{}, slices.Contains(fx.in.sequenceOf(shipFlow{}), "finish"))
 	fx.f.script("herdr agent prompt "+agentOf(id)+" "+prompt, "{}")
 }
 
@@ -456,6 +457,7 @@ func (fx *driveFixture) assertOrder(t *testing.T, want []string, prefixes ...str
 func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.f.meta.Seed("GH-1", branchmeta.Chain, "judge") // an older drive's
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
@@ -482,8 +484,12 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 		t.Error("an asked skill was recorded as done")
 	}
 
-	if !fx.f.called("set branch.GH-1." + string(branchmeta.Chain) + " judge") {
-		t.Error("the chain was not recorded on the branch")
+	if fx.f.called("set branch.GH-1." + string(branchmeta.Chain)) {
+		t.Error("drive recorded a chain on the branch; it reads the skills off the flow")
+	}
+
+	if !fx.f.meta.Unsetted("GH-1", branchmeta.Chain) {
+		t.Error("drive left the chain an older drive stored on the branch")
 	}
 }
 
@@ -1778,15 +1784,15 @@ func TestDriveChain(t *testing.T) {
 		{shipFlow{name: "direct", planless: true}, "ship finish"},
 		{shipFlow{name: "direct", planless: true, finish: "off"}, "ship"},
 	} {
-		if got := strings.Join(driveChain(c.fl), " "); got != c.want {
+		if got := strings.Join(driveSkills(c.fl), " "); got != c.want {
 			t.Errorf("%+v = %q, want %q", c.fl, got, c.want)
 		}
 	}
 }
 
 // Medium and a user pace with no finish dial end in finish; slow does not.
-func TestDriveChainFinishesByDefault(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+func TestDriveSkillsFinishByDefault(t *testing.T) {
+	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 	set := facts.NewPaceSet()
 	set.Over(map[string]facts.Pace{"mine": {"judge": {Off: true}}}, func(string, string) string { return "test" })
 
@@ -1800,8 +1806,8 @@ func TestDriveChainFinishesByDefault(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveChain(fl), " "); got != want {
-			t.Errorf("%s: chain %q, want %q", pace, got, want)
+		if got := strings.Join(driveSkills(fl), " "); got != want {
+			t.Errorf("%s: skills %q, want %q", pace, got, want)
 		}
 	}
 }
@@ -3302,9 +3308,9 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 	return fx
 }
 
-// A spike's chain ends with its close even where the pace leaves finish
-// out: no catchup and no merge check before it (neither is scripted), the
-// chain recorded with finish for status.
+// A spike ends with its close even where the pace leaves finish out: no
+// catchup and no merge check before it (neither is scripted), and a finish
+// record for status.
 func TestDriveClosesASpikeAfterShip(t *testing.T) {
 	for _, chain := range [][]string{{"ship"}, {"ship", "finish"}} {
 		t.Run(strings.Join(chain, " "), func(t *testing.T) {
@@ -3323,7 +3329,7 @@ func TestDriveClosesASpikeAfterShip(t *testing.T) {
 				t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 			}
 
-			if record := "set branch.GH-1." + string(branchmeta.Chain) + " ship finish"; !fx.f.called(record) {
+			if record := "set branch.GH-1." + string(branchmeta.Finish) + " queued"; !fx.f.called(record) {
 				t.Errorf("%q did not run: %q", record, fx.f.calls)
 			}
 		})
@@ -3361,7 +3367,7 @@ func TestDriveStartsADependentOfAClosedSpike(t *testing.T) {
 // so drive takes no shortcut for it.
 func TestDriveSpikeShortcutNeedsABranchNeverPushed(t *testing.T) {
 	fx := spikeDrive(t, "GH-1", "ship")
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, chain: []string{"ship"}, pos: 1}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, pos: 1}
 	r.o.path, r.o.branch = "/code/repo.GH-1", "GH-1"
 
 	if done, _ := fx.in.spikeDone(t.Context(), r); !done {
@@ -3418,9 +3424,11 @@ func TestDriveRecordsFinishProgress(t *testing.T) {
 	}
 }
 
-// A chain with no finish writes no finish record.
+// A drive with no finish writes no finish record, and clears one an earlier
+// drive left.
 func TestDriveWithoutFinishWritesNoRecord(t *testing.T) {
 	fx := wave(t, "GH-11", "judge")
+	fx.f.meta.Seed("GH-11", branchmeta.Finish, branchmeta.FinishQueued) // an earlier drive's
 
 	fx.f.script(wsList, unopened, all("idle", "GH-11"), all("working", "GH-11"), all("idle", "GH-11"))
 
@@ -3428,40 +3436,37 @@ func TestDriveWithoutFinishWritesNoRecord(t *testing.T) {
 		t.Fatalf("%v\n%s", err, fx.out.String())
 	}
 
-	if !fx.f.called("set branch.GH-11." + string(branchmeta.Chain)) {
-		t.Fatal("drive opened no task")
+	if !fx.f.meta.Unsetted("GH-11", branchmeta.Finish) {
+		t.Fatal("drive opened no task, or left a finish record standing")
 	}
 
 	if fx.f.called("set branch.GH-11." + string(branchmeta.Finish)) {
-		t.Error("a chain without finish wrote a finish record")
-	}
-
-	for _, c := range fx.f.calls {
-		if strings.Contains(c, string(branchmeta.Finish)) {
-			t.Errorf("unexpected finish record call %q", c)
-		}
+		t.Error("a drive without finish wrote a finish record")
 	}
 }
 
-// A task that ends any way but finished drops its finish record; a
+// A task that ends any way but finished keeps its finish record, set back
+// to queued so status still shows finish without claiming it runs; a
 // finished one's went with its branch.
-func TestDriveEndClearsFinishRecord(t *testing.T) {
+func TestDriveEndParksFinishRecord(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	r := &driveRun{opened: true, chain: []string{"ship", "finish"}, o: openedTask{branch: "GH-1"}}
-	fx.f.meta.Seed("GH-1", branchmeta.Finish, branchmeta.FinishQueued)
+	r := &driveRun{opened: true, finishes: true, o: openedTask{branch: "GH-1"}}
 
 	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "asked at finish", code: exitAsk})
 
-	unset := "unset branch.GH-1." + string(branchmeta.Finish)
-	if !fx.f.called(unset) {
-		t.Errorf("an ask left the finish record; calls: %v", fx.f.calls)
+	if !fx.f.meta.Wrote("GH-1", branchmeta.Finish, branchmeta.FinishQueued) {
+		t.Errorf("an ask did not park the finish record; calls: %v", fx.f.calls)
+	}
+
+	if fx.f.meta.Unsetted("GH-1", branchmeta.Finish) {
+		t.Error("an ask dropped the finish record, which status reads")
 	}
 
 	fx.f.calls = nil
 	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "finished"})
 
-	if fx.f.called(unset) {
-		t.Error("a finished task's record was unset again")
+	if fx.f.called("set branch.GH-1." + string(branchmeta.Finish)) {
+		t.Error("a finished task's record was written again")
 	}
 }
 
@@ -3511,9 +3516,10 @@ func TestSkillPromptNamesDriveFinish(t *testing.T) {
 	}
 }
 
-// An interrupted drive clears the finish record of every task still in
-// flight, so status never reads a drive that is gone as queued.
-func TestDriveInterruptClearsFinishRecord(t *testing.T) {
+// An interrupted drive parks the finish record of every task still in
+// flight at queued, so status still shows finish and never reads a drive
+// that is gone as running it.
+func TestDriveInterruptParksFinishRecord(t *testing.T) {
 	fx := wave(t, "GH-11", "judge", "finish")
 	fx.f.script(wsList, unopened, all("idle", "GH-11"), all("working", "GH-11"))
 
@@ -3531,8 +3537,13 @@ func TestDriveInterruptClearsFinishRecord(t *testing.T) {
 		t.Fatalf("drive = %v, want the interrupt\n%s", err, fx.out.String())
 	}
 
-	if unset := "unset branch.GH-11." + string(branchmeta.Finish); !fx.f.called(unset) {
-		t.Errorf("%q did not run: %q", unset, fx.f.calls)
+	key := "branch.GH-11." + string(branchmeta.Finish)
+	if last := fx.f.calls[len(fx.f.calls)-1]; last != "set "+key+" queued" {
+		t.Errorf("the last call = %q, want the record parked at queued", last)
+	}
+
+	if fx.f.meta.Unsetted("GH-11", branchmeta.Finish) {
+		t.Errorf("%s was unset: status would lose the finish row", key)
 	}
 }
 
@@ -3876,7 +3887,7 @@ func TestResumeShownUsesTheLabel(t *testing.T) {
 // cancelled drive leaves no test suite running behind it.
 func TestDriveEndStopsARunningVerify(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	r := &driveRun{opened: true, chain: []string{"ship"}, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{opened: true, o: openedTask{branch: "GH-1"}}
 
 	log := filepath.Join(t.TempDir(), "verify.log")
 	r.verifying = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {

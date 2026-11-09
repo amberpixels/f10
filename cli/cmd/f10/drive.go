@@ -19,7 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// The drive verb runs tasks through the flow's chain and exits when every
+// The drive verb runs tasks through their flow and exits when every
 // task is through or one needs a human. It is Go, not a Claude session:
 // ordering, prompting and polling are deterministic, and a session polling
 // an agent pays a round trip and a slice of context per check.
@@ -48,7 +48,7 @@ func driveCommand() *cli.Command {
 			"list shows the drives; cancel N stops one from prompting further.\n" +
 			"The drive runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
 			"Ctrl+C stops only that, and rerunning it follows the drive again. --foreground runs it in this process.\n" +
-			"Exit 0: every task went through its chain. 4: an agent asks; rerun with --answer. " +
+			"Exit 0: every task went through its flow. 4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
 		SkipFlagParsing: true,
@@ -83,21 +83,6 @@ const (
 	// maxSpan caps a range, since every id in it costs a tracker call.
 	maxSpan = 50
 )
-
-// driveChain is the skills drive prompts a task through.
-func driveChain(fl shipFlow) []string {
-	var chain []string
-	if fl.plans() {
-		chain = append(chain, "plan")
-	}
-
-	chain = append(chain, "ship")
-	if fl.finishes() {
-		chain = append(chain, "finish")
-	}
-
-	return chain
-}
 
 func runDrive(ctx context.Context, cmd *cli.Command) error {
 	argv := cmd.Args().Slice()
@@ -189,8 +174,6 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	chain := driveChain(fl)
-
 	layers, err := agentLayers(t.eff, "")
 	if err != nil {
 		return err
@@ -200,7 +183,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	drv := t.driver()
 	h, hostErr := t.host()
 
-	if slices.Contains(chain, "finish") && hostErr != nil {
+	if fl.finishes() && hostErr != nil {
 		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
 	}
 
@@ -217,7 +200,6 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		tracker: t.tracker(),
 		args:    a,
 		argv:    argv,
-		chain:   chain,
 		flow:    fl,
 		resolve: func(name string) (shipFlow, error) { return resolvePacedFlow(t.eff, paces, pace.name, name) },
 		paced: func(fl shipFlow, p string) (shipFlow, error) {

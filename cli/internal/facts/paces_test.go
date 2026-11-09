@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 func decodePaces(t *testing.T, yml string) Declared {
@@ -77,7 +79,7 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 	fm.merge(decodePaces(t, "paces:\n  fast: { review: { rounds: 2 }, judge: off }\n"), "main")
 	fm.merge(decodePaces(t, "paces:\n  fast: { review: { rounds: 1, depth: light } }\n"), "worktree")
 
-	e := &Effective{Flows: map[string][]string{"default": strings.Fields(DefaultFlow)}}
+	e := &Effective{Flows: map[string]flow.Flow{"default": flowOf(strings.Fields(DefaultFlow))}}
 	e.resolvePaces(&fm)
 
 	if got := e.Paces["fast"]; got["review"].Depth != "light" || !got["judge"].Off {
@@ -98,7 +100,7 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 }
 
 func TestResolveFlow(t *testing.T) {
-	flow := strings.Fields("plan judge implement cleanup pr review:local judge pr")
+	written := strings.Fields("plan judge implement cleanup pr review:local judge pr")
 	s := NewPaceSet()
 
 	for _, tc := range []struct {
@@ -110,7 +112,7 @@ func TestResolveFlow(t *testing.T) {
 		{"fast", "plan judge implement cleanup pr review:local judge pr", "on"},
 		{"ultra", "implement pr review:local pr", "on"},
 	} {
-		r, err := s.ResolveFlow("default", flow, tc.pace)
+		r, err := s.ResolveFlow("default", flowOf(written), tc.pace)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.pace, err)
 		}
@@ -126,7 +128,7 @@ func TestResolveFlow(t *testing.T) {
 	}
 
 	// the entry's argument fixes the half; the pace's other dials still apply
-	r, _ := s.ResolveFlow("default", flow, "slow")
+	r, _ := s.ResolveFlow("default", flowOf(written), "slow")
 	if e := r.Entries[5]; e.Entry != "review:local" || len(e.Dials) != 2 || e.Dials[0].Origin != "entry argument" ||
 		e.Dials[1].Name != "rounds" || e.Dials[1].Value != "2" {
 		t.Errorf("review under slow = %+v", e)
@@ -135,7 +137,7 @@ func TestResolveFlow(t *testing.T) {
 	// a bare review takes the pace's half
 	s.Over(map[string]Pace{"remote": {"review": {By: "ci"}}}, func(string, string) string { return "test" })
 
-	if r, _ := s.ResolveFlow("x", []string{"implement", "pr", "review"}, "remote"); r.Run()[2] != "review:ci" {
+	if r, _ := s.ResolveFlow("x", flowOf([]string{"implement", "pr", "review"}), "remote"); r.Run()[2] != "review:ci" {
 		t.Errorf("bare review under remote = %v", r.Run())
 	}
 }
@@ -143,11 +145,11 @@ func TestResolveFlow(t *testing.T) {
 // Every built-in pace keeps handoff, ultra included: an auto-merged run is
 // where the list of what to do after merge matters most.
 func TestBuiltinPacesKeepHandoff(t *testing.T) {
-	flow := strings.Fields("plan implement handoff pr")
+	written := strings.Fields("plan implement handoff pr")
 	s := NewPaceSet()
 
 	for _, pace := range s.Names() {
-		r, err := s.ResolveFlow("default", flow, pace)
+		r, err := s.ResolveFlow("default", flowOf(written), pace)
 		if err != nil {
 			t.Fatalf("%s: %v", pace, err)
 		}
@@ -170,7 +172,7 @@ func TestPaceHandoffOffReachesPR(t *testing.T) {
 	s := NewPaceSet()
 	s.Over(d.Paces, func(string, string) string { return "test" })
 
-	r, err := s.ResolveFlow("default", strings.Fields("implement pr review:local pr"), "quiet")
+	r, err := s.ResolveFlow("default", flowOf(strings.Fields("implement pr review:local pr")), "quiet")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +190,7 @@ func TestPaceHandoffOffReachesPR(t *testing.T) {
 
 	s.Ceiling = Pace{"handoff": {On: true}}
 
-	r, err = s.ResolveFlow("default", strings.Fields("implement pr"), "quiet")
+	r, err = s.ResolveFlow("default", flowOf(strings.Fields("implement pr")), "quiet")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +207,7 @@ func TestPaceHandoffOff(t *testing.T) {
 	s := NewPaceSet()
 	s.Over(d.Paces, func(string, string) string { return "test" })
 
-	r, err := s.ResolveFlow("default", strings.Fields("implement handoff pr"), "quiet")
+	r, err := s.ResolveFlow("default", flowOf(strings.Fields("implement handoff pr")), "quiet")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +232,7 @@ func TestPaceFinishOnlyAtAPR(t *testing.T) {
 		"implement commit":        false,
 		"implement pr deploy:stg": false,
 	} {
-		r, err := s.ResolveFlow("x", strings.Fields(flow), "fast")
+		r, err := s.ResolveFlow("x", flowOf(strings.Fields(flow)), "fast")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -249,16 +251,16 @@ func TestPaceThatBreaksAFlow(t *testing.T) {
 
 	flows := map[string][]string{"default": strings.Fields("plan judge implement pr")}
 
-	if _, err := s.ResolveFlow("default", flows["default"], "noplan"); err == nil ||
+	if _, err := s.ResolveFlow("default", flowOf(flows["default"]), "noplan"); err == nil ||
 		!strings.Contains(err.Error(), "pace noplan on the default flow") {
 		t.Errorf("err = %v", err)
 	}
 
-	if bad := s.PaceProblems(flows); len(bad) != 1 {
+	if bad := s.PaceProblems(map[string]flow.Flow{"default": flow.Of(flows["default"])}); len(bad) != 1 {
 		t.Errorf("problems = %v", bad)
 	}
 
-	if _, err := s.ResolveFlow("default", flows["default"], "nope"); err == nil ||
+	if _, err := s.ResolveFlow("default", flowOf(flows["default"]), "nope"); err == nil ||
 		!strings.Contains(err.Error(), "fast, medium, noplan, slow, ultra") {
 		t.Errorf("unknown pace = %v", err)
 	}
@@ -315,7 +317,7 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 	fm.merge(decodePaces(t, "ceiling: { finish: off, judge: on, except: [ultra] }\n"), "main")
 	fm.merge(decodePaces(t, "ceiling: { judge: { effort: high }, except: [fast] }\n"), "worktree")
 
-	e := &Effective{Flows: map[string][]string{"default": strings.Fields(DefaultFlow)}}
+	e := &Effective{Flows: map[string]flow.Flow{"default": flowOf(strings.Fields(DefaultFlow))}}
 	e.resolvePaces(&fm)
 
 	if e.Ceiling["finish"].Finish != "off" || e.Ceiling["judge"].Effort != "high" ||
@@ -333,7 +335,7 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 // A ceiling slows every pace but the excepted one, a silent pace included,
 // and each capped dial says what the pace had.
 func TestCeilingCaps(t *testing.T) {
-	flow := strings.Fields("plan judge implement cleanup pr review judge pr")
+	written := strings.Fields("plan judge implement cleanup pr review judge pr")
 	set := NewPaceSet()
 	set.Ceiling = Pace{
 		PaceFinishKey: {Finish: "off"},
@@ -347,7 +349,7 @@ func TestCeilingCaps(t *testing.T) {
 		"fast":   "plan judge implement cleanup pr review:local judge pr",
 		"ultra":  "implement cleanup pr review:local pr",
 	} {
-		r, err := set.ResolveFlow("default", flow, pace)
+		r, err := set.ResolveFlow("default", flowOf(written), pace)
 		if err != nil {
 			t.Fatalf("%s: %v", pace, err)
 		}
@@ -377,13 +379,13 @@ func TestCeilingCaps(t *testing.T) {
 
 	set.Except = []string{"ultra"}
 
-	r, err := set.ResolveFlow("default", flow, "ultra")
+	r, err := set.ResolveFlow("default", flowOf(written), "ultra")
 	if err != nil || r.Finish == nil || r.Finish.Value != "on" || strings.Contains(strings.Join(r.Run(), " "), "plan") {
 		t.Errorf("an excepted pace = %+v, %v", r, err)
 	}
 
 	// a flow ending at implement takes no finish, capped or not
-	local, err := set.ResolveFlow("local", strings.Fields("implement commit"), "fast")
+	local, err := set.ResolveFlow("local", flowOf(strings.Fields("implement commit")), "fast")
 	if err != nil || local.Finish != nil {
 		t.Errorf("local = %+v, %v", local.Finish, err)
 	}
@@ -412,7 +414,7 @@ func TestCeilingThatBreaksAFlow(t *testing.T) {
 	set := NewPaceSet()
 	set.Ceiling = Pace{"judge": {On: true}}
 
-	_, err := set.ResolveFlow("default", strings.Fields("plan judge implement pr"), "ultra")
+	_, err := set.ResolveFlow("default", flowOf(strings.Fields("plan judge implement pr")), "ultra")
 	if err == nil || !strings.Contains(err.Error(), "pace ultra") {
 		t.Errorf("err = %v", err)
 	}
@@ -445,7 +447,7 @@ func TestResolveOptionalCI(t *testing.T) {
 		s := NewPaceSet()
 		s.Remote = tc.remote
 
-		r, err := s.ResolveFlow("x", strings.Fields(tc.flow), tc.pace)
+		r, err := s.ResolveFlow("x", flowOf(strings.Fields(tc.flow)), tc.pace)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -490,3 +492,5 @@ func TestOptionalCIInFlowStyle(t *testing.T) {
 		t.Errorf("unknown key = %v", err)
 	}
 }
+
+func flowOf(written []string) flow.Flow { return flow.Of(written) }

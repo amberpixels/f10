@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -70,22 +71,21 @@ type Effective struct {
 
 	// The rest of the typed facts (resolve.go). MergeMethod "" means none
 	// declared: finish asks the repo.
-	MergeMethod    string              `json:"mergeMethod,omitempty"`
-	Catchup        string              `json:"catchup"`
-	CatchupStacked string              `json:"catchupStacked"`        // catchup_stacked: the method for a base that is another task's branch
-	Traces         bool                `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
-	Lore           string              `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
-	LoreGate       string              `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
-	StaleAfter     string              `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
-	DriverTimeout  time.Duration       `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
-	Flows          map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
-	FlowLabels     map[string][]string `json:"flowLabels,omitempty"`  // a flow's name to its entries' display labels by index; only flows with one
-	FlowByArea     map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
-	DriveEnv       []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
-	Watch          string              `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
-	WatchCatchup   bool                `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
-	ReportBack     bool                `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
-	UpkeepPaths    []string            `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
+	MergeMethod    string               `json:"mergeMethod,omitempty"`
+	Catchup        string               `json:"catchup"`
+	CatchupStacked string               `json:"catchupStacked"`        // catchup_stacked: the method for a base that is another task's branch
+	Traces         bool                 `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
+	Lore           string               `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
+	LoreGate       string               `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
+	StaleAfter     string               `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
+	DriverTimeout  time.Duration        `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
+	Flows          map[string]flow.Flow `json:"flows"`                 // a flow's name to its entries, written as declared
+	FlowByArea     map[string]string    `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
+	DriveEnv       []string             `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
+	Watch          string               `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
+	WatchCatchup   bool                 `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
+	ReportBack     bool                 `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
+	UpkeepPaths    []string             `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 	// Verify is the frontmatter's verify list, which f10 config verify
 	// scopes to the diff; VerifyOrigin names its layer. Nil when undeclared,
 	// and the Verify field is the whole of verify.

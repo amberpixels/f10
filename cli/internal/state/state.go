@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // DefaultTTL is how long a run counts as live with nothing reporting.
@@ -298,37 +300,6 @@ func SplitPipeline(s string) []string {
 	return steps
 }
 
-// SplitLabel cuts an entry's trailing `[label]`, a display name only:
-// `pr[pr-polish]` is pr and pr-polish. An entry with none has label "".
-func SplitLabel(e string) (string, string) {
-	e = strings.TrimSpace(e)
-
-	i := strings.Index(e, "[")
-	if i < 0 || !strings.HasSuffix(e, "]") {
-		return e, ""
-	}
-
-	return strings.TrimSpace(e[:i]), e[i+1 : len(e)-1]
-}
-
-// Labeled is the entry as written, its label in brackets after it.
-func Labeled(entry, label string) string {
-	if label == "" {
-		return entry
-	}
-
-	return entry + "[" + label + "]"
-}
-
-// LabelAt is labels[i], or "" when the flow has none there.
-func LabelAt(labels []string, i int) string {
-	if i < 0 || i >= len(labels) {
-		return ""
-	}
-
-	return labels[i]
-}
-
 // noLabel holds an unlabelled entry's place in the state file's labels line.
 const noLabel = "-"
 
@@ -352,8 +323,18 @@ func splitLabels(s string) []string {
 	return labels
 }
 
+// Entries is the pipeline with each entry's label: the state file keeps
+// the two on separate lines.
+func (r *Run) Entries() flow.Flow { return flow.Zip(r.Pipeline, r.Labels) }
+
 // LabelAt is the label of the pipeline's at-th entry, counted from 1.
-func (r *Run) LabelAt(at int) string { return LabelAt(r.Labels, at-1) }
+func (r *Run) LabelAt(at int) string {
+	if at < 1 || at > len(r.Labels) {
+		return ""
+	}
+
+	return r.Labels[at-1]
+}
 
 // LeafShown is the leaf as a person reads it: its entry's label, else the
 // step itself. A leaf the pipeline does not hold (catchup) keeps the place

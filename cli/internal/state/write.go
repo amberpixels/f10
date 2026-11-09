@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/flock"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -294,7 +295,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 	}
 
 	// a label names the entry for a person; the run records the step
-	leaf, label := SplitLabel(leaf)
+	leaf, label := flow.CutLabel(leaf)
 
 	r.backfill(phase)
 	r.setStatus(phase, status)
@@ -440,7 +441,7 @@ func (r *Run) SetPipeline(steps []string) error {
 
 	for _, s := range steps {
 		for _, e := range SplitPipeline(s) {
-			entry, label := SplitLabel(e)
+			entry, label := flow.CutLabel(e)
 			kept, labels = append(kept, entry), append(labels, label)
 			labeled = labeled || label != ""
 		}
