@@ -445,3 +445,13 @@ func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
 		t.Errorf("claim %+v", got)
 	}
 }
+
+// A halt drive records reads back through the ledger's readers.
+func TestHaltPayloadReadsBack(t *testing.T) {
+	p := haltPayload(driveResult{skill: "ship", reason: "stalled"})
+
+	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
+	if e.Skill() != "ship" || e.Reason() != "stalled" {
+		t.Errorf("halt %v", e.Payload.Val)
+	}
+}

@@ -488,7 +488,7 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 	for _, e := range in.events {
 		switch e.Kind {
 		case ledger.RunStarted:
-			s := e.Payload.Val.String("skill")
+			s := e.Skill()
 
 			if mark != nil && e.Session == mark.session && e.At.After(mark.at) {
 				mark = nil

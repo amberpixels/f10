@@ -187,7 +187,7 @@ func ledgerFor(events []ledger.Event, id string, resolve func(string) string) le
 		case e.Kind == ledger.Pushed:
 			lt.pushed = true
 		case e.Kind == ledger.TaskHalted:
-			lt.halt = &ledgerHalt{skill: p.String("skill"), reason: p.String("reason"), at: e.At}
+			lt.halt = &ledgerHalt{skill: e.Skill(), reason: e.Reason(), at: e.At}
 		}
 	}
 

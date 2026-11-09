@@ -156,7 +156,7 @@ func windows(evs []ledger.Event) []Window {
 	for _, e := range evs {
 		switch e.Kind {
 		case ledger.RunStarted:
-			skill := e.Payload.Val.String("skill")
+			skill := e.Skill()
 			if !slices.Contains(state.Phases, skill) {
 				continue // a step's own skill, resolve or catchup, runs inside the run
 			}
@@ -179,7 +179,7 @@ func windows(evs []ledger.Event) []Window {
 				step, split = open(e, Resolve), entry
 			}
 		case ledger.SessionStopped:
-			if e.Payload.Val.Bool("backstop") {
+			if e.Backstop() {
 				leave(e)
 			}
 		case ledger.StateSet:
@@ -262,7 +262,7 @@ func segments(evs []ledger.Event) []Window {
 
 		switch e.Kind {
 		case ledger.RunStarted:
-			skill := e.Payload.Val.String("skill")
+			skill := e.Skill()
 			if !slices.Contains(state.Phases, skill) {
 				continue
 			}
@@ -276,11 +276,11 @@ func segments(evs []ledger.Event) []Window {
 		case ledger.PlanSaved:
 			over = over || seg != nil && last == "plan"
 		case ledger.WaitStarted:
-			if over && e.Payload.Val.String("reason") == "turn" {
+			if over && e.Reason() == "turn" {
 				closeAt(e)
 			}
 		case ledger.SessionStopped:
-			if e.Payload.Val.Bool("backstop") {
+			if e.Backstop() {
 				closeAt(e)
 			}
 		case ledger.StateSet:
@@ -322,7 +322,7 @@ func waitSpans(evs []ledger.Event) []span {
 			continue
 		}
 
-		turn := e.Payload.Val.String("reason") == "turn"
+		turn := e.Reason() == "turn"
 		s := span{from: e.At}
 
 		for _, next := range evs[i+1:] {
