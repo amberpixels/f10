@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -165,20 +166,20 @@ func readRemote(ctx context.Context, h host, f facts.Review, branch string) remo
 	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
 	defer cancel()
 
-	p, err := h.pull(ctx, branch)
+	p, err := h.PR(ctx, branch)
 
 	switch {
 	case ctx.Err() != nil:
 		return remoteState{err: ctx.Err()}
-	case noSuchPull(err):
+	case errors.Is(err, forge.ErrNotFound):
 		return remoteState{}
 	case err != nil:
 		return remoteState{err: err}
-	case p.url() == "":
+	case p.URL == "":
 		return remoteState{}
 	}
 
-	rv, err := newReviewer(ctx, h, f, path.Base(p.url()))
+	rv, err := newReviewer(ctx, h, f, path.Base(p.URL))
 	if err == nil {
 		var r remoteReview
 

@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -285,8 +286,8 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts)
 
 	// gh and glab take a branch or a request's url alike
 	if at := cmp.Or(branch, lt.pr); at != "" && src.host != nil {
-		if p, err := src.host.pull(ctx, at); err == nil {
-			row.PR, row.PRState = p.url(), p.status()
+		if p, err := src.host.PR(ctx, at); err == nil {
+			row.PR, row.PRState = p.URL, p.Status
 		}
 	}
 
@@ -504,9 +505,9 @@ func prColumn(r taskRow) string {
 	col := pullNumber(r.PR)
 
 	switch r.PRState {
-	case "", pullOpen:
+	case "", forge.Open:
 		return statusGlyph(glyphOpenPR) + " " + col
-	case pullMerged:
+	case forge.Merged:
 		return statusGlyph(glyphMergedPR) + " " + col + " " + r.PRState
 	}
 

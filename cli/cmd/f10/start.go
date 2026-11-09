@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -216,7 +217,7 @@ func startRef(
 	t *target,
 	token string,
 	pick *pickup,
-	pr pull,
+	pr forge.PR,
 	flowName, after, base string,
 ) (ref.Ref, string, error) {
 	task := strings.TrimSpace(cmd.String("task"))

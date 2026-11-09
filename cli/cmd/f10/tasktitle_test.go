@@ -26,10 +26,10 @@ func titledHost() host {
 func TestHostReadsStripTheTitle(t *testing.T) {
 	f := newFakes(t)
 
-	f.script("gh issue view 12 --json number,title,state,labels,createdAt,url,body,comments",
+	f.script("gh issue view 12 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":12,"title":"FT-12: Drive halts","url":"https://github.com/o/r/issues/12"}`)
 	f.script(
-		"gh issue view 12 --json title,url",
+		"gh issue view 12 --json number,title,state,labels,createdAt,url,body,assignees",
 		`{"title":"FT-12: Drive halts","url":"https://github.com/o/r/issues/12"}`,
 	)
 	f.script("gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
@@ -69,7 +69,7 @@ func TestDriverRowsStripTheTitle(t *testing.T) {
 func TestHostUpdateRestoresThePrefix(t *testing.T) {
 	f := newFakes(t)
 
-	f.script("gh issue view 7 --json labels,assignees,title,url",
+	f.script("gh issue view 7 --json number,title,state,labels,createdAt,url,body,assignees",
 		`{"url":"https://github.com/o/r/issues/7","title":"Renamed by hand"}`)
 	f.script("gh issue edit 7 --title FT-7: Renamed by hand --add-label shipped", "")
 
@@ -78,7 +78,7 @@ func TestHostUpdateRestoresThePrefix(t *testing.T) {
 		t.Errorf("update: %v, calls %v", err, f.calls)
 	}
 
-	f.script("gh issue view 8 --json labels,assignees,title,url",
+	f.script("gh issue view 8 --json number,title,state,labels,createdAt,url,body,assignees",
 		`{"url":"https://github.com/o/r/issues/8","title":"FT-8: Fine"}`)
 	f.script("gh issue close 8", "")
 
@@ -164,7 +164,7 @@ func TestRetitleAfter(t *testing.T) {
 	r := ref.Ref{ID: "FT-12", Number: "12"}
 
 	f.script(
-		"gh issue view 12 --json number,title,url",
+		"gh issue view 12 --json number,title,state,labels,createdAt,url,body,assignees",
 		`{"number":12,"title":"Drive","url":"https://github.com/o/r/issues/12"}`,
 	)
 	f.script("gh issue edit 12 --title FT-12: Drive", "")

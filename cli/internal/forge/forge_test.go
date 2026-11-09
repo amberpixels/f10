@@ -60,7 +60,7 @@ func TestSameLogin(t *testing.T) {
 func TestDecodePagesReadsEveryDocument(t *testing.T) {
 	script(t, map[string]string{"glab api --paginate x": "[1,2]\n[3]\n"})
 
-	got, err := DecodePages[int](t.Context(), Host{Name: "glab"}, "x")
+	got, err := decodePages[int](t.Context(), Host{Name: "glab"}, "x")
 	if err != nil || len(got) != 3 {
 		t.Fatalf("got %v, %v", got, err)
 	}
@@ -203,7 +203,7 @@ func TestRunNamesTheRepository(t *testing.T) {
 	} {
 		got = nil
 
-		if _, err := c.host.Run(ctx, c.args...); err != nil {
+		if _, err := c.host.run(ctx, c.args...); err != nil {
 			t.Fatal(err)
 		}
 

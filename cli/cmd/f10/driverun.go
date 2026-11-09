@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -49,7 +50,7 @@ type driveInput struct {
 	record func(ctx context.Context, dir string, e ledger.Event)
 	// pull reads a branch's PR on the host when the drive reconciles a
 	// task; nil, with no host, reads none
-	pull func(ctx context.Context, branch string) (pull, error)
+	pull func(ctx context.Context, branch string) (forge.PR, error)
 	// catchup is the catchup the drive runs itself; nil sends the whole
 	// catchup to the agent, for catchupWhy
 	catchup    *binaryCatchup

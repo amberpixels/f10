@@ -206,7 +206,7 @@ func TestReviewAckReactsOnceAndSkipsCheckRuns(t *testing.T) {
 	f := newFakes(t)
 	rv := ghReviewer(t, f, stickyFacts())
 
-	unhandled := remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u"}
+	unhandled := remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", host: forge.Note{ID: "200"}}
 	post := "gh api -X POST repos/{owner}/{repo}/issues/comments/200/reactions -f content=eyes"
 	f.script(post, `{"id":1}`)
 
@@ -251,7 +251,11 @@ func TestReviewAckTicksTheCheckboxAndAppendsTheMarker(t *testing.T) {
 
 	if _, err := rv.ack(
 		t.Context(),
-		remoteReview{ID: "7", Kind: facts.ArrivesComment, stored: "findings\n\n- [ ] handled"},
+		remoteReview{
+			ID:   "7",
+			Kind: facts.ArrivesComment,
+			host: forge.Note{ID: "7", Stored: "findings\n\n- [ ] handled"},
+		},
 	); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
@@ -260,7 +264,10 @@ func TestReviewAckTicksTheCheckboxAndAppendsTheMarker(t *testing.T) {
 		t.Errorf("checkbox not ticked: %v", f.calls)
 	}
 
-	if _, err := rv.ack(t.Context(), remoteReview{ID: "7", Kind: facts.ArrivesComment, stored: "no box"}); err == nil {
+	if _, err := rv.ack(
+		t.Context(),
+		remoteReview{ID: "7", Kind: facts.ArrivesComment, host: forge.Note{ID: "7", Stored: "no box"}},
+	); err == nil {
 		t.Error("ack ticked a checkbox that is not there")
 	}
 
@@ -270,7 +277,7 @@ func TestReviewAckTicksTheCheckboxAndAppendsTheMarker(t *testing.T) {
 
 	if _, err := rv.ack(
 		t.Context(),
-		remoteReview{ID: "7", Kind: facts.ArrivesComment, stored: "findings\n"},
+		remoteReview{ID: "7", Kind: facts.ArrivesComment, host: forge.Note{ID: "7", Stored: "findings\n"}},
 	); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
@@ -494,7 +501,8 @@ func TestReviewAckTicksOnlyTheFirstCheckbox(t *testing.T) {
 	f.script(patch, `{}`)
 
 	if _, err := rv.ack(t.Context(), remoteReview{
-		ID: "7", Kind: facts.ArrivesComment, stored: "- [ ] handled\n- [ ] fix a.go\n- [ ] fix b.go",
+		ID: "7", Kind: facts.ArrivesComment,
+		host: forge.Note{ID: "7", Stored: "- [ ] handled\n- [ ] fix a.go\n- [ ] fix b.go"},
 	}); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
@@ -671,7 +679,7 @@ func TestReviewGlabDiscussions(t *testing.T) {
 		t.Fatalf("pick: %v", err)
 	}
 
-	if r.ID != "da" || r.SHA != "d2" || len(r.threads) != 2 || r.Handled {
+	if r.ID != "da" || r.SHA != "d2" || len(r.host.Threads) != 2 || r.Handled {
 		t.Errorf("picked %+v", r)
 	}
 
@@ -775,7 +783,10 @@ func TestReviewSettleReactsOnceAndSkipsCheckRuns(t *testing.T) {
 	post := "gh api -X POST repos/{owner}/{repo}/issues/comments/200/reactions -f content=rocket"
 	f.script(post, `{"id":1}`)
 
-	what, err := rv.settle(t.Context(), remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", Handled: true})
+	what, err := rv.settle(
+		t.Context(),
+		remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", Handled: true, host: forge.Note{ID: "200"}},
+	)
 	if err != nil || what != "reaction rocket" || !f.called(post) {
 		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
 	}
@@ -882,7 +893,10 @@ func TestReviewSettleAppendsTheMarker(t *testing.T) {
 	patch := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=findings\n\n<!-- settled -->"
 	f.script(patch, `{}`)
 
-	what, err := rv.settle(t.Context(), remoteReview{ID: "7", Kind: facts.ArrivesComment, stored: "findings\n"})
+	what, err := rv.settle(
+		t.Context(),
+		remoteReview{ID: "7", Kind: facts.ArrivesComment, host: forge.Note{ID: "7", Stored: "findings\n"}},
+	)
 	if err != nil || what != "marker appended" || !f.called(patch) {
 		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
 	}
@@ -1067,3 +1081,13 @@ func TestReviewStaleReadsAStickyCommentAtItsLastEdit(t *testing.T) {
 		t.Error("an automatic-only trigger reads as triggerable")
 	}
 }
+
+// The GraphQL documents forge sends for review threads, as gh's argv carries
+// them; a change in forge shows here as an unscripted call.
+const (
+	reviewThreadsQuery = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
+		"{ pullRequest(number: $number) { reviewThreads(first: 100) { nodes { id isResolved " +
+		"comments(first: 1) { nodes { pullRequestReview { databaseId } } } } } } } }"
+
+	resolveThreadMutation = "mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }"
+)

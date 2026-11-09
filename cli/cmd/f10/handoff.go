@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -94,13 +95,13 @@ func handoffLines(path, id string, tip func() string) []string {
 
 // branchTip is the local branch's commit, which the handoff step records as
 // head; without the branch, the PR's head.
-func branchTip(ctx context.Context, main, branch string, p pull) func() string {
+func branchTip(ctx context.Context, main, branch string, p forge.PR) func() string {
 	return func() string {
 		if sha := gitx.Out(ctx, main, "rev-parse", "--verify", "-q", "refs/heads/"+branch); sha != "" {
 			return sha
 		}
 
-		return p.headSHA()
+		return p.HeadSHA
 	}
 }
 

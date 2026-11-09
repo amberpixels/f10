@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/trace"
@@ -47,10 +48,10 @@ func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, er
 		p := d.pull
 
 		return landing{
-			ended: p.url() + " left open",
-			rows:  []fact{taskFact(ctx, w, in.main, in.task.ID), {label: "pr", value: p.url(), url: true}},
+			ended: p.URL + " left open",
+			rows:  []fact{taskFact(ctx, w, in.main, in.task.ID), {label: "pr", value: p.URL, url: true}},
 			notes: []string{fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
-				p.url(), p.status())},
+				p.URL, p.Status)},
 		}, nil
 	default:
 		return landMerge(ctx, w, in, d, errs)
@@ -95,13 +96,13 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 	)
 
 	if len(in.task.Riders()) > 0 && !unpushed {
-		if riderNotes, err = settleRiders(ctx, in, name, p.status() == pullMerged); err != nil {
+		if riderNotes, err = settleRiders(ctx, in, name, p.Status == forge.Merged); err != nil {
 			return landing{}, err
 		}
 	}
 
 	l := landing{
-		ended: p.url() + " merged",
+		ended: p.URL + " merged",
 		// read before the merge, while the branch tip it was written at still exists
 		hand: handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p)),
 	}
@@ -117,7 +118,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 			return landing{}, err
 		}
 	} else {
-		in.step("merging " + pullNumber(p.url()))
+		in.step("merging " + pullNumber(p.URL))
 
 		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
 			return landing{}, err
@@ -127,7 +128,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 
 		in.step("pulling " + def)
 
-		note, deferred := pullMain(ctx, in.root, in.main, def, p.sha())
+		note, deferred := pullMain(ctx, in.root, in.main, def, p.Landed)
 		if d.place != inMainCheckout || deferred {
 			notes = appendNote(notes, note)
 		}
@@ -136,12 +137,12 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 			in.deferred(note)
 		}
 
-		sha = p.sha()
+		sha = p.Landed
 	}
 
 	l.end = &seriesEnd{pr: "none", head: sha}
 	if !unpushed {
-		l.end.pr = pullNumber(p.url())
+		l.end.pr = pullNumber(p.URL)
 	}
 
 	notes = appendNote(notes, d.loreNote)
@@ -156,7 +157,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 
 	l.rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
 	if !unpushed {
-		l.rows = append(l.rows, fact{label: "pr", value: p.url(), url: true})
+		l.rows = append(l.rows, fact{label: "pr", value: p.URL, url: true})
 	}
 
 	l.rows = appendClosed(append(l.rows, fact{label: "merge", value: sha}), in, unpushed)
@@ -167,16 +168,16 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 // landPull merges an open request or confirms a merged one. Requests based
 // on the branch move to the merged one's base before the branch goes, since
 // the delete would close them; the notes say which moved.
-func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pull, []string, error) {
+func landPull(ctx context.Context, in finishInput, name, def string, p forge.PR) (forge.PR, []string, error) {
 	var notes []string
 
-	switch p.status() {
-	case pullOpen:
-		if base := p.base(); base != "" && base != def {
-			return pull{}, nil, fmt.Errorf(
+	switch p.Status {
+	case forge.Open:
+		if base := p.Base; base != "" && base != def {
+			return forge.PR{}, nil, fmt.Errorf(
 				"%s is stacked on %s, not %s: finish the task that branch belongs to first, "+
 					"and its finish retargets this PR to %s",
-				p.url(),
+				p.URL,
 				base,
 				def,
 				def,
@@ -185,54 +186,54 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 
 		method, note, err := in.host.mergeMethod(ctx, in.method)
 		if err != nil {
-			return pull{}, nil, err
+			return forge.PR{}, nil, err
 		}
 
 		notes = appendNote(notes, note)
 
 		// settleRiders may have just rewritten the description's closing
 		// keywords, and the body under the commit must be the host's current one
-		description := p.body()
+		description := p.Body
 		if in.traces {
 			var note string
 
 			if description, note, err = lastState(ctx, in, name, description); err != nil {
-				return pull{}, nil, err
+				return forge.PR{}, nil, err
 			}
 
 			notes = appendNote(notes, note)
 		}
 
-		if p, err = in.host.mergePull(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
-			return pull{}, nil, err
+		if p, err = in.host.MergePR(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
+			return forge.PR{}, nil, err
 		}
-	case pullMerged:
-		notes = append(notes, p.url()+" was already merged")
+	case forge.Merged:
+		notes = append(notes, p.URL+" was already merged")
 	default:
-		return pull{}, nil, fmt.Errorf("%s is %s without a merge: finish only finishes merged or mergeable work; "+
-			"--local cleans up here and leaves it %s", p.url(), p.status(), p.status())
+		return forge.PR{}, nil, fmt.Errorf("%s is %s without a merge: finish only finishes merged or mergeable work; "+
+			"--local cleans up here and leaves it %s", p.URL, p.Status, p.Status)
 	}
 
-	if p.status() != pullMerged || p.sha() == "" {
-		return pull{}, nil, fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
-			in.host.Name, p.url(), p.status())
+	if p.Status != forge.Merged || p.Landed == "" {
+		return forge.PR{}, nil, fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
+			in.host.Name, p.URL, p.Status)
 	}
 
 	exists, err := gitx.RemoteBranchExists(ctx, in.main, name)
 	if err != nil {
-		return pull{}, nil, err
+		return forge.PR{}, nil, err
 	}
 
 	if exists {
-		moved, err := retargetStacked(ctx, in.host, p, name, cmp.Or(p.base(), def))
+		moved, err := retargetStacked(ctx, in.host, p, name, cmp.Or(p.Base, def))
 		if err != nil {
-			return pull{}, nil, err
+			return forge.PR{}, nil, err
 		}
 
 		notes = append(notes, moved...)
 
-		if err := in.host.deleteRemoteBranch(ctx, name); err != nil {
-			return pull{}, nil, fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.url(), err)
+		if err := in.host.DeleteBranch(ctx, name); err != nil {
+			return forge.PR{}, nil, fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.URL, err)
 		}
 	}
 
@@ -248,27 +249,27 @@ func landPull(ctx context.Context, in finishInput, name, def string, p pull) (pu
 // retargetStacked moves every open request based on branch to base. A
 // failure stops before the delete, so the request stays open for a rerun;
 // its error names the requests already moved, since no report follows it.
-func retargetStacked(ctx context.Context, h host, merged pull, branch, base string) ([]string, error) {
-	stacked, err := h.stackedPulls(ctx, branch)
+func retargetStacked(ctx context.Context, h host, merged forge.PR, branch, base string) ([]string, error) {
+	stacked, err := h.StackedPRs(ctx, branch)
 	if err != nil {
 		return nil, fmt.Errorf("%s merged, but listing the requests based on %s failed, "+
-			"so origin/%s is left in place: %w", merged.url(), branch, branch, err)
+			"so origin/%s is left in place: %w", merged.URL, branch, branch, err)
 	}
 
 	var notes, moved []string
 
 	for _, s := range stacked {
-		if err := h.retargetPull(ctx, s, base); err != nil {
+		if err := h.Retarget(ctx, s.Number, base); err != nil {
 			if len(moved) > 0 {
 				err = fmt.Errorf("%w (already retargeted: %s)", err, strings.Join(moved, ", "))
 			}
 
 			return nil, fmt.Errorf("%s merged, but retargeting %s to %s failed, "+
-				"so origin/%s is left in place to keep it open: %w", merged.url(), s.url(), base, branch, err)
+				"so origin/%s is left in place to keep it open: %w", merged.URL, s.URL, base, branch, err)
 		}
 
-		moved = append(moved, s.url())
-		notes = append(notes, fmt.Sprintf("retargeted %s to %s", s.url(), base))
+		moved = append(moved, s.URL)
+		notes = append(notes, fmt.Sprintf("retargeted %s to %s", s.URL, base))
 	}
 
 	return notes, nil
@@ -278,7 +279,7 @@ func retargetStacked(ctx context.Context, h host, merged pull, branch, base stri
 // host holds. A failed read or write is a note, except for a bundle, whose
 // fallback body would close a rider settleRiders just kept open.
 func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string, error) {
-	body, err := in.host.pullBody(ctx, branch)
+	body, err := in.host.PRBody(ctx, branch)
 
 	switch {
 	case err != nil && len(in.task.Riders()) > 0:
@@ -303,7 +304,7 @@ func putLastState(ctx context.Context, in finishInput, branch, body string) (str
 		return body, err
 	}
 
-	if err := in.host.editPullBody(ctx, branch, out); err != nil {
+	if err := in.host.EditPull(ctx, branch, "", out); err != nil {
 		return body, err
 	}
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -57,7 +58,7 @@ type finishDecision struct {
 	name  string // the task's branch
 	path  string // its checkout, "" with no worktree
 	def   string // the local default branch
-	pull  pull
+	pull  forge.PR
 	spike string   // the spike report, "" for none
 	dirty []string // a spike's uncommitted experiment
 	// the task's workspace and main's; self is this process running in the task's
@@ -126,14 +127,14 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 		return d, err
 	}
 
-	d.pull, err = in.host.pull(ctx, name)
+	d.pull, err = in.host.PR(ctx, name)
 
 	unpushed, err := neverPushed(ctx, in, name, err)
 	if err != nil {
 		return d, err
 	}
 
-	if in.flags.mergedOnly && (unpushed || d.pull.status() != pullMerged) {
+	if in.flags.mergedOnly && (unpushed || d.pull.Status != forge.Merged) {
 		return d, errNotMerged
 	}
 
@@ -180,7 +181,7 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 	}
 
 	// before anything leaves the machine: a block refuses with nothing changed
-	if d.loreNote, err = checkLore(in, unpushed || d.pull.status() == pullOpen); err != nil {
+	if d.loreNote, err = checkLore(in, unpushed || d.pull.Status == forge.Open); err != nil {
 		return d, err
 	}
 
@@ -190,8 +191,8 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 // decideGone takes over a branch with no worktree only when its PR merged;
 // anything else keeps the refusal, which guards branches start never made.
 func decideGone(ctx context.Context, in finishInput, gone goneError) (finishDecision, error) {
-	p, err := in.host.pull(ctx, gone.branch)
-	if err != nil || p.status() != pullMerged {
+	p, err := in.host.PR(ctx, gone.branch)
+	if err != nil || p.Status != forge.Merged {
 		return finishDecision{}, gone.err
 	}
 
@@ -308,28 +309,28 @@ func switchMain(ctx context.Context, main, def, branch, kept string) error {
 // leaveOpen reports whether finish leaves the PR as it is. A merged PR always
 // takes the full path; someone else's open one, with neither flag, is a
 // refusal that changes nothing; a closed one is left only with --local.
-func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
+func (in finishInput) leaveOpen(ctx context.Context, p forge.PR) (bool, error) {
 	switch {
-	case p.status() == pullMerged:
+	case p.Status == forge.Merged:
 		return false, nil
 	case in.flags.leaveOpen:
 		return true, nil
-	case in.flags.merge || p.status() != pullOpen:
+	case in.flags.merge || p.Status != forge.Open:
 		return false, nil
 	}
 
-	author := p.author()
+	author := p.Author
 	if author == "" {
 		return false, nil
 	}
 
 	me, err := in.host.Login(ctx)
 	if err != nil {
-		return false, fmt.Errorf("telling whose PR %s is: %w", p.url(), err)
+		return false, fmt.Errorf("telling whose PR %s is: %w", p.URL, err)
 	}
 
 	if !strings.EqualFold(author, me) {
-		return false, foreignPullError{url: p.url(), author: author}
+		return false, foreignPullError{url: p.URL, author: author}
 	}
 
 	return false, nil

@@ -27,7 +27,7 @@ type NewPull struct {
 // CreatePull opens a request from a branch already on the remote, so neither
 // CLI stops to ask about pushing it.
 func (h Host) CreatePull(ctx context.Context, n NewPull) error {
-	args := h.Pick(
+	args := h.pick(
 		[]string{"pr", "create", "--head", n.Head, "--base", n.Base, "--title", n.Title, "--body", n.Body},
 		[]string{
 			"mr", "create", "--source-branch", n.Head, "--target-branch", n.Base,
@@ -47,7 +47,7 @@ func (h Host) CreatePull(ctx context.Context, n NewPull) error {
 		args = append(args, "--draft")
 	}
 
-	_, err := h.Run(ctx, args...)
+	_, err := h.run(ctx, args...)
 
 	return err
 }
@@ -59,7 +59,7 @@ func (h Host) EditPull(ctx context.Context, selector, title, body string) error 
 		return errors.New("nothing to edit: give a title or a body")
 	}
 
-	if h.GLab() {
+	if h.glab() {
 		args := []string{"mr", "update", selector}
 		if title != "" {
 			args = append(args, "--title", title)
@@ -69,7 +69,7 @@ func (h Host) EditPull(ctx context.Context, selector, title, body string) error 
 			args = append(args, "--description", body)
 		}
 
-		_, err := h.Run(ctx, args...)
+		_, err := h.run(ctx, args...)
 
 		return err
 	}
@@ -100,7 +100,7 @@ func (h Host) EditPull(ctx context.Context, selector, title, body string) error 
 		args = append(args, "--body-file", f.Name())
 	}
 
-	_, err := h.Run(ctx, args...)
+	_, err := h.run(ctx, args...)
 
 	return err
 }
@@ -122,7 +122,7 @@ var (
 func (h Host) Thread(ctx context.Context, number int, threadURL string) (string, error) {
 	n := strconv.Itoa(number)
 
-	if h.GLab() {
+	if h.glab() {
 		m := glNoteRE.FindStringSubmatch(threadURL)
 		if m == nil {
 			return "", ErrNoThread
@@ -136,7 +136,7 @@ func (h Host) Thread(ctx context.Context, number int, threadURL string) (string,
 			} `json:"notes"`
 		}
 
-		ds, err := DecodePages[discussion](ctx, h, "projects/:fullpath/merge_requests/"+n+"/discussions?per_page=100")
+		ds, err := decodePages[discussion](ctx, h, "projects/:fullpath/merge_requests/"+n+"/discussions?per_page=100")
 		if err != nil {
 			return "", err
 		}
@@ -165,7 +165,7 @@ func (h Host) Thread(ctx context.Context, number int, threadURL string) (string,
 
 	if m := ghCommentRE.FindStringSubmatch(threadURL); m != nil {
 		var c comment
-		if err := h.Decode(ctx, &c, "api", "repos/{owner}/{repo}/pulls/comments/"+m[1]); err != nil {
+		if err := h.decode(ctx, &c, "api", "repos/{owner}/{repo}/pulls/comments/"+m[1]); err != nil {
 			return "", err
 		}
 
@@ -173,7 +173,7 @@ func (h Host) Thread(ctx context.Context, number int, threadURL string) (string,
 	}
 
 	if m := ghReviewRE.FindStringSubmatch(threadURL); m != nil {
-		cs, err := DecodePages[comment](
+		cs, err := decodePages[comment](
 			ctx,
 			h,
 			"repos/{owner}/{repo}/pulls/"+n+"/reviews/"+m[1]+"/comments?per_page=100",
@@ -206,7 +206,7 @@ type Posted struct {
 func (h Host) ThreadComments(ctx context.Context, number int, webURL, thread string) ([]Posted, error) {
 	n := strconv.Itoa(number)
 
-	if h.GLab() {
+	if h.glab() {
 		type note struct {
 			ID     int64  `json:"id"`
 			Body   string `json:"body"`
@@ -218,7 +218,7 @@ func (h Host) ThreadComments(ctx context.Context, number int, webURL, thread str
 
 		if thread == "" {
 			var err error
-			if notes, err = DecodePages[note](
+			if notes, err = decodePages[note](
 				ctx,
 				h,
 				"projects/:fullpath/merge_requests/"+n+"/notes?per_page=100",
@@ -229,7 +229,7 @@ func (h Host) ThreadComments(ctx context.Context, number int, webURL, thread str
 			var d struct {
 				Notes []note `json:"notes"`
 			}
-			if err := h.Decode(
+			if err := h.decode(
 				ctx,
 				&d,
 				"api",
@@ -265,7 +265,7 @@ func (h Host) ThreadComments(ctx context.Context, number int, webURL, thread str
 		path = "repos/{owner}/{repo}/pulls/" + n + "/comments?per_page=100"
 	}
 
-	cs, err := DecodePages[comment](ctx, h, path)
+	cs, err := decodePages[comment](ctx, h, path)
 	if err != nil {
 		return nil, err
 	}
@@ -296,9 +296,9 @@ func (h Host) PostComment(ctx context.Context, number int, webURL, thread, body 
 	var path string
 
 	switch {
-	case h.GLab() && thread == "":
+	case h.glab() && thread == "":
 		path = "projects/:fullpath/merge_requests/" + n + "/notes"
-	case h.GLab():
+	case h.glab():
 		path = "projects/:fullpath/merge_requests/" + n + "/discussions/" + thread + "/notes"
 	case thread == "":
 		path = "repos/{owner}/{repo}/issues/" + n + "/comments"
@@ -306,11 +306,11 @@ func (h Host) PostComment(ctx context.Context, number int, webURL, thread, body 
 		path = "repos/{owner}/{repo}/pulls/" + n + "/comments/" + thread + "/replies"
 	}
 
-	if err := h.Decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+body); err != nil {
+	if err := h.decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+body); err != nil {
 		return "", err
 	}
 
-	if h.GLab() {
+	if h.glab() {
 		return noteURL(webURL, posted.ID), nil
 	}
 
@@ -335,7 +335,7 @@ type CommitStatus struct {
 
 // LatestStatus is the newest status named name on sha, nil when it has none.
 func (h Host) LatestStatus(ctx context.Context, sha, name string) (*CommitStatus, error) {
-	if h.GLab() {
+	if h.glab() {
 		type status struct {
 			ID          int64  `json:"id"`
 			Name        string `json:"name"`
@@ -343,7 +343,7 @@ func (h Host) LatestStatus(ctx context.Context, sha, name string) (*CommitStatus
 			Description string `json:"description"`
 		}
 
-		ss, err := DecodePages[status](ctx, h, "projects/:fullpath/repository/commits/"+sha+
+		ss, err := decodePages[status](ctx, h, "projects/:fullpath/repository/commits/"+sha+
 			"/statuses?all=true&per_page=100&name="+url.QueryEscape(name))
 		if err != nil {
 			return nil, err
@@ -376,7 +376,7 @@ func (h Host) LatestStatus(ctx context.Context, sha, name string) (*CommitStatus
 	}
 
 	// newest first, so the first with the name is the one that counts
-	ss, err := DecodePages[status](ctx, h, "repos/{owner}/{repo}/commits/"+sha+"/statuses?per_page=100")
+	ss, err := decodePages[status](ctx, h, "repos/{owner}/{repo}/commits/"+sha+"/statuses?per_page=100")
 	if err != nil {
 		return nil, err
 	}
@@ -393,19 +393,19 @@ func (h Host) LatestStatus(ctx context.Context, sha, name string) (*CommitStatus
 // SetStatus sets a named status on sha; state is "success" or "failure",
 // which GitLab spells "failed".
 func (h Host) SetStatus(ctx context.Context, sha string, s CommitStatus) error {
-	if h.GLab() {
+	if h.glab() {
 		state := s.State
 		if state == "failure" {
 			state = "failed"
 		}
 
-		_, err := h.Run(ctx, "api", "-X", "POST", "projects/:fullpath/statuses/"+sha,
+		_, err := h.run(ctx, "api", "-X", "POST", "projects/:fullpath/statuses/"+sha,
 			"-f", "state="+state, "-f", "name="+s.Name, "-f", "description="+s.Description)
 
 		return err
 	}
 
-	_, err := h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/statuses/"+sha,
+	_, err := h.run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/statuses/"+sha,
 		"-f", "state="+s.State, "-f", "context="+s.Name, "-f", "description="+s.Description)
 
 	return err

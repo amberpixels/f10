@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -75,7 +76,7 @@ func TestDriveTakesAShippedBranchFromGit(t *testing.T) {
 		fx.f.script("git rev-list --count --no-merges refs/heads/GH-1 --not refs/heads/main", "2")
 	}
 
-	fx.in.pull = func(context.Context, string) (pull, error) { return pull{State: "OPEN", Number: 7}, nil }
+	fx.in.pull = func(context.Context, string) (forge.PR, error) { return forge.PR{Status: forge.Open, Number: 7}, nil }
 
 	err := fx.drive(t)
 	if err != nil {

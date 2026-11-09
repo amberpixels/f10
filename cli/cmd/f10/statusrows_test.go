@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -254,7 +255,7 @@ func TestRenderRows(t *testing.T) {
 		},
 		{
 			ID: "FT-212", URL: gh("issues", 212), Title: "Run drives in a per-user daemon", Depth: 1,
-			After: "FT-210", Stage: stageReviewing, Step: "review", PR: gh("pull", 219), PRState: pullOpen,
+			After: "FT-210", Stage: stageReviewing, Step: "review", PR: gh("pull", 219), PRState: forge.Open,
 			Gates: []gate{{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}}},
 		},
 		{
@@ -415,9 +416,9 @@ func TestPRColumnIcons(t *testing.T) {
 	pr := "https://github.com/a/b/pull/7"
 
 	for state, want := range map[string]string{
-		pullOpen:   "\U000F04C2 #7",
-		pullMerged: "\U000F062D #7 merged",
-		"closed":   "#7 closed",
+		forge.Open:   "\U000F04C2 #7",
+		forge.Merged: "\U000F062D #7 merged",
+		"closed":     "#7 closed",
 	} {
 		if got := prColumn(taskRow{PR: pr, PRState: state}); got != want {
 			t.Errorf("%s: %q, want %q", state, got, want)
@@ -426,7 +427,7 @@ func TestPRColumnIcons(t *testing.T) {
 
 	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
 
-	if got := prColumn(taskRow{PR: pr, PRState: pullMerged}); got != "MR #7 merged" {
+	if got := prColumn(taskRow{PR: pr, PRState: forge.Merged}); got != "MR #7 merged" {
 		t.Errorf("with F10_STATUS_GLYPHS: %q", got)
 	}
 

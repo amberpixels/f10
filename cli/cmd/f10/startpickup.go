@@ -4,40 +4,41 @@ import (
 	"context"
 	"errors"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // pickupFor is the PR the start argument names, or nil for a task id; a
 // bare #n the host knows as no PR is a task id.
-func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, error) {
+func pickupFor(ctx context.Context, t *target, token string) (*pickup, forge.PR, error) {
 	number, probe := pullToken(token)
 	if number == "" {
-		return nil, pull{}, nil
+		return nil, forge.PR{}, nil
 	}
 
 	h, err := t.host()
 
 	switch {
 	case err != nil && probe:
-		return nil, pull{}, nil
+		return nil, forge.PR{}, nil
 	case err != nil:
-		return nil, pull{}, err
-	case probe && h.GLab():
+		return nil, forge.PR{}, err
+	case probe && !h.SharedNumbers():
 		// GitLab numbers issues and MRs apart: #n is an issue there, !n an MR
-		return nil, pull{}, nil
+		return nil, forge.PR{}, nil
 	}
 
-	p, err := h.pullNumber(ctx, number)
+	p, err := h.PR(ctx, number)
 
 	switch {
-	case err != nil && probe && noSuchPull(err):
-		return nil, pull{}, nil
+	case err != nil && probe && errors.Is(err, forge.ErrNotFound):
+		return nil, forge.PR{}, nil
 	case err != nil:
-		return nil, pull{}, err
+		return nil, forge.PR{}, err
 	}
 
 	if err := refusePull(p); err != nil {
-		return nil, pull{}, err
+		return nil, forge.PR{}, err
 	}
 
 	return h.pickupOf(number, p), p, nil
@@ -46,7 +47,7 @@ func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, err
 // pickedTask is the task id for a picked-up PR: --task, else the one the
 // PR names. A PR naming none exits with ui.ExitDeclined, which the start skill
 // turns into a question; --task with no PR is a refusal.
-func pickedTask(prefix string, hostIssues bool, pick *pickup, pr pull, task string) (string, error) {
+func pickedTask(prefix string, hostIssues bool, pick *pickup, pr forge.PR, task string) (string, error) {
 	switch {
 	case pick == nil && task != "":
 		return "", errors.New("--task names the task of a PR: pass the PR's link or #n")

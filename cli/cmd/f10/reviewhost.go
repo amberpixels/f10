@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,51 +41,10 @@ type remoteReview struct {
 	Triggerable bool   `json:"triggerable"`
 	Revision    string `json:"revision"`
 
-	// stored is the host's text on the object ack edits: Body folds an inline
-	// review's comments in, and writing that back would copy them into the summary
-	stored string
-
-	threads    []string // inline review: the threads a `thread resolved` ack resolves
-	threadsErr error    // inline review: why threads could not be read, reported by the ack
-	commentID  string   // inline review: the comment a reaction or marker lands on
-	pending    bool     // inline review: not yet submitted
-	concluded  bool     // check run: finished
-}
-
-// A reviewPull is the request the reviews sit on, with the commits a
-// comment's sha is derived from (an issue comment stores none).
-type reviewPull struct {
-	Number   string
-	HeadSHA  string
-	URL      string
-	Commits  []pullCommit
-	Pipeline *headPipeline // glab only; nil until a pipeline has run
-}
-
-// headPipeline is the merge request's latest pipeline, as GitLab records it
-// on the request itself: the pipelines listing has no sort order to ask for.
-type headPipeline struct {
-	ID  int64  `json:"id"`
-	SHA string `json:"sha"`
-}
-
-type pullCommit struct {
-	SHA string
-	At  time.Time
-}
-
-// shaBefore is the head a reviewer saw when it posted at t; the head sha when
-// no commit precedes it.
-func (p reviewPull) shaBefore(t time.Time) string {
-	sha := p.HeadSHA
-
-	for _, c := range p.Commits {
-		if !c.At.After(t) {
-			sha = c.SHA
-		}
-	}
-
-	return sha
+	// host is the review as the host keeps it, which every write goes back
+	// through; its Stored is the text an ack edits, since Body folds an
+	// inline review's comments in and writing that back would copy them
+	host forge.Note
 }
 
 // errNoReview is pick finding nothing to return: no review by the reviewer,
@@ -96,38 +54,24 @@ var errNoReview = errors.New("no review")
 type reviewer struct {
 	h     host
 	facts facts.Review
-	pull  reviewPull
+	pull  *forge.ReviewPR
 
 	reactions map[string]map[string]bool // per candidates call: review id to the viewer's fresh reactions
-
-	viewer string // the login gh or glab is signed in as
-	owner  string // gh GraphQL needs owner and name spelled out
-	repo   string
 }
 
 // newReviewer reads the request number names, or the current branch's.
 //
 //nolint:lostfield // h is kept whole on the reviewer
 func newReviewer(ctx context.Context, h host, f facts.Review, number string) (*reviewer, error) {
-	rv := &reviewer{h: h, facts: f}
-
-	if err := rv.loadPull(ctx, number); err != nil {
+	pull, err := h.OpenReviews(ctx, number)
+	if err != nil {
 		return nil, err
 	}
 
-	return rv, nil
+	return &reviewer{h: h, facts: f, pull: pull}, nil
 }
 
-// isReviewer drops a declared `[bot]` on GitLab, which names a bot by username
-// alone with no suffix anyone could forge; on GitHub SameLogin's rule stands.
-func (rv *reviewer) isReviewer(login string) bool {
-	declared := rv.facts.Reviewer
-	if rv.h.GLab() {
-		declared = strings.TrimSuffix(declared, "[bot]")
-	}
-
-	return forge.SameLogin(declared, login)
-}
+func (rv *reviewer) isReviewer(login string) bool { return rv.h.IsLogin(rv.facts.Reviewer, login) }
 
 // candidates lists every review, newest update first. A settled one counts as
 // handled: the settled marker is an edit, which would otherwise make the
@@ -138,19 +82,25 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 		err   error
 	)
 
+	var notes []forge.Note
+
 	switch rv.facts.Arrives {
 	case facts.ArrivesComment:
-		found, err = rv.comments(ctx)
+		notes, err = rv.pull.Comments(ctx, rv.isReviewer)
 	case facts.ArrivesInline:
-		found, err = rv.inlineReviews(ctx)
+		notes, err = rv.pull.InlineReviews(ctx, rv.isReviewer)
 	case facts.ArrivesCheck:
-		found, err = rv.checkRuns(ctx)
+		notes, err = rv.pull.Checks(ctx, rv.facts.Reviewer)
 	default:
 		return nil, fmt.Errorf("the Review section declares no known arrival kind: %q", rv.facts.Arrives)
 	}
 
 	if err != nil {
 		return nil, err
+	}
+
+	for _, n := range notes {
+		found = append(found, fromNote(rv.facts, n))
 	}
 
 	rv.reactions = map[string]map[string]bool{}
@@ -182,7 +132,7 @@ func (rv *reviewer) candidates(ctx context.Context) ([]remoteReview, error) {
 func (rv *reviewer) stale(r remoteReview) bool {
 	sha := r.SHA
 	if r.Kind == facts.ArrivesComment {
-		sha = rv.pull.shaBefore(r.UpdatedAt)
+		sha = rv.pull.ShaBefore(r.UpdatedAt)
 	}
 
 	return sha != "" && rv.pull.HeadSHA != "" && sha != rv.pull.HeadSHA
@@ -355,27 +305,22 @@ func (rv *reviewer) trigger(ctx context.Context) (string, string, time.Time, err
 	}
 
 	if kind == facts.ManualRequest {
-		return rv.requestReview(ctx, text)
+		// neither host dates the request, so the local clock stands in; a
+		// human's review comes long after
+		at := time.Now().UTC().Truncate(time.Second)
+		if err := rv.pull.RequestReview(ctx, text); err != nil {
+			return "", "", time.Time{}, err
+		}
+
+		return "requested a review from " + text, rv.pull.URL, at, nil
 	}
 
-	path := rv.issuePath("issues/" + rv.pull.Number + "/comments")
-	if rv.h.GLab() {
-		path = rv.mrPath("notes")
-	}
-
-	var posted struct {
-		ID        int64     `json:"id"`
-		HTMLURL   string    `json:"html_url"`
-		CreatedAt time.Time `json:"created_at"`
-	}
-
-	if err := rv.h.Decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+text); err != nil {
+	url, at, err := rv.pull.Comment(ctx, text)
+	if err != nil {
 		return "", "", time.Time{}, err
 	}
 
-	url := cmp.Or(posted.HTMLURL, rv.pull.URL+"#note_"+strconv.FormatInt(posted.ID, 10))
-
-	return "commented " + text, url, cmp.Or(posted.CreatedAt, time.Now().UTC()), nil
+	return "commented " + text, url, cmp.Or(at, time.Now().UTC()), nil
 }
 
 func (rv *reviewer) isDone(r remoteReview) bool {
@@ -383,11 +328,11 @@ func (rv *reviewer) isDone(r remoteReview) bool {
 	case facts.DoneMarker:
 		return rv.facts.DoneText != "" && strings.Contains(r.Body, rv.facts.DoneText)
 	case facts.DoneSubmitted:
-		return !r.pending
+		return !r.host.Pending
 	case facts.DoneConcluded:
-		return r.concluded
+		return r.host.Concluded
 	default: // posted: it exists
-		return r.Kind != facts.ArrivesCheck || r.concluded
+		return r.Kind != facts.ArrivesCheck || r.host.Concluded
 	}
 }
 
@@ -401,11 +346,11 @@ func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error)
 	case facts.HandledReaction, facts.HandledMarker:
 		return rv.hasMark(ctx, r, rv.facts.HandledMark())
 	case facts.HandledCheckbox:
-		m := checkboxRE.FindStringSubmatch(r.stored)
+		m := checkboxRE.FindStringSubmatch(r.host.Stored)
 
 		return len(m) > 1 && m[1] != " ", nil
 	case facts.HandledThread:
-		return rv.threadsResolved(ctx, r)
+		return rv.pull.ThreadsResolved(ctx, r.host)
 	default:
 		return false, nil
 	}
@@ -427,7 +372,7 @@ func (rv *reviewer) hasMark(ctx context.Context, r remoteReview, m facts.Mark) (
 	case facts.HandledReaction:
 		return rv.hasFreshReaction(ctx, r, m.Text)
 	case facts.HandledMarker:
-		return m.Text != "" && strings.Contains(r.stored, m.Text), nil
+		return m.Text != "" && strings.Contains(r.host.Stored, m.Text), nil
 	default:
 		return false, nil
 	}
@@ -442,7 +387,7 @@ func (rv *reviewer) leaveMark(ctx context.Context, r remoteReview, m facts.Mark)
 
 		return msg, true, err
 	case facts.HandledMarker:
-		msg, err := rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+m.Text, "marker appended")
+		msg, err := rv.patchBody(ctx, r, strings.TrimRight(r.host.Stored, "\n")+"\n\n"+m.Text, "marker appended")
 
 		return msg, true, err
 	default:
@@ -459,7 +404,7 @@ func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview, emoji 
 		return fresh[emoji], nil
 	}
 
-	fresh, err := rv.freshReactions(ctx, r)
+	fresh, err := rv.pull.FreshReactions(ctx, r.host)
 	if err != nil {
 		return false, err
 	}
@@ -489,12 +434,12 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 	case facts.HandledCheckbox:
 		// the first box only: isHandled reads the first, and the rest may be
 		// the reviewer's own list, which ticking would read as all fixed
-		m := checkboxRE.FindStringSubmatchIndex(r.stored)
+		m := checkboxRE.FindStringSubmatchIndex(r.host.Stored)
 		if m == nil {
 			return "", errors.New("the review carries no checkbox to tick")
 		}
 
-		body := r.stored[:m[2]] + "x" + r.stored[m[3]:]
+		body := r.host.Stored[:m[2]] + "x" + r.host.Stored[m[3]:]
 
 		return rv.patchBody(ctx, r, body, "checkbox ticked")
 	case facts.HandledThread:
@@ -521,4 +466,65 @@ func (rv *reviewer) settle(ctx context.Context, r remoteReview) (string, error) 
 
 	return "", errors.New("project.md declares no review settled mark: declare `settled` " +
 		"(reaction `<emoji>` or marker \"<text>\") under review")
+}
+
+// fromNote is a host note as the review the declared arrival kind makes of
+// it; GitLab discussions name no author, so the reviewer stands in.
+//
+//nolint:lostfield // candidates fills the judged fields: Done, Handled, Settled, Stale...
+func fromNote(f facts.Review, n forge.Note) remoteReview {
+	kind := f.Arrives
+	if kind == facts.ArrivesInline && n.Author == "" {
+		n.Author = f.Reviewer
+	}
+
+	return remoteReview{
+		ID:        n.ID,
+		Kind:      kind,
+		URL:       n.URL,
+		Author:    n.Author,
+		Body:      n.Body,
+		SHA:       n.SHA,
+		CreatedAt: n.CreatedAt,
+		UpdatedAt: n.UpdatedAt,
+		host:      n,
+	}
+}
+
+func (rv *reviewer) react(ctx context.Context, r remoteReview, emoji string) (string, error) {
+	if err := rv.pull.React(ctx, r.host, emoji); err != nil {
+		return "", err
+	}
+
+	return "reaction " + emoji, nil
+}
+
+func (rv *reviewer) patchBody(ctx context.Context, r remoteReview, body, what string) (string, error) {
+	if err := rv.pull.EditBody(ctx, r.host, body); err != nil {
+		return "", err
+	}
+
+	return what, nil
+}
+
+func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string, error) {
+	if r.Kind != facts.ArrivesInline {
+		return "", errors.New(
+			"only an inline review has threads to resolve; declare reaction, marker or checkbox for a comment",
+		)
+	}
+
+	if r.host.ThreadsErr != nil {
+		return "", fmt.Errorf("reading the review's threads: %w", r.host.ThreadsErr)
+	}
+
+	if len(r.host.Threads) == 0 {
+		return "", errors.New("the review opened no threads to resolve")
+	}
+
+	if err := rv.pull.ResolveThreads(ctx, r.host.Threads); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%d thread(s) resolved", len(r.host.Threads)), nil
 }

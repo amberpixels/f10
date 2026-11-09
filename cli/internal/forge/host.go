@@ -28,51 +28,11 @@ type Host struct {
 	Repo string
 }
 
-// GLab reports whether the host is GitLab's CLI.
-func (h Host) GLab() bool { return h.Name == "glab" }
-
 // At is the same host answering from another checkout of the repo.
 func (h Host) At(dir string) Host {
 	h.Dir = dir
 
 	return h
-}
-
-// Pick is this host's spelling of a command: gh's or glab's.
-func (h Host) Pick(gh, glab []string) []string {
-	if h.GLab() {
-		return glab
-	}
-
-	return gh
-}
-
-// Run runs one host CLI command and returns its stdout.
-func (h Host) Run(ctx context.Context, args ...string) (string, error) {
-	res, err := shell.Capture(ctx, h.Dir, h.Name, h.named(args)...)
-	if err != nil {
-		return "", fmt.Errorf("running %s: %w", h.Name, err)
-	}
-
-	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", h.Name, cmp.Or(res.Stderr, res.Stdout, fmt.Sprintf("exit %d", res.Code)))
-	}
-
-	return res.Stdout, nil
-}
-
-// Decode runs one host CLI command and reads its JSON stdout into v.
-func (h Host) Decode(ctx context.Context, v any, args ...string) error {
-	out, err := h.Run(ctx, args...)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal([]byte(out), v); err != nil {
-		return fmt.Errorf("parsing %s output: %w", h.Name, err)
-	}
-
-	return nil
 }
 
 // Login is who the CLI is signed in as: gh names it login, glab username.
@@ -82,7 +42,7 @@ func (h Host) Login(ctx context.Context) (string, error) {
 		Username string `json:"username"`
 	}
 
-	if err := h.Decode(ctx, &user, "api", "user"); err != nil {
+	if err := h.decode(ctx, &user, "api", "user"); err != nil {
 		return "", err
 	}
 
@@ -94,51 +54,11 @@ func (h Host) Login(ctx context.Context) (string, error) {
 	return login, nil
 }
 
-// named puts Repo on args: an api call gets `{owner}`, `{repo}` and
-// `:fullpath` filled here, since the CLIs fill them from a checkout; every
-// other command takes -R. glab wants an off-host repository as a url.
-func (h Host) named(args []string) []string {
-	if h.Repo == "" || len(args) == 0 {
-		return args
-	}
-
-	host, path := "", h.Repo
-	if i := strings.Index(path, "/"); i > 0 && strings.Count(path, "/") > 1 && strings.Contains(path[:i], ".") {
-		host, path = path[:i], path[i+1:]
-	}
-
-	if args[0] != "api" {
-		repo := h.Repo
-		if host != "" && h.GLab() {
-			repo = "https://" + h.Repo
-		}
-
-		return append(slices.Clone(args), "-R", repo)
-	}
-
-	owner, name, _ := strings.Cut(path, "/")
-	fill := strings.NewReplacer(
-		"{owner}", owner, "{repo}", name,
-		":fullpath", url.PathEscape(path), ":id", url.PathEscape(path),
-	)
-
-	out := slices.Clone(args)
-	for i := 1; i < len(out); i++ {
-		out[i] = fill.Replace(out[i])
-	}
-
-	if host != "" && !h.GLab() {
-		out = append(out, "--hostname", host)
-	}
-
-	return out
-}
-
-// DecodePages runs a `api --paginate` call and reads every page into one
+// decodePages runs a `api --paginate` call and reads every page into one
 // list. gh merges the pages of an array into one array; glab may print one
 // document per page, so every document in the output is read in turn.
-func DecodePages[T any](ctx context.Context, h Host, path string) ([]T, error) {
-	out, err := h.Run(ctx, "api", "--paginate", path)
+func decodePages[T any](ctx context.Context, h Host, path string) ([]T, error) {
+	out, err := h.run(ctx, "api", "--paginate", path)
 	if err != nil {
 		return nil, err
 	}
@@ -191,4 +111,86 @@ func SameLogin(declared, login string) bool {
 	}
 
 	return d == l || d+"[bot]" == l
+}
+
+// glab reports whether the host is GitLab's CLI.
+func (h Host) glab() bool { return h.Name == "glab" }
+
+// pick is this host's spelling of a command: gh's or glab's.
+func (h Host) pick(gh, glab []string) []string {
+	if h.glab() {
+		return glab
+	}
+
+	return gh
+}
+
+// run runs one host CLI command and returns its stdout.
+func (h Host) run(ctx context.Context, args ...string) (string, error) {
+	res, err := shell.Capture(ctx, h.Dir, h.Name, h.named(args)...)
+	if err != nil {
+		return "", fmt.Errorf("running %s: %w", h.Name, err)
+	}
+
+	if res.Code != 0 {
+		msg := cmp.Or(res.Stderr, res.Stdout, fmt.Sprintf("exit %d", res.Code))
+
+		return "", &Error{Host: h.Name, Code: res.Code, Stderr: msg, kind: classify(msg)}
+	}
+
+	return res.Stdout, nil
+}
+
+// decode runs one host CLI command and reads its JSON stdout into v.
+func (h Host) decode(ctx context.Context, v any, args ...string) error {
+	out, err := h.run(ctx, args...)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal([]byte(out), v); err != nil {
+		return fmt.Errorf("parsing %s output: %w", h.Name, err)
+	}
+
+	return nil
+}
+
+// named puts Repo on args: an api call gets `{owner}`, `{repo}` and
+// `:fullpath` filled here, since the CLIs fill them from a checkout; every
+// other command takes -R. glab wants an off-host repository as a url.
+func (h Host) named(args []string) []string {
+	if h.Repo == "" || len(args) == 0 {
+		return args
+	}
+
+	host, path := "", h.Repo
+	if i := strings.Index(path, "/"); i > 0 && strings.Count(path, "/") > 1 && strings.Contains(path[:i], ".") {
+		host, path = path[:i], path[i+1:]
+	}
+
+	if args[0] != "api" {
+		repo := h.Repo
+		if host != "" && h.glab() {
+			repo = "https://" + h.Repo
+		}
+
+		return append(slices.Clone(args), "-R", repo)
+	}
+
+	owner, name, _ := strings.Cut(path, "/")
+	fill := strings.NewReplacer(
+		"{owner}", owner, "{repo}", name,
+		":fullpath", url.PathEscape(path), ":id", url.PathEscape(path),
+	)
+
+	out := slices.Clone(args)
+	for i := 1; i < len(out); i++ {
+		out[i] = fill.Replace(out[i])
+	}
+
+	if host != "" && !h.glab() {
+		out = append(out, "--hostname", host)
+	}
+
+	return out
 }

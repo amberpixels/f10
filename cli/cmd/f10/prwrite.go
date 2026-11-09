@@ -23,45 +23,45 @@ const statusLimit = 140
 
 // openPull is the subject's open request, read whole, for a command that
 // writes to it: a merged or closed one, or none, is refused by name.
-func openPull(ctx context.Context, cmd *cli.Command) (host, pull, error) {
+func openPull(ctx context.Context, cmd *cli.Command) (host, forge.PR, error) {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
-		return host{}, pull{}, err
+		return host{}, forge.PR{}, err
 	}
 
 	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
-		return host{}, pull{}, err
+		return host{}, forge.PR{}, err
 	}
 
 	if s.lookupErr != nil {
-		return host{}, pull{}, s.lookupErr
+		return host{}, forge.PR{}, s.lookupErr
 	}
 
 	if s.number == 0 {
-		return host{}, pull{}, fmt.Errorf("no open PR for %s", s.branch)
+		return host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.branch)
 	}
 
 	h, err := t.host()
 	if err != nil {
-		return host{}, pull{}, err
+		return host{}, forge.PR{}, err
 	}
 
-	p, err := h.pullNumber(ctx, strconv.Itoa(s.number))
+	p, err := h.PR(ctx, strconv.Itoa(s.number))
 	if err != nil {
-		return host{}, pull{}, err
+		return host{}, forge.PR{}, err
 	}
 
 	if err := requireOpen(p); err != nil {
-		return host{}, pull{}, err
+		return host{}, forge.PR{}, err
 	}
 
 	return h, p, nil
 }
 
-func requireOpen(p pull) error {
-	if p.status() != pullOpen {
-		return fmt.Errorf("%s is %s: nothing written", p.url(), p.status())
+func requireOpen(p forge.PR) error {
+	if p.Status != forge.Open {
+		return fmt.Errorf("%s is %s: nothing written", p.URL, p.Status)
 	}
 
 	return nil
@@ -87,7 +87,7 @@ func runPREdit(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return h.EditPull(ctx, p.id(), title, body)
+	return h.EditPull(ctx, strconv.Itoa(p.Number), title, body)
 }
 
 // readBody reads a PR body from file, - meaning stdin; an empty one is
@@ -145,13 +145,13 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		p, err := h.pullNumber(ctx, strconv.Itoa(s.number))
+		p, err := h.PR(ctx, strconv.Itoa(s.number))
 		if err != nil {
 			return err
 		}
 
 		ui.Warnf(cmd.ErrWriter, "already open for %s, nothing created", s.branch)
-		_, err = fmt.Fprintln(cmd.Writer, p.url())
+		_, err = fmt.Fprintln(cmd.Writer, p.URL)
 
 		return err
 	}
@@ -194,12 +194,12 @@ func (h host) createPull(ctx context.Context, n forge.NewPull) (string, error) {
 		return "", err
 	}
 
-	p, err := h.pull(ctx, n.Head)
+	p, err := h.PR(ctx, n.Head)
 	if err != nil {
 		return "", fmt.Errorf("opened, but reading it back failed: %w", err)
 	}
 
-	return p.url(), nil
+	return p.URL, nil
 }
 
 func runPRComment(ctx context.Context, cmd *cli.Command) error {
@@ -231,8 +231,8 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 // commentOnce never posts the same text twice where it lands: a retry after
 // a post whose answer was lost finds it and returns its url instead. quote
 // heads a reply that fell back to the top level, which no thread places.
-func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, quote, body string) (string, error) {
-	number, _ := strconv.Atoi(p.id())
+func commentOnce(ctx context.Context, warn io.Writer, h host, p forge.PR, replyTo, quote, body string) (string, error) {
+	number, _ := strconv.Atoi(strconv.Itoa(p.Number))
 
 	var thread string
 
@@ -258,7 +258,7 @@ func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, q
 		return "", err
 	}
 
-	posted, err := h.ThreadComments(ctx, number, p.url(), thread)
+	posted, err := h.ThreadComments(ctx, number, p.URL, thread)
 	if err != nil {
 		return "", err
 	}
@@ -271,7 +271,7 @@ func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, q
 		}
 	}
 
-	return h.PostComment(ctx, number, p.url(), thread, body)
+	return h.PostComment(ctx, number, p.URL, thread, body)
 }
 
 func runPRStatus(ctx context.Context, cmd *cli.Command) error {
@@ -304,10 +304,17 @@ func runPRStatus(ctx context.Context, cmd *cli.Command) error {
 // statusOnce sets the status on the head only, so it never lands on a commit
 // the PR has moved past; sha, when given, is the head the caller judged. One
 // already set the same way is left alone, so a retry never posts twice.
-func statusOnce(ctx context.Context, warn io.Writer, h host, p pull, sha string, s forge.CommitStatus) (string, error) {
-	head := p.headSHA()
+func statusOnce(
+	ctx context.Context,
+	warn io.Writer,
+	h host,
+	p forge.PR,
+	sha string,
+	s forge.CommitStatus,
+) (string, error) {
+	head := p.HeadSHA
 	if head == "" {
-		return "", fmt.Errorf("%s returned no head sha for %s", h.Name, p.url())
+		return "", fmt.Errorf("%s returned no head sha for %s", h.Name, p.URL)
 	}
 
 	if sha != "" && !strings.HasPrefix(head, sha) {
@@ -344,7 +351,7 @@ func statusOnce(ctx context.Context, warn io.Writer, h host, p pull, sha string,
 // mineLine says whether the signed-in user opened p. A failed login read is
 // unknown, never no, so a step guarding someone else's PR stops on it; the
 // view itself goes on, since explain and demo need none of it.
-func mineLine(ctx context.Context, warn io.Writer, h host, p pull) string {
+func mineLine(ctx context.Context, warn io.Writer, h host, p forge.PR) string {
 	login, err := h.Login(ctx)
 
 	switch {
@@ -352,7 +359,7 @@ func mineLine(ctx context.Context, warn io.Writer, h host, p pull) string {
 		ui.Warnf(warn, "who is signed in is unknown: %v", err)
 
 		return "mine: unknown\n"
-	case strings.EqualFold(p.author(), login):
+	case strings.EqualFold(p.Author, login):
 		return "mine: yes\n"
 	default:
 		return "mine: no\n"

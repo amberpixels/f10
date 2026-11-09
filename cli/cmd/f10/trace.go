@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
@@ -160,17 +161,17 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	p, err := h.pull(ctx, branch)
+	p, err := h.PR(ctx, branch)
 
 	switch {
-	case noSuchPull(err):
+	case errors.Is(err, forge.ErrNotFound):
 		ui.Warnf(errWriter(cmd), "no PR for %s yet: no state to write", branch)
 
 		return nil
 	case err != nil:
 		return err
-	case p.status() != pullOpen:
-		ui.Warnf(errWriter(cmd), "%s is %s: its body is left alone", p.url(), p.status())
+	case p.Status != forge.Open:
+		ui.Warnf(errWriter(cmd), "%s is %s: its body is left alone", p.URL, p.Status)
 
 		return nil
 	}
@@ -180,14 +181,14 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if !strings.EqualFold(p.author(), login) {
-		ui.Warnf(errWriter(cmd), "%s was opened by %s: its body is left alone", p.url(), p.author())
+	if !strings.EqualFold(p.Author, login) {
+		ui.Warnf(errWriter(cmd), "%s was opened by %s: its body is left alone", p.URL, p.Author)
 
 		return nil
 	}
 
 	if !t.eff.Traces {
-		return carryStateToFile(file, p.body())
+		return carryStateToFile(file, p.Body)
 	}
 
 	tasks, err := traceTasks(ctx, cmd, t, "the block names none")
@@ -208,19 +209,19 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if file != "" {
-		return putStateInFile(file, p.body(), u)
+		return putStateInFile(file, p.Body, u)
 	}
 
-	out, err := trace.Rewrite(p.body(), u)
+	out, err := trace.Rewrite(p.Body, u)
 	if err != nil {
 		return err
 	}
 
-	if out == p.body() {
+	if out == p.Body {
 		return nil
 	}
 
-	return h.editPullBody(ctx, branch, out)
+	return h.EditPull(ctx, branch, "", out)
 }
 
 // putStateInFile carries the counts from the body the host holds, so a step

@@ -12,7 +12,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -284,9 +283,6 @@ func patchFiles(patch string) string {
 	return strings.Join(files, "\n")
 }
 
-// viewFields is what view reads of a request by number.
-const viewFields = "number,url,state,title,body,author,headRefName,headRefOid,baseRefName"
-
 func runPRView(ctx context.Context, cmd *cli.Command) error {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
@@ -330,25 +326,19 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	var p pull
-	if err := h.Decode(ctx, &p, h.prArgs(strconv.Itoa(s.number), h.Pick(
-		[]string{"--json", viewFields}, []string{"-F", "json"})...)...); err != nil {
+	p, err := h.PR(ctx, strconv.Itoa(s.number))
+	if err != nil {
 		return err
 	}
 
-	sigil := "#"
-	if h.GLab() {
-		sigil = "!"
-	}
-
-	fmt.Fprintf(&b, "pr: %s%s\nurl: %s\nstate: %s\nhead: %s\ntarget: %s\nauthor: %s\n",
-		sigil, p.id(), p.url(), p.status(), p.headSHA(), p.base(), p.author())
+	fmt.Fprintf(&b, "pr: %s%d\nurl: %s\nstate: %s\nhead: %s\ntarget: %s\nauthor: %s\n",
+		h.Sigil(), p.Number, p.URL, p.Status, p.HeadSHA, p.Base, p.Author)
 
 	b.WriteString(mineLine(ctx, cmd.ErrWriter, h, p))
 
 	fmt.Fprintf(&b, "title: %s\n", p.Title)
 
-	if body := strings.TrimSpace(p.body()); body != "" {
+	if body := strings.TrimSpace(p.Body); body != "" {
 		fmt.Fprintf(&b, "\n## Description\n\n%s\n", body)
 	}
 
@@ -409,14 +399,14 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 
 		return writeRows(cmd.Writer, rows, "no open requests")
 	case number == "":
-		url, err := h.pullsURL(ctx)
+		url, err := h.PullsURL(ctx)
 		if err != nil {
 			return err
 		}
 
 		return follow(ctx, cmd.Writer, h.Dir, url, cmd.Bool("link"))
 	case cmd.Bool("print"):
-		return shell.Passthrough(ctx, h.Dir, h.Name, h.prArgs(number)...)
+		return h.ShowPR(ctx, number, false)
 	}
 
 	if cmd.Bool("link") {
@@ -430,70 +420,33 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return shell.Passthrough(ctx, h.Dir, h.Name, h.prArgs(number, "--web")...)
-}
-
-// prArgs: GitHub has pull requests, GitLab merge requests.
-func (h host) prArgs(number string, tail ...string) []string {
-	args := h.Pick([]string{"pr", "view"}, []string{"mr", "view"})
-
-	if number != "" {
-		args = append(args, number)
-	}
-
-	return append(args, tail...)
+	return h.ShowPR(ctx, number, true)
 }
 
 // pullRows is the first page of open requests, newest first.
 func (h host) pullRows(ctx context.Context) ([]row, error) {
-	var found []pull
-
-	err := h.Decode(ctx, &found, h.Pick(
-		[]string{"pr", "list", "--json", "number,title,state,url", "--limit", "30"},
-		[]string{"mr", "list", "-F", "json", "--per-page", "30"},
-	)...)
+	found, err := h.OpenPRs(ctx, 30)
 	if err != nil {
 		return nil, err
 	}
 
-	sigil := "#"
-	if h.GLab() {
-		sigil = "!"
-	}
-
 	rows := make([]row, 0, len(found))
 	for _, p := range found {
-		rows = append(rows, row{
-			ID:     sigil + strconv.Itoa(cmp.Or(p.Number, p.IID)),
-			Title:  p.Title,
-			Status: p.status(),
-			URL:    p.url(),
-		})
+		rows = append(rows, row{ID: h.Sigil() + strconv.Itoa(p.Number), Title: p.Title, Status: p.Status, URL: p.URL})
 	}
 
 	return rows, nil
 }
 
 func (h host) prURL(ctx context.Context, number string) (string, error) {
-	var payload map[string]any
-
-	err := h.Decode(ctx, &payload, h.Pick(
-		h.prArgs(number, "--json", "url"),
-		h.prArgs(number, "-F", "json"),
-	)...)
+	p, err := h.PR(ctx, number)
 	if err != nil {
 		return "", err
 	}
 
-	field := "url"
-	if h.GLab() {
-		field = "web_url"
+	if p.URL == "" {
+		return "", fmt.Errorf("%s returned no url for %s%s", h.Name, h.Sigil(), number)
 	}
 
-	url, _ := payload[field].(string)
-	if url == "" {
-		return "", fmt.Errorf("%s returned no %s", h.Name, field)
-	}
-
-	return url, nil
+	return p.URL, nil
 }
