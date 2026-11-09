@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -41,7 +42,7 @@ func TestFinishClosesASpike(t *testing.T) {
 	}
 
 	for _, name := range []string{"GH-1.md", "GH-1.spike.md"} {
-		if !exists(filepath.Join(archive, name)) {
+		if !fsx.Exists(filepath.Join(archive, name)) {
 			t.Errorf("%s is not archived", name)
 		}
 	}
@@ -119,7 +120,7 @@ func TestFinishASpikeWithAPR(t *testing.T) {
 			t.Fatalf("%v\n%s", err, out)
 		}
 
-		if !fx.f.called(ghMerge) || !exists(filepath.Join(archive, "GH-1.spike.md")) {
+		if !fx.f.called(ghMerge) || !fsx.Exists(filepath.Join(archive, "GH-1.spike.md")) {
 			t.Errorf("calls = %q", fx.f.calls)
 		}
 	})
@@ -242,7 +243,7 @@ func TestFinishKeepsTheReportWhenTheRemovalFails(t *testing.T) {
 		t.Fatal("a failed removal finished")
 	}
 
-	if !exists(filepath.Join(fx.main, ".f10", "spikes", "GH-1.md")) {
+	if !fsx.Exists(filepath.Join(fx.main, ".f10", "spikes", "GH-1.md")) {
 		t.Error("the report left spikes/ before the worktree went")
 	}
 }

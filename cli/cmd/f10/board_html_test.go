@@ -376,12 +376,7 @@ func TestBoardDrawsParts(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	lines := boardLines(b).Rows
-	lay := newBoardLayout(lines, nil, 0)
-
-	for _, l := range lines {
-		lay.line(&buf, l, "")
-	}
+	renderBoard(&buf, b, 0)
 
 	if !strings.Contains(buf.String(), "#1 + #2") {
 		t.Errorf("the terminal draws no parts:\n%s", buf.String())

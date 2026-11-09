@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // capRuns is n unopened tasks with no branch, GH-1 first.
@@ -38,7 +39,7 @@ func liveGate(in *driveInput) *openGate {
 	}
 
 	for _, r := range in.runs {
-		if (r.end == nil || r.end.code == exitAsk) && g.workspace(r) != nil {
+		if (r.end == nil || r.end.code == ui.ExitAsk) && g.workspace(r) != nil {
 			g.open++
 		}
 	}
@@ -108,7 +109,7 @@ func TestCapAskFreesTheSlot(t *testing.T) {
 		t.Fatalf("GH-3 and GH-4 should queue behind the cap of 2")
 	}
 
-	in.runs[0].end = &driveResult{row: "asked at judge", code: exitAsk}
+	in.runs[0].end = &driveResult{row: "asked at judge", code: ui.ExitAsk}
 	pass(in, liveGate(in))
 
 	if !in.runs[2].opened || in.runs[2].queued {
@@ -161,7 +162,7 @@ func TestCapOpenCeiling(t *testing.T) {
 
 	for _, r := range in.runs[:2] {
 		openRun(r)
-		r.end = &driveResult{row: "asked at plan", code: exitAsk}
+		r.end = &driveResult{row: "asked at plan", code: ui.ExitAsk}
 	}
 
 	pass(in, liveGate(in))
@@ -171,7 +172,7 @@ func TestCapOpenCeiling(t *testing.T) {
 	}
 
 	// a halted task's agent is the user's, so it frees the ceiling
-	in.runs[1].end = &driveResult{row: "halted at plan", code: exitHalted}
+	in.runs[1].end = &driveResult{row: "halted at plan", code: ui.ExitHalted}
 	pass(in, liveGate(in))
 
 	if !in.runs[2].opened {
@@ -274,8 +275,8 @@ func TestDriveAskFreesTheSlot(t *testing.T) {
 		listing("GH-1", "idle", "GH-2", "idle", "GH-3", "working"), all("idle", "GH-1", "GH-2", "GH-3"))
 	fx.onTick[2] = func() { fx.writeRunFor(t, "GH-1", "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
-	if err := fx.drive(t); exitCode(err) != exitAsk {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitAsk, fx.out.String())
+	if err := fx.drive(t); exitCode(err) != ui.ExitAsk {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitAsk, fx.out.String())
 	}
 
 	fx.assertOrder(t, []string{

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // Text that leaves the machine names another task by its title and url.
@@ -177,7 +178,7 @@ func (t *target) taskRefs(
 
 		k, err := t.lookupRef(ctx, r)
 		if err != nil {
-			fmt.Fprintf(warn, "f10: %s: %v\n", r.ID, err)
+			ui.Warnf(warn, "%s: %v", r.ID, err)
 			delete(known, r.ID)
 
 			continue

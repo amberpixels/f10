@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
@@ -512,7 +513,7 @@ func finishedLazily(plans, id string, branched func() (bool, error), info func()
 	}
 
 	var ti taskInfo
-	if !exists(filepath.Join(plans, id+".md")) && !planArchivedIn(plans, id) {
+	if !fsx.Exists(filepath.Join(plans, id+".md")) && !planArchivedIn(plans, id) {
 		ti = info()
 	}
 

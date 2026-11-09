@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -74,7 +75,7 @@ func TestArchiveHandoffNumbers(t *testing.T) {
 	writeHandoffFile(t, src, "abc")
 
 	got, err := archiveHandoff(storage.InRepo(main), "GH-1")
-	if err != nil || got != filepath.Join(archive, "GH-1.1.md") || exists(src) {
+	if err != nil || got != filepath.Join(archive, "GH-1.1.md") || fsx.Exists(src) {
 		t.Fatalf("archived = %q, %v", got, err)
 	}
 

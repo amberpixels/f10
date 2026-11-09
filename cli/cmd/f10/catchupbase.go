@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The catchup step's base and method, decided here so the step, ship's
@@ -105,7 +106,7 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 
 	if !cmd.Bool("no-fetch") {
 		if err := gitx.Fetch(ctx, in.main); err != nil {
-			fmt.Fprintf(cmd.ErrWriter, "f10: fetching origin failed, deciding on the refs at hand: %v\n", err)
+			ui.Warnf(cmd.ErrWriter, "fetching origin failed, deciding on the refs at hand: %v", err)
 		}
 	}
 
@@ -353,7 +354,7 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 		// the drive and the watcher gate the push on this sha, so a newer
 		// local tip would carry commits neither checked
 		p.base, p.sha = moved, moved
-		p.how = "f10-base-moved: " + short(moved) + " of " + after + ", the commit the mark names"
+		p.how = "f10-base-moved: " + gitx.ShortSHA(moved) + " of " + after + ", the commit the mark names"
 	case local != "":
 		p.base, p.sha, p.how = after, local, "f10-after-branch: "+after
 	default:
@@ -398,7 +399,7 @@ func movedMark(ctx context.Context, main, branch, after string) (string, error) 
 	}
 
 	return "", fmt.Errorf("%s names %s, which %s no longer holds: unset %s to catch up with the base branch",
-		branchmeta.Moved, short(sha), after, key)
+		branchmeta.Moved, gitx.ShortSHA(sha), after, key)
 }
 
 // rewritten is the base's old tip when its history was rewritten: onto
@@ -427,7 +428,7 @@ func (in catchupInput) method(onOrigin, stacked bool, rewritten string) (string,
 
 // ontoWhy names the declared key onto overrides, so the report can say so.
 func (in catchupInput) ontoWhy(stacked bool, rewritten string) string {
-	why := "base rewritten since " + short(rewritten) + ": its old commits are dropped, " +
+	why := "base rewritten since " + gitx.ShortSHA(rewritten) + ": its old commits are dropped, " +
 		"and the next push needs --force-with-lease when the branch is on origin"
 
 	switch {

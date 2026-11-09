@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A task's images come after it as local paths, a failed one by its url and
@@ -464,8 +465,8 @@ func TestTaskCreatePrefixedID(t *testing.T) {
 func TestTaskCreateDeclined(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create").streams()
-		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
-			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
+		if exitCode(err) != ui.ExitDeclined || !strings.Contains(err.Error(), "Create adapter") {
+			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, ui.ExitDeclined)
 		}
 	}
 
@@ -477,8 +478,8 @@ func TestTaskCreateDeclined(t *testing.T) {
 
 		_, _, err := runAppStdin(t, strings.NewReader(doc),
 			append([]string{"-C", createRepo(t, ""), "task", "create"}, args...)...).streams()
-		if exitCode(err) != exitNoCreate || !strings.Contains(err.Error(), "Create adapter") {
-			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, exitNoCreate)
+		if exitCode(err) != ui.ExitDeclined || !strings.Contains(err.Error(), "Create adapter") {
+			t.Errorf("%s: err = %v, want exit %d naming the Create adapter", name, err, ui.ExitDeclined)
 		}
 	}
 }
@@ -549,8 +550,8 @@ func (r failingReader) Read([]byte) (int, error) {
 // nothing piped in never waits on a terminal.
 func TestTaskCreateNoDriverLeavesStdin(t *testing.T) {
 	err := runAppStdin(t, failingReader{t}, "-C", createRepo(t, ""), "task", "create").err
-	if exitCode(err) != exitNoCreate {
-		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
+	if exitCode(err) != ui.ExitDeclined {
+		t.Errorf("err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 }
 
@@ -660,7 +661,7 @@ func TestTaskCreateNoHostCLI(t *testing.T) {
 	}
 
 	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create").streams()
-	if exitCode(err) != exitNoCreate {
-		t.Errorf("err = %v, want exit %d", err, exitNoCreate)
+	if exitCode(err) != ui.ExitDeclined {
+		t.Errorf("err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 }

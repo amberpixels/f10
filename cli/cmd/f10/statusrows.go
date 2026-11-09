@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -581,7 +582,7 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	lt := ledgerFor(src.events, r.ID, src.idOf)
 
 	// a ledger finish counts only while no live plan says the task came back
-	if !finishedTask(info, tr.plans, r.ID, false) && (!lt.finished || exists(filepath.Join(tr.plans, r.ID+".md"))) {
+	if !finishedTask(info, tr.plans, r.ID, false) && (!lt.finished || fsx.Exists(filepath.Join(tr.plans, r.ID+".md"))) {
 		return nil, nil
 	}
 

@@ -25,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A driveFixture is the fakes, a tracker answering from a map, a clock
@@ -465,8 +466,8 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
 	err := fx.drive(t)
-	if exitCode(err) != exitAsk {
-		t.Fatalf("err = %v, want exit %d", err, exitAsk)
+	if exitCode(err) != ui.ExitAsk {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitAsk)
 	}
 
 	out := fx.out.String()
@@ -589,7 +590,7 @@ func TestDriveResumesAShipStopACatchupSettled(t *testing.T) {
 			}
 
 			if tc.again {
-				if exitCode(err) != exitHalted ||
+				if exitCode(err) != ui.ExitHalted ||
 					!strings.Contains(fx.out.String(), "GH-1 halted at ship: conflict with main") {
 					t.Errorf("err = %v\n%s", err, fx.out.String())
 				}
@@ -657,8 +658,8 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 			fx.f.script(wsList, unopened, listing("GH-1", "idle"))
 
 			err := fx.drive(t)
-			if exitCode(err) != exitHalted {
-				t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, fx.out.String())
+			if exitCode(err) != ui.ExitHalted {
+				t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, fx.out.String())
 			}
 
 			out := fx.out.String()
@@ -737,20 +738,20 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 				fx.reports(t, fx.clock)
 			},
-			code: exitHalted,
+			code: ui.ExitHalted,
 			want: []string{"halted at catchup: the catchup did not end clean", "next: settle it with /f10:catchup in"},
 		},
 		"asks": {
 			after: func(fx *driveFixture, t *testing.T) {
 				fx.writeRun(t, "blocked", "catchup", "", "1. Keep both renames? [both | ours]")
 			},
-			code: exitAsk,
+			code: ui.ExitAsk,
 			want: []string{"GH-1 asks at catchup: 1. Keep both renames?"},
 		},
 		"conflicts again, main did not move": {
 			after: restored,
 			again: conflictsAgain("main0", aOneWay),
-			code:  exitHalted,
+			code:  ui.ExitHalted,
 			want: []string{
 				"GH-1 halted at ship: GH-1 still conflicts with main after a catchup: " +
 					"main has not moved since the catchup; conflicting: a.go",
@@ -765,7 +766,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			later: []func(fx *driveFixture, t *testing.T){
 				restored, conflictsAgain("main0", aOneWay), restored, conflictsAgain("main0", aOneWay),
 			},
-			code: exitHalted,
+			code: ui.ExitHalted,
 			full: true,
 			want: []string{
 				"catchup failed 3 times in a row with nothing changed",
@@ -777,7 +778,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 		"conflicts again on the same files the same way": {
 			after: restored,
 			again: conflictsAgain("main1", aOneWay),
-			code:  exitHalted,
+			code:  ui.ExitHalted,
 			want: []string{
 				"GH-1 halted at ship: GH-1 still conflicts with main after a catchup: " +
 					"the same files conflict with main the same way again: a.go",
@@ -809,7 +810,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
-			if tc.code == exitHalted && !tc.full {
+			if tc.code == ui.ExitHalted && !tc.full {
 				fx.oneAttempt(t)
 			}
 
@@ -877,7 +878,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 // An ask ends the drive only once every active task is held on a base, or
 // none is active; a held task with no ask anywhere keeps it polling.
 func TestStoppingOnAnAsk(t *testing.T) {
-	asked := func() *driveRun { return &driveRun{opened: true, end: &driveResult{code: exitAsk}} }
+	asked := func() *driveRun { return &driveRun{opened: true, end: &driveResult{code: ui.ExitAsk}} }
 	moving := func() *driveRun { return &driveRun{opened: true} }
 	parked := func() *driveRun { return &driveRun{opened: true, parked: true} }
 	waiting := func() *driveRun { return &driveRun{opened: true, waiting: true} }
@@ -953,8 +954,8 @@ func TestDriveCatchesUpAGuardStopWhileAnotherTaskAsks(t *testing.T) {
 			err := fx.drive(t)
 			out := fx.out.String()
 
-			if exitCode(err) != exitAsk {
-				t.Fatalf("err = %v, want exit %d\n%s", err, exitAsk, out)
+			if exitCode(err) != ui.ExitAsk {
+				t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitAsk, out)
 			}
 
 			for _, call := range []string{catchup, resume} {
@@ -1165,7 +1166,7 @@ func TestDriveFollowsAnAttachedCatchup(t *testing.T) {
 				t.Errorf("the drive did not attach:\n%s", out)
 			}
 
-			if tc.haltCode != (exitCode(err) == exitHalted) || !tc.haltCode && err != nil {
+			if tc.haltCode != (exitCode(err) == ui.ExitHalted) || !tc.haltCode && err != nil {
 				t.Errorf("err = %v\n%s", err, out)
 			}
 
@@ -1204,8 +1205,8 @@ func TestDriveHaltsOnACatchupThatStoppedWithoutReporting(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, out)
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, out)
 	}
 
 	if !strings.Contains(out, "GH-1 halted at catchup") || !strings.Contains(out, "stopped without reporting") ||
@@ -1271,8 +1272,8 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
 
 	err := fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d", err, exitHalted)
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitHalted)
 	}
 
 	out := fx.out.String()
@@ -1318,8 +1319,8 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	}
 
 	err := fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d", err, exitHalted)
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitHalted)
 	}
 
 	if !strings.Contains(fx.out.String(), "stopped without reporting") || !strings.Contains(fx.out.String(), "GH-1") {
@@ -2052,8 +2053,8 @@ func TestDriveScopesAStopToItsDependents(t *testing.T) {
 	fx.onTick[2] = func() { fx.writeRunFor(t, "GH-13", "blocked", "judge", "stop: duplicate of GH-9", "") }
 
 	err := fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, fx.out.String())
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, fx.out.String())
 	}
 
 	out := fx.out.String()
@@ -2128,7 +2129,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			err := fx.drive(t)
 
 			if !clean {
-				if exitCode(err) != exitHalted || !strings.Contains(fx.out.String(), "GH-2:    halted at catchup") ||
+				if exitCode(err) != ui.ExitHalted || !strings.Contains(fx.out.String(), "GH-2:    halted at catchup") ||
 					!strings.Contains(fx.out.String(), "still marked "+string(branchmeta.Landed)) {
 					t.Fatalf("err = %v\n%s", err, fx.out.String())
 				}
@@ -2272,7 +2273,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			}
 
 			if tc.halt != "" {
-				if exitCode(err) != exitHalted ||
+				if exitCode(err) != ui.ExitHalted ||
 					!strings.Contains(out, "GH-1 still conflicts with origin/main after a catchup: "+tc.halt) ||
 					!strings.Contains(out, "next: settle it with /f10:catchup in /code/repo.GH-1") {
 					t.Fatalf("err = %v\n%s", err, out)
@@ -2466,7 +2467,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 
 			if tc.halt != "" {
 				next := cmp.Or(tc.next, "next: rerun the drive")
-				if exitCode(err) != exitHalted || !strings.Contains(out, tc.halt) ||
+				if exitCode(err) != ui.ExitHalted || !strings.Contains(out, tc.halt) ||
 					!strings.Contains(out, next) || fx.f.called("finish GH-1") ||
 					(tc.moved && fx.f.called("git push")) {
 					t.Fatalf("err = %v\n%s", err, out)
@@ -2575,7 +2576,7 @@ func TestDriveHaltsAShipThatFailedUnderAWatcherMark(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if exitCode(err) != exitHalted || !strings.Contains(out, "GH-1 halted at ship: conflict with main") {
+	if exitCode(err) != ui.ExitHalted || !strings.Contains(out, "GH-1 halted at ship: conflict with main") {
 		t.Fatalf("err = %v\n%s", err, out)
 	}
 
@@ -2614,8 +2615,8 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		}
 
 		err := fx.drive(t)
-		if exitCode(err) != exitAsk {
-			t.Fatalf("err = %v, want exit %d", err, exitAsk)
+		if exitCode(err) != ui.ExitAsk {
+			t.Fatalf("err = %v, want exit %d", err, ui.ExitAsk)
 		}
 
 		for _, want := range []string{
@@ -2809,8 +2810,8 @@ func TestDrivePrintsAHaltWhenItHappens(t *testing.T) {
 	fx.f.script(wsList, listing("GH-1", "idle"))
 
 	err := fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d", err, exitHalted)
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitHalted)
 	}
 
 	out := fx.out.String()
@@ -2836,8 +2837,8 @@ func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-1", "unknown"))
 
 	err := fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, fx.out.String())
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, fx.out.String())
 	}
 
 	if !strings.Contains(fx.out.String(), "workspace GH-1 (ws:GH-1) shows no agent") {
@@ -2869,7 +2870,7 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 	run := &driveRun{task: driveTask{ref: gh1}}
 
 	res := in.runFinish(t.Context(), io.Discard, run)
-	if res.code != exitAsk || len(res.lines) != 1 || !strings.Contains(res.lines[0], "[local | merge]") {
+	if res.code != ui.ExitAsk || len(res.lines) != 1 || !strings.Contains(res.lines[0], "[local | merge]") {
 		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
 	}
 
@@ -2882,13 +2883,13 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 	// a bare answer that is no finish choice belongs to some agent's question
 	in.answer = "1. yes"
 
-	if res = in.runFinish(t.Context(), io.Discard, run); res.code != exitAsk || in.answer != "1. yes" {
+	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitAsk || in.answer != "1. yes" {
 		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.answer)
 	}
 
 	in.answers["GH-1"] = "maybe"
 
-	if res = in.runFinish(t.Context(), io.Discard, run); res.code != exitHalted {
+	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitHalted {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
 	}
 
@@ -3045,7 +3046,7 @@ func TestDriveHoldsADependentUntilItsBaseCommits(t *testing.T) {
 	fx.f.script(wsList, unopened, all("idle", "GH-1"), all("working", "GH-1"), all("idle", "GH-1"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
-	if err := fx.drive(t); exitCode(err) != exitHalted {
+	if err := fx.drive(t); exitCode(err) != ui.ExitHalted {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
@@ -3073,7 +3074,7 @@ func TestDriveHaltsADependentWhenItsBaseHaltsAfterRelease(t *testing.T) {
 		all("idle", "GH-1", "GH-2"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
-	if err := fx.drive(t); exitCode(err) != exitHalted {
+	if err := fx.drive(t); exitCode(err) != ui.ExitHalted {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
@@ -3185,7 +3186,7 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 		t.Error("not released once it has a commit of its own")
 	}
 
-	b.end = &driveResult{code: exitHalted}
+	b.end = &driveResult{code: ui.ExitHalted}
 
 	if fx.in.released(t.Context(), b) {
 		t.Error("a halted base released its dependent")
@@ -3265,7 +3266,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 					"main has not moved since the catchup; conflicting: a.go"
 			}
 
-			if exitCode(err) != exitHalted || fx.f.called("finish GH-1") ||
+			if exitCode(err) != ui.ExitHalted || fx.f.called("finish GH-1") ||
 				!strings.Contains(out, "conflicts with m0, catching up first") || !strings.Contains(out, want) {
 				t.Fatalf("err = %v\n%s", err, out)
 			}
@@ -3455,7 +3456,7 @@ func TestDriveEndParksFinishRecord(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	r := &driveRun{opened: true, finishes: true, o: openedTask{branch: "GH-1"}}
 
-	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "asked at finish", code: exitAsk})
+	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "asked at finish", code: ui.ExitAsk})
 
 	if !fx.f.meta.Wrote("GH-1", branchmeta.Finish, branchmeta.FinishQueued) {
 		t.Errorf("an ask did not park the finish record; calls: %v", fx.f.calls)
@@ -3654,7 +3655,7 @@ func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
 	// GH-1 halts, which ends the parked GH-2 at its next boundary
 	fx.onTick[5] = func() { fx.writeRunFor(t, "GH-1", "blocked", "judge", "stop: duplicate of GH-9", "") }
 
-	if err := fx.drive(t); exitCode(err) != exitHalted {
+	if err := fx.drive(t); exitCode(err) != ui.ExitHalted {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
@@ -3699,7 +3700,7 @@ func TestDriveHaltsAShipWaitingOnABaseOutsideIt(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
 	fx.onTick[2] = func() { fx.writeWait(t) }
 
-	if err := fx.drive(t); exitCode(err) != exitHalted {
+	if err := fx.drive(t); exitCode(err) != ui.ExitHalted {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
@@ -3897,7 +3898,7 @@ func TestDriveEndStopsARunningVerify(t *testing.T) {
 		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
-	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "cancelled", code: exitHalted, drives: true})
+	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
 
 	select {
 	case <-r.verifying.done:

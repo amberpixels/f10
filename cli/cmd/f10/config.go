@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -14,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A view is the one model both outputs render - the human table and --json
@@ -176,7 +176,7 @@ func configCommand() *cli.Command {
 		Usage:     "print the effective configuration, with the origin of every value",
 		ArgsUsage: "[verify]",
 		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "json", Usage: "emit the same view as JSON"},
+			ui.JSONFlag("emit the same view as JSON"),
 		},
 		Action: runConfig,
 	}
@@ -262,17 +262,10 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	v.withPaces(eff)
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(v); err != nil {
-			return fmt.Errorf("encoding view: %w", err)
-		}
-
-		return nil
+		return ui.JSON(cmd.Writer, v)
 	}
 
-	renderHuman(cmd.Writer, v, termWidth(cmd.Writer))
+	renderHuman(cmd.Writer, v, ui.Width(cmd.Writer))
 
 	return nil
 }

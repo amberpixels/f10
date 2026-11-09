@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A prSubject is the change a step reads: a branch, where it is checked
@@ -244,7 +245,7 @@ func prBase(ctx context.Context, warn io.Writer, main, branch string) (string, e
 	}
 
 	if after != "" {
-		fmt.Fprintf(warn, "f10: the recorded base %s is gone locally and on origin, so the base is %s\n", after, def)
+		ui.Warnf(warn, "the recorded base %s is gone locally and on origin, so the base is %s", after, def)
 	}
 
 	return def, nil

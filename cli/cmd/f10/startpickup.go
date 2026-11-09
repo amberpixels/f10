@@ -3,9 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 
-	"github.com/urfave/cli/v3"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // pickupFor is the PR the start argument names, or nil for a task id; a
@@ -45,7 +44,7 @@ func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, err
 }
 
 // pickedTask is the task id for a picked-up PR: --task, else the one the
-// PR names. A PR naming none exits with exitNoTask, which the start skill
+// PR names. A PR naming none exits with ui.ExitDeclined, which the start skill
 // turns into a question; --task with no PR is a refusal.
 func pickedTask(prefix string, hostIssues bool, pick *pickup, pr pull, task string) (string, error) {
 	switch {
@@ -56,8 +55,8 @@ func pickedTask(prefix string, hostIssues bool, pick *pickup, pr pull, task stri
 	}
 
 	if task = pickupTask(prefix, hostIssues, pr); task == "" {
-		return "", cli.Exit(fmt.Sprintf("f10: %s names no task in its body, title or branch %s: "+
-			"rerun with --task <ID>", pick.url, pick.branch), exitNoTask)
+		return "", ui.Exit(ui.ExitDeclined, "%s names no task in its body, title or branch %s: "+
+			"rerun with --task <ID>", pick.url, pick.branch)
 	}
 
 	return task, nil

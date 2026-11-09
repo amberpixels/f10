@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/amberpixels/f10/cli/internal/fsx"
 )
 
 const (
@@ -417,23 +419,5 @@ func write(path string, a *Ask) error {
 		return err
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".ask-*")
-	if err != nil {
-		return err
-	}
-
-	if _, err := tmp.Write(raw); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-
-		return err
-	}
-
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmp.Name())
-
-		return err
-	}
-
-	return os.Rename(tmp.Name(), path)
+	return fsx.WriteFile(path, raw, 0o600)
 }

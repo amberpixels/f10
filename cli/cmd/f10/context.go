@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/urfave/cli/v3"
-	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
@@ -22,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A target is the project a command answers for; -C only changes which
@@ -285,18 +285,7 @@ func follow(ctx context.Context, w io.Writer, dir, url string, linkOnly bool) er
 		return err
 	}
 
-	opener := shell.Opener()
-	if opener == "" {
-		return errors.New("no OS opener (open/xdg-open) on PATH - use --link and open it yourself")
-	}
-
-	return shell.Passthrough(ctx, dir, opener, url)
-}
-
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-
-	return ok && term.IsTerminal(int(f.Fd()))
+	return ui.Open(ctx, dir, url)
 }
 
 // writeDoc pages markdown on a terminal and writes it raw to a pipe: no
@@ -305,7 +294,7 @@ func writeDoc(ctx context.Context, w io.Writer, dir, doc string) error {
 	doc = strings.TrimRight(doc, "\n") + "\n"
 
 	pager := strings.Fields(os.Getenv("PAGER"))
-	if !isTerminal(w) || len(pager) == 0 {
+	if !ui.IsTerminal(w) || len(pager) == 0 {
 		_, err := io.WriteString(w, doc)
 
 		return err

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // report exits with an ask over a halt, since answering the ask is what
@@ -28,11 +30,11 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 			rows = append(rows, fact{label: shown, value: r.end.row})
 			lines = append(lines, r.end.lines...)
 
-			if r.end.code == exitAsk {
+			if r.end.code == ui.ExitAsk {
 				asking = append(asking, id)
 			}
 
-			halted[id] = r.end.code == exitHalted
+			halted[id] = r.end.code == ui.ExitHalted
 			code = max(code, r.end.code)
 		case r.queued:
 			rows = append(rows, fact{label: shown, value: "queued"})
@@ -45,14 +47,14 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 		case halted[r.task.base]:
 			rows = append(rows, fact{label: shown, value: "halted: base " + in.id(r.task.base) + " halted"})
 			halted[id] = true
-			code = max(code, exitHalted)
+			code = max(code, ui.ExitHalted)
 		default:
 			rows = append(rows, fact{label: shown, value: "not reached"})
 		}
 	}
 
 	if len(asking) > 0 {
-		code = exitAsk
+		code = ui.ExitAsk
 		lines = append(lines, "answer with: "+in.resumeLine()+answerFlags(asking))
 	}
 

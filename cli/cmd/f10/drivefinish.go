@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // readyToMerge brings the branch to where it merges cleanly, or says why not.
@@ -201,7 +202,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 		return driveResult{
 			row:   "asked at finish",
-			code:  exitAsk,
+			code:  ui.ExitAsk,
 			lines: []string{id + " asks at finish: " + ask},
 			ask:   ask,
 		}

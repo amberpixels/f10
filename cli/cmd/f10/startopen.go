@@ -536,11 +536,8 @@ func landedNotes(ctx context.Context, in startInput, name string, created bool) 
 	}
 
 	return append(notes, fmt.Sprintf("%s is %s: %s is local only at %s, and the watcher leaves it alone "+
-		"(f10 watch on %s undoes that)", in.pick.url, in.pick.state, name, shortSHA(in.pick.sha), in.task.ID))
+		"(f10 watch on %s undoes that)", in.pick.url, in.pick.state, name, gitx.ShortSHA(in.pick.sha), in.task.ID))
 }
-
-// shortSHA is the seven characters a reader recognises a commit by.
-func shortSHA(sha string) string { return sha[:min(len(sha), 7)] }
 
 // shellWait reports a wait for the pane's shell to finish starting, so a
 // slow rc file reads as progress rather than a hang. A nil w reports nothing.

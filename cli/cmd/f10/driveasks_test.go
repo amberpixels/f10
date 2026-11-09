@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // inboxFixture is a drive fixture with a record and an inbox, counting
@@ -58,7 +59,7 @@ func TestDriveRaisesAskIntoInbox(t *testing.T) {
 	fx, notified, resumed := inboxFixture(t, "GH-1", "judge")
 	fx.asking(t)
 
-	if err := fx.drive(t); exitCode(err) != exitAsk {
+	if err := fx.drive(t); exitCode(err) != ui.ExitAsk {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
@@ -156,7 +157,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 		return err
 	}
 
-	if err := fx.drive(t); exitCode(err) != exitAsk {
+	if err := fx.drive(t); exitCode(err) != ui.ExitAsk {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 

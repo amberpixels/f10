@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The trace noun renders what a step leaves on the host for a reader of the
@@ -126,7 +127,7 @@ func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) 
 	case err == nil:
 		return r.Members(), nil
 	case errors.Is(err, ref.ErrNoReference) && strings.TrimSpace(cmd.String("task")) == "":
-		fmt.Fprintln(errWriter(cmd), "f10: no task on this branch: "+alone)
+		ui.Warnf(errWriter(cmd), "no task on this branch: %s", alone)
 
 		return nil, nil
 	default:
@@ -163,13 +164,13 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 
 	switch {
 	case noSuchPull(err):
-		fmt.Fprintf(errWriter(cmd), "f10: no PR for %s yet: no state to write\n", branch)
+		ui.Warnf(errWriter(cmd), "no PR for %s yet: no state to write", branch)
 
 		return nil
 	case err != nil:
 		return err
 	case p.status() != pullOpen:
-		fmt.Fprintf(errWriter(cmd), "f10: %s is %s: its body is left alone\n", p.url(), p.status())
+		ui.Warnf(errWriter(cmd), "%s is %s: its body is left alone", p.url(), p.status())
 
 		return nil
 	}
@@ -180,7 +181,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if !strings.EqualFold(p.author(), login) {
-		fmt.Fprintf(errWriter(cmd), "f10: %s was opened by %s: its body is left alone\n", p.url(), p.author())
+		ui.Warnf(errWriter(cmd), "%s was opened by %s: its body is left alone", p.url(), p.author())
 
 		return nil
 	}

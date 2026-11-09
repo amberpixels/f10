@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -264,12 +265,12 @@ func planArchived(in finishInput) bool {
 }
 
 func planArchivedIn(plans, id string) bool {
-	if exists(filepath.Join(plans, id+".md")) {
+	if fsx.Exists(filepath.Join(plans, id+".md")) {
 		return false
 	}
 
 	dir := storage.ArchiveOf(plans)
-	if exists(filepath.Join(dir, id+".md")) {
+	if fsx.Exists(filepath.Join(dir, id+".md")) {
 		return true
 	}
 

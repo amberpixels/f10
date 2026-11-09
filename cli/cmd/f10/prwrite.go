@@ -14,6 +14,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // statusLimit is the longest description a commit status takes.
@@ -148,7 +150,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		fmt.Fprintf(cmd.ErrWriter, "f10: already open for %s, nothing created\n", s.branch)
+		ui.Warnf(cmd.ErrWriter, "already open for %s, nothing created", s.branch)
 		_, err = fmt.Fprintln(cmd.Writer, p.url())
 
 		return err
@@ -241,7 +243,7 @@ func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, q
 
 		switch {
 		case errors.Is(err, forge.ErrNoThread):
-			fmt.Fprintf(warn, "f10: %s names no thread: commenting at the top level\n", replyTo)
+			ui.Warnf(warn, "%s names no thread: commenting at the top level", replyTo)
 
 			if quote != "" {
 				body = "> " + quote + "\n\n" + body
@@ -263,7 +265,7 @@ func commentOnce(ctx context.Context, warn io.Writer, h host, p pull, replyTo, q
 
 	for _, c := range posted {
 		if strings.EqualFold(c.Author, login) && strings.TrimSpace(c.Body) == body {
-			fmt.Fprintln(warn, "f10: already posted")
+			ui.Warnf(warn, "already posted")
 
 			return c.URL, nil
 		}
@@ -286,7 +288,7 @@ func runPRStatus(ctx context.Context, cmd *cli.Command) error {
 	s := forge.CommitStatus{
 		Name:        cmd.String("name"),
 		State:       state,
-		Description: cut(strings.TrimSpace(cmd.String("description")), statusLimit),
+		Description: textx.Cut(strings.TrimSpace(cmd.String("description")), statusLimit),
 	}
 
 	line, err := statusOnce(ctx, cmd.ErrWriter, h, p, cmd.String("sha"), s)
@@ -313,17 +315,17 @@ func statusOnce(ctx context.Context, warn io.Writer, h host, p pull, sha string,
 		// built on the head it reports is that push, not a stale commit
 		full, err := gitx.Exec(ctx, h.Dir, "rev-parse", "--verify", sha+"^{commit}")
 		if err != nil {
-			return "", fmt.Errorf("head is %s, not %s: no status set", short(head), sha)
+			return "", fmt.Errorf("head is %s, not %s: no status set", gitx.ShortSHA(head), sha)
 		}
 
 		if ahead, err := gitx.IsAncestor(ctx, h.Dir, head, full); err != nil || !ahead {
-			return "", fmt.Errorf("head is %s, not %s: no status set", short(head), sha)
+			return "", fmt.Errorf("head is %s, not %s: no status set", gitx.ShortSHA(head), sha)
 		}
 
 		head = full
 	}
 
-	line := fmt.Sprintf("%s %s %s", short(head), s.Name, s.State)
+	line := fmt.Sprintf("%s %s %s", gitx.ShortSHA(head), s.Name, s.State)
 
 	prev, err := h.LatestStatus(ctx, head, s.Name)
 	if err != nil {
@@ -331,20 +333,12 @@ func statusOnce(ctx context.Context, warn io.Writer, h host, p pull, sha string,
 	}
 
 	if prev != nil && prev.State == s.State && prev.Description == s.Description {
-		fmt.Fprintln(warn, "f10: already set")
+		ui.Warnf(warn, "already set")
 
 		return line, nil
 	}
 
 	return line, h.SetStatus(ctx, head, s)
-}
-
-func short(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-
-	return sha
 }
 
 // mineLine says whether the signed-in user opened p. A failed login read is
@@ -355,7 +349,7 @@ func mineLine(ctx context.Context, warn io.Writer, h host, p pull) string {
 
 	switch {
 	case err != nil:
-		fmt.Fprintf(warn, "f10: who is signed in is unknown: %v\n", err)
+		ui.Warnf(warn, "who is signed in is unknown: %v", err)
 
 		return "mine: unknown\n"
 	case strings.EqualFold(p.author(), login):

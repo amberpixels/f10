@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The review noun reads the declared remote review off the branch's request.
@@ -28,7 +28,7 @@ func reviewCommand() *cli.Command {
 				Usage:     "write the latest unhandled review to stdout",
 				ArgsUsage: "[number]",
 				Flags: []cli.Flag{
-					jsonFlag(),
+					ui.JSONFlag("emit the review as JSON instead of markdown"),
 					&cli.BoolFlag{Name: "latest", Usage: "the latest review whether handled or settled"},
 				},
 				Action: runReviewPick,
@@ -38,7 +38,7 @@ func reviewCommand() *cli.Command {
 				Usage:     "poll until the latest unhandled review is done, within a budget",
 				ArgsUsage: "[number]",
 				Flags: []cli.Flag{
-					jsonFlag(),
+					ui.JSONFlag("emit the review as JSON instead of markdown"),
 					&cli.DurationFlag{Name: "budget", Value: 10 * time.Minute, Usage: "give up after this long"},
 					&cli.DurationFlag{Name: "every", Value: 20 * time.Second, Usage: "poll interval"},
 					&cli.TimestampFlag{
@@ -86,15 +86,11 @@ func reviewCommand() *cli.Command {
 				Usage: "print the task's findings directory, its latest round and the next one, or why none is " +
 					"allowed (exit 3)",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{&cli.BoolFlag{Name: "json", Usage: "emit the rounds as JSON"}},
+				Flags:     []cli.Flag{ui.JSONFlag("emit the rounds as JSON")},
 				Action:    runReviewRound,
 			},
 		},
 	}
-}
-
-func jsonFlag() cli.Flag {
-	return &cli.BoolFlag{Name: "json", Usage: "emit the review as JSON instead of markdown"}
 }
 
 // remoteReviewer refuses before any host call, each refusal naming what to fix.
@@ -299,14 +295,7 @@ func runReviewSettle(ctx context.Context, cmd *cli.Command) error {
 
 func writeReview(ctx context.Context, cmd *cli.Command, rv *reviewer, r remoteReview) error {
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(r); err != nil {
-			return fmt.Errorf("encoding review: %w", err)
-		}
-
-		return nil
+		return ui.JSON(cmd.Writer, r)
 	}
 
 	return writeDoc(ctx, cmd.Writer, rv.h.Dir, reviewDoc(r))

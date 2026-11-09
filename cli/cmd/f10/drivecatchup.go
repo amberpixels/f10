@@ -193,7 +193,7 @@ func (in *driveInput) catchupHere(
 		return in.catchupPrompt(ctx, w, r, ws, fmt.Sprintf(
 			"the drive %s %s (%s) and git stopped on conflicts in %s: settle them in place, keeping both sides, "+
 				"then conclude the %s",
-			verb, p.base, short(p.sha), listOrNone(paths), what))
+			verb, p.base, gitx.ShortSHA(p.sha), listOrNone(paths), what))
 	}
 
 	if p.method == methodNone || p.method == methodSkip {
@@ -243,7 +243,7 @@ func (in *driveInput) inProgressSteering(ctx context.Context, r *driveRun, op gi
 	}
 
 	return fmt.Sprintf("a %s onto %s is still in progress in %s%s, conflicted: %s: settle it in place, keeping "+
-		"both sides, and conclude it", op.Kind, short(op.Onto), r.o.path, at, listOrNone(paths))
+		"both sides, and conclude it", op.Kind, gitx.ShortSHA(op.Onto), r.o.path, at, listOrNone(paths))
 }
 
 // catchupPrompt sends /f10:catchup with steering as a new turn of the
@@ -377,7 +377,7 @@ func (in *driveInput) catchupLeft(ctx context.Context, r *driveRun) (string, err
 	}
 
 	if !held {
-		return fmt.Sprintf("%s%s%s (%s)", r.o.branch, notHeld, p.base, short(p.sha)), nil
+		return fmt.Sprintf("%s%s%s (%s)", r.o.branch, notHeld, p.base, gitx.ShortSHA(p.sha)), nil
 	}
 
 	markers, err := gitx.Markers(ctx, dir, p.sha)

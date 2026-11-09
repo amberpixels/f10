@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A ship typed by hand into the pane while the drive follows plan, its guard
@@ -162,8 +163,8 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 				return
 			}
 
-			if exitCode(err) != exitHalted {
-				t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, out)
+			if exitCode(err) != ui.ExitHalted {
+				t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, out)
 			}
 
 			for _, want := range []string{
@@ -277,7 +278,7 @@ func TestCatchupAttemptsCountTheConflict(t *testing.T) {
 	}
 
 	res := in.catchupAttempt(&out, r, "ship", same, "a.go")
-	if res == nil || res.code != exitHalted || len(res.attempts) != 3 {
+	if res == nil || res.code != ui.ExitHalted || len(res.attempts) != 3 {
 		t.Fatalf("the third same conflict in a row did not halt: %+v\n%s", res, out.String())
 	}
 

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error {
@@ -238,7 +239,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	skill := skills[r.pos]
 
-	if b := r.base; b != nil && b.end != nil && b.end.code == exitHalted {
+	if b := r.base; b != nil && b.end != nil && b.end.code == ui.ExitHalted {
 		in.end(ctx, w, r, baseHalted(r, skill))
 
 		return nil
@@ -408,7 +409,7 @@ func baseHalted(r *driveRun, skill string) driveResult {
 
 	return driveResult{
 		row:    "halted: base " + base + " halted",
-		code:   exitHalted,
+		code:   ui.ExitHalted,
 		lines:  []string{fmt.Sprintf("%s halted before %s: %s", id, skill, reason)},
 		skill:  skill,
 		reason: reason,

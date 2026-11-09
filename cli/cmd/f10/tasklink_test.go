@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
 const linkProject = "github.com/o/r"
@@ -251,9 +252,15 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 				limit = 120
 			}
 
-			lay := newBoardLayout(lines, nil, limit)
-			for _, l := range lines {
-				lay.line(&out, l, "")
+			links := linksOn(limit > 0)
+
+			nodes := make([]tasktree.Node, len(lines))
+			for i, l := range lines {
+				nodes[i] = boardNode(l, "", false, links)
+			}
+
+			if err := (tasktree.Tree{Align: true, Width: limit}).Write(&out, nodes); err != nil {
+				t.Fatal(err)
 			}
 
 			return out.String()
@@ -277,19 +284,21 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 }
 
 // plainIDPrint is a print whose argument is a bare task id: a local id, a
-// ref's ID, a row's ID, an ask's Task or a bundle's Label().
+// ref's ID, a row's ID, an ask's Task or a bundle's Label(). ui.Exit is left
+// out: its message is an error on stderr, which stays plain.
 var plainIDPrint = regexp.MustCompile(
-	`fmt\.Fprint\w*\([^,]+, "[^"]*"(, [^,()]+)*, (id|[\w.]*ref\.ID|[\w.]*\.ID|[\w.]*\.Task|[\w.]*\.Label\(\))[,)]`)
+	`(fmt\.Fprint\w*|ui\.Warnf)\([^,]+, "[^"]*"(, [^,()]+)*, (id|[\w.]*ref\.ID|[\w.]*\.ID|[\w.]*\.Task|[\w.]*\.Label\(\))[,)]`,
+)
 
 // machineRead are prints of a bare id that agents or scripts parse, by file
 // and a piece of the line, so they stay plain on purpose.
 var machineRead = map[string]string{
-	"host.go":        `"# %s: %s\n\n"`,                       // the task as markdown, for an agent
-	"reviewround.go": `"  %s %s - %s\n"`,                     // a declined round, read by the review step
-	"review.go":      `"%s  %s  %s\n"`,                       // review pick, parsed
-	"pr.go":          `"task: %s\n"`,                         // pr view, parsed
-	"taskref.go":     `"f10: %s: %v\n"`,                      // a warning on stderr
-	"taskreport.go":  `"f10: %s: %v: no subtasks to list\n"`, // a warning on stderr
+	"host.go":        `"# %s: %s\n\n"`,                // the task as markdown, for an agent
+	"reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
+	"review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
+	"pr.go":          `"task: %s\n"`,                  // pr view, parsed
+	"taskref.go":     `"%s: %v"`,                      // a warning on stderr
+	"taskreport.go":  `"%s: %v: no subtasks to list"`, // a warning on stderr
 }
 
 // The render table above covers the commands that exist; this scan catches a

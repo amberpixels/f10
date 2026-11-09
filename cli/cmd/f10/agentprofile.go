@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A step's agent profile comes from three layers of one map, later winning
@@ -296,7 +297,7 @@ func agentsCommand() *cli.Command {
 			},
 			&cli.StringFlag{Name: "agent", Usage: "a run's `PROFILE`, laid over default as f10 start --agent does"},
 			paceFlag(),
-			&cli.BoolFlag{Name: "json", Usage: "emit the same lines as JSON"},
+			ui.JSONFlag("emit the same lines as JSON"),
 		},
 		Action: runAgents,
 	}
@@ -385,7 +386,7 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, lines)
+		return ui.JSON(cmd.Writer, lines)
 	}
 
 	for _, l := range lines {
@@ -479,7 +480,7 @@ func printAgentMap(w io.Writer, m agentMap, asJSON bool) error {
 			entries = append(entries, m[k])
 		}
 
-		return encodeJSON(w, entries)
+		return ui.JSON(w, entries)
 	}
 
 	if len(keys) == 0 {
