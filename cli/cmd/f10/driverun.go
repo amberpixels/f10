@@ -65,11 +65,13 @@ type driveInput struct {
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
 
 	// asksDir is the inbox an ask goes to and answers come from; "" keeps
-	// none. notify tells the user of a new ask; resume starts this drive
-	// again for an answer that came after it stopped looking.
+	// none. notify tells the user of a new ask.
 	asksDir string
 	notify  func(context.Context, asks.Ask) error
-	resume  func(ctx context.Context, n int) error
+
+	// daemonRun is a drive a daemon runs that restarts it: an answer that
+	// came after it stopped looking ends it ExitResume for that restart
+	daemonRun bool
 
 	// links prints this drive's task ids for people, under project
 	links   *taskLinks

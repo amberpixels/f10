@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -17,6 +18,10 @@ const retryDelay = 10 * time.Millisecond
 // Wait takes path's exclusive lock, retrying until wait runs out; the
 // returned func releases it.
 func Wait(path string, wait time.Duration) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, fmt.Errorf("lock %s: %w", path, err)
+	}
+
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("lock %s: %w", path, err)

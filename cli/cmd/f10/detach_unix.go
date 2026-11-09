@@ -5,7 +5,6 @@ package main
 import (
 	"os/exec"
 	"syscall"
-	"time"
 )
 
 // startDetached starts exe in its own session and lets it go: it outlives
@@ -19,18 +18,4 @@ func startDetached(exe string, args ...string) error {
 	}
 
 	return cmd.Process.Release()
-}
-
-// waitGone waits, up to limit, for process pid to end, then a moment more
-// for its parent to reap it.
-func waitGone(pid int, limit time.Duration) {
-	for deadline := time.Now().Add(limit); time.Now().Before(deadline); {
-		if syscall.Kill(pid, 0) != nil {
-			break
-		}
-
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	time.Sleep(500 * time.Millisecond)
 }

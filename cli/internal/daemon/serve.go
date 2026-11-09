@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/flock"
 )
 
 // Supported reports whether this platform runs a daemon; elsewhere drive
@@ -128,8 +129,8 @@ func (s *Server) Serve(ctx context.Context) error {
 		return err
 	}
 
-	own, err := drives.Acquire(s.Dir, "daemon", 0)
-	if held := (drives.HeldError{}); errors.As(err, &held) {
+	own, err := lock(s.Dir, lockDaemon)
+	if held := (flock.HeldError{}); errors.As(err, &held) {
 		return ErrRunning
 	}
 
@@ -280,12 +281,11 @@ func (s *Server) run(req Request) Reply {
 	// numbered at start
 	key := req.Key
 	if req.Resume > 0 {
-		key = cmp.Or(liveRecordKey(req.Root, req.Resume), key)
+		key = cmp.Or(liveKey(req.Root, req.Resume), key)
 	}
 
 	for _, c := range s.runs {
-		if c.Root == req.Root &&
-			((key != "" && strings.EqualFold(c.key, key)) || (req.Resume > 0 && c.Drive == req.Resume)) {
+		if c.is(req.Root, key, req.Resume) {
 			return Reply{Log: c.Log, Attach: true}
 		}
 	}
@@ -301,6 +301,13 @@ func (s *Server) run(req Request) Reply {
 	}
 
 	return Reply{Log: c.Log}
+}
+
+// is reports c as the drive a request names: in the same project, by its
+// command line's key, or by the record number a resume names. The key is
+// compared without case, because an older client sends it as typed.
+func (c *child) is(root, key string, resume int) bool {
+	return c.Root == root && ((key != "" && strings.EqualFold(c.key, key)) || (resume > 0 && c.Drive == resume))
 }
 
 // start runs one drive process; the caller holds mu.
@@ -324,7 +331,7 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 	cmd := exec.CommandContext(context.WithoutCancel(s.ctx), name, args...)
 	numberFile := path + ".drive"
 	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, f, f
-	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile)
+	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile, ResumeEnv+"=1")
 
 	if err := cmd.Start(); err != nil {
 		_ = f.Close()
@@ -369,7 +376,7 @@ func (s *Server) awaitNumber(c *child, numberFile string) {
 // numbered records the drive number the child printed, and the record's
 // command line, so another client of the same drive attaches.
 func (s *Server) numbered(c *child, n int) {
-	key := recordKey(c.Root, n)
+	key := liveKey(c.Root, n)
 
 	s.mu.Lock()
 	c.Drive = n
@@ -403,12 +410,20 @@ func (s *Server) reap(c *child, f *os.File) {
 	s.last = time.Now()
 
 	exit := Exit{Code: code, Drive: c.Drive}
-	if code == ExitDrained {
+	if code == ExitDrained || (code == ExitResume && c.Drive > 0) {
 		exit.Reason = ReasonStopped
 
-		if s.upgrade && c.Drive > 0 {
+		switch {
+		case s.upgrade && c.Drive > 0:
 			exit.Reason = ReasonUpgrade
 			s.drained = append(s.drained, drained{Root: c.Root, Dir: c.Dir, Drive: c.Drive, Env: c.env})
+		case code == ExitResume && !s.draining:
+			// under the same mu that dropped c, so no rerun starts a second one
+			if err := s.startResume(c.Root, c.Dir, c.env, c.Drive); err == nil {
+				exit.Reason = ReasonResumed
+			} else {
+				s.Log.Printf("resuming drive %d in %s: %v", c.Drive, c.Dir, err)
+			}
 		}
 	}
 
@@ -558,35 +573,35 @@ func (s *Server) resumeDrained() {
 	defer s.mu.Unlock()
 
 	for _, d := range list {
-		c, err := s.start(d.Root, d.Dir, []string{"--resume", strconv.Itoa(d.Drive)}, d.Env)
-		if err != nil {
+		if err := s.startResume(d.Root, d.Dir, d.Env, d.Drive); err != nil {
 			s.Log.Printf("resuming drive %d in %s: %v", d.Drive, d.Dir, err)
-
-			continue
 		}
-
-		c.Drive, c.key = d.Drive, recordKey(d.Root, d.Drive)
 	}
 }
 
-// recordKey is the command line record n was started with, the key a rerun
-// of it sends; "" when the record will not read.
-func recordKey(root string, n int) string {
-	rec, err := drives.Read(root, n)
+// startResume starts drive n again with --resume, numbered and keyed at
+// start so a rerun attaches before it reports; the caller holds mu.
+func (s *Server) startResume(root, dir string, env []string, n int) error {
+	req := ResumeRequest(root, dir, env, n)
+
+	c, err := s.start(req.Root, req.Dir, req.Argv, req.Env)
 	if err != nil {
-		return ""
+		return err
 	}
 
-	return strings.Join(rec.Args, " ")
+	c.Drive, c.key = n, liveKey(root, n)
+
+	return nil
 }
 
-// liveRecordKey is recordKey for a record still running: a cancelled or done
-// one shares its command line with a newer drive it must not attach to.
-func liveRecordKey(root string, n int) string {
+// liveKey is the key of record n while it runs, the key a rerun of its
+// command line sends; "" when it will not read, and for a cancelled or done
+// one, which shares its command line with a newer drive it must not attach to.
+func liveKey(root string, n int) string {
 	rec, err := drives.Read(root, n)
 	if err != nil || rec.Cancelled != nil || rec.Done() {
 		return ""
 	}
 
-	return strings.Join(rec.Args, " ")
+	return rec.Key()
 }

@@ -14,6 +14,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/amberpixels/f10/cli/internal/flock"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 )
 
@@ -78,11 +79,13 @@ func (r *Record) Task(id string) *Task {
 	return nil
 }
 
-// Same reports whether args names the same drive: the same tasks and flags,
-// order kept, case ignored.
-func (r *Record) Same(args []string) bool {
-	return slices.EqualFunc(r.Args, args, strings.EqualFold)
-}
+// Key is the drive a command line names: its args as the record keeps them,
+// joined and lowercased, so the same tasks and flags in the same order match
+// whatever their case. A client sends it to the daemon, so its form stays.
+func Key(args []string) string { return strings.ToLower(strings.Join(args, " ")) }
+
+// Key is the drive this record is.
+func (r *Record) Key() string { return Key(r.Args) }
 
 // Path is record n's file under the storage root.
 func Path(root string, n int) string { return recordPath(root, n) }
@@ -164,11 +167,11 @@ func Read(root string, n int) (*Record, error) {
 // through a rename, so a cancel and the drive's own writes never lose one
 // another. It returns the record as written.
 func Update(root string, n int, change func(*Record)) (*Record, error) {
-	l, err := lockRecord(root, n)
+	release, err := lockRecord(root, n)
 	if err != nil {
 		return nil, err
 	}
-	defer l.Release()
+	defer release()
 
 	rec, err := Read(root, n)
 	if err != nil {
@@ -189,20 +192,21 @@ func Update(root string, n int, change func(*Record)) (*Record, error) {
 	return rec, nil
 }
 
+// recordLockWait is how long Update waits out another writer of a record.
+const recordLockWait = 2 * time.Second
+
 // lockRecord holds record n's write lock, waiting out a writer for a while.
-func lockRecord(root string, n int) (*Lease, error) {
-	key := "record-" + strconv.Itoa(n)
-
-	for range 40 {
-		l, err := Acquire(root, key, 0)
-		if held := (HeldError{}); !errors.As(err, &held) {
-			return l, err
-		}
-
-		time.Sleep(retryDelay)
+func lockRecord(root string, n int) (func(), error) {
+	release, err := flock.Wait(lockPath(root, "record-"+strconv.Itoa(n)), recordLockWait)
+	if errors.Is(err, flock.ErrHeld) {
+		return nil, fmt.Errorf("drive %d: its record stayed locked", n)
 	}
 
-	return nil, fmt.Errorf("drive %d: its record stayed locked", n)
+	if err != nil {
+		return nil, fmt.Errorf("drive %d: %w", n, err)
+	}
+
+	return release, nil
 }
 
 // Find is the newest record started with args that is neither cancelled
@@ -213,8 +217,10 @@ func Find(root string, args []string) (*Record, error) {
 		return nil, err
 	}
 
+	key := Key(args)
+
 	for _, r := range recs {
-		if r.Cancelled == nil && !r.Done() && r.Same(args) {
+		if r.Cancelled == nil && !r.Done() && r.Key() == key {
 			return r, nil
 		}
 	}

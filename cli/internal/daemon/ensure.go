@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/flock"
 )
 
 // An Ensurer finds this user's daemon, or starts one.
@@ -72,7 +72,7 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 func (e *Ensurer) settle(ctx context.Context) (Reply, bool, error) {
 	rep, err := e.hello(ctx)
 
-	_, held := drives.Probe(e.Dir, "daemon")
+	held := daemonHeld(e.Dir)
 
 	switch {
 	case (err == nil && rep.Stopping) || (err != nil && held):
@@ -120,7 +120,7 @@ func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 		return rep, !rep.Stopping && e.keeps(rep), nil
 	}
 
-	if _, held := drives.Probe(e.Dir, "daemon"); held {
+	if daemonHeld(e.Dir) {
 		return Reply{}, false, nil
 	}
 
@@ -168,7 +168,7 @@ func (e *Ensurer) awaitAny(ctx context.Context) (Reply, bool) {
 			return rep, true
 		}
 
-		_, held := drives.Probe(e.Dir, "daemon")
+		held := daemonHeld(e.Dir)
 
 		switch {
 		case err == nil || held:
@@ -192,7 +192,7 @@ func (e *Ensurer) keeps(rep Reply) bool {
 }
 
 func (e *Ensurer) hello(ctx context.Context) (Reply, error) {
-	return Call(ctx, e.Dir, Request{Op: OpHello, Version: e.Version}, 0)
+	return Call(ctx, e.Dir, Request{Op: OpHello}, 0)
 }
 
 // gone waits for a stopping daemon's lease to free.
@@ -200,7 +200,7 @@ func (e *Ensurer) gone(ctx context.Context) error {
 	deadline := time.Now().Add(e.DrainWait)
 
 	for {
-		if _, held := drives.Probe(e.Dir, "daemon"); !held {
+		if !daemonHeld(e.Dir) {
 			return nil
 		}
 
@@ -215,19 +215,19 @@ func (e *Ensurer) gone(ctx context.Context) error {
 }
 
 // startLease waits for the lease that lets one client start a daemon.
-func (e *Ensurer) startLease(ctx context.Context) (*drives.Lease, error) {
+func (e *Ensurer) startLease(ctx context.Context) (*flock.Lease, error) {
 	deadline := time.Now().Add(e.StartWait + time.Second)
 
 	for {
-		l, err := drives.Acquire(e.Dir, "start", 0)
+		l, err := lock(e.Dir, lockStart)
 
-		held := drives.HeldError{}
+		held := flock.HeldError{}
 		if !errors.As(err, &held) {
 			return l, err
 		}
 
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("another client is starting the f10 daemon (pid %d)", held.Holder.PID)
+			return nil, fmt.Errorf("another client is starting the f10 daemon (pid %d)", holderPID(held))
 		}
 
 		if err := sleep(ctx, 50*time.Millisecond); err != nil {

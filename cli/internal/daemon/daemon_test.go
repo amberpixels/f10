@@ -626,3 +626,107 @@ func TestDrainReadsADriveNumberedLate(t *testing.T) {
 		t.Errorf("log:\n%s", logged.String())
 	}
 }
+
+// A drive that exits ExitResume is started again with --resume in the same
+// place, and a follower's resume request attaches to the new run.
+func TestServeResumesADriveThatAsksIt(t *testing.T) {
+	dir := runDir(t)
+
+	var (
+		mu  sync.Mutex
+		got [][]string
+	)
+
+	s := &Server{Dir: dir, Version: "v1", Child: func(argv []string) (string, []string) {
+		mu.Lock()
+		got = append(got, argv)
+		mu.Unlock()
+
+		if argv[0] == "--resume" {
+			return "/bin/sh", []string{"-c", `echo "resumed $A"; sleep 1`}
+		}
+
+		return "/bin/sh", []string{"-c", argv[0]}
+	}}
+	serve(t, s)
+
+	first, err := Call(t.Context(), dir, Request{
+		Op:   OpRun,
+		Argv: []string{`echo 5 > "$F10_DRIVE_FILE"; sleep 0.4; exit 8`},
+		Dir:  "/",
+		Root: "/r",
+		Env:  []string{"A=1"},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if exit := waitExit(t, first.Log); exit != (Exit{Code: ExitResume, Drive: 5, Reason: ReasonResumed}) {
+		t.Fatalf("exit = %+v, want drive 5 resumed", exit)
+	}
+
+	follow, err := Call(t.Context(), dir, ResumeRequest("/r", "/", nil, 5), 0)
+	if err != nil || !follow.Attach || follow.Log == first.Log {
+		t.Fatalf("follower got %+v, %v, want to attach to the resumed run", follow, err)
+	}
+
+	waitExit(t, follow.Log)
+
+	if raw, _ := os.ReadFile(follow.Log); string(raw) != "resumed 1\n" {
+		t.Errorf("resumed log = %q", raw)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(got) != 2 || !slices.Equal(got[1], []string{"--resume", "5"}) {
+		t.Errorf("ran %v, want the drive then --resume 5", got)
+	}
+}
+
+// A drive asking to resume while an upgrade drains goes to the next daemon.
+func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
+	dir := runDir(t)
+
+	s := &Server{Dir: dir, Version: "v1", Child: shell}
+	done := serve(t, s)
+
+	rep, err := Call(t.Context(), dir, Request{
+		Op:   OpRun,
+		Argv: []string{`trap 'exit 8' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`},
+		Dir:  "/",
+		Root: "/r",
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		st, _ := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+		if len(st.Runs) == 1 && st.Runs[0].Drive == 5 {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("the drive never named itself: %+v", st)
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	if exit := waitExit(t, rep.Log); exit != (Exit{Code: ExitResume, Drive: 5, Reason: ReasonUpgrade}) {
+		t.Fatalf("exit = %+v, want drive 5 kept for the upgrade", exit)
+	}
+
+	if raw, err := os.ReadFile(drainedPath(dir)); err != nil || !strings.Contains(string(raw), `"drive":5`) {
+		t.Errorf("drained list = %s, %v", raw, err)
+	}
+}

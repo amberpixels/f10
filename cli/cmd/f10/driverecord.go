@@ -289,15 +289,16 @@ func (in *driveInput) took(id, skill, text string) {
 	}
 }
 
-// cancelled reports the record cancelled since the drive read it last.
-func (in *driveInput) cancelled() bool {
+// refreshRecord reads the drive's record again, for a cancel or a new cap
+// written since; a failed read keeps the one it has.
+func (in *driveInput) refreshRecord() {
 	if in.rec == nil {
-		return false
+		return
 	}
 
 	rec, err := drives.Read(in.root, in.rec.Number)
 	if err != nil {
-		return false
+		return
 	}
 
 	in.rec = rec
@@ -306,8 +307,6 @@ func (in *driveInput) cancelled() bool {
 	if rec.Parallel > 0 {
 		in.parallel = rec.Parallel
 	}
-
-	return rec.Cancelled != nil
 }
 
 // leaseKey is a task's lease: its lead id, so two attempts at one task are
