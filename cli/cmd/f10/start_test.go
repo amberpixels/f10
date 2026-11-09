@@ -1074,8 +1074,8 @@ func TestStartMarksStarted(t *testing.T) {
 }
 
 // Without worktrunk, git creates the worktree at the sibling path; --after
-// swaps the base and records the dependency, and with no shared plans dir
-// the base is named without a plan path, the report saying why.
+// swaps the base and records the dependency, and a base with no plan yet is
+// named with the path its plan will take, the report saying it is missing.
 func TestStartWithGitAlone(t *testing.T) {
 	f := newFakes(t)
 	f.script(refsLocal, "")

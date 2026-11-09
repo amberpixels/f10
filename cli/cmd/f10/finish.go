@@ -215,7 +215,7 @@ type finishInput struct {
 	merge     bool         // merge the PR even when someone else opened it
 	local     bool         // leave the PR open and clean up only what is here
 	keep      bool         // a spike's experiment is committed onto a kept/ branch, not discarded
-	storage   storage.Root // the storage root every checkout shares
+	storage   storage.Root // the same root as root, for task files: plans, findings, handoffs
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
 	// close is the riders the PR delivers, closed with the lead; nil, no
