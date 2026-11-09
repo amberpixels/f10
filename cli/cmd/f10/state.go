@@ -158,34 +158,6 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 // recordClaim puts the call in the ledger as the model made it, beside the
 // state it left. Its outcome never reaches the exit code.
 func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, now time.Time) {
-	payload := ledger.Payload{
-		"args":    args,
-		"capture": r.Capture,
-		"plan":    r.Plan,
-		"ship":    r.Ship,
-	}
-
-	for key, v := range map[string]string{
-		"leaf": r.Leaf, "final": r.Final, "note": r.Note, "next": r.Next, "ask": r.Ask, "wait": r.Wait, "done": r.Done,
-	} {
-		if v != "" {
-			payload[key] = v
-		}
-	}
-
-	if len(r.Pipeline) > 0 {
-		payload["pipeline"] = r.Pipeline
-	}
-
-	// labels and the place show a finished task's steps by their names
-	if r.Labels != nil {
-		payload["labels"] = r.Labels
-	}
-
-	if r.At > 0 {
-		payload["at"] = r.At
-	}
-
 	cwd, _ := os.Getwd()
 	place := ledger.Where(ctx, cwd)
 
@@ -199,6 +171,6 @@ func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, 
 		Task:         r.Task,
 		Kind:         kind,
 		Source:       ledger.Claimed,
-		Payload:      ledger.NewPayload(payload),
+		Payload:      ledger.NewPayload(ledger.EncodeClaim(r, args)),
 	})
 }

@@ -46,13 +46,11 @@ func Claim(e ledger.Event) (string, string, string) {
 		return "", "", ""
 	}
 
-	args, _ := e.Payload.Val["args"].([]any)
+	args := ledger.DecodeClaim(e).Args
 
 	var words [3]string
 
-	for i := range min(len(args), 3) {
-		words[i], _ = args[i].(string)
-	}
+	copy(words[:], args)
 
 	// a leaf's [label] only names the entry for a person
 	leaf, _ := flow.CutLabel(words[2])
@@ -158,7 +156,7 @@ func windows(evs []ledger.Event) []Window {
 	for _, e := range evs {
 		switch e.Kind {
 		case ledger.RunStarted:
-			skill, _ := e.Payload.Val["skill"].(string)
+			skill := e.Payload.Val.String("skill")
 			if !slices.Contains(state.Phases, skill) {
 				continue // a step's own skill, resolve or catchup, runs inside the run
 			}
@@ -181,7 +179,7 @@ func windows(evs []ledger.Event) []Window {
 				step, split = open(e, Resolve), entry
 			}
 		case ledger.SessionStopped:
-			if e.Payload.Val["backstop"] == true {
+			if e.Payload.Val.Bool("backstop") {
 				leave(e)
 			}
 		case ledger.StateSet:
@@ -229,16 +227,9 @@ func windows(evs []ledger.Event) []Window {
 // claimedLabel is the label of the entry a claim placed the run on, from
 // the labels and place the claim records.
 func claimedLabel(e ledger.Event) string {
-	raw, _ := e.Payload.Val["labels"].([]any)
-	at, _ := e.Payload.Val["at"].(float64)
+	r := ledger.DecodeClaim(e).Run
 
-	if i := int(at) - 1; i >= 0 && i < len(raw) {
-		label, _ := raw[i].(string)
-
-		return label
-	}
-
-	return ""
+	return r.LabelAt(r.At)
 }
 
 // segments is every closed stretch of a plan or ship run, as glue windows. It
@@ -271,7 +262,7 @@ func segments(evs []ledger.Event) []Window {
 
 		switch e.Kind {
 		case ledger.RunStarted:
-			skill, _ := e.Payload.Val["skill"].(string)
+			skill := e.Payload.Val.String("skill")
 			if !slices.Contains(state.Phases, skill) {
 				continue
 			}
@@ -285,11 +276,11 @@ func segments(evs []ledger.Event) []Window {
 		case ledger.PlanSaved:
 			over = over || seg != nil && last == "plan"
 		case ledger.WaitStarted:
-			if over && e.Payload.Val["reason"] == "turn" {
+			if over && e.Payload.Val.String("reason") == "turn" {
 				closeAt(e)
 			}
 		case ledger.SessionStopped:
-			if e.Payload.Val["backstop"] == true {
+			if e.Payload.Val.Bool("backstop") {
 				closeAt(e)
 			}
 		case ledger.StateSet:
@@ -331,7 +322,7 @@ func waitSpans(evs []ledger.Event) []span {
 			continue
 		}
 
-		turn := e.Payload.Val["reason"] == "turn"
+		turn := e.Payload.Val.String("reason") == "turn"
 		s := span{from: e.At}
 
 		for _, next := range evs[i+1:] {
