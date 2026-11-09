@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A driveFixture is the fakes, a tracker answering from a map, a clock
@@ -86,7 +87,8 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	}
 
 	fx.in = &driveInput{
-		main: "/code/repo",
+		main:    "/code/repo",
+		storage: testStorage,
 		tracker: tracker{
 			resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
 				return ref.Lookup{Prefix: "GH"}.Find(ctx, tok)
@@ -1404,13 +1406,13 @@ func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 // keeps it in place; start's tests cover the move from main.
 func TestDriveTakesASavedPlanAsPlanned(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "plan", "judge")
-	fx.in.plansDir = t.TempDir()
-	writePlan(t, filepath.Join(fx.in.plansDir, "GH-1.md"))
+	fx.in.storage = storage.Root(t.TempDir())
+	writePlan(t, fx.in.storage.Plan("GH-1"))
 	fx.task("GH-1", taskInfo{body: "first"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	// the shared storage root sits outside the worktree, so the agent may write there
-	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.plansDir, "/code/repo.GH-1"), " ")
+	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.storage, "/code/repo.GH-1"), " ")
 	fx.f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:1"+addDir, "{}")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -3264,7 +3266,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 
 	fx := newDriveFixture(t, args...)
 	root := t.TempDir()
-	fx.in.plansDir = filepath.Join(root, "plans")
+	fx.in.storage = storage.Root(root)
 
 	var pairs []string
 
@@ -3272,7 +3274,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 		path := "/code/repo." + id
 		pairs = append(pairs, id, path)
 		fx.opens(id, "ws:"+id, fmt.Sprintf("pane:%d", i))
-		addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.plansDir, path), " ")
+		addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.storage, path), " ")
 		fx.f.script(fmt.Sprintf("herdr agent start %s --kind claude --pane pane:%d%s", agentOf(id), i, addDir), "{}")
 		fx.expects(id, "ship")
 	}

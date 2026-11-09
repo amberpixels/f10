@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 func childRows(spec ...[2]string) []childRow {
@@ -107,7 +108,7 @@ func childTarget(t *testing.T, cli string) *target {
 
 	return &target{
 		dir: root,
-		lay: &layout.Layout{CheckoutRoot: root, StorageRoot: filepath.Join(root, ".f10")},
+		lay: &layout.Layout{CheckoutRoot: root, StorageRoot: storage.InRepo(root)},
 		pb:  &probe.Probes{CLI: probe.Signal{Value: cli}},
 		eff: &facts.Effective{IDPrefix: "FT"},
 	}
@@ -207,7 +208,7 @@ func TestChildrenDriverDeclines(t *testing.T) {
 	newFakes(t)
 
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot)
+	writeDriver(t, tg.lay.StorageRoot.Path())
 	tg.eff = &facts.Effective{
 		IDPrefix:    "FT",
 		TrackerKind: "Notion",

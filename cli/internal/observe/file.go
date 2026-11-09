@@ -3,32 +3,37 @@ package observe
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // inRepoStorage is the storage root's name inside a checkout. A path holding
 // it names its own root, so a write is recognised even when the storage root
 // was not resolved for the hook's cwd.
-const inRepoStorage = "/.f10/"
+const inRepoStorage = "/" + storage.DirName + "/"
 
 // FromWrite reads one file written with Write or Edit. storageRoot is the
 // resolved storage root; empty falls back to the `.f10/` the path holds.
 // Plan archives are moves, not new plans, and are not matched.
 func FromWrite(path, storageRoot string) Observation {
-	for _, root := range storageRoots(path, storageRoot) {
-		rel, ok := strings.CutPrefix(filepath.Clean(path), root+string(filepath.Separator))
-		if !ok || !strings.HasSuffix(rel, ".md") {
-			continue
-		}
+	clean := filepath.Clean(path)
+	if !strings.HasSuffix(clean, ".md") {
+		return nil
+	}
 
-		parts := strings.Split(filepath.ToSlash(rel), "/")
+	dir, name := filepath.Dir(clean), strings.TrimSuffix(filepath.Base(clean), ".md")
+	key, parent := filepath.Base(dir), filepath.Dir(dir)
+
+	for _, root := range storageRoots(path, storageRoot) {
+		r := storage.Root(root)
 
 		switch {
-		case len(parts) == 2 && parts[0] == "plans":
-			return &PlanWritten{Path: path, Task: strings.TrimSuffix(parts[1], ".md")}
-		case len(parts) == 3 && parts[0] == "reviews":
-			return &FindingsWritten{Path: path, Task: parts[1], Round: strings.TrimSuffix(parts[2], ".md")}
-		case len(parts) == 3 && parts[0] == "verdicts":
-			return &VerdictWritten{Path: path, Key: parts[1], N: strings.TrimSuffix(parts[2], ".md")}
+		case dir == r.Plans():
+			return &PlanWritten{Path: path, Task: name}
+		case parent == r.Reviews(""):
+			return &FindingsWritten{Path: path, Task: key, Round: name}
+		case parent == r.Verdicts(""):
+			return &VerdictWritten{Path: path, Key: key, N: name}
 		}
 	}
 

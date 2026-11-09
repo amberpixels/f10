@@ -210,7 +210,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 
 	v := &view{
 		CheckoutRoot:    lay.CheckoutRoot,
-		StorageRoot:     lay.StorageRoot,
+		StorageRoot:     lay.StorageRoot.Path(),
 		Instructions:    lay.Source,
 		NestedIgnored:   lay.NestedIgnored,
 		Remote:          pb.RemoteURL,

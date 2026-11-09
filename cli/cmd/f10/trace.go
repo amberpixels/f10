@@ -107,7 +107,7 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if len(tasks) > 0 {
-		out += changeTrailer(tasks[0], changeOf(filepath.Join(t.lay.StorageRoot, "reviews", tasks[0])))
+		out += changeTrailer(tasks[0], changeOf(t.lay.StorageRoot.Reviews(tasks[0])))
 	}
 
 	fmt.Fprint(cmd.Writer, out)

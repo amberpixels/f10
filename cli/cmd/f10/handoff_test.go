@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 const handoffBody = "## Config\n- set `LOCALE_DEFAULT` before the deploy"
@@ -61,17 +63,17 @@ func TestHandoffLines(t *testing.T) {
 
 func TestArchiveHandoffNumbers(t *testing.T) {
 	main := t.TempDir()
-	src := taskHandoff(main, "", "GH-1")
+	src := taskHandoff(storage.InRepo(main), "GH-1")
 	archive := filepath.Join(filepath.Dir(src), "archive")
 
-	if got, err := archiveHandoff(main, "", "GH-1"); err != nil || got != "" {
+	if got, err := archiveHandoff(storage.InRepo(main), "GH-1"); err != nil || got != "" {
 		t.Fatalf("missing file = %q, %v", got, err)
 	}
 
 	writeFile(t, filepath.Join(archive, "GH-1.md"), "first PR")
 	writeHandoffFile(t, src, "abc")
 
-	got, err := archiveHandoff(main, "", "GH-1")
+	got, err := archiveHandoff(storage.InRepo(main), "GH-1")
 	if err != nil || got != filepath.Join(archive, "GH-1.1.md") || exists(src) {
 		t.Fatalf("archived = %q, %v", got, err)
 	}

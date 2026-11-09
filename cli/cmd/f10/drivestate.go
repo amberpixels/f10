@@ -50,12 +50,10 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 	}
 
 	lead := r.task.ref.Head().ID
-	s.plan = r.o.plan != "" || exists(taskPlan(r.o.path, in.plansDir, lead))
+	s.plan = r.o.plan != "" || exists(in.storage.Plan(lead))
 
-	if in.root != "" {
-		o := readOutcomes(nil, in.root, lead)
-		s.reviews, s.changeJudged = len(o.local)+len(o.remote), o.changeJudge != nil
-	}
+	o := readOutcomes(nil, in.storage.Path(), lead)
+	s.reviews, s.changeJudged = len(o.local)+len(o.remote), o.changeJudge != nil
 
 	if in.pull != nil && s.origin != "" {
 		if p, err := in.pull(ctx, branch); err == nil && p.status() == "open" {

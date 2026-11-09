@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // writeDriver puts an executable driver in a storage root.
@@ -37,7 +38,7 @@ func TestDriverFromAWorktree(t *testing.T) {
 	mainDriver := writeDriver(t, main)
 
 	extends := &target{lay: &layout.Layout{
-		StorageRoot: wt,
+		StorageRoot: storage.Root(wt),
 		Layers: []layout.Layer{
 			{Label: "main", Dir: filepath.Join(main, "instructions")},
 			{Label: "worktree", Dir: filepath.Join(wt, "instructions")},
@@ -49,7 +50,7 @@ func TestDriverFromAWorktree(t *testing.T) {
 	}
 
 	replaces := &target{lay: &layout.Layout{
-		StorageRoot: wt,
+		StorageRoot: storage.Root(wt),
 		Layers:      []layout.Layer{{Label: "worktree", Dir: filepath.Join(wt, "instructions")}},
 	}}
 
@@ -70,7 +71,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 	gh := &probe.Probes{CLI: probe.Signal{Value: "gh"}}
 
 	notion := &target{
-		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: root},
+		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
 		pb:  gh,
 		eff: &facts.Effective{
 			TrackerKind: "Notion",
@@ -85,7 +86,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 	}
 
 	github := &target{
-		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: root},
+		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
 		pb:  gh,
 		eff: &facts.Effective{
 			TrackerKind: "GitHub Issues",
@@ -114,7 +115,7 @@ func declaredTracker(t *testing.T, kind string) *target {
 func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	f := newFakes(t)
 	tg := declaredTracker(t, "Notion")
-	path := writeDriver(t, tg.lay.StorageRoot)
+	path := writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.fail("driver search index", shell.Result{Code: driver.ExitUnsupported})
@@ -139,7 +140,7 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 // name answers for a declined branch.
 func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 	tg := declaredTracker(t, "Notion")
-	path := writeDriver(t, tg.lay.StorageRoot)
+	path := writeDriver(t, tg.lay.StorageRoot.Path())
 
 	verbs := []string{
 		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
@@ -165,7 +166,7 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 	f := newFakes(t)
 	tg := declaredTracker(t, "GitHub Issues")
-	writeDriver(t, tg.lay.StorageRoot)
+	writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.script(

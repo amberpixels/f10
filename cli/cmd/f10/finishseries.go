@@ -9,13 +9,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // seriesLore sets in.change to the lore change the closed series names, then
 // returns the report's lore line ("" with no store).
 func seriesLore(in *finishInput, end *seriesEnd) string {
 	if end != nil {
-		if change, ok := closedChange(taskReviews(in.main, in.plansDir, in.task.ID), *end); ok {
+		if change, ok := closedChange(in.storage.Reviews(in.task.ID), *end); ok {
 			in.change = change
 		}
 	}
@@ -35,7 +37,7 @@ func closeSeries(dir string, end seriesEnd) (string, error) {
 		return archiveReviews(dir, end)
 	}
 
-	archive := filepath.Join(filepath.Dir(dir), "archive")
+	archive := storage.ArchiveOf(filepath.Dir(dir))
 	for _, n := range seriesNumbers(archive, filepath.Base(dir)) {
 		if end.same(readSeriesEnd(filepath.Join(archive, fmt.Sprintf("%s.%d", filepath.Base(dir), n)))) {
 			return "", nil
@@ -147,7 +149,7 @@ func nextSeries(archive, id string) string {
 // closedPRs is the archived series that each ended a PR, oldest first: a
 // restart is left out.
 func closedPRs(dir string) []string {
-	archive, id := filepath.Join(filepath.Dir(dir), "archive"), filepath.Base(dir)
+	archive, id := storage.ArchiveOf(filepath.Dir(dir)), filepath.Base(dir)
 
 	var out []string
 

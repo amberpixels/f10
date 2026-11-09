@@ -721,7 +721,7 @@ func statusSource(ctx context.Context, t *target) (rowSource, error) {
 	gs := newGateSource(t, src.events, src.host)
 	src.driven = drivenTasks(gs.shared)
 	src.gates = func(ctx context.Context, id, branch, root string, run *state.Run) []gate {
-		return gs.gatesOf(ctx, id, branch, root, gs.storageFor(ctx, root, run), run)
+		return gs.gatesOf(ctx, id, branch, root, gs.storageFor(ctx, root), run)
 	}
 
 	return src, nil

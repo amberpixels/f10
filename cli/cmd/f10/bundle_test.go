@@ -51,7 +51,7 @@ func TestStartABundle(t *testing.T) {
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", task: bundle12, title: titled("Add dark mode", nil)}
+	in := startInput{main: "/code/repo", storage: testStorage, task: bundle12, title: titled("Add dark mode", nil)}
 	if err := start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,10 @@ func TestStartRefusesABundleWithAParent(t *testing.T) {
 		return nil, nil
 	}
 
-	err := refuseStartParent(t.Context(), startInput{main: "/code/repo", task: bundle12, children: kids})
+	err := refuseStartParent(
+		t.Context(),
+		startInput{main: "/code/repo", storage: testStorage, task: bundle12, children: kids},
+	)
 	if err == nil || !strings.Contains(err.Error(), "GH-2 is a parent of GH-5") {
 		t.Errorf("err = %v, want GH-2 named as the parent", err)
 	}

@@ -113,7 +113,11 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1", fwdWT))
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 
-	if err := start(t.Context(), &bytes.Buffer{}, startInput{main: fwdMain, task: gh1}); err != nil {
+	if err := start(
+		t.Context(),
+		&bytes.Buffer{},
+		startInput{main: fwdMain, storage: testStorage, task: gh1},
+	); err != nil {
 		t.Fatal(err)
 	}
 

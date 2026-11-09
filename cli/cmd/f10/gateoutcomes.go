@@ -1,11 +1,11 @@
 package main
 
 import (
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // outcomes is what the reviews and judges of a task left, with the time
@@ -37,7 +37,7 @@ func seriesOutcomes(store *lore.Store, storageRoot, task string, open bool) outc
 	)
 
 	if storageRoot != "" {
-		dir := filepath.Join(storageRoot, "reviews", task)
+		dir := storage.Root(storageRoot).Reviews(task)
 		change, since = changeOf(dir), seriesStart(dir)
 	}
 

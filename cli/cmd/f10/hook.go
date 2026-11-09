@@ -60,7 +60,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		// the shim exports its own root; Claude Code sets the other for hooks
 		PluginRoot:  cmp.Or(os.Getenv("F10_PLUGIN_ROOT"), os.Getenv("CLAUDE_PLUGIN_ROOT")),
 		Debug:       os.Getenv("F10_STATE_DEBUG") != "",
-		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot },
+		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot.Path() },
 		TaskID:      hookTaskID,
 		StatusText:  hookStatusText,
 		PromptTyped: paneAnswered,

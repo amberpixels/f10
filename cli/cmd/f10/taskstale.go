@@ -42,7 +42,7 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	roots := []string{t.lay.StorageRoot}
+	roots := []string{t.lay.StorageRoot.Path()}
 	_, err = fmt.Fprintln(cmd.Writer, staleness(created, t.eff.StaleAfter, time.Now(), roots, r.ID))
 
 	return err

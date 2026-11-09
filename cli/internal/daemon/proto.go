@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // RunDir holds the socket, the locks, the logs and the drained runs:
@@ -33,7 +35,7 @@ func RunDir() string {
 		return ""
 	}
 
-	return filepath.Join(home, ".f10", "run")
+	return filepath.Join(storage.UserDir(home), "run")
 }
 
 // SocketPath is where the daemon listens.

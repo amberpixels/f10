@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A standup's period and a board's scope are the person's, not a checkout's,
@@ -47,7 +48,7 @@ func userF10Dir() (string, error) {
 		return "", fmt.Errorf("finding your home directory: %w", err)
 	}
 
-	return filepath.Join(home, ".f10"), nil
+	return storage.UserDir(home), nil
 }
 
 // agentsConfig is the frontmatter of ~/.f10/agents.md: the user's own

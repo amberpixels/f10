@@ -106,7 +106,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		case state.LaunchStart:
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
-			for _, task := range driveTasks(t.lay.StorageRoot, l.Value) {
+			for _, task := range driveTasks(t.lay.StorageRoot.Path(), l.Value) {
 				tokens = append(tokens, token{text: task.ID, after: task.After, queued: task.Queued})
 			}
 		}

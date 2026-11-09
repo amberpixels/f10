@@ -23,7 +23,13 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 		prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"
 	f.script(launch, "{}")
 
-	in := startInput{main: "/code/repo", task: gh1, profile: agentctl.Profile{Effort: "high"}, profileFlagged: true}
+	in := startInput{
+		main:           "/code/repo",
+		storage:        testStorage,
+		task:           gh1,
+		profile:        agentctl.Profile{Effort: "high"},
+		profileFlagged: true,
+	}
 	if err := start(t.Context(), &bytes.Buffer{}, in); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +57,7 @@ func TestStartTypesAPromptWithANewline(t *testing.T) {
 	text := prompt(modeDiscuss, shipFlow{}, "GH-1", nil, "", nil, "first\nsecond")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+text, "{}")
 
-	in := startInput{main: "/code/repo", task: gh1, mode: modeDiscuss, note: "first\nsecond"}
+	in := startInput{main: "/code/repo", storage: testStorage, task: gh1, mode: modeDiscuss, note: "first\nsecond"}
 	if err := start(t.Context(), &bytes.Buffer{}, in); err != nil {
 		t.Fatal(err)
 	}

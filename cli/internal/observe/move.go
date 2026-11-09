@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // FromMoves reads the `mv` commands in a Bash call for plans moved into
@@ -48,8 +50,8 @@ func planArchive(src, to, storageRoot string) Observation {
 	}
 
 	for _, root := range storageRoots(src, storageRoot) {
-		plans := filepath.Join(root, "plans")
-		if filepath.Dir(src) != plans || filepath.Dir(to) != filepath.Join(plans, "archive") ||
+		r := storage.Root(root)
+		if filepath.Dir(src) != r.Plans() || filepath.Dir(to) != r.Archive() ||
 			!strings.HasSuffix(src, ".md") {
 			continue
 		}
