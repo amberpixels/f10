@@ -942,9 +942,11 @@ func (e *Effective) resolvePaces(fm *layered) {
 		}
 	}
 
+	// the user's default serves every project, and one that only some
+	// declare must not stop the rest; a run that takes it still fails
 	if s.Default != "" {
 		if _, err := s.Lookup(s.Default); err != nil {
-			e.problem(true, "pace: %v", err)
+			e.problem(s.DefaultOrigin.Layer != userLayer, "pace (%s): %v", s.DefaultOrigin, err)
 		}
 	}
 

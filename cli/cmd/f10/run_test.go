@@ -52,13 +52,30 @@ func TestGatesFollowTheRecordedPace(t *testing.T) {
 	meta := branchmetatest.Use(t)
 	meta.Seed("GH-1", branchmeta.Pace, "ultra")
 
-	if got := src.pipeline(t.Context(), "default", "GH-1").Strings(); strings.Join(got, " ") !=
+	if got := src.pipeline(t.Context(), "default", "GH-1", "").Strings(); strings.Join(got, " ") !=
 		"implement pr review:local pr" {
 		t.Errorf("under ultra: %v", got)
 	}
 
-	if got := src.pipeline(t.Context(), "default", "GH-2").Strings(); strings.Join(got, " ") !=
+	if got := src.pipeline(t.Context(), "default", "GH-2", "").Strings(); strings.Join(got, " ") !=
 		"judge implement cleanup pr review:local judge pr" {
 		t.Errorf("no record: %v", got)
+	}
+
+	// a task a drive has not opened yet takes the drive's --pace
+	if got := src.pipeline(t.Context(), "default", "", "ultra").Strings(); strings.Join(got, " ") !=
+		"implement pr review:local pr" {
+		t.Errorf("a queued drive task under ultra: %v", got)
+	}
+}
+
+// A problem in the user's file names that file, so only the project's own
+// errors take the project.md label.
+func TestLabeledErrors(t *testing.T) {
+	got := labeledErrors("/home/me/.f10/agents.md: agents.review: bad\nagents.x: no flow has an x entry")
+	want := "/home/me/.f10/agents.md: agents.review: bad\nproject.md: agents.x: no flow has an x entry"
+
+	if got != want {
+		t.Errorf("labeled = %q, want %q", got, want)
 	}
 }

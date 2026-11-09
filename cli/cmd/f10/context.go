@@ -56,7 +56,7 @@ func targetAt(ctx context.Context, dir string, scoped bool, cmdName string) (*ta
 	// a fact declared wrong stops every command that acts on facts; config,
 	// init and doctor are how it is seen and fixed, so they run anyway
 	if errs := eff.Errors(); errs != "" && cmdName != "config" && cmdName != "init" && cmdName != "doctor" {
-		return nil, errors.New("project.md: " + errs + "\n(f10 config shows every fact and where it came from)")
+		return nil, errors.New(labeledErrors(errs) + "\n(f10 config shows every fact and where it came from)")
 	}
 
 	return &target{dir: dir, lay: lay, pb: pb, eff: eff, scoped: scoped}, nil
@@ -317,4 +317,17 @@ func linkFlag() cli.Flag {
 
 func printFlag() cli.Flag {
 	return &cli.BoolFlag{Name: "print", Usage: "write the item, or with none the list's first page, to stdout"}
+}
+
+// labeledErrors marks each error with project.md unless it already names
+// its own file, as a problem in the user's ~/.f10 files does.
+func labeledErrors(errs string) string {
+	lines := strings.Split(errs, "\n")
+	for i, line := range lines {
+		if !filepath.IsAbs(line[:strings.IndexByte(line+":", ':')]) {
+			lines[i] = "project.md: " + line
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }

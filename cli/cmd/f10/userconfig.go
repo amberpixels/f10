@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -15,7 +13,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/amberpixels/f10/cli/internal/frontmatter"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -133,30 +131,9 @@ func readUserConfig(file string, cfg any) (string, error) {
 		return "", err
 	}
 
-	path := filepath.Join(dir, file)
+	path, _, err := facts.ReadUserFile(dir, file, cfg)
 
-	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return path, nil
-	}
-
-	if err != nil {
-		return path, err
-	}
-
-	block, _, ok := frontmatter.Split(data)
-	if !ok {
-		return path, nil
-	}
-
-	dec := yaml.NewDecoder(bytes.NewReader(block))
-	dec.KnownFields(true)
-
-	if err := dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
-		return path, fmt.Errorf("%s: %w", path, err)
-	}
-
-	return path, nil
+	return path, err
 }
 
 func readStandupConfig() (standupConfig, string, error) {

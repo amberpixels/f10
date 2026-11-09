@@ -3,6 +3,7 @@ package facts
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -131,13 +132,21 @@ func TestPaceProblemReportedOnce(t *testing.T) {
 	}
 }
 
-// A default pace no layer declares is an error.
+// A default pace no layer declares is an error in project.md, and a
+// warning in the user's file, which serves projects that may lack it.
 func TestDefaultPaceUnknown(t *testing.T) {
 	eff, _ := buildWithUser(t, "---\nflows:\n  default: plan implement pr\n---\n",
 		map[string]string{UserPacesFile: "pace: brisk\n"})
 
-	if !strings.Contains(eff.Errors(), `pace: no pace "brisk"`) {
-		t.Errorf("errors = %q", eff.Errors())
+	if eff.Errors() != "" || !slices.ContainsFunc(eff.Problems, func(p Problem) bool {
+		return strings.Contains(p.Message, `no pace "brisk"`) && strings.Contains(p.Message, UserPacesFile)
+	}) {
+		t.Errorf("a user default: errors %q, problems %+v", eff.Errors(), eff.Problems)
+	}
+
+	eff, _ = buildWithUser(t, "---\nflows:\n  default: plan implement pr\npace: brisk\n---\n", nil)
+	if !strings.Contains(eff.Errors(), `no pace "brisk"`) {
+		t.Errorf("a project default: errors %q", eff.Errors())
 	}
 }
 

@@ -50,7 +50,7 @@ func (l *layered) mergeUser(dir string) []Problem {
 	}
 
 	var agents userAgents
-	if path, ok, err := readUserFile(dir, UserAgentsFile, &agents); err != nil {
+	if path, ok, err := ReadUserFile(dir, UserAgentsFile, &agents); err != nil {
 		fail("%v", err)
 	} else if ok {
 		if err := checkUserAgents(agents.Agents); err != nil {
@@ -61,7 +61,7 @@ func (l *layered) mergeUser(dir string) []Problem {
 	}
 
 	var paces userPaces
-	if path, ok, err := readUserFile(dir, UserPacesFile, &paces); err != nil {
+	if path, ok, err := ReadUserFile(dir, UserPacesFile, &paces); err != nil {
 		fail("%v", err)
 	} else if ok {
 		if bad := checkUserPaces(paces); len(bad) > 0 {
@@ -83,10 +83,10 @@ func (l *layered) mergeUserLayer(d Declared, path string) {
 	l.merge(d, path)
 }
 
-// readUserFile decodes the file's frontmatter into cfg, refusing an unknown
-// key as project.md does; ok is false for a missing file or one with no
-// frontmatter.
-func readUserFile(dir, file string, cfg any) (string, bool, error) {
+// ReadUserFile decodes the frontmatter of the user's file in dir into cfg,
+// refusing an unknown key as project.md does; ok is false for a missing
+// file or one with no frontmatter, which leaves cfg as it was.
+func ReadUserFile(dir, file string, cfg any) (string, bool, error) {
 	path := filepath.Join(dir, file)
 
 	data, err := os.ReadFile(path)
