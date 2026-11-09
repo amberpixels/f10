@@ -1,0 +1,284 @@
+{
+  "checkoutRoot": "$REPO",
+  "storageRoot": "$REPO/.f10",
+  "instructions": "none",
+  "remote": "git@github.com:amberpixels/demo.git",
+  "plansDir": "$REPO/.f10/plans",
+  "fields": [
+    {
+      "name": "Project",
+      "value": "",
+      "origin": "absent"
+    },
+    {
+      "name": "Visibility",
+      "value": "stealth",
+      "origin": "default"
+    },
+    {
+      "name": "Storage",
+      "value": "in-repo ($REPO/.f10)",
+      "origin": "default"
+    },
+    {
+      "name": "Roles",
+      "value": "",
+      "origin": "absent"
+    },
+    {
+      "name": "Tracker",
+      "value": "GitHub Issues (via gh)",
+      "origin": "detected",
+      "source": "well-known host github.com"
+    },
+    {
+      "name": "Hosting \u0026 PR",
+      "value": "github.com (gh)",
+      "origin": "detected",
+      "source": "well-known host github.com"
+    },
+    {
+      "name": "Verify",
+      "value": "just lint / just test",
+      "origin": "detected",
+      "source": "justfile"
+    },
+    {
+      "name": "Review",
+      "value": "",
+      "origin": "absent"
+    },
+    {
+      "name": "Guardrails",
+      "value": "",
+      "origin": "absent"
+    }
+  ],
+  "layering": "extends",
+  "visibility": "stealth",
+  "storage": "in-repo",
+  "trackerKind": "GitHub Issues",
+  "idPrefix": "DEM",
+  "idPrefixOrigin": "derived from project name demo",
+  "idPrefixDerived": true,
+  "catchup": "rebase",
+  "catchupStacked": "merge",
+  "traces": false,
+  "lore": "local",
+  "loreGate": "warn",
+  "driverTimeout": "30s",
+  "flows": {
+    "default": [
+      "plan",
+      "implement",
+      "pr"
+    ]
+  },
+  "watch": "finish",
+  "watchCatchup": false,
+  "reportBack": true,
+  "paces": [
+    {
+      "key": "paces.fast.finish",
+      "value": "on",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.fast.judge",
+      "value": "effort low",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.fast.review",
+      "value": "by local, rounds 1",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.medium.finish",
+      "value": "on",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.slow.finish",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.slow.review",
+      "value": "by local+ci?, rounds 2",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.cleanup",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.demo",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.finish",
+      "value": "on",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.judge",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.plan",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.pr",
+      "value": "marker fast",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.review",
+      "value": "by local, depth light",
+      "origin": "built-in"
+    }
+  ],
+  "facts": [
+    {
+      "key": "visibility",
+      "value": "stealth",
+      "origin": "default"
+    },
+    {
+      "key": "storage",
+      "value": "in-repo",
+      "origin": "default"
+    },
+    {
+      "key": "tracker.id",
+      "value": "DEM",
+      "origin": "derived from project name demo"
+    },
+    {
+      "key": "catchup",
+      "value": "rebase",
+      "origin": "default"
+    },
+    {
+      "key": "catchup_stacked",
+      "value": "merge",
+      "origin": "default"
+    },
+    {
+      "key": "traces",
+      "value": "off",
+      "origin": "default"
+    },
+    {
+      "key": "lore",
+      "value": "local",
+      "origin": "default"
+    },
+    {
+      "key": "lore_gate",
+      "value": "warn",
+      "origin": "default"
+    },
+    {
+      "key": "stale_after",
+      "value": "off",
+      "origin": "default"
+    },
+    {
+      "key": "driver_timeout",
+      "value": "30s",
+      "origin": "default"
+    },
+    {
+      "key": "report_back",
+      "value": "on",
+      "origin": "default"
+    },
+    {
+      "key": "watch",
+      "value": "finish",
+      "origin": "default"
+    },
+    {
+      "key": "watch_catchup",
+      "value": "off",
+      "origin": "default"
+    },
+    {
+      "key": "flows",
+      "value": "default: plan implement pr",
+      "origin": "default"
+    },
+    {
+      "key": "paces.fast.finish",
+      "value": "on",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.fast.judge",
+      "value": "effort low",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.fast.review",
+      "value": "by local, rounds 1",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.medium.finish",
+      "value": "on",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.slow.finish",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.slow.review",
+      "value": "by local+ci?, rounds 2",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.cleanup",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.demo",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.finish",
+      "value": "on",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.judge",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.plan",
+      "value": "off",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.pr",
+      "value": "marker fast",
+      "origin": "built-in"
+    },
+    {
+      "key": "paces.ultra.review",
+      "value": "by local, depth light",
+      "origin": "built-in"
+    }
+  ]
+}

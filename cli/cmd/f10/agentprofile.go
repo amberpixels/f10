@@ -29,6 +29,8 @@ type agentEntry struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
 	Origin string `json:"origin"`
+
+	src facts.Origin // a key a file declared: the origin as a fact; zero for a run's profile
 }
 
 // agentMap is the merged map, by key.
@@ -48,12 +50,14 @@ func agentLayers(eff *facts.Effective, flag string) (agentMap, error) {
 	}
 
 	for key, value := range user {
-		m[key] = agentEntry{Key: key, Value: value, Origin: "declared (user, " + path + ")"}
+		src := facts.DeclaredByUser(path)
+		m[key] = agentEntry{Key: key, Value: value, Origin: src.String(), src: src}
 	}
 
 	if eff != nil {
 		for key, value := range eff.Agents {
-			m[key] = agentEntry{Key: key, Value: value, Origin: eff.AgentsOrigin[key]}
+			src := eff.AgentsOrigin[key]
+			m[key] = agentEntry{Key: key, Value: value, Origin: src.String(), src: src}
 		}
 	}
 
@@ -139,7 +143,7 @@ func (m agentMap) withPace(set *facts.PaceSet, pace runPace) agentMap {
 			continue
 		}
 
-		value, origin := d.Effort, "pace "+pace.name+" ("+set.Origins[pace.name+"."+step]+")"
+		value, origin := d.Effort, "pace "+pace.name+" ("+set.Origins[pace.name+"."+step].String()+")"
 		if c, ok := caps[step+".effort"]; ok {
 			origin = c.Origin + "; " + c.Capped
 		}

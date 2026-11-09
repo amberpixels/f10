@@ -1794,7 +1794,10 @@ func TestDriveChain(t *testing.T) {
 func TestDriveSkillsFinishByDefault(t *testing.T) {
 	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 	set := facts.NewPaceSet()
-	set.Over(map[string]facts.Pace{"mine": {"judge": {Off: true}}}, func(string, string) string { return "test" })
+	set.Over(
+		map[string]facts.Pace{"mine": {"judge": {Off: true}}},
+		func(string, string) facts.Origin { return facts.DeclaredIn("test") },
+	)
 
 	for pace, want := range map[string]string{
 		"medium": "plan ship finish",

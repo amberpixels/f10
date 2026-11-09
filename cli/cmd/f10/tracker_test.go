@@ -74,8 +74,10 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
 		pb:  gh,
 		eff: &facts.Effective{
-			TrackerKind: "Notion",
-			Facts:       []facts.Fact{{Key: "tracker.kind", Value: "Notion", Origin: "declared (main, frontmatter)"}},
+			TrackerKind: facts.TrackerNotion,
+			Facts: []facts.Fact{
+				{Key: "tracker.kind", Value: "Notion", Origin: facts.DeclaredFrontmatter("main")},
+			},
 		},
 	}
 
@@ -89,8 +91,8 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
 		pb:  gh,
 		eff: &facts.Effective{
-			TrackerKind: "GitHub Issues",
-			Facts:       []facts.Fact{{Key: "tracker.kind", Value: "GitHub Issues", Origin: "declared (main)"}},
+			TrackerKind: facts.TrackerGitHub,
+			Facts:       []facts.Fact{{Key: "tracker.kind", Value: "GitHub Issues", Origin: facts.DeclaredIn("main")}},
 		},
 	}
 
@@ -100,12 +102,12 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 }
 
 // declaredTracker is a child target whose project.md declares kind.
-func declaredTracker(t *testing.T, kind string) *target {
+func declaredTracker(t *testing.T, kind facts.TrackerKind) *target {
 	t.Helper()
 
 	tg := childTarget(t, "gh")
 	tg.eff.TrackerKind = kind
-	tg.eff.Facts = []facts.Fact{{Key: "tracker.kind", Value: kind, Origin: "declared (main, frontmatter)"}}
+	tg.eff.Facts = []facts.Fact{{Key: "tracker.kind", Value: kind.String(), Origin: facts.DeclaredFrontmatter("main")}}
 
 	return tg
 }
@@ -114,7 +116,7 @@ func declaredTracker(t *testing.T, kind string) *target {
 // never reported as missing.
 func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	f := newFakes(t)
-	tg := declaredTracker(t, "Notion")
+	tg := declaredTracker(t, facts.TrackerNotion)
 	path := writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
@@ -139,7 +141,7 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 // tracker, with what needs it; the title lookup behind the default branch
 // name answers for a declined branch.
 func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
-	tg := declaredTracker(t, "Notion")
+	tg := declaredTracker(t, facts.TrackerNotion)
 	path := writeDriver(t, tg.lay.StorageRoot.Path())
 
 	verbs := []string{
@@ -165,7 +167,7 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 // A host tracker whose driver declines a verb still falls back to host issues.
 func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 	f := newFakes(t)
-	tg := declaredTracker(t, "GitHub Issues")
+	tg := declaredTracker(t, facts.TrackerGitHub)
 	writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})

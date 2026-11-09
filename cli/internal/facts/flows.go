@@ -297,7 +297,7 @@ func flowsShown(flows map[string]flow.Flow, names []string) string {
 func (e *Effective) resolveFlows(fm *layered) {
 	if fm.Flows == nil {
 		e.Flows = map[string]flow.Flow{"default": flow.Of(strings.Fields(DefaultFlow))}
-		e.Facts = append(e.Facts, Fact{Key: "flows", Value: "default: " + DefaultFlow, Origin: OriginDefault})
+		e.Facts = append(e.Facts, Fact{Key: "flows", Value: "default: " + DefaultFlow, Origin: OriginOf(OriginDefault)})
 	} else {
 		e.Flows = map[string]flow.Flow{}
 
@@ -313,7 +313,7 @@ func (e *Effective) resolveFlows(fm *layered) {
 
 		e.Facts = append(e.Facts, Fact{
 			Key: "flows", Value: flowsShown(e.Flows, e.FlowNames()),
-			Origin: "declared (" + fm.origin["flows"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["flows"]),
 		})
 	}
 
@@ -325,7 +325,7 @@ func (e *Effective) resolveFlows(fm *layered) {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "flow_by_area",
 			Value:  mapShown(e.FlowByArea),
-			Origin: "declared (" + fm.origin["flow_by_area"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["flow_by_area"]),
 		})
 
 		for _, area := range slices.Sorted(maps.Keys(e.FlowByArea)) {

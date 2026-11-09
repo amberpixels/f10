@@ -58,7 +58,7 @@ func (e *Effective) resolveAgents(fm *layered) {
 
 	steps := e.FlowSteps()
 	e.Agents = map[string]string{}
-	e.AgentsOrigin = map[string]string{}
+	e.AgentsOrigin = map[string]Origin{}
 
 	layers := map[string]bool{}
 
@@ -68,13 +68,13 @@ func (e *Effective) resolveAgents(fm *layered) {
 		}
 
 		e.Agents[key] = fm.Agents[key]
-		e.AgentsOrigin[key] = "declared (" + fm.origin["agents."+key] + ", frontmatter)"
+		e.AgentsOrigin[key] = DeclaredFrontmatter(fm.origin["agents."+key])
 		layers[fm.origin["agents."+key]] = true
 	}
 
 	e.Facts = append(e.Facts, Fact{
 		Key:    "agents",
 		Value:  mapShown(e.Agents),
-		Origin: "declared (" + strings.Join(slices.Sorted(maps.Keys(layers)), " + ") + ", frontmatter)",
+		Origin: declaredAcross(layers),
 	})
 }

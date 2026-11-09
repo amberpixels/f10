@@ -35,7 +35,7 @@ func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) (*Draft, err
 
 	// no CLI settled: which tracker this repo uses is a human's answer
 	if eff.TrackerKind != "" && eff.IDPrefix != "" {
-		decl.Tracker = TrackerDecl{Kind: kindKey(eff.TrackerKind), ID: eff.IDPrefix + "-###"}
+		decl.Tracker = TrackerDecl{Kind: string(eff.TrackerKind), ID: eff.IDPrefix + "-###"}
 		d.Keys = append(d.Keys, "tracker")
 	}
 
@@ -169,20 +169,13 @@ func renderDeclared(d Declared) (string, error) {
 }
 
 func isEmpty(d Declared) bool {
-	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker.empty() &&
-		d.MergeMethod == "" && d.Catchup == "" && d.CatchupStacked == "" && d.Traces == "" && d.Lore == "" && d.StaleAfter == "" && d.DriverTimeout == "" &&
-		d.Flows == nil && d.FlowByArea == nil && d.DriveEnv == nil && d.Watch == "" && d.WatchCatchup == "" &&
-		d.ReportBack == "" && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil &&
-		d.Verify == nil && d.Agents == nil && d.Paces == nil && d.Pace == "" && d.Ceiling == nil
-}
-
-// kindKey is the frontmatter word for a tracker kind's shown name.
-func kindKey(kind string) string {
-	for key, name := range trackerKinds {
-		if name == kind {
-			return key
+	for _, k := range scalarKeys {
+		if *k.field(&d) != "" {
+			return false
 		}
 	}
 
-	return ""
+	return d.Tracker.empty() && d.Flows == nil && d.FlowByArea == nil && d.DriveEnv == nil &&
+		d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil && d.Verify == nil &&
+		d.Agents == nil && d.Paces == nil && d.Ceiling == nil
 }
