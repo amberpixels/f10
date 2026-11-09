@@ -42,8 +42,7 @@ func (e *Effective) FlowSteps() []string {
 
 	for _, entries := range e.Flows {
 		for _, entry := range entries {
-			step, _ := SplitEntry(entry)
-			seen[step] = true
+			seen[entry.Step] = true
 		}
 	}
 

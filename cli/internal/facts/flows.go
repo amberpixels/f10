@@ -9,7 +9,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // A flow is every step a task runs through: a leading `plan` runs only for a
@@ -19,9 +19,9 @@ import (
 // DefaultFlow is the flow a project that declares none runs.
 const DefaultFlow = "plan implement pr"
 
-// Flow is one declared flow's entries as written: a list, or one string
-// split on whitespace and arrows, never on commas, which an argument may
-// hold.
+// Flow is one declared flow's entries as written, before flow.Of parses
+// them: a list, or one string split on whitespace and arrows, never on
+// commas, which an argument may hold.
 type Flow []string
 
 // UnmarshalYAML accepts a sequence of entries or one string.
@@ -59,59 +59,6 @@ func splitFlow(text string) Flow {
 	}
 
 	return out
-}
-
-// unlabeled is an entry with its label cut.
-func unlabeled(e string) string {
-	e, _ = state.SplitLabel(e)
-
-	return strings.TrimSpace(e)
-}
-
-// splitLabels is every entry with its label cut, and the labels by index,
-// nil when none has one.
-func splitLabels(f []string) ([]string, []string) {
-	out := make([]string, 0, len(f))
-	labels := make([]string, len(f))
-	labeled := false
-
-	for i, e := range f {
-		_, labels[i] = state.SplitLabel(e)
-		out = append(out, unlabeled(e))
-		labeled = labeled || labels[i] != ""
-	}
-
-	if !labeled {
-		labels = nil
-	}
-
-	return out, labels
-}
-
-// SplitEntry is an entry's step and its argument: `review:local` is review
-// and local.
-func SplitEntry(e string) (string, string) {
-	step, arg, _ := strings.Cut(unlabeled(e), ":")
-
-	return step, arg
-}
-
-// ShipEntries is what /f10:ship runs: the flow after a leading `plan`.
-func ShipEntries(flow []string) []string {
-	if len(flow) > 0 && flow[0] == "plan" {
-		return flow[1:]
-	}
-
-	return flow
-}
-
-// ShipLabels is labels cut as ShipEntries cuts their flow.
-func ShipLabels(flow, labels []string) []string {
-	if len(flow) > 0 && flow[0] == "plan" && len(labels) > 0 {
-		return labels[1:]
-	}
-
-	return labels
 }
 
 // By is who a review entry runs: the local review, the CI review, or both.
@@ -185,54 +132,34 @@ func (b By) Arg() string {
 	return ""
 }
 
-// Planless reports a flow that writes no plan file.
-func Planless(flow []string) bool { return len(flow) == 0 || flow[0] != "plan" }
-
-// JudgeKind is what the judge at entry i judges: the plan before any
-// `implement`, the change after one.
-func JudgeKind(flow []string, i int) string {
-	for _, e := range flow[:min(i, len(flow))] {
-		if step, _ := SplitEntry(e); step == "implement" {
-			return "change"
-		}
-	}
-
-	return "plan"
-}
-
 var (
 	flowNameRE  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	stepNameRE  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	labelNameRE = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 )
 
-// GenericSteps is every generic step a flow entry may name, plus finish, which
-// drive runs. A label never takes one of these names, so status and stats
-// never show a step that did not run.
-var GenericSteps = []string{
-	"brainstorm", "capture", "catchup", "cleanup", "commit", "debug", "demo", "deploy", "explain", "fetch",
-	"finish", "handoff", "implement", "judge", "plan", "pr", "push", "resolve", "review", "standup",
-}
-
 // checkFlow reports what is wrong with one flow. Step names are not checked
 // against a vocabulary: a project-defined step is any overlay's name. others
 // is every step the declared flows name, which no label may take.
-func checkFlow(name string, flow []string, others ...string) []string {
+func checkFlow(name string, written []string, others ...string) []string {
 	var bad []string
 
 	if !flowNameRE.MatchString(name) {
 		bad = append(bad, fmt.Sprintf("flows: %q is not a lowercase name", name))
 	}
 
-	if len(flow) == 0 {
+	if len(written) == 0 {
 		return append(bad, fmt.Sprintf("flows.%s: no entries", name))
 	}
 
-	entries, labels := splitLabels(flow)
-	bad = append(bad, checkLabels(name, flow, labels, others)...)
+	parsed := flow.Of(written)
+	bad = append(bad, checkLabels(name, written, parsed, others)...)
 
-	for i, e := range entries {
-		step, arg, colon := strings.Cut(e, ":")
+	for i, entry := range parsed {
+		// the written text, since a parsed `review:` has lost its colon
+		e, _ := flow.CutLabel(written[i])
+		step, arg := entry.Step, entry.Arg
+		colon := strings.Contains(e, ":")
 
 		switch {
 		case !stepNameRE.MatchString(step):
@@ -248,7 +175,7 @@ func checkFlow(name string, flow []string, others ...string) []string {
 		case step == "plan" && i > 0:
 			bad = append(bad, fmt.Sprintf("flows.%s: plan comes first, since ship runs only the entries after it; "+
 				"stale_after judges a task before planning it", name))
-		case step == "judge" && Planless(entries) && JudgeKind(entries, i) == "plan":
+		case step == "judge" && !parsed.Plans() && parsed.JudgeKind(i) == "plan":
 			bad = append(bad, fmt.Sprintf("flows.%s: a judge before implement judges the plan, "+
 				"and the flow writes none; lead with plan", name))
 		}
@@ -259,25 +186,25 @@ func checkFlow(name string, flow []string, others ...string) []string {
 
 // checkLabels reports a label that is not lower kebab-case, repeats in its
 // flow, or names a step.
-func checkLabels(name string, flow, labels, others []string) []string {
+func checkLabels(name string, written []string, parsed flow.Flow, others []string) []string {
 	var bad []string
 
 	seen := map[string]bool{}
 
-	for i := range flow {
-		label, written := state.LabelAt(labels, i), strings.TrimSpace(flow[i])
+	for i := range written {
+		label, entry := parsed[i].Label, strings.TrimSpace(written[i])
 
 		switch {
-		case label == "" && strings.ContainsAny(written, "[]"):
+		case label == "" && strings.ContainsAny(entry, "[]"):
 			bad = append(bad, fmt.Sprintf("flows.%s: %q: a label is a name in brackets after the entry, "+
-				"as pr[pr-polish]", name, written))
+				"as pr[pr-polish]", name, entry))
 		case label == "":
 			continue
 		case !labelNameRE.MatchString(label):
-			bad = append(bad, fmt.Sprintf("flows.%s: %q: label %q is not lower kebab-case", name, written, label))
-		case slices.Contains(GenericSteps, label) || slices.Contains(others, label):
+			bad = append(bad, fmt.Sprintf("flows.%s: %q: label %q is not lower kebab-case", name, entry, label))
+		case slices.Contains(flow.GenericSteps, label) || slices.Contains(others, label):
 			bad = append(bad, fmt.Sprintf("flows.%s: %q: label %q is a step's name, "+
-				"so status would show a step that did not run", name, written, label))
+				"so status would show a step that did not run", name, entry, label))
 		case seen[label]:
 			bad = append(bad, fmt.Sprintf("flows.%s: label %q names two entries", name, label))
 		}
@@ -294,7 +221,7 @@ func FlowSteps[F ~[]string](flows map[string]F) []string {
 
 	for _, f := range flows {
 		for _, e := range f {
-			if step, _ := SplitEntry(e); !slices.Contains(steps, step) {
+			if step := flow.Parse(e).Step; !slices.Contains(steps, step) {
 				steps = append(steps, step)
 			}
 		}
@@ -314,25 +241,20 @@ func validBy(arg string) bool {
 // never warns: dropping it is what `?` asks for.
 func (e *Effective) checkRemoteReview() {
 	for _, name := range e.FlowNames() {
-		published := false
+		f := e.Flows[name]
 
-		for _, entry := range e.Flows[name] {
-			step, arg := SplitEntry(entry)
-			if step == "pr" || step == "push" {
-				published = true
-			}
-
-			if by, _ := ReviewBy(arg); step != "review" || !by.CI || by.CIOptional {
+		for i, entry := range f {
+			if by, _ := ReviewBy(entry.Arg); entry.Step != "review" || !by.CI || by.CIOptional {
 				continue
 			}
 
 			switch {
 			case !e.Review.Remote():
 				e.problem(false, "flows.%s: %s reads a CI review, and Review declares no remote reviewer; "+
-					"write ci? to run it only where one is", name, entry)
-			case !published:
+					"write ci? to run it only where one is", name, entry.String())
+			case !f.PublishedBefore(i):
 				e.problem(false, "flows.%s: %s reads a CI review on the PR, and no pr or push comes before it",
-					name, entry)
+					name, entry.String())
 			}
 
 			break
@@ -351,30 +273,20 @@ func (e *Effective) FlowNames() []string {
 }
 
 // Flow is the named flow, in any case, and whether it is declared.
-func (e *Effective) Flow(name string) ([]string, bool) {
-	for declared, flow := range e.Flows {
+func (e *Effective) Flow(name string) (flow.Flow, bool) {
+	for declared, f := range e.Flows {
 		if strings.EqualFold(declared, name) {
-			return flow, true
+			return f, true
 		}
 	}
 
 	return nil, false
 }
 
-// LabeledEntries is entries as written, each with its label.
-func LabeledEntries(entries, labels []string) []string {
-	out := make([]string, len(entries))
-	for i, e := range entries {
-		out[i] = state.Labeled(e, state.LabelAt(labels, i))
-	}
-
-	return out
-}
-
-func flowsShown(flows, labels map[string][]string, names []string) string {
+func flowsShown(flows map[string]flow.Flow, names []string) string {
 	shown := make([]string, 0, len(names))
 	for _, name := range names {
-		shown = append(shown, name+": "+strings.Join(LabeledEntries(flows[name], labels[name]), " "))
+		shown = append(shown, name+": "+strings.Join(flows[name].Written(), " "))
 	}
 
 	return strings.Join(shown, "; ")
@@ -384,32 +296,23 @@ func flowsShown(flows, labels map[string][]string, names []string) string {
 // else the default.
 func (e *Effective) resolveFlows(fm *layered) {
 	if fm.Flows == nil {
-		e.Flows = map[string][]string{"default": strings.Fields(DefaultFlow)}
+		e.Flows = map[string]flow.Flow{"default": flow.Of(strings.Fields(DefaultFlow))}
 		e.Facts = append(e.Facts, Fact{Key: "flows", Value: "default: " + DefaultFlow, Origin: OriginDefault})
 	} else {
-		e.Flows = map[string][]string{}
+		e.Flows = map[string]flow.Flow{}
 
 		for name, f := range fm.Flows {
-			entries, labels := splitLabels(f)
-			e.Flows[name] = entries
-
-			if labels != nil {
-				if e.FlowLabels == nil {
-					e.FlowLabels = map[string][]string{}
-				}
-
-				e.FlowLabels[name] = labels
-			}
+			e.Flows[name] = flow.Of(f)
 		}
 
 		// start and drive run default unasked, so a project naming only
 		// other flows still has one
 		if _, ok := e.Flows["default"]; !ok {
-			e.Flows["default"] = strings.Fields(DefaultFlow)
+			e.Flows["default"] = flow.Of(strings.Fields(DefaultFlow))
 		}
 
 		e.Facts = append(e.Facts, Fact{
-			Key: "flows", Value: flowsShown(e.Flows, e.FlowLabels, e.FlowNames()),
+			Key: "flows", Value: flowsShown(e.Flows, e.FlowNames()),
 			Origin: "declared (" + fm.origin["flows"] + ", frontmatter)",
 		})
 	}

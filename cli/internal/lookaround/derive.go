@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -496,7 +496,7 @@ func (r *row) block() (counts, bool) {
 
 // reviewStep reads an entry as the flow names it: `review:local` is review.
 func reviewStep(entry string) bool {
-	step, _ := facts.SplitEntry(entry)
+	step := flow.Parse(entry).Step
 
 	return step == "review" || step == "resolve" || step == "judge"
 }
@@ -509,7 +509,7 @@ func planJudge(run *state.Run) bool {
 		return false
 	}
 
-	if step, _ := facts.SplitEntry(run.Leaf); step != "judge" {
+	if flow.Parse(run.Leaf).Step != "judge" {
 		return false
 	}
 
@@ -518,11 +518,7 @@ func planJudge(run *state.Run) bool {
 		at = slices.Index(run.Pipeline, run.Leaf)
 	}
 
-	implement := slices.IndexFunc(run.Pipeline, func(e string) bool {
-		step, _ := facts.SplitEntry(e)
-
-		return step == "implement"
-	})
+	implement := slices.IndexFunc(run.Entries(), func(e flow.Entry) bool { return e.Step == "implement" })
 
 	return at >= 0 && implement > at
 }

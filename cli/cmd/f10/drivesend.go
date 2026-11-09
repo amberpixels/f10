@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -140,7 +141,7 @@ func (in *driveInput) prompt(
 		return nil
 	}
 
-	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, slices.Contains(r.chain, "finish")), steering)
+	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, r.finishes), steering)
 	if err := in.deliver(ctx, r, p); err != nil {
 		return err
 	}
@@ -200,8 +201,8 @@ func resumeAt(skill string, run *state.Run) string {
 		return ""
 	}
 
-	step, _, _ := strings.Cut(entry, ":")
-	if !slices.Contains(guardedSteps, step) || !slices.Contains(run.Pipeline, entry) {
+	step := flow.Parse(entry).Step
+	if !slices.Contains(flow.Guarded, step) || !slices.Contains(run.Pipeline, entry) {
 		return ""
 	}
 
@@ -223,9 +224,6 @@ func resumeShown(run *state.Run, at string) string {
 
 	return at
 }
-
-// guardedSteps are the entries ship's catchup guard runs before.
-var guardedSteps = []string{"implement", "pr", "judge"}
 
 // steered puts steering after the skill's subject, before any chained
 // clause and the driven marker, so the skill reads it as its own.

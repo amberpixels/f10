@@ -14,6 +14,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -125,15 +126,18 @@ func TestGatesOptionalCI(t *testing.T) {
 	pipeline := []string{"implement", "pr", "review:local+ci?", "pr"}
 	now := time.Unix(1_800_000_000, 0)
 
-	alone := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: pipeline, now: now})
+	alone := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: flow.Of(pipeline), now: now})
 	checkTexts(t, alone, map[string]string{"review": "local: pending"})
 
-	both := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: pipeline, remoteFlow: true, now: now})
+	both := taskGates(
+		context.Background(),
+		gateInput{task: "FT-1", pipeline: flow.Of(pipeline), remoteFlow: true, now: now},
+	)
 	checkTexts(t, both, map[string]string{"review": "local: pending · remote: pending"})
 
 	// a flow whose only review is a dropped ci? keeps one review gate, off
 	ciOnly := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: []string{"implement", "pr", "review:ci?"}, now: now,
+		task: "FT-1", pipeline: flow.Of([]string{"implement", "pr", "review:ci?"}), now: now,
 	})
 
 	var reviews []gate
@@ -164,7 +168,7 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local+ci", Pipeline: pipeline}
 
 	pending := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: pipeline, events: events[:3], now: at(3),
+		task: "FT-1", pipeline: flow.Of(pipeline), events: events[:3], now: at(3),
 	})
 	checkTexts(t, pending, map[string]string{"review": "local: pending · remote: pending"})
 
@@ -216,7 +220,13 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 	t0 := time.Unix(1_800_000_000, 0)
 	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
 
-	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Pipeline: []string{"implement", "pr"}}
+	// the flow declares review and judge after pr, which ship's claims never reached
+	done := &state.Run{
+		Session:  "s1",
+		Task:     "FT-1",
+		Ship:     "done",
+		Pipeline: []string{"implement", "pr", "review", "judge"},
+	}
 	base := []ledger.Event{
 		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
 		shipClaim(at(1), "s1", "implement"),
@@ -299,7 +309,6 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 			gates := taskGates(context.Background(), gateInput{
 				task: "FT-1", branch: "FT-1/thing", checkout: "/code/repo.FT-1", run: done,
 				events: append(append([]ledger.Event{}, base...), tc.extra...),
-				chain:  []string{"ship", "review", "judge"},
 				now:    at(9),
 			})
 
@@ -374,13 +383,19 @@ func TestGatesOutcomes(t *testing.T) {
 
 	// a plan judge before ship and a change judge after it
 	gates = taskGates(context.Background(), gateInput{
-		task: "FT-1", run: ship, now: time.Now(),
-		chain: []string{"plan", "judge", "ship", "review", "resolve", "judge", "finish"},
+		task: "FT-1",
+		now:  time.Now(),
+		run: &state.Run{
+			Session:  "s1",
+			Task:     "FT-1",
+			Ship:     "done",
+			Pipeline: []string{"judge", "implement", "review:local", "pr", "judge"},
+		},
+		finishes: true,
 		outcomes: outcomes{
 			planJudge:   &judgeOutcome{Verdict: "proceed", Reason: "sound"},
 			changeJudge: &judgeOutcome{Verdict: "rethink", Reason: "symptom"},
 		},
-		driven: "judge",
 	})
 
 	checkTexts(t, gates, map[string]string{
@@ -605,7 +620,7 @@ func TestRenderGates(t *testing.T) {
 // The judge fetch runs on a stale task leads the gates once it ran or the
 // plan phase is on it, and shows nowhere before that.
 func TestGatesTaskJudge(t *testing.T) {
-	none := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: gatePipeline, now: time.Now()})
+	none := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now()})
 	if _, ok := texts(none)["judge task"]; ok {
 		t.Errorf("a task judge with nothing behind it: %v", texts(none))
 	}
@@ -614,7 +629,7 @@ func TestGatesTaskJudge(t *testing.T) {
 	// it is no task judge
 	atShip := taskGates(context.Background(), gateInput{
 		task:     "FT-1",
-		pipeline: gatePipeline,
+		pipeline: flow.Of(gatePipeline),
 		now:      time.Now(),
 		run: &state.Run{
 			Session:  "s1",
@@ -646,7 +661,7 @@ func TestGatesTaskJudge(t *testing.T) {
 		}, "task: blocked"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.in.task, tc.in.pipeline, tc.in.now = "FT-1", gatePipeline, time.Now()
+			tc.in.task, tc.in.pipeline, tc.in.now = "FT-1", flow.Of(gatePipeline), time.Now()
 
 			gates := taskGates(context.Background(), tc.in)
 			if len(gates) == 0 || gates[0].Judged != "task" || gates[0].text() != tc.want {
@@ -656,7 +671,7 @@ func TestGatesTaskJudge(t *testing.T) {
 	}
 
 	gates := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: gatePipeline, now: time.Now(),
+		task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now(),
 		outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "proceed"}},
 	})
 	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L pending · R - · 󰊛 J pending" {
@@ -720,7 +735,6 @@ func running(action string) ref.DriveFinish {
 // queued once ship is done, then running with the action finish is on; a
 // base wait stays queued.
 func TestGatesDriveFinish(t *testing.T) {
-	chain := []string{"plan", "ship", "finish"}
 	shipped := &state.Run{Session: "s1", Task: "FT-1", Plan: "done", Ship: "done", Pipeline: gatePipeline}
 	working := &state.Run{
 		Session: "s1", Task: "FT-1", Plan: "done", Ship: "running", Leaf: "pr", Pipeline: gatePipeline,
@@ -736,7 +750,7 @@ func TestGatesDriveFinish(t *testing.T) {
 		{"no record", shipped, "", ref.DriveFinish{}, gatePending},
 		{"ship not done", working, "", queued(""), gatePending},
 		{"queued", shipped, "", queued(""), "queued (drive)"},
-		{"queued by the recorded chain", nil, "ship", queued(""), "queued (drive)"},
+		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (drive)"},
 		{"waiting for a base", shipped, "", queued("waiting for FT-0"), "queued (drive): waiting for FT-0"},
 		{"catching up", shipped, "", queued("catching up with main"), "queued (drive): catching up with main"},
 		{"merging", shipped, "", running("merging #204"), "running (drive): merging #204"},
@@ -744,8 +758,8 @@ func TestGatesDriveFinish(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gates := taskGates(context.Background(), gateInput{
-				task: "FT-1", pipeline: gatePipeline, now: time.Now(),
-				run: tc.run, chain: chain, driven: tc.driven, finish: tc.finish,
+				task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now(),
+				run: tc.run, finishes: true, driven: tc.driven, finish: tc.finish,
 			})
 
 			if got := texts(gates)["finish"]; got != tc.want {
@@ -755,11 +769,22 @@ func TestGatesDriveFinish(t *testing.T) {
 	}
 }
 
+// A branch with no finish record has no finish row: drive does not finish
+// it, or no drive opened it.
+func TestGatesNoFinishRecord(t *testing.T) {
+	shipped := &state.Run{Session: "s1", Task: "FT-1", Plan: "done", Ship: "done", Pipeline: gatePipeline}
+	gates := taskGates(context.Background(), gateInput{task: "FT-1", run: shipped, driven: "ship", now: time.Now()})
+
+	if got, ok := texts(gates)["finish"]; ok {
+		t.Errorf("finish = %q, want no row", got)
+	}
+}
+
 // A flow with no review or judge leaves both out of the compact row, while
 // the full listing still names them as not in this flow.
 func TestCompactGatesOmitsStepsNotInTheFlow(t *testing.T) {
 	gates := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: []string{"implement", "pr"}, now: time.Now(),
+		task: "FT-1", pipeline: flow.Of([]string{"implement", "pr"}), now: time.Now(),
 	})
 
 	if got := compactGates(gates); got != "" {
@@ -960,7 +985,7 @@ func TestGatesShowEntryLabels(t *testing.T) {
 
 	// with no run yet, the branch's flow gives the labels
 	gates = taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: run.Pipeline, labels: run.Labels, now: at(5),
+		task: "FT-1", pipeline: run.Entries(), now: at(5),
 	})
 	if i := slices.IndexFunc(gates, func(g gate) bool { return g.shown() == "pr-polish" }); i < 0 ||
 		gates[i].State != gatePending {

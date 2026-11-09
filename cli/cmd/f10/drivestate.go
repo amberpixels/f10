@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -9,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -84,8 +85,8 @@ func (s taskState) stopped(phase string) bool {
 	return s.run != nil && s.run.Ask == "" && state.Stopped(s.run.Status(phase))
 }
 
-// has reports the evidence that a chain element is done. finish is the
-// drive's own step, never read from the branch, and any other element only
+// has reports the evidence that a skill is done. finish is the drive's own
+// step, never read from the branch, and any other skill only
 // from its run's phase.
 func (s taskState) has(skill string) bool {
 	if s.stopped(skill) {
@@ -107,18 +108,16 @@ func (s taskState) has(skill string) bool {
 // way, so a ship stopped between its first pr and its last is not shipped.
 // With no pipeline recorded, an open PR carrying the branch stands for it.
 func (s taskState) shipped() bool {
-	var pipeline []string
+	var pipeline flow.Flow
 	if s.run != nil {
-		pipeline = s.run.Pipeline
+		pipeline = s.run.Entries()
 	}
 
-	deliver := "pr"
+	deliver := cmp.Or(pipeline.Delivered(), "pr")
 	implemented := false
 
 	for _, e := range pipeline {
-		base, _ := facts.SplitEntry(e)
-
-		switch base {
+		switch e.Step {
 		case "implement":
 			implemented = true
 		case "review":
@@ -129,10 +128,6 @@ func (s taskState) shipped() bool {
 			if implemented && !s.changeJudged {
 				return false
 			}
-		}
-
-		if slices.Contains(deliveringSteps, base) {
-			deliver = base
 		}
 	}
 
@@ -156,16 +151,13 @@ func (s taskState) shipped() bool {
 	return false
 }
 
-// deliveringSteps are the entries whose output is a shipment the branch shows.
-var deliveringSteps = []string{"implement", "commit", "push", "pr", "deploy"}
-
-// reconcile moves the task past every chain element whose evidence is in,
+// reconcile moves the task past every skill whose evidence is in,
 // recording each as drive does a reported one, and says how many it passed.
 func (in *driveInput) reconcile(ctx context.Context, w io.Writer, r *driveRun, s taskState) (int, error) {
 	passed := 0
 
-	for r.pos < len(r.chain) && s.has(r.chain[r.pos]) {
-		skill := r.chain[r.pos]
+	for skills := in.skills(r); r.pos < len(skills) && s.has(skills[r.pos]); {
+		skill := skills[r.pos]
 		if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
 			return passed, fmt.Errorf("recording %s done: %w", skill, err)
 		}
@@ -264,8 +256,8 @@ func (*driveInput) clearAttempts(r *driveRun) {
 	r.attempts = nil
 }
 
-// settle reads the state at a turn's end its run did not explain: a chain
-// element the branch shows done moves the task on, anything else is a failed
+// settle reads the state at a turn's end its run did not explain: a skill
+// the branch shows done moves the task on, anything else is a failed
 // attempt of the action in flight, or with retry false, halt at once.
 func (in *driveInput) settle(
 	ctx context.Context,

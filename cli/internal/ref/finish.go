@@ -2,9 +2,10 @@ package ref
 
 import "strings"
 
-// FinishKey is `f10 drive`'s record, beside TaskKey, of where its finish of
-// the branch stands. Whether the drive still runs is its task's lease, never
-// this record: finish removes it with the branch, drive clears it on any end.
+// FinishKey is `f10 drive`'s record, beside TaskKey, that it finishes the
+// branch, and where that finish stands. Whether the drive still runs is its
+// task's lease, never this record: finish removes it with the branch, and a
+// drive that stops short sets it back to queued.
 const FinishKey = "f10-finish"
 
 // The states a DriveFinish records.

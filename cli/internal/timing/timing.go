@@ -6,9 +6,9 @@ package timing
 
 import (
 	"slices"
-	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -55,7 +55,7 @@ func Claim(e ledger.Event) (string, string, string) {
 	}
 
 	// a leaf's [label] only names the entry for a person
-	leaf, _ := state.SplitLabel(words[2])
+	leaf, _ := flow.CutLabel(words[2])
 
 	return words[0], words[1], leaf
 }
@@ -205,7 +205,7 @@ func windows(evs []ledger.Event) []Window {
 
 				if leaf != "" {
 					// `review:local` is review, `cleanup:comments` cleanup
-					name, _, _ := strings.Cut(leaf, ":")
+					name := flow.Parse(leaf).Step
 					if name == Review && split == leaf {
 						name = Resolve // a resolve blocked on an ask and resumed
 					}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -25,9 +26,11 @@ type driveInput struct {
 	tracker tracker
 	args    driveArgs
 	argv    []string // the command line as given, for the resume command
-	chain   []string
-	flow    shipFlow                            // the flow typed, or default; a task's branch may record another
-	resolve func(name string) (shipFlow, error) // a declared flow by name, at the run's pace
+	// sequence is the skills a task on fl goes through; nil is driveSkills,
+	// read off the flow, and a test runs the machinery on any skill
+	sequence func(fl shipFlow) []string
+	flow     shipFlow                            // the flow typed, or default; a task's branch may record another
+	resolve  func(name string) (shipFlow, error) // a declared flow by name, at the run's pace
 	// paced is a flow at another pace, for a branch that records one; nil
 	// keeps the run's
 	paced    func(fl shipFlow, pace string) (shipFlow, error)
@@ -124,17 +127,17 @@ type driveResult struct {
 }
 
 // A driveRun is one task on its way through the drive: pending until its
-// base has a commit, then active with one chain element in flight or
-// waiting at finish for its base, then ended with its row.
+// base has a commit, then active with one skill in flight or waiting at
+// finish for its base, then ended with its row.
 type driveRun struct {
 	task      driveTask
 	base      *driveRun // the listed base, or nil for none or one outside the list
 	o         openedTask
 	opened    bool
 	flow      shipFlow // the flow this task ships through: its branch's record, else the run's
-	chain     []string // what the task runs through on that flow
-	pos       int      // the chain element in flight, or the next one
-	skill     string   // what is in flight: a chain skill, or catchup
+	finishes  bool     // drive ends the task with finish: the pace says so, or a spike closes
+	pos       int      // the index in its skills of the skill in flight, or the next one
+	skill     string   // what is in flight: one of its skills, or catchup
 	sentAt    time.Time
 	begun     bool
 	idleSince time.Time
@@ -152,7 +155,7 @@ type driveRun struct {
 	// waiting is set while finish waits for the base to be through: no turn
 	// is in flight, so the poll only asks next again
 	waiting bool
-	// parked is set while a chain skill waits for its base's code, the same
+	// parked is set while a skill waits for its base's code, the same
 	// way. parkedHead is the base's head when a ship parked itself, so only
 	// a commit after it sends ship again, never the same empty base.
 	parked     bool
@@ -188,6 +191,41 @@ type driveRun struct {
 
 func (r *driveRun) active() bool { return r.opened && r.end == nil }
 
+// skills is what drive prompts r through, in order; a spike its pace does
+// not finish gets finish once it closes.
+func (in *driveInput) skills(r *driveRun) []string {
+	skills := in.sequenceOf(r.flow)
+	if r.finishes && !slices.Contains(skills, "finish") {
+		skills = append(slices.Clip(skills), "finish")
+	}
+
+	return skills
+}
+
+func (in *driveInput) sequenceOf(fl shipFlow) []string {
+	if in.sequence != nil {
+		return in.sequence(fl)
+	}
+
+	return driveSkills(fl)
+}
+
+// driveSkills reads the skills off the flow: plan when the flow leads with
+// it, ship, then finish when the pace finishes.
+func driveSkills(fl shipFlow) []string {
+	var skills []string
+	if fl.plans() {
+		skills = append(skills, "plan")
+	}
+
+	skills = append(skills, "ship")
+	if fl.finishes() {
+		skills = append(skills, "finish")
+	}
+
+	return skills
+}
+
 // current is run unless its agent is gone, as for a run a cancelled start
 // left behind in a checkout this drive gave a new agent.
 func (r *driveRun) current(run *state.Run) *state.Run {
@@ -199,5 +237,5 @@ func (r *driveRun) current(run *state.Run) *state.Run {
 }
 
 // through reports a task done with for its dependents: finished, or its
-// whole chain run.
+// every skill run.
 func (r *driveRun) through() bool { return r.end != nil && r.end.code == 0 }

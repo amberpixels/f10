@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -125,8 +126,8 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
-		// drive records its chain on every branch it opens
-		if strings.HasPrefix(key, "git config branch.") && strings.Contains(key, "."+cfgChain+" ") {
+		// drive clears the chain an older drive stored on every branch it opens
+		if strings.HasPrefix(key, "git config --unset branch.") && strings.HasSuffix(key, ".f10-chain") {
 			return shell.Result{}
 		}
 
@@ -964,10 +965,10 @@ func TestSiblingPathAndAgentName(t *testing.T) {
 }
 
 func TestResolveShipFlow(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string][]string{
-		"default": {"plan", "implement", "review:local", "pr"},
-		"local":   {"plan", "implement", "commit"},
-		"direct":  {"implement", "push"},
+	eff := &facts.Effective{Flows: map[string]flow.Flow{
+		"default": flow.Of([]string{"plan", "implement", "review:local", "pr"}),
+		"local":   flow.Of([]string{"plan", "implement", "commit"}),
+		"direct":  flow.Of([]string{"implement", "push"}),
 	}}
 
 	for name, want := range map[string]shipFlow{
