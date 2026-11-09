@@ -4,12 +4,165 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
+
+// A landingKind is how a finish ends the task's work.
+type landingKind int
+
+const (
+	landingPull     landingKind = iota // merge the PR, or confirm it merged
+	landingUnpushed                    // a branch never pushed merges into the local default branch
+	landingSpike                       // a spike with no PR closes without a merge
+	landingLeftOpen                    // --local: the PR stays open, only the local side is cleaned up
+	landingGone                        // the PR merged and the worktree is gone: a finish stopped halfway
+)
+
+// landed reports whether the kind merges, after which cleanup runs on past
+// a failure instead of stopping.
+func (k landingKind) landed() bool {
+	return k == landingPull || k == landingUnpushed || k == landingGone
+}
+
+// A landing is what land leaves for cleanup and the report.
+type landing struct {
+	rows  []fact
+	notes []string
+	ended string     // what already happened, for an error after it
+	end   *seriesEnd // what closes the review series; nil moves the rounds unclosed
+	hand  []string   // the handoff printed under the report, set only on a merge
+	kept  string     // the kept/ branch a spike's experiment goes to, "" to discard it
+}
+
+func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
+	switch d.kind {
+	case landingSpike:
+		return landSpike(ctx, w, in, d)
+	case landingLeftOpen:
+		p := d.pull
+
+		return landing{
+			ended: p.url() + " left open",
+			rows:  []fact{taskFact(ctx, w, in.main, in.task.ID), {label: "pr", value: p.url(), url: true}},
+			notes: []string{fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
+				p.url(), p.status())},
+		}, nil
+	default:
+		return landMerge(ctx, w, in, d, errs)
+	}
+}
+
+// landSpike releases what waited on the spike; its experiment goes later,
+// with the worktree.
+func landSpike(ctx context.Context, w io.Writer, in finishInput, d finishDecision) (landing, error) {
+	l := landing{ended: "the spike " + in.task.ID + " closed"}
+
+	if in.flags.keep {
+		l.kept = keptName(ctx, in.main, d.name, in.task.Members())
+	}
+
+	released, err := releaseDependents(ctx, in.main, d.name, d.def, false)
+	if err != nil {
+		return l, err
+	}
+
+	l.rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
+	if l.kept != "" {
+		l.rows = append(l.rows, fact{label: "branch", value: l.kept})
+	}
+
+	l.notes = append(spikeNotes(ctx, in, d.name, d.def, l.kept, d.dirty), released...)
+
+	return l, nil
+}
+
+// landMerge lands a PR or a branch never pushed. Main stays on the task's
+// branch until cleanup, so a failure here leaves a rerun the same shape to
+// find; once the merge lands, errs collects instead of stopping.
+func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
+	name, def, p := d.name, d.def, d.pull
+	unpushed := d.kind == landingUnpushed
+
+	var (
+		riderNotes, notes []string
+		sha               string
+		err               error
+	)
+
+	if len(in.task.Riders()) > 0 && !unpushed {
+		if riderNotes, err = settleRiders(ctx, in, name, p.status() == pullMerged); err != nil {
+			return landing{}, err
+		}
+	}
+
+	l := landing{
+		ended: p.url() + " merged",
+		// read before the merge, while the branch tip it was written at still exists
+		hand: handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p)),
+	}
+
+	recordLanded := sizeRecorder(ctx, in, name, def, unpushed)
+
+	if unpushed {
+		l.ended = name + " merged into " + def
+
+		in.step("merging " + name + " into " + def)
+
+		if sha, notes, err = landUnpushed(ctx, in, name, def); err != nil {
+			return landing{}, err
+		}
+	} else {
+		in.step("merging " + pullNumber(p.url()))
+
+		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
+			return landing{}, err
+		}
+
+		notes = append(notes, riderNotes...)
+
+		in.step("pulling " + def)
+
+		note, deferred := pullMain(ctx, in.root, in.main, def, p.sha())
+		if d.place != inMainCheckout || deferred {
+			notes = appendNote(notes, note)
+		}
+
+		if deferred && in.deferred != nil {
+			in.deferred(note)
+		}
+
+		sha = p.sha()
+	}
+
+	l.end = &seriesEnd{pr: "none", head: sha}
+	if !unpushed {
+		l.end.pr = pullNumber(p.url())
+	}
+
+	notes = appendNote(notes, d.loreNote)
+
+	recordLanded()
+
+	released, err := releaseDependents(ctx, in.main, name, def, true)
+	_ = errs.check("releasing dependents", err)
+
+	notes = append(notes, released...)
+	l.notes = notes
+
+	l.rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
+	if !unpushed {
+		l.rows = append(l.rows, fact{label: "pr", value: p.url(), url: true})
+	}
+
+	l.rows = appendClosed(append(l.rows, fact{label: "merge", value: sha}), in, unpushed)
+
+	return l, nil
+}
 
 // landPull merges an open request or confirms a merged one. Requests based
 // on the branch move to the merged one's base before the branch goes, since

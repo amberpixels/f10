@@ -23,9 +23,9 @@ type branchSize struct {
 // measureBranch reads the size before the branch lands, since landing moves
 // the merge base to the tip and the diff reads zero; a PR the host already
 // merged with a merge commit measures from that commit's first parent.
-func measureBranch(ctx context.Context, dir, branch, def string, local bool) (branchSize, bool) {
+func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) (branchSize, bool) {
 	bases := []string{"origin/" + def}
-	if local {
+	if unpushed {
 		bases = []string{def}
 	}
 
@@ -42,7 +42,7 @@ func measureBranch(ctx context.Context, dir, branch, def string, local bool) (br
 		}
 
 		s := numstatSize(out, base)
-		if s.files == 0 && !local {
+		if s.files == 0 && !unpushed {
 			if merge, _, _ := strings.Cut(gitx.Out(ctx, dir, "rev-list", "--ancestry-path", "--merges",
 				"--reverse", head+".."+base), "\n"); merge != "" {
 				if out, err := gitx.Exec(
@@ -110,8 +110,8 @@ var recordSize = func(ctx context.Context, dir, branch, task string, s branchSiz
 
 // sizeRecorder measures the branch while it still differs from its base and
 // returns what records it, run only once the merge has landed.
-func sizeRecorder(ctx context.Context, in finishInput, branch, def string, local bool) func() {
-	size, sized := measureBranch(ctx, in.main, branch, def, local)
+func sizeRecorder(ctx context.Context, in finishInput, branch, def string, unpushed bool) func() {
+	size, sized := measureBranch(ctx, in.main, branch, def, unpushed)
 	if !sized || size.files == 0 {
 		return func() {}
 	}

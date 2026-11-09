@@ -604,85 +604,56 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 
 	for _, id := range ids {
 		plan := j.in.storage.Plan(id)
+		live := fsx.Exists(plan)
 
 		switch {
-		case !fsx.Exists(plan):
 		case len(left[id]) > 0:
-			j.say("kept the plan for %s: %s still uses it", id, strings.Join(left[id], ", "))
-
-			continue
-		case writtenAfter(plan, cleared[id]):
+			if live {
+				j.say("kept the plan for %s: %s still uses it", id, strings.Join(left[id], ", "))
+			}
+		case live && writtenAfter(plan, cleared[id]):
 			j.say("kept the plan for %s: it was written after its branch's work ended", id)
-
-			continue
 		case j.in.dry:
-			j.say("would archive %s", plan)
-			j.archiveReviews(id, ends[id])
-			j.archiveHandoff(id)
-
-			continue
+			for _, p := range []string{plan, j.in.storage.Reviews(id), taskHandoff(j.in.storage, id)} {
+				if fsx.Exists(p) {
+					j.say("would archive %s", p)
+				}
+			}
 		default:
-			archived, _, err := archivePlan(j.in.storage, id)
-			if err != nil {
-				j.say("%v", err)
-
-				continue
-			}
-
-			j.say("archived %s to %s", plan, archived)
-		}
-
-		if len(left[id]) == 0 {
-			j.archiveReviews(id, ends[id])
-			j.archiveHandoff(id)
-		}
-
-		if len(left[id]) == 0 && !j.in.dry {
-			if note := removeImages(j.in.storage, id); note != "" {
-				j.say("%s", note)
-			}
+			j.clear(id, ends[id])
 		}
 	}
 }
 
-// archiveReviews ends the task's series of review rounds, so a later PR on
-// the same task starts at round 1 and writes its own lore change; a merge
-// with no rounds still closes one.
-func (j *sweeper) archiveReviews(id string, end seriesEnd) {
-	reviews := j.in.storage.Reviews(id)
+// clear archives a task whose branches are all gone; closing its review
+// series lets a later PR on the task start at round 1 with its own lore
+// change. A failed step is a line, and the rest still run.
+func (j *sweeper) clear(id string, end seriesEnd) {
+	plan := j.in.storage.Plan(id)
 
-	switch {
-	case j.in.dry:
-		if fsx.Exists(reviews) {
-			j.say("would archive %s", reviews)
-		}
-	default:
-		switch archived, err := closeSeries(reviews, end); {
-		case err != nil:
-			j.say("%v", err)
-		case archived != "":
-			j.say("archived %s's findings to %s", id, archived)
-		}
+	a, _ := archiveTask(j.in.storage, id, &end, func(_ string, err error) error {
+		j.say("%v", err)
+
+		return nil
+	})
+
+	if a.plan != "" {
+		j.say("archived %s to %s", plan, a.plan)
 	}
-}
 
-// archiveHandoff moves a merged task's handoff aside, so its next PR
-// writes its own.
-func (j *sweeper) archiveHandoff(id string) {
-	src := taskHandoff(j.in.storage, id)
+	if a.reviews != "" {
+		j.say("archived %s's findings to %s", id, a.reviews)
+	}
 
-	switch {
-	case j.in.dry:
-		if fsx.Exists(src) {
-			j.say("would archive %s", src)
-		}
-	default:
-		switch archived, err := archiveHandoff(j.in.storage, id); {
-		case err != nil:
-			j.say("%v", err)
-		case archived != "":
-			j.say("archived %s's handoff to %s", id, archived)
-		}
+	switch err := moveHandoff(a.handoffSrc, a.handoff); {
+	case err != nil:
+		j.say("%v", err)
+	case a.handoff != "":
+		j.say("archived %s's handoff to %s", id, a.handoff)
+	}
+
+	if a.images != "" {
+		j.say("%s", a.images)
 	}
 }
 

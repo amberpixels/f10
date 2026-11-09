@@ -925,7 +925,7 @@ func TestFinishSelfClose(t *testing.T) {
 
 	fx = newFinishFixture(t)
 	fx.in.cwd = filepath.Join(fx.wt, "cli")
-	fx.in.yes = true
+	fx.in.flags.yes = true
 	fx.openPR()
 	fx.f.script("herdr workspace focus ws:1", "{}")
 
@@ -1776,7 +1776,7 @@ func TestFinishMergeFlagMergesSomeoneElsesPR(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	fx.f.script(ghView, prOpenBy("alice"), prMerged)
-	fx.in.merge = true
+	fx.in.flags.merge = true
 
 	if _, err := fx.run(t); err != nil {
 		t.Fatal(err)
@@ -1794,7 +1794,7 @@ func TestFinishLocalLeavesThePROpen(t *testing.T) {
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.script(unpushed, "")
 	fx.plan(t, "# plan")
-	fx.in.local = true
+	fx.in.flags.leaveOpen = true
 	released := fx.dependent()
 
 	out, err := fx.run(t)
@@ -1834,7 +1834,7 @@ func TestFinishLocalRefusesUnpushedCommits(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.fail(unpushed, missing)
-	fx.in.local = true
+	fx.in.flags.leaveOpen = true
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "push or drop them") {
 		t.Fatalf("err = %v, want the unpushed commits refused", err)
@@ -2156,7 +2156,7 @@ func TestFinishLandsANeverPushedBranchOnOriginsHead(t *testing.T) {
 func TestFinishKeepsTheRefusalWhenNeverPushedIsNotProven(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
-	fx.in.local = true
+	fx.in.flags.leaveOpen = true
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "no pull requests found") {
 		t.Fatalf("--local: err = %v", err)
@@ -2446,7 +2446,7 @@ func TestFinishReportsProgress(t *testing.T) {
 // moves, and a merged one finishes as any finish would.
 func TestFinishMergedOnly(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.mergedOnly = true
+	fx.in.flags.mergedOnly = true
 	fx.openPR()
 
 	if _, err := fx.run(t); !errors.Is(err, errNotMerged) {
@@ -2460,7 +2460,7 @@ func TestFinishMergedOnly(t *testing.T) {
 	}
 
 	fx = newFinishFixture(t)
-	fx.in.mergedOnly = true
+	fx.in.flags.mergedOnly = true
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 
@@ -2531,7 +2531,7 @@ func TestFinishLoreGate(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.f.script(ghView, prOpenBy("alice"))
 		fx.f.script(unpushed, "")
-		fx.in.local = true
+		fx.in.flags.leaveOpen = true
 		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
 
 		if out, err := fx.run(t); err != nil || strings.Contains(out, "lore check") {
@@ -2817,7 +2817,7 @@ func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.script(unpushed, "")
-	fx.in.local = true
+	fx.in.flags.leaveOpen = true
 
 	src := taskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc")
@@ -2986,5 +2986,70 @@ func TestFinishRefOnADetachedHead(t *testing.T) {
 
 	if r, _, branch, err := finishRef(t.Context(), tg, ""); err == nil || branch == "HEAD" {
 		t.Errorf("detached = %q on %q, %v; want a refusal", r.ID, branch, err)
+	}
+}
+
+// reportLabels is the facts block's labels in order.
+func reportLabels(out string) []string {
+	var labels []string
+
+	for _, m := range regexp.MustCompile(`(?m)^([a-z]+):\s`).FindAllStringSubmatch(out, -1) {
+		labels = append(labels, m[1])
+	}
+
+	return labels
+}
+
+// Each way a finish lands prints its facts in one order, whichever path ran.
+func TestFinishReportRowOrder(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setup func(fx *finishFixture)
+		want  string
+	}{
+		"pull": {func(fx *finishFixture) { fx.openPR() }, "task pr merge plan workspace path"},
+		"gone": {func(fx *finishFixture) {
+			fx.f.script(worktrees, porcelain())
+			fx.f.script(ghView, prMerged)
+			fx.f.script(lsRem, "")
+		}, "task pr merge plan"},
+		"left open": {func(fx *finishFixture) {
+			fx.f.script(ghView, prOpenBy("alice"))
+			fx.f.script(unpushed, "")
+			fx.in.flags.leaveOpen = true
+		}, "task pr plan workspace path"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.plan(t, "# plan")
+			tc.setup(fx)
+
+			out, err := fx.run(t)
+			if err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+
+			if got := strings.Join(reportLabels(out), " "); got != tc.want {
+				t.Errorf("labels %q, want %q:\n%s", got, tc.want, out)
+			}
+		})
+	}
+}
+
+// A rerun with the worktree gone sweeps as a whole finish does.
+func TestFinishMergedWithoutWorktreeSweeps(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(worktrees, porcelain())
+	fx.f.script(ghView, prMerged)
+	fx.f.script(lsRem, "")
+	fx.f.script("sweep", "")
+	fx.in.sweep = func(context.Context) { fx.f.answer("sweep") }
+
+	if out, err := fx.run(t); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	removed := slices.Index(fx.f.calls, "git branch -D GH-1")
+	if swept := slices.Index(fx.f.calls, "sweep"); removed < 0 || swept < removed {
+		t.Errorf("branch removed at %d, swept at %d", removed, swept)
 	}
 }

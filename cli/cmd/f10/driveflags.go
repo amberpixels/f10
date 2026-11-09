@@ -77,11 +77,11 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		case tok == "--foreground":
 			a.fore = true
 		case tok == "--local":
-			if a.flow != "" && a.flow != "local" {
+			if a.flow != "" && a.flow != localFlow {
 				return driveArgs{}, fmt.Errorf("--local and --flow %s name two flows", a.flow)
 			}
 
-			a.flow = "local"
+			a.flow = localFlow
 		case tok == "--":
 			if a.span || len(a.tasks) != 1 {
 				return driveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")

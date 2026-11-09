@@ -77,7 +77,7 @@ func TestFinishKeepsASpikesExperiment(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
 	fx.spike(t)
-	fx.in.keep = true
+	fx.in.flags.keep = true
 	fx.f.script("git rev-parse -q --verify refs/heads/kept/spike", "")
 	fx.f.script("git add -A", "")
 	fx.f.script("git commit --no-verify -m GH-1: spike experiment, not for merge", "")
@@ -160,7 +160,7 @@ func TestFinishRefusesADirtySpikeOnMain(t *testing.T) {
 
 func TestFinishKeepNeedsASpike(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.keep = true
+	fx.in.flags.keep = true
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "has no spike report") {

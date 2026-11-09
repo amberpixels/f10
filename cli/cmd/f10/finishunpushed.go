@@ -18,7 +18,7 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 		return false, nil
 	}
 
-	if !noSuchPull(pullErr) || in.local {
+	if !noSuchPull(pullErr) || in.flags.leaveOpen {
 		return false, pullErr
 	}
 
@@ -62,11 +62,11 @@ func landingBase(ctx context.Context, dir, def string) (string, error) {
 	return sha, err
 }
 
-// landLocal builds the merge in memory on landingBase so no checkout is
+// landUnpushed builds the merge in memory on landingBase so no checkout is
 // touched, then moves the default branch. A conflict, or a rebase that is
 // not a fast-forward, is left to a catchup; a rerun lands nothing. The last
 // note says whether the commit closes the task or the tracker must.
-func landLocal(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
+func landUnpushed(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
 	defRef, head := "refs/heads/"+def, "refs/heads/"+branch
 	// old is the compare-and-swap value the ref moves from: an unread one
 	// would move it unchecked
@@ -165,7 +165,7 @@ func closesOnPush(in finishInput, def string) string {
 }
 
 // alreadyLanded reports every change on head already in base, the case
-// landLocal lands nothing for; a conflict is not landed.
+// landUnpushed lands nothing for; a conflict is not landed.
 func alreadyLanded(ctx context.Context, dir, base, head string) bool {
 	tree, err := gitx.MergeTree(ctx, dir, base, head)
 

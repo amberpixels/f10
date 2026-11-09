@@ -122,8 +122,8 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 // The answers drive's own finish question takes, for a PR someone else
 // opened: merge it, or clean up locally and leave it open.
 const (
-	finishMerge = "merge"
-	finishLocal = "local"
+	finishMerge     = "merge"
+	finishLeaveOpen = "local"
 )
 
 // driveFinish is what a drive's finish needs from its run; the rest comes
@@ -132,7 +132,7 @@ type driveFinish struct {
 	task     ref.Ref
 	suffix   string
 	branch   string // the run's branch, "" to look it up by task and suffix
-	pr       string // the answer to a foreign PR: finishMerge, finishLocal or ""
+	pr       string // the answer to a foreign PR: finishMerge, finishLeaveOpen or ""
 	progress func(string)
 	handoff  func([]string)
 	deferred func(string)
@@ -147,7 +147,7 @@ func driveFinishInput(t *target, main string, h host, req driveFinish) (finishIn
 	}
 
 	in.suffix, in.branch = req.suffix, req.branch
-	in.merge, in.local = req.pr == finishMerge, req.pr == finishLocal
+	in.flags.merge, in.flags.leaveOpen = req.pr == finishMerge, req.pr == finishLeaveOpen
 	in.progress, in.handoff, in.deferred = req.progress, req.handoff, req.deferred
 	// a driven finish asks no second question, since a resume carries only
 	// the latest answer: a bundle's riders stay open, the reversible choice,
@@ -198,7 +198,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 	}
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
-		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.url, fp.author, finishLocal, finishMerge)
+		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.url, fp.author, finishLeaveOpen, finishMerge)
 
 		return driveResult{
 			row:   "asked at finish",

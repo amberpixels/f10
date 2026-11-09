@@ -2893,7 +2893,7 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
 	}
 
-	if want := []string{"", finishLocal, ""}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if want := []string{"", finishLeaveOpen, ""}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("finish was passed %q, want %q", got, want)
 	}
 }
@@ -2954,9 +2954,9 @@ func TestDriveFinishInputTakesTheSettings(t *testing.T) {
 			in.traces, in.method, in.gate, in.loreStore)
 	}
 
-	if in.task.ID != "DM-1" || in.suffix != "b" || in.branch != "DM-1-b" || !in.merge || in.local {
+	if in.task.ID != "DM-1" || in.suffix != "b" || in.branch != "DM-1-b" || !in.flags.merge || in.flags.leaveOpen {
 		t.Errorf("run = %s %q %q merge %v local %v; want the lead DM-1, the run's suffix and branch, a merge",
-			in.task.ID, in.suffix, in.branch, in.merge, in.local)
+			in.task.ID, in.suffix, in.branch, in.flags.merge, in.flags.leaveOpen)
 	}
 
 	if in.close == nil || len(in.close) != 0 {

@@ -143,7 +143,9 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in.suffix, in.branch = suffix, branch
-	in.yes, in.merge, in.local, in.keep = cmd.Bool("yes"), cmd.Bool("merge"), cmd.Bool("local"), cmd.Bool("keep")
+	in.flags = finishFlags{
+		yes: cmd.Bool("yes"), merge: cmd.Bool("merge"), leaveOpen: cmd.Bool("local"), keep: cmd.Bool("keep"),
+	}
 	in.close = closing
 	in.sweep = func(ctx context.Context) {
 		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now(),
@@ -208,10 +210,7 @@ type finishInput struct {
 	gate      string
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
-	yes       bool
-	merge     bool         // merge the PR even when someone else opened it
-	local     bool         // leave the PR open and clean up only what is here
-	keep      bool         // a spike's experiment is committed onto a kept/ branch, not discarded
+	flags     finishFlags
 	storage   storage.Root // the same root as root, for task files: plans, findings, handoffs
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
@@ -227,14 +226,22 @@ type finishInput struct {
 	handoff func([]string)
 	// deferred takes a deferred pull's note, for drive's report; nil for none
 	deferred func(string)
-	// mergedOnly refuses all but an already merged request: the watcher never merges
-	mergedOnly bool
 	// subtasks is every subtask, closed ones kept, for a parent with no branch;
 	// nil, like errNoParentLink, is a tracker with no parent link
 	subtasks func(context.Context, ref.Ref) ([]childRow, error)
 	// closeTask closes a parent its subtasks delivered; nil where the tracker is
 	// not the host, which f10 has no "done" word for
 	closeTask func(context.Context, ref.Ref) error
+}
+
+// finishFlags are the caller's choices; everything else finish derives.
+type finishFlags struct {
+	yes       bool // close the workspace finish runs in, after the report
+	merge     bool // merge the PR even when someone else opened it
+	leaveOpen bool // --local: leave the PR open and clean up only what is here
+	keep      bool // a spike's experiment is committed onto a kept/ branch, not discarded
+	// mergedOnly refuses all but an already merged request: the watcher never merges
+	mergedOnly bool
 }
 
 // finishInputFor fills what comes from the task and the project's settings,

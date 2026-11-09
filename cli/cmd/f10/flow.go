@@ -232,12 +232,17 @@ func dialSource(d facts.Dial) string {
 	return "(" + d.Origin + ")"
 }
 
+// localFlow is the flow --local selects on start and drive; finish's
+// --local (leave the PR open) and a never-pushed branch's merge here are
+// unrelated.
+const localFlow = "local"
+
 func selectors(name string) []string {
 	switch name {
 	case "default":
 		return []string{"f10 start", "f10 drive"}
-	case "local":
-		return []string{"--local", "--flow local"}
+	case localFlow:
+		return []string{"--local", "--flow " + localFlow}
 	default:
 		return []string{"--flow " + name}
 	}
@@ -355,11 +360,11 @@ func flowFlags(cmd *cli.Command) (string, error) {
 	name := strings.ToLower(strings.TrimSpace(cmd.String("flow")))
 
 	if cmd.Bool("local") {
-		if name != "" && name != "local" {
+		if name != "" && name != localFlow {
 			return "", fmt.Errorf("--local and --flow %s name two flows", name)
 		}
 
-		name = "local"
+		name = localFlow
 	}
 
 	return name, nil
