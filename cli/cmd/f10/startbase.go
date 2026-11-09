@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
@@ -88,11 +89,13 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 // another branch ships or a branch reopened with other riders than typed,
 // since riders are fixed at start; a task alone takes its branch's riders.
 func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
+	x, err := loadBranchIndex(ctx, main)
+	if err != nil {
+		return ref.Ref{}, err
+	}
+
 	if existing != "" {
-		lead, riders, err := branchBundle(ctx, main, existing, strings.TrimSuffix(prefixOf(task), "-"))
-		if err != nil {
-			return ref.Ref{}, err
-		}
+		lead, riders := x.bundle(existing, strings.TrimSuffix(prefixOf(task), "-"))
 
 		switch {
 		case len(task.Riders()) == 0 && len(riders) > 0 && strings.EqualFold(lead, task.ID):
@@ -109,10 +112,7 @@ func settleBundle(ctx context.Context, main string, task ref.Ref, existing strin
 	}
 
 	for _, rider := range task.Riders() {
-		branches, err := linkedBranches(ctx, main, rider)
-		if err != nil {
-			return ref.Ref{}, err
-		}
+		branches := x.linked(rider)
 
 		for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
 			refs, err := gitx.Refs(ctx, main, append(taskRefs(root, rider), riderRefs(root, rider)...)...)
@@ -139,13 +139,11 @@ func settleBundle(ctx context.Context, main string, task ref.Ref, existing strin
 // recordBundle links the branch to its lead and lists its riders, under
 // the branch's section of the local git config, so any member finds it.
 func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
-	section := "branch." + branch + "."
-
-	if err := gitx.SetConfig(ctx, dir, section+cfgTaskID, task.ID); err != nil {
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.Task, task.ID); err != nil {
 		return fmt.Errorf("recording bundle %s: %w", task.Label(), err)
 	}
 
-	if err := gitx.SetConfig(ctx, dir, section+cfgRiders, strings.Join(task.Riders(), " ")); err != nil {
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.Riders, strings.Join(task.Riders(), " ")); err != nil {
 		return fmt.Errorf("recording bundle %s: %w", task.Label(), err)
 	}
 
@@ -158,7 +156,12 @@ func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
 func baseFor(ctx context.Context, in startInput) (baseRef, *dependency, error) {
 	switch {
 	case in.after != "":
-		branch, err := taskBranch(ctx, in.main, in.after)
+		x, err := loadBranchIndex(ctx, in.main)
+		if err != nil {
+			return baseRef{}, nil, err
+		}
+
+		branch, err := x.after(ctx, in.after)
 		if err != nil {
 			return baseRef{}, nil, err
 		}
@@ -244,13 +247,11 @@ func planIf(path string) string {
 // recordDependency writes the dependency under the branch's section of the
 // local git config: per-branch, shared by every worktree, never pushed.
 func recordDependency(ctx context.Context, dir, branch string, dep *dependency) error {
-	section := "branch." + branch + "."
-
-	if err := gitx.SetConfig(ctx, dir, section+cfgAfter, dep.task); err != nil {
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.After, dep.task); err != nil {
 		return fmt.Errorf("recording the dependency on %s: %w", dep.task, err)
 	}
 
-	if err := gitx.SetConfig(ctx, dir, section+cfgAfterBranch, dep.branch); err != nil {
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.AfterBranch, dep.branch); err != nil {
 		return fmt.Errorf("recording the dependency on %s: %w", dep.task, err)
 	}
 
@@ -295,7 +296,7 @@ func recordTip(ctx context.Context, dir, branch, base string) error {
 		return nil
 	}
 
-	if err := gitx.SetConfig(ctx, dir, "branch."+branch+"."+cfgTip, tip); err != nil {
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.Tip, tip); err != nil {
 		return fmt.Errorf("recording %s's base tip on %s: %w", branch, base, err)
 	}
 

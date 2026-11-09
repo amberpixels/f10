@@ -3,8 +3,8 @@ package lookaround
 import (
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
@@ -84,7 +84,7 @@ type Branch struct {
 	Agent  string   // the agent's profile as typed (opus:high), where start recorded one
 	// Finish is `f10 drive`'s record of running the branch's finish, while
 	// that drive holds the task's lease
-	Finish *ref.DriveFinish
+	Finish *branchmeta.DriveFinish
 }
 
 // Findings is a task's latest review round as its findings file holds it.

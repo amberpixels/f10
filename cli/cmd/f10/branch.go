@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -136,44 +137,88 @@ func riderRefs(root, id string) []string {
 	return []string{mid, mid + "/*", mid + ref.Separator + "*", mid + ref.Separator + "*/*"}
 }
 
-// branchBundle is the lead and riders a branch ships: its recorded link,
-// else the ids its name spells, as a fetched branch carries them. A link git
-// cannot read is an error: the name alone would read a bundle as its lead.
-func branchBundle(ctx context.Context, dir, branch, prefix string) (string, []string, error) {
-	section := "branch." + branch + "."
+// A branchIndex answers which branch is a task's, from every branch's
+// record read once. Build one per command and never keep it across a write
+// to the records, since it answers from the read.
+type branchIndex struct {
+	dir     string
+	records []branchmeta.Record
+}
 
-	recorded, err := gitx.Config(ctx, dir, section+cfgRiders)
+func loadBranchIndex(ctx context.Context, dir string) (*branchIndex, error) {
+	records, err := branchmeta.LoadAll(ctx, dir)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	if riders := strings.Fields(recorded); len(riders) > 0 {
-		lead, err := gitx.Config(ctx, dir, section+cfgTaskID)
-		if err != nil {
-			return "", nil, err
-		}
+	return &branchIndex{dir: dir, records: records}, nil
+}
 
-		return cmp.Or(lead, ref.Match(prefix, branch)), riders, nil
+// A branchPolicy is where find looks past the link: the roots it searches,
+// in order.
+type branchPolicy []string
+
+var (
+	// policyLocal never tracks origin's copy, as a landed pickup must not
+	policyLocal = branchPolicy{"refs/heads/"}
+	// policyLocalOrOrigin finds a branch only origin has, for start to track
+	policyLocalOrOrigin = branchPolicy{"refs/heads/", "refs/remotes/origin/"}
+)
+
+func (x *branchIndex) record(branch string) branchmeta.Record {
+	for _, r := range x.records {
+		if r.Branch == branch {
+			return r
+		}
+	}
+
+	return branchmeta.Record{Branch: branch}
+}
+
+// linked are the local branches linked to id as lead or rider: a picked-up
+// PR's branch need not carry the id, and a bundle's branch is found by any
+// member.
+func (x *branchIndex) linked(id string) []string {
+	var names []string
+
+	same := func(s string) bool { return strings.EqualFold(s, id) }
+
+	for _, r := range x.records {
+		if same(r.Task) || slices.ContainsFunc(r.Riders, same) {
+			names = append(names, r.Branch)
+		}
+	}
+
+	return names
+}
+
+// bundle is the lead and riders a branch ships: its recorded riders, led by
+// its link else the id its name carries, then the ids its name spells, as a
+// fetched branch carries them.
+func (x *branchIndex) bundle(branch, prefix string) (string, []string) {
+	r := x.record(branch)
+	if len(r.Riders) > 0 {
+		return cmp.Or(r.Task, ref.Match(prefix, branch)), r.Riders
 	}
 
 	if members := ref.Members(prefix, branch); members != nil {
-		return members[0], members[1:], nil
+		return members[0], members[1:]
 	}
 
-	return "", nil, nil
+	return "", nil
 }
 
-// branchesFor lists the task's branches under root, narrowed to a suffix
-// when given. Locally, a miss on the shapes start creates falls back to the
-// id anywhere in the name (`feat/ABC-6-slug`), as `task read` reads a branch.
-func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, error) {
-	refs, err := gitx.Refs(ctx, dir, taskRefs(root, id)...)
+// under lists the task's branches under root, narrowed to a suffix when
+// given. Locally, a miss on the shapes start creates falls back to the id
+// anywhere in the name (`feat/ABC-6-slug`), as `task read` reads a branch.
+func (x *branchIndex) under(ctx context.Context, root, id, suffix string) ([]string, error) {
+	refs, err := gitx.Refs(ctx, x.dir, taskRefs(root, id)...)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(refs) == 0 && root == "refs/heads/" {
-		if refs, err = carryingBranches(ctx, dir, id); err != nil {
+		if refs, err = x.carrying(ctx, id); err != nil {
 			return nil, err
 		}
 	}
@@ -185,37 +230,24 @@ func branchesFor(ctx context.Context, dir, root, id, suffix string) ([]string, e
 	return slices.DeleteFunc(refs, func(r string) bool { return !strings.HasSuffix(r, "-"+suffix) }), nil
 }
 
-// carryingBranches are the local branches carrying id past a prefix, minus
-// any linked to another task, since a picked-up PR's branch may mention an id
-// it does not ship. The prefix is the id's own, so GH-10 never reads as GH-1.
-func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
+// carrying are the local branches carrying id past a prefix, minus any
+// linked to another task, since a picked-up PR's branch may mention an id it
+// does not ship. The prefix is the id's own, so GH-10 never reads as GH-1.
+func (x *branchIndex) carrying(ctx context.Context, id string) ([]string, error) {
 	cut := strings.LastIndexByte(id, '-')
 	if cut <= 0 {
 		return nil, nil
 	}
 
-	all, err := gitx.Refs(ctx, dir, "refs/heads/")
+	all, err := gitx.Refs(ctx, x.dir, "refs/heads/")
 	if err != nil {
 		return nil, err
-	}
-
-	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	linked := map[string]string{}
-
-	for _, e := range entries {
-		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
-			linked[strings.TrimPrefix(b, "branch.")] = e.Value
-		}
 	}
 
 	match := ref.Matcher(id[:cut])
 
 	return slices.DeleteFunc(all, func(b string) bool {
-		if task, ok := linked[b]; ok && !strings.EqualFold(task, id) {
+		if task := x.record(b).Task; task != "" && !strings.EqualFold(task, id) {
 			return true
 		}
 
@@ -223,134 +255,23 @@ func carryingBranches(ctx context.Context, dir, id string) ([]string, error) {
 	}), nil
 }
 
-// taskBranch is the branch --after names. Nothing or several matching fails
-// before anything is created, since guessing would base the work on the
-// wrong attempt.
-func taskBranch(ctx context.Context, dir, id string) (string, error) {
-	linked, err := linkedBranches(ctx, dir, id)
-	if err != nil {
-		return "", err
-	}
-
-	switch len(linked) {
-	case 0:
-	case 1:
-		return linked[0], nil
-	default:
-		return "", fmt.Errorf("--after %s: several branches are linked to it, name one: %s",
-			id, strings.Join(linked, ", "))
-	}
-
-	for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
-		refs, err := branchesFor(ctx, dir, root, id, "")
-		if err != nil {
-			return "", err
-		}
-
-		switch len(refs) {
-		case 0:
-			continue
-		case 1:
-			return refs[0], nil
-		default:
-			return "", fmt.Errorf("--after %s: several branches match, name one: %s", id, strings.Join(refs, ", "))
-		}
-	}
-
-	return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
-}
-
-const cfgTaskKeys = `^branch\..*\.(` + cfgTaskID + `|` + cfgRiders + `)$`
-
-// linkedBranches are the local branches linked to id as lead or rider: a
-// picked-up PR's branch need not carry the id, and a bundle's branch is
-// found by any member.
-func linkedBranches(ctx context.Context, dir, id string) ([]string, error) {
-	entries, err := gitx.ConfigEntries(ctx, dir, cfgTaskKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	var names []string
-
-	for _, e := range entries {
-		branch, key := e.Key, ""
-		for _, k := range []string{cfgTaskID, cfgRiders} {
-			if b, ok := strings.CutSuffix(e.Key, "."+k); ok {
-				branch, key = strings.TrimPrefix(b, "branch."), k
-			}
-		}
-
-		ids := []string{e.Value}
-		if key == cfgRiders {
-			ids = strings.Fields(e.Value)
-		}
-
-		if slices.ContainsFunc(ids, func(s string) bool { return strings.EqualFold(s, id) }) &&
-			!slices.Contains(names, branch) {
-			names = append(names, branch)
-		}
-	}
-
-	return names, nil
-}
-
-// namedRef is the ref --base names, with its commit. Exact refs rather than
-// for-each-ref, since a base is one commit and a literal pattern would also
-// match everything below the name at a slash.
-func namedRef(ctx context.Context, dir, branch string) (string, string, error) {
-	for _, root := range []string{"refs/heads/", "refs/remotes/", "refs/remotes/origin/"} {
-		if sha := refSHA(ctx, dir, root+branch); sha != "" {
-			return strings.TrimPrefix(strings.TrimPrefix(root+branch, "refs/heads/"), "refs/remotes/"), sha, nil
-		}
-	}
-
-	return "", "", fmt.Errorf("--base %s: no branch %s locally or on origin", branch, branch)
-}
-
-func refSHA(ctx context.Context, dir, r string) string {
-	return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", r)
-}
-
-// A foundBranch is the branch existingBranch settled on, and whether only
-// origin has it, in which case start creates the local branch tracking it.
-type foundBranch struct {
-	name   string
-	remote bool
-}
-
-// existingBranch is the branch to reuse, or "" when the task has none yet.
-// Several is an error, since a suffix exists to say which; a suffix skips
-// the link, naming an attempt by its branch name.
-func existingBranch(ctx context.Context, dir, want, id, suffix string) (foundBranch, error) {
-	return existingBranchIn(ctx, dir, want, id, suffix, "refs/heads/", "refs/remotes/origin/")
-}
-
-// localBranch is existingBranch over this checkout's branches alone, for a
-// landed pickup, which never tracks origin's copy of a branch.
-func localBranch(ctx context.Context, dir, want, id string) (foundBranch, error) {
-	return existingBranchIn(ctx, dir, want, id, "", "refs/heads/")
-}
-
-func existingBranchIn(ctx context.Context, dir, want, id, suffix string, roots ...string) (foundBranch, error) {
+// find is the branch to reuse, or none when the task has none yet. Several
+// is an error, since a suffix exists to say which; a suffix skips the link,
+// naming an attempt by its branch name.
+func (x *branchIndex) find(ctx context.Context, want, id, suffix string, roots branchPolicy) (foundBranch, error) {
 	if suffix == "" {
-		linked, err := linkedBranches(ctx, dir, id)
-		if err != nil {
-			return foundBranch{}, err
-		}
-
-		switch len(linked) {
+		switch linked := x.linked(id); len(linked) {
 		case 0:
 		case 1:
 			return foundBranch{name: linked[0]}, nil
 		default:
 			return foundBranch{}, fmt.Errorf("several branches are linked to %s (git config branch.<name>.%s): %s",
-				id, cfgTaskID, strings.Join(linked, ", "))
+				id, branchmeta.Task, strings.Join(linked, ", "))
 		}
 	}
 
 	for _, root := range roots {
-		refs, err := branchesFor(ctx, dir, root, id, suffix)
+		refs, err := x.under(ctx, root, id, suffix)
 		if err != nil {
 			return foundBranch{}, err
 		}
@@ -384,6 +305,83 @@ func existingBranchIn(ctx context.Context, dir, want, id, suffix string, roots .
 	return foundBranch{}, nil
 }
 
+// after is the branch --after names. Nothing or several matching fails
+// before anything is created, since guessing would base the work on the
+// wrong attempt.
+func (x *branchIndex) after(ctx context.Context, id string) (string, error) {
+	switch linked := x.linked(id); len(linked) {
+	case 0:
+	case 1:
+		return linked[0], nil
+	default:
+		return "", fmt.Errorf("--after %s: several branches are linked to it, name one: %s",
+			id, strings.Join(linked, ", "))
+	}
+
+	for _, root := range policyLocalOrOrigin {
+		refs, err := x.under(ctx, root, id, "")
+		if err != nil {
+			return "", err
+		}
+
+		switch len(refs) {
+		case 0:
+			continue
+		case 1:
+			return refs[0], nil
+		default:
+			return "", fmt.Errorf("--after %s: several branches match, name one: %s", id, strings.Join(refs, ", "))
+		}
+	}
+
+	return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
+}
+
+// any is the first branch of the task, linked, local or origin's
+// (`origin/<name>`), or "" for none.
+func (x *branchIndex) any(ctx context.Context, id string) (string, error) {
+	if linked := x.linked(id); len(linked) > 0 {
+		return linked[0], nil
+	}
+
+	for _, root := range policyLocalOrOrigin {
+		refs, err := x.under(ctx, root, id, "")
+		if err != nil {
+			return "", err
+		}
+
+		if len(refs) > 0 {
+			return refs[0], nil
+		}
+	}
+
+	return "", nil
+}
+
+// namedRef is the ref --base names, with its commit. Exact refs rather than
+// for-each-ref, since a base is one commit and a literal pattern would also
+// match everything below the name at a slash.
+func namedRef(ctx context.Context, dir, branch string) (string, string, error) {
+	for _, root := range []string{"refs/heads/", "refs/remotes/", "refs/remotes/origin/"} {
+		if sha := refSHA(ctx, dir, root+branch); sha != "" {
+			return strings.TrimPrefix(strings.TrimPrefix(root+branch, "refs/heads/"), "refs/remotes/"), sha, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("--base %s: no branch %s locally or on origin", branch, branch)
+}
+
+func refSHA(ctx context.Context, dir, r string) string {
+	return gitx.Out(ctx, dir, "rev-parse", "--verify", "--quiet", r)
+}
+
+// A foundBranch is the branch find settled on, and whether only
+// origin has it, in which case start creates the local branch tracking it.
+type foundBranch struct {
+	name   string
+	remote bool
+}
+
 // taskCheckout is the task's branch and the checkout that has it checked
 // out: both "" with no local branch, the path "" when checked out nowhere.
 // No title lookup: a slug would cost a host call for nothing.
@@ -401,7 +399,12 @@ func taskCheckout(
 		return "", "", err
 	}
 
-	found, err := existingBranch(ctx, main, want, task.ID, suffix)
+	x, err := loadBranchIndex(ctx, main)
+	if err != nil {
+		return "", "", err
+	}
+
+	found, err := x.find(ctx, want, task.ID, suffix, policyLocalOrOrigin)
 	if err != nil || found.name == "" || found.remote {
 		return "", "", err
 	}

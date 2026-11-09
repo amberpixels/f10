@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 )
 
 func TestClaudeDefaultModel(t *testing.T) {
@@ -244,7 +245,7 @@ func TestFlagOverlaysTheMapsDefault(t *testing.T) {
 // given, read from f10-agent.
 func TestWithBranchReadsTheRecord(t *testing.T) {
 	f := newFakes(t)
-	f.script("git config --get branch.GH-1/slug."+cfgAgent, "claude:sonnet:low")
+	f.meta.Seed("GH-1/slug", branchmeta.Agent, "claude:sonnet:low")
 
 	m := agentMap{"default": {Key: "default", Value: "opus:high", Origin: "user"}}
 

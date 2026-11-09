@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 )
 
 func TestPullToken(t *testing.T) {
@@ -337,7 +338,7 @@ func TestStartPicksUpAPR(t *testing.T) {
 	f.script("git branch --track alice/fix-login origin/alice/fix-login", "")
 	f.script(worktrees, porcelain(), porcelain("alice/fix-login", wt))
 	f.script("git worktree add "+wt+" alice/fix-login", "")
-	f.script("git config branch.alice/fix-login.f10-task GH-1", "")
+
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label alice/fix-login", opened)
 	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
@@ -368,7 +369,7 @@ func TestStartPicksUpAPR(t *testing.T) {
 		t.Errorf("the tracking branch was not created before its worktree: %v", f.calls)
 	}
 
-	if !f.called("git config branch.alice/fix-login.f10-task GH-1") {
+	if !f.called("set branch.alice/fix-login.f10-task GH-1") {
 		t.Errorf("the branch was not linked to its task: %v", f.calls)
 	}
 
@@ -393,8 +394,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(worktrees, porcelain(), porcelain("GH-1/fix-login", wt))
 	f.script("git worktree add -b GH-1/fix-login "+wt+" abc1234abc", "")
-	f.script("git config branch.GH-1/fix-login.f10-task GH-1", "")
-	f.script("git config branch.GH-1/fix-login.f10-watch false", "")
+
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/fix-login", opened)
 	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
@@ -416,7 +416,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 		}
 	}
 
-	if !f.called("git config branch.GH-1/fix-login.f10-watch false") {
+	if !f.called("set branch.GH-1/fix-login.f10-watch false") {
 		t.Errorf("the branch was not handed back from the watcher: %v", f.calls)
 	}
 
@@ -436,9 +436,9 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 	const wt = "/code/repo.GH-1-fix-login"
 
 	f := newFakes(t)
-	f.script(linkedKeys, "branch.GH-1/fix-login.f10-task GH-1")
+	f.meta.Seed("GH-1/fix-login", branchmeta.Task, "GH-1")
 	f.script(worktrees, porcelain("GH-1/fix-login", wt))
-	f.script("git config branch.GH-1/fix-login.f10-task GH-1", "")
+
 	f.script("herdr worktree open --cwd /code/repo --path "+wt+" --label GH-1/fix-login", opened)
 	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
@@ -454,7 +454,7 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if f.called("git worktree add") || f.called("git config branch.GH-1/fix-login.f10-watch") {
+	if f.called("git worktree add") || f.called("set branch.GH-1/fix-login.f10-watch") {
 		t.Errorf("the task's own worktree was not reused as it is: %v", f.calls)
 	}
 
@@ -506,40 +506,42 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 
 // A branch linked to the task wins over the name patterns, local or on
 // origin; two linked is an error; a suffix skips the link.
-func TestExistingBranchFindsLinksAndOrigin(t *testing.T) {
+func TestFindPrefersLinksThenOrigin(t *testing.T) {
 	f := newFakes(t)
-	f.script(linkedKeys, "branch.alice/fix.f10-task GH-1\nbranch.other.f10-task GH-2")
+	f.meta.Seed("alice/fix", branchmeta.Task, "GH-1")
+	f.meta.Seed("other", branchmeta.Task, "GH-2")
 	f.script(refsLocal, heads("GH-1"))
 
-	got, err := existingBranch(t.Context(), "/code/repo", "GH-1", "GH-1", "")
+	got, err := indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin)
 	if err != nil || got != (foundBranch{name: "alice/fix"}) {
 		t.Errorf("a linked branch = %+v, %v; want alice/fix", got, err)
 	}
 
 	f.script(refsLocal, heads("GH-1", "GH-1-v2"))
 
-	got, err = existingBranch(t.Context(), "/code/repo", "GH-1-v2", "GH-1", "v2")
+	got, err = indexOf(t).find(t.Context(), "GH-1-v2", "GH-1", "v2", policyLocalOrOrigin)
 	if err != nil || got.name != "GH-1-v2" {
 		t.Errorf("a suffix = %+v, %v; want the link skipped", got, err)
 	}
 
-	f.script(linkedKeys, "branch.a.f10-task GH-1\nbranch.b.f10-task gh-1")
+	f.meta.Seed("a", branchmeta.Task, "GH-1")
+	f.meta.Seed("b", branchmeta.Task, "gh-1")
 
-	if _, err = existingBranch(t.Context(), "/code/repo", "GH-1", "GH-1", ""); err == nil {
+	if _, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin); err == nil {
 		t.Error("two linked branches were not an error")
 	}
 
-	f.script(linkedKeys, "")
+	f.meta.Clear()
 	f.script(refsLocal, "")
 	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\nrefs/remotes/origin/GH-1/b\n")
 
-	if _, err = existingBranch(t.Context(), "/code/repo", "GH-1", "GH-1", ""); err == nil {
+	if _, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin); err == nil {
 		t.Error("two task branches on origin were not an error")
 	}
 
 	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\n")
 
-	got, err = existingBranch(t.Context(), "/code/repo", "GH-1", "GH-1", "")
+	got, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin)
 	if err != nil || got != (foundBranch{name: "GH-1/a", remote: true}) {
 		t.Errorf("an origin-only branch = %+v, %v", got, err)
 	}
@@ -553,12 +555,38 @@ func TestExistingBranchFindsLinksAndOrigin(t *testing.T) {
 	}
 }
 
+// A local name carrying the id is not the task's branch when its link names
+// another task; the local policy never looks at origin.
+func TestLocalPolicySkipsForeignLinksAndOrigin(t *testing.T) {
+	f := newFakes(t)
+	f.meta.Seed("feat/GH-1-fix", branchmeta.Task, "GH-9")
+	f.script(refsLocal, "")
+	f.script(allHeads, "refs/heads/feat/GH-1-fix\nrefs/heads/feat/GH-1-other\n")
+
+	got, err := indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocal)
+	if err != nil || got != (foundBranch{name: "feat/GH-1-other"}) {
+		t.Errorf("a name linked to another task = %+v, %v; want feat/GH-1-other alone", got, err)
+	}
+
+	f.script(allHeads, "")
+	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\n")
+
+	got, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocal)
+	if err != nil || got != (foundBranch{}) {
+		t.Errorf("an origin-only branch under the local policy = %+v, %v; want none", got, err)
+	}
+
+	if f.called(refsOrigin) {
+		t.Error("the local policy listed origin's branches")
+	}
+}
+
 func TestLinkedBranchCountsForAfter(t *testing.T) {
 	f := newFakes(t)
-	f.script(linkedKeys, "branch.alice/base.f10-task GH-7")
+	f.meta.Seed("alice/base", branchmeta.Task, "GH-7")
 
-	if got, err := taskBranch(t.Context(), "/code/repo", "GH-7"); err != nil || got != "alice/base" {
-		t.Errorf("taskBranch on a linked branch = %q, %v", got, err)
+	if got, err := indexOf(t).after(t.Context(), "GH-7"); err != nil || got != "alice/base" {
+		t.Errorf("after on a linked branch = %q, %v", got, err)
 	}
 
 	if ok, err := hasTaskBranch(t.Context(), "/code/repo", "GH-7"); !ok || err != nil {

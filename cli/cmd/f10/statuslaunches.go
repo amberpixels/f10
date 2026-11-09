@@ -173,8 +173,10 @@ func launchBase(
 ) string {
 	base := recorded
 	if branched {
-		if b, err := existingBranchIn(ctx, main, "", id, suffix, "refs/heads/"); err == nil && b.name != "" {
-			base = cmp.Or(branchAfter(ctx, main, b.name), base)
+		if x, err := loadBranchIndex(ctx, main); err == nil {
+			if b, err := x.find(ctx, "", id, suffix, policyLocal); err == nil && b.name != "" {
+				base = cmp.Or(branchAfter(ctx, main, b.name), base)
+			}
 		}
 	}
 

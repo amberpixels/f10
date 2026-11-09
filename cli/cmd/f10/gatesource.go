@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -106,15 +106,15 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	}
 
 	if branch != "" && src.main != "" {
-		in.chain = strings.Fields(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgChain))
-		in.driven = gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgDrive)
+		in.chain = strings.Fields(branchmeta.Out(ctx, src.main, branch, branchmeta.Chain))
+		in.driven = branchmeta.Out(ctx, src.main, branch, branchmeta.Drive)
 		// the record outlives a killed drive; the lease does not
 		if _, held := drives.Probe(src.shared, id); held {
-			rec := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+ref.FinishKey)
-			in.finish, _ = ref.ParseDriveFinish(rec)
+			rec := branchmeta.Out(ctx, src.main, branch, branchmeta.Finish)
+			in.finish, _ = branchmeta.ParseDriveFinish(rec)
 		}
 
-		if recorded := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgFlow); recorded != "" {
+		if recorded := branchmeta.Out(ctx, src.main, branch, branchmeta.Flow); recorded != "" {
 			flow = recorded
 		}
 	}

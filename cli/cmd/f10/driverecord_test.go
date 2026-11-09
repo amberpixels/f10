@@ -94,7 +94,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	fx.f.script("herdr agent get pane:1", agentFound)
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. proceed", "{}")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" judge", "")
+
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() {
 		// the task runs again: the outcome its last run left is gone
@@ -234,7 +234,7 @@ func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "plan")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"),
 		listing("GH-1", "idle"))
 	// plan's turn ends with ship done too

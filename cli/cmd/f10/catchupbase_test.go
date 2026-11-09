@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -76,7 +77,8 @@ func TestCatchupBaseDefaultBranch(t *testing.T) {
 	p := r.resolve(r.input(""))
 	wantPlan(t, p, "origin/main", foundDefault, methodRebase)
 
-	if !strings.Contains(p.why, "by default") || p.mark != cfgLanded+" main" || p.sha != r.sha("origin/main") {
+	if !strings.Contains(p.why, "by default") || p.mark != string(branchmeta.Landed)+" main" ||
+		p.sha != r.sha("origin/main") {
 		t.Errorf("why %q mark %q sha %q", p.why, p.mark, p.sha)
 	}
 
@@ -98,7 +100,7 @@ func TestCatchupBaseNothingToBringIn(t *testing.T) {
 
 func TestCatchupBaseLanded(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "config", "branch.FT-1/a."+cfgLanded, "main")
+	r.at(during, "config", branchmeta.Landed.For("FT-1/a"), "main")
 	r.at(during, "branch", "-f", "main", "main~1")
 
 	// local main behind origin's: origin's
@@ -124,12 +126,12 @@ func TestCatchupBaseRecordedBranch(t *testing.T) {
 	r.at(during, "push", "-q", "-u", "origin", "FT-2/b")
 	r.commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
 	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+	r.at(later, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	p := r.resolve(r.input(""))
 	wantPlan(t, p, "FT-2/b", foundAfter, methodMerge)
 
-	if p.mark != cfgMoved+" "+r.sha("FT-2/b") {
+	if p.mark != string(branchmeta.Moved)+" "+r.sha("FT-2/b") {
 		t.Errorf("mark %q, want the base's sha", p.mark)
 	}
 
@@ -155,20 +157,20 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 	r.at(during, "push", "-q", "-u", "origin", "FT-2/b")
 	r.commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
 	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+	r.at(later, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	pushed := r.sha("origin/FT-2/b")
-	r.at(later, "config", "branch.FT-1/a."+cfgMoved, pushed)
+	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), pushed)
 
 	for _, guard := range []string{"", "implement"} {
 		p := r.resolve(r.input(guard))
 		wantPlan(t, p, pushed, foundAfter, methodMerge)
 
-		if !strings.HasPrefix(p.how, cfgMoved+": "+short(pushed)) {
+		if !strings.HasPrefix(p.how, string(branchmeta.Moved)+": "+short(pushed)) {
 			t.Errorf("guard %q: how %q, want it to name the mark", guard, p.how)
 		}
 
-		if p.sha != pushed || p.mark != cfgMoved+" "+pushed || p.code != codeYes {
+		if p.sha != pushed || p.mark != string(branchmeta.Moved)+" "+pushed || p.code != codeYes {
 			t.Errorf("guard %q: sha %q mark %q code %q, want the marked sha %s", guard, p.sha, p.mark, p.code, pushed)
 		}
 	}
@@ -178,7 +180,7 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 
 	// the drive marks a local head; a later local commit stays out
 	marked := r.sha("FT-2/b")
-	r.at(later, "config", "branch.FT-1/a."+cfgMoved, marked)
+	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), marked)
 	r.at(later, "checkout", "-q", "FT-2/b")
 	r.commit(later, "base.go", "package main // base, after the mark\n", "base, after the mark")
 	r.at(later, "checkout", "-q", "FT-1/a")
@@ -201,28 +203,32 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 	dropped := r.sha("HEAD")
 	r.at(later, "reset", "-q", "--hard", "HEAD~1")
 	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", "branch.FT-1/a."+cfgMoved, dropped)
+	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), dropped)
 
 	_, err := resolveCatchup(t.Context(), r.input(""))
 	if err == nil || !strings.Contains(err.Error(), "no longer holds") {
 		t.Errorf("a mark the base no longer holds: err %v, want it refused", err)
 	}
 
-	r.at(later, "config", "branch.FT-1/a."+cfgMoved, strings.Repeat("0", len(marked)))
+	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), strings.Repeat("0", len(marked)))
 
-	if _, err := resolveCatchup(t.Context(), r.input("")); err == nil || !strings.Contains(err.Error(), cfgMoved) {
-		t.Errorf("a mark naming no commit: err %v, want one naming %s", err, cfgMoved)
+	if _, err := resolveCatchup(
+		t.Context(),
+		r.input(""),
+	); err == nil ||
+		!strings.Contains(err.Error(), string(branchmeta.Moved)) {
+		t.Errorf("a mark naming no commit: err %v, want one naming %s", err, string(branchmeta.Moved))
 	}
 }
 
 func TestCatchupBaseRecordedBranchGone(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-9/gone")
+	r.at(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-9/gone")
 
 	p := r.resolve(r.input("implement"))
 	wantPlan(t, p, "origin/main", foundGone, methodRebase)
 
-	if p.mark != cfgLanded+" main" {
+	if p.mark != string(branchmeta.Landed)+" main" {
 		t.Errorf("mark %q", p.mark)
 	}
 }
@@ -332,7 +338,7 @@ func TestCatchupBaseOutput(t *testing.T) {
 func TestCatchupGuardOffStillPrintsTheBase(t *testing.T) {
 	r := newCatchupRepo(t)
 	r.at(during, "branch", "FT-2/b", "origin/main")
-	r.at(during, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+	r.at(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	in := r.input("implement")
 	in.catchup, in.catchupDefault = "off", false
@@ -350,9 +356,9 @@ func TestCatchupGuardOffStillPrintsTheBase(t *testing.T) {
 func TestCatchupBaseCodeRow(t *testing.T) {
 	r := newCatchupRepo(t)
 	r.at(during, "branch", "FT-2/b", "FT-1/a")
-	r.at(during, "config", "branch.FT-2/b."+cfgAfterBranch, "FT-1/a")
+	r.at(during, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
 	r.at(during, "checkout", "-q", "-b", "FT-3/c", "FT-2/b")
-	r.at(during, "config", "branch.FT-3/c."+cfgAfterBranch, "FT-2/b")
+	r.at(during, "config", branchmeta.AfterBranch.For("FT-3/c"), "FT-2/b")
 
 	r.at(during, "checkout", "-q", "FT-1/a")
 	r.commit(during, "a2.go", "package main // a2\n", "a2")
@@ -378,7 +384,7 @@ func TestCatchupBaseCodeRow(t *testing.T) {
 	}
 
 	// a landed base prints none: its code is in the default branch
-	r.at(during, "config", "branch.FT-3/c."+cfgLanded, "main")
+	r.at(during, "config", branchmeta.Landed.For("FT-3/c"), "main")
 
 	if p := r.resolve(r.input("")); p.code != "" {
 		t.Errorf("landed: code %q, want none printed", p.code)
@@ -389,7 +395,7 @@ func TestCatchupBaseCodeRow(t *testing.T) {
 // than guess main on a repo whose default may be master.
 func TestCatchupBaseWithoutOriginHeadFails(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "config", "branch.FT-1/a."+cfgLanded, "main")
+	r.at(during, "config", branchmeta.Landed.For("FT-1/a"), "main")
 	r.at(during, "remote", "set-head", "origin", "-d")
 
 	_, err := resolveCatchup(t.Context(), r.input(""))
@@ -443,11 +449,11 @@ func newStackedRepo(t *testing.T) (gitRepo, string) {
 	r.commit(during, "help.go", "package main // help\n", "help")
 	r.at(during, "checkout", "-q", "-B", "FT-1/a", "FT-2/b")
 	r.commit(during, "a.go", "package main // a\n", "a")
-	r.at(during, "config", "branch.FT-1/a."+cfgAfter, "FT-2")
-	r.at(during, "config", "branch.FT-1/a."+cfgAfterBranch, "FT-2/b")
+	r.at(during, "config", branchmeta.After.For("FT-1/a"), "FT-2")
+	r.at(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	tip := r.sha("FT-2/b")
-	r.at(during, "config", "branch.FT-1/a."+cfgTip, tip)
+	r.at(during, "config", branchmeta.Tip.For("FT-1/a"), tip)
 
 	return r, tip
 }
@@ -489,8 +495,8 @@ func TestCatchupBaseSquashLanded(t *testing.T) {
 	r.at(later, "commit", "-q", "-m", "FT-2 squashed")
 	r.at(later, "push", "-q", "origin", "main")
 	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", "--unset", "branch.FT-1/a."+cfgAfterBranch)
-	r.at(later, "config", "branch.FT-1/a."+cfgLanded, "main")
+	r.at(later, "config", "--unset", branchmeta.AfterBranch.For("FT-1/a"))
+	r.at(later, "config", branchmeta.Landed.For("FT-1/a"), "main")
 
 	p := r.resolve(r.input(""))
 	wantPlan(t, p, "main", foundLanded, methodOnto)
@@ -518,7 +524,7 @@ func TestCatchupBaseTipNotRewritten(t *testing.T) {
 	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
 	r.commit(later, "help.go", "package main // help, rebased\n", "help")
 	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", "branch.FT-1/a."+cfgTip, r.sha("elsewhere"))
+	r.at(later, "config", branchmeta.Tip.For("FT-1/a"), r.sha("elsewhere"))
 
 	if p := r.resolve(r.input("")); p.method == methodOnto {
 		t.Errorf("stale tip: method %q, want today's", p.method)
@@ -543,13 +549,13 @@ func TestCatchupBaseOutputUpstream(t *testing.T) {
 // its catchup can drop the squashed commits.
 func TestReleaseDependentsRecordsTip(t *testing.T) {
 	r, tip := newStackedRepo(t)
-	r.at(later, "config", "--unset", "branch.FT-1/a."+cfgTip)
+	r.at(later, "config", "--unset", branchmeta.Tip.For("FT-1/a"))
 
 	if _, err := releaseDependents(t.Context(), r.dir, "FT-2/b", "main", true); err != nil {
 		t.Fatal(err)
 	}
 
-	if got := r.at(later, "config", "branch.FT-1/a."+cfgTip); got != tip {
+	if got := r.at(later, "config", branchmeta.Tip.For("FT-1/a")); got != tip {
 		t.Errorf("tip %q, want %s", got, tip)
 	}
 }
@@ -588,7 +594,7 @@ func TestReleaseDependentsSpikeClearsTip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, err := gitx.Config(t.Context(), r.dir, "branch.FT-1/a."+cfgTip); err != nil || got != "" {
+	if got, err := gitx.Config(t.Context(), r.dir, branchmeta.Tip.For("FT-1/a")); err != nil || got != "" {
 		t.Errorf("tip %q (%v) after a spike closed, want none", got, err)
 	}
 
@@ -613,7 +619,7 @@ func TestRecordTipTakesTheNewerBase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := r.at(later, "config", "branch.FT-1/a."+cfgTip); got != newer {
+	if got := r.at(later, "config", branchmeta.Tip.For("FT-1/a")); got != newer {
 		t.Errorf("tip %q, want origin's %s", got, newer)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -35,7 +36,7 @@ func (b *binaryCatchupFake) next(list []bool, n int) bool {
 }
 
 // binaryCatchup gives the fixture the drive's own catchup over main at
-// main0, the marks held in git config the fakes answer: an unset clears.
+// main0, the landed mark in the fakes' records.
 func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebaseDir string) {
 	t.Helper()
 
@@ -93,25 +94,7 @@ func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebase
 	fx.f.script("git diff --name-only --diff-filter=d -z main0...HEAD", "")
 	fx.f.script("git diff --name-only --diff-filter=U -z", "a.go")
 
-	for _, key := range []string{cfgMoved, cfgTip} {
-		fx.f.script("git config --get branch.GH-1."+key, "")
-	}
-
-	landed := "git config --get branch.GH-1." + cfgLanded
-	fx.f.script(landed, "main")
-	fx.f.script("git config --unset branch.GH-1."+cfgLanded, "")
-
-	prev := gitx.Exec
-	gitx.Exec = func(ctx context.Context, dir string, args ...string) (string, error) {
-		out, err := prev(ctx, dir, args...)
-		if err == nil && strings.Join(args, " ") == "config --unset branch.GH-1."+cfgLanded {
-			fx.f.script(landed, "")
-		}
-
-		return out, err
-	}
-
-	t.Cleanup(func() { gitx.Exec = prev })
+	fx.f.meta.Seed("GH-1", branchmeta.Landed, "main")
 }
 
 // startRebase leaves dir looking like a rebase stopped at commit 2 of 3.
@@ -140,7 +123,6 @@ func TestDriveCatchesUpCleanWithNoAgentTurn(t *testing.T) {
 	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}}, t.TempDir())
 	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+resumeGH1, "{}")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 
 	idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
 	fx.f.script(wsList, unopened, idle, idle, idle, idle, working, idle)
@@ -158,7 +140,7 @@ func TestDriveCatchesUpCleanWithNoAgentTurn(t *testing.T) {
 		t.Errorf("the agent was prompted for a clean catchup: %q", fx.f.calls)
 	}
 
-	if !fx.f.called("git config --unset branch.GH-1." + cfgLanded) {
+	if !fx.f.called("unset branch.GH-1." + string(branchmeta.Landed)) {
 		t.Errorf("the mark was not cleared: %q", fx.f.calls)
 	}
 }
@@ -224,8 +206,6 @@ func TestDrivePromptsTheAgentOnlyForAConflict(t *testing.T) {
 			for _, p := range []string{conflict, left, resumeGH1} {
 				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
 			}
-
-			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 
 			catchups := 0
 			fx.agent(t, func(prompt string) {
@@ -310,8 +290,6 @@ func TestDrivePromptsAgainForWhatATurnLeft(t *testing.T) {
 			} {
 				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
 			}
-
-			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 
 			turns := 0
 			fx.agent(t, func(prompt string) {
@@ -403,8 +381,6 @@ func TestDrivePromptsTheAgentOnRedVerify(t *testing.T) {
 	for _, p := range []string{red, resumeGH1} {
 		fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
 	}
-
-	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 
 	fx.agent(t, func(prompt string) {
 		if prompt == resumeGH1 {
@@ -572,7 +548,7 @@ func TestRunVerifyStopsAtTheFirstRedAndLogsIt(t *testing.T) {
 // then holds its base with nothing left, and clearMarks drops the mark.
 func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(before, "config", "branch.FT-1/a."+cfgLanded, "main")
+	r.at(before, "config", branchmeta.Landed.For("FT-1/a"), "main")
 
 	in := r.input("")
 
@@ -597,7 +573,7 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if v, _ := gitx.Config(t.Context(), r.dir, "branch.FT-1/a."+cfgLanded); v != "" {
+	if v, _ := gitx.Config(t.Context(), r.dir, branchmeta.Landed.For("FT-1/a")); v != "" {
 		t.Errorf("the landed mark survived: %q", v)
 	}
 }
@@ -652,8 +628,6 @@ func TestDriveSendsAStalledCatchupBack(t *testing.T) {
 			for _, p := range []string{conflict, again, resumeGH1} {
 				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
 			}
-
-			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 
 			turns := 0
 			fx.agent(t, func(prompt string) {
@@ -722,8 +696,6 @@ func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
 	for _, p := range []string{conflict, resumeGH1} {
 		fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
 	}
-
-	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
 
 	parked := false
 

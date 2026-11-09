@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -356,7 +357,7 @@ func recordBranchFacts(
 	}
 
 	if in.pick != nil {
-		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgTaskID, in.task.ID); err != nil {
+		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Task, in.task.ID); err != nil {
 			return nil, fmt.Errorf("linking %s to %s: %w", name, in.task.ID, err)
 		}
 	}
@@ -417,13 +418,13 @@ func prepareLaunch(
 	// the flow is the branch's fact from here on: status lists its gates,
 	// and a rerun of drive keeps it
 	if !in.flowKept && in.flow.recorded() != "" {
-		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgFlow, in.flow.recorded()); err != nil {
+		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Flow, in.flow.recorded()); err != nil {
 			notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
 		}
 	}
 
 	if !in.flowKept && in.pace != "" {
-		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgPace, in.pace); err != nil {
+		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Pace, in.pace); err != nil {
 			notes = append(notes, "the pace was not recorded on the branch: "+err.Error())
 		}
 	}
@@ -432,7 +433,7 @@ func prepareLaunch(
 	// reader of the branch (f10 board); a failed write loses nothing
 	// the agent needs
 	if !profile.IsDefault() {
-		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgAgent, profile.String()); err != nil {
+		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Agent, profile.String()); err != nil {
 			notes = append(notes, "the agent profile was not recorded on the branch: "+err.Error())
 		}
 	}
@@ -473,7 +474,12 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 		return settledBranch{}, err
 	}
 
-	existing, err := existingBranch(ctx, in.main, name, in.task.ID, in.suffix)
+	x, err := loadBranchIndex(ctx, in.main)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	existing, err := x.find(ctx, name, in.task.ID, in.suffix, policyLocalOrOrigin)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -493,7 +499,12 @@ func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) 
 		return settledBranch{}, err
 	}
 
-	existing, err := localBranch(ctx, in.main, name, in.task.ID)
+	x, err := loadBranchIndex(ctx, in.main)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	existing, err := x.find(ctx, name, in.task.ID, "", policyLocal)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -519,7 +530,7 @@ func landedNotes(ctx context.Context, in startInput, name string, created bool) 
 
 	var notes []string
 
-	if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgWatch, "false"); err != nil {
+	if err := branchmeta.Set(ctx, in.main, name, branchmeta.Watch, "false"); err != nil {
 		notes = append(notes, "the watcher was not told to leave "+name+" alone: "+err.Error())
 	}
 

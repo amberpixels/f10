@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -36,7 +37,6 @@ func scriptTarget(fx *janitorFixture) {
 	f.script("git status --porcelain", "")
 	f.fail("git merge-base --is-ancestor m2 refs/heads/GH-1/x", shell.Result{Code: 1})
 	f.script("git rev-parse -q --verify HEAD", "p1")
-	f.script("git config branch.GH-1/x."+cfgLanded+" main", "")
 }
 
 // A pass under watch_catchup: on, as watchPass runs it after collecting.
@@ -60,7 +60,7 @@ func catchupPass(t *testing.T, in watchInput, tasks []watchedTask, store map[str
 }
 
 func TestWatchCatchesUpAnOpenPR(t *testing.T) {
-	const mark = "git config branch.GH-1/x." + cfgLanded + " main"
+	const mark = "set branch.GH-1/x." + string(branchmeta.Landed) + " main"
 
 	cases := map[string]struct {
 		key    bool
@@ -89,7 +89,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		}},
 		// a mark a finish or a ship guard left is a catchup nobody else sends
 		"already marked": {key: true, script: func(fx *janitorFixture) {
-			fx.f.script("git config --get branch.GH-1/x."+cfgLanded, "main")
+			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
 		}, prompt: true, kind: watchCatchup},
 		"diverged from origin": {key: true, task: func(w *watchedTask) { w.localSHA = "h9" }, kind: watchBehind},
 		"not on origin": {key: true, script: func(fx *janitorFixture) {
@@ -207,10 +207,9 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 	for _, onOrigin := range []bool{true, false} {
 		fx := newJanitorFixture(t)
 		scriptTarget(fx)
-		fx.f.script("git config --get branch.GH-1/x."+cfgAfterBranch, "GH-9/y")
+		fx.f.meta.Seed("GH-1/x", branchmeta.AfterBranch, "GH-9/y")
 		fx.f.script("git rev-parse -q --verify refs/heads/GH-9/y", "b2")
 		fx.f.fail("git merge-base --is-ancestor b2 refs/heads/GH-1/x", shell.Result{Code: 1})
-		fx.f.script("git config branch.GH-1/x."+cfgMoved+" b2", "")
 
 		if onOrigin {
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-9/y", "b2")
@@ -231,7 +230,7 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 
 		store := map[string]watchReport{}
 		out := catchupPass(t, in, []watchedTask{task}, store)
-		marked := fx.f.called("git config branch.GH-1/x." + cfgMoved + " b2")
+		marked := fx.f.called("set branch.GH-1/x." + string(branchmeta.Moved) + " b2")
 
 		want := map[bool]int{true: 1, false: 0}[onOrigin]
 		if prompts != want || marked != onOrigin || len(out) != want {
@@ -248,7 +247,6 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 func TestWatchReportsAnAgentItCannotPrompt(t *testing.T) {
 	fx := newJanitorFixture(t)
 	scriptTarget(fx)
-	fx.f.script("git config --unset branch.GH-1/x."+cfgLanded, "")
 
 	in := watchInput{
 		main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
@@ -259,7 +257,7 @@ func TestWatchReportsAnAgentItCannotPrompt(t *testing.T) {
 	out := catchupPass(t, in, []watchedTask{undrivenTask()}, store)
 
 	if len(out) != 1 || out[0].Kind != watchBehind || !strings.Contains(out[0].Text, "not found") ||
-		!fx.f.called("git config --unset branch.GH-1/x."+cfgLanded) || store["GH-1"].Catchup != nil {
+		!fx.f.called("unset branch.GH-1/x."+string(branchmeta.Landed)) || store["GH-1"].Catchup != nil {
 		t.Errorf("reported %+v, unset %v, record %+v", out, fx.f.called("git config --unset"), store["GH-1"].Catchup)
 	}
 }
@@ -288,7 +286,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 		}},
 		"agent still working": {task: func(w *watchedTask) { w.agent = agentctl.StatusWorking }, kept: true},
 		"mark still set": {script: func(fx *janitorFixture) {
-			fx.f.script("git config --get branch.GH-1/x."+cfgLanded, "main")
+			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
 		}, kind: watchCatchup, kept: true, failed: true},
 		"rebase left open": {script: func(fx *janitorFixture) {
 			fx.f.script("git rev-parse --git-path rebase-merge", fx.f.t.TempDir())
@@ -308,8 +306,8 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fx := newJanitorFixture(t)
 			scriptTarget(fx)
-			fx.f.script("git config --get branch.GH-1/x."+cfgLanded, "") // the catchup cleared it
-			fx.f.script("git config --get branch.GH-1/x."+cfgMoved, "")
+			fx.f.meta.Script("GH-1/x", branchmeta.Landed, "") // the catchup cleared it
+			fx.f.meta.Script("GH-1/x", branchmeta.Moved, "")
 			fx.f.script("git rev-parse -q --verify HEAD", "h2")
 			fx.f.script("git merge-base --is-ancestor p1 HEAD", "")
 			fx.f.script(plain, "")

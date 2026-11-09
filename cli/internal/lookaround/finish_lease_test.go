@@ -5,14 +5,14 @@ package lookaround
 import (
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
 // A finish record outlives a killed drive; only a held lease keeps it.
 func TestDropDeadFinish(t *testing.T) {
 	root := t.TempDir()
-	rec := &ref.DriveFinish{State: ref.FinishRunning, Action: "merging #9"}
+	rec := &branchmeta.DriveFinish{State: branchmeta.FinishRunning, Action: "merging #9"}
 
 	branches := map[string]Branch{
 		"GH-1/a":      {Task: "GH-1", Finish: rec},

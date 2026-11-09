@@ -21,7 +21,7 @@
     "gh pr list --state all --search reviewed-by:amberpixels updated:\u003e=2026-10-07T21:00:00Z --json number,title,state,url,author,mergedAt,mergedBy,reviews --limit 1000": {
       "stdout": "[]"
     },
-    "git config --get-regexp ^branch\\..*\\.f10-after-branch$": {
+    "git config --get-regexp ^branch\\..*\\.f10-": {
       "stdout": "",
       "stderr": "git config: exit status 1",
       "code": 1

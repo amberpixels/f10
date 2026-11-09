@@ -32,6 +32,7 @@ func TestFinishClosesASpike(t *testing.T) {
 	archive := fx.spike(t)
 	fx.f.script("git reset --hard", "")
 	fx.f.script("git clean -fd", "")
+	released := fx.dependent()
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -61,7 +62,7 @@ func TestFinishClosesASpike(t *testing.T) {
 	reset := slices.Index(fx.f.calls, "git reset --hard")
 	removed := slices.Index(fx.f.calls, "git worktree remove "+fx.wt)
 
-	if reset < 0 || removed < reset || !fx.f.called(cfgDeps) || !fx.f.called("git branch -D GH-1") ||
+	if reset < 0 || removed < reset || !released() || !fx.f.called("git branch -D GH-1") ||
 		!fx.f.called("herdr workspace close ws:9") {
 		t.Errorf("calls = %q", fx.f.calls)
 	}

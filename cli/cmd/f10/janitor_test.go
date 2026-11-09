@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -47,7 +48,7 @@ func newJanitorFixture(t *testing.T) *janitorFixture {
 	f.script(originURL, "git@x:a/b.git")
 	f.script(remoteURL, "git@x:a/b.git")
 	f.script(worktrees, porcelain())
-	f.script(cfgDeps, "")
+
 	f.script(ghLogin, `{"login":"me"}`)
 
 	return fx
@@ -166,15 +167,12 @@ func TestJanitorReleasesDependents(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
-	fx.f.script(cfgDeps, "branch.GH-2.f10-after-branch GH-1/x")
-	fx.f.script("git config --get branch.GH-2.f10-after", "GH-1")
-	fx.f.script("git config --unset branch.GH-2.f10-after", "")
-	fx.f.script("git config --unset branch.GH-2.f10-after-branch", "")
-	fx.f.script("git config branch.GH-2.f10-landed GH-1", "")
+	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1/x")
+	fx.f.meta.Seed("GH-2", branchmeta.After, "GH-1")
 
 	out := fx.run(t)
 
-	if !fx.f.called("git config branch.GH-2.f10-landed GH-1") || !fx.f.called("git branch -D GH-1/x") {
+	if !fx.f.called("set branch.GH-2.f10-landed GH-1") || !fx.f.called("git branch -D GH-1/x") {
 		t.Errorf("dependent not released: %q\n%s", fx.f.calls, out)
 	}
 }
@@ -316,7 +314,7 @@ func TestJanitorClosedRequest(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
 	fx.request("GH-1/x", "CLOSED", "abc", "me")
-	fx.f.script(cfgDeps, "branch.GH-2.f10-after-branch GH-1/x")
+	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1/x")
 
 	if out := fx.run(t); fx.f.called("git branch -D") || !strings.Contains(out, "GH-2 started --after it") {
 		t.Errorf("with a dependent: out = %q", out)
@@ -521,7 +519,8 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
-	fx.f.script(linkedKeys, "branch.GH-1/x.f10-task GH-1\nbranch.GH-1/x.f10-tasks GH-2")
+	fx.f.meta.Seed("GH-1/x", branchmeta.Task, "GH-1")
+	fx.f.meta.Seed("GH-1/x", branchmeta.Riders, "GH-2")
 
 	rider := filepath.Join(fx.in.plansDir, "GH-2.md")
 	if err := os.MkdirAll(fx.in.plansDir, 0o755); err != nil {

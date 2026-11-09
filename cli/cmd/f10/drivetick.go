@@ -11,6 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
@@ -362,11 +363,10 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 			continue
 		}
 
-		key := "branch." + r.o.branch + "." + cfgMoved
-
-		marked, err := gitx.Config(ctx, in.main, key)
+		marked, err := branchmeta.Get(ctx, in.main, r.o.branch, branchmeta.Moved)
 		if err != nil {
-			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), key, err)
+			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n",
+				in.id(r.task.ref.ID), branchmeta.Moved.For(r.o.branch), err)
 
 			continue
 		}
@@ -375,7 +375,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 			continue
 		}
 
-		if err := gitx.SetConfig(ctx, in.main, key, head); err != nil {
+		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Moved, head); err != nil {
 			return fmt.Errorf("%s: marking %s moved: %w", r.task.ref.ID, b.o.branch, err)
 		}
 
@@ -442,7 +442,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 		return nil
 	}
 
-	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+target.key, target.value); err != nil {
+	if err := branchmeta.Set(ctx, in.main, branch, target.key, target.value); err != nil {
 		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
 	}
 

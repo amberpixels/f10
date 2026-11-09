@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -71,12 +72,12 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	chain := in.chainFor(fl)
 
 	// status reads finish off the chain
-	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(chain, " ")); err != nil {
+	if err := branchmeta.Set(ctx, in.main, o.branch, branchmeta.Chain, strings.Join(chain, " ")); err != nil {
 		return fmt.Errorf("recording the chain: %w", err)
 	}
 
 	if slices.Contains(chain, "finish") {
-		in.finishStep(ctx, w, o.branch, ref.FinishQueued, "")
+		in.finishStep(ctx, w, o.branch, branchmeta.FinishQueued, "")
 	}
 
 	for _, n := range appendNote(o.notes, note) {
@@ -100,9 +101,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 // switching mid-run would rerun or skip entries ship already declared; one
 // project.md no longer declares gives way to the run's, with a note.
 func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, string, error) {
-	key := "branch." + branch + "." + cfgFlow
-
-	recorded, err := gitx.Config(ctx, in.main, key)
+	recorded, err := branchmeta.Get(ctx, in.main, branch, branchmeta.Flow)
 	if err != nil {
 		return shipFlow{}, "", fmt.Errorf("reading the recorded flow: %w", err)
 	}
@@ -126,7 +125,7 @@ func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, st
 	}
 
 	if !in.flow.byArea {
-		if err := gitx.SetConfig(ctx, in.main, key, in.flow.recorded()); err != nil {
+		if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Flow, in.flow.recorded()); err != nil {
 			return shipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
 		}
 	}
@@ -151,9 +150,7 @@ func (in *driveInput) chainFor(fl shipFlow) []string {
 // rerun that slows down must be able to take finish off; with none typed,
 // the branch's record wins over the project's default.
 func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) (shipFlow, string, error) {
-	key := "branch." + branch + "." + cfgPace
-
-	recorded, err := gitx.Config(ctx, in.main, key)
+	recorded, err := branchmeta.Get(ctx, in.main, branch, branchmeta.Pace)
 	if err != nil {
 		return shipFlow{}, "", fmt.Errorf("reading the recorded pace: %w", err)
 	}
@@ -161,7 +158,7 @@ func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) 
 	switch {
 	case in.args.pace != "":
 		if recorded != in.args.pace {
-			if err := gitx.SetConfig(ctx, in.main, key, in.args.pace); err != nil {
+			if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Pace, in.args.pace); err != nil {
 				return shipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
 			}
 		}
@@ -184,7 +181,7 @@ func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) 
 // worktree reads counts as plan done, so driven ship takes it rather than
 // planning again.
 func (in *driveInput) position(ctx context.Context, o openedTask, chain []string) (int, error) {
-	last, err := gitx.Config(ctx, in.main, "branch."+o.branch+"."+cfgDrive)
+	last, err := branchmeta.Get(ctx, in.main, o.branch, branchmeta.Drive)
 	if err != nil {
 		return 0, fmt.Errorf("reading where the drive left %s: %w", o.branch, err)
 	}
@@ -268,7 +265,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
 			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", in.id(r.task.ref.ID), in.id(r.base.task.ref.ID))
-			in.finishStep(ctx, w, r.o.branch, ref.FinishQueued, "waiting for "+r.base.task.ref.ID)
+			in.finishStep(ctx, w, r.o.branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
 		r.waiting = true
@@ -360,7 +357,7 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) error {
 	r.chain = append(slices.Clone(r.chain), "finish")
 
-	if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgChain, strings.Join(r.chain, " ")); err != nil {
+	if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Chain, strings.Join(r.chain, " ")); err != nil {
 		return fmt.Errorf("recording the chain: %w", err)
 	}
 

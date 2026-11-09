@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -29,7 +29,7 @@ func measureBranch(ctx context.Context, dir, branch, def string, local bool) (br
 		bases = []string{def}
 	}
 
-	if after := gitx.Out(ctx, dir, "config", "--get", "branch."+branch+"."+ref.AfterBranchKey); after != "" {
+	if after := branchmeta.Out(ctx, dir, branch, branchmeta.AfterBranch); after != "" {
 		bases = append([]string{after}, bases...)
 	}
 

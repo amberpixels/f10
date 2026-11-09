@@ -9,17 +9,13 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // A run's pace comes from, first to last: --pace, the branch's record, the
 // project's pace:, the user's pace:. None of them leaves every flow as
 // declared.
-
-// cfgPace is the pace a started task runs, under `branch.<name>.` beside
-// f10-flow, so a rerun of start or drive keeps it.
-const cfgPace = "f10-pace"
 
 // pacesConfig is the frontmatter of ~/.f10/paces.md: the user's paces,
 // laid over the built-ins, and the pace every project takes unless it
@@ -115,7 +111,7 @@ func activePace(ctx context.Context, s *facts.PaceSet, flag, main, branch string
 	case flag != "":
 		rp = runPace{name: flag, origin: "--pace"}
 	case branch != "":
-		recorded, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgPace)
+		recorded, err := branchmeta.Get(ctx, main, branch, branchmeta.Pace)
 		if err != nil {
 			return rp, fmt.Errorf("reading the recorded pace: %w", err)
 		}

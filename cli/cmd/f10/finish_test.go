@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
@@ -40,7 +41,6 @@ const (
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
 	ghStack = "gh pr list --base GH-1 --state open --limit 1000 --json number,url,headRefName"
-	cfgDeps = `git config --get-regexp ^branch\..*\.f10-after-branch$`
 	lsRem   = "git ls-remote --heads origin GH-1"
 	// finish drops the local copy of origin's branch along with the branch
 	dropRemoteRef = "git update-ref -d refs/remotes/origin/GH-1"
@@ -51,6 +51,15 @@ const (
 	prMerged = `{"state":"MERGED","url":"https://gh/pr/9","number":9,"baseRefName":"main","mergeCommit":{"oid":"m3rge"}}`
 	allowAll = `{"squashMergeAllowed":true,"mergeCommitAllowed":true,"rebaseMergeAllowed":true}`
 )
+
+// dependent records GH-2 as started --after GH-1, and reports whether
+// finish released it: its dependency swapped for the landed mark.
+func (fx *finishFixture) dependent() func() bool {
+	fx.f.meta.Seed("GH-2", branchmeta.After, "GH-1")
+	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1")
+
+	return func() bool { return fx.f.meta.Wrote("GH-2", branchmeta.Landed, "GH-1") }
+}
 
 func newFinishFixture(t *testing.T) *finishFixture {
 	t.Helper()
@@ -75,7 +84,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 	f.script(curBr, "main")
 	f.script("git pull --ff-only", "")
 	f.script("git merge-base --is-ancestor m3rge main", "")
-	f.script(cfgDeps, "")
+
 	f.script(lsRem, "abc\trefs/heads/GH-1")
 	f.script(ghStack, "[]")
 	f.script(ghDel, "")
@@ -435,11 +444,9 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 func TestFinishReleasesDependents(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.f.script(cfgDeps, "branch.GH-8/slug.f10-after-branch GH-1\nbranch.GH-9.f10-after-branch GH-2")
-	fx.f.script("git config --get branch.GH-8/slug.f10-after", "GH-1")
-	fx.f.script("git config --unset branch.GH-8/slug.f10-after", "")
-	fx.f.script("git config --unset branch.GH-8/slug.f10-after-branch", "")
-	fx.f.script("git config branch.GH-8/slug.f10-landed GH-1", "")
+	fx.f.meta.Seed("GH-8/slug", branchmeta.AfterBranch, "GH-1")
+	fx.f.meta.Seed("GH-9", branchmeta.AfterBranch, "GH-2")
+	fx.f.meta.Seed("GH-8/slug", branchmeta.After, "GH-1")
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -447,16 +454,16 @@ func TestFinishReleasesDependents(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"git config --unset branch.GH-8/slug.f10-after",
-		"git config --unset branch.GH-8/slug.f10-after-branch",
-		"git config branch.GH-8/slug.f10-landed GH-1",
+		"unset branch.GH-8/slug.f10-after",
+		"unset branch.GH-8/slug.f10-after-branch",
+		"set branch.GH-8/slug.f10-landed GH-1",
 	} {
 		if !fx.f.called(want) {
 			t.Errorf("%q did not run: %v", want, fx.f.calls)
 		}
 	}
 
-	if fx.f.called("git config --unset branch.GH-9") || fx.f.called("git config branch.GH-9") {
+	if fx.f.called("unset branch.GH-9") || fx.f.called("set branch.GH-9") {
 		t.Error("a dependency on another branch was touched")
 	}
 
@@ -1802,16 +1809,21 @@ func TestFinishLocalLeavesThePROpen(t *testing.T) {
 	fx.f.script(unpushed, "")
 	fx.plan(t, "# plan")
 	fx.in.local = true
+	released := fx.dependent()
 
 	out, err := fx.run(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, banned := range []string{"gh pr merge", ghDel, lsRem, "git pull", cfgDeps, ghUser} {
+	for _, banned := range []string{"gh pr merge", ghDel, lsRem, "git pull", ghUser} {
 		if fx.f.called(banned) {
 			t.Errorf("--local ran %q: %v", banned, fx.f.calls)
 		}
+	}
+
+	if released() {
+		t.Error("--local released a dependent")
 	}
 
 	for _, want := range []string{"git worktree remove " + fx.wt, "git branch -D GH-1", "herdr workspace close ws:9"} {
@@ -1891,6 +1903,8 @@ func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
 				advance = "git update-ref refs/heads/main s9 m0"
 			}
 
+			released := fx.dependent()
+
 			out, err := fx.run(t)
 			if err != nil {
 				t.Fatalf("%v\n%s", err, out)
@@ -1916,7 +1930,11 @@ func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
 				}
 			}
 
-			for _, step := range []string{cfgDeps, "git worktree remove " + fx.wt, "git branch -D GH-1"} {
+			if !released() {
+				t.Error("the dependent was not released")
+			}
+
+			for _, step := range []string{"git worktree remove " + fx.wt, "git branch -D GH-1"} {
 				if !fx.f.called(step) {
 					t.Errorf("%q did not run", step)
 				}
@@ -2226,7 +2244,7 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 		{
 			name: "against its base branch",
 			setup: func(fx *finishFixture) {
-				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, "GH-0")
+				fx.f.meta.Seed("GH-1", branchmeta.AfterBranch, "GH-0")
 				fx.f.script(diff+"GH-0...refs/heads/GH-1", numstat)
 			},
 			want: sized("GH-0"),
@@ -2234,7 +2252,7 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 		{
 			name: "a base branch already deleted falls back to the default branch",
 			setup: func(fx *finishFixture) {
-				fx.f.script("git config --get branch.GH-1."+cfgAfterBranch, "GH-0")
+				fx.f.meta.Seed("GH-1", branchmeta.AfterBranch, "GH-0")
 				fx.f.fail(diff+"GH-0...refs/heads/GH-1", shell.Result{Code: 128})
 				fx.f.script(diff+"origin/main...refs/heads/GH-1", numstat)
 			},
@@ -2945,7 +2963,8 @@ func TestFinishRerunsAfterAFailedRemoval(t *testing.T) {
 func TestFinishKeepsTheWorktreeWhenAStepFails(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.f.fail(cfgDeps, shell.Result{Code: 2, Stderr: "fatal: bad config"})
+	fx.dependent()
+	fx.f.meta.FailWrite("GH-2", branchmeta.Landed, errors.New("fatal: bad config"))
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "releasing dependents failed") ||
@@ -2961,7 +2980,6 @@ func TestFinishKeepsTheWorktreeWhenAStepFails(t *testing.T) {
 
 	fx.f.calls = nil
 	fx.f.script(ghView, prMerged)
-	fx.f.script(cfgDeps, "")
 
 	if out, err := fx.run(t); err != nil {
 		t.Fatalf("rerun: %v\n%s", err, out)

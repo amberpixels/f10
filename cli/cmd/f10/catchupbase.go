@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -205,7 +206,7 @@ func resolveCatchup(ctx context.Context, in catchupInput) (catchupPlan, error) {
 // baseRewritten is the recorded base tip when the branch holds it and the
 // base no longer does (squash-merged or rebased), else "".
 func baseRewritten(ctx context.Context, in catchupInput, p catchupPlan) (string, error) {
-	tip, err := gitx.Config(ctx, in.main, "branch."+p.branch+"."+cfgTip)
+	tip, err := branchmeta.Get(ctx, in.main, p.branch, branchmeta.Tip)
 	if err != nil || tip == "" {
 		return "", err
 	}
@@ -232,13 +233,13 @@ func (p *catchupPlan) skip(why string) {
 func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string) error {
 	fromOrigin := in.guard == "pr" || in.guard == "judge"
 
-	landed, err := gitx.Config(ctx, in.main, "branch."+p.branch+"."+cfgLanded)
+	landed, err := branchmeta.Get(ctx, in.main, p.branch, branchmeta.Landed)
 	if err != nil {
 		return err
 	}
 
 	if landed != "" {
-		p.found, p.mark = foundLanded, cfgLanded+" "+def
+		p.found, p.mark = foundLanded, string(branchmeta.Landed)+" "+def
 
 		if fromOrigin {
 			return p.originBase(ctx, in.main, def, "f10-landed: the default branch as origin holds it")
@@ -273,7 +274,7 @@ func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string)
 		p.found, p.how = foundDefault, "nothing recorded: the default branch"
 	}
 
-	p.mark = cfgLanded + " " + def
+	p.mark = string(branchmeta.Landed) + " " + def
 
 	sha, err = gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
 	if err != nil || sha != "" {
@@ -358,7 +359,7 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 		p.base, p.sha, p.how = "origin/"+after, remote, "f10-after-branch: "+after+", on origin only"
 	}
 
-	p.mark = cfgMoved + " " + p.sha
+	p.mark = string(branchmeta.Moved) + " " + p.sha
 
 	return nil
 }
@@ -367,27 +368,27 @@ func (p *catchupPlan) afterBase(ctx context.Context, main, after, def string, fr
 // mark naming no commit, or one the base no longer reaches (rewritten since),
 // fails rather than falling back to a branch tip or bringing in old commits.
 func movedMark(ctx context.Context, main, branch, after string) (string, error) {
-	key := "branch." + branch + "." + cfgMoved
+	key := branchmeta.Moved.For(branch)
 
-	moved, err := gitx.Config(ctx, main, key)
+	moved, err := branchmeta.Get(ctx, main, branch, branchmeta.Moved)
 	if err != nil || moved == "" {
 		return "", err
 	}
 
 	sha, err := gitx.Ref(ctx, main, moved+"^{commit}")
 	if err != nil {
-		return "", fmt.Errorf("reading the %s mark %s: %w", cfgMoved, moved, err)
+		return "", fmt.Errorf("reading the %s mark %s: %w", branchmeta.Moved, moved, err)
 	}
 
 	if sha == "" {
 		return "", fmt.Errorf("%s names %s, no commit here: unset %s to catch up with the base branch",
-			cfgMoved, moved, key)
+			branchmeta.Moved, moved, key)
 	}
 
 	for _, ref := range []string{"refs/heads/" + after, "refs/remotes/origin/" + after} {
 		held, err := gitx.IsAncestor(ctx, main, sha, ref)
 		if err != nil {
-			return "", fmt.Errorf("checking whether %s holds the %s mark: %w", after, cfgMoved, err)
+			return "", fmt.Errorf("checking whether %s holds the %s mark: %w", after, branchmeta.Moved, err)
 		}
 
 		if held {
@@ -396,7 +397,7 @@ func movedMark(ctx context.Context, main, branch, after string) (string, error) 
 	}
 
 	return "", fmt.Errorf("%s names %s, which %s no longer holds: unset %s to catch up with the base branch",
-		cfgMoved, short(sha), after, key)
+		branchmeta.Moved, short(sha), after, key)
 }
 
 // rewritten is the base's old tip when its history was rewritten: onto

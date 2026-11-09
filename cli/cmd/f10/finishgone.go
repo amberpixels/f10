@@ -215,7 +215,12 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 
 		// a tracking ref the host deleted but this clone never pruned counts too,
 		// so the ref is named for the user to prune
-		branch, err := anyTaskBranch(ctx, in.main, k.ID)
+		x, err := loadBranchIndex(ctx, in.main)
+		if err != nil {
+			return err
+		}
+
+		branch, err := x.any(ctx, k.ID)
 		if err != nil {
 			return err
 		}

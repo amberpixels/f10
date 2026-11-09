@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -14,17 +16,18 @@ var broken = shell.Result{Code: 128, Stderr: "fatal: unable to read config"}
 // A catchup whose mark or merge state git cannot read is not settled: a
 // failed read never counts as "nothing left".
 func TestUnsettledWhenGitCannotRead(t *testing.T) {
-	for name, failing := range map[string]string{
-		"mark":       "git config --get branch.GH-1." + cfgLanded,
-		"MERGE_HEAD": "git rev-parse -q --verify MERGE_HEAD",
+	for name, fail := range map[string]func(*fakes){
+		"mark": func(f *fakes) { f.meta.FailRead("GH-1", branchmeta.Landed, errors.New(broken.Stderr)) },
+		"MERGE_HEAD": func(f *fakes) {
+			f.fail("git rev-parse -q --verify MERGE_HEAD", broken)
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "finish")
-			fx.f.script("git config --get branch.GH-1."+cfgLanded, "")
-			fx.f.script("git config --get branch.GH-1."+cfgMoved, "")
+
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
-			fx.f.fail(failing, broken)
+			fail(fx.f)
 
 			r := &driveRun{o: openedTask{branch: "GH-1", path: "/code/repo.GH-1"}}
 

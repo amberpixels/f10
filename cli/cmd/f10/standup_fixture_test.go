@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -59,6 +60,9 @@ func TestStandupFixtures(t *testing.T) {
 			}
 
 			f := newFakes(t)
+			// the recorded calls answer the branch records, as git did when recording
+			t.Cleanup(branchmeta.SetBackend(branchmeta.Git{}))
+
 			for key, res := range fx.Calls {
 				f.answers[key] = []shell.Result{shell.Result(res)}
 			}

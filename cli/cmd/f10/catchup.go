@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -14,7 +15,8 @@ import (
 // it: origin's copy of the f10-after-branch base, else its local copy, else
 // the default branch. sha is "" for a base found nowhere.
 type prTarget struct {
-	sha, name, key, value string
+	sha, name, value string
+	key              branchmeta.Key
 }
 
 func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
@@ -24,7 +26,7 @@ func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
 	}
 
 	if after != "" {
-		return prTarget{sha: sha, name: after, key: cfgMoved, value: sha}, nil
+		return prTarget{sha: sha, name: after, key: branchmeta.Moved, value: sha}, nil
 	}
 
 	// the default branch resolves as the catchup will read it, so the mark
@@ -36,13 +38,13 @@ func prTargetOf(ctx context.Context, main, branch string) (prTarget, error) {
 
 	def, err := localDefault(ctx, main)
 
-	return prTarget{sha: sha, name: name, key: cfgLanded, value: def}, err
+	return prTarget{sha: sha, name: name, key: branchmeta.Landed, value: def}, err
 }
 
 // recordedBase is the f10-after-branch base start recorded on branch, and
 // its sha, origin's copy first; sha is "" for a base found nowhere.
 func recordedBase(ctx context.Context, main, branch string) (string, string, error) {
-	after, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAfterBranch)
+	after, err := branchmeta.Get(ctx, main, branch, branchmeta.AfterBranch)
 	if err != nil || after == "" {
 		return "", "", err
 	}
@@ -100,9 +102,9 @@ func defaultTargetOf(ctx context.Context, main, def string) (string, string, err
 	return remote, "origin/" + def, nil
 }
 
-func markOn(ctx context.Context, main, branch string) (string, error) {
-	for _, key := range []string{cfgLanded, cfgMoved} {
-		v, err := gitx.Config(ctx, main, "branch."+branch+"."+key)
+func markOn(ctx context.Context, main, branch string) (branchmeta.Key, error) {
+	for _, key := range []branchmeta.Key{branchmeta.Landed, branchmeta.Moved} {
+		v, err := branchmeta.Get(ctx, main, branch, key)
 		if err != nil {
 			return "", fmt.Errorf("reading the %s mark on %s: %w", key, branch, err)
 		}
@@ -124,7 +126,7 @@ func branchUnsettled(ctx context.Context, main, dir, branch string) string {
 	case err != nil:
 		return err.Error()
 	case key != "":
-		return "the branch is still marked " + key
+		return "the branch is still marked " + string(key)
 	}
 
 	return treeBusy(ctx, dir)

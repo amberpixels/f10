@@ -15,6 +15,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -223,20 +224,9 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 		held[wt.Branch] = true
 	}
 
-	// one config read for every branch's link and recorded riders
-	linked, riders := map[string]string{}, map[string][]string{}
-
-	entries, err := gitx.ConfigEntries(ctx, in.main, cfgTaskKeys)
+	x, err := loadBranchIndex(ctx, in.main)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	for _, e := range entries {
-		if b, ok := strings.CutSuffix(e.Key, "."+cfgTaskID); ok {
-			linked[strings.TrimPrefix(b, "branch.")] = e.Value
-		} else if b, ok := strings.CutSuffix(e.Key, "."+cfgRiders); ok {
-			riders[strings.TrimPrefix(b, "branch.")] = strings.Fields(e.Value)
-		}
 	}
 
 	match := ref.Matcher(in.prefix)
@@ -251,13 +241,7 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 			return nil
 		}
 
-		// the bundle as branchBundle reads it, from the config read above
-		lead, rest := linked[name], riders[name]
-		if len(rest) > 0 {
-			lead = cmp.Or(lead, match(name))
-		} else if members := ref.Members(in.prefix, name); members != nil {
-			lead, rest = members[0], members[1:]
-		}
+		lead, rest := x.bundle(name, in.prefix)
 
 		var ids []string
 
@@ -724,18 +708,10 @@ func startShape(name, id string) bool {
 }
 
 func dependentsOf(ctx context.Context, dir, branch string) ([]string, error) {
-	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
+	records, err := branchmeta.LoadAll(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	var deps []string
-
-	for _, e := range entries {
-		if e.Value == branch {
-			deps = append(deps, strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgAfterBranch))
-		}
-	}
-
-	return deps, nil
+	return branchmeta.Dependents(records, branch), nil
 }

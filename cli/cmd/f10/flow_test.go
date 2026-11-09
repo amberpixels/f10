@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -86,13 +87,13 @@ func TestDriveKeepsTheRecordedFlow(t *testing.T) {
 		{recorded: "gone", want: "default", note: "no longer declares", writes: true},
 	} {
 		f := newFakes(t)
-		f.script("git config --get branch.GH-1."+cfgFlow, tc.recorded)
+		f.meta.Seed("GH-1", branchmeta.Flow, tc.recorded)
 
 		in := &driveInput{main: "/code/repo", resolve: resolve}
 
 		fl, note, err := in.keepFlow(t.Context(), "GH-1")
 		if err != nil || fl.recorded() != tc.want || !strings.Contains(note, tc.note) ||
-			f.called("git config branch.GH-1."+cfgFlow+" default") != tc.writes {
+			f.called("set branch.GH-1."+string(branchmeta.Flow)+" default") != tc.writes {
 			t.Errorf("recorded %q: flow %q, note %q, err %v, calls %v", tc.recorded, fl.recorded(), note, err, f.calls)
 		}
 	}
@@ -152,11 +153,10 @@ func TestFlowByArea(t *testing.T) {
 	}
 
 	f := newFakes(t)
-	f.script("git config --get branch.GH-1."+cfgFlow, "")
 
 	in := &driveInput{main: "/code/repo", flow: fl}
 	if kept, note, err := in.keepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
-		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "git config branch.") }) {
+		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "set branch.") }) {
 		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
 	}
 }

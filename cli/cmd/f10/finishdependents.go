@@ -4,9 +4,8 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 )
 
 // releaseDependents clears other branches' `start --after` dependency on the
@@ -14,22 +13,15 @@ import (
 // branch now, and their next ship or catchup must bring it in first. merged
 // says the finished branch's code reached the default branch.
 func releaseDependents(ctx context.Context, dir, branch, def string, merged bool) ([]string, error) {
-	entries, err := gitx.ConfigEntries(ctx, dir, `^branch\..*\.`+cfgAfterBranch+`$`)
+	records, err := branchmeta.LoadAll(ctx, dir)
 	if err != nil {
 		return nil, fmt.Errorf("reading which branches depend on %s: %w", branch, err)
 	}
 
 	var notes []string
 
-	for _, e := range entries {
-		if e.Value != branch {
-			continue
-		}
-
-		dependent := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+cfgAfterBranch)
-		section := "branch." + dependent + "."
-
-		base, err := gitx.Config(ctx, dir, section+cfgAfter)
+	for _, dependent := range branchmeta.Dependents(records, branch) {
+		base, err := branchmeta.Get(ctx, dir, dependent, branchmeta.After)
 		if err != nil {
 			return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
 		}
@@ -38,13 +30,13 @@ func releaseDependents(ctx context.Context, dir, branch, def string, merged bool
 			return nil, err
 		}
 
-		for _, key := range []string{cfgAfter, cfgAfterBranch} {
-			if err := gitx.UnsetConfig(ctx, dir, section+key); err != nil {
+		for _, key := range []branchmeta.Key{branchmeta.After, branchmeta.AfterBranch} {
+			if err := branchmeta.Unset(ctx, dir, dependent, key); err != nil {
 				return nil, fmt.Errorf("releasing %s from its dependency on %s: %w", dependent, branch, err)
 			}
 		}
 
-		if err := gitx.SetConfig(ctx, dir, section+cfgLanded, cmp.Or(base, branch)); err != nil {
+		if err := branchmeta.Set(ctx, dir, dependent, branchmeta.Landed, cmp.Or(base, branch)); err != nil {
 			return nil, fmt.Errorf("marking %s landed on %s: %w", dependent, def, err)
 		}
 
@@ -63,14 +55,12 @@ func releaseTip(ctx context.Context, dir, dependent, branch string, merged bool)
 		return recordTip(ctx, dir, dependent, branch)
 	}
 
-	key := "branch." + dependent + "." + cfgTip
-
-	tip, err := gitx.Config(ctx, dir, key)
+	tip, err := branchmeta.Get(ctx, dir, dependent, branchmeta.Tip)
 	if err != nil || tip == "" {
 		return err
 	}
 
-	if err := gitx.UnsetConfig(ctx, dir, key); err != nil {
+	if err := branchmeta.Unset(ctx, dir, dependent, branchmeta.Tip); err != nil {
 		return fmt.Errorf("clearing %s's base tip on %s: %w", dependent, branch, err)
 	}
 

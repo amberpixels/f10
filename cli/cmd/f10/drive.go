@@ -82,11 +82,6 @@ const (
 	stallGrace = time.Minute
 	// maxSpan caps a range, since every id in it costs a tracker call.
 	maxSpan = 50
-	// cfgDrive is the last chain skill drive saw a task finish, under
-	// `branch.<name>.` beside f10-after: local, and deleted with the branch.
-	cfgDrive = "f10-drive"
-	// cfgChain is the chain drive runs the task through, space-joined.
-	cfgChain = "f10-chain"
 )
 
 // driveChain is the skills drive prompts a task through.
