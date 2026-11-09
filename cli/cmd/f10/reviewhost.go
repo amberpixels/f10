@@ -41,15 +41,10 @@ type remoteReview struct {
 	Triggerable bool   `json:"triggerable"`
 	Revision    string `json:"revision"`
 
-	// stored is the host's text on the object ack edits: Body folds an inline
-	// review's comments in, and writing that back would copy them into the summary
-	stored string
-
-	threads    []string // inline review: the threads a `thread resolved` ack resolves
-	threadsErr error    // inline review: why threads could not be read, reported by the ack
-	commentID  string   // inline review: the comment a reaction or marker lands on
-	pending    bool     // inline review: not yet submitted
-	concluded  bool     // check run: finished
+	// host is the review as the host keeps it, which every write goes back
+	// through; its Stored is the text an ack edits, since Body folds an
+	// inline review's comments in and writing that back would copy them
+	host forge.Note
 }
 
 // errNoReview is pick finding nothing to return: no review by the reviewer,
@@ -333,11 +328,11 @@ func (rv *reviewer) isDone(r remoteReview) bool {
 	case facts.DoneMarker:
 		return rv.facts.DoneText != "" && strings.Contains(r.Body, rv.facts.DoneText)
 	case facts.DoneSubmitted:
-		return !r.pending
+		return !r.host.Pending
 	case facts.DoneConcluded:
-		return r.concluded
+		return r.host.Concluded
 	default: // posted: it exists
-		return r.Kind != facts.ArrivesCheck || r.concluded
+		return r.Kind != facts.ArrivesCheck || r.host.Concluded
 	}
 }
 
@@ -351,11 +346,11 @@ func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error)
 	case facts.HandledReaction, facts.HandledMarker:
 		return rv.hasMark(ctx, r, rv.facts.HandledMark())
 	case facts.HandledCheckbox:
-		m := checkboxRE.FindStringSubmatch(r.stored)
+		m := checkboxRE.FindStringSubmatch(r.host.Stored)
 
 		return len(m) > 1 && m[1] != " ", nil
 	case facts.HandledThread:
-		return rv.pull.ThreadsResolved(ctx, r.note())
+		return rv.pull.ThreadsResolved(ctx, r.host)
 	default:
 		return false, nil
 	}
@@ -377,7 +372,7 @@ func (rv *reviewer) hasMark(ctx context.Context, r remoteReview, m facts.Mark) (
 	case facts.HandledReaction:
 		return rv.hasFreshReaction(ctx, r, m.Text)
 	case facts.HandledMarker:
-		return m.Text != "" && strings.Contains(r.stored, m.Text), nil
+		return m.Text != "" && strings.Contains(r.host.Stored, m.Text), nil
 	default:
 		return false, nil
 	}
@@ -392,7 +387,7 @@ func (rv *reviewer) leaveMark(ctx context.Context, r remoteReview, m facts.Mark)
 
 		return msg, true, err
 	case facts.HandledMarker:
-		msg, err := rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+m.Text, "marker appended")
+		msg, err := rv.patchBody(ctx, r, strings.TrimRight(r.host.Stored, "\n")+"\n\n"+m.Text, "marker appended")
 
 		return msg, true, err
 	default:
@@ -409,7 +404,7 @@ func (rv *reviewer) hasFreshReaction(ctx context.Context, r remoteReview, emoji 
 		return fresh[emoji], nil
 	}
 
-	fresh, err := rv.pull.FreshReactions(ctx, r.note())
+	fresh, err := rv.pull.FreshReactions(ctx, r.host)
 	if err != nil {
 		return false, err
 	}
@@ -439,12 +434,12 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 	case facts.HandledCheckbox:
 		// the first box only: isHandled reads the first, and the rest may be
 		// the reviewer's own list, which ticking would read as all fixed
-		m := checkboxRE.FindStringSubmatchIndex(r.stored)
+		m := checkboxRE.FindStringSubmatchIndex(r.host.Stored)
 		if m == nil {
 			return "", errors.New("the review carries no checkbox to tick")
 		}
 
-		body := r.stored[:m[2]] + "x" + r.stored[m[3]:]
+		body := r.host.Stored[:m[2]] + "x" + r.host.Stored[m[3]:]
 
 		return rv.patchBody(ctx, r, body, "checkbox ticked")
 	case facts.HandledThread:
@@ -484,45 +479,20 @@ func fromNote(f facts.Review, n forge.Note) remoteReview {
 	}
 
 	return remoteReview{
-		ID:         n.ID,
-		Kind:       kind,
-		URL:        n.URL,
-		Author:     n.Author,
-		Body:       n.Body,
-		SHA:        n.SHA,
-		CreatedAt:  n.CreatedAt,
-		UpdatedAt:  n.UpdatedAt,
-		stored:     n.Stored,
-		threads:    n.Threads,
-		threadsErr: n.ThreadsErr,
-		commentID:  n.CommentID,
-		pending:    n.Pending,
-		concluded:  n.Concluded,
-	}
-}
-
-// note is the review as the host keeps it, for a write back to it.
-func (r remoteReview) note() forge.Note {
-	return forge.Note{
-		ID:         r.ID,
-		URL:        r.URL,
-		Author:     r.Author,
-		Body:       r.Body,
-		Stored:     r.stored,
-		SHA:        r.SHA,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
-		Inline:     r.Kind == facts.ArrivesInline,
-		CommentID:  r.commentID,
-		Threads:    r.threads,
-		ThreadsErr: r.threadsErr,
-		Pending:    r.pending,
-		Concluded:  r.concluded,
+		ID:        n.ID,
+		Kind:      kind,
+		URL:       n.URL,
+		Author:    n.Author,
+		Body:      n.Body,
+		SHA:       n.SHA,
+		CreatedAt: n.CreatedAt,
+		UpdatedAt: n.UpdatedAt,
+		host:      n,
 	}
 }
 
 func (rv *reviewer) react(ctx context.Context, r remoteReview, emoji string) (string, error) {
-	if err := rv.pull.React(ctx, r.note(), emoji); err != nil {
+	if err := rv.pull.React(ctx, r.host, emoji); err != nil {
 		return "", err
 	}
 
@@ -530,7 +500,7 @@ func (rv *reviewer) react(ctx context.Context, r remoteReview, emoji string) (st
 }
 
 func (rv *reviewer) patchBody(ctx context.Context, r remoteReview, body, what string) (string, error) {
-	if err := rv.pull.EditBody(ctx, r.note(), body); err != nil {
+	if err := rv.pull.EditBody(ctx, r.host, body); err != nil {
 		return "", err
 	}
 
@@ -544,17 +514,17 @@ func (rv *reviewer) resolveThreads(ctx context.Context, r remoteReview) (string,
 		)
 	}
 
-	if r.threadsErr != nil {
-		return "", fmt.Errorf("reading the review's threads: %w", r.threadsErr)
+	if r.host.ThreadsErr != nil {
+		return "", fmt.Errorf("reading the review's threads: %w", r.host.ThreadsErr)
 	}
 
-	if len(r.threads) == 0 {
+	if len(r.host.Threads) == 0 {
 		return "", errors.New("the review opened no threads to resolve")
 	}
 
-	if err := rv.pull.ResolveThreads(ctx, r.threads); err != nil {
+	if err := rv.pull.ResolveThreads(ctx, r.host.Threads); err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%d thread(s) resolved", len(r.threads)), nil
+	return fmt.Sprintf("%d thread(s) resolved", len(r.host.Threads)), nil
 }
