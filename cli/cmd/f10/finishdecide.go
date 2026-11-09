@@ -12,421 +12,214 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// finish runs the flow in the order the refusals need: the report prints
-// before anything local goes, and the workspace closes last, since on the
-// self-close path the close ends this process.
+// finish runs in the order the refusals need: every refusal before anything
+// changes, the report before anything local goes, and the workspace close
+// last, since on the self-close path the close ends this process.
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	// read before the merge archives the series, which raises the count
 	if in.change == "" {
 		in.change = changeOf(in.storage.Reviews(in.task.ID))
 	}
 
-	name, path, onMain, err := finishTarget(ctx, in)
+	d, err := decideFinish(ctx, in)
 	if gone := (goneError{}); errors.As(err, &gone) {
-		return finishGone(ctx, w, in, gone)
+		return finishBranchless(ctx, w, in, gone)
 	}
 
 	if err != nil {
 		return err
 	}
 
+	errs := &cleanupErrs{landed: d.kind.landed()}
+
+	l, err := land(ctx, w, in, d, errs)
+	if err != nil {
+		return err
+	}
+
+	return cleanup(ctx, w, in, d, l, errs)
+}
+
+// A checkoutPlace is where the task's branch is checked out, which decides
+// what cleanup removes.
+type checkoutPlace int
+
+const (
+	inWorktree     checkoutPlace = iota
+	inMainCheckout               // main switches to the default branch, no worktree or workspace goes
+	noWorktree                   // a finish that stopped halfway left only the branch
+)
+
+// finishDecision is everything decideFinish settled, once nothing can refuse.
+type finishDecision struct {
+	kind  landingKind
+	place checkoutPlace
+	name  string // the task's branch
+	path  string // its checkout, "" with no worktree
+	def   string // the local default branch
+	pull  pull
+	spike string   // the spike report, "" for none
+	dirty []string // a spike's uncommitted experiment
+	// the task's workspace and main's; self is this process running in the task's
+	ws, mainWS *agentctl.Workspace
+	self       bool
+	loreNote   string // a failing lore check under lore_gate: warn
+}
+
+// stays names what a failure before the removal keeps for the rerun.
+func (d finishDecision) stays() string {
+	if d.place == noWorktree {
+		return "the branch stays"
+	}
+
+	return "the worktree and branch stay"
+}
+
+// decideFinish runs every refusal, so nothing has changed when one fires.
+// A branch with no worktree and a merged PR completes a finish that stopped
+// halfway; no branch at all returns the goneError for finishBranchless.
+func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
+	name, path, onMain, err := finishTarget(ctx, in)
+	if gone := (goneError{}); errors.As(err, &gone) && gone.branch != "" {
+		return decideGone(ctx, in, gone)
+	}
+
+	if err != nil {
+		return finishDecision{}, err
+	}
+
+	d := finishDecision{name: name, path: path, place: inWorktree}
+	if onMain {
+		d.place = inMainCheckout
+	}
+
 	// a spike's worktree holds its experiment uncommitted, which the close
 	// discards; main's tree may hold anything, so it stays refused
-	spike := taskSpike(path, in.storage, in.task.ID)
+	d.spike = taskSpike(path, in.storage, in.task.ID)
 
 	switch {
-	case in.keep && spike == "":
-		return fmt.Errorf("--keep keeps a spike's experiment, and %s has no spike report", in.task.ID)
-	case spike == "" || onMain:
+	case in.flags.keep && d.spike == "":
+		return d, fmt.Errorf("--keep keeps a spike's experiment, and %s has no spike report", in.task.ID)
+	case d.spike == "" || onMain:
 		if err := refuseDirty(ctx, path); err != nil {
-			return err
+			return d, err
 		}
 	}
 
 	wss, err := agents(in.main).Workspaces(ctx)
 	if err != nil {
-		return err
+		return d, err
 	}
-
-	var ws, mainWS *agentctl.Workspace
-
-	var self bool
 
 	if !onMain {
-		ws, mainWS = workspaceAt(wss, path), workspaceAt(wss, in.main)
-		self = gitx.Inside(in.cwd, path) || (ws != nil && in.workspace != "" && in.workspace == ws.ID)
+		d.ws, d.mainWS = workspaceAt(wss, path), workspaceAt(wss, in.main)
+		d.self = gitx.Inside(in.cwd, path) || (d.ws != nil && in.workspace != "" && in.workspace == d.ws.ID)
 	}
 
-	if self && !in.yes {
-		return fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
+	if d.self && !in.flags.yes {
+		return d, fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
 			"run it from the main checkout, or pass --yes to close this workspace after the report",
-			in.task.ID, cmp.Or(workspaceLabel(ws), name))
+			in.task.ID, cmp.Or(workspaceLabel(d.ws), name))
 	}
 
-	def, err := localDefault(ctx, in.main)
+	if d.def, err = localDefault(ctx, in.main); err != nil {
+		return d, err
+	}
+
+	d.pull, err = in.host.pull(ctx, name)
+
+	unpushed, err := neverPushed(ctx, in, name, err)
 	if err != nil {
-		return err
+		return d, err
 	}
 
-	p, err := in.host.pull(ctx, name)
-
-	local, err := neverPushed(ctx, in, name, err)
-	if err != nil {
-		return err
-	}
-
-	if in.mergedOnly && (local || p.status() != pullMerged) {
-		return errNotMerged
+	if in.flags.mergedOnly && (unpushed || d.pull.status() != pullMerged) {
+		return d, errNotMerged
 	}
 
 	// a spike with a PR finishes the normal way, and its tree must be clean
-	closeSpike := spike != "" && local
+	closeSpike := d.spike != "" && unpushed
 
-	var dirty []string
-
-	if spike != "" && !onMain {
+	if d.spike != "" && !onMain {
 		if !closeSpike {
 			if err := refuseDirty(ctx, path); err != nil {
-				return err
+				return d, err
 			}
 		}
 
-		if dirty, err = gitx.Status(ctx, path); err != nil {
-			return err
+		if d.dirty, err = gitx.Status(ctx, path); err != nil {
+			return d, err
 		}
 	}
 
-	if in.keep && !closeSpike {
-		return fmt.Errorf("--keep keeps a spike's experiment, and %s has a PR: finish it the normal way", in.task.ID)
+	if in.flags.keep && !closeSpike {
+		return d, fmt.Errorf("--keep keeps a spike's experiment, and %s has a PR: finish it the normal way", in.task.ID)
 	}
 
 	var leave bool
 
-	if !local {
-		if leave, err = in.leaveOpen(ctx, p); err != nil {
-			return err
+	if !unpushed {
+		if leave, err = in.leaveOpen(ctx, d.pull); err != nil {
+			return d, err
 		}
 	}
-
-	var (
-		rows  []fact
-		notes []string
-		ended = p.url() + " merged"
-		// a merge ends the series; a PR left open or a spike's close only
-		// moves what rounds there were
-		end *seriesEnd
-	)
-
-	if local {
-		ended = name + " merged into " + def
-	}
-
-	var (
-		kept string
-		// set only on a merge, since a PR left open or a spike's close ships nothing
-		hand  []string
-		after = &afterMerge{}
-	)
 
 	switch {
 	case closeSpike:
-		ended = "the spike " + in.task.ID + " closed"
+		d.kind = landingSpike
 
-		if in.keep {
-			kept = keptName(ctx, in.main, name, in.task.Members())
-		}
-
-		released, err := releaseDependents(ctx, in.main, name, def, false)
-		if err != nil {
-			return err
-		}
-
-		rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
-		if kept != "" {
-			rows = append(rows, fact{label: "branch", value: kept})
-		}
-
-		notes = append(spikeNotes(ctx, in, name, def, kept, dirty), released...)
+		return d, nil
 	case leave:
-		if err := refuseUnpushed(ctx, in.main, name); err != nil {
-			return err
-		}
+		d.kind = landingLeftOpen
 
-		ended = p.url() + " left open"
-		rows = []fact{taskFact(ctx, w, in.main, in.task.ID), {label: "pr", value: p.url(), url: true}}
-		notes = append(notes, fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
-			p.url(), p.status()))
+		return d, refuseUnpushed(ctx, in.main, name)
+	case unpushed:
+		d.kind = landingUnpushed
 	default:
-		// before anything leaves the machine: a block refuses with nothing changed
-		var loreNote string
-
-		if loreNote, err = checkLore(in, local || p.status() == pullOpen); err != nil {
-			return err
-		}
-
-		var riderNotes []string
-
-		if len(in.task.Riders()) > 0 {
-			if in.close == nil {
-				return ridersError{task: in.task}
-			}
-
-			if !local {
-				if riderNotes, err = settleRiders(ctx, in, name, p.status() == pullMerged); err != nil {
-					return err
-				}
-			}
-		}
-
-		// read before the merge, while the branch tip it was written at still exists
-		hand = handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
-
-		var sha string
-
-		recordLanded := sizeRecorder(ctx, in, name, def, local)
-
-		if local {
-			in.step("merging " + name + " into " + def)
-
-			if sha, notes, err = landLocal(ctx, in, name, def); err != nil {
-				return err
-			}
-		} else {
-			in.step("merging " + pullNumber(p.url()))
-
-			if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
-				return err
-			}
-
-			notes = append(notes, riderNotes...)
-
-			// main stays on the task's branch until the end, so a failure before
-			// then leaves a rerun the same shape to find
-			in.step("pulling " + def)
-
-			note, deferred := pullMain(ctx, in.root, in.main, def, p.sha())
-			if !onMain || deferred {
-				notes = appendNote(notes, note)
-			}
-
-			if deferred && in.deferred != nil {
-				in.deferred(note)
-			}
-
-			sha = p.sha()
-		}
-
-		end = &seriesEnd{pr: "none", head: sha}
-		if !local {
-			end.pr = pullNumber(p.url())
-		}
-
-		notes = appendNote(notes, loreNote)
-
-		recordLanded()
-
-		// the merge has landed: a failing step from here is collected and the
-		// rest still run, so a rerun finds only what is left
-		after.on = true
-
-		released, err := releaseDependents(ctx, in.main, name, def, true)
-		if err := after.check("releasing dependents", err); err != nil {
-			return err
-		}
-
-		notes = append(notes, released...)
-
-		rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
-		if !local {
-			rows = append(rows, fact{label: "pr", value: p.url(), url: true})
-		}
-
-		rows = append(rows, fact{label: "merge", value: sha})
-
-		rows = appendClosed(rows, in, local)
+		d.kind = landingPull
 	}
 
-	in.step("archiving the plan")
-
-	archived, note, err := archivePlan(in.storage, in.task.ID)
-	if err := after.check("archiving the plan", err); err != nil {
-		return err
+	// before anything leaves the machine: a block refuses with nothing changed
+	if d.loreNote, err = checkLore(in, unpushed || d.pull.status() == pullOpen); err != nil {
+		return d, err
 	}
 
-	if err != nil {
-		// a branch gone with its plan live reads as no task to a rerun
-		after.keep = "the worktree and branch stay, since the plan is not archived"
-	}
-
-	notes = appendNote(notes, note)
-	notes = appendNote(notes, removeImages(in.storage, in.task.ID))
-
-	handoffSrc, handed := handoffTarget(in.storage, in.task.ID)
-
-	var reviews string
-
-	if end != nil {
-		reviews, err = closeSeries(in.storage.Reviews(in.task.ID), *end)
-	} else {
-		reviews, err = archiveReviews(in.storage.Reviews(in.task.ID), seriesEnd{})
-	}
-
-	if err := after.check("archiving the reviews", err); err != nil {
-		return err
-	}
-
-	notes = appendNote(notes, seriesLore(&in, end))
-
-	if archived != "" {
-		rows = append(rows, fact{label: "plan", value: archived, path: true})
-	}
-
-	if handed != "" && hand != nil {
-		rows = append(rows, fact{label: "handoff", value: handed, path: true})
-	}
-
-	if reviews != "" {
-		rows = append(rows, fact{label: "reviews", value: reviews})
-	}
-
-	// the report is copied out before the worktree goes and moved only after
-	// it, so a rerun after a failed removal still finds the spike
-	var spikeDst string
-
-	early := spike != "" && !onMain && gitx.Inside(spike, path)
-
-	if spike != "" {
-		spikeDst, err = spikeArchiveName(in.storage, in.task.ID)
-		if err == nil && early {
-			err = copySpike(spike, spikeDst)
-		}
-
-		if err := after.check("archiving the spike report", err); err != nil {
-			return err
-		}
-
-		if err != nil {
-			// removing the worktree would delete the report's only copy
-			after.keep = "the worktree and branch stay, since the spike report is not archived"
-		} else {
-			rows = append(rows, fact{label: "spike", value: spikeDst, path: true})
-		}
-	}
-
-	archiveLate := func() error {
-		if spike == "" || early || spikeDst == "" {
-			return nil
-		}
-
-		return archiveSpike(spike, spikeDst)
-	}
-
-	switch {
-	case onMain:
-		notes = append(notes, fmt.Sprintf("%s is checked out in the main checkout at %s: after this report "+
-			"main switches to %s and the branch is deleted; no worktree removed, no workspace closed",
-			name, in.main, def))
-	case ws != nil:
-		rows = append(rows, fact{label: "workspace", value: ws.ID})
-	default:
-		notes = append(notes, "no "+agents(in.main).Name()+" workspace shows the worktree, so nothing to close")
-	}
-
-	rows = append(rows, fact{label: "path", value: path})
-
-	if self {
-		notes = append(notes, "this workspace closes after this report")
-	}
-
-	if err := writeReport(w, rows, notes); err != nil {
-		return err
-	}
-
-	if err := writeHandoff(w, hand); err != nil {
-		return err
-	}
-
-	if err := after.check("", moveHandoff(handoffSrc, handed)); err != nil {
-		return fmt.Errorf("%s, but %w", ended, err)
-	}
-
-	if in.handoff != nil && hand != nil {
-		in.handoff(hand)
-	}
-
-	// a rerun finds the task by its branch, so a step that failed keeps it
-	if after.keep == "" && len(after.failed) > 0 {
-		after.keep = "the worktree and branch stay for the rerun"
-	}
-
-	if after.keep != "" {
-		return after.done(in.task.ID, ended)
-	}
-
-	if onMain {
-		if err := after.check("", switchMain(ctx, in.main, def, name, kept)); err != nil {
-			return fmt.Errorf("%s, but %w", ended, err)
-		}
-
-		after.removed = true
-
-		if err := after.check("archiving the spike report", archiveLate()); err != nil {
-			return fmt.Errorf("%s, but archiving the spike report failed: %w", ended, err)
-		}
-
-		finishRecords(w, in, name)
-		in.sweepNow(ctx)
-
-		return after.done(in.task.ID, ended)
-	}
-
-	// last: removing the checkout deletes the branch, and the record with it
-	in.step("removing worktree")
-
-	err = removeTaskCheckout(ctx, in, path, name, kept, dirty, closeSpike)
-	if err := after.check("removing the worktree", err); err != nil {
-		return err
-	}
-
-	after.removed = err == nil
-
-	if err := after.check("archiving the spike report", archiveLate()); err != nil {
-		return fmt.Errorf("%s, but archiving the spike report failed: %w", ended, err)
-	}
-
-	// before the close, which ends the process on the self-close path
-	finishRecords(w, in, name)
-	in.sweepNow(ctx)
-
-	// closing its own workspace would end this process before the error prints
-	if self && len(after.failed) > 0 {
-		after.keep = "this workspace stays open"
-
-		return after.done(in.task.ID, ended)
-	}
-
-	if self && mainWS != nil {
-		err := agents(in.main).Focus(ctx, mainWS.ID)
-		if err := after.check("focusing the main workspace", err); err != nil {
-			return err
-		}
-	}
-
-	if ws != nil {
-		err := agents(in.main).Close(ctx, ws.ID)
-		if err := after.check("closing workspace "+ws.ID, err); err != nil {
-			return err
-		}
-	}
-
-	return after.done(in.task.ID, ended)
+	return d, refuseRiders(in)
 }
 
-// afterMerge collects the failures of the steps after a merge: the merge
-// has landed, so each step runs on. A rerun completes what failed only while
-// the branch exists, so a failure before its removal keeps it.
-type afterMerge struct {
-	on     bool     // the merge landed
+// decideGone takes over a branch with no worktree only when its PR merged;
+// anything else keeps the refusal, which guards branches start never made.
+func decideGone(ctx context.Context, in finishInput, gone goneError) (finishDecision, error) {
+	p, err := in.host.pull(ctx, gone.branch)
+	if err != nil || p.status() != pullMerged {
+		return finishDecision{}, gone.err
+	}
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return finishDecision{}, err
+	}
+
+	d := finishDecision{kind: landingGone, place: noWorktree, name: gone.branch, def: def, pull: p}
+
+	return d, refuseRiders(in)
+}
+
+// refuseRiders stops a bundle's merge until the riders it closes are known.
+func refuseRiders(in finishInput) error {
+	if len(in.task.Riders()) > 0 && in.close == nil {
+		return ridersError{task: in.task}
+	}
+
+	return nil
+}
+
+// cleanupErrs collects the failures after a merge: the merge has landed, so
+// each step runs on. A rerun completes what failed only while the branch
+// exists, so a failure before its removal keeps it. Before a landing (a
+// spike's close, a PR left open) check returns the error and the run stops.
+type cleanupErrs struct {
+	landed bool
 	failed []string // "<step>: <error>"
 	// keep, when set, says what stays and why
 	keep string
@@ -434,10 +227,10 @@ type afterMerge struct {
 	removed bool
 }
 
-// check returns err before the merge, and collects it after, under step
+// check returns err before a landing, and collects it after, under step
 // unless the error names its step itself (step "").
-func (a *afterMerge) check(step string, err error) error {
-	if err == nil || !a.on {
+func (a *cleanupErrs) check(step string, err error) error {
+	if err == nil || !a.landed {
 		return err
 	}
 
@@ -450,7 +243,7 @@ func (a *afterMerge) check(step string, err error) error {
 	return nil
 }
 
-func (a *afterMerge) done(id, ended string) error {
+func (a *cleanupErrs) done(id, ended string) error {
 	if len(a.failed) == 0 {
 		return nil
 	}
@@ -469,8 +262,8 @@ func (a *afterMerge) done(id, ended string) error {
 
 // appendClosed adds the riders the merge closed; a tracker that is not the
 // host closes nothing on merge.
-func appendClosed(rows []fact, in finishInput, local bool) []fact {
-	if len(in.close) == 0 || !in.hostCloses || local {
+func appendClosed(rows []fact, in finishInput, unpushed bool) []fact {
+	if len(in.close) == 0 || !in.hostCloses || unpushed {
 		return rows
 	}
 
@@ -519,9 +312,9 @@ func (in finishInput) leaveOpen(ctx context.Context, p pull) (bool, error) {
 	switch {
 	case p.status() == pullMerged:
 		return false, nil
-	case in.local:
+	case in.flags.leaveOpen:
 		return true, nil
-	case in.merge || p.status() != pullOpen:
+	case in.flags.merge || p.status() != pullOpen:
 		return false, nil
 	}
 

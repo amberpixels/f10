@@ -104,14 +104,6 @@ func branchTip(ctx context.Context, main, branch string, p pull) func() string {
 	}
 }
 
-// archiveHandoff moves the handoff to handoffs/archive/, numbered as plans
-// are, so the task's next PR writes its own; a missing file archives nothing.
-func archiveHandoff(root storage.Root, id string) (string, error) {
-	src, target := handoffTarget(root, id)
-
-	return target, moveHandoff(src, target)
-}
-
 // handoffTarget names where the handoff will be archived, "" with none.
 // Finish names it for its report and moves the file only after printing it,
 // so a failure before the report leaves the file for the rerun to print.

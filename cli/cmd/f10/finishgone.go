@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // A goneError is a checkout a finish that stopped halfway left: no branch,
@@ -21,160 +19,21 @@ func (e goneError) Error() string { return e.err.Error() }
 
 func (e goneError) Unwrap() error { return e.err }
 
-// finishGone completes a finish that stopped halfway; anything else keeps
-// the refusal, which guards branches start never made.
-func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError) error {
-	if gone.branch == "" {
-		if !in.storage.PlanArchived(in.task.ID) {
-			return finishParent(ctx, w, in, gone)
-		}
-
-		if err := writeReport(w, []fact{taskFact(ctx, w, in.main, in.task.Label())},
-			[]string{in.task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
-			return err
-		}
-
-		finishRecords(w, in, in.branch)
-
-		return nil
+// finishBranchless ends a task with no branch here: already finished when
+// its plan is archived, else a parent its subtasks delivered.
+func finishBranchless(ctx context.Context, w io.Writer, in finishInput, gone goneError) error {
+	if !in.storage.PlanArchived(in.task.ID) {
+		return finishParent(ctx, w, in, gone)
 	}
 
-	name := gone.branch
-
-	p, err := in.host.pull(ctx, name)
-	if err != nil || p.status() != pullMerged {
-		return gone.err
-	}
-
-	def, err := localDefault(ctx, in.main)
-	if err != nil {
+	if err := writeReport(w, []fact{taskFact(ctx, w, in.main, in.task.Label())},
+		[]string{in.task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
 		return err
 	}
 
-	var riderNotes []string
+	finishRecords(w, in, in.branch)
 
-	if len(in.task.Riders()) > 0 {
-		if in.close == nil {
-			return ridersError{task: in.task}
-		}
-
-		if riderNotes, err = settleRiders(ctx, in, name, true); err != nil {
-			return err
-		}
-	}
-
-	// the PR already merged; the local branch still holds the tip the handoff was written at
-	hand := handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
-
-	// measured before the land, as finish does, while the branch still differs
-	recordLanded := sizeRecorder(ctx, in, name, def, false)
-
-	p, notes, err := landPull(ctx, in, name, def, p)
-	if err != nil {
-		return err
-	}
-
-	recordLanded()
-
-	notes = append(notes, riderNotes...)
-
-	in.step("pulling " + def)
-
-	// the merge has landed: each step from here runs on past a failure
-	after := &afterMerge{on: true}
-
-	note, deferred := pullMain(ctx, in.root, in.main, def, p.sha())
-	notes = appendNote(notes, note)
-
-	if deferred && in.deferred != nil {
-		in.deferred(note)
-	}
-
-	released, err := releaseDependents(ctx, in.main, name, def, true)
-	_ = after.check("releasing dependents", err)
-
-	notes = append(notes, released...)
-
-	in.step("archiving the plan")
-
-	archived, note, err := archivePlan(in.storage, in.task.ID)
-	_ = after.check("archiving the plan", err)
-	if err != nil {
-		after.keep = "the branch stays, since the plan is not archived"
-	}
-
-	notes = appendNote(notes, note)
-	notes = appendNote(notes, removeImages(in.storage, in.task.ID))
-
-	handoffSrc, handed := handoffTarget(in.storage, in.task.ID)
-
-	end := seriesEnd{pr: pullNumber(p.url()), head: p.sha()}
-
-	reviews, err := closeSeries(in.storage.Reviews(in.task.ID), end)
-	_ = after.check("archiving the reviews", err)
-
-	notes = appendNote(notes, seriesLore(&in, &end))
-
-	rows := appendClosed([]fact{
-		taskFact(ctx, w, in.main, in.task.Label()),
-		{label: "pr", value: p.url(), url: true},
-		{label: "merge", value: p.sha()},
-	}, in, false)
-
-	if archived != "" {
-		rows = append(rows, fact{label: "plan", value: archived, path: true})
-	}
-
-	if handed != "" {
-		rows = append(rows, fact{label: "handoff", value: handed, path: true})
-	}
-
-	if reviews != "" {
-		rows = append(rows, fact{label: "reviews", value: reviews})
-	}
-
-	// a rerun finds the task by its branch, so a step that failed keeps it
-	if after.keep == "" && len(after.failed) > 0 {
-		after.keep = "the branch stays for the rerun"
-	}
-
-	if after.keep != "" {
-		notes = append(notes, name+" had no worktree left, and "+after.keep)
-	} else {
-		notes = append(notes, name+" had no worktree left: only the branch is deleted, no workspace closed")
-	}
-
-	if err := writeReport(w, rows, notes); err != nil {
-		return err
-	}
-
-	if err := writeHandoff(w, hand); err != nil {
-		return err
-	}
-
-	_ = after.check("", moveHandoff(handoffSrc, handed))
-
-	if in.handoff != nil {
-		in.handoff(hand)
-	}
-
-	ended := p.url() + " merged"
-
-	if after.keep == "" && len(after.failed) > 0 {
-		after.keep = "the branch stays for the rerun"
-	}
-
-	if after.keep != "" {
-		return after.done(in.task.ID, ended)
-	}
-
-	in.step("deleting " + name)
-
-	_ = after.check("deleting branch "+name, gitx.DeleteBranch(ctx, in.main, name))
-
-	finishRecords(w, in, name)
-
-	return after.done(in.task.ID, ended)
+	return nil
 }
 
 // finishParent closes a parent its subtasks delivered: it never had a branch

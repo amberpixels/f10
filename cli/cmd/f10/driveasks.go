@@ -213,7 +213,7 @@ func (in *driveInput) finishAnswer(id string) (string, error) {
 			return c, nil
 		}
 
-		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLocal, finishMerge)
+		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLeaveOpen, finishMerge)
 	}
 
 	if c := finishChoice(in.answer); c != "" {
@@ -230,7 +230,7 @@ func finishChoice(answer string) string {
 	a := strings.ToLower(strings.TrimSpace(answer))
 	a = strings.TrimSpace(strings.TrimPrefix(a, "1."))
 
-	if a == finishMerge || a == finishLocal {
+	if a == finishMerge || a == finishLeaveOpen {
 		return a
 	}
 

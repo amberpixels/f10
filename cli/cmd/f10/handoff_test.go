@@ -62,6 +62,13 @@ func TestHandoffLines(t *testing.T) {
 	}
 }
 
+// archiveHandoff is the move finish and the janitor make, in one call.
+func archiveHandoff(root storage.Root, id string) (string, error) {
+	src, target := handoffTarget(root, id)
+
+	return target, moveHandoff(src, target)
+}
+
 func TestArchiveHandoffNumbers(t *testing.T) {
 	main := t.TempDir()
 	src := taskHandoff(storage.InRepo(main), "GH-1")
