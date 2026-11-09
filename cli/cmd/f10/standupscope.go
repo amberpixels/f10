@@ -16,7 +16,7 @@ import (
 func (t *target) standupTracker() (standup.Tracker, string) {
 	tr := standup.Tracker{Kind: t.eff.TrackerKind.String(), Prefix: t.eff.IDPrefix}
 
-	if tr.Prefix != "" && (t.driver() != nil || !t.hostIssues()) {
+	if tr.Prefix != "" && !t.hostCloses() {
 		tr.Key = "tracker\x00" + tr.Kind + "\x00" + tr.Prefix
 
 		return tr, tr.Prefix

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
@@ -59,7 +60,7 @@ func resolvePlugin(env *Env, in *install) plugin {
 
 	if inSession(env) {
 		if path, err := env.LookPath(stateScript); err == nil {
-			root := filepath.Dir(realPath(filepath.Dir(path)))
+			root := filepath.Dir(gitx.Resolved(filepath.Dir(path)))
 			if name, version := readManifest(root); name == pluginName {
 				p.Root, p.Version, p.Origin = root, version, originSession
 
@@ -493,14 +494,6 @@ func projectFile(lay *layout.Layout) string {
 	return filepath.Join(lay.Layers[len(lay.Layers)-1].Dir, "project.md")
 }
 
-func realPath(path string) string {
-	if r, err := filepath.EvalSymlinks(path); err == nil {
-		return r
-	}
-
-	return path
-}
-
 // driversName is the executable a project's .f10/driver shim runs.
 const driversName = "f10-drivers"
 
@@ -603,7 +596,7 @@ func parses(v string) bool {
 // it resolves to one. named false is a custom driver; named with no path is
 // an f10-drivers that is not installed.
 func driversExecutable(env *Env, shim string) (string, bool) {
-	if filepath.Base(realPath(shim)) == driversName {
+	if filepath.Base(gitx.Resolved(shim)) == driversName {
 		return shim, true
 	}
 

@@ -338,14 +338,8 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 	}
 
 	reason := run.Note
-	if reason == "" {
-		for _, p := range state.Phases {
-			if state.Stopped(run.Status(p)) {
-				reason = "the run says " + p + " " + run.PhaseText(p)
-
-				break
-			}
-		}
+	if p, ok := run.StoppedPhase(); reason == "" && ok {
+		reason = "the run says " + p + " " + run.PhaseText(p)
 	}
 
 	res := halted(id, skill, reason)
