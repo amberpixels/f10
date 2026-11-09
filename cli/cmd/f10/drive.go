@@ -150,25 +150,18 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		argv = rec.Args
 	}
 
-	paces, err := paceSet(t.eff)
+	run, err := resolveRun(ctx, t.eff, runInput{pace: a.pace})
 	if err != nil {
 		return err
 	}
 
-	pace, err := activePace(ctx, paces, a.pace, "", "")
+	fl, err := run.flow(a.flow)
 	if err != nil {
 		return err
 	}
 
-	fl, err := resolvePacedFlow(t.eff, paces, pace.name, a.flow)
-	if err != nil {
-		return err
-	}
-
-	layers, err := agentLayers(t.eff, "")
-	if err != nil {
-		return err
-	}
+	// the drive lays --agent and each task's suffix on per task
+	layers := agentMapOf(t.eff)
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
 	drv := t.driver()
@@ -192,13 +185,13 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		args:    a,
 		argv:    argv,
 		flow:    fl,
-		resolve: func(name string) (shipFlow, error) { return resolvePacedFlow(t.eff, paces, pace.name, name) },
+		resolve: run.flow,
 		paced: func(fl shipFlow, p string) (shipFlow, error) {
 			if fl.byArea {
-				return resolvePacedFlow(t.eff, paces, p, "")
+				return run.flowAt(p, "")
 			}
 
-			return resolvePacedFlow(t.eff, paces, p, fl.recorded())
+			return run.flowAt(p, fl.recorded())
 		},
 		storage:  t.lay.StorageRoot,
 		settings: claudeSettingsPath(),

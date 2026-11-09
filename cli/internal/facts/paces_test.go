@@ -24,7 +24,7 @@ func TestPaceShorthands(t *testing.T) {
 	d := decodePaces(t, "paces:\n  quick: { judge: off, review: ci, finish: on, pr: { marker: fast } }\npace: quick\n")
 	p := d.Paces["quick"]
 
-	if !p["judge"].Off || p["review"].By != "ci" || p["finish"].Finish != "on" || p["pr"].Marker != "fast" {
+	if !p.Steps["judge"].Off || p.Steps["review"].By != "ci" || p.Finish != "on" || p.Steps["pr"].Marker != "fast" {
 		t.Errorf("quick = %+v", p)
 	}
 
@@ -82,7 +82,7 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 	e := &Effective{Flows: map[string]flow.Flow{"default": flowOf(strings.Fields(DefaultFlow))}}
 	e.resolvePaces(&fm)
 
-	if got := e.Paces["fast"]; got["review"].Depth != "light" || !got["judge"].Off {
+	if got := e.Paces["fast"]; got.Steps["review"].Depth != "light" || !got.Steps["judge"].Off {
 		t.Errorf("fast = %+v", got)
 	}
 
@@ -94,7 +94,7 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 	s := NewPaceSet()
 	s.Over(e.Paces, func(name, key string) Origin { return e.PacesOrigin[name+"."+key] })
 
-	if s.Paces["fast"]["finish"].Finish != "on" || s.Origins["fast.finish"] != PaceOriginBuiltin {
+	if s.Paces["fast"].Finish != "on" || s.Origins["fast.finish"] != PaceOriginBuiltin {
 		t.Errorf("the built-in finish under the project's fast = %+v, %q", s.Paces["fast"], s.Origins["fast.finish"])
 	}
 }
@@ -135,7 +135,10 @@ func TestResolveFlow(t *testing.T) {
 	}
 
 	// a bare review takes the pace's half
-	s.Over(map[string]Pace{"remote": {"review": {By: "ci"}}}, func(string, string) Origin { return DeclaredIn("test") })
+	s.Over(
+		map[string]Pace{"remote": {Steps: map[string]Dials{"review": {By: "ci"}}}},
+		func(string, string) Origin { return DeclaredIn("test") },
+	)
 
 	if r, _ := s.ResolveFlow("x", flowOf([]string{"implement", "pr", "review"}), "remote"); r.Run()[2] != "review:ci" {
 		t.Errorf("bare review under remote = %v", r.Run())
@@ -188,7 +191,7 @@ func TestPaceHandoffOffReachesPR(t *testing.T) {
 		}
 	}
 
-	s.Ceiling = Pace{"handoff": {On: true}}
+	s.Ceiling = Pace{Steps: map[string]Dials{"handoff": {On: true}}}
 
 	r, err = s.ResolveFlow("default", flowOf(strings.Fields("implement pr")), "quiet")
 	if err != nil {
@@ -247,7 +250,10 @@ func TestPaceFinishOnlyAtAPR(t *testing.T) {
 // and shows as a problem at load.
 func TestPaceThatBreaksAFlow(t *testing.T) {
 	s := NewPaceSet()
-	s.Over(map[string]Pace{"noplan": {"plan": {Off: true}}}, func(string, string) Origin { return DeclaredIn("test") })
+	s.Over(
+		map[string]Pace{"noplan": {Steps: map[string]Dials{"plan": {Off: true}}}},
+		func(string, string) Origin { return DeclaredIn("test") },
+	)
 
 	flows := map[string][]string{"default": strings.Fields("plan judge implement pr")}
 
@@ -271,7 +277,7 @@ func TestCeilingDecode(t *testing.T) {
 	d := decodePaces(t, "ceiling: { finish: off, judge: on, review: { rounds: 2 }, except: [ultra] }\n")
 
 	c := d.Ceiling
-	if c == nil || c.Pace["finish"].Finish != "off" || !c.Pace["judge"].On || c.Pace["review"].Rounds != 2 ||
+	if c == nil || c.Pace.Finish != "off" || !c.Pace.Steps["judge"].On || c.Pace.Steps["review"].Rounds != 2 ||
 		strings.Join(c.Except, ",") != "ultra" {
 		t.Fatalf("ceiling = %+v", c)
 	}
@@ -320,7 +326,7 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 	e := &Effective{Flows: map[string]flow.Flow{"default": flowOf(strings.Fields(DefaultFlow))}}
 	e.resolvePaces(&fm)
 
-	if e.Ceiling["finish"].Finish != "off" || e.Ceiling["judge"].Effort != "high" ||
+	if e.Ceiling.Finish != "off" || e.Ceiling.Steps["judge"].Effort != "high" ||
 		strings.Join(e.CeilingExcept, ",") != "fast" {
 		t.Errorf("ceiling = %+v, except %v", e.Ceiling, e.CeilingExcept)
 	}
@@ -338,9 +344,11 @@ func TestCeilingCaps(t *testing.T) {
 	written := strings.Fields("plan judge implement cleanup pr review judge pr")
 	set := NewPaceSet()
 	set.Ceiling = Pace{
-		PaceFinishKey: {Finish: "off"},
-		"cleanup":     {On: true},
-		"review":      {Rounds: 2, Depth: "full"},
+		Steps: map[string]Dials{
+			"cleanup": {On: true},
+			"review":  {Rounds: 2, Depth: "full"},
+		},
+		Finish: "off",
 	}
 	main := DeclaredFrontmatter("main")
 	set.CeilingOrigins = map[string]Origin{PaceFinishKey: main, "cleanup": main, "review": main}
@@ -396,17 +404,17 @@ func TestCeilingCaps(t *testing.T) {
 // A ceiling's effort raises a pace's lower effort and leaves a silent one.
 func TestCeilingEffort(t *testing.T) {
 	set := NewPaceSet()
-	set.Ceiling = Pace{"judge": {Effort: "high"}}
+	set.Ceiling = Pace{Steps: map[string]Dials{"judge": {Effort: "high"}}}
 
 	if p, caps := set.Capped(
 		"fast",
-	); p["judge"].Effort != "high" ||
+	); p.Steps["judge"].Effort != "high" ||
 		caps["judge.effort"].Capped != "pace fast said low" {
-		t.Errorf("fast = %+v, %+v", p["judge"], caps)
+		t.Errorf("fast = %+v, %+v", p.Steps["judge"], caps)
 	}
 
-	if p, _ := set.Capped("medium"); p["judge"].Effort != "" {
-		t.Errorf("medium = %+v", p["judge"])
+	if p, _ := set.Capped("medium"); p.Steps["judge"].Effort != "" {
+		t.Errorf("medium = %+v", p.Steps["judge"])
 	}
 }
 
@@ -414,7 +422,7 @@ func TestCeilingEffort(t *testing.T) {
 // no plan, which the flow check refuses.
 func TestCeilingThatBreaksAFlow(t *testing.T) {
 	set := NewPaceSet()
-	set.Ceiling = Pace{"judge": {On: true}}
+	set.Ceiling = Pace{Steps: map[string]Dials{"judge": {On: true}}}
 
 	_, err := set.ResolveFlow("default", flowOf(strings.Fields("plan judge implement pr")), "ultra")
 	if err == nil || !strings.Contains(err.Error(), "pace ultra") {
@@ -484,7 +492,10 @@ func TestOptionalCIInFlowStyle(t *testing.T) {
 		t.Errorf("unquoted = %v", err)
 	}
 
-	if d := decodePaces(t, "paces:\n  x: { review: \"local+ci?\" }\n"); d.Paces["x"]["review"].By != "local+ci?" ||
+	if d := decodePaces(
+		t,
+		"paces:\n  x: { review: \"local+ci?\" }\n",
+	); d.Paces["x"].Steps["review"].By != "local+ci?" ||
 		len(d.check()) > 0 {
 		t.Errorf("quoted = %+v, %v", d.Paces["x"], d.check())
 	}

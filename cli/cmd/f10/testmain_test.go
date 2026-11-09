@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 // A new default path that escapes the temp root fails here, not by writing
 // to the developer's ~/.claude/f10 or ~/.f10.
 func TestUserDirsStayInTheTestRoot(t *testing.T) {
-	userDir, err := userF10Dir()
+	userDir, err := storage.UserFilesDir()
 	if err != nil {
 		t.Fatal(err)
 	}

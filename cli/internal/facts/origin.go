@@ -2,8 +2,6 @@ package facts
 
 import (
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
 	"time"
 )
@@ -45,19 +43,16 @@ func DeclaredFrontmatter(layer string) Origin {
 	return Origin{Kind: OriginDeclared, Layer: layer, Frontmatter: true}
 }
 
+// userLayer is the layer the user's own files declare in.
+const userLayer = "user"
+
 // DeclaredByUser is a value the user's own file at path set.
 func DeclaredByUser(path string) Origin {
-	return Origin{Kind: OriginDeclared, Layer: "user", Detail: path}
+	return Origin{Kind: OriginDeclared, Layer: userLayer, Detail: path}
 }
 
 // DerivedFrom is a task id prefix the project's name gave.
 func DerivedFrom(project string) Origin { return Origin{Kind: OriginDerived, Detail: project} }
-
-// declaredAcross is a frontmatter value several layers each set part of,
-// such as a map merged key by key.
-func declaredAcross(layers map[string]bool) Origin {
-	return DeclaredFrontmatter(strings.Join(slices.Sorted(maps.Keys(layers)), " + "))
-}
 
 // Declared says a project.md layer or the user's file set the value.
 func (o Origin) Declared() bool { return o.Kind == OriginDeclared }

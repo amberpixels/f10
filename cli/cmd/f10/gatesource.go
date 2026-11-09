@@ -22,8 +22,8 @@ import (
 // gateSource is what every task's gates read alike.
 type gateSource struct {
 	events []ledger.Event
-	main   string // where the branch config lives
-	flows  map[string]flow.Flow
+	main   string           // where the branch config lives
+	eff    *facts.Effective // the flows, the paces and the review every task resolves against
 	review facts.Review
 	store  *lore.Store
 	host   *host
@@ -33,10 +33,12 @@ type gateSource struct {
 	driveFlows map[string]driveFlow
 }
 
-// A driveFlow is the flow a drive record names, and whether that drive's
-// driver still runs: only a running one can be opening a branch right now.
+// A driveFlow is the flow and the --pace a drive record names, and whether
+// that drive's driver still runs: only a running one can be opening a
+// branch right now.
 type driveFlow struct {
 	name    string
+	pace    string
 	running bool
 }
 
@@ -59,7 +61,9 @@ func driveFlows(root string) map[string]driveFlow {
 	for _, d := range drives.Active(root) {
 		for _, t := range d.Tasks {
 			if lead := ref.TypedLead(t.ID); out[lead].name == "" {
-				out[lead] = driveFlow{name: cmp.Or(d.Flow, "default"), running: d.Running}
+				// a record that no longer parses keeps its flow, under no pace
+				a, _ := parseDriveArgs(d.Args)
+				out[lead] = driveFlow{name: cmp.Or(d.Flow, "default"), pace: a.pace, running: d.Running}
 			}
 		}
 	}
@@ -82,9 +86,15 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	// the branch's record, else the drive that will open the task: a
 	// stopped drive's record speaks only for a task with no branch yet,
 	// since a branch it never recorded may have been started another way
-	name := "default"
+	name, pace := "default", ""
 	if d := src.driveFlows[strings.ToUpper(id)]; d.running || branch == "" {
 		name = cmp.Or(d.name, name)
+	}
+
+	// a branch records the pace it was opened at; before one exists, the
+	// drive that will open it holds the pace
+	if branch == "" {
+		pace = src.driveFlows[strings.ToUpper(id)].pace
 	}
 
 	if branch != "" && src.main != "" {
@@ -103,11 +113,11 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		}
 	}
 
-	if _, ok := src.flows[name]; !ok {
+	if _, ok := src.eff.Flows[name]; !ok {
 		name = "default"
 	}
 
-	in.pipeline = src.flows[name].Ship()
+	in.pipeline = src.pipeline(ctx, name, branch, pace)
 
 	if src.host != nil && branch != "" && src.review.Remote() {
 		h := *src.host
@@ -121,6 +131,34 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	}
 
 	return taskGates(ctx, in)
+}
+
+// pipeline is what ship runs of the named flow under the task's pace: pace
+// when given, else the one its branch records, else the default. A pace that
+// no longer resolves leaves the flow as declared, since status must still
+// show the task.
+func (src gateSource) pipeline(ctx context.Context, name, branch, pace string) flow.Flow {
+	declared := src.eff.Flows[name]
+	if src.eff.PaceSet == nil {
+		return declared.Ship()
+	}
+
+	in := runInput{pace: pace}
+	if src.main != "" {
+		in.main, in.branch = src.main, branch
+	}
+
+	run, err := resolveRun(ctx, src.eff, in)
+	if err != nil {
+		return declared.Ship()
+	}
+
+	entries, err := run.entries(name)
+	if err != nil {
+		return declared.Ship()
+	}
+
+	return entries.Ship()
 }
 
 func readRemote(ctx context.Context, h host, f facts.Review, branch string) remoteState {

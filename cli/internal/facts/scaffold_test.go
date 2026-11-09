@@ -133,7 +133,7 @@ func TestScaffoldSections(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			eff := Build(tc.lay, tc.pb)
+			eff := Build(tc.lay, tc.pb, "")
 			if tc.storage != "" {
 				eff.Storage = tc.storage
 			}
@@ -183,7 +183,7 @@ func TestScaffoldRoundTrip(t *testing.T) {
 		},
 	}
 
-	before := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected)
+	before := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected, "")
 	d, err := Scaffold(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, detected, before)
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +195,7 @@ func TestScaffoldRoundTrip(t *testing.T) {
 		Layers:      []layout.Layer{{Label: "main", Dir: dirWithProjectMD(t, d.Markdown)}},
 	}
 
-	after := Build(declaring, detected)
+	after := Build(declaring, detected, "")
 
 	for _, name := range d.Sections {
 		if f := fieldByName(t, after, name); f.Origin.String() != "declared (main)" {

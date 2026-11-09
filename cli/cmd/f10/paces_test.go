@@ -37,7 +37,7 @@ func paceRepo(t *testing.T, frontmatter, user string) string {
 		}
 
 		if err := os.WriteFile(
-			filepath.Join(home, ".f10", pacesConfigFile),
+			filepath.Join(home, ".f10", facts.UserPacesFile),
 			[]byte("---\n"+user+"---\n"),
 			0o600,
 		); err != nil {
@@ -99,9 +99,10 @@ func TestPaceLayers(t *testing.T) {
 		"flows:\n  default: plan judge implement pr\npaces:\n  brisk: { judge: { effort: high } }\npace: brisk\n",
 		"paces:\n  brisk: { judge: off, review: { rounds: 1 } }\npace: fast\n")
 
+	// the project's judge key replaces the user's off, so judge runs
 	out := runApp(t, "-C", repo, "flow", "default").must(t)
 	if !strings.Contains(out, "pace: brisk (declared (main, frontmatter))") ||
-		!strings.Contains(out, "judge      effort high (pace brisk (declared (main, frontmatter)))") {
+		!strings.Contains(out, "\njudge\n") || strings.Contains(out, "skipped") {
 		t.Errorf("the project's brisk over the user's:\n%s", out)
 	}
 
@@ -141,7 +142,7 @@ func TestPaceShapesTheDriveSkills(t *testing.T) {
 		"slow":   "plan ship",
 		"ultra":  "ship finish",
 	} {
-		fl, err := resolvePacedFlow(eff, set, pace, "")
+		fl, err := pacedFlowIn(eff, set, pace, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -200,7 +201,7 @@ func TestDriveTakesPace(t *testing.T) {
 func TestStartRecordsThePace(t *testing.T) {
 	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 
-	ultra, err := resolvePacedFlow(eff, facts.NewPaceSet(), "ultra", "")
+	ultra, err := pacedFlowIn(eff, facts.NewPaceSet(), "ultra", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +248,6 @@ func TestFlowUnderACeiling(t *testing.T) {
 	for _, want := range []string{
 		"ceiling: finish off (declared (main, frontmatter)), judge effort high (declared (main, frontmatter))",
 		"finish        off (ceiling (declared (main, frontmatter)); pace fast said on)",
-		"effort high (ceiling (declared (main, frontmatter)); pace fast said low)",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
@@ -274,8 +274,17 @@ func TestFlowUnderACeiling(t *testing.T) {
 	}
 
 	got := runApp(t, "-C", repo, "agents", "judge", "--pace", "fast").must(t)
-	if !strings.Contains(got, "effort high") || !strings.Contains(got, "ceiling") {
+	if !strings.Contains(got, "effort high") || !strings.Contains(got, "ceiling") ||
+		!strings.Contains(got, "pace fast said low") {
 		t.Errorf("agents judge = %q", got)
+	}
+
+	// an effort reaches the judge through its profile, so the flow never
+	// lists one
+	for line := range strings.Lines(out) {
+		if strings.HasPrefix(line, "judge") && strings.Contains(line, "effort") {
+			t.Errorf("the flow lists an effort dial: %q", line)
+		}
 	}
 }
 
@@ -298,10 +307,10 @@ func TestCeilingRefusedWhereItDoesNotBelong(t *testing.T) {
 func TestCeilingShapesTheDriveChain(t *testing.T) {
 	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 	set := facts.NewPaceSet()
-	set.Ceiling = facts.Pace{facts.PaceFinishKey: {Finish: "off"}}
+	set.Ceiling = facts.Pace{Finish: "off"}
 
 	for _, pace := range []string{"medium", "fast"} {
-		fl, err := resolvePacedFlow(eff, set, pace, "")
+		fl, err := pacedFlowIn(eff, set, pace, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -313,7 +322,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 
 	set.Except = []string{"fast"}
 
-	fl, err := resolvePacedFlow(eff, set, "fast", "")
+	fl, err := pacedFlowIn(eff, set, "fast", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,4 +330,17 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 	if got := strings.Join(driveSkills(fl), " "); got != "plan ship finish" {
 		t.Errorf("excepted fast: %q", got)
 	}
+}
+
+// pacedFlowIn resolves on a literal Effective, which Build would have given
+// a pace set; nil is the built-ins.
+func pacedFlowIn(eff *facts.Effective, set *facts.PaceSet, pace, name string) (shipFlow, error) {
+	if set == nil {
+		set = facts.NewPaceSet()
+		set.Remote = eff.Review.Remote()
+	}
+
+	eff.PaceSet = set
+
+	return pacedFlow(eff, pace, name)
 }

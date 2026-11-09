@@ -3,7 +3,10 @@
 package storage
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -131,4 +134,23 @@ func (r Root) join(elem ...string) string {
 	}
 
 	return filepath.Join(append([]string{string(r)}, elem...)...)
+}
+
+// UserDirEnv names another directory than ~/.f10 for the user's files, so
+// a run that must not read them (the eval runner, tests) points it elsewhere.
+const UserDirEnv = "F10_USER_DIR"
+
+// UserFilesDir is the dir holding the user's own files: UserDirEnv when
+// set, else ~/.f10.
+func UserFilesDir() (string, error) {
+	if dir := strings.TrimSpace(os.Getenv(UserDirEnv)); dir != "" {
+		return dir, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("finding your home directory: %w", err)
+	}
+
+	return UserDir(home), nil
 }

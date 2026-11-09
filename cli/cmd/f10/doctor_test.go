@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/doctor"
+	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
 // A broken project.md stops every command that acts on facts, but doctor
@@ -46,6 +48,49 @@ func TestDoctorReportsABrokenProjectAndExitsNonZero(t *testing.T) {
 		if r.Name == doctor.CheckProject {
 			if r.Status != doctor.StatusProblem {
 				t.Errorf("project check = %q (%s), want problem", r.Status, r.Detail)
+			}
+
+			return
+		}
+	}
+
+	t.Fatal("no project check in the output")
+}
+
+// The user's files are facts, so doctor reports a broken one by its path,
+// even in a checkout with no project.md.
+func TestDoctorReportsABrokenUserFile(t *testing.T) {
+	home := isolateEnv(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
+	t.Setenv("CLAUDECODE", "")
+
+	user := filepath.Join(home, ".f10")
+	t.Setenv(userDirEnv, user)
+
+	if err := os.MkdirAll(user, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	paces := filepath.Join(user, facts.UserPacesFile)
+	if err := os.WriteFile(paces, []byte("---\npaces:\n  bad: { implement: off }\n---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := mkRepo(t)
+	git(t, dir, "remote", "remove", "origin") // no host CLI call leaves the test
+
+	out, _ := runApp(t, "-C", dir, "doctor", "--json").outErr()
+
+	var results []doctor.Result
+	if err := json.Unmarshal([]byte(out), &results); err != nil {
+		t.Fatalf("output is not a JSON array of checks: %v\n%s", err, out)
+	}
+
+	for _, r := range results {
+		if r.Name == doctor.CheckProject {
+			if r.Status != doctor.StatusProblem || !strings.Contains(r.Detail, paces) ||
+				!strings.Contains(r.Remedy, "edit "+paces) {
+				t.Errorf("project check = %q (%s; %s)", r.Status, r.Detail, r.Remedy)
 			}
 
 			return

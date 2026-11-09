@@ -142,12 +142,12 @@ func TestFlowByArea(t *testing.T) {
 		FlowByArea: map[string]string{"ui": "direct"},
 	}
 
-	fl, err := resolveShipFlow(eff, "")
+	fl, err := pacedFlowIn(eff, nil, "", "")
 	if err != nil || !fl.byArea || fl.plans() || fl.recorded() != "" {
 		t.Fatalf("no flow named = %+v, %v", fl, err)
 	}
 
-	if named, _ := resolveShipFlow(eff, "default"); named.byArea || !named.plans() {
+	if named, _ := pacedFlowIn(eff, nil, "", "default"); named.byArea || !named.plans() {
 		t.Errorf("a named flow wins over the area map: %+v", named)
 	}
 

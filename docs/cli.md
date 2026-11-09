@@ -138,7 +138,7 @@ The run's pace (`--pace`, else the branch's record, else the project's or the us
 A step scoped by task kind (`plan.bug`) prints a line per kind unless `--kind` picks one.
 `--agent <profile>` lays a run's profile over `default` as `f10 start --agent` does, and `--json` emits the same lines.
 `f10-load-project.sh <step>...` prints this for the steps it loads, which is where a spawning step reads the Agent tool form.
-A key or a profile the vocabulary refuses fails the command naming the file, as a `project.md` fact does.
+A key or a profile the vocabulary refuses is a problem naming the file, as a `project.md` fact is: it stops every command that acts on facts but `f10 config`, `f10 init` and `f10 doctor`, which report it.
 
 **Your file**, `~/.f10/agents.md`, YAML frontmatter then free prose, holds the `agents:` map every project starts from (`docs/project-setup.md` → Agents).
 `F10_USER_DIR` names another directory than `~/.f10` for it and the other user files, which the eval runner uses to keep a measured run off your own map.

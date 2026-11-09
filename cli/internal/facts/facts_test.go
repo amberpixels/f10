@@ -110,7 +110,7 @@ func TestBuildMergesLayersFieldLevel(t *testing.T) {
 		Layering: layout.LayeringExtends,
 	}
 
-	eff := Build(lay, &probe.Probes{})
+	eff := Build(lay, &probe.Probes{}, "")
 
 	verify := fieldByName(t, eff, "Verify")
 	if verify.Value != "go test ./..." || verify.Origin.String() != "declared (worktree)" {
@@ -131,7 +131,7 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 		Stack: []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
 	}
 
-	eff := Build(lay, pb)
+	eff := Build(lay, pb, "")
 
 	for name, want := range map[string]struct {
 		origin OriginKind
@@ -174,7 +174,7 @@ func TestBuildVisibilityProseSetsNothing(t *testing.T) {
 		},
 	}
 
-	eff := Build(lay, &probe.Probes{})
+	eff := Build(lay, &probe.Probes{}, "")
 
 	if eff.Visibility != "stealth" || len(eff.Problems) > 0 {
 		t.Errorf("visibility = %q, problems %+v, want the default stealth and no warning", eff.Visibility, eff.Problems)
@@ -240,7 +240,7 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 		},
 	}
 
-	eff := Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+	eff := Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}}, "")
 
 	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin.String() != "declared (main, frontmatter)" {
 		t.Errorf("id prefix = %q (%s), want ABC declared (main, frontmatter)", eff.IDPrefix, eff.IDPrefixOrigin)
@@ -250,7 +250,7 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 // A name that derives nothing leaves the prefix empty rather than inventing
 // one: only explicit ids are accepted, and init leaves the Tracker to a human.
 func TestBuildUnusableProjectName(t *testing.T) {
-	eff := Build(&layout.Layout{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+	eff := Build(&layout.Layout{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}}, "")
 
 	if eff.IDPrefix != "" || eff.IDPrefixOrigin != (Origin{}) {
 		t.Errorf("id prefix = %q (%s), want none", eff.IDPrefix, eff.IDPrefixOrigin)

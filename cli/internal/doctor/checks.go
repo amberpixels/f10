@@ -446,14 +446,6 @@ func checkHost(ctx context.Context, env *Env) Result {
 func checkProject(env *Env) Result {
 	r := Result{Name: CheckProject}
 
-	if env.Layout == nil || len(env.Layout.Layers) == 0 {
-		r.Status, r.Detail = StatusNotNeeded, "no project.md here; inferred defaults apply"
-
-		return r
-	}
-
-	file := projectFile(env.Layout)
-
 	var errs, warnings []string
 
 	if env.Facts != nil {
@@ -466,6 +458,15 @@ func checkProject(env *Env) Result {
 		}
 	}
 
+	// the user's own files are facts too, so a broken one shows even where
+	// no project.md is
+	noProject := env.Layout == nil || len(env.Layout.Layers) == 0
+	if noProject && len(errs) == 0 {
+		r.Status, r.Detail = StatusNotNeeded, "no project.md here; inferred defaults apply"
+
+		return r
+	}
+
 	if len(errs) > 0 {
 		r.Status = StatusProblem
 		r.Detail = errs[0]
@@ -474,10 +475,20 @@ func checkProject(env *Env) Result {
 			r.Detail += " (+" + strconv.Itoa(len(errs)-1) + " more)"
 		}
 
-		r.Remedy = "edit " + file + "; f10 config shows every fact and its origin"
+		file := fileNamed(errs[0])
+		if file == "" && !noProject {
+			file = projectFile(env.Layout)
+		}
+
+		r.Remedy = "f10 config shows every fact and its origin"
+		if file != "" {
+			r.Remedy = "edit " + file + "; " + r.Remedy
+		}
 
 		return r
 	}
+
+	file := projectFile(env.Layout)
 
 	r.Status = StatusOK
 
@@ -487,6 +498,17 @@ func checkProject(env *Env) Result {
 	}
 
 	return r
+}
+
+// fileNamed is the file a problem opens with (`/home/me/.f10/paces.md: ...`),
+// "" when it names none.
+func fileNamed(msg string) string {
+	path, _, ok := strings.Cut(msg, ": ")
+	if !ok || !filepath.IsAbs(path) || !strings.HasSuffix(path, ".md") {
+		return ""
+	}
+
+	return path
 }
 
 // projectFile is the project.md of the layer that wins.

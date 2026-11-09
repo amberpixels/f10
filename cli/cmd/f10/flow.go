@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -63,22 +62,19 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	paces, err := paceSet(t.eff)
+	run, err := resolveRun(ctx, t.eff, runInput{
+		pace:   cmd.String("pace"),
+		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		branch: gitx.CurrentBranch(ctx, t.lay.CheckoutRoot),
+	})
 	if err != nil {
 		return err
 	}
 
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-
-	pace, err := activePace(ctx, paces, cmd.String("pace"), main, gitx.CurrentBranch(ctx, t.lay.CheckoutRoot))
-	if err != nil {
-		return err
-	}
-
-	v := pacedFlowsView(t.eff, paces, pace)
+	v := pacedFlowsView(t.eff, t.eff.PaceSet, run.pace)
 
 	if name := strings.ToLower(strings.TrimSpace(cmd.Args().First())); name != "" {
-		if _, err := resolveShipFlow(t.eff, name); err != nil {
+		if _, err := pacedFlow(t.eff, "", name); err != nil {
 			return err
 		}
 
@@ -106,10 +102,16 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 }
 
 func flowsView(eff *facts.Effective) flowView {
-	set := facts.NewPaceSet()
-	set.Remote = eff.Review.Remote()
+	return pacedFlowsView(eff, uncapped(eff.PaceSet), runPace{})
+}
 
-	return pacedFlowsView(eff, set, runPace{})
+// uncapped is the set without its ceiling: a flow under no pace runs as
+// declared, which a cap would change.
+func uncapped(set *facts.PaceSet) *facts.PaceSet {
+	s := *set
+	s.Ceiling, s.CeilingOrigins, s.Except = facts.Pace{}, nil, nil
+
+	return &s
 }
 
 // pacedFlowsView is every flow with its entries under pace; a flow the
@@ -137,7 +139,7 @@ func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flow
 // ceilingShown is the ceiling's dials with their layers, or why it leaves
 // the pace alone; "" with no ceiling.
 func ceilingShown(set *facts.PaceSet, pace string) string {
-	if len(set.Ceiling) == 0 {
+	if set.Ceiling.Empty() {
 		return ""
 	}
 
@@ -146,8 +148,8 @@ func ceilingShown(set *facts.PaceSet, pace string) string {
 	}
 
 	var parts []string
-	for _, key := range slices.Sorted(maps.Keys(set.Ceiling)) {
-		parts = append(parts, key+" "+set.Ceiling[key].Shown()+" ("+set.CeilingOrigins[key].String()+")")
+	for _, key := range set.Ceiling.Keys() {
+		parts = append(parts, key+" "+set.Ceiling.Shown(key)+" ("+set.CeilingOrigins[key].String()+")")
 	}
 
 	return strings.Join(parts, ", ")
@@ -370,16 +372,13 @@ func flowFlags(cmd *cli.Command) (string, error) {
 	return name, nil
 }
 
-func resolveShipFlow(eff *facts.Effective, name string) (shipFlow, error) {
-	return resolvePacedFlow(eff, nil, "", name)
-}
-
-// resolvePacedFlow is the named flow under pace: an entry the pace skips
-// does not run, so `plan: off` makes the flow planless. A nil set is no pace.
-func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name string) (shipFlow, error) {
-	if set == nil {
-		set, pace = facts.NewPaceSet(), ""
-		set.Remote = eff.Review.Remote()
+// pacedFlow is the named flow under pace: an entry the pace skips does not
+// run, so `plan: off` makes the flow planless. "" is no pace, the flow as
+// declared.
+func pacedFlow(eff *facts.Effective, pace, name string) (shipFlow, error) {
+	set := eff.PaceSet
+	if pace == "" {
+		set = uncapped(set)
 	}
 
 	if name == "" && len(eff.FlowByArea) > 0 {
