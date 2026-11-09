@@ -85,6 +85,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 	sid := cmp.Or(p.Session, state.Session())
 
 	notify(ctx, env, sid, p.Cwd, waits(env, sid, p)...)
+	background(env, sid, p)
 
 	switch p.Event {
 	case "UserPromptSubmit":

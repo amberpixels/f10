@@ -55,6 +55,17 @@
         ]
       },
       {
+        "matcher": "Bash|Monitor|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 hook",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      },
+      {
         "matcher": "AskUserQuestion",
         "hooks": [
           {

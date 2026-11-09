@@ -30,10 +30,38 @@ func unreported(run *state.Run, skill string, since time.Time) bool {
 
 // stalled is an agent idle for grace with its turn's end unreported, once
 // the Stop hook had time; drive and the watcher read a stall the same way.
-func stalled(status agentctl.Status, run *state.Run, skill string, since time.Time, idle, grace time.Duration) bool {
+// Background work launched at bg keeps it working: Herdr shows an agent idle
+// while it waits on one.
+func stalled(
+	status agentctl.Status,
+	run *state.Run,
+	skill string,
+	since time.Time,
+	idle, grace time.Duration,
+	bg, now time.Time,
+) bool {
 	atRest := status == agentctl.StatusIdle || status == agentctl.StatusDone
 
-	return atRest && unreported(run, skill, since) && idle >= grace
+	return atRest && unreported(run, skill, since) && idle >= grace && !backgroundPending(bg, now)
+}
+
+// backgroundPending is background work launched at bg still counting as
+// running: up to verifyLimit, the longest a catchup's verify may take, so a
+// job whose notification never comes still ends in a stall.
+func backgroundPending(bg, now time.Time) bool {
+	return !bg.IsZero() && now.Sub(bg) < verifyLimit
+}
+
+// backgroundAt is when the run's session last launched background work its
+// hooks still count as pending, the zero time for none.
+func backgroundAt(dir string, run *state.Run) time.Time {
+	if run == nil {
+		return time.Time{}
+	}
+
+	b, _ := state.PendingBackground(dir, run.Session)
+
+	return b.At
 }
 
 func idleWhile(run *state.Run, skill string) string {
@@ -184,19 +212,28 @@ func (in *driveInput) poll(
 	}
 
 	if unreported(run, skill, since) {
-		if r.idleSince.IsZero() {
+		// the grace counts from when background work stops showing, not from
+		// the turn's end
+		bg := backgroundAt(in.stateDir, run)
+		if r.idleSince.IsZero() || backgroundPending(bg, now) {
 			r.idleSince = now
 		}
 
 		// a turn that ends without its report is read from the branch; one the
 		// branch does not get past halts, since the agent may wait on a
 		// permission dialog that typing the skill again could answer
-		if stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), stallGrace) {
+		if stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), stallGrace, bg, now) {
 			r.idleSince = time.Time{}
 
-			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
+			halt := halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
 				"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
-				workspaceName(ws), idleWhile(run, skill))), false)
+				workspaceName(ws), idleWhile(run, skill)))
+
+			if skill == "catchup" && in.catchup != nil {
+				return in.catchupStalled(ctx, w, r, run, halt)
+			}
+
+			return in.settle(ctx, w, r, run, halt, false)
 		}
 
 		return nil

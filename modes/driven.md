@@ -65,6 +65,9 @@ Otherwise the task halts, because an idle agent on a running run may be waiting 
   Raise the `timeout` where the default is too short.
 - If a command must run in the background, wait for it in the same turn with a Monitor until-loop on its exit.
   Never end the turn expecting to be woken when it reports.
+  The drive reads an agent whose turn ended on a background Bash command, a Monitor or a subagent as working for up to 30 minutes, so a turn that breaks this rule is not halted at once.
+  The rule still holds, because a turn that waits reports sooner than one the drive waits out.
+  A background job that never notifies leaves the drive waiting the full 30 minutes before it treats the agent as stalled.
 - A driven turn ends in only three ways: the step's report, an ask or a failure.
 
 ## When a drive halts
