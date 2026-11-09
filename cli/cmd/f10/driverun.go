@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // driveInput is everything drive needs once the target is settled, so the
@@ -30,9 +31,9 @@ type driveInput struct {
 	// paced is a flow at another pace, for a branch that records one; nil
 	// keeps the run's
 	paced    func(fl shipFlow, pace string) (shipFlow, error)
-	plansDir string   // the plans dir every checkout shares
-	settings string   // claude's settings file, which names the model a bad --model falls back to
-	layers   agentMap // the user's and the project's agents map; nil for none
+	storage  storage.Root // the storage root every checkout shares
+	settings string       // claude's settings file, which names the model a bad --model falls back to
+	layers   agentMap     // the user's and the project's agents map; nil for none
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	finish   func(ctx context.Context, w io.Writer, req driveFinish) error

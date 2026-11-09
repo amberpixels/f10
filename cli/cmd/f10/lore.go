@@ -224,7 +224,7 @@ func loreNote(store *lore.Store, change string) string {
 
 // localLoreRoot is the lore dir every checkout shares.
 func localLoreRoot(lay *layout.Layout) string {
-	return filepath.Join(lay.StorageRoot, "lore")
+	return lay.StorageRoot.Lore()
 }
 
 // repoPath is the repo-relative, slash-separated form anchors use.
@@ -488,7 +488,7 @@ func runLoreChange(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("lore change: %w", err)
 	}
 
-	dir := filepath.Join(t.lay.StorageRoot, "reviews", key)
+	dir := t.lay.StorageRoot.Reviews(key)
 
 	if s, err := resolvePRSubject(ctx, t, cmd.Args().First()); err == nil && s.here {
 		if _, err := seriesOf(ctx, t, s, dir, cmd.ErrWriter); err != nil {

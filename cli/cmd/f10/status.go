@@ -316,9 +316,9 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 		branch:  name,
 		root:    path,
 		main:    main,
-		plan:    taskPlan(path, t.sharedPlansDir(), r.ID),
-		handoff: taskHandoff(main, t.sharedPlansDir(), r.ID),
-		storage: filepath.Dir(taskPlansDir(main, t.sharedPlansDir())),
+		plan:    t.lay.StorageRoot.Plan(r.ID),
+		handoff: taskHandoff(t.lay.StorageRoot, r.ID),
+		storage: t.lay.StorageRoot.Path(),
 	}
 
 	if h, err := t.host(); err == nil {

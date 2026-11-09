@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
@@ -103,7 +104,7 @@ func (in *driveInput) catchupMessage(r *driveRun) func(catchupPlan) []string {
 		}
 
 		if in.root != "" {
-			trailers += changeTrailer(tasks[0], changeOf(filepath.Join(in.root, "reviews", tasks[0])))
+			trailers += changeTrailer(tasks[0], changeOf(storage.Root(in.root).Reviews(tasks[0])))
 		}
 
 		return append(msg, strings.TrimSpace(trailers))

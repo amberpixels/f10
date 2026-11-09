@@ -49,7 +49,7 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 	}
 
 	lead := r.task.ref.Head().ID
-	s.plan = r.o.plan != "" || exists(taskPlan(r.o.path, in.plansDir, lead))
+	s.plan = r.o.plan != "" || exists(in.storage.Plan(lead))
 
 	if in.root != "" {
 		o := readOutcomes(nil, in.root, lead)

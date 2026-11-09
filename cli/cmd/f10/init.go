@@ -82,7 +82,7 @@ func destination(lay *layout.Layout) (string, error) {
 			"of its own - run `f10 -C %s init`", lay.CheckoutRoot, lay.MainRoot)
 	}
 
-	path := filepath.Join(lay.StorageRoot, "instructions", "project.md")
+	path := filepath.Join(lay.StorageRoot.Instructions(), "project.md")
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("%s already exists - f10 init creates, never overwrites", path)
 	}

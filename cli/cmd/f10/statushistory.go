@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/timing"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
@@ -72,25 +73,6 @@ func fileOutcomes(storageRoot, task string, since time.Time) outcomes {
 	return o
 }
 
-// finishedStorage is where a finished task's findings and verdicts still
-// are: the shared root, else the .f10 of the checkout its last run was in,
-// while that is on disk.
-func finishedStorage(shared, checkout string) string {
-	if shared != "" {
-		return shared
-	}
-
-	if checkout == "" {
-		return ""
-	}
-
-	if root := filepath.Join(checkout, ".f10"); exists(root) {
-		return root
-	}
-
-	return ""
-}
-
 // shipSteps is the steps the session's last ship run claimed before until.
 // Only a phase skill begins a run, so resolve or catchup mid-pipeline does
 // not end it; a step claimed again right after itself is one entry.
@@ -147,7 +129,7 @@ type roundFile struct {
 func reviewRounds(storageRoot, task string) []roundFile {
 	var rounds []roundFile
 
-	for _, path := range numbered(filepath.Join(storageRoot, "reviews", task)) {
+	for _, path := range numbered(storage.Root(storageRoot).Reviews(task)) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -229,7 +211,7 @@ type verdictFile struct {
 func judgeFiles(storageRoot, task string) []verdictFile {
 	var out []verdictFile
 
-	for _, path := range numbered(filepath.Join(storageRoot, "verdicts", task)) {
+	for _, path := range numbered(storage.Root(storageRoot).Verdicts(task)) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue

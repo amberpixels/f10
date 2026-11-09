@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // shipment is the facts block a ship report opens with, reprinted from what
@@ -117,8 +118,8 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 
 // shipFiles is the task's verdict and findings files. Verdicts from before
 // the open series are an earlier PR's, dropped as the judge row drops them.
-func shipFiles(storage, id string) ([]verdictPath, []reviewPath) {
-	reviews := filepath.Join(storage, "reviews", id)
+func shipFiles(root, id string) ([]verdictPath, []reviewPath) {
+	reviews := storage.Root(root).Reviews(id)
 	since := seriesStart(reviews)
 
 	var (
@@ -126,7 +127,7 @@ func shipFiles(storage, id string) ([]verdictPath, []reviewPath) {
 		rounds   []reviewPath
 	)
 
-	for _, v := range judgeFiles(storage, id) {
+	for _, v := range judgeFiles(root, id) {
 		if !v.at.Before(since) {
 			verdicts = append(verdicts, verdictPath{Subject: v.judged, Path: v.path})
 		}

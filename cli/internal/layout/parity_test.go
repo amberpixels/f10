@@ -166,7 +166,7 @@ func TestParity(t *testing.T) {
 				t.Errorf("source:\n  go:     %q\n  script: %q", lay.Source, want.source)
 			}
 
-			if lay.StorageRoot != want.storageRoot {
+			if lay.StorageRoot.Path() != want.storageRoot {
 				t.Errorf("storage root:\n  go:     %q\n  script: %q", lay.StorageRoot, want.storageRoot)
 			}
 

@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
@@ -26,7 +27,7 @@ type LocalInputs struct {
 	Main       string // the main checkout
 	StateDir   string // run state files
 	TTL        time.Duration
-	SharedRoot string           // the storage root every checkout shares; "" reads each checkout's .f10
+	SharedRoot storage.Root     // the storage root every checkout shares
 	LedgerPath string           // "" reads no ledger
 	ProjectID  string           // the ledger's project id
 	Agents     agentctl.Backend // the agent backend, when reachable: read its workspaces; nil reads none
@@ -135,7 +136,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 		}
 	}
 
-	dropDeadFinish(l.Branches, in.SharedRoot, prefix)
+	dropDeadFinish(l.Branches, in.SharedRoot.Path(), prefix)
 
 	runs, err := state.List(in.StateDir, now, in.TTL)
 	if err != nil {
@@ -152,9 +153,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 		}
 	}
 
-	for _, root := range storageRoots(in.SharedRoot, wts) {
-		notes = append(notes, readRoot(root, l)...)
-	}
+	notes = append(notes, readRoot(in.SharedRoot, l)...)
 
 	if in.LedgerPath != "" {
 		notes = append(notes, readLedger(ctx, in.LedgerPath, in.ProjectID, in.Resolve, l)...)
@@ -180,10 +179,10 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	return l, notes, nil
 }
 
-func readRoot(root string, l *Local) []string {
+func readRoot(root storage.Root, l *Local) []string {
 	var notes []string
 
-	for _, e := range dirEntries(filepath.Join(root, "plans")) {
+	for _, e := range dirEntries(root.Plans()) {
 		if id, ok := strings.CutSuffix(e.Name(), ".md"); ok && !e.IsDir() {
 			if info, err := e.Info(); err == nil {
 				if at, seen := l.Plans[id]; !seen || info.ModTime().After(at) {
@@ -193,7 +192,7 @@ func readRoot(root string, l *Local) []string {
 		}
 	}
 
-	for _, e := range dirEntries(filepath.Join(root, "plans", "archive")) {
+	for _, e := range dirEntries(root.Archive()) {
 		name := strings.TrimSuffix(e.Name(), ".md")
 		if id, _, ok := strings.Cut(name, "."); ok {
 			name = id
@@ -202,13 +201,13 @@ func readRoot(root string, l *Local) []string {
 		l.Archived[name] = true
 	}
 
-	for _, e := range dirEntries(filepath.Join(root, "reviews")) {
+	for _, e := range dirEntries(root.Reviews("")) {
 		// archive/ holds the series of finished PRs, no task's live rounds
-		if !e.IsDir() || e.Name() == "archive" {
+		if !e.IsDir() || e.Name() == storage.ArchiveDir {
 			continue
 		}
 
-		path, n := latest(filepath.Join(root, "reviews", e.Name()))
+		path, n := latest(root.Reviews(e.Name()))
 		if path == "" {
 			continue
 		}
@@ -253,12 +252,12 @@ func readRoot(root string, l *Local) []string {
 		}
 	}
 
-	for _, e := range dirEntries(filepath.Join(root, "verdicts")) {
+	for _, e := range dirEntries(root.Verdicts("")) {
 		if !e.IsDir() {
 			continue
 		}
 
-		path, _ := latest(filepath.Join(root, "verdicts", e.Name()))
+		path, _ := latest(root.Verdicts(e.Name()))
 		if path == "" {
 			continue
 		}
@@ -356,21 +355,6 @@ func dirEntries(dir string) []fs.DirEntry {
 	}
 
 	return entries
-}
-
-// storageRoots are the .f10 dirs holding task files: the shared root, or
-// with none, every checkout's.
-func storageRoots(shared string, wts []gitx.Worktree) []string {
-	if shared != "" {
-		return []string{shared}
-	}
-
-	roots := make([]string, 0, len(wts))
-	for _, wt := range wts {
-		roots = append(roots, filepath.Join(wt.Path, ".f10"))
-	}
-
-	return roots
 }
 
 func canon(p string) string {

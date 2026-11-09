@@ -120,18 +120,18 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in := startInput{
-		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		driver:   t.driver(),
-		task:     r,
-		suffix:   suffix,
-		mode:     mode,
-		flow:     fl,
-		pace:     strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
-		base:     base,
-		plansDir: t.sharedPlansDir(),
-		title:    titleLookup(t, r.Number),
-		pick:     pick,
-		note:     note,
+		main:    cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		driver:  t.driver(),
+		task:    r,
+		suffix:  suffix,
+		mode:    mode,
+		flow:    fl,
+		pace:    strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
+		base:    base,
+		storage: t.lay.StorageRoot,
+		title:   titleLookup(t, r.Number),
+		pick:    pick,
+		note:    note,
 	}
 
 	if checksParent(mode, pick) {
@@ -346,7 +346,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suf
 
 	watchProject(ctx, cmd.ErrWriter, t)
 
-	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now(),
+	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 }
 

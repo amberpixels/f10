@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // The fixture every janitor test starts from: origin's HEAD is main, the
@@ -36,7 +37,7 @@ func newJanitorFixture(t *testing.T) *janitorFixture {
 	main := t.TempDir()
 	fx := &janitorFixture{
 		f:  newFakes(t),
-		in: janitorInput{main: main, prefix: "GH", plansDir: filepath.Join(main, ".f10", "plans")},
+		in: janitorInput{main: main, prefix: "GH", storage: storage.InRepo(main)},
 	}
 
 	h := newHost("gh", main)
@@ -97,7 +98,7 @@ func (fx *janitorFixture) request(branch, state, sha, author string) {
 func (fx *janitorFixture) plan(t *testing.T) string {
 	t.Helper()
 
-	p := filepath.Join(fx.in.plansDir, "GH-1.md")
+	p := filepath.Join(fx.in.storage.Plans(), "GH-1.md")
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +130,7 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 	plan := fx.plan(t)
 	reviews := filepath.Join(fx.in.main, ".f10", "reviews")
 	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.main, fx.in.plansDir, "GH-1")
+	handoff := taskHandoff(fx.in.storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 
 	out := fx.run(t)
@@ -152,7 +153,7 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 		}
 	}
 
-	if exists(plan) || !exists(filepath.Join(fx.in.plansDir, "archive", "GH-1.md")) {
+	if exists(plan) || !exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-1.md")) {
 		t.Errorf("plan not archived:\n%s", out)
 	}
 
@@ -217,7 +218,7 @@ func TestJanitorKeepsABranchAheadOfItsRequest(t *testing.T) {
 			t.Errorf("tips %v: out = %q", c.tips, out)
 		}
 
-		if !exists(filepath.Join(fx.in.plansDir, "GH-1.md")) {
+		if !exists(filepath.Join(fx.in.storage.Plans(), "GH-1.md")) {
 			t.Errorf("tips %v: plan moved", c.tips)
 		}
 	}
@@ -396,7 +397,7 @@ func TestJanitorDryRun(t *testing.T) {
 	plan := fx.plan(t)
 	reviews := filepath.Join(fx.in.main, ".f10", "reviews", "GH-1")
 	writeFile(t, filepath.Join(reviews, "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.main, fx.in.plansDir, "GH-1")
+	handoff := taskHandoff(fx.in.storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 
 	out := fx.run(t)
@@ -523,8 +524,8 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 	fx.request("GH-1/x", "MERGED", "abc", "me")
 	fx.f.script(linkedKeys, "branch.GH-1/x.f10-task GH-1\nbranch.GH-1/x.f10-tasks GH-2")
 
-	rider := filepath.Join(fx.in.plansDir, "GH-2.md")
-	if err := os.MkdirAll(fx.in.plansDir, 0o755); err != nil {
+	rider := filepath.Join(fx.in.storage.Plans(), "GH-2.md")
+	if err := os.MkdirAll(fx.in.storage.Plans(), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -544,14 +545,14 @@ func TestJanitorArchivesARidersPlan(t *testing.T) {
 	fx.request("GH-1+GH-2/x", "MERGED", "abc", "me")
 	fx.plan(t)
 
-	rider := filepath.Join(fx.in.plansDir, "GH-2.md")
+	rider := filepath.Join(fx.in.storage.Plans(), "GH-2.md")
 	if err := os.WriteFile(rider, []byte("plan"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	out := fx.run(t)
 
-	if exists(rider) || !exists(filepath.Join(fx.in.plansDir, "archive", "GH-2.md")) {
+	if exists(rider) || !exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-2.md")) {
 		t.Errorf("rider's plan not archived:\n%s", out)
 	}
 }

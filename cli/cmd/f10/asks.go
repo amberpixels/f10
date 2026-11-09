@@ -737,7 +737,7 @@ func askFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 	return asks.Ask{
 		Task:     strings.ToUpper(task),
 		URL:      r.URL,
-		Root:     lay.StorageRoot,
+		Root:     lay.StorageRoot.Path(),
 		Main:     cmp.Or(lay.MainRoot, lay.CheckoutRoot),
 		Project:  lay.Project,
 		Worktree: lay.CheckoutRoot,

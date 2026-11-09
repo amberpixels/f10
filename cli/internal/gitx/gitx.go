@@ -665,3 +665,14 @@ func Resolved(p string) string {
 
 	return filepath.Join(Resolved(parent), filepath.Base(p))
 }
+
+// Inside says path is root or lies below it, both compared with symlinks
+// resolved, so two spellings of one place agree.
+func Inside(path, root string) bool {
+	rel, err := filepath.Rel(Resolved(root), Resolved(path))
+	if err != nil {
+		return false
+	}
+
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}

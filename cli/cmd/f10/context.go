@@ -21,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A target is the project a command answers for; -C only changes which
@@ -190,12 +191,12 @@ func (t *target) host() (host, error) {
 // instruction layer, last first, so a worktree finds main's driver where it
 // finds main's instructions and one replacing them keeps main's driver out.
 func (t *target) driverPaths() []string {
-	own := filepath.Join(t.lay.CheckoutRoot, ".f10")
+	own := storage.InRepo(t.lay.CheckoutRoot)
 	if t.outOfTree() {
 		own = t.lay.StorageRoot
 	}
 
-	paths := []string{filepath.Join(own, "driver")}
+	paths := []string{own.Driver()}
 
 	for _, layer := range slices.Backward(t.lay.Layers) {
 		if p := filepath.Join(filepath.Dir(layer.Dir), "driver"); !slices.Contains(paths, p) {
@@ -269,10 +270,6 @@ func (t *target) trackerDeclared() bool {
 	}
 
 	return false
-}
-
-func (t *target) sharedPlansDir() string {
-	return filepath.Join(t.lay.StorageRoot, "plans")
 }
 
 // outOfTree says the storage root is ~/.f10/<project>, outside every checkout.

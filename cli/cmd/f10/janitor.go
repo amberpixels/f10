@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // The janitor catches the task branches that went around finish: a PR merged
@@ -52,7 +53,7 @@ func runJanitor(ctx context.Context, cmd *cli.Command) error {
 	in.dry = cmd.Bool("dry-run")
 
 	if !in.dry {
-		if err := touchStamp(filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now()); err != nil {
+		if err := touchStamp(filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now()); err != nil {
 			return err
 		}
 	}
@@ -111,18 +112,18 @@ func touchStamp(stamp string, now time.Time) error {
 // janitorInput is everything the janitor needs, so it runs in a test
 // without a checkout.
 type janitorInput struct {
-	main     string
-	host     *host // nil without a host CLI: only branches never pushed qualify
-	prefix   string
-	plansDir string
-	dry      bool
+	main    string
+	host    *host // nil without a host CLI: only branches never pushed qualify
+	prefix  string
+	storage storage.Root
+	dry     bool
 	// localOnly: the watcher asks the network nothing before the host
 	localOnly bool
 }
 
 func janitorFor(t *target) janitorInput {
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	in := janitorInput{main: main, prefix: t.eff.IDPrefix, plansDir: t.sharedPlansDir()}
+	in := janitorInput{main: main, prefix: t.eff.IDPrefix, storage: t.lay.StorageRoot}
 
 	if h, err := t.host(); err == nil {
 		h = h.at(main)
@@ -620,7 +621,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 	slices.Sort(ids)
 
 	for _, id := range ids {
-		plan := taskPlan(j.in.main, j.in.plansDir, id)
+		plan := j.in.storage.Plan(id)
 
 		switch {
 		case !exists(plan):
@@ -639,7 +640,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 
 			continue
 		default:
-			archived, _, err := archivePlan(j.in.main, j.in.main, j.in.plansDir, id)
+			archived, _, err := archivePlan(j.in.storage, id)
 			if err != nil {
 				j.say("%v", err)
 
@@ -655,7 +656,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		}
 
 		if len(left[id]) == 0 && !j.in.dry {
-			if note := removeImages(j.in.main, j.in.plansDir, id); note != "" {
+			if note := removeImages(j.in.storage, id); note != "" {
 				j.say("%s", note)
 			}
 		}
@@ -666,7 +667,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 // the same task starts at round 1 and writes its own lore change; a merge
 // with no rounds still closes one.
 func (j *sweeper) archiveReviews(id string, end seriesEnd) {
-	reviews := taskReviews(j.in.main, j.in.plansDir, id)
+	reviews := j.in.storage.Reviews(id)
 
 	switch {
 	case j.in.dry:
@@ -686,7 +687,7 @@ func (j *sweeper) archiveReviews(id string, end seriesEnd) {
 // archiveHandoff moves a merged task's handoff aside, so its next PR
 // writes its own.
 func (j *sweeper) archiveHandoff(id string) {
-	src := taskHandoff(j.in.main, j.in.plansDir, id)
+	src := taskHandoff(j.in.storage, id)
 
 	switch {
 	case j.in.dry:
@@ -694,7 +695,7 @@ func (j *sweeper) archiveHandoff(id string) {
 			j.say("would archive %s", src)
 		}
 	default:
-		switch archived, err := archiveHandoff(j.in.main, j.in.plansDir, id); {
+		switch archived, err := archiveHandoff(j.in.storage, id); {
 		case err != nil:
 			j.say("%v", err)
 		case archived != "":

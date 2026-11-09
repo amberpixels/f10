@@ -33,7 +33,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		task:           task.ref,
 		suffix:         task.suffix,
 		after:          after,
-		plansDir:       in.plansDir,
+		storage:        in.storage,
 		title:          title,
 		profile:        task.profile,
 		profileFlagged: task.flagged,
@@ -342,7 +342,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 // a pushed one finishes through its PR.
 func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) {
 	i := slices.Index(r.chain, "ship")
-	if i < 0 || r.pos <= i || taskSpike(r.o.path, in.plansDir, r.task.ref.ID) == "" {
+	if i < 0 || r.pos <= i || taskSpike(r.o.path, in.storage, r.task.ref.ID) == "" {
 		return false, nil
 	}
 

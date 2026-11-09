@@ -39,7 +39,7 @@ type Probes struct {
 
 // Run probes the located checkout. Read-only, like everything here.
 func Run(ctx context.Context, lay *layout.Layout) *Probes {
-	p := &Probes{PlansDir: filepath.Join(lay.StorageRoot, "plans")}
+	p := &Probes{PlansDir: lay.StorageRoot.Plans()}
 
 	p.RemoteURL = gitx.Out(ctx, lay.CheckoutRoot, "remote", "get-url", "origin")
 	if p.RemoteURL != "" {
