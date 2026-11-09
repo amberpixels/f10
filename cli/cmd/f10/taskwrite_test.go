@@ -186,8 +186,8 @@ func TestHostRelink(t *testing.T) {
 		t.Errorf("unlink with no parent: %v", err)
 	}
 
-	err := relinkTask(t.Context(), &bytes.Buffer{}, childTarget(t, "glab"), nil,
-		ref.Ref{ID: "FT-12", Number: "12"}, "7", false)
+	err := childTarget(t, "glab").tasks().Relink(t.Context(), &bytes.Buffer{},
+		ref.Ref{ID: "FT-12", Number: "12"}, "7", unwrittenNothing)
 	if exitCode(err) != ui.ExitDeclined {
 		t.Errorf("glab relink: err = %v, want exit %d", err, ui.ExitDeclined)
 	}
@@ -351,8 +351,11 @@ func TestHostCreate(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	r, url, err := hostCreate(t.Context(), &warn, tg, "# Add it\n\nthe body\n",
-		props{priority: "high", labels: []string{"draft"}}, "FT-7")
+	r, url, err := tg.tasks().Create(t.Context(), &warn, newTask{
+		doc:    "# Add it\n\nthe body\n",
+		props:  props{priority: "high", labels: []string{"draft"}},
+		parent: ref.Ref{ID: "FT-7", Number: "7"},
+	})
 	if err != nil || r.ID != "FT-12" || url != "https://github.com/o/r/issues/12" || warn.Len() > 0 {
 		t.Errorf("hostCreate = %+v, %q, %v, %q", r, url, err, warn.String())
 	}
@@ -373,7 +376,7 @@ func TestHostCreateLinkFailureWarns(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	r, _, err := hostCreate(t.Context(), &warn, tg, "# A\n", props{}, "FT-7")
+	r, _, err := tg.tasks().Create(t.Context(), &warn, newTask{doc: "# A\n", parent: ref.Ref{ID: "FT-7", Number: "7"}})
 	if err != nil || r.ID != "FT-12" || !strings.Contains(warn.String(), "not linked under FT-7") {
 		t.Errorf("hostCreate = %+v, %v, %q; want the id and a warning", r, err, warn.String())
 	}
@@ -387,7 +390,7 @@ func TestHostCreateRefusals(t *testing.T) {
 	tg := childTarget(t, "gh")
 
 	for _, p := range []props{{status: "closed"}, {priority: "urgent"}, {set: []string{"Kind=Bug"}}} {
-		if _, _, err := hostCreate(t.Context(), &bytes.Buffer{}, tg, "# A\n", p, ""); err == nil {
+		if _, _, err := tg.tasks().Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n", props: p}); err == nil {
 			t.Errorf("%+v: no error", p)
 		}
 	}
@@ -398,7 +401,7 @@ func TestHostCreateRefusals(t *testing.T) {
 
 	f.script("gh issue create --title A --body ", "done\n")
 
-	if _, _, err := hostCreate(t.Context(), &bytes.Buffer{}, tg, "# A\n", props{}, ""); err == nil ||
+	if _, _, err := tg.tasks().Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n"}); err == nil ||
 		!strings.Contains(err.Error(), mayExist) {
 		t.Errorf("no url printed: err = %v, want the may-exist warning", err)
 	}

@@ -574,8 +574,8 @@ func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
 	}
 
 	k := childRow{ID: r.ID, Finished: true}
-	if h, err := t.issues(""); err == nil {
-		k.Title, _ = h.issueTitle(ctx, r.Number)
+	if s, err := t.hostTasks(""); err == nil {
+		k.Title, _ = s.h.issueTitle(ctx, r.Number)
 		t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
 	}
 

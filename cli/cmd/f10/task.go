@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -243,31 +242,9 @@ func fetchFallback(err error) error {
 
 // readDoc feeds the ledger's task refs, so a later ref costs no tracker call.
 func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
-	if d := t.driver(); d != nil {
-		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
-		if err == nil {
-			doc = oneIDHeading(doc, r, t.eff.TitleTemplate)
-			t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: t.driverTitle(r, doc)})
-
-			return doc, nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return "", err
-		}
-	}
-
-	h, err := t.issues(driver.VerbRead)
-	if err != nil {
-		return "", err
-	}
-
-	doc, iss, err := h.issueDoc(ctx, r.ID, r.Number, t.eff.StaleAfter)
+	doc, k, err := t.tasks().Read(ctx, r)
 	if err == nil {
-		t.rememberRefs(
-			ctx,
-			ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.URL},
-		)
+		t.rememberRefs(ctx, k)
 	}
 
 	return doc, err
@@ -386,25 +363,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if d := t.driver(); d != nil {
-		url, err := d.Run(ctx, driver.VerbURL, r.Number)
-		if err == nil {
-			return follow(ctx, cmd.Writer, t.dir, strings.TrimSpace(url), cmd.Bool("link"))
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return err
-		}
-	}
-
-	h, err := t.issues(driver.VerbURL)
-	if err != nil {
-		return err
-	}
-
-	// through the url, never `issue view --web`, which opens a pull request
-	// that shares the number
-	url, err := h.issueURL(ctx, r.Number)
+	url, err := t.tasks().URL(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -413,23 +372,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 }
 
 func taskListURL(ctx context.Context, t *target) (string, error) {
-	if d := t.driver(); d != nil {
-		url, err := d.Run(ctx, driver.VerbIndex)
-		if err == nil {
-			return strings.TrimSpace(url), nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return "", err
-		}
-	}
-
-	h, err := t.issues(driver.VerbIndex)
-	if err != nil {
-		return "", err
-	}
-
-	return h.IssuesURL(ctx)
+	return t.tasks().Index(ctx)
 }
 
 func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
@@ -442,31 +385,7 @@ func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
 }
 
 func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
-	if d := t.driver(); d != nil {
-		out, err := d.Run(ctx, driver.VerbList)
-		if err == nil {
-			var rows []row
-			if err := json.Unmarshal([]byte(out), &rows); err != nil {
-				return nil, fmt.Errorf("parsing driver list rows: %w", err)
-			}
-
-			rows = stripTitles(rows, t.eff.TitleTemplate)
-			t.rememberRefs(ctx, rowRefs(rows)...)
-
-			return rows, nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return nil, err
-		}
-	}
-
-	h, err := t.issues(driver.VerbList)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := h.listIssues(ctx, "", t.eff.IDPrefix, t.eff.PriorityLabels, limit)
+	rows, err := t.tasks().List(ctx, limit)
 	t.rememberRefs(ctx, rowRefs(rows)...)
 
 	return rows, err
@@ -557,31 +476,7 @@ func rankRows(rows []row) []row {
 }
 
 func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
-	if d := t.driver(); d != nil {
-		out, err := d.Run(ctx, driver.VerbSearch, query)
-		if err == nil {
-			var rows []row
-			if err := json.Unmarshal([]byte(out), &rows); err != nil {
-				return nil, fmt.Errorf("parsing driver search rows: %w", err)
-			}
-
-			rows = stripTitles(rows, t.eff.TitleTemplate)
-			t.rememberRefs(ctx, rowRefs(rows)...)
-
-			return rows, nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return nil, err
-		}
-	}
-
-	h, err := t.issues(driver.VerbSearch)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := h.listIssues(ctx, query, t.eff.IDPrefix, t.eff.PriorityLabels, issuePage)
+	rows, err := t.tasks().Search(ctx, query)
 	t.rememberRefs(ctx, rowRefs(rows)...)
 
 	return rows, err
@@ -671,10 +566,8 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
-	d := t.driver()
-	if d == nil && !t.createsOnHost() {
-		return ui.Exit(ui.ExitDeclined, "no driver creates tasks here (looked for %s), and no host issues take them; "+
-			"create it through the project's Create adapter (project.md, Tracker)", strings.Join(t.driverPaths(), ", "))
+	if rs, ok := t.refusedUpFront(); ok {
+		return rs.refuseCreate()
 	}
 
 	in, err := io.ReadAll(cmd.Reader)
@@ -690,30 +583,12 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 	doc = t.linkBodyAfter(ctx, doc, cmd.ErrWriter)
 
-	args, err := createArgs(ctx, t, cmd, doc)
+	nt, err := readNewTask(ctx, t, cmd, doc)
 	if err != nil {
 		return err
 	}
 
-	var r ref.Ref
-
-	created := ledger.TaskRef{}
-
-	if d != nil {
-		r, created.URL, err = driverCreate(ctx, cmd.ErrWriter, t, d, doc, args)
-		if errors.Is(err, driver.ErrUnsupported) && !t.createsOnHost() {
-			return ui.Exit(ui.ExitDeclined, "the driver at %s declines `create`; "+
-				"create the task through the project's Create adapter (project.md, Tracker)", d.Path)
-		}
-	}
-
-	if d == nil || errors.Is(err, driver.ErrUnsupported) {
-		var p props
-		if p, err = readProps(cmd); err == nil {
-			r, created.URL, err = hostCreate(ctx, cmd.ErrWriter, t, doc, p, cmd.String("parent"))
-		}
-	}
-
+	r, url, err := t.tasks().Create(ctx, cmd.ErrWriter, nt)
 	if err != nil {
 		return err
 	}
@@ -722,8 +597,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	retitleAfter(ctx, cmd.ErrWriter, t, r, "created")
 
 	// the url too, so naming the new task costs no tracker call
-	created.ID, created.Title = r.ID, docTitle(r.ID, doc)
-	t.rememberRefs(ctx, created)
+	t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc), URL: url})
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
@@ -808,19 +682,22 @@ func taskTitle(doc string) string {
 	return strings.TrimSpace(title)
 }
 
-// createArgs passes the parent and the body's After: base as numbers, as
-// every driver verb's argument is.
-func createArgs(ctx context.Context, t *target, cmd *cli.Command, doc string) ([]string, error) {
-	props, err := readProps(cmd)
+// readNewTask reads the properties and resolves the parent and the body's
+// After: base once, before any source sees them.
+func readNewTask(ctx context.Context, t *target, cmd *cli.Command, doc string) (newTask, error) {
+	p, err := readProps(cmd)
 	if err != nil {
-		return nil, err
+		return newTask{}, err
 	}
 
-	args := props.args()
+	nt := newTask{doc: doc, props: p}
 
-	for _, link := range []struct{ flag, id string }{
-		{"--parent", cmd.String("parent")},
-		{"--after", afterIn(doc)},
+	for _, link := range []struct {
+		flag, id string
+		to       *ref.Ref
+	}{
+		{"--parent", cmd.String("parent"), &nt.parent},
+		{"--after", afterIn(doc), &nt.after},
 	} {
 		if strings.TrimSpace(link.id) == "" {
 			continue
@@ -828,11 +705,11 @@ func createArgs(ctx context.Context, t *target, cmd *cli.Command, doc string) ([
 
 		r, err := t.reference(ctx, link.id)
 		if err != nil {
-			return nil, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
+			return newTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
 		}
 
-		args = append(args, link.flag, r.Number)
+		*link.to = r
 	}
 
-	return args, nil
+	return nt, nil
 }

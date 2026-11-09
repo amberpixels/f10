@@ -49,7 +49,7 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 }
 
 // createdAt prefers --created, the date the agent already read; a bare call
-// asks the host's issues, and any other tracker has no date f10 can parse.
+// asks the tracker, and one that keeps no date f10 can parse answers zero.
 func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Time, error) {
 	if flag != "" {
 		at, err := time.Parse(time.DateOnly, flag)
@@ -60,16 +60,7 @@ func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Ti
 		return at, nil
 	}
 
-	if !t.hostIssues() {
-		return time.Time{}, nil
-	}
-
-	h, err := t.host()
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	return h.issueCreated(ctx, r.Number)
+	return t.tasks().Created(ctx, r)
 }
 
 // staleness is the line task stale prints. A proceed on the task within

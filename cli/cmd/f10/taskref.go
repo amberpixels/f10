@@ -10,7 +10,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
@@ -179,43 +178,8 @@ func (t *target) taskRefs(
 	return known
 }
 
-//nolint:lostfield // a lookup by id, not a conversion
 func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) {
-	if d := t.driver(); d != nil {
-		doc, err := d.Run(ctx, driver.VerbRead, r.Number)
-		if err == nil {
-			k := ledger.TaskRef{ID: r.ID, Title: t.driverTitle(r, doc)}
-			if url, err := d.Run(ctx, driver.VerbURL, r.Number); err == nil {
-				k.URL = strings.TrimSpace(url)
-			}
-
-			if k.Title == "" {
-				return k, errors.New("the driver's read has no `# <title>` line")
-			}
-
-			return k, nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return ledger.TaskRef{}, err
-		}
-	}
-
-	h, err := t.issues(driver.VerbRead)
-	if err != nil {
-		return ledger.TaskRef{}, err
-	}
-
-	iss, err := h.Issue(ctx, r.Number)
-	if err != nil {
-		return ledger.TaskRef{}, err
-	}
-
-	if iss.Title == "" {
-		return ledger.TaskRef{}, fmt.Errorf("%s returned no title for issue %s", h.Name, r.Number)
-	}
-
-	return ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.URL}, nil
+	return t.tasks().Ref(ctx, r)
 }
 
 // linkBodyAfter links the body's `After: <id>` line to the base task, so a

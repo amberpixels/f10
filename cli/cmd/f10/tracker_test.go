@@ -81,10 +81,10 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	_, err := notion.issues("")
+	_, err := notion.hostTasks("")
 	if err == nil || !strings.Contains(err.Error(), "Notion") ||
 		!strings.Contains(err.Error(), filepath.Join(root, "driver")) {
-		t.Errorf("issues() = %v, want the Notion refusal naming the driver path", err)
+		t.Errorf("hostTasks() = %v, want the Notion refusal naming the driver path", err)
 	}
 
 	github := &target{
@@ -96,7 +96,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	if _, err := github.issues(""); err != nil {
+	if _, err := github.hostTasks(""); err != nil {
 		t.Errorf("a GitHub tracker = %v, want its host", err)
 	}
 }
@@ -148,10 +148,10 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
 	}
 	for _, verb := range verbs {
-		_, err := tg.issues(verb)
+		_, err := tg.hostTasks(verb)
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
 			!strings.Contains(err.Error(), verbNeeds[verb]) {
-			t.Errorf("issues(%s) = %v, want the driver path, the verb and what needs it", verb, err)
+			t.Errorf("hostTasks(%s) = %v, want the driver path, the verb and what needs it", verb, err)
 		}
 	}
 

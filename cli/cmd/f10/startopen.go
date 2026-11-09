@@ -51,12 +51,12 @@ type startInput struct {
 // the note beneath the report can quote it.
 func titleLookup(t *target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		h, err := t.issues(driver.VerbBranch)
+		s, err := t.hostTasks(driver.VerbBranch)
 		if err != nil {
 			return "", err
 		}
 
-		return h.issueTitle(ctx, number)
+		return s.h.issueTitle(ctx, number)
 	}
 }
 
@@ -120,7 +120,7 @@ func startedMove(t *target) func(context.Context, ref.Ref) error {
 	}
 
 	return func(ctx context.Context, task ref.Ref) error {
-		return updateTask(ctx, io.Discard, t, t.driver(), task, props{status: word})
+		return t.tasks().Update(ctx, io.Discard, task, props{status: word})
 	}
 }
 
