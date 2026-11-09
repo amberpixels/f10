@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -109,32 +107,7 @@ func (t *target) tracker() tracker {
 	tr := tracker{
 		resolve: t.reference,
 		info: func(ctx context.Context, task ref.Ref) (taskInfo, error) {
-			if d := t.driver(); d != nil {
-				body, err := d.Run(ctx, driver.VerbRead, task.Number)
-				if err == nil {
-					return taskInfo{body: body}, nil
-				}
-
-				if !errors.Is(err, driver.ErrUnsupported) {
-					return taskInfo{}, err
-				}
-			}
-
-			h, err := t.issues(driver.VerbRead)
-			if err != nil {
-				return taskInfo{}, err
-			}
-
-			iss, err := h.Item(ctx, task.Number)
-			if err != nil {
-				return taskInfo{}, err
-			}
-
-			return taskInfo{
-				body:   iss.Body,
-				closed: strings.EqualFold(iss.State, "closed"),
-				pull:   iss.Pull,
-			}, nil
+			return t.tasks().Info(ctx, task)
 		},
 		storage: t.lay.StorageRoot,
 		titles:  t.eff.TitleTemplate,

@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +12,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -117,52 +114,10 @@ func openRows(rows []childRow) []childRow {
 	return childTree(slices.DeleteFunc(slices.Clone(rows), func(r childRow) bool { return r.Finished }))
 }
 
-// rawChildren asks the driver's `children`, else the host; a driver that
-// declines on a tracker no host CLI reaches has no parent link to read.
+// rawChildren is the task's subtasks as the tracker holds them;
+// errNoParentLink when it has no parent link to read.
 func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, error) {
-	if d := t.driver(); d != nil {
-		out, err := d.Run(ctx, driver.VerbChildren, task.Number)
-		if err == nil {
-			var raw []rawChild
-			if err := json.Unmarshal([]byte(out), &raw); err != nil {
-				return nil, fmt.Errorf("parsing driver children rows: %w", err)
-			}
-
-			return raw, nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return nil, err
-		}
-
-		if !t.hostIssues() {
-			return nil, errNoParentLink
-		}
-	}
-
-	h, err := t.issues(driver.VerbChildren)
-	if err != nil {
-		return nil, err
-	}
-
-	kids, err := h.Children(ctx, task.Number)
-	if errors.Is(err, forge.ErrUnsupported) {
-		return nil, errNoParentLink
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	raw := make([]rawChild, 0, len(kids))
-	for _, k := range kids {
-		raw = append(
-			raw,
-			rawChild{ID: k.Number, Title: k.Title, URL: k.URL, State: k.State, Body: k.Body, Labels: k.Labels},
-		)
-	}
-
-	return raw, nil
+	return t.tasks().Children(ctx, task)
 }
 
 func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild, keepClosed bool) ([]childRow, error) {

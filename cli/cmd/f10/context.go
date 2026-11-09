@@ -223,41 +223,6 @@ func (t *target) driver() *driver.Driver {
 	return nil
 }
 
-// verbNeeds names what needs each verb, for the refusal when a driver
-// declines it.
-var verbNeeds = map[string]string{
-	driver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
-	driver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
-	driver.VerbURL:    "`f10 task open <id>` needs",
-	driver.VerbIndex:  "`f10 task open` with no id needs",
-	driver.VerbList:   "`f10 task open --print` and the board's next rows need",
-	driver.VerbSearch: "`f10 task search` needs",
-}
-
-// issues is the host-issues fallback when no driver answers; declined is
-// the verb that exited 3. A tracker no host CLI reaches is refused, since
-// an unrelated issue or PR on the host shares the number.
-func (t *target) issues(declined string) (host, error) {
-	if t.hostIssues() {
-		return t.host()
-	}
-
-	if d := t.driver(); d != nil && declined != "" {
-		need := ""
-		if n, ok := verbNeeds[declined]; ok {
-			need = ", which " + n
-		}
-
-		return host{}, fmt.Errorf("project.md declares a %s tracker, which has no host-issues fallback, "+
-			"and the driver at %s declines `%s`%s; add it per docs/driver-contract.md",
-			t.eff.TrackerKind, d.Path, declined, need)
-	}
-
-	return host{}, fmt.Errorf("project.md declares a %s tracker, which f10 reads only through a driver, "+
-		"and none was found (looked for %s); see docs/driver-contract.md",
-		t.eff.TrackerKind, strings.Join(t.driverPaths(), ", "))
-}
-
 func (t *target) hostIssues() bool {
 	kind := t.eff.TrackerKind
 

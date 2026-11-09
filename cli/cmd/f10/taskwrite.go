@@ -98,7 +98,7 @@ func (p props) args() []string {
 }
 
 func runTaskComment(ctx context.Context, cmd *cli.Command) error {
-	t, r, d, err := writeTarget(ctx, cmd, driver.VerbComment)
+	t, r, err := writeTarget(ctx, cmd, driver.VerbComment)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task comment reads the comment as markdown on stdin, and it was empty")
 	}
 
-	url, err := postComment(ctx, cmd.ErrWriter, t, d, r, body)
+	url, err := t.tasks().Comment(ctx, cmd.ErrWriter, r, body)
 	if err != nil {
 		return err
 	}
@@ -123,42 +123,6 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return err
-}
-
-func postComment(
-	ctx context.Context,
-	warnTo io.Writer,
-	t *target,
-	d *driver.Driver,
-	r ref.Ref,
-	body string,
-) (string, error) {
-	if d != nil {
-		out, warn, err := d.RunInput(ctx, body, driver.VerbComment, r.Number)
-		if err == nil {
-			if warn != "" {
-				fmt.Fprintln(warnTo, warn)
-			}
-
-			return strings.TrimSpace(out), nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return "", fmt.Errorf("%w\n%s", err, mayPosted)
-		}
-	}
-
-	h, err := writeHost(t, d, driver.VerbComment)
-	if err != nil {
-		return "", err
-	}
-
-	url, err := h.CommentIssue(ctx, r.Number, body)
-	if err != nil {
-		return "", fmt.Errorf("%w\n%s", err, mayPosted)
-	}
-
-	return url, nil
 }
 
 // runTaskUpdate takes absolute values, so a rerun after a failure is safe.
@@ -177,7 +141,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		)
 	}
 
-	t, r, d, err := writeTarget(ctx, cmd, driver.VerbUpdate)
+	t, r, err := writeTarget(ctx, cmd, driver.VerbUpdate)
 	if err != nil {
 		return err
 	}
@@ -190,7 +154,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if !p.empty() {
-		if err := updateTask(ctx, cmd.ErrWriter, t, d, r, p); err != nil {
+		if err := t.tasks().Update(ctx, cmd.ErrWriter, r, p); err != nil {
 			return err
 		}
 	}
@@ -199,7 +163,13 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	return relinkTask(ctx, cmd.ErrWriter, t, d, r, parent, !p.empty())
+	// the parent goes alone, so a source declining it has dropped nothing else
+	unwritten := unwrittenNothing
+	if !p.empty() {
+		unwritten = "the other properties were written, the parent link was not"
+	}
+
+	return t.tasks().Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
 }
 
 // parentNumber resolves --parent before anything is written; empty means
@@ -221,115 +191,24 @@ func parentNumber(ctx context.Context, t *target, r ref.Ref, raw string) (string
 	return pr.Number, nil
 }
 
-// relinkTask sends the parent alone, so a driver declining it has dropped
-// nothing else; wrote says the properties before it already landed.
-func relinkTask(
-	ctx context.Context, warnTo io.Writer, t *target, d *driver.Driver, r ref.Ref, parent string, wrote bool,
-) error {
-	unwritten := "nothing was written"
-	if wrote {
-		unwritten = "the other properties were written, the parent link was not"
-	}
-
-	if d != nil {
-		_, warn, err := d.RunInput(ctx, "", driver.VerbUpdate, r.Number, "--parent", parent)
-		if err == nil {
-			if warn != "" {
-				fmt.Fprintln(warnTo, warn)
-			}
-
-			return nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			if wrote {
-				return fmt.Errorf("%w\n%s", err, unwritten)
-			}
-
-			return err
-		}
-	}
-
-	h, err := hostOrExit(t, d, driver.VerbUpdate+" --parent", unwritten)
-	if err != nil {
-		return err
-	}
-
-	err = h.relink(ctx, parent, r.Number)
-	if errors.Is(err, forge.ErrNoIssueParent) {
-		return ui.Exit(ui.ExitDeclined, "%v; %s", err, unwritten)
-	}
-
-	return err
-}
-
-func updateTask(ctx context.Context, warnTo io.Writer, t *target, d *driver.Driver, r ref.Ref, p props) error {
-	if d != nil {
-		_, warn, err := d.RunInput(ctx, "", driver.VerbUpdate, append([]string{r.Number}, p.args()...)...)
-		if err == nil {
-			if warn != "" {
-				fmt.Fprintln(warnTo, warn)
-			}
-
-			retitleAfter(ctx, warnTo, t, r, "updated")
-
-			return nil
-		}
-
-		if !errors.Is(err, driver.ErrUnsupported) {
-			return err
-		}
-	}
-
-	h, err := writeHost(t, d, driver.VerbUpdate)
-	if err != nil {
-		return err
-	}
-
-	return h.update(ctx, r.Number, p, t.eff.PriorityLabels)
-}
-
-// writeTarget settles the task and its driver for a write verb, and
-// answers exit 3 before stdin is read when nothing could take the write.
-func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target, ref.Ref, *driver.Driver, error) {
+// writeTarget settles the task for a write verb, and refuses before stdin
+// is read when nothing could take the write.
+func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target, ref.Ref, error) {
 	t, err := targetFor(ctx, cmd)
 	if err != nil {
-		return nil, ref.Ref{}, nil, err
+		return nil, ref.Ref{}, err
 	}
 
 	r, err := t.reference(ctx, cmd.Args().First())
 	if err != nil {
-		return nil, ref.Ref{}, nil, err
+		return nil, ref.Ref{}, err
 	}
 
-	d := t.driver()
-	if d == nil && !t.hostIssues() {
-		_, err := writeHost(t, nil, verb)
-
-		return nil, ref.Ref{}, nil, err
+	if rs, ok := t.refusedUpFront(); ok {
+		return nil, ref.Ref{}, rs.refuseWrite(verb, unwrittenNothing)
 	}
 
-	return t, r, d, nil
-}
-
-func writeHost(t *target, d *driver.Driver, verb string) (host, error) {
-	return hostOrExit(t, d, verb, "nothing was written")
-}
-
-// hostOrExit is writeHost with the exit message's last clause given, for a
-// write that follows another one.
-func hostOrExit(t *target, d *driver.Driver, verb, unwritten string) (host, error) {
-	if t.hostIssues() {
-		return t.host()
-	}
-
-	why := "no driver was found (looked for " + strings.Join(t.driverPaths(), ", ") + ")"
-	if d != nil {
-		why = "the driver at " + d.Path + " declines `" + verb + "`"
-	}
-
-	return host{}, ui.Exit(ui.ExitDeclined, "%s, and a %s tracker has no host-issues fallback; %s",
-		why, t.eff.TrackerKind, unwritten)
+	return t, r, nil
 }
 
 // update: an issue has two states and no custom properties, so `--status`
@@ -526,25 +405,13 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// createsOnHost is a tracker on the host's issues with a host CLI to reach
-// them; without one, create answers exit 3 like a tracker f10 cannot reach.
-func (t *target) createsOnHost() bool {
-	if !t.hostIssues() {
-		return false
-	}
-
-	_, err := t.host()
-
-	return err == nil
-}
-
 // hostCreate makes the task an issue on the host. The parent link is a second
 // write, since it needs the new number; the issue exists by then, so a failed
 // link is a warning and never a reason to create it again. An issue has no
 // named properties, so --set is refused before anything is written.
-func hostCreate(
-	ctx context.Context, warnTo io.Writer, t *target, doc string, p props, parent string,
-) (ref.Ref, string, error) {
+func hostCreate(ctx context.Context, warnTo io.Writer, t *target, h host, nt newTask) (ref.Ref, string, error) {
+	p := nt.props
+
 	if len(p.set) > 0 {
 		return ref.Ref{}, "", fmt.Errorf(
 			"issues on the host have no custom properties for --set %s; nothing was created",
@@ -570,14 +437,9 @@ func hostCreate(
 		labels = append(labels, label)
 	}
 
-	h, err := t.host()
-	if err != nil {
-		return ref.Ref{}, "", err
-	}
+	_, body, _ := strings.Cut(nt.doc, "\n")
 
-	_, body, _ := strings.Cut(doc, "\n")
-
-	url, number, err := h.CreateIssue(ctx, taskTitle(doc), strings.TrimSpace(body), labels)
+	url, number, err := h.CreateIssue(ctx, taskTitle(nt.doc), strings.TrimSpace(body), labels)
 	if err != nil {
 		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
 	}
@@ -587,21 +449,12 @@ func hostCreate(
 		return ref.Ref{}, "", fmt.Errorf("%s: %w\n%s", url, err, mayExist)
 	}
 
-	if parent = strings.TrimSpace(parent); parent != "" {
-		if err := linkUnder(ctx, t, h, parent, number); err != nil {
+	if parent := nt.parent; parent.Number != "" {
+		if err := h.LinkParent(ctx, parent.Number, number); err != nil {
 			ui.Warnf(warnTo, "%s was created, but not linked under %s: %v; "+
-				"link it by hand, and `f10 task children %s` confirms it", r.ID, parent, err, parent)
+				"link it by hand, and `f10 task children %s` confirms it", r.ID, parent.ID, err, parent.ID)
 		}
 	}
 
 	return r, url, nil
-}
-
-func linkUnder(ctx context.Context, t *target, h host, parent, child string) error {
-	pr, err := t.reference(ctx, parent)
-	if err != nil {
-		return err
-	}
-
-	return h.LinkParent(ctx, pr.Number, child)
 }
