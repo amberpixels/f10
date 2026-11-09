@@ -124,6 +124,11 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
+		// drive clears the chain an older drive stored on every branch it opens
+		if strings.HasPrefix(key, "git config --unset branch.") && strings.HasSuffix(key, ".f10-chain") {
+			return shell.Result{}
+		}
+
 		// drive records its finish's progress on every branch it finishes
 		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+ref.FinishKey) {
 			return shell.Result{}

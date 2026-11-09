@@ -79,6 +79,9 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		_ = gitx.UnsetConfig(ctx, in.main, "branch."+o.branch+"."+ref.FinishKey) // absent is fine
 	}
 
+	// drives before the skills were read off the flow stored them here
+	_ = gitx.UnsetConfig(ctx, in.main, "branch."+o.branch+".f10-chain") // absent is fine
+
 	for _, n := range appendNote(o.notes, note) {
 		fmt.Fprintf(w, "  %s\n", n)
 	}

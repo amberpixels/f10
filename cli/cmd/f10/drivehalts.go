@@ -133,7 +133,7 @@ func blockedRun(run *state.Run) bool {
 // or partial with no question, at an entry the guard runs before. A
 // judge's stop is blocked, and a driven catchup stops at leaf catchup.
 func guardStop(run *state.Run) bool {
-	step, _, _ := strings.Cut(run.Leaf, ":")
+	step := flow.Parse(run.Leaf).Step
 
 	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(flow.Guarded, step)
 }

@@ -258,8 +258,8 @@ func (*driveInput) clearAttempts(r *driveRun) {
 	r.attempts = nil
 }
 
-// settle reads the state at a turn's end its run did not explain: a
-// element the branch shows done moves the task on, anything else is a failed
+// settle reads the state at a turn's end its run did not explain: a skill
+// the branch shows done moves the task on, anything else is a failed
 // attempt of the action in flight, or with retry false, halt at once.
 func (in *driveInput) settle(
 	ctx context.Context,

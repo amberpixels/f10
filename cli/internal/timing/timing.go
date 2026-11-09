@@ -6,7 +6,6 @@ package timing
 
 import (
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -206,7 +205,7 @@ func windows(evs []ledger.Event) []Window {
 
 				if leaf != "" {
 					// `review:local` is review, `cleanup:comments` cleanup
-					name, _, _ := strings.Cut(leaf, ":")
+					name := flow.Parse(leaf).Step
 					if name == Review && split == leaf {
 						name = Resolve // a resolve blocked on an ask and resumed
 					}

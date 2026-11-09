@@ -492,6 +492,10 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	if fx.f.called("git config branch.GH-1.f10-chain") {
 		t.Error("drive recorded a chain on the branch; it reads the skills off the flow")
 	}
+
+	if !fx.f.called("git config --unset branch.GH-1.f10-chain") {
+		t.Error("drive left the chain an older drive stored on the branch")
+	}
 }
 
 // The same command with --answer resumes the same task: the answer goes to

@@ -589,14 +589,14 @@ A cancelled record is never picked up again: the same command line starts a new 
    A base outside the list that is not finished is refused, and so are tasks that wait on each other in a circle, both before anything is created.
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
-   A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or its whole chain run).
+   A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or every one of its skills run).
    Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
    `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, up to the cap.
    `--parallel <n>` caps the tasks running a skill at once, by default half the CPU cores, from 2 to 8.
-   A task keeps its slot from one skill of its chain to the next.
+   A task keeps its slot from one of its skills to the next.
    It frees the slot once it asks, waits for its base's first commit, or waits at finish for its base.
    Open agents are capped too, at twice the cap, because an idle session still holds its memory.
    The agent limit counts the tasks under way and the tasks asking, including agents an earlier run of the drive left open.
@@ -611,7 +611,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
    Nothing is prompted at open.
-   The chain runs from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
+   The skills run from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
    A plan the worktree reads when the driver starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
    A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); on any other end, an interrupt included, the driver sets it back to `queued`.
@@ -659,7 +659,7 @@ A cancelled record is never picked up again: the same command line starts a new 
      Once the base is released and its branch head has moved past the one the ship found, ship is sent again with `resume at implement`; the same head never sends it twice.
      A wait on a base this drive does not run, or one already through, halts the task with the run's note;
    - **blocked without one** (a judge stop, a stale task's verdict) - a decision, not breakage: the task halts with the run's note and next, since sending the skill again would only roll the decision again;
-   - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan): each chain element the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
+   - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan): each skill the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
      A stop the branch does not get past is a failed attempt of the skill in flight;
    - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting; the driver reads the branch the same way, so a branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
      Anything less halts the task naming the workspace, because the agent is usually waiting on a permission dialog in its pane, and typing the skill again could answer it.
@@ -671,7 +671,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Three failures in a row of one action, with nothing changed between them (the branch, origin's copy, the marks, a merge or rebase in progress, the plan file, the PR, the review rounds and change verdicts, the run's phases), halt the task with the last reason and a line per attempt; the halt and its attempts go to the ledger.
    A failure after which any of those moved starts the count over, and so does a step that goes through.
    A catchup's attempts compare the conflict it leaves instead, because a catchup that merges moves the branch every time; a clean catchup does not clear them, only the entry it guarded going through does.
-   A halted task halts every task that waits on it: one not started yet never starts, and one already running halts at its next chain boundary, its work left on its branch.
+   A halted task halts every task that waits on it: one not started yet never starts, and one already running halts before its next skill, its work left on its branch.
    Every other task runs on, and the driver exits **5** once nothing can move.
    The count lives in the running drive only, so a rerun or a resumed drive starts it over.
 
@@ -680,8 +680,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <chain>`, `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
-   Exit 0 when every task went through its chain, 4 when any task asks, else 5 when any halted.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
+   Exit 0 when every task went through its skills, 4 when any task asks, else 5 when any halted.
    Exit 6 is a drive stopped for a daemon upgrade; only the daemon and the command following it see it.
 
 Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
