@@ -656,8 +656,8 @@ func TestJanitorKeepsABranchWhoseTipItCannotRead(t *testing.T) {
 	}
 }
 
-// A plan that cannot move is a line, and the task's findings and handoff
-// still go: the janitor reaches the task only through the branch it just
+// A plan that cannot move is a line and keeps its images, and the task's
+// findings and handoff still go: the janitor reaches the task only through the branch it just
 // removed, so nothing would come back for them.
 func TestJanitorArchivesTheRestWhenThePlanCannotMove(t *testing.T) {
 	fx := newJanitorFixture(t)
@@ -669,11 +669,13 @@ func TestJanitorArchivesTheRestWhenThePlanCannotMove(t *testing.T) {
 	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
 	handoff := taskHandoff(fx.in.storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
+	image := filepath.Join(fx.in.storage.Images("GH-1"), "1.png")
+	writeFile(t, image, "png")
 
 	out := fx.run(t)
 
-	if !fsx.Exists(plan) || !strings.Contains(out, "archiving the plan at "+plan) {
-		t.Errorf("want the plan kept and its failure named:\n%s", out)
+	if !fsx.Exists(plan) || !fsx.Exists(image) || !strings.Contains(out, "archiving the plan at "+plan) {
+		t.Errorf("want the plan and its images kept and the failure named:\n%s", out)
 	}
 
 	if !fsx.Exists(filepath.Join(reviews, "archive", "GH-1.1", "1.md")) || fsx.Exists(handoff) {

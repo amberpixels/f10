@@ -34,7 +34,12 @@ func archiveTask(root storage.Root, id string, end *seriesEnd,
 	}
 
 	a.plan, a.planFailed, a.missing = plan, err != nil, note
-	a.images = removeImages(root, id)
+
+	// a plan still live keeps the images its text links to
+	if !a.planFailed {
+		a.images = removeImages(root, id)
+	}
+
 	a.handoffSrc, a.handoff = handoffTarget(root, id)
 
 	if end != nil {
