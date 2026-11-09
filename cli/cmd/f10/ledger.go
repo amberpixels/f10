@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"slices"
 	"strings"
@@ -55,20 +53,7 @@ func runLedgerDump(ctx context.Context, cmd *cli.Command) error {
 		f.Project = ledger.Where(ctx, cwd).Project
 	}
 
-	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
-
-	l, err := ledger.OpenRead(ctx, ledger.Path())
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil // nothing recorded yet
-	}
-
-	if err != nil {
-		return err
-	}
-
-	defer l.Close()
-
-	events, err := l.List(ctx, f)
+	events, err := ledger.ReadEvents(ctx, ledger.Path(), f)
 	if err != nil {
 		return err
 	}

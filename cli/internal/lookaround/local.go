@@ -2,7 +2,6 @@ package lookaround
 
 import (
 	"context"
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -266,20 +265,7 @@ func readRoot(root storage.Root, l *Local) []string {
 }
 
 func readLedger(ctx context.Context, path, project string, resolve func(string) string, l *Local) []string {
-	_ = ledger.SyncAt(ctx, path) // a failed replay still reads what the database holds
-
-	db, err := ledger.OpenRead(ctx, path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-
-	if err != nil {
-		return []string{"ledger not read: " + err.Error()}
-	}
-
-	defer db.Close()
-
-	events, err := db.List(ctx, ledger.Filter{Project: project, Kind: ledger.TaskFinished})
+	events, err := ledger.ReadEvents(ctx, path, ledger.Filter{Project: project, Kind: ledger.TaskFinished})
 	if err != nil {
 		return []string{"ledger not read: " + err.Error()}
 	}

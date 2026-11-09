@@ -43,8 +43,51 @@ const (
 	Claimed  = "claimed"
 )
 
-// Payload is an event's kind-specific detail, stored as JSON.
-type Payload = map[string]any
+// Payload is an event's kind-specific detail, stored as JSON. Its readers
+// take a value as stored (JSON numbers and lists) or as built in memory.
+type Payload map[string]any
+
+// String is the key's string, "" when absent or not a string.
+func (p Payload) String(key string) string {
+	s, _ := p[key].(string)
+
+	return s
+}
+
+// Strings is the key's list, its strings only.
+func (p Payload) Strings(key string) []string {
+	switch raw := p[key].(type) {
+	case []string:
+		return raw
+	case []any:
+		var out []string
+
+		for _, v := range raw {
+			if s, ok := v.(string); ok {
+				out = append(out, s)
+			}
+		}
+
+		return out
+	}
+
+	return nil
+}
+
+// Int is the key's number: a float64 once stored as JSON, an int as built.
+func (p Payload) Int(key string) (int, bool) {
+	switch n := p[key].(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	}
+
+	return 0, false
+}
+
+// Bool reports whether the key holds true.
+func (p Payload) Bool(key string) bool { return p[key] == true }
 
 type payloadCol = r3.JSONColumn[Payload]
 
@@ -76,10 +119,10 @@ func (Event) TableName() string { return "events" }
 // first non-flag argument, else the row's task, which the observer takes from
 // the session's run and so names another task when finish ran from elsewhere.
 func (e Event) FinishedTask() string {
-	args, _ := e.Payload.Val["args"].([]any)
+	args := e.Payload.Val.Strings("args")
 
 	for i := 0; i < len(args); i++ {
-		s, _ := args[i].(string)
+		s := args[i]
 
 		switch {
 		case s == "--close" || s == "-close":
@@ -226,6 +269,25 @@ func (l *Ledger) List(ctx context.Context, f Filter) ([]Event, error) {
 	}
 
 	return events, nil
+}
+
+// ReadEvents is the events f matches in the database at path, oldest first,
+// what writers spooled included. A missing database has no events.
+func ReadEvents(ctx context.Context, path string, f Filter) ([]Event, error) {
+	_ = SyncAt(ctx, path) // a failed replay still reads what the database holds
+
+	l, err := OpenRead(ctx, path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer l.Close()
+
+	return l.List(ctx, f)
 }
 
 // Count is how many events f matches.
