@@ -92,8 +92,8 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 	// pushed task asks the host, so a status before the PR stays local
 	if s.pr == "" && lt.pushed && in.host != nil && in.branch != "" {
 		s.pulled = true
-		if p, err := in.host.pull(ctx, in.branch); err == nil {
-			s.pr, s.prState = p.url(), p.status()
+		if p, err := in.host.PR(ctx, in.branch); err == nil {
+			s.pr, s.prState = p.URL, p.Status
 		}
 	}
 

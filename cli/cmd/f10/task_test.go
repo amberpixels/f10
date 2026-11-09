@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -335,7 +336,8 @@ func TestPullRows(t *testing.T) {
 		{"glab", "!4", "https://gitlab.example.com/g/r/-/merge_requests/4"},
 	} {
 		rows, err := newHost(tc.cli, "").pullRows(t.Context())
-		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != pullOpen || rows[0].URL != tc.url {
+		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != forge.Open ||
+			rows[0].URL != tc.url {
 			t.Errorf("%s rows = %+v, %v", tc.cli, rows, err)
 		}
 	}

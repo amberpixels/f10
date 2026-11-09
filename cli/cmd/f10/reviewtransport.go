@@ -750,3 +750,14 @@ func (rv *reviewer) pipelineJobs(ctx context.Context) ([]remoteReview, error) {
 
 	return found, nil
 }
+
+// prArgs: GitHub has pull requests, GitLab merge requests.
+func (h host) prArgs(number string, tail ...string) []string {
+	args := h.Pick([]string{"pr", "view"}, []string{"mr", "view"})
+
+	if number != "" {
+		args = append(args, number)
+	}
+
+	return append(args, tail...)
+}

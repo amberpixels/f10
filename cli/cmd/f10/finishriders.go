@@ -96,7 +96,7 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 
 		notes = append(notes, "reopened "+strings.Join(refIDs(kept), ", ")+", which the merge had closed")
 	case !merged:
-		body, err := in.host.pullBody(ctx, branch)
+		body, err := in.host.PRBody(ctx, branch)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +112,7 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 		}
 
 		if edited != body {
-			if err := in.host.editPullBody(ctx, branch, edited); err != nil {
+			if err := in.host.EditPull(ctx, branch, "", edited); err != nil {
 				return nil, fmt.Errorf("editing the closing keywords in the PR body: %w", err)
 			}
 		}

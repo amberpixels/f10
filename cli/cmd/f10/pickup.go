@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
@@ -58,14 +59,14 @@ func digits(s string) bool {
 
 // pickupTask prefers a closing keyword's issue (this repository's only) on a
 // host-issues tracker, else an id in the body, title or branch, in that order.
-func pickupTask(prefix string, hostIssues bool, p pull) string {
+func pickupTask(prefix string, hostIssues bool, p forge.PR) string {
 	if hostIssues && prefix != "" {
-		repo := p.url()
+		repo := p.URL
 		if i := pullPathRE.FindStringIndex(repo); i != nil {
 			repo = strings.TrimSuffix(repo[:i[0]], "/-")
 		}
 
-		for _, m := range closingRE.FindAllStringSubmatch(p.body(), -1) {
+		for _, m := range closingRE.FindAllStringSubmatch(p.Body, -1) {
 			issue := m[1]
 
 			if !strings.HasPrefix(issue, "#") {
@@ -81,7 +82,7 @@ func pickupTask(prefix string, hostIssues bool, p pull) string {
 		}
 	}
 
-	for _, text := range []string{p.body(), p.Title, p.head()} {
+	for _, text := range []string{p.Body, p.Title, p.Head} {
 		if id := ref.Match(prefix, text); id != "" {
 			return id
 		}
@@ -90,18 +91,18 @@ func pickupTask(prefix string, hostIssues bool, p pull) string {
 	return ""
 }
 
-func refusePull(p pull) error {
+func refusePull(p forge.PR) error {
 	switch {
-	case p.fork():
-		return fmt.Errorf("%s comes from a fork: PRs from forks are not supported yet", p.url())
-	case p.status() == pullOpen && p.head() == "":
-		return fmt.Errorf("%s has no head branch in the host's answer", p.url())
-	case p.status() == pullMerged && p.sha() == "":
-		return fmt.Errorf("%s is merged, but the host names no merge commit to check out", p.url())
-	case p.status() == pullClosed && p.headSHA() == "":
-		return fmt.Errorf("%s is closed, but the host names no head commit to check out", p.url())
-	case p.status() != pullOpen && p.status() != pullMerged && p.status() != pullClosed:
-		return fmt.Errorf("%s is %q: start picks up open, merged and closed PRs", p.url(), p.status())
+	case p.Fork:
+		return fmt.Errorf("%s comes from a fork: PRs from forks are not supported yet", p.URL)
+	case p.Status == forge.Open && p.Head == "":
+		return fmt.Errorf("%s has no head branch in the host's answer", p.URL)
+	case p.Status == forge.Merged && p.Landed == "":
+		return fmt.Errorf("%s is merged, but the host names no merge commit to check out", p.URL)
+	case p.Status == forge.Closed && p.HeadSHA == "":
+		return fmt.Errorf("%s is closed, but the host names no head commit to check out", p.URL)
+	case p.Status != forge.Open && p.Status != forge.Merged && p.Status != forge.Closed:
+		return fmt.Errorf("%s is %q: start picks up open, merged and closed PRs", p.URL, p.Status)
 	}
 
 	return nil
@@ -109,21 +110,21 @@ func refusePull(p pull) error {
 
 // pickupOf reads the request through f10 pr, which reads one in any state on
 // either host, so the prompt is the same text on GitHub and GitLab.
-func (h host) pickupOf(number string, p pull) *pickup {
+func (h host) pickupOf(number string, p forge.PR) *pickup {
 	pick := &pickup{
 		number: number,
-		url:    p.url(),
-		branch: p.head(),
+		url:    p.URL,
+		branch: p.Head,
 		view:   "f10 pr view --comments " + number,
 		diff:   "f10 pr diff " + number,
 	}
 
-	switch p.status() {
-	case pullMerged:
-		pick.sha, pick.state = p.sha(), landedState(p)
-	case pullClosed:
-		pick.sha, pick.state = p.headSHA(), landedState(p)
-		pick.headRef = h.Pick([]string{"refs/pull/" + number + "/head"}, []string{"refs/merge-requests/" + number + "/head"})[0]
+	switch p.Status {
+	case forge.Merged:
+		pick.sha, pick.state = p.Landed, landedState(p)
+	case forge.Closed:
+		pick.sha, pick.state = p.HeadSHA, landedState(p)
+		pick.headRef = h.HeadRef(number)
 	}
 
 	return pick
@@ -131,17 +132,17 @@ func (h host) pickupOf(number string, p pull) *pickup {
 
 // landedState is how a merged or closed request is named to the agent and
 // in the report: who merged it and when, or that it closed unmerged.
-func landedState(p pull) string {
-	switch p.status() {
-	case pullMerged:
+func landedState(p forge.PR) string {
+	switch p.Status {
+	case forge.Merged:
 		state := "merged"
-		if by := p.mergedBy(); by != "" {
+		if by := p.MergedBy; by != "" {
 			state += " by " + by
 		}
 
-		return state + onDay(p.mergedAt())
-	case pullClosed:
-		return "closed without a merge" + onDay(p.closedAt())
+		return state + onDay(p.MergedAt)
+	case forge.Closed:
+		return "closed without a merge" + onDay(p.ClosedAt)
 	}
 
 	return ""

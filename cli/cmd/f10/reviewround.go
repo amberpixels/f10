@@ -115,8 +115,8 @@ func seriesOf(ctx context.Context, t *target, s prSubject, dir string, warn io.W
 	h, hostErr := t.host()
 	if s.number > 0 {
 		series.pr = "#" + strconv.Itoa(s.number)
-		if hostErr == nil && h.GLab() {
-			series.pr = "!" + strconv.Itoa(s.number)
+		if hostErr == nil {
+			series.pr = h.Sigil() + strconv.Itoa(s.number)
 		}
 	}
 
@@ -196,14 +196,14 @@ func seriesClosed(ctx context.Context, dir string, f *findings.File, h host, hos
 			return false
 		}
 
-		p, err := h.pullNumber(ctx, n)
+		p, err := h.PR(ctx, n)
 		if err != nil {
 			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, err)
 
 			return false
 		}
 
-		return p.status() == forge.Merged || p.status() == forge.Closed
+		return p.Status == forge.Merged || p.Status == forge.Closed
 	}
 
 	sha, _, _ := strings.Cut(f.Reviewed, " ")

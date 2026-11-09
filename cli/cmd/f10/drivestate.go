@@ -58,8 +58,8 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 	s.reviews, s.changeJudged = len(o.local)+len(o.remote), o.changeJudge != nil
 
 	if in.pull != nil && s.origin != "" {
-		if p, err := in.pull(ctx, branch); err == nil && p.status() == "open" {
-			s.pr = p.id()
+		if p, err := in.pull(ctx, branch); err == nil && p.Status == "open" {
+			s.pr = strconv.Itoa(p.Number)
 		}
 	}
 

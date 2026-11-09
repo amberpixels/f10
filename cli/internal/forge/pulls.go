@@ -55,6 +55,8 @@ type PR struct {
 	Checks    string     // Green, Red, Pending or "" with none
 	Commits   []PRCommit // the commits the host lists for it, where asked for
 	MergeSHA  []string   // the merge and squash commits it landed as
+	Landed    string     // the commit it landed as: gh's merge commit, else glab's squash, else its merge
+	Fork      bool       // its branch lives in another repository, which origin does not have
 	Reviews   []Review   // where asked for
 
 	ForcePushes []ForcePush // the requester's own, where asked for
@@ -143,6 +145,10 @@ type pull struct {
 	Body         string    `json:"body"`
 	Description  string    `json:"description"`
 
+	IsCrossRepository bool `json:"isCrossRepository"`
+	SourceProjectID   int  `json:"source_project_id"`
+	TargetProjectID   int  `json:"target_project_id"`
+
 	Author   user `json:"author"`
 	MergedBy user `json:"mergedBy"`
 	MergedGL user `json:"merged_by"`
@@ -214,6 +220,8 @@ func (p pull) pr() PR {
 		Decision:  decision(p.ReviewDecision),
 		Mergeable: mergeable(p.Mergeable, p.MergeStateStatus, p.DetailedMergeStatus),
 		Checks:    p.checks(),
+		Landed:    cmp.Or(p.MergeCommit.OID, p.SquashSHA, p.MergeSHA),
+		Fork:      p.IsCrossRepository || p.SourceProjectID != p.TargetProjectID,
 	}
 
 	for _, sha := range []string{p.MergeCommit.OID, p.MergeSHA, p.SquashSHA} {

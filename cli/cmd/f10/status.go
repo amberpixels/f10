@@ -390,8 +390,8 @@ func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run, 
 	case ship.pulled:
 		fb.PRState = ship.prState
 	case in.host != nil:
-		if p, err := in.host.pull(ctx, in.branch); err == nil && p.url() != "" {
-			fb.PR, fb.PRState = p.url(), p.status()
+		if p, err := in.host.PR(ctx, in.branch); err == nil && p.URL != "" {
+			fb.PR, fb.PRState = p.URL, p.Status
 		}
 	}
 

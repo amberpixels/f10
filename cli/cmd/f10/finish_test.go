@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
@@ -38,7 +39,7 @@ type finishFixture struct {
 }
 
 const (
-	ghView  = "gh pr view GH-1 --json state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author"
+	ghView  = "gh pr view GH-1 --json number,title,state,url,body,author,baseRefName,headRefName,headRefOid,isCrossRepository,mergeStateStatus,mergeCommit,mergedAt,mergedBy,closedAt"
 	ghRepo  = "gh repo view --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
 	ghMerge = "gh pr merge GH-1 --squash"
 	ghDel   = "gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/GH-1"
@@ -326,8 +327,8 @@ func TestMergePullGlabSquashMessage(t *testing.T) {
 	f.script(merge, "")
 	f.script(view, `{"state":"merged","web_url":"https://gl/mr/9","squash_commit_sha":"sq"}`)
 
-	p, err := h.mergePull(t.Context(), pull{Title: "Add the thing"}, "GH-1", "--squash", "Task: GH-1\n")
-	if err != nil || p.sha() != "sq" {
+	p, err := h.MergePR(t.Context(), forge.PR{Title: "Add the thing"}, "GH-1", "--squash", "Task: GH-1\n")
+	if err != nil || p.Landed != "sq" {
 		t.Fatalf("merged = %+v, %v", p, err)
 	}
 
@@ -341,15 +342,15 @@ func TestMergePullGlabSquashMessage(t *testing.T) {
 func TestMergePullGhSquashSubject(t *testing.T) {
 	cases := []struct {
 		name  string
-		p     pull
+		p     forge.PR
 		merge string
 	}{
 		{
 			"titled",
-			pull{Title: "Add the thing", Number: 9},
+			forge.PR{Title: "Add the thing", Number: 9},
 			"gh pr merge GH-1 --squash --subject Add the thing (#9) --body Task: GH-1\n",
 		},
-		{"untitled", pull{Number: 9}, "gh pr merge GH-1 --squash --body Task: GH-1\n"},
+		{"untitled", forge.PR{Number: 9}, "gh pr merge GH-1 --squash --body Task: GH-1\n"},
 	}
 
 	for _, c := range cases {
@@ -358,7 +359,7 @@ func TestMergePullGhSquashSubject(t *testing.T) {
 		f.script(c.merge, "")
 		f.script(ghView, prMerged)
 
-		if _, err := h.mergePull(t.Context(), c.p, "GH-1", "--squash", "Task: GH-1\n"); err != nil {
+		if _, err := h.MergePR(t.Context(), c.p, "GH-1", "--squash", "Task: GH-1\n"); err != nil {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 

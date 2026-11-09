@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -171,9 +172,9 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
 	}
 
-	var pullOf func(context.Context, string) (pull, error)
+	var pullOf func(context.Context, string) (forge.PR, error)
 	if hostErr == nil {
-		pullOf = h.pull
+		pullOf = h.PR
 	}
 
 	in := &driveInput{
