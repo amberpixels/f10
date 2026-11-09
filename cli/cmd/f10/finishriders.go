@@ -89,7 +89,7 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 	switch {
 	case merged && len(kept) > 0:
 		for _, m := range kept {
-			if err := in.host.reopenIssue(ctx, m.Number); err != nil {
+			if err := in.host.SetIssueOpen(ctx, m.Number, true); err != nil {
 				return nil, fmt.Errorf("reopening %s, which the merge closed: %w", m.ID, err)
 			}
 		}
@@ -136,16 +136,4 @@ func refIDs(refs []ref.Ref) []string {
 	}
 
 	return ids
-}
-
-func (h host) reopenIssue(ctx context.Context, number string) error {
-	_, err := h.Run(ctx, "issue", "reopen", number)
-
-	return err
-}
-
-func (h host) closeIssue(ctx context.Context, number string) error {
-	_, err := h.Run(ctx, "issue", "close", number)
-
-	return err
 }

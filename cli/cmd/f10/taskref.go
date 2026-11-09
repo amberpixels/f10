@@ -206,12 +206,8 @@ func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, erro
 		return ledger.TaskRef{}, err
 	}
 
-	iss, err := h.issue(ctx, r.Number, "title,url")
+	iss, err := h.Issue(ctx, r.Number)
 	if err != nil {
-		return ledger.TaskRef{}, err
-	}
-
-	if err := iss.notPull(r.Number); err != nil {
 		return ledger.TaskRef{}, err
 	}
 
@@ -219,7 +215,7 @@ func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, erro
 		return ledger.TaskRef{}, fmt.Errorf("%s returned no title for issue %s", h.Name, r.Number)
 	}
 
-	return ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.url()}, nil
+	return ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.URL}, nil
 }
 
 // linkBodyAfter links the body's `After: <id>` line to the base task, so a

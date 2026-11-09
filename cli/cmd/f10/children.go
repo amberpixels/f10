@@ -145,11 +145,24 @@ func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, err
 		return nil, err
 	}
 
-	if h.GLab() {
-		return h.childItems(ctx, task.Number)
+	kids, err := h.Children(ctx, task.Number)
+	if errors.Is(err, forge.ErrUnsupported) {
+		return nil, errNoParentLink
 	}
 
-	return h.subIssues(ctx, task.Number)
+	if err != nil {
+		return nil, err
+	}
+
+	raw := make([]rawChild, 0, len(kids))
+	for _, k := range kids {
+		raw = append(
+			raw,
+			rawChild{ID: k.Number, Title: k.Title, URL: k.URL, State: k.State, Body: k.Body, Labels: k.Labels},
+		)
+	}
+
+	return raw, nil
 }
 
 func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild, keepClosed bool) ([]childRow, error) {
@@ -293,213 +306,12 @@ func writeTree(w io.Writer, rows []childRow) error {
 	return tasktree.Tree{}.Write(w, nodes)
 }
 
-// subIssues reads an issue's GitHub sub-issues. A 404 is a host without
-// sub-issues: the issue itself was already read by the time drive asks.
-func (h host) subIssues(ctx context.Context, number string) ([]rawChild, error) {
-	type label struct {
-		Name string `json:"name"`
-	}
-
-	found, err := forge.DecodePages[struct {
-		Number  int     `json:"number"`
-		Title   string  `json:"title"`
-		State   string  `json:"state"`
-		HTMLURL string  `json:"html_url"`
-		Body    string  `json:"body"`
-		Labels  []label `json:"labels"`
-	}](ctx, h.Host, "repos/{owner}/{repo}/issues/"+number+"/sub_issues")
-	if err != nil {
-		if strings.Contains(err.Error(), "HTTP 404") {
-			return nil, errNoParentLink
-		}
-
-		return nil, err
-	}
-
-	raw := make([]rawChild, 0, len(found))
-
-	for _, iss := range found {
-		c := rawChild{
-			ID:    strconv.Itoa(iss.Number),
-			Title: iss.Title,
-			URL:   iss.HTMLURL,
-			State: iss.State,
-			Body:  iss.Body,
-		}
-
-		for _, l := range iss.Labels {
-			c.Labels = append(c.Labels, l.Name)
-		}
-
-		raw = append(raw, c)
-	}
-
-	return raw, nil
-}
-
-// childItemsQuery reads a GitLab issue's children from the work-item
-// hierarchy, the only place GitLab keeps the parent link: REST issue links
-// are "relates to" and "blocks", never a parent.
-const childItemsQuery = `query($path: ID!, $iid: String!) {
-  project(fullPath: $path) {
-    workItems(iid: $iid) {
-      nodes {
-        widgets {
-          ... on WorkItemWidgetHierarchy {
-            children(first: 100) {
-              nodes {
-                iid title state webUrl description
-                widgets { ... on WorkItemWidgetLabels { labels { nodes { title } } } }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}`
-
-// childItems reads a GitLab issue's work-item children; a GitLab without
-// work items answers an unknown-field error, which is no parent link.
-func (h host) childItems(ctx context.Context, number string) ([]rawChild, error) {
-	var repo struct {
-		Path string `json:"path_with_namespace"`
-	}
-
-	if err := h.Decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
-		return nil, err
-	}
-
-	type labels struct {
-		Labels *struct {
-			Nodes []struct {
-				Title string `json:"title"`
-			} `json:"nodes"`
-		} `json:"labels"`
-	}
-
-	var payload struct {
-		Data struct {
-			Project struct {
-				WorkItems struct {
-					Nodes []struct {
-						Widgets []struct {
-							Children *struct {
-								Nodes []struct {
-									IID         string   `json:"iid"`
-									Title       string   `json:"title"`
-									State       string   `json:"state"`
-									WebURL      string   `json:"webUrl"`
-									Description string   `json:"description"`
-									Widgets     []labels `json:"widgets"`
-								} `json:"nodes"`
-							} `json:"children"`
-						} `json:"widgets"`
-					} `json:"nodes"`
-				} `json:"workItems"`
-			} `json:"project"`
-		} `json:"data"`
-	}
-
-	err := h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+childItemsQuery,
-		"-f", "path="+repo.Path, "-f", "iid="+number)
-	if err != nil {
-		if strings.Contains(err.Error(), "doesn't exist on type") {
-			return nil, errNoParentLink
-		}
-
-		return nil, err
-	}
-
-	var raw []rawChild
-
-	for _, item := range payload.Data.Project.WorkItems.Nodes {
-		for _, w := range item.Widgets {
-			if w.Children == nil {
-				continue
-			}
-
-			for _, c := range w.Children.Nodes {
-				child := rawChild{ID: c.IID, Title: c.Title, URL: c.WebURL, State: c.State, Body: c.Description}
-
-				for _, lw := range c.Widgets {
-					if lw.Labels == nil {
-						continue
-					}
-
-					for _, l := range lw.Labels.Nodes {
-						child.Labels = append(child.Labels, l.Title)
-					}
-				}
-
-				raw = append(raw, child)
-			}
-		}
-	}
-
-	return raw, nil
-}
-
-// linkParent puts child under parent, the write beside subIssues, moving it
-// from a parent it already has: GitHub gives an issue one parent. GitHub
-// links by the child's database id, not its number. GitLab nests tasks, not
-// issues, under an issue, so an issue there takes no parent.
-func (h host) linkParent(ctx context.Context, parent, child string) error {
-	if h.GLab() {
-		return errGitLabNoIssueParent
-	}
-
-	iss, err := h.linkFacts(ctx, child)
-	if err != nil {
-		return err
-	}
-
-	_, err = h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
-		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10), "-F", "replace_parent=true")
-
-	return err
-}
-
 // relink puts child under parent, or with parent "" takes it out from under
-// the parent it has; an issue with none is left alone, so a rerun is safe.
+// the parent it has.
 func (h host) relink(ctx context.Context, parent, child string) error {
 	if parent != "" {
-		return h.linkParent(ctx, parent, child)
+		return h.LinkParent(ctx, parent, child)
 	}
 
-	if h.GLab() {
-		return errGitLabNoIssueParent
-	}
-
-	iss, err := h.linkFacts(ctx, child)
-	if err != nil || iss.ParentURL == "" {
-		return err
-	}
-
-	// the parent may live in another repo of the owner, so its own api path
-	// is used, never this repo's issue of the same number
-	_, apiPath, ok := strings.Cut(iss.ParentURL, "/repos/")
-	if !ok {
-		return fmt.Errorf("issue %s names its parent as %q, not an api url", child, iss.ParentURL)
-	}
-
-	_, err = h.Run(ctx, "api", "-X", "DELETE", "repos/"+apiPath+"/sub_issue",
-		"-F", "sub_issue_id="+strconv.FormatInt(iss.ID, 10))
-
-	return err
+	return h.Unlink(ctx, child)
 }
-
-type issueLink struct {
-	ID        int64  `json:"id"`
-	ParentURL string `json:"parent_issue_url"`
-}
-
-func (h host) linkFacts(ctx context.Context, number string) (issueLink, error) {
-	var iss issueLink
-
-	err := h.Decode(ctx, &iss, "api", "repos/{owner}/{repo}/issues/"+number)
-
-	return iss, err
-}
-
-var errGitLabNoIssueParent = errors.New("GitLab nests no issue under an issue; list the subtasks in the parent's body")

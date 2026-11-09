@@ -266,7 +266,7 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if err == nil {
 		t.rememberRefs(
 			ctx,
-			ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.url()},
+			ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.URL},
 		)
 	}
 
@@ -329,7 +329,7 @@ func (t *target) imagesDir(ctx context.Context, id string) string {
 // leaves the request bare, so its error names the image.
 func githubAuth(ctx context.Context, t *target) func(*http.Request) {
 	h, err := t.host()
-	if err != nil || h.GLab() {
+	if err != nil {
 		return nil
 	}
 
@@ -345,9 +345,8 @@ func githubAuth(ctx context.Context, t *target) func(*http.Request) {
 		}
 
 		once.Do(func() {
-			out, err := h.Run(ctx, "auth", "token")
-			if err == nil {
-				token = strings.TrimSpace(out)
+			if tok, err := h.Token(ctx); err == nil {
+				token = tok
 			}
 		})
 
@@ -430,7 +429,7 @@ func taskListURL(ctx context.Context, t *target) (string, error) {
 		return "", err
 	}
 
-	return h.issuesURL(ctx)
+	return h.IssuesURL(ctx)
 }
 
 func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {

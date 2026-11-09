@@ -2741,7 +2741,7 @@ func newParentFixture(t *testing.T, kids ...childRow) *finishFixture {
 	fx.f.script(refsLocal, "")
 	fx.in.storage = storage.Root(t.TempDir())
 	fx.in.subtasks = func(context.Context, ref.Ref) ([]childRow, error) { return kids, nil }
-	fx.in.closeTask = func(ctx context.Context, r ref.Ref) error { return fx.in.host.closeIssue(ctx, r.Number) }
+	fx.in.closeTask = func(ctx context.Context, r ref.Ref) error { return fx.in.host.SetIssueOpen(ctx, r.Number, false) }
 
 	for _, k := range kids {
 		fx.f.script(strings.ReplaceAll(refsLocal, "GH-1", k.ID), "")

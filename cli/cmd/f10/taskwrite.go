@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -154,7 +153,7 @@ func postComment(
 		return "", err
 	}
 
-	url, err := h.comment(ctx, r.Number, body)
+	url, err := h.CommentIssue(ctx, r.Number, body)
 	if err != nil {
 		return "", fmt.Errorf("%w\n%s", err, mayPosted)
 	}
@@ -257,7 +256,7 @@ func relinkTask(
 	}
 
 	err = h.relink(ctx, parent, r.Number)
-	if errors.Is(err, errGitLabNoIssueParent) {
+	if errors.Is(err, forge.ErrNoIssueParent) {
 		return ui.Exit(ui.ExitDeclined, "%v; %s", err, unwritten)
 	}
 
@@ -333,28 +332,6 @@ func hostOrExit(t *target, d *driver.Driver, verb, unwritten string) (host, erro
 		why, t.eff.TrackerKind, unwritten)
 }
 
-func (h host) comment(ctx context.Context, number, body string) (string, error) {
-	if err := h.mustBeIssue(ctx, number); err != nil {
-		return "", err
-	}
-
-	out, err := h.Run(ctx, h.Pick(
-		[]string{"issue", "comment", number, "--body", body},
-		[]string{"issue", "note", number, "--message", body},
-	)...)
-	if err != nil {
-		return "", err
-	}
-
-	for line := range strings.Lines(out) {
-		if line = strings.TrimSpace(line); strings.HasPrefix(line, "http") {
-			return line, nil
-		}
-	}
-
-	return "", nil
-}
-
 // update: an issue has two states and no custom properties, so `--status`
 // takes open or closed and `--set` is refused; the labels of every other
 // priority level come off, so the issue carries one; an assignee replaces
@@ -377,17 +354,8 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 		return fmt.Errorf("status %q: %s issues are open or closed", p.status, h.Name)
 	}
 
-	fields := "labels,assignees"
-	if h.titles != "" {
-		fields += ",title"
-	}
-
-	iss, err := h.issue(ctx, number, fields)
+	iss, err := h.Issue(ctx, number)
 	if err != nil {
-		return err
-	}
-
-	if err := iss.notPull(number); err != nil {
 		return err
 	}
 
@@ -410,84 +378,20 @@ func (h host) update(ctx context.Context, number string, p props, priorities map
 		}
 	}
 
-	// gh only adds an assignee, so the others come off by name
-	var unassign []string
-
-	if p.assignee != "" && !h.GLab() {
-		// gh reads @me as the signed-in login, which must stay on
-		keep := p.assignee
-		if keep == "@me" {
-			if keep, err = h.Login(ctx); err != nil {
-				return err
-			}
-		}
-
-		for _, a := range iss.Assignees {
-			if a.Login != "" && !strings.EqualFold(a.Login, keep) {
-				unassign = append(unassign, a.Login)
-			}
-		}
+	edit := forge.IssueEdit{
+		Title: title, AddLabels: add, RemoveLabels: remove, Assignee: p.assignee, Current: iss.Assignees,
 	}
-
-	if len(add) > 0 || len(remove) > 0 || p.assignee != "" || title != "" {
-		if _, err := h.Run(ctx, h.editArgs(number, title, add, remove, p.assignee, unassign)...); err != nil {
-			return err
-		}
+	if err := h.EditIssue(ctx, number, edit); err != nil {
+		return err
 	}
 
 	if state != "" {
-		if _, err := h.Run(ctx, "issue", state, number); err != nil {
+		if err := h.SetIssueOpen(ctx, number, state == "reopen"); err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-func (h host) editArgs(number, title string, add, remove []string, assignee string, unassign []string) []string {
-	if h.GLab() {
-		args := []string{"issue", "update", number}
-		if title != "" {
-			args = append(args, "--title", title)
-		}
-
-		if len(add) > 0 {
-			args = append(args, "--label", strings.Join(add, ","))
-		}
-
-		if len(remove) > 0 {
-			args = append(args, "--unlabel", strings.Join(remove, ","))
-		}
-
-		if assignee != "" {
-			args = append(args, "--assignee", assignee)
-		}
-
-		return args
-	}
-
-	args := []string{"issue", "edit", number}
-	if title != "" {
-		args = append(args, "--title", title)
-	}
-
-	for _, l := range add {
-		args = append(args, "--add-label", l)
-	}
-
-	for _, l := range remove {
-		args = append(args, "--remove-label", l)
-	}
-
-	if assignee != "" {
-		args = append(args, "--add-assignee", assignee)
-	}
-
-	for _, a := range unassign {
-		args = append(args, "--remove-assignee", a)
-	}
-
-	return args
 }
 
 // priorityLabel takes the first label in name order when several carry the
@@ -510,17 +414,6 @@ func priorityLabel(level string, priorities map[string]string) string {
 	return names[0]
 }
 
-// mustBeIssue refuses a pull request where a write was meant for an issue:
-// gh numbers both from one counter and would comment on either.
-func (h host) mustBeIssue(ctx context.Context, number string) error {
-	iss, err := h.issue(ctx, number, "url")
-	if err != nil {
-		return err
-	}
-
-	return iss.notPull(number)
-}
-
 func (h host) retitled(raw, number string) string {
 	id := h.taskID(number)
 	if raw == "" || h.titles.Applied(raw, id, number) {
@@ -533,21 +426,17 @@ func (h host) retitled(raw, number string) string {
 type titleChange struct{ id, number, from, to string }
 
 func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, error) {
-	var found []issue
+	var found []forge.Issue
 
 	if number != "" {
-		iss, err := h.issue(ctx, number, "number,title")
+		iss, err := h.Issue(ctx, number)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := iss.notPull(number); err != nil {
-			return nil, err
-		}
-
-		found = []issue{iss}
+		found = []forge.Issue{iss}
 	} else {
-		all, err := h.allIssues(ctx)
+		all, err := h.AllIssues(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -558,7 +447,7 @@ func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, e
 	var changes []titleChange
 
 	for _, iss := range found {
-		n := iss.ident()
+		n := iss.Number
 		if to := h.retitled(iss.Title, n); to != "" {
 			changes = append(changes, titleChange{id: h.taskID(n), number: n, from: iss.Title, to: to})
 		}
@@ -567,41 +456,8 @@ func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, e
 	return changes, nil
 }
 
-// retitlePage is how many issues glab lists a page; gh takes one limit.
-const retitlePage = 100
-
-// allIssues: gh issue list never includes pull requests, nor glab's merge
-// requests, so nothing here filters them.
-func (h host) allIssues(ctx context.Context) ([]issue, error) {
-	if !h.GLab() {
-		var all []issue
-
-		err := h.Decode(ctx, &all, "issue", "list", "--state", "all", "--json", "number,title", "--limit", "100000")
-
-		return all, err
-	}
-
-	var all []issue
-
-	for page := 1; ; page++ {
-		var found []issue
-		if err := h.Decode(ctx, &found, "issue", "list", "--all", "--output", "json",
-			"--per-page", strconv.Itoa(retitlePage), "--page", strconv.Itoa(page)); err != nil {
-			return nil, err
-		}
-
-		all = append(all, found...)
-
-		if len(found) < retitlePage {
-			return all, nil
-		}
-	}
-}
-
 func (h host) setTitle(ctx context.Context, number, title string) error {
-	_, err := h.Run(ctx, h.editArgs(number, title, nil, nil, "", nil)...)
-
-	return err
+	return h.EditIssue(ctx, number, forge.IssueEdit{Title: title})
 }
 
 // runTaskRetitle leaves a title already written through tracker.title alone,
@@ -721,7 +577,7 @@ func hostCreate(
 
 	_, body, _ := strings.Cut(doc, "\n")
 
-	url, number, err := h.createIssue(ctx, taskTitle(doc), strings.TrimSpace(body), labels)
+	url, number, err := h.CreateIssue(ctx, taskTitle(doc), strings.TrimSpace(body), labels)
 	if err != nil {
 		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
 	}
@@ -747,34 +603,5 @@ func linkUnder(ctx context.Context, t *target, h host, parent, child string) err
 		return err
 	}
 
-	return h.linkParent(ctx, pr.Number, child)
-}
-
-var issueNumberRe = regexp.MustCompile(`/issues/(\d+)\b`)
-
-// createIssue returns the new issue's url and number, read from the url the
-// CLI prints: a list query afterwards could find another create's issue.
-func (h host) createIssue(ctx context.Context, title, body string, labels []string) (string, string, error) {
-	args := h.Pick(
-		[]string{"issue", "create", "--title", title, "--body", body},
-		[]string{"issue", "create", "--title", title, "--description", body, "--no-editor", "--yes"},
-	)
-
-	for _, l := range labels {
-		args = append(args, "--label", l)
-	}
-
-	out, err := h.Run(ctx, args...)
-	if err != nil {
-		return "", "", err
-	}
-
-	for _, line := range slices.Backward(strings.Split(strings.TrimSpace(out), "\n")) {
-		line = strings.TrimSpace(line)
-		if m := issueNumberRe.FindStringSubmatch(line); m != nil && strings.HasPrefix(line, "http") {
-			return line, m[1], nil
-		}
-	}
-
-	return "", "", fmt.Errorf("%s issue create printed no issue url: %q", h.Name, out)
+	return h.LinkParent(ctx, pr.Number, child)
 }

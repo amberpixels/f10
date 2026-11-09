@@ -74,15 +74,21 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 	projectOf = func(context.Context, string) string { return "github.com/o/r" }
 
-	f.script("gh issue view 109 --json number,title,state,labels,createdAt,url,body,comments",
+	f.script("gh issue view 109 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":109,"title":"Base task","state":"OPEN","url":"https://github.com/o/r/issues/109","body":"b"}`)
 
 	if _, err := readDoc(t.Context(), tg, ref.Ref{ID: "FT-109", Number: "109"}); err != nil {
 		t.Fatal(err)
 	}
 
-	f.script("gh issue view 132 --json title,url", `{"title":"Second","url":"https://github.com/o/r/issues/132"}`)
-	f.fail("gh issue view 7 --json title,url", shell.Result{Code: 1, Stderr: "no issue 7"})
+	f.script(
+		"gh issue view 132 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Second","url":"https://github.com/o/r/issues/132"}`,
+	)
+	f.fail(
+		"gh issue view 7 --json number,title,state,labels,createdAt,url,body,assignees",
+		shell.Result{Code: 1, Stderr: "no issue 7"},
+	)
 
 	refs := []ref.Ref{{ID: "FT-109", Number: "109"}, {ID: "FT-132", Number: "132"}, {ID: "FT-7", Number: "7"}}
 
@@ -104,7 +110,10 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 		t.Errorf("second lookup called %v, refs %+v", f.calls, got)
 	}
 
-	f.script("gh issue view 109 --json title,url", `{"title":"Renamed","url":"https://github.com/o/r/issues/109"}`)
+	f.script(
+		"gh issue view 109 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Renamed","url":"https://github.com/o/r/issues/109"}`,
+	)
 
 	if got := tg.taskRefs(t.Context(), refs[:1], false, true, &warn); got["FT-109"].Title != "Renamed" {
 		t.Errorf("fresh = %+v", got)

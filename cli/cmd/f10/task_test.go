@@ -116,11 +116,11 @@ func TestListURLs(t *testing.T) {
 	} {
 		h := newHost(tc.cli, "")
 
-		if got, err := h.issuesURL(t.Context()); err != nil || got != tc.issues {
+		if got, err := h.IssuesURL(t.Context()); err != nil || got != tc.issues {
 			t.Errorf("%s issues = %q, %v; want %q", tc.cli, got, err, tc.issues)
 		}
 
-		if got, err := h.pullsURL(t.Context()); err != nil || got != tc.pulls {
+		if got, err := h.PullsURL(t.Context()); err != nil || got != tc.pulls {
 			t.Errorf("%s pulls = %q, %v; want %q", tc.cli, got, err, tc.pulls)
 		}
 	}

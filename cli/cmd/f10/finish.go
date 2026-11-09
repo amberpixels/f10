@@ -274,7 +274,7 @@ func closeTaskFor(t *target, h host) func(context.Context, ref.Ref) error {
 		return nil
 	}
 
-	return func(ctx context.Context, task ref.Ref) error { return h.closeIssue(ctx, task.Number) }
+	return func(ctx context.Context, task ref.Ref) error { return h.SetIssueOpen(ctx, task.Number, false) }
 }
 
 // processPlace is this process's directory and workspace, for finish's

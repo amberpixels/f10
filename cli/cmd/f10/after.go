@@ -125,15 +125,15 @@ func (t *target) tracker() tracker {
 				return taskInfo{}, err
 			}
 
-			iss, err := h.issue(ctx, task.Number, "body,state,url")
+			iss, err := h.Item(ctx, task.Number)
 			if err != nil {
 				return taskInfo{}, err
 			}
 
 			return taskInfo{
-				body:   iss.body(),
+				body:   iss.Body,
 				closed: strings.EqualFold(iss.State, "closed"),
-				pull:   iss.pull(),
+				pull:   iss.Pull,
 			}, nil
 		},
 		storage: t.lay.StorageRoot,

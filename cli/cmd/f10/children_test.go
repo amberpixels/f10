@@ -178,30 +178,6 @@ func TestChildrenGitHub404(t *testing.T) {
 	}
 }
 
-// GitLab children come from the work-item hierarchy.
-func TestChildrenFromGitLab(t *testing.T) {
-	f := newFakes(t)
-	tg := childTarget(t, "glab")
-
-	f.script("glab repo view -F json", `{"path_with_namespace":"group/repo"}`)
-	f.script("glab api graphql -f query="+childItemsQuery+" -f path=group/repo -f iid=71", `{"data":{"project":{
-		"workItems":{"nodes":[{"widgets":[{},{"children":{"nodes":[
-			{"iid":"72","title":"base","state":"OPEN","webUrl":"https://g/72","description":"",
-			 "widgets":[{},{"labels":{"nodes":[{"title":"draft"}]}}]},
-			{"iid":"73","title":"gone","state":"CLOSED","webUrl":"https://g/73","description":"","widgets":[]}
-		]}}]}]}}}}`)
-	scriptNoBranch(f, "FT-72")
-
-	rows, err := tg.tracker().children(t.Context(), ref.Ref{ID: "FT-71", Number: "71"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(rows) != 1 || rows[0].ID != "FT-72" || rows[0].Labels[0] != "draft" || rows[0].URL != "https://g/72" {
-		t.Errorf("rows = %+v", rows)
-	}
-}
-
 // A driver declining the verb on a tracker no host reaches has no parent
 // link; on a host tracker the host answers.
 func TestChildrenDriverDeclines(t *testing.T) {

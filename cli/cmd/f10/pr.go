@@ -409,7 +409,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 
 		return writeRows(cmd.Writer, rows, "no open requests")
 	case number == "":
-		url, err := h.pullsURL(ctx)
+		url, err := h.PullsURL(ctx)
 		if err != nil {
 			return err
 		}
