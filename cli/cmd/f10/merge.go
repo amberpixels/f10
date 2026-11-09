@@ -92,29 +92,6 @@ func (p pull) fork() bool {
 
 func (p pull) status() string { return forge.Status(p.State) }
 
-// noSuchPull tells "no such request" from a host that failed to answer at
-// all; every phrase either CLI uses for it lives here.
-func noSuchPull(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	msg := err.Error()
-
-	for _, phrase := range []string{
-		"Could not resolve to a PullRequest", // gh, by number
-		"no pull requests found",             // gh, by branch
-		"no open merge request",              // glab, by branch
-		"404 Not Found",                      // glab, by number
-	} {
-		if strings.Contains(msg, phrase) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // pull passes a missing request through as the host's own error, so finish
 // says why in gh's or glab's words.
 func (h host) pull(ctx context.Context, branch string) (pull, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -30,7 +31,7 @@ func pickupFor(ctx context.Context, t *target, token string) (*pickup, pull, err
 	p, err := h.pullNumber(ctx, number)
 
 	switch {
-	case err != nil && probe && noSuchPull(err):
+	case err != nil && probe && errors.Is(err, forge.ErrNotFound):
 		return nil, pull{}, nil
 	case err != nil:
 		return nil, pull{}, err

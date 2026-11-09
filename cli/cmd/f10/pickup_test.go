@@ -644,19 +644,6 @@ func TestPickedTask(t *testing.T) {
 	}
 }
 
-// Only the host's "no such PR" turns a #n back into a task id; a login or
-// network failure is the error.
-func TestNoSuchPull(t *testing.T) {
-	no := errors.New("gh: GraphQL: Could not resolve to a PullRequest with the number of 85. (repository.pullRequest)")
-	if !noSuchPull(no) {
-		t.Error("gh's no-such-PR answer was not recognised")
-	}
-
-	if noSuchPull(errors.New("gh: To get started with GitHub CLI, please run:  gh auth login")) {
-		t.Error("a logged-out gh was read as no PR")
-	}
-}
-
 // A picked-up PR's branch already here is brought to origin's head when it
 // is behind and checked out nowhere, else noted.
 func TestSyncPickup(t *testing.T) {

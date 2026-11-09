@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -170,7 +171,7 @@ func readRemote(ctx context.Context, h host, f facts.Review, branch string) remo
 	switch {
 	case ctx.Err() != nil:
 		return remoteState{err: ctx.Err()}
-	case noSuchPull(err):
+	case errors.Is(err, forge.ErrNotFound):
 		return remoteState{}
 	case err != nil:
 		return remoteState{err: err}

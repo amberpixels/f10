@@ -3,10 +3,12 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -18,7 +20,7 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 		return false, nil
 	}
 
-	if !noSuchPull(pullErr) || in.flags.leaveOpen {
+	if !errors.Is(pullErr, forge.ErrNotFound) || in.flags.leaveOpen {
 		return false, pullErr
 	}
 

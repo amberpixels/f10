@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
@@ -163,7 +164,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 	p, err := h.pull(ctx, branch)
 
 	switch {
-	case noSuchPull(err):
+	case errors.Is(err, forge.ErrNotFound):
 		ui.Warnf(errWriter(cmd), "no PR for %s yet: no state to write", branch)
 
 		return nil

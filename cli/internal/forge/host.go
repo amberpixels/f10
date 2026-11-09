@@ -55,7 +55,9 @@ func (h Host) Run(ctx context.Context, args ...string) (string, error) {
 	}
 
 	if res.Code != 0 {
-		return "", fmt.Errorf("%s: %s", h.Name, cmp.Or(res.Stderr, res.Stdout, fmt.Sprintf("exit %d", res.Code)))
+		msg := cmp.Or(res.Stderr, res.Stdout, fmt.Sprintf("exit %d", res.Code))
+
+		return "", &Error{Host: h.Name, Code: res.Code, Stderr: msg, kind: classify(msg)}
 	}
 
 	return res.Stdout, nil
