@@ -536,6 +536,22 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 	}
 }
 
+// A branch whose name carries no id is still its linked task's: a merged
+// picked-up PR's branch goes, and that task's plan with it.
+func TestJanitorReadsALinkWithoutRiders(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"alice/fix", "abc", ""})
+	fx.request("alice/fix", "MERGED", "abc", "me")
+	fx.f.meta.Seed("alice/fix", branchmeta.Task, "GH-1")
+	plan := fx.plan(t)
+
+	out := fx.run(t)
+
+	if !fx.f.called("git branch -D alice/fix") || exists(plan) {
+		t.Errorf("a link-only branch was not cleared:\n%s\ncalls: %q", out, fx.f.calls)
+	}
+}
+
 // A bundle branch ships every member: its riders' plans go with the lead's.
 func TestJanitorArchivesARidersPlan(t *testing.T) {
 	fx := newJanitorFixture(t)

@@ -66,9 +66,10 @@ func (m *Memory) Clear() {
 	m.entries, m.scripted = nil, nil
 }
 
-// Script makes reads of the key answer values in order, the last repeating,
-// for a key something outside the code changes between reads. The code's own
-// writes are recorded but do not change the answers; a Seed ends the script.
+// Script makes Get of the key answer values in order, the last repeating, for
+// a key something outside the code changes between reads. All, and so Load and
+// LoadAll, still answer the stored value. The code's own writes do not change
+// the answers; a Seed ends the script.
 func (m *Memory) Script(branch string, key branchmeta.Key, values ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -80,7 +81,8 @@ func (m *Memory) Script(branch string, key branchmeta.Key, values ...string) {
 	m.scripted[key.For(branch)] = values
 }
 
-// FailRead makes every read of the key on branch fail with err.
+// FailRead makes every Get of the key on branch fail with err. All, and so
+// Load and LoadAll, still succeed: use Fail to break those.
 func (m *Memory) FailRead(branch string, key branchmeta.Key, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

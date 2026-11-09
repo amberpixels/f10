@@ -309,53 +309,49 @@ func (x *branchIndex) find(ctx context.Context, want, id, suffix string, roots b
 // before anything is created, since guessing would base the work on the
 // wrong attempt.
 func (x *branchIndex) after(ctx context.Context, id string) (string, error) {
-	switch linked := x.linked(id); len(linked) {
-	case 0:
-	case 1:
-		return linked[0], nil
-	default:
+	names, linked, err := x.candidates(ctx, id)
+
+	switch {
+	case err != nil:
+		return "", err
+	case len(names) == 1:
+		return names[0], nil
+	case len(names) == 0:
+		return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
+	case linked:
 		return "", fmt.Errorf("--after %s: several branches are linked to it, name one: %s",
-			id, strings.Join(linked, ", "))
+			id, strings.Join(names, ", "))
+	default:
+		return "", fmt.Errorf("--after %s: several branches match, name one: %s", id, strings.Join(names, ", "))
 	}
-
-	for _, root := range policyLocalOrOrigin {
-		refs, err := x.under(ctx, root, id, "")
-		if err != nil {
-			return "", err
-		}
-
-		switch len(refs) {
-		case 0:
-			continue
-		case 1:
-			return refs[0], nil
-		default:
-			return "", fmt.Errorf("--after %s: several branches match, name one: %s", id, strings.Join(refs, ", "))
-		}
-	}
-
-	return "", fmt.Errorf("--after %s: no branch for it locally or on origin", id)
 }
 
 // any is the first branch of the task, linked, local or origin's
 // (`origin/<name>`), or "" for none.
 func (x *branchIndex) any(ctx context.Context, id string) (string, error) {
+	names, _, err := x.candidates(ctx, id)
+	if err != nil || len(names) == 0 {
+		return "", err
+	}
+
+	return names[0], nil
+}
+
+// candidates are the task's linked branches, else its branches under the
+// first root of policyLocalOrOrigin that has any, and whether they are linked.
+func (x *branchIndex) candidates(ctx context.Context, id string) ([]string, bool, error) {
 	if linked := x.linked(id); len(linked) > 0 {
-		return linked[0], nil
+		return linked, true, nil
 	}
 
 	for _, root := range policyLocalOrOrigin {
 		refs, err := x.under(ctx, root, id, "")
-		if err != nil {
-			return "", err
-		}
-
-		if len(refs) > 0 {
-			return refs[0], nil
+		if err != nil || len(refs) > 0 {
+			return refs, false, err
 		}
 	}
 
-	return "", nil
+	return nil, false, nil
 }
 
 // namedRef is the ref --base names, with its commit. Exact refs rather than

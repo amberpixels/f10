@@ -241,7 +241,12 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 			return nil
 		}
 
+		// a link with no riders still names the task, as a picked-up PR's
+		// branch may carry no id at all
 		lead, rest := x.bundle(name, in.prefix)
+		if lead == "" {
+			lead = x.record(name).Task
+		}
 
 		var ids []string
 
