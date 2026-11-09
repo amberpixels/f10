@@ -15,8 +15,8 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // The flow verb lists the declared flows, the same list an unknown --flow
@@ -130,13 +130,12 @@ func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flow
 	v.Ceiling = ceilingShown(set, pace.name)
 
 	for _, name := range eff.FlowNames() {
-		labels := eff.FlowLabels[name]
-		row := flowRow{Name: name, Entries: eff.Flows[name], Labels: labels, Selected: selectors(name)}
+		f := eff.Flows[name]
+		row := flowRow{Name: name, Entries: f.Strings(), Labels: f.Labels(), Selected: selectors(name)}
 
-		if r, err := set.ResolveFlow(name, eff.Flows[name], pace.name); err != nil {
+		if r, err := set.ResolveFlow(name, f, pace.name); err != nil {
 			row.Broken = err.Error()
 		} else if pace.name != "" || r.Changed() {
-			r = r.WithLabels(labels)
 			row.Resolved, row.Run = &r, r.Run()
 		}
 
@@ -181,7 +180,7 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 	}
 
 	if f.Resolved == nil {
-		for _, e := range facts.LabeledEntries(f.Entries, f.Labels) {
+		for _, e := range flow.Zip(f.Entries, f.Labels).Written() {
 			fmt.Fprintln(&b, e)
 		}
 
@@ -192,11 +191,11 @@ func writeFlowEntries(w io.Writer, v flowView) error {
 
 	width := len(facts.PaceFinishKey)
 	for _, e := range f.Resolved.Entries {
-		width = max(width, len(state.Labeled(e.Entry, e.Label)))
+		width = max(width, len(e.Parsed().Written()))
 	}
 
 	for _, e := range f.Resolved.Entries {
-		entry := state.Labeled(e.Entry, e.Label)
+		entry := e.Parsed().Written()
 
 		switch {
 		case e.Skipped != "":
@@ -275,7 +274,7 @@ func writeFlows(w io.Writer, v flowView) error {
 	}
 
 	for _, f := range v.Flows {
-		entries := facts.LabeledEntries(f.Entries, f.Labels)
+		entries := flow.Zip(f.Entries, f.Labels).Written()
 		if f.Resolved != nil {
 			entries = f.Resolved.Labeled()
 		}
@@ -406,7 +405,7 @@ func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name strin
 		lookup = "default"
 	}
 
-	flow, ok := eff.Flow(lookup)
+	declared, ok := eff.Flow(lookup)
 	if !ok {
 		var b strings.Builder
 		_ = writeFlows(&b, flowsView(eff))
@@ -415,12 +414,12 @@ func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name strin
 			strings.TrimRight(b.String(), "\n"))
 	}
 
-	r, err := set.ResolveFlow(lookup, flow, pace)
+	r, err := set.ResolveFlow(lookup, declared, pace)
 	if err != nil {
 		return shipFlow{}, err
 	}
 
-	fl := shipFlow{planless: facts.Planless(r.Run()), pace: pace}
+	fl := shipFlow{planless: !flow.Of(r.Run()).Plans(), pace: pace}
 	if r.Finish != nil {
 		fl.finish = r.Finish.Value
 	}

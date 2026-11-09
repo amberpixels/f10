@@ -103,7 +103,6 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 		events: events,
 		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
 		flows:  t.eff.Flows,
-		labels: t.eff.FlowLabels,
 		review: t.eff.Review,
 		store:  &lore.Store{Root: loreRootFor(t)},
 		host:   h,

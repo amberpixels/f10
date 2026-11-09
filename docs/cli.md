@@ -500,16 +500,17 @@ ship            running: review:local
   pr            pending
 ```
 
-- **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`), else the flow of the newest drive record holding the task that is neither cancelled nor done (a stopped drive's only while the task has no branch), else `default`, inside the chain `f10 drive` recorded on the branch (`branch.<name>.f10-chain`), which adds `finish`: a `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
+- **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`), else the flow of the newest drive record holding the task that is neither cancelled nor done (a stopped drive's only while the task has no branch), else `default`, followed by `finish` when the branch carries the finish record `f10 drive` writes (`branch.<name>.f10-finish`, below): a `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
 - **A plain step** is `done` before the step ship is on, that step takes the run's status (`running`, `blocked`, ...), the rest are `pending`; once ship is done, a step it never entered is `skipped`.
   A driven ship parked on its base (`f10 state wait`) reads `waiting on <id>` at that step, and the parent's row `waiting` with step `on <id>`.
 - **Review** has a local and a remote review, each `pending`, `running` (its round, and `in ship`, `driven` or `manual`; `resolve running` while a resolve settles it, and in `review:local+ci` `round N in, waiting for the other review` once its own findings landed), `open` (`N open of M found`, or `open (not handled)` on the host), `settled` (`3 found (2 fixed, 1 skipped)`, `clean`), or `unknown`.
   A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote review's, and inside ship that review reads `resolve running` once a round lands after ship entered the review.
   The remote review is in the flow when an entry names it (`review:ci`, or both in one `review:local+ci`, which shows both on the one review row; a `ci?` only where it would run), or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
-- **Finish** in a chain `f10 drive` runs reads `pending` until ship is done, then `queued (drive)`, then `running (drive): <action>` while the driver's finish works (`merging #204`, `pulling main`, `removing worktree`), and `done`; a finish held for its base reads `queued (drive): waiting for <id>`.
+- **Finish**, on a branch `f10 drive` finishes, reads `pending` until ship is done, then `queued (drive)`, then `running (drive): <action>` while the driver's finish works (`merging #204`, `pulling main`, `removing worktree`), and `done`; a finish held for its base reads `queued (drive): waiting for <id>`.
   A finish whose pull was deferred is `done` and the task `finished`, with the note under it in the drive's report; a drive that ran a finish retries the pull each tick and prints a cause once.
   The driver records this on the branch as `branch.<name>.f10-finish`: `queued` or `running: <action>`.
-  Whether the driver still runs is the task's lease (**Drive**, below), never the record: a record whose lease nobody holds is ignored, so a killed driver leaves the row `pending`.
+  The record's presence is what puts the finish row there, so a drive that stops short of finish sets it back to `queued` rather than removing it.
+  Whether the driver still runs is the task's lease (**Drive**, below), never the record: without the lease only the record's presence counts, so a halted or killed driver leaves the row `pending`.
   A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`drive: merging #204`, `drive finishes it`) in place of `f10 finish`.
 - **Judge** reads `pending`, `running`, or its outcome and reason, with what the ship run did with it in parentheses, read from the verdict file's `decision:` line: `proceed with changes (2 built) - <reason>`, `(folded into plan)`, `(refactor built)`, `(blocked)`, `(waiting on an answer)`; `continue`, or a file with no `decision:` line, adds nothing, and `--json` carries the `decision` and the `changes` count; a judge, or a local or CI review, the flow does not declare shows once one ran, and otherwise the row reads `not in this flow`.
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
@@ -540,7 +541,7 @@ Rerunning the same command line picks up the newest record started with it that 
 A rerun and a `--resume` keep the record's cap, unless they pass `--parallel`, which rewrites it.
 A driver still running reads the new cap at its next poll.
 An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
-The branch's `f10-drive`, `f10-chain` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
+The branch's `f10-drive` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
 
 **The lease.**
 Before anything opens, the driver takes an exclusive, non-blocking `flock` on `<storage root>/drives/locks/<id>.lock` for every task not already finished, its pid and drive number written into it, and one for itself (`drive-<n>.lock`).
@@ -565,8 +566,8 @@ A cancelled record is never picked up again: the same command line starts a new 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
-   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the run's pace says `finish: off` or the project's ceiling forbids it. A pace that sets no `finish` finishes.
-   A task whose ship ended as a spike (its spike report written) is closed right after ship whatever the pace's `finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
+   It gives the skills the driver prompts, which are never typed and never stored: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the run's pace says `finish: off` or the project's ceiling forbids it. A pace that sets no `finish` finishes.
+   A task whose ship ended as a spike (its spike report written) is closed right after ship whatever the pace's `finish` says, since the close merges nothing, and its branch gains the finish record; a dependent then starts on the default branch.
    `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--agent` starts every agent on that profile, read as start reads it, and `--model` is its model-only form; `<id>:<profile>` starts one task's agent on its own, which wins (`42:sonnet:low 43 --agent opus`).
@@ -613,10 +614,10 @@ A cancelled record is never picked up again: the same command line starts a new 
    The chain runs from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
    A plan the worktree reads when the driver starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
    A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
-   `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); the driver clears it on any other end, an interrupt included.
+   `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); on any other end, an interrupt included, the driver sets it back to `queued`.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
    Each finished task's handoff, the body finish printed under its report, repeats beneath the drive's report as `<id> handoff:` with the body indented, so the driving session relays every merged task's list at once.
-   Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` in the chain ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
+   Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` among the skills ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
 5. **Catchup when the base or the target moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
    Before a task's next skill, when its branch is on origin, the driver fetches once and marks the branch if its pull request's target moved past it, so an open PR never sits behind.
@@ -641,9 +642,9 @@ A cancelled record is never picked up again: the same command line starts a new 
    A ship stopped by its catchup guard, which marks the branch, gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict is judged by the same progress rule.
    The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt, and git, not the signal, says whether it settled.
    An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: a catchup git shows settled goes on to verify, and any other halts, as a stalled ship or plan turn does.
-   The drive's own catchup resumes the chain once git shows it settled and the driver's verify is green; the driver clears the marks then.
+   The drive's own catchup resumes the task once git shows it settled and the driver's verify is green; the driver clears the marks then.
    A red verify the agent's turns do not fix counts as a failed attempt, so the same command red on the same head three times halts.
-   When the agent catches up whole (a prose Verify heading), the chain resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
+   When the agent catches up whole (a prose Verify heading), the task resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
    A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails, or makes no progress, counts as a failed attempt.
 6. **Waiting.**
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.

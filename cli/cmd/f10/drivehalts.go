@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -22,7 +23,7 @@ import (
 func (in *driveInput) leaveRuns(ctx context.Context, runs []*driveRun) {
 	for _, r := range runs {
 		if r.active() {
-			in.clearFinish(ctx, r)
+			in.parkFinish(ctx, r)
 		}
 
 		if r.verifying != nil {
@@ -41,7 +42,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 
 	// a finished task's branch took the record with it
 	if res.row != rowFinished {
-		in.clearFinish(ctx, r)
+		in.parkFinish(ctx, r)
 	}
 
 	in.saveTask(r, func(t *drives.Task) {
@@ -134,7 +135,7 @@ func blockedRun(run *state.Run) bool {
 func guardStop(run *state.Run) bool {
 	step, _, _ := strings.Cut(run.Leaf, ":")
 
-	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(guardedSteps, step)
+	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(flow.Guarded, step)
 }
 
 // baseHead is the base branch's head, "none" for no branch, or why git

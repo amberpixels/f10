@@ -17,7 +17,7 @@ import (
 // each agent's verify uses several, held between 2 and 8.
 func defaultParallel() int { return min(max(runtime.NumCPU()/2, 2), 8) }
 
-// holdsSlot: a run on its chain keeps its slot from one skill to the next;
+// holdsSlot: a run on its way keeps its slot from one skill to the next;
 // one parked, waiting or queued has given it up.
 func (r *driveRun) holdsSlot() bool { return r.active() && !r.parked && !r.waiting && !r.queued }
 

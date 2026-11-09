@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // paceRepo is a checkout whose project.md declares frontmatter, with the
@@ -126,10 +127,10 @@ func TestPaceUserFileRefused(t *testing.T) {
 	}
 }
 
-// A pace that skips plan drops /f10:plan from drive's chain, and its
-// finish word decides whether the chain ends in finish.
-func TestPaceShapesTheDriveChain(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+// A pace that skips plan drops /f10:plan from drive's skills, and its
+// finish word decides whether they end in finish.
+func TestPaceShapesTheDriveSkills(t *testing.T) {
+	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 	set := facts.NewPaceSet()
 
 	for pace, want := range map[string]string{
@@ -144,8 +145,8 @@ func TestPaceShapesTheDriveChain(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveChain(fl), " "); got != want {
-			t.Errorf("%q: chain %q, want %q", pace, got, want)
+		if got := strings.Join(driveSkills(fl), " "); got != want {
+			t.Errorf("%q: skills %q, want %q", pace, got, want)
 		}
 	}
 }
@@ -196,7 +197,7 @@ func TestDriveTakesPace(t *testing.T) {
 // f10 start --pace records the pace on the new branch, and a pace that
 // skips plan sends ship alone.
 func TestStartRecordsThePace(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 
 	ultra, err := resolvePacedFlow(eff, facts.NewPaceSet(), "ultra", "")
 	if err != nil {
@@ -293,10 +294,10 @@ func TestCeilingRefusedWhereItDoesNotBelong(t *testing.T) {
 	}
 }
 
-// A ceiling's finish off keeps finish out of drive's chain under a pace
+// A ceiling's finish off keeps finish out of drive's skills under a pace
 // that finishes, unless that pace is excepted.
 func TestCeilingShapesTheDriveChain(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 	set := facts.NewPaceSet()
 	set.Ceiling = facts.Pace{facts.PaceFinishKey: {Finish: "off"}}
 
@@ -306,7 +307,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveChain(fl), " "); got != "plan ship" {
+		if got := strings.Join(driveSkills(fl), " "); got != "plan ship" {
 			t.Errorf("%s under finish off: %q", pace, got)
 		}
 	}
@@ -318,7 +319,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := strings.Join(driveChain(fl), " "); got != "plan ship finish" {
+	if got := strings.Join(driveSkills(fl), " "); got != "plan ship finish" {
 		t.Errorf("excepted fast: %q", got)
 	}
 }

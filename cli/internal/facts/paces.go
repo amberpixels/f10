@@ -10,7 +10,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // A pace is how fast a project delivers: dials keyed by step, laid over
@@ -592,35 +592,28 @@ func (r Resolved) Labeled() []string {
 
 	for _, e := range r.Entries {
 		if e.Skipped == "" {
-			run = append(run, state.Labeled(e.Entry, e.Label))
+			run = append(run, e.Parsed().Written())
 		}
 	}
 
 	return run
 }
 
-// WithLabels is r with each entry given its label, by index.
-func (r Resolved) WithLabels(labels []string) Resolved {
-	entries := slices.Clone(r.Entries)
-	for i := range entries {
-		entries[i].Label = state.LabelAt(labels, i)
-	}
+// Parsed is the entry as it runs, with its label.
+func (e ResolvedEntry) Parsed() flow.Entry {
+	p := flow.Parse(e.Entry)
+	p.Label = e.Label
 
-	r.Entries = entries
-
-	return r
+	return p
 }
 
 // handoffStep is the step whose pace key also reaches every pr entry.
 const handoffStep = "handoff"
 
-// deliveringSteps are the generic steps whose output is a run's shipment.
-var deliveringSteps = []string{"implement", "commit", "push", "pr", "deploy"}
-
 // ResolveFlow lays the named pace on a flow. An entry argument beats the
 // pace for the dial it expresses (review:local fixes by), and the pace
 // beats the step's own default. No pace ("") leaves the flow as declared, an optional CI review settled.
-func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Resolved, error) {
+func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) (Resolved, error) {
 	r := Resolved{Flow: flowName, Pace: pace}
 
 	if pace != "" {
@@ -640,9 +633,9 @@ func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Reso
 		return Dial{Name: name, Value: value, Origin: from(key)}
 	}
 
-	for _, entry := range flow {
-		step, arg := SplitEntry(entry)
-		e := ResolvedEntry{Entry: entry, Declared: entry, Step: step}
+	for _, entry := range declared {
+		step, arg := entry.Step, entry.Arg
+		e := ResolvedEntry{Entry: entry.String(), Declared: entry.String(), Step: step, Label: entry.Label}
 		d, ok := p[step]
 
 		if c, unskipped := caps[step+".run"]; unskipped {
@@ -698,7 +691,7 @@ func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Reso
 		return r, fmt.Errorf("pace %s on the %s flow: %s", pace, flowName, strings.Join(bad, "; "))
 	}
 
-	if d, ok := p[PaceFinishKey]; ok && d.Finish != "" && endsAtPR(run) {
+	if d, ok := p[PaceFinishKey]; ok && d.Finish != "" && flow.Of(run).Delivered() == "pr" {
 		fin := Dial{Name: PaceFinishKey, Value: d.Finish, Origin: from(PaceFinishKey)}
 		if c, ok := caps[PaceFinishKey]; ok {
 			fin = c
@@ -710,23 +703,9 @@ func (s *PaceSet) ResolveFlow(flowName string, flow []string, pace string) (Reso
 	return r, nil
 }
 
-// endsAtPR reports a run whose last delivering entry is pr: one that would
-// otherwise stop at an open PR.
-func endsAtPR(run []string) bool {
-	last := ""
-
-	for _, entry := range run {
-		if step, _ := SplitEntry(entry); slices.Contains(deliveringSteps, step) {
-			last = step
-		}
-	}
-
-	return last == "pr"
-}
-
 // PaceProblems resolves every flow under every pace and reports each pace
 // that breaks one, so a broken pace shows before a run picks it.
-func (s *PaceSet) PaceProblems(flows map[string][]string) []string {
+func (s *PaceSet) PaceProblems(flows map[string]flow.Flow) []string {
 	var bad []string
 
 	for _, pace := range s.Names() {
@@ -744,7 +723,7 @@ func (s *PaceSet) PaceProblems(flows map[string][]string) []string {
 // rewritten to what runs, or skipped when nothing does, and its by dial
 // says why.
 func (s *PaceSet) settleCI(e *ResolvedEntry, published bool) {
-	_, arg := SplitEntry(e.Entry)
+	arg := flow.Parse(e.Entry).Arg
 
 	by, ok := ReviewBy(arg)
 	if !ok || !by.CIOptional {

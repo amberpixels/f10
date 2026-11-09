@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // f10 flow and f10 config read the same flows, and the human list names
@@ -44,7 +44,7 @@ func TestFlowAndConfigAgree(t *testing.T) {
 	}
 
 	for _, f := range flows.Flows {
-		if strings.Join(config.Flows[f.Name], " ") != strings.Join(f.Entries, " ") {
+		if strings.Join(config.Flows[f.Name].Strings(), " ") != strings.Join(f.Entries, " ") {
 			t.Errorf("%s: flow says %v, config says %v", f.Name, f.Entries, config.Flows[f.Name])
 		}
 	}
@@ -111,18 +111,23 @@ func TestCompletingFlow(t *testing.T) {
 	}
 }
 
-// A task that keeps a flow from its branch runs that flow's chain: a
-// planless run still plans a task whose recorded flow leads with plan.
-func TestChainForAKeptFlow(t *testing.T) {
+// A task runs the skills of the flow it keeps from its branch: a planless
+// run still plans a task whose recorded flow leads with plan.
+func TestSkillsOfAKeptFlow(t *testing.T) {
 	direct := shipFlow{name: "direct", planless: true}
-	in := &driveInput{flow: direct, chain: driveChain(direct)}
+	in := &driveInput{flow: direct}
 
-	if got := strings.Join(in.chainFor(direct), " "); got != "ship finish" {
+	if got := strings.Join(in.skills(&driveRun{flow: direct}), " "); got != "ship finish" {
 		t.Errorf("the run's own flow = %q", got)
 	}
 
-	if got := strings.Join(in.chainFor(shipFlow{}), " "); got != "plan ship finish" {
+	if got := strings.Join(in.skills(&driveRun{flow: shipFlow{}}), " "); got != "plan ship finish" {
 		t.Errorf("a kept default flow = %q, want plan first and finish kept", got)
+	}
+
+	spike := &driveRun{flow: shipFlow{finish: "off"}, finishes: true}
+	if got := strings.Join(in.skills(spike), " "); got != "plan ship finish" {
+		t.Errorf("a spike closing on a pace without finish = %q, want finish added", got)
 	}
 }
 
@@ -130,7 +135,9 @@ func TestChainForAKeptFlow(t *testing.T) {
 // the task's area: start and drive send ship alone, and record nothing.
 func TestFlowByArea(t *testing.T) {
 	eff := &facts.Effective{
-		Flows:      map[string][]string{"default": {"plan", "implement", "pr"}, "direct": {"implement", "push"}},
+		Flows: map[string]flow.Flow{
+			"default": flow.Of([]string{"plan", "implement", "pr"}), "direct": flow.Of([]string{"implement", "push"}),
+		},
 		FlowByArea: map[string]string{"ui": "direct"},
 	}
 
@@ -147,8 +154,8 @@ func TestFlowByArea(t *testing.T) {
 		t.Errorf("prompt = %q, want ship alone", got)
 	}
 
-	if got := strings.Join(driveChain(fl), " "); got != "ship finish" {
-		t.Errorf("drive chain = %q, want ship plans as the area's flow says", got)
+	if got := strings.Join(driveSkills(fl), " "); got != "ship finish" {
+		t.Errorf("drive skills = %q, want ship plans as the area's flow says", got)
 	}
 
 	f := newFakes(t)
@@ -201,7 +208,7 @@ func TestFlowPrintsEntryLabels(t *testing.T) {
 
 	f := v.Flows[0]
 	if got := strings.Join(f.Entries, " "); got != "plan implement pr review:local pr" ||
-		state.LabelAt(f.Labels, 4) != "pr-polish" {
+		len(f.Labels) != 5 || f.Labels[4] != "pr-polish" {
 		t.Errorf("json flow = %+v", f)
 	}
 }

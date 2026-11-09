@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -254,10 +253,14 @@ func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, a
 	}
 }
 
-func (in *driveInput) clearFinish(ctx context.Context, r *driveRun) {
-	if !r.opened || !slices.Contains(r.chain, "finish") {
+// parkFinish sets the record back to queued with no action when the drive
+// stops short of finish: status reads the record as "drive finishes this
+// branch", so it stays, and never claims a finish running with no drive.
+func (in *driveInput) parkFinish(ctx context.Context, r *driveRun) {
+	if !r.opened || !r.finishes {
 		return
 	}
 
-	_ = gitx.UnsetConfig(ctx, in.main, "branch."+r.o.branch+"."+ref.FinishKey) // absent is fine
+	key := "branch." + r.o.branch + "." + ref.FinishKey
+	_ = gitx.SetConfig(ctx, in.main, key, ref.DriveFinish{State: ref.FinishQueued}.Format()) // a view only
 }

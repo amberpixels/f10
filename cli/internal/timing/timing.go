@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -55,7 +56,7 @@ func Claim(e ledger.Event) (string, string, string) {
 	}
 
 	// a leaf's [label] only names the entry for a person
-	leaf, _ := state.SplitLabel(words[2])
+	leaf, _ := flow.CutLabel(words[2])
 
 	return words[0], words[1], leaf
 }

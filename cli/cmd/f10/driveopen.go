@@ -68,27 +68,27 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		o.notes = append(o.notes, paceNote)
 	}
 
-	chain := in.chainFor(fl)
+	// status reads the finish record as drive finishing the branch; a rerun
+	// at a pace without finish takes it off
+	skills := in.sequenceOf(fl)
 
-	// status reads finish off the chain
-	if err := gitx.SetConfig(ctx, in.main, "branch."+o.branch+"."+cfgChain, strings.Join(chain, " ")); err != nil {
-		return fmt.Errorf("recording the chain: %w", err)
-	}
-
-	if slices.Contains(chain, "finish") {
+	finishes := slices.Contains(skills, "finish")
+	if finishes {
 		in.finishStep(ctx, w, o.branch, ref.FinishQueued, "")
+	} else {
+		_ = gitx.UnsetConfig(ctx, in.main, "branch."+o.branch+"."+ref.FinishKey) // absent is fine
 	}
 
 	for _, n := range appendNote(o.notes, note) {
 		fmt.Fprintf(w, "  %s\n", n)
 	}
 
-	pos, err := in.position(ctx, o, chain)
+	pos, err := in.position(ctx, o, skills)
 	if err != nil {
 		return err
 	}
 
-	r.o, r.opened, r.pos, r.flow, r.chain = o, true, pos, fl, chain
+	r.o, r.opened, r.pos, r.flow, r.finishes = o, true, pos, fl, finishes
 	if o.fresh {
 		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
 	}
@@ -139,14 +139,6 @@ func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, st
 	return in.flow, "", nil
 }
 
-func (in *driveInput) chainFor(fl shipFlow) []string {
-	if fl == in.flow {
-		return in.chain
-	}
-
-	return driveChain(fl)
-}
-
 // keepPace: a run's --pace wins and is recorded on the branch, since a
 // rerun that slows down must be able to take finish off; with none typed,
 // the branch's record wins over the project's default.
@@ -183,21 +175,21 @@ func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) 
 // position: a skill drive recorded on the branch wins; else a plan the
 // worktree reads counts as plan done, so driven ship takes it rather than
 // planning again.
-func (in *driveInput) position(ctx context.Context, o openedTask, chain []string) (int, error) {
+func (in *driveInput) position(ctx context.Context, o openedTask, skills []string) (int, error) {
 	last, err := gitx.Config(ctx, in.main, "branch."+o.branch+"."+cfgDrive)
 	if err != nil {
 		return 0, fmt.Errorf("reading where the drive left %s: %w", o.branch, err)
 	}
 
 	if last != "" {
-		if i := slices.Index(chain, last); i >= 0 {
+		if i := slices.Index(skills, last); i >= 0 {
 			return i + 1, nil
 		}
 	}
 
 	pos := 0
 
-	if i := slices.Index(chain, "plan"); i >= 0 && o.plan != "" {
+	if i := slices.Index(skills, "plan"); i >= 0 && o.plan != "" {
 		pos = i + 1
 	}
 
@@ -211,7 +203,7 @@ func (in *driveInput) position(ctx context.Context, o openedTask, chain []string
 			continue
 		}
 
-		if i := slices.Index(chain, phase); i >= 0 {
+		if i := slices.Index(skills, phase); i >= 0 {
 			pos = max(pos, i+1)
 		}
 	}
@@ -233,19 +225,18 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
-	if spike && r.pos >= len(r.chain) {
-		if err := in.closeAfterShip(ctx, r); err != nil {
-			return err
-		}
+	if spike && !r.finishes {
+		in.closeAfterShip(ctx, w, r)
 	}
 
-	if r.pos >= len(r.chain) {
-		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(r.chain, " ")})
+	skills := in.skills(r)
+	if r.pos >= len(skills) {
+		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(skills, " ")})
 
 		return nil
 	}
 
-	skill := r.chain[r.pos]
+	skill := skills[r.pos]
 
 	if b := r.base; b != nil && b.end != nil && b.end.code == exitHalted {
 		in.end(ctx, w, r, baseHalted(r, skill))
@@ -341,7 +332,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 // spikeDone: a spike report on a branch never pushed closes without a merge;
 // a pushed one finishes through its PR.
 func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) {
-	i := slices.Index(r.chain, "ship")
+	i := slices.Index(in.skills(r), "ship")
 	if i < 0 || r.pos <= i || taskSpike(r.o.path, in.plansDir, r.task.ref.ID) == "" {
 		return false, nil
 	}
@@ -354,20 +345,15 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 	return pushed == "", nil
 }
 
-// closeAfterShip adds finish to a spike's chain that lacks it: a spike close
-// merges nothing, which the pace's finish gates, and a spike left open keeps its
-// dependents on an empty base. status reads the recorded chain.
-func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) error {
-	r.chain = append(slices.Clone(r.chain), "finish")
-
-	if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgChain, strings.Join(r.chain, " ")); err != nil {
-		return fmt.Errorf("recording the chain: %w", err)
-	}
-
-	return nil
+// closeAfterShip has drive finish a spike its pace does not finish: a spike
+// close merges nothing, which the pace's finish gates, and a spike left open
+// keeps its dependents on an empty base. status reads the finish record.
+func (in *driveInput) closeAfterShip(ctx context.Context, w io.Writer, r *driveRun) {
+	r.finishes = true
+	in.finishStep(ctx, w, r.o.branch, ref.FinishQueued, "")
 }
 
-// baseReady reports the base's code there for a chain skill: released, and
+// baseReady reports the base's code there for a skill: released, and
 // for a ship that parked itself, moved past the head it found empty.
 func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
 	if !in.released(ctx, r.base) {

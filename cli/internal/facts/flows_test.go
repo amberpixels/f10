@@ -1,12 +1,11 @@
 package facts
 
 import (
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 func TestDecodeFlows(t *testing.T) {
@@ -73,10 +72,6 @@ func TestCheckFlow(t *testing.T) {
 }
 
 func TestFlowLabels(t *testing.T) {
-	if step, arg := SplitEntry("review:ci[review-final]"); step != "review" || arg != "ci" {
-		t.Errorf("SplitEntry kept the label: %q %q", step, arg)
-	}
-
 	for name, tc := range map[string]struct {
 		flow Flow
 		want string
@@ -101,65 +96,25 @@ func TestFlowLabels(t *testing.T) {
 		t.Errorf("a labelled flow has a problem: %s", p.Message)
 	}
 
-	if got := strings.Join(eff.Flows["default"], " "); got != "plan implement pr review:local pr" {
+	if got := strings.Join(eff.Flows["default"].Strings(), " "); got != "plan implement pr review:local pr" {
 		t.Errorf("entries = %q, want them bare", got)
 	}
 
-	if got := eff.FlowLabels["default"]; len(got) != 5 || got[4] != "pr-polish" || got[2] != "" {
+	if got := eff.Flows["default"].Labels(); len(got) != 5 || got[4] != "pr-polish" || got[2] != "" {
 		t.Errorf("labels = %q", got)
 	}
 
-	if got := eff.FlowLabels["direct"]; state.LabelAt(got, 1) != "check" {
-		t.Errorf("direct labels = %q", got)
+	if got := eff.Flows["direct"][1]; got.Label != "check" || got.String() != "review:local" {
+		t.Errorf("direct entry = %+v", got)
 	}
 
-	if got := LabeledEntries(eff.Flows["default"], eff.FlowLabels["default"]); got[4] != "pr[pr-polish]" {
+	if got := eff.Flows["default"].Written(); got[4] != "pr[pr-polish]" {
 		t.Errorf("labelled entries = %q", got)
 	}
 
 	plain := buildWith(t, "---\nflows:\n  default: plan implement pr\n---\n", "")
-	if plain.FlowLabels != nil {
-		t.Errorf("a flow with no label has labels: %v", plain.FlowLabels)
-	}
-}
-
-// GenericSteps tracks the plugin's step files, so a label can never take
-// a generic step's name once a step is added.
-func TestGenericStepsMatchStepFiles(t *testing.T) {
-	files, err := filepath.Glob("../../../steps/*.md")
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no step files: %v", err)
-	}
-
-	want := []string{"finish"}
-	for _, f := range files {
-		want = append(want, strings.TrimSuffix(filepath.Base(f), ".md"))
-	}
-
-	slices.Sort(want)
-
-	if got := slices.Sorted(slices.Values(GenericSteps)); !slices.Equal(got, want) {
-		t.Errorf("GenericSteps = %v, want the steps/ files plus finish: %v", got, want)
-	}
-}
-
-func TestFlowHelpers(t *testing.T) {
-	flow := []string{"plan", "judge", "implement", "review:local", "judge", "pr"}
-
-	if got := ShipEntries(flow); got[0] != "judge" || len(got) != 5 {
-		t.Errorf("ship entries = %v", got)
-	}
-
-	if JudgeKind(flow, 1) != "plan" || JudgeKind(flow, 4) != "change" {
-		t.Error("judge kind is read by position against implement")
-	}
-
-	if Planless(flow) || !Planless([]string{"implement", "pr"}) {
-		t.Error("planless is a flow not led by plan")
-	}
-
-	if step, arg := SplitEntry("cleanup:comments,prose"); step != "cleanup" || arg != "comments,prose" {
-		t.Errorf("colon entry = %s, %s", step, arg)
+	if got := plain.Flows["default"].Labels(); got != nil {
+		t.Errorf("a flow with no label has labels: %v", got)
 	}
 }
 
@@ -227,7 +182,7 @@ func TestRemoteReviewWarnings(t *testing.T) {
 		"optional, before pr":   {block: "flows:\n  default: plan implement review:ci? pr\n" + review},
 	} {
 		eff := buildWith(t, "---\n"+tc.block+"---\n", "")
-		if got := strings.Join(eff.Flows["default"], " "); !strings.Contains(got, "review:") {
+		if got := strings.Join(eff.Flows["default"].Strings(), " "); !strings.Contains(got, "review:") {
 			t.Errorf("%s: flow = %q", name, got)
 		}
 
@@ -251,7 +206,7 @@ func TestRemoteReviewWarnings(t *testing.T) {
 }
 
 func TestFlowNames(t *testing.T) {
-	e := &Effective{Flows: map[string][]string{"local": nil, "default": nil, "direct": nil}}
+	e := &Effective{Flows: map[string]flow.Flow{"local": nil, "default": nil, "direct": nil}}
 	if got := strings.Join(e.FlowNames(), " "); got != "default direct local" {
 		t.Errorf("names = %q", got)
 	}
