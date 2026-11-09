@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // LastRound is the highest round a task gets: round two exists so fixes get
@@ -70,7 +71,7 @@ func Rounds(dir string, paths []string) (Status, error) {
 
 		files = append(files, f)
 
-		if i, err := strconv.Atoi(strings.TrimSuffix(filepath.Base(path), ".md")); err == nil {
+		if i := storage.NumberOf(path); i >= 0 {
 			n = i
 		}
 
@@ -94,7 +95,7 @@ func unanswered(f *File) []Open {
 	var open []Open
 
 	for _, fd := range f.Findings {
-		if fd.Verdict == "" {
+		if fd.Word() == "" {
 			open = append(open, Open{ID: fd.ID, Title: fd.Title, Why: "no verdict"})
 		}
 	}
@@ -125,12 +126,10 @@ func lastOpen(files []*File) []Open {
 	for _, id := range order {
 		fd := last[id]
 
-		verdict, _, _ := strings.Cut(strings.ToLower(fd.Verdict), " ")
-
-		switch {
-		case verdict == "ask":
+		switch word := fd.Word(); {
+		case word == "ask":
 			open = append(open, Open{ID: id, Title: fd.Title, Why: "ask"})
-		case fd.Verdict != "":
+		case word != "":
 		case !fd.Prior:
 			open = append(open, Open{ID: id, Title: fd.Title, Why: "no verdict"})
 		// a prior block `fixed` or `explanation accepted` takes no verdict

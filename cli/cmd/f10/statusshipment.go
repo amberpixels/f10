@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -134,7 +135,7 @@ func shipFiles(root, id string) ([]verdictPath, []reviewPath) {
 		}
 	}
 
-	for _, path := range numbered(reviews) {
+	for _, path := range findings.Series(reviews) {
 		rounds = append(rounds, reviewPath{Round: strings.TrimSuffix(filepath.Base(path), ".md"), Path: path})
 	}
 

@@ -480,18 +480,10 @@ func runLoreChange(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// keyed as review round keys it, so branch-only work has a change too
-	key, err := reviewsKey(ctx, t, cmd.Args().First())
+	// opened as review round opens it, so branch-only work has a change too
+	dir, _, err := openReviews(ctx, t, cmd.Args().First(), cmd.ErrWriter)
 	if err != nil {
 		return fmt.Errorf("lore change: %w", err)
-	}
-
-	dir := t.lay.StorageRoot.Reviews(key)
-
-	if s, err := resolvePRSubject(ctx, t, cmd.Args().First()); err == nil && s.here {
-		if _, err := seriesOf(ctx, t, s, dir, cmd.ErrWriter); err != nil {
-			return err
-		}
 	}
 
 	_, err = fmt.Fprintln(cmd.Writer, changeOf(dir))

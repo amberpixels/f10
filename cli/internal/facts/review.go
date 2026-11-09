@@ -1,6 +1,8 @@
 package facts
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -35,6 +37,47 @@ type Review struct {
 
 // Remote reports whether the section names a remote reviewer at all.
 func (r Review) Remote() bool { return r.Reviewer != "" }
+
+// A Mark is a sign f10 leaves on a host review: a kind from the handled
+// vocabulary, and the reaction's emoji or the marker's text.
+type Mark struct{ Kind, Text string }
+
+// HandledMark is the mark ack leaves: the review was read.
+func (r Review) HandledMark() Mark { return Mark{r.Handled, r.HandledText} }
+
+// SettledMark is the mark settle leaves: every finding has a verdict.
+func (r Review) SettledMark() Mark { return Mark{r.Settled, r.SettledText} }
+
+// Validate refuses a contract `f10 review` cannot act on, before any host
+// call, each refusal naming what to fix.
+func (r Review) Validate() error {
+	if !r.Remote() {
+		return errors.New("project.md declares no remote review: declare Review's four facts " +
+			"(Reviewer, Arrives as, Trigger, Done, handled) and optionally Settled, or run `f10 init` on a checkout with a Claude Code review workflow")
+	}
+
+	if missing := r.Missing(); len(missing) > 0 {
+		return fmt.Errorf(
+			"the Review section's %s line(s) could not be read - see the vocabulary in docs/project-setup.md",
+			strings.Join(missing, ", "),
+		)
+	}
+
+	if r.Handled == HandledThread && r.Arrives != ArrivesInline {
+		return errors.New(
+			"the Review section declares `thread resolved` for a review that does not arrive inline; " +
+				"declare reaction, marker or checkbox instead",
+		)
+	}
+
+	// the host could not tell settled from handled
+	if r.Settled != "" && r.SettledMark() == r.HandledMark() {
+		return errors.New("the Review section's settled mark is the handled mark: settled could never be told " +
+			"from handled; declare a different reaction or marker")
+	}
+
+	return nil
+}
 
 // Missing names the facts a remote review still lacks, in contract order,
 // so a refusal can say which line to fix. Settled is optional: it is

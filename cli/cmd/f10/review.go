@@ -9,7 +9,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -101,26 +100,7 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 	}
 
 	f := t.eff.Review
-	if !f.Remote() {
-		return nil, errors.New("project.md declares no remote review: declare Review's four facts " +
-			"(Reviewer, Arrives as, Trigger, Done, handled) and optionally Settled, or run `f10 init` on a checkout with a Claude Code review workflow")
-	}
-
-	if missing := f.Missing(); len(missing) > 0 {
-		return nil, fmt.Errorf(
-			"the Review section's %s line(s) could not be read - see the vocabulary in docs/project-setup.md",
-			strings.Join(missing, ", "),
-		)
-	}
-
-	if f.Handled == facts.HandledThread && f.Arrives != facts.ArrivesInline {
-		return nil, errors.New(
-			"the Review section declares `thread resolved` for a review that does not arrive inline; " +
-				"declare reaction, marker or checkbox instead",
-		)
-	}
-
-	if err := settledConflict(f); err != nil {
+	if err := f.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -130,19 +110,6 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 	}
 
 	return newReviewer(ctx, h, f, cmd.Args().First())
-}
-
-// settledConflict refuses a settled mark the host could not tell from handled.
-func settledConflict(f facts.Review) error {
-	switch {
-	case f.Settled == "":
-		return nil
-	case f.Settled == f.Handled && f.SettledText == f.HandledText:
-		return errors.New("the Review section's settled mark is the handled mark: settled could never be told " +
-			"from handled; declare a different reaction or marker")
-	}
-
-	return nil
 }
 
 func runReviewPick(ctx context.Context, cmd *cli.Command) error {
