@@ -117,15 +117,22 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if a.list {
-			return driveList(ctx, cmd.Writer, linksFor(cmd.Writer, false), t.refProject(ctx), t.lay.StorageRoot, a.all,
-				rowFinishedFor(ctx, t))
+			return driveList(
+				ctx,
+				cmd.Writer,
+				linksFor(cmd.Writer, false),
+				t.refProject(ctx),
+				t.lay.StorageRoot.Path(),
+				a.all,
+				rowFinishedFor(ctx, t),
+			)
 		}
 
-		if err := driveCancel(cmd.Writer, t.lay.StorageRoot, a.cancel, time.Now()); err != nil {
+		if err := driveCancel(cmd.Writer, t.lay.StorageRoot.Path(), a.cancel, time.Now()); err != nil {
 			return err
 		}
 
-		closeDriveAsks(asks.Dir(), t.lay.StorageRoot, a.cancel, time.Now())
+		closeDriveAsks(asks.Dir(), t.lay.StorageRoot.Path(), a.cancel, time.Now())
 
 		return nil
 	}
@@ -152,7 +159,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
 	if a.resume > 0 {
-		rec, err := drives.Read(t.lay.StorageRoot, a.resume)
+		rec, err := drives.Read(t.lay.StorageRoot.Path(), a.resume)
 		if err != nil {
 			return err
 		}
@@ -205,7 +212,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in := &driveInput{
 		main:    main,
 		pull:    pullOf,
-		root:    t.lay.StorageRoot,
+		root:    t.lay.StorageRoot.Path(),
 		driver:  drv,
 		tracker: t.tracker(),
 		args:    a,
@@ -220,7 +227,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 			return resolvePacedFlow(t.eff, paces, p, fl.recorded())
 		},
-		plansDir: t.sharedPlansDir(),
+		storage:  t.lay.StorageRoot,
 		settings: claudeSettingsPath(),
 		layers:   layers,
 		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },

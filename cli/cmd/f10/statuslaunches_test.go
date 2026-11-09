@@ -75,7 +75,7 @@ func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...
 		change(rec)
 	}
 
-	if err := drives.Create(tg.lay.StorageRoot, rec); err != nil {
+	if err := drives.Create(tg.lay.StorageRoot.Path(), rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -219,7 +219,7 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lease, err := drives.Acquire(tg.lay.StorageRoot, drives.DriveKey(n), n)
+	lease, err := drives.Acquire(tg.lay.StorageRoot.Path(), drives.DriveKey(n), n)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -129,7 +129,7 @@ func TestListURLs(t *testing.T) {
 func TestTaskListURL(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot)
+	writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.script("driver index", "https://tracker.example.com/board\n")
 
@@ -151,7 +151,7 @@ func TestTaskListURL(t *testing.T) {
 func TestTaskRows(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot)
+	writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.script(
 		"driver list",
@@ -213,7 +213,7 @@ func TestTaskRows(t *testing.T) {
 func TestWriteTaskListRanksAndWarns(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot)
+	writeDriver(t, tg.lay.StorageRoot.Path())
 
 	f.script("driver list", `[{"id":"FT-1","title":"a","priority":"Highest"},{"id":"FT-2","title":"b"},`+
 		`{"id":"FT-3","title":"c","priority":"low"},{"id":"FT-4","title":"d","priority":"HIGH"},`+

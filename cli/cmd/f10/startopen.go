@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // startInput is everything start needs once the target is settled, so
@@ -27,7 +28,7 @@ type startInput struct {
 	pace     string                                // the --pace typed, recorded on the branch; "" records none
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	base     string                                // branch whose ref is the base, or ""
-	plansDir string                                // the plans dir every checkout shares
+	storage  storage.Root                          // the storage root every checkout shares
 	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
 	notes    []string                              // notes settled before the flow, printed beneath the report
 	// profile is what the agent starts on, resolved; profileFlagged says a
@@ -294,7 +295,7 @@ func openWorktree(
 	}
 
 	if dep != nil {
-		notes = append(notes, locatePlan(dep, in.plansDir)...)
+		notes = append(notes, locatePlan(dep, in.storage)...)
 	}
 
 	path := worktreeOf(wts, name)
@@ -388,9 +389,9 @@ func prepareLaunch(
 	notes []string,
 ) (agentctl.Profile, []string, error) {
 	// the agent reads the plan in place: only a prompted agent is told of it
-	o.plan = planIf(taskPlan(path, in.plansDir, in.task.ID))
+	o.plan = planIf(in.storage.Plan(in.task.ID))
 
-	if err := makeStorageDirs(in.plansDir); err != nil {
+	if err := makeStorageDirs(in.storage); err != nil {
 		return profile, nil, err
 	}
 
@@ -409,7 +410,7 @@ func prepareLaunch(
 	o.launch = &pendingLaunch{
 		agent:   agent,
 		profile: profile,
-		args:    agentArgs(profile, in.plansDir, path),
+		args:    agentArgs(profile, in.storage, path),
 		waiting: shellWait(in.progress, ws.Slot),
 	}
 	o.fresh = true

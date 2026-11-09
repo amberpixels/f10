@@ -20,6 +20,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 func daemonCommand() *cli.Command {
@@ -153,7 +154,7 @@ func driveTitle(r daemon.Run) string {
 }
 
 func projectName(root string) string {
-	if project := filepath.Base(root); project != ".f10" {
+	if project := filepath.Base(root); project != storage.DirName {
 		return project
 	}
 
@@ -197,7 +198,7 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		if path = daemon.FindLog(dir, t.lay.StorageRoot, n); path == "" {
+		if path = daemon.FindLog(dir, t.lay.StorageRoot.Path(), n); path == "" {
 			return fmt.Errorf("no daemon log for drive %d in this project", n)
 		}
 	}
@@ -237,14 +238,14 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 		Op:   daemon.OpRun,
 		Argv: argv,
 		Dir:  cwd,
-		Root: t.lay.StorageRoot,
+		Root: t.lay.StorageRoot.Path(),
 		Env:  driveEnv(os.Environ(), t.eff.DriveEnv),
 	}
 
 	// a rerun may attach to the drive still running, which reads its cap
 	// from the record each tick
 	if a.parallel > 0 {
-		setDriveParallel(w, t.lay.StorageRoot, argv, a)
+		setDriveParallel(w, t.lay.StorageRoot.Path(), argv, a)
 	}
 
 	// a drive given answers starts its own process, so the answers reach it

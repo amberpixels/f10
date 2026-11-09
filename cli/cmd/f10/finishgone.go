@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A goneError is a checkout a finish that stopped halfway left: no branch,
@@ -65,7 +66,7 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 	}
 
 	// the PR already merged; the local branch still holds the tip the handoff was written at
-	hand := handoffLines(taskHandoff(in.main, in.plansDir, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
+	hand := handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p))
 
 	// measured before the land, as finish does, while the branch still differs
 	recordLanded := sizeRecorder(ctx, in, name, def, false)
@@ -98,20 +99,20 @@ func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError
 
 	in.step("archiving the plan")
 
-	archived, note, err := archivePlan(in.main, in.main, in.plansDir, in.task.ID)
+	archived, note, err := archivePlan(in.storage, in.task.ID)
 	_ = after.check("archiving the plan", err)
 	if err != nil {
 		after.keep = "the branch stays, since the plan is not archived"
 	}
 
 	notes = appendNote(notes, note)
-	notes = appendNote(notes, removeImages(in.main, in.plansDir, in.task.ID))
+	notes = appendNote(notes, removeImages(in.storage, in.task.ID))
 
-	handoffSrc, handed := handoffTarget(in.main, in.plansDir, in.task.ID)
+	handoffSrc, handed := handoffTarget(in.storage, in.task.ID)
 
 	end := seriesEnd{pr: pullNumber(p.url()), head: p.sha()}
 
-	reviews, err := closeSeries(taskReviews(in.main, in.plansDir, in.task.ID), end)
+	reviews, err := closeSeries(in.storage.Reviews(in.task.ID), end)
 	_ = after.check("archiving the reviews", err)
 
 	notes = appendNote(notes, seriesLore(&in, &end))
@@ -259,12 +260,7 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 // planArchived wants an archived plan with no live one beside it, since a
 // re-plan archives the old plan too.
 func planArchived(in finishInput) bool {
-	plans := filepath.Join(in.main, ".f10", "plans")
-	if in.plansDir != "" {
-		plans = in.plansDir
-	}
-
-	return planArchivedIn(plans, in.task.ID)
+	return planArchivedIn(in.storage.Plans(), in.task.ID)
 }
 
 func planArchivedIn(plans, id string) bool {
@@ -272,7 +268,7 @@ func planArchivedIn(plans, id string) bool {
 		return false
 	}
 
-	dir := filepath.Join(plans, "archive")
+	dir := storage.ArchiveOf(plans)
 	if exists(filepath.Join(dir, id+".md")) {
 		return true
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // spike gives the fixture shared storage in main's .f10 with GH-1's plan
@@ -15,13 +16,13 @@ import (
 func (fx *finishFixture) spike(t *testing.T) string {
 	t.Helper()
 
-	fx.in.plansDir = filepath.Join(fx.main, ".f10", "plans")
-	writeFile(t, filepath.Join(fx.in.plansDir, "GH-1.md"), "Roles: senior engineer\nKind: spike\n\n# GH-1\n")
+	fx.in.storage = storage.InRepo(fx.main)
+	writeFile(t, filepath.Join(fx.in.storage.Plans(), "GH-1.md"), "Roles: senior engineer\nKind: spike\n\n# GH-1\n")
 	writePlan(t, filepath.Join(fx.main, ".f10", "spikes", "GH-1.md"))
 	fx.f.script("git status --porcelain", " M cli/a.go\n?? probe.txt")
 	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
 
-	return filepath.Join(fx.in.plansDir, "archive")
+	return filepath.Join(fx.in.storage.Plans(), "archive")
 }
 
 // A spike with no PR closes without a merge: the experiment is discarded
@@ -215,7 +216,7 @@ func TestFinishIgnoresAReportUnderAPlanThatIsNoSpike(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
 	fx.spike(t)
-	writeFile(t, filepath.Join(fx.in.plansDir, "GH-1.md"), "Roles: senior engineer\n\n# GH-1\n")
+	writeFile(t, filepath.Join(fx.in.storage.Plans(), "GH-1.md"), "Roles: senior engineer\n\n# GH-1\n")
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
@@ -269,7 +270,7 @@ func TestFinishArchivesALegacyWorktreesSpikeReport(t *testing.T) {
 	}
 
 	// the worktree's own copy goes with the worktree, so a rerun still finds it
-	if taskSpike(fx.wt, fx.in.plansDir, "GH-1") == "" {
+	if taskSpike(fx.wt, fx.in.storage, "GH-1") == "" {
 		t.Error("a rerun after the failed removal sees no spike")
 	}
 }

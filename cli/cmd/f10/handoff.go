@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // handoff is the file steps/handoff.md writes: what the change leaves for
@@ -21,9 +22,9 @@ type handoff struct {
 	body string
 }
 
-// taskHandoff is the task's handoff file, beside its plans.
-func taskHandoff(main, plansDir, id string) string {
-	return filepath.Join(filepath.Dir(taskPlansDir(main, plansDir)), "handoffs", id+".md")
+// taskHandoff is the task's handoff file.
+func taskHandoff(root storage.Root, id string) string {
+	return filepath.Join(root.Handoffs(), id+".md")
 }
 
 // readHandoff reads the frontmatter's head and the body after it; a missing
@@ -114,8 +115,8 @@ func branchTip(ctx context.Context, main, branch string, p pull) func() string {
 
 // archiveHandoff moves the handoff to handoffs/archive/, numbered as plans
 // are, so the task's next PR writes its own; a missing file archives nothing.
-func archiveHandoff(main, plansDir, id string) (string, error) {
-	src, target := handoffTarget(main, plansDir, id)
+func archiveHandoff(root storage.Root, id string) (string, error) {
+	src, target := handoffTarget(root, id)
 
 	return target, moveHandoff(src, target)
 }
@@ -123,13 +124,13 @@ func archiveHandoff(main, plansDir, id string) (string, error) {
 // handoffTarget names where the handoff will be archived, "" with none.
 // Finish names it for its report and moves the file only after printing it,
 // so a failure before the report leaves the file for the rerun to print.
-func handoffTarget(main, plansDir, id string) (string, string) {
-	src := taskHandoff(main, plansDir, id)
+func handoffTarget(root storage.Root, id string) (string, string) {
+	src := taskHandoff(root, id)
 	if !exists(src) {
 		return src, ""
 	}
 
-	return src, freeArchiveName(filepath.Join(filepath.Dir(src), "archive"), id)
+	return src, freeArchiveName(storage.ArchiveOf(root.Handoffs()), id)
 }
 
 func moveHandoff(src, target string) error {

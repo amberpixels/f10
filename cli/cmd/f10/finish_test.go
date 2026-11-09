@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // The fixture every finish test starts from: GH-1's branch is checked out
@@ -67,13 +68,19 @@ func newFinishFixture(t *testing.T) *finishFixture {
 	root := t.TempDir()
 	fx := &finishFixture{f: newFakes(t), main: filepath.Join(root, "repo"), wt: filepath.Join(root, "repo.GH-1")}
 
-	for _, d := range []string{fx.main, filepath.Join(fx.wt, ".f10", "plans")} {
+	for _, d := range []string{fx.main, fx.wt} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	fx.in = finishInput{main: fx.main, task: gh1, host: newHost("gh", fx.main), cwd: fx.main}
+	fx.in = finishInput{
+		main:    fx.main,
+		storage: storage.InRepo(fx.main),
+		task:    gh1,
+		host:    newHost("gh", fx.main),
+		cwd:     fx.main,
+	}
 
 	f := fx.f
 	f.script(refsLocal, heads("GH-1"))
@@ -107,11 +114,11 @@ func (fx *finishFixture) workspaces(open bool) string {
 	return `{"result":{"workspaces":[` + main + `,` + task + `]}}`
 }
 
-// plan writes GH-1's plan in the task's checkout, the plans dir the fixture reads.
+// plan writes GH-1's plan in the shared storage root.
 func (fx *finishFixture) plan(t *testing.T, body string) string {
 	t.Helper()
 
-	p := filepath.Join(fx.wt, ".f10", "plans", "GH-1.md")
+	p := fx.in.storage.Plan("GH-1")
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -562,7 +569,7 @@ func TestFinishStopsOnHostRefusal(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join(fx.wt, ".f10", "plans", "GH-1.md")); err != nil {
+	if _, err := os.Stat(fx.in.storage.Plan("GH-1")); err != nil {
 		t.Error("the plan was moved although the merge failed")
 	}
 }
@@ -645,7 +652,7 @@ func TestFinishKeepsBranchWhenRetargetFails(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join(fx.wt, ".f10", "plans", "GH-1.md")); err != nil {
+	if _, err := os.Stat(fx.in.storage.Plan("GH-1")); err != nil {
 		t.Error("the plan was moved although the retarget failed")
 	}
 }
@@ -1087,7 +1094,7 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 
 	root := t.TempDir()
 	shared := filepath.Join(root, "plans")
-	fx.in.plansDir = shared
+	fx.in.storage = storage.Root(root)
 
 	images := filepath.Join(root, "images", "GH-1")
 	for _, d := range []string{shared, images} {
@@ -1126,7 +1133,7 @@ func TestRemoveImagesInRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if note := removeImages(main, "", "GH-1"); note != "" {
+	if note := removeImages(storage.InRepo(main), "GH-1"); note != "" {
 		t.Errorf("removeImages = %q, want no note", note)
 	}
 
@@ -1346,13 +1353,17 @@ func TestAttemptRows(t *testing.T) {
 func TestFinishAlreadyFinished(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(refsLocal, "")
-	fx.in.plansDir = filepath.Join(t.TempDir(), "plans")
+	fx.in.storage = storage.Root(t.TempDir())
 
-	if err := os.MkdirAll(filepath.Join(fx.in.plansDir, "archive"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(fx.in.storage.Plans(), "archive"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(fx.in.plansDir, "archive", "GH-1.1.md"), []byte("# plan"), 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(fx.in.storage.Plans(), "archive", "GH-1.1.md"),
+		[]byte("# plan"),
+		0o644,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1380,7 +1391,7 @@ func TestFinishAlreadyFinished(t *testing.T) {
 	}
 
 	// a re-plan archives the old plan too, and keeps the new one live
-	if err := os.WriteFile(filepath.Join(fx.in.plansDir, "GH-1.md"), []byte("# plan"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(fx.in.storage.Plans(), "GH-1.md"), []byte("# plan"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1475,32 +1486,6 @@ func TestMergeMethod(t *testing.T) {
 				t.Error("the repo was asked although project.md declares the method")
 			}
 		})
-	}
-}
-
-func TestInside(t *testing.T) {
-	root := t.TempDir()
-	wt := filepath.Join(root, "repo.GH-1")
-
-	if err := os.MkdirAll(filepath.Join(wt, "cli"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	cases := []struct {
-		dir  string
-		want bool
-	}{
-		{wt, true},
-		{filepath.Join(wt, "cli"), true},
-		{root, false},
-		{filepath.Join(root, "repo.GH-10"), false},
-		{filepath.Join(root, "repo"), false},
-	}
-
-	for _, c := range cases {
-		if got := inside(c.dir, wt); got != c.want {
-			t.Errorf("inside(%s, %s) = %v, want %v", c.dir, wt, got, c.want)
-		}
 	}
 }
 
@@ -2201,7 +2186,7 @@ func TestFinishArchivesMainsSharedPlan(t *testing.T) {
 	fx.openPR()
 
 	shared := filepath.Join(fx.main, ".f10", "plans")
-	fx.in.plansDir = shared
+	fx.in.storage = storage.InRepo(fx.main)
 
 	if err := os.MkdirAll(shared, 0o750); err != nil {
 		t.Fatal(err)
@@ -2758,7 +2743,7 @@ func newParentFixture(t *testing.T, kids ...childRow) *finishFixture {
 
 	fx := newFinishFixture(t)
 	fx.f.script(refsLocal, "")
-	fx.in.plansDir = filepath.Join(t.TempDir(), "plans")
+	fx.in.storage = storage.Root(t.TempDir())
 	fx.in.subtasks = func(context.Context, ref.Ref) ([]childRow, error) { return kids, nil }
 	fx.in.closeTask = func(ctx context.Context, r ref.Ref) error { return fx.in.host.closeIssue(ctx, r.Number) }
 
@@ -2776,7 +2761,7 @@ func TestFinishPrintsAndArchivesTheHandoff(t *testing.T) {
 	fx.openPR()
 	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
 
-	src := taskHandoff(fx.main, "", "GH-1")
+	src := taskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc1234567")
 
 	var handed []string
@@ -2816,7 +2801,7 @@ func TestFinishCompletesOnAStaleOrMissingHandoff(t *testing.T) {
 
 			if name == "stale" {
 				fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "def7654321")
-				writeHandoffFile(t, taskHandoff(fx.main, "", "GH-1"), "abc1234567")
+				writeHandoffFile(t, taskHandoff(fx.in.storage, "GH-1"), "abc1234567")
 			}
 
 			out, err := fx.run(t)
@@ -2838,7 +2823,7 @@ func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
 	fx.f.script(unpushed, "")
 	fx.in.local = true
 
-	src := taskHandoff(fx.main, "", "GH-1")
+	src := taskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc")
 
 	out, err := fx.run(t)
@@ -2860,7 +2845,7 @@ func TestFinishMergedWithoutWorktreePrintsTheHandoff(t *testing.T) {
 	fx.f.script(lsRem, "")
 	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
 
-	src := taskHandoff(fx.main, "", "GH-1")
+	src := taskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc1234567")
 
 	var handed []string

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A Check is one assertion on what a scenario's run left in its repo:
@@ -39,7 +41,7 @@ func result(name string, problems []string) Check {
 }
 
 func checkPlan(_ context.Context, dir string, s Scenario) Check {
-	body, err := os.ReadFile(filepath.Join(dir, ".f10", "plans", s.Task+".md"))
+	body, err := os.ReadFile(storage.InRepo(dir).Plan(s.Task))
 	if err != nil {
 		return result("plan", []string{err.Error()})
 	}
@@ -192,7 +194,7 @@ type where struct {
 }
 
 func findingWheres(dir, task string) ([]where, []string) {
-	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "reviews", task, "*.md"))
+	files, _ := filepath.Glob(filepath.Join(storage.InRepo(dir).Reviews(task), "*.md"))
 
 	var found []where
 
@@ -211,7 +213,7 @@ func findingWheres(dir, task string) ([]where, []string) {
 var verdicts = []string{"proceed", "proceed with changes", "rethink", "stop"}
 
 func checkVerdict(_ context.Context, dir string, s Scenario) Check {
-	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "verdicts", s.Task, "*.md"))
+	files, _ := filepath.Glob(filepath.Join(storage.InRepo(dir).Verdicts(s.Task), "*.md"))
 	if len(files) == 0 {
 		return result("verdict", []string{"no verdict file"})
 	}
@@ -237,7 +239,7 @@ func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 
 // checkIntent checks presence only; the schema is checkLore's.
 func checkIntent(_ context.Context, dir string, s Scenario) Check {
-	files, _ := filepath.Glob(filepath.Join(dir, ".f10", "lore", s.Task, "*-intent.md"))
+	files, _ := filepath.Glob(filepath.Join(storage.InRepo(dir).Lore(), s.Task, "*-intent.md"))
 	if len(files) == 0 {
 		return result("intent", []string{"no intent entry"})
 	}

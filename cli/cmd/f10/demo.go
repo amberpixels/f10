@@ -62,7 +62,7 @@ func demoReport(ctx context.Context, cmd *cli.Command) (*target, string, error) 
 		return nil, "", err
 	}
 
-	path := filepath.Join(t.lay.StorageRoot, "demo", r.Head().ID, "report.html")
+	path := filepath.Join(t.lay.StorageRoot.Demo(r.Head().ID), "report.html")
 	if _, err := os.Stat(path); err != nil {
 		return nil, "", fmt.Errorf("no demo report for %s at %s", memberLabel(r), path)
 	}

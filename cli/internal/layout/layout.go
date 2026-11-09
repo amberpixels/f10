@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // Layering modes: a worktree layer either extends main's instructions or
@@ -33,16 +34,16 @@ type Layer struct {
 // A Layout names where configuration lives for one working directory.
 // Path fields are physical (symlinks resolved), matching f10-load-project.sh.
 type Layout struct {
-	Cwd              string  // where the run started
-	CheckoutRoot     string  // root of the checkout the run started in
-	MainRoot         string  // root of the main checkout; empty when git cannot name one
-	Project          string  // basename of the main checkout, or of the cwd outside git
-	StorageRoot      string  // where plans, reviews, verdicts and lore live: main's .f10 for every checkout, or the out-of-tree root
-	Layering         string  // LayeringExtends or LayeringReplaces
-	LayeringDeclared bool    // a worktree project.md declares Layering
-	Layers           []Layer // precedence order: later wins
-	Source           string  // human description; wording matches f10-load-project.sh
-	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
+	Cwd              string       // where the run started
+	CheckoutRoot     string       // root of the checkout the run started in
+	MainRoot         string       // root of the main checkout; empty when git cannot name one
+	Project          string       // basename of the main checkout, or of the cwd outside git
+	StorageRoot      storage.Root // where plans, reviews, verdicts and lore live: main's .f10 for every checkout, or the out-of-tree root
+	Layering         string       // LayeringExtends or LayeringReplaces
+	LayeringDeclared bool         // a worktree project.md declares Layering
+	Layers           []Layer      // precedence order: later wins
+	Source           string       // human description; wording matches f10-load-project.sh
+	NestedIgnored    string       // a .f10/instructions below the root, noted and ignored
 }
 
 // Locate finds the configuration layout for cwd. It never fails -
@@ -69,13 +70,13 @@ func Locate(ctx context.Context, cwd string) *Layout {
 
 	lay.Project = filepath.Base(baseRoot)
 	// main's .f10 is every checkout's storage, so removing a worktree loses nothing
-	lay.StorageRoot = filepath.Join(baseRoot, ".f10")
+	lay.StorageRoot = storage.InRepo(baseRoot)
 
-	baseInstr := existingDir(filepath.Join(baseRoot, ".f10", "instructions"))
+	baseInstr := existingDir(lay.StorageRoot.Instructions())
 
 	var wtInstr string
 	if here != baseRoot {
-		wtInstr = existingDir(filepath.Join(here, ".f10", "instructions"))
+		wtInstr = existingDir(storage.InRepo(here).Instructions())
 	}
 
 	// only `replaces` in the worktree's own project.md takes main's place;
@@ -115,11 +116,11 @@ func Locate(ctx context.Context, cwd string) *Layout {
 		// layer and only a last resort - and finding it moves the whole
 		// storage root, plans included
 		if home, err := os.UserHomeDir(); err == nil {
-			oot := existingDir(filepath.Join(home, ".f10", lay.Project, "instructions"))
-			if oot != "" {
+			root := storage.OutOfTree(home, lay.Project)
+			if oot := existingDir(root.Instructions()); oot != "" {
 				lay.Layers = []Layer{{Label: "out-of-tree", Dir: oot}}
 				lay.Source = "out-of-tree (~/.f10/" + lay.Project + ")"
-				lay.StorageRoot = filepath.Join(home, ".f10", lay.Project)
+				lay.StorageRoot = root
 			}
 		}
 	}
@@ -131,7 +132,7 @@ func Locate(ctx context.Context, cwd string) *Layout {
 	// a config below the root is not a per-directory config - note it
 	// rather than pass it over silently
 	if canon(cwd) != here {
-		lay.NestedIgnored = existingDir(filepath.Join(cwd, ".f10", "instructions"))
+		lay.NestedIgnored = existingDir(storage.InRepo(cwd).Instructions())
 	}
 
 	return lay

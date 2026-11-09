@@ -38,7 +38,7 @@ func TestStorageRoot(t *testing.T) {
 			wt := addWorktree(t, repo)
 			tc.setup(t, repo, wt)
 
-			if lay := Locate(t.Context(), wt); lay.StorageRoot != filepath.Join(repo, ".f10") {
+			if lay := Locate(t.Context(), wt); lay.StorageRoot.Path() != filepath.Join(repo, ".f10") {
 				t.Errorf("Locate = %q, want main's .f10", lay.StorageRoot)
 			}
 		})

@@ -103,9 +103,7 @@ func (in *driveInput) catchupMessage(r *driveRun) func(catchupPlan) []string {
 			return msg
 		}
 
-		if in.root != "" {
-			trailers += changeTrailer(tasks[0], changeOf(filepath.Join(in.root, "reviews", tasks[0])))
-		}
+		trailers += changeTrailer(tasks[0], changeOf(in.storage.Reviews(tasks[0])))
 
 		return append(msg, strings.TrimSpace(trailers))
 	}

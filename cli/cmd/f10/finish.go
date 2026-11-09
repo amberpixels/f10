@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // The finish verb is start's inverse. Nothing local moves until the merge
@@ -133,7 +134,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 
 	// drive's own finish runs under the lease drive holds, so only the
 	// command takes it
-	lease, err := finishLease(t.lay.StorageRoot, r.ID)
+	lease, err := finishLease(t.lay.StorageRoot.Path(), r.ID)
 	if err != nil {
 		return err
 	}
@@ -148,7 +149,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	in.yes, in.merge, in.local, in.keep = cmd.Bool("yes"), cmd.Bool("merge"), cmd.Bool("local"), cmd.Bool("keep")
 	in.close = closing
 	in.sweep = func(ctx context.Context) {
-		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now(),
+		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now(),
 			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 	}
 
@@ -211,10 +212,10 @@ type finishInput struct {
 	cwd       string // where the command runs: inside the worktree is the self-close case
 	workspace string // HERDR_WORKSPACE_ID: the workspace this process runs in, or ""
 	yes       bool
-	merge     bool   // merge the PR even when someone else opened it
-	local     bool   // leave the PR open and clean up only what is here
-	keep      bool   // a spike's experiment is committed onto a kept/ branch, not discarded
-	plansDir  string // the plans dir every checkout shares; the spikes dir sits beside it
+	merge     bool         // merge the PR even when someone else opened it
+	local     bool         // leave the PR open and clean up only what is here
+	keep      bool         // a spike's experiment is committed onto a kept/ branch, not discarded
+	storage   storage.Root // the same root as root, for task files: plans, findings, handoffs
 	// title reads the task's title for a squash merged here, nil for none
 	title func(context.Context) (string, error)
 	// close is the riders the PR delivers, closed with the lead; nil, no
@@ -247,7 +248,7 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 
 	return finishInput{
 		main:       main,
-		root:       t.lay.StorageRoot,
+		root:       t.lay.StorageRoot.Path(),
 		driver:     t.driver(),
 		task:       task,
 		host:       h.at(main),
@@ -256,7 +257,7 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 		hostIssues: t.hostIssues(),
 		loreStore:  &lore.Store{Root: loreRootFor(t)},
 		gate:       t.eff.LoreGate,
-		plansDir:   t.sharedPlansDir(),
+		storage:    t.lay.StorageRoot,
 		title:      titleLookup(t, task.Number),
 		subtasks:   t.tracker().allChildren,
 		closeTask:  closeTaskFor(t, h.at(main)),

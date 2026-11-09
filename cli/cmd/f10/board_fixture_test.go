@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // The board checked on recorded runs: each fixture under testdata/board is
@@ -165,7 +166,7 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	if !fx.Remote {
 		in.Project.Checkout = root
 		in.Local = &lookaround.LocalInputs{
-			Main: root, StateDir: stateDir, TTL: 365 * 24 * time.Hour,
+			Main: root, StateDir: stateDir, TTL: 365 * 24 * time.Hour, SharedRoot: storage.InRepo(root),
 			LedgerPath: filepath.Join(t.TempDir(), "none.db"), ProjectID: in.Project.ID,
 		}
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A round-two file's settled prior blocks are not open findings; one in a
@@ -41,7 +41,7 @@ func TestReadRootCountsOpenFindings(t *testing.T) {
 		Archived: map[string]bool{},
 		Verdicts: map[string]string{},
 	}
-	readRoot(root, l)
+	readRoot(storage.Root(root), l)
 
 	if got := l.Findings["FT-1"]; got.Round != 2 || got.Open != 0 {
 		t.Errorf("settled round two = %+v, want round 2 with nothing open", got)
@@ -56,31 +56,9 @@ func TestReadRootCountsOpenFindings(t *testing.T) {
 	write("2.md", reopened)
 
 	l.Findings = map[string]Findings{}
-	readRoot(root, l)
+	readRoot(storage.Root(root), l)
 
 	if got := l.Findings["FT-1"]; got.Open != 1 {
 		t.Errorf("reopened prior block = %+v, want one open", got)
-	}
-}
-
-// The shared root is the one root, even beside a worktree whose own .f10
-// holds task files; with no shared root, every checkout's is read.
-func TestStorageRoots(t *testing.T) {
-	main, fresh, stray := t.TempDir(), t.TempDir(), t.TempDir()
-	shared := filepath.Join(main, ".f10")
-
-	if err := os.MkdirAll(filepath.Join(stray, ".f10", "reviews"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-
-	wts := []gitx.Worktree{{Path: main}, {Path: fresh}, {Path: stray}}
-
-	if got := strings.Join(storageRoots(shared, wts), " "); got != shared {
-		t.Errorf("storageRoots = %q, want %q", got, shared)
-	}
-
-	got := strings.Join(storageRoots("", wts[:2]), " ")
-	if want := shared + " " + filepath.Join(fresh, ".f10"); got != want {
-		t.Errorf("storageRoots with no shared root = %q, want %q", got, want)
 	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -107,7 +106,7 @@ func (t *target) tracker() tracker {
 		main = t.lay.CheckoutRoot
 	}
 
-	plans := cmp.Or(t.sharedPlansDir(), filepath.Join(main, ".f10", "plans"))
+	plans := t.lay.StorageRoot.Plans()
 
 	tr := tracker{
 		resolve: t.reference,

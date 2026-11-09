@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // afterFromBody reads the task's body for an After: line. A body that
@@ -217,14 +217,8 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 
 // locatePlan finds the base task's plan in the shared plans dir. The notes
 // name what was not found, so a prompt that cannot cite the plan is explained.
-func locatePlan(dep *dependency, plansDir string) []string {
-	if plansDir == "" {
-		return []string{
-			dep.task + " has no shared plans dir here, so its plan is out of reach: the prompt names the task alone",
-		}
-	}
-
-	dep.plan = filepath.Join(plansDir, dep.task+".md")
+func locatePlan(dep *dependency, root storage.Root) []string {
+	dep.plan = root.Plan(dep.task)
 
 	if _, err := os.Stat(dep.plan); err != nil {
 		return []string{fmt.Sprintf("%s has no plan yet at %s", dep.task, dep.plan)}

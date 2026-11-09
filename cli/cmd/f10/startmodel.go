@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // claudeSettingsPath is the user's claude settings file, under
@@ -52,23 +53,18 @@ func claudeDefaultModel(path string) string {
 	return strings.TrimSpace(settings.Model)
 }
 
-// taskFileDirs are the storage root's dirs an agent writes task files to.
-// Instructions and the driver stay out: a worktree's agent never edits
-// what every checkout's next run loads.
-var taskFileDirs = []string{"plans", "reviews", "verdicts", "spikes", "handoffs", "lore", "images", "demo"}
-
 // agentArgs is the agent's command line: the profile's flags through its
 // kind, and each task-file dir of the storage root when that root sits
 // outside the worktree, so writing plans and findings there asks no
 // permission.
-func agentArgs(p agentctl.Profile, plansDir, worktree string) []string {
+func agentArgs(p agentctl.Profile, root storage.Root, worktree string) []string {
 	args := p.Args()
-	if !outsideWorktree(plansDir, worktree) {
+	if !root.Outside(worktree) {
 		return args
 	}
 
-	for _, d := range taskFileDirs {
-		args = append(args, "--add-dir", filepath.Join(filepath.Dir(plansDir), d))
+	for _, d := range root.TaskFileDirs() {
+		args = append(args, "--add-dir", d)
 	}
 
 	return args
@@ -93,27 +89,12 @@ func recordedProfile(ctx context.Context, main, branch string) (agentctl.Profile
 
 // makeStorageDirs creates the task-file dirs agentArgs names, since claude
 // may refuse --add-dir on a missing one.
-func makeStorageDirs(plansDir string) error {
-	if plansDir == "" {
-		return nil
-	}
-
-	for _, d := range taskFileDirs {
-		if err := os.MkdirAll(filepath.Join(filepath.Dir(plansDir), d), 0o750); err != nil {
+func makeStorageDirs(root storage.Root) error {
+	for _, d := range root.TaskFileDirs() {
+		if err := os.MkdirAll(d, 0o750); err != nil {
 			return fmt.Errorf("creating the storage dirs: %w", err)
 		}
 	}
 
 	return nil
-}
-
-// outsideWorktree says the storage root of plansDir lies outside worktree.
-func outsideWorktree(plansDir, worktree string) bool {
-	if plansDir == "" {
-		return false
-	}
-
-	rel, err := filepath.Rel(worktree, filepath.Dir(plansDir))
-
-	return err != nil || strings.HasPrefix(rel, "..")
 }

@@ -13,13 +13,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // driveInput is everything drive needs once the target is settled, so the
 // flow can be tested without a checkout, a clock or a wait.
 type driveInput struct {
 	main    string
-	root    string // the storage root every checkout shares, for the record and the leases; "" keeps none
+	root    string // the storage root as a path for per-run state: the record, the leases, the asks; "" keeps none
 	driver  *driver.Driver
 	tracker tracker
 	args    driveArgs
@@ -30,9 +31,9 @@ type driveInput struct {
 	// paced is a flow at another pace, for a branch that records one; nil
 	// keeps the run's
 	paced    func(fl shipFlow, pace string) (shipFlow, error)
-	plansDir string   // the plans dir every checkout shares
-	settings string   // claude's settings file, which names the model a bad --model falls back to
-	layers   agentMap // the user's and the project's agents map; nil for none
+	storage  storage.Root // the same root, for task files: plans, findings, verdicts
+	settings string       // claude's settings file, which names the model a bad --model falls back to
+	layers   agentMap     // the user's and the project's agents map; nil for none
 	title    func(ref.Ref) func(context.Context) (string, error)
 	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
