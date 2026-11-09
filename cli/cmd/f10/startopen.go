@@ -293,7 +293,7 @@ func openWorktree(
 	}
 
 	if dep != nil {
-		notes = append(notes, locatePlan(dep, in.plansDir, wts)...)
+		notes = append(notes, locatePlan(dep, in.plansDir)...)
 	}
 
 	path := worktreeOf(wts, name)

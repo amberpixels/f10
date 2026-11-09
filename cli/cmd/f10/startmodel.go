@@ -74,24 +74,21 @@ func agentArgs(p agentctl.Profile, plansDir, worktree string) []string {
 	return args
 }
 
-// recordedProfile is the profile a branch records, from f10-agent, else
-// the model alone an older branch recorded under f10-model; the zero
-// profile when it records neither.
+// recordedProfile is the profile a branch records under f10-agent, the
+// zero profile when it records none.
 func recordedProfile(ctx context.Context, main, branch string) (agentctl.Profile, error) {
-	for _, key := range []string{cfgAgent, cfgModel} {
-		v, err := gitx.Config(ctx, main, "branch."+branch+"."+key)
-		if err != nil {
-			return agentctl.Profile{}, fmt.Errorf("reading the recorded agent profile: %w", err)
-		}
-
-		if v != "" {
-			p, _, _ := agentctl.ParseRecorded(v).Resolve()
-
-			return p, nil
-		}
+	v, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAgent)
+	if err != nil {
+		return agentctl.Profile{}, fmt.Errorf("reading the recorded agent profile: %w", err)
 	}
 
-	return agentctl.Profile{}, nil
+	if v == "" {
+		return agentctl.Profile{}, nil
+	}
+
+	p, _, _ := agentctl.ParseRecorded(v).Resolve()
+
+	return p, nil
 }
 
 // makeStorageDirs creates the task-file dirs agentArgs names, since claude

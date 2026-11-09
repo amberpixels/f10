@@ -20,8 +20,7 @@ import (
 type view struct {
 	CheckoutRoot    string              `json:"checkoutRoot"`
 	StorageRoot     string              `json:"storageRoot"`
-	LegacyStorage   bool                `json:"legacyStorage,omitempty"` // a worktree keeping its own .f10
-	Instructions    string              `json:"instructions"`            // source description, f10-load-project.sh wording
+	Instructions    string              `json:"instructions"` // source description, f10-load-project.sh wording
 	NestedIgnored   string              `json:"nestedIgnored,omitempty"`
 	Remote          string              `json:"remote,omitempty"`
 	PlansDir        string              `json:"plansDir"`
@@ -48,7 +47,6 @@ type view struct {
 	StaleAfter      string              `json:"staleAfter,omitempty"`
 	Flows           map[string][]string `json:"flows"`
 	FlowByArea      map[string]string   `json:"flowByArea,omitempty"`
-	DriveFinish     bool                `json:"driveFinish"`
 	ReportBack      bool                `json:"reportBack"`
 	Agents          []agentEntry        `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
 	Paces           []paceEntry         `json:"paces,omitempty"`   // every pace's keys, built-ins under the user's under the project's, each with its origin
@@ -212,7 +210,6 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 	v := &view{
 		CheckoutRoot:    lay.CheckoutRoot,
 		StorageRoot:     lay.StorageRoot,
-		LegacyStorage:   lay.LegacyStorage,
 		Instructions:    lay.Source,
 		NestedIgnored:   lay.NestedIgnored,
 		Remote:          pb.RemoteURL,
@@ -240,7 +237,6 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		StaleAfter:      eff.StaleAfter,
 		Flows:           eff.Flows,
 		FlowByArea:      eff.FlowByArea,
-		DriveFinish:     eff.DriveFinish,
 		ReportBack:      eff.ReportBack,
 		Facts:           eff.Facts,
 		Problems:        eff.Problems,

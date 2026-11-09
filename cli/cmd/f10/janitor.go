@@ -52,7 +52,7 @@ func runJanitor(ctx context.Context, cmd *cli.Command) error {
 	in.dry = cmd.Bool("dry-run")
 
 	if !in.dry {
-		if err := touchStamp(filepath.Join(t.sharedRoot(), janitorStamp), time.Now()); err != nil {
+		if err := touchStamp(filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now()); err != nil {
 			return err
 		}
 	}

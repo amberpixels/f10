@@ -29,19 +29,18 @@ type driveInput struct {
 	resolve func(name string) (shipFlow, error) // a declared flow by name, at the run's pace
 	// paced is a flow at another pace, for a branch that records one; nil
 	// keeps the run's
-	paced       func(fl shipFlow, pace string) (shipFlow, error)
-	driveFinish bool     // drive_finish, which a pace's finish word overrides
-	plansDir    string   // the plans dir every checkout shares
-	settings    string   // claude's settings file, which names the model a bad --model falls back to
-	layers      agentMap // the user's and the project's agents map; nil for none
-	title       func(ref.Ref) func(context.Context) (string, error)
-	started     func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
-	finish      func(ctx context.Context, w io.Writer, req driveFinish) error
-	stateDir    string
-	session     string // the session that typed the command, inherited through the daemon's environment
-	ttl         time.Duration
-	now         func() time.Time
-	sleep       func(context.Context, time.Duration) error
+	paced    func(fl shipFlow, pace string) (shipFlow, error)
+	plansDir string   // the plans dir every checkout shares
+	settings string   // claude's settings file, which names the model a bad --model falls back to
+	layers   agentMap // the user's and the project's agents map; nil for none
+	title    func(ref.Ref) func(context.Context) (string, error)
+	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
+	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
+	stateDir string
+	session  string // the session that typed the command, inherited through the daemon's environment
+	ttl      time.Duration
+	now      func() time.Time
+	sleep    func(context.Context, time.Duration) error
 	// record puts an event in the ledger, placed in dir; nil records nothing
 	record func(ctx context.Context, dir string, e ledger.Event)
 	// pull reads a branch's PR on the host when the drive reconciles a

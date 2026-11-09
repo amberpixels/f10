@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -738,22 +737,13 @@ func askFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 	return asks.Ask{
 		Task:     strings.ToUpper(task),
 		URL:      r.URL,
-		Root:     sharedRootOf(lay),
+		Root:     lay.StorageRoot,
 		Main:     cmp.Or(lay.MainRoot, lay.CheckoutRoot),
 		Project:  lay.Project,
 		Worktree: lay.CheckoutRoot,
 		Skill:    r.Leaf,
 		Text:     r.Ask,
 	}, true
-}
-
-// sharedRootOf is target.sharedRoot for a layout alone.
-func sharedRootOf(lay *layout.Layout) string {
-	if lay.LegacyStorage && lay.MainRoot != "" {
-		return filepath.Join(lay.MainRoot, ".f10")
-	}
-
-	return lay.StorageRoot
 }
 
 // runAsksHook prints, as context, the open asks this session has not been

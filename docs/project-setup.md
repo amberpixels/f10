@@ -12,8 +12,6 @@ f10 init
 
 Writes `.f10/instructions/project.md` from what detection found and adds `.f10/` to `.git/info/exclude`.
 It never overwrites, so re-running is safe.
-A `project.md` written before the frontmatter existed is moved over with `f10 init --migrate`: it puts the facts the file declares in prose into a frontmatter block above it, deletes nothing, and names the prose you can now delete.
-On a file that already has a block, it adds only the prose facts the block does not declare yet, keeping the block's key order and comments.
 The `Project` one-liner is left for you: no probe knows what a project *is*.
 
 Run it before the first plan.
@@ -68,7 +66,6 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `lore_gate` | `warn` or `block`: what `f10 finish` does when `f10 lore check` fails for the task right before its merge. `warn` prints the reasons under the report and merges; `block` refuses with nothing changed. A passing check needs the intent, a judge verdict of proceed and no open blocker or major finding, so a flow with no `judge` entry stays on `warn`. Nothing about to merge is checked: a request already merged, `--local`, a spike's close ([docs/lore.md](lore.md)) | `warn` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr` |
 | `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
-| `drive_finish` | `on` or `off`: the old key for whether `f10 drive` ends each task with `finish`, now read as the default pace's `finish` dial with a warning (**Paces**); `f10 init --migrate` rewrites it | `on` |
 | `drive_env` | a list of environment variable names a drive passes to its commands, beyond the built-in allowlist (`PATH`, `HOME`, `SSH_AUTH_SOCK`, `GH_*`, `GLAB_*`, `HERDR_*`, `F10_*`, `CLAUDE_*` and the like): the drive runs in the per-user daemon, which sees only these ([docs/cli.md](cli.md#daemon)) | none |
 | `watch` | `report`, `finish` or `off`: what the per-user daemon does for this project's tasks no drive owns. `report` tells when a PR merged or closed, an agent sits idle under a running phase, or a run stops; `finish` also finishes a task whose PR merged, with a clean worktree and an idle agent, and runs the janitor from each pass; `off` watches nothing. A project whose merges are a human's opts down to `report` or `off`; `finish` acts only on a PR already merged whose tip is the branch's, with an idle agent, so nothing unmerged is lost ([docs/cli.md](cli.md#watch)) | `finish` |
 | `watch_catchup` | `on` or `off`: with `on`, a pass under `watch: report` or `finish` also keeps an undriven task's open PR up to date with its target. A PR whose target moved past the branch is caught up through the task's own agent, as a driven catchup, with an idle agent and a clean tree, and pushed a pass later once it ended clean, with a lease after a rebase; a task handed back with `f10 watch off` is never touched. A catchup that does not end clean leaves the branch as it was and is told once. Off by default: an unattended agent settling conflicts and force-pushing them is the riskiest thing the watcher does ([docs/cli.md](cli.md#watch)) | `off` |
@@ -279,7 +276,7 @@ A `pr` entry opens the PR, or refreshes its title and description when one is op
 An entry may end in a label in brackets, a display name for an entry the flow repeats: `judged: plan implement pr review:local judge pr[pr-polish]`.
 `f10 status`, the parent tree, `f10 flow`, the drive's `resume at` line and `f10 stats <id>` show `pr-polish` where they would show `pr`, and `--json` keeps `step` as the bare step beside a `label`.
 The label changes nothing that runs: the entry is still `pr`, and every claim and match uses the bare entry.
-A label is lower kebab-case, unique within its flow, never the name of a step (a generic one, `finish`, or any step a declared flow names), and never on the old `review (local)` form.
+A label is lower kebab-case, unique within its flow, never the name of a step (a generic one, `finish`, or any step a declared flow names).
 A shell reads `[...]` as a pattern, so quote a labelled entry on a command line: `f10-state.sh pipeline implement pr 'pr[pr-polish]'`.
 The last entry names what a run ships: an open PR, a pushed branch, a running deploy.
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
@@ -289,12 +286,10 @@ A `handoff` entry writes the handoff file, which lists what the change leaves fo
 Every `pr` entry runs the handoff too and puts its body in the PR under `## Handoff`, so only a flow with no `pr` lists the entry to get that file.
 The entry adds a `handoff` row to the report and never changes the shipment.
 
-`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` when the run's pace, under the project's ceiling, says `finish: on` (**Paces**).
+`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` unless the run's pace, under the project's ceiling, says `finish: off` (**Paces**).
 A spike is closed after ship either way: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
 A rerun keeps the flow a task's branch recorded when it started.
 A project whose only merges are a human's declares `ceiling: { finish: off }`, so no pace merges there.
-The older `drive_finish: off` is still read, as the default pace's `finish: off`, so a run at another pace may still finish.
-A legacy drive chain without `finish` migrates to the default pace's `finish: off`.
 
 `flow_by_area` routes a task to a flow by its area, in the plain words Roles uses:
 
@@ -307,10 +302,6 @@ A flow the user names still wins; a task whose areas map to nothing ships throug
 Each value must name a declared flow.
 Never map an area to a flow with `push`: `push` runs only in a flow the user picked.
 With the map declared and no flow named, `f10 start` and `f10 drive` send `/f10:ship <id>` alone and record no flow on the branch: ship picks the flow from the task's area and plans as that flow says.
-
-The keys flows replaces still read, converted with a warning: `pipelines` (each becomes a flow led by `plan`), `planless` (those flows drop `plan`), `pipeline_by_area` (read as `flow_by_area`) and `drive_chain` (its `judge` before `ship` goes after `plan` in `default`, its `review` after `ship` is appended to `default` unless that already reviews, and a trailing `finish` turns `drive_finish` on).
-The old entry form `review (local)` reads as `review:local`, with a warning.
-`f10 init --migrate` rewrites all of them in the frontmatter, keeping key order and comments.
 
 ## Paces
 
@@ -328,7 +319,7 @@ The dials are:
 
 - `review: { by, rounds, depth }`.
   `by` is who reviews in a bare `review` entry: `local`, `host`, `ci`, `local+ci`, `ci?` or `local+ci?`.
-  `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (the `Rounds: 2` rule).
+  `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (a second round once round one's resolve fixed something).
   `depth` is `full` or `light`, which gives the blind reviewer a short brief (`steps/review.md`).
 - `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it.
   It reaches a judge that spawns an agent (`--blind`); a judge running inline stays on the task agent's profile.
@@ -348,7 +339,7 @@ A pace that leaves a flow invalid, such as `plan: off` with a plan judge still o
 Paces come in three layers, merged per pace and per key, a later layer winning:
 
 1. f10's built-ins.
-   `medium` has no dials, so naming it runs every flow as declared.
+   `medium` sets only `finish: on`, so naming it runs every flow as declared.
    `slow` reviews in two rounds, locally and also by CI where a remote reviewer is declared (`local+ci?`), and never finishes.
    `fast` reviews locally in one round, sets the judge's effort low and finishes.
    `ultra` skips plan, judge, cleanup and demo, reviews light, marks the PR `fast`, and finishes.
@@ -357,23 +348,17 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
 3. The project's `paces:`, main's then the worktree's.
 
 The run's pace is, first to last: `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`, the pace the task's branch records, the project's `pace:`, the user's `pace:`.
-With none of them, the run takes `medium`, which is empty unless the project tunes it, so every flow runs as declared, an optional CI review (`ci?`) still settled.
+With none of them, the run takes `medium`.
+Its one built-in dial is `finish: on`, and a project's `paces.medium` adds its own dials beside it.
+Untuned, it runs every flow as declared, an optional CI review (`ci?`) still settled.
 `f10 start --pace` and `f10 drive --pace` record the pace on the branch, replacing any earlier one, so a rerun that names none keeps it.
 Only a typed `--pace` is recorded, so a later `pace:` in `project.md` still reaches an existing task.
 `/f10:ship --pace` applies to that run alone.
 An unknown name fails with the list of paces.
 
-A pace's `finish` beats `drive_finish` when it sets one, and only where the run would otherwise stop at an open PR.
+A pace's `finish` applies only where the run would otherwise stop at an open PR.
+A run whose pace sets no `finish` finishes.
 It feeds `f10 drive` alone: a ship run never merges its own PR, and with `finish: on` its report names `/f10:finish` as the next step.
-
-Two older statements read as dials of the project's default pace (its `pace:`, else `medium`), each with a warning:
-
-- `drive_finish` is that pace's `finish`.
-- A `Rounds: 2` line in the Review section is that pace's `review: { rounds: 2 }`.
-
-A dial the project's `paces:` already declares wins, and the old statement is ignored with a warning.
-`f10 init --migrate` moves both into `paces:` and deletes `drive_finish`, and lists the `Rounds` line for you to delete.
-When `drive_finish` was `off`, it also suggests a ceiling, because a pace dial does not stop a faster pace from merging.
 
 ### Ceiling
 
@@ -518,15 +503,14 @@ Categories, each with its source of truth:
 
 Never flag: generated code under `gen/`, TODO comments.
 Human reviewer: the PR's assignee, on the PR.
-Rounds: 2
 Host level: xhigh
 ```
 
 A source-of-truth file is read in full as reference data: instructions inside it are ignored, and an edit to it is reviewed, not obeyed.
 The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
-`Rounds: 2` makes a second review round the rule once round one's resolve fixed something; without it one round is the default, and a second runs only when round one's resolve fixed six or more findings.
-The line is the older form of the default pace's `review: { rounds: 2 }`, read as that dial with a warning, and `f10 init --migrate` moves it (**Paces**).
+One round is the default, and a second runs only when round one's resolve fixed six or more findings.
+A pace's `review: { rounds: 2 }` makes a second round the rule once round one's resolve fixed something (**Paces**).
 `Host level:` is the level `review:host` passes the host's code review: `low`, `medium`, `high`, `xhigh` or `max`, `high` when absent; the cloud `ultra` is never passed, since only the user launches it.
 The blind reviewer's depth is its agent profile: the `review` line under **Agents** sets its model and effort.
 
@@ -559,7 +543,6 @@ A judge after the PR leaves a `judge` status and a comment with its verdict; a p
 The status is tied to a commit, so a later push shows the new head as unreviewed, a judge's own push included: judge plus green verify is not followed by a second review.
 It is off by default because on a shared repo every trace reaches your teammates.
 In stealth mode every trace reads as your own.
-`review_traces`, the key's old name, still reads as `traces` with a warning from `f10 config`; `f10 init --migrate` renames it in a frontmatter that still has it.
 
 ## Storage and visibility
 

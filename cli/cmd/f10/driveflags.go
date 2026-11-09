@@ -71,8 +71,6 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 			continue
 		}
 
-		skill := strings.ToLower(strings.Trim(tok, ","))
-
 		switch {
 		case tok == "":
 			continue
@@ -90,11 +88,6 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 			}
 
 			a.span = true
-		case isArrow(tok):
-			continue
-		case slices.Contains(oldChainSkills, skill):
-			return driveArgs{}, fmt.Errorf("%s: drive takes no chain; it runs the project's flow "+
-				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
 			return driveArgs{}, fmt.Errorf(
 				"unknown flag %s: drive takes --flow, --local, --pace, --agent, --model, --parallel, --answer, --every, --resume "+
@@ -265,8 +258,4 @@ func splitProfile(tok string) (string, string, error) {
 	}
 
 	return tok, "", nil
-}
-
-func isArrow(tok string) bool {
-	return tok == "→" || tok == "->" || tok == ","
 }

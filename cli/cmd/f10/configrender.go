@@ -39,11 +39,6 @@ func renderHuman(w io.Writer, v *view, limit int) {
 		{"storage root", v.StorageRoot, plain},
 	}
 
-	if v.LegacyStorage {
-		note := "this worktree's own .f10: it holds task files from before storage moved to main's"
-		header = append(header, headerLine{"note", note, faint})
-	}
-
 	header = append(header, headerLine{"instructions", v.Instructions, plain})
 
 	if v.NestedIgnored != "" {

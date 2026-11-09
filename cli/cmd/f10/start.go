@@ -75,7 +75,6 @@ const (
 	cfgLanded      = ref.LandedKey
 	cfgMoved       = ref.MovedKey
 	cfgTip         = ref.TipKey
-	cfgModel       = ref.ModelKey
 	cfgAgent       = ref.AgentKey
 	cfgTaskID      = ref.TaskKey
 	cfgRiders      = ref.RidersKey
@@ -347,7 +346,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suf
 
 	watchProject(ctx, cmd.ErrWriter, t)
 
-	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 }
 

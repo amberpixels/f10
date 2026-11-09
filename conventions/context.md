@@ -102,7 +102,7 @@ A fact belongs to whatever acts on it, which says what it means:
 
 - `flows`, `flow_by_area`, `report_back`, `tracker.status`: `/f10:ship`.
   `flows` and `tracker.status`'s `started` also go to `f10 start` and `f10 drive`.
-- `drive_finish` (the old form of a pace's `finish`), `ceiling`: `f10 drive`, `f10 flow` and every reader of a pace.
+- `ceiling`: `f10 drive`, `f10 flow` and every reader of a pace.
 - `review`, `catchup`, `stale_after`: the **review**, **catchup** and **fetch** steps.
 - `traces`: the **commit**, **resolve**, **judge** and **catchup** steps, and `f10 finish`.
 - `agents`: `f10 start` and `f10 drive` (the task agent's `default`), and the **review**, **judge** and **cleanup** steps where they spawn a subagent.

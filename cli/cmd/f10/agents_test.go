@@ -151,11 +151,12 @@ func TestPromptAgentFallsBackToTheBareName(t *testing.T) {
 	m := useAgents(t)
 	m.started = []string{agentctl.BareAgentName("GH-1", "")}
 
-	if err := promptAgent(t.Context(), fwdWT, "GH-1", "", "hi"); err != nil {
-		t.Fatal(err)
+	name, err := promptAgentAs(t.Context(), fwdWT, "GH-1", "", "hi")
+	if err != nil || name != agentctl.BareAgentName("GH-1", "") {
+		t.Fatalf("took %q, %v; want the bare name", name, err)
 	}
 
-	if err := promptAgent(t.Context(), fwdWT, "GH-2", "", "hi"); !errors.Is(err, agentctl.ErrAgentNotFound) {
+	if _, err := promptAgentAs(t.Context(), fwdWT, "GH-2", "", "hi"); !errors.Is(err, agentctl.ErrAgentNotFound) {
 		t.Errorf("unknown agent = %v, want ErrAgentNotFound", err)
 	}
 }

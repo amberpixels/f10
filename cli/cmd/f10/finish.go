@@ -133,7 +133,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 
 	// drive's own finish runs under the lease drive holds, so only the
 	// command takes it
-	lease, err := finishLease(t.sharedRoot(), r.ID)
+	lease, err := finishLease(t.lay.StorageRoot, r.ID)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	in.yes, in.merge, in.local, in.keep = cmd.Bool("yes"), cmd.Bool("merge"), cmd.Bool("local"), cmd.Bool("keep")
 	in.close = closing
 	in.sweep = func(ctx context.Context) {
-		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now(),
 			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 	}
 
@@ -247,7 +247,7 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 
 	return finishInput{
 		main:       main,
-		root:       t.sharedRoot(),
+		root:       t.lay.StorageRoot,
 		driver:     t.driver(),
 		task:       task,
 		host:       h.at(main),

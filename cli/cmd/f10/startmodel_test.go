@@ -241,11 +241,10 @@ func TestFlagOverlaysTheMapsDefault(t *testing.T) {
 }
 
 // The branch's record lays under a spawning step's line when no flag is
-// given, read from f10-agent, else the model recorded before profiles.
+// given, read from f10-agent.
 func TestWithBranchReadsTheRecord(t *testing.T) {
 	f := newFakes(t)
 	f.script("git config --get branch.GH-1/slug."+cfgAgent, "claude:sonnet:low")
-	f.script("git config --get branch.GH-2/slug."+cfgModel, "opus")
 
 	m := agentMap{"default": {Key: "default", Value: "opus:high", Origin: "user"}}
 
@@ -257,14 +256,6 @@ func TestWithBranchReadsTheRecord(t *testing.T) {
 	if r := got.profileFor("review", ""); r.Profile.String() != "claude:sonnet:low" ||
 		r.Sources["model"] != agentKeyFlag+" (recorded on branch GH-1/slug)" {
 		t.Errorf("review on a recorded profile = %q from %v", r.Profile, r.Sources)
-	}
-
-	if got, err = m.withBranch(t.Context(), "/code/repo", "GH-2/slug"); err != nil {
-		t.Fatal(err)
-	}
-
-	if r := got.profileFor("review", ""); r.Profile.String() != "claude:opus:high" {
-		t.Errorf("an old model record keeps the map's effort: %q", r.Profile)
 	}
 
 	if got, err = m.withBranch(t.Context(), "/code/repo", ""); err != nil || len(got) != 1 {

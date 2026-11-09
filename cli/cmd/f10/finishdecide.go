@@ -254,8 +254,7 @@ func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	}
 
 	if err != nil {
-		// a branch gone with its plan live reads as no task to a rerun, and a
-		// plan in the worktree's own .f10/ would go with it
+		// a branch gone with its plan live reads as no task to a rerun
 		after.keep = "the worktree and branch stay, since the plan is not archived"
 	}
 

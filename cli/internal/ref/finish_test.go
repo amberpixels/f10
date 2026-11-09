@@ -24,11 +24,3 @@ func TestDriveFinishRoundTrip(t *testing.T) {
 		}
 	}
 }
-
-// A value an older drive wrote, its pid first, still parses.
-func TestParseDriveFinishSkipsAnOldPid(t *testing.T) {
-	got, ok := ParseDriveFinish("4242 running merging #204")
-	if want := (DriveFinish{State: FinishRunning, Action: "merging #204"}); !ok || got != want {
-		t.Errorf("ParseDriveFinish = %+v, %v, want %+v", got, ok, want)
-	}
-}

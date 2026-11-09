@@ -15,8 +15,6 @@ const mainProjectMD = `# demo project
 - **Project** - A demo service, Go.
 - **Tracker** - GitHub Issues. Id format ` + "`GH-###`" + `.
   Fetch: ` + "`gh issue view <n> --comments`" + `.
-- **Ship pipelines** - implement → review (local) → pr
-- **Drive chain** - judge → ship → finish
 - **Visibility** - public
 
 ## Custom notes
@@ -29,7 +27,7 @@ func TestParseFile(t *testing.T) {
 
 	fields, unknown := parseFile(readFile(t, path), path, "main")
 
-	for _, want := range []string{"Project", "Tracker", "Ship pipeline(s)", "Visibility"} {
+	for _, want := range []string{"Project", "Tracker", "Visibility"} {
 		if _, ok := fields[want]; !ok {
 			t.Errorf("field %q not parsed; got %v", want, keys(fields))
 		}
@@ -38,15 +36,6 @@ func TestParseFile(t *testing.T) {
 	// the indented Fetch sub-line belongs to Tracker's body, not a field
 	if tracker := fields["Tracker"]; !contains(tracker.body, "gh issue view") {
 		t.Errorf("Tracker body lost its sub-lines: %q", tracker.body)
-	}
-
-	// the alias form maps to the canonical name
-	if pipe := fields["Ship pipeline(s)"]; !contains(pipe.body, "review (local)") {
-		t.Errorf("Ship pipelines alias not mapped: %q", pipe.body)
-	}
-
-	if chain := fields["Drive chain"]; chain.body != "judge → ship → finish" {
-		t.Errorf("Drive chain = %q", chain.body)
 	}
 
 	// an unmatched heading with content is kept; the empty title heading
@@ -66,9 +55,6 @@ const headingProjectMD = "# acme · f10 project instructions\n\n" +
 	"Notion. Task id format: **`ABC-####`**.\n" +
 	"- **Fetch:** invoke the `tasks` skill with the number.\n" +
 	"- **Create:** invoke the `create-notion-task` skill.\n\n" +
-	"## Ship pipelines\n" +
-	"- **default**: `implement → pr → review`\n" +
-	"- **direct** (planless): `implement → push`\n\n" +
 	"## Visibility\nstealth\n"
 
 func TestParseFileHeadingShape(t *testing.T) {
@@ -112,11 +98,6 @@ func TestParseFileHeadingShape(t *testing.T) {
 	tracker := fields["Tracker"]
 	if !contains(tracker.body, "Fetch:") || !contains(tracker.body, "Create:") {
 		t.Errorf("Tracker lost its sub-bullets: %q", tracker.body)
-	}
-
-	pipelines := fields["Ship pipeline(s)"]
-	if !contains(pipelines.body, "default") || !contains(pipelines.body, "(planless)") {
-		t.Errorf("named pipelines hijacked out of Ship pipelines: %q", pipelines.body)
 	}
 }
 
@@ -181,7 +162,9 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 	}
 }
 
-func TestBuildDeclaredVisibilityWins(t *testing.T) {
+// A Visibility section is prose for the agents; only the frontmatter's
+// visibility key sets the fact.
+func TestBuildVisibilityProseSetsNothing(t *testing.T) {
 	lay := &layout.Layout{
 		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "- **Visibility** - public\n")},
@@ -190,8 +173,8 @@ func TestBuildDeclaredVisibilityWins(t *testing.T) {
 
 	eff := Build(lay, &probe.Probes{})
 
-	if eff.Visibility != "public" {
-		t.Errorf("visibility = %q, want public", eff.Visibility)
+	if eff.Visibility != "stealth" || len(eff.Problems) > 0 {
+		t.Errorf("visibility = %q, problems %+v, want the default stealth and no warning", eff.Visibility, eff.Problems)
 	}
 
 	f := fieldByName(t, eff, "Visibility")
@@ -250,14 +233,14 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 	lay := &layout.Layout{
 		Project: "demo",
 		Layers: []layout.Layer{
-			{Label: "main", Dir: dirWithProjectMD(t, "- **Tracker** - Jira. Task ids `ABC-####`.\n")},
+			{Label: "main", Dir: dirWithProjectMD(t, "---\ntracker: {kind: jira, id: ABC-####}\n---\n")},
 		},
 	}
 
 	eff := Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
 
-	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin != "declared (main)" {
-		t.Errorf("id prefix = %q (%s), want ABC declared (main)", eff.IDPrefix, eff.IDPrefixOrigin)
+	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin != "declared (main, frontmatter)" {
+		t.Errorf("id prefix = %q (%s), want ABC declared (main, frontmatter)", eff.IDPrefix, eff.IDPrefixOrigin)
 	}
 }
 

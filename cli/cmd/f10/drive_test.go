@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -61,11 +62,13 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 	// a test names the chain after the ids to run the machinery on any
 	// skill; drive itself derives the chain from the flow
+	testChainSkills := []string{"plan", "judge", "ship", "review", "resolve", "finish"}
+
 	var chain, rest []string
 
 	for i := 0; i < len(args); i++ {
 		switch {
-		case slices.Contains(oldChainSkills, args[i]):
+		case slices.Contains(testChainSkills, args[i]):
 			chain = append(chain, args[i])
 		case args[i] == "--answer" || args[i] == "--model" || args[i] == "--agent" ||
 			args[i] == "--every" || args[i] == "--flow":
@@ -353,13 +356,12 @@ func TestDriveMarksStarted(t *testing.T) {
 // name that is no model starts claude's default, said once at the top.
 func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 	cases := []struct {
-		name          string
-		args          []string
-		model1        string
-		model2        string
-		recorded      string // the profile GH-1's branch records
-		recordedModel string // the model GH-1's branch recorded before profiles
-		out, notWant  string
+		name         string
+		args         []string
+		model1       string
+		model2       string
+		recorded     string // the profile GH-1's branch records
+		out, notWant string
 	}{
 		{
 			name: "own and run-wide", args: []string{"GH-1:sonnet", "GH-2", "--model", "opus", "judge"},
@@ -387,10 +389,6 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 			name: "a flag wins over the record", args: []string{"GH-1", "GH-2", "--agent", "opus", "judge"},
 			model1: "opus", model2: "opus", recorded: "claude:haiku:low", notWant: "haiku",
 		},
-		{
-			name: "a model recorded before profiles", args: []string{"GH-1", "GH-2", "judge"},
-			model1: "opus", recordedModel: "opus", out: "workspace ws:GH-1 on opus",
-		},
 	}
 
 	for _, c := range cases {
@@ -405,10 +403,6 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 				porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 			if c.recorded != "" {
 				fx.f.script("git config --get branch.GH-1."+cfgAgent, c.recorded)
-			}
-
-			if c.recordedModel != "" {
-				fx.f.script("git config --get branch.GH-1."+cfgModel, c.recordedModel)
 			}
 
 			fx.opensOn("GH-1", "ws:GH-1", "pane:1", c.model1)
@@ -1735,8 +1729,6 @@ func TestParseDriveArgs(t *testing.T) {
 		{args: []string{"GH-1", "--agent", "opencode:opus:high"}, wantErr: "not an agent kind"},
 		{args: []string{"GH-1", "--model", "opus", "--model", "fable"}, wantErr: "given twice"},
 		{args: []string{"GH-1", "--model"}, wantErr: "needs a value"},
-		{args: []string{"GH-1", "judge", "GH-2"}, wantErr: "drive takes no chain"},
-		{args: []string{"GH-1", "ship"}, wantErr: "f10 flow lists them"},
 		{args: []string{"GH-1", "--local", "--flow", "direct"}, wantErr: "already names the local flow"},
 		{args: []string{"GH-1", "--flow"}, wantErr: "needs a value"},
 		{args: []string{"GH-1", "GH-2", "--", "GH-4"}, wantErr: "a range is one id"},
@@ -1773,19 +1765,42 @@ func TestParseDriveArgs(t *testing.T) {
 	}
 }
 
+// A flow with no pace finish word finishes; only finish off stops at ship.
 func TestDriveChain(t *testing.T) {
 	for _, c := range []struct {
-		fl     shipFlow
-		finish bool
-		want   string
+		fl   shipFlow
+		want string
 	}{
-		{shipFlow{}, false, "plan ship"},
-		{shipFlow{}, true, "plan ship finish"},
-		{shipFlow{name: "direct", planless: true}, true, "ship finish"},
-		{shipFlow{name: "direct", planless: true}, false, "ship"},
+		{shipFlow{}, "plan ship finish"},
+		{shipFlow{finish: "on"}, "plan ship finish"},
+		{shipFlow{finish: "off"}, "plan ship"},
+		{shipFlow{name: "direct", planless: true}, "ship finish"},
+		{shipFlow{name: "direct", planless: true, finish: "off"}, "ship"},
 	} {
-		if got := strings.Join(driveChain(c.fl, c.finish), " "); got != c.want {
-			t.Errorf("%+v finish %v = %q, want %q", c.fl, c.finish, got, c.want)
+		if got := strings.Join(driveChain(c.fl), " "); got != c.want {
+			t.Errorf("%+v = %q, want %q", c.fl, got, c.want)
+		}
+	}
+}
+
+// Medium and a user pace with no finish dial end in finish; slow does not.
+func TestDriveChainFinishesByDefault(t *testing.T) {
+	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
+	set := facts.NewPaceSet()
+	set.Over(map[string]facts.Pace{"mine": {"judge": {Off: true}}}, func(string, string) string { return "test" })
+
+	for pace, want := range map[string]string{
+		"medium": "plan ship finish",
+		"mine":   "plan ship finish",
+		"slow":   "plan ship",
+	} {
+		fl, err := resolvePacedFlow(eff, set, pace, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := strings.Join(driveChain(fl), " "); got != want {
+			t.Errorf("%s: chain %q, want %q", pace, got, want)
 		}
 	}
 }
@@ -3275,7 +3290,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 	return fx
 }
 
-// A spike's chain ends with its close even where drive_finish leaves finish
+// A spike's chain ends with its close even where the pace leaves finish
 // out: no catchup and no merge check before it (neither is scripted), the
 // chain recorded with finish for status.
 func TestDriveClosesASpikeAfterShip(t *testing.T) {

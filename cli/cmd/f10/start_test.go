@@ -133,10 +133,8 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
-		// no branch records an agent profile, nor a model from before profiles,
-		// until a test says so
-		if strings.HasPrefix(key, "git config --get branch.") &&
-			(strings.HasSuffix(key, "."+cfgAgent) || strings.HasSuffix(key, "."+cfgModel)) {
+		// no branch records an agent profile until a test says so
+		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgAgent) {
 			return shell.Result{}
 		}
 
@@ -1044,8 +1042,8 @@ func TestStartMarksStarted(t *testing.T) {
 }
 
 // Without worktrunk, git creates the worktree at the sibling path; --after
-// swaps the base and records the dependency, and a base with no checkout
-// here is named without a plan path, the report saying why.
+// swaps the base and records the dependency, and with no shared plans dir
+// the base is named without a plan path, the report saying why.
 func TestStartWithGitAlone(t *testing.T) {
 	f := newFakes(t)
 	f.script(refsLocal, "")
@@ -1091,7 +1089,7 @@ func TestStartWithGitAlone(t *testing.T) {
 		t.Errorf("the dependency was recorded before the worktree existed: %v", f.calls)
 	}
 
-	for _, want := range []string{"after:", "GH-7", "GH-7 has no checkout here"} {
+	for _, want := range []string{"after:", "GH-7", "GH-7 has no shared plans dir here"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}
@@ -1139,12 +1137,13 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 	}
 
 	f := afterFixture(t, dir, "ccc")
+	plans := sharedPlans(f, filepath.Dir(plan))
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7", plansDir: plans})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1158,6 +1157,15 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 	}
 }
 
+// sharedPlans scripts the agent start a shared plans dir adds its dirs to,
+// and returns the dir.
+func sharedPlans(f *fakes, plans string) string {
+	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, plans, "/code/repo.GH-1"), " ")
+	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7"+addDir, "{}")
+
+	return plans
+}
+
 // A base task whose plan is not written yet is named with the path the plan
 // is expected at, and the report says it is missing.
 func TestStartAfterWithoutAPlanYet(t *testing.T) {
@@ -1165,12 +1173,13 @@ func TestStartAfterWithoutAPlanYet(t *testing.T) {
 	plan := filepath.Join(dir, ".f10", "plans", "GH-7.md")
 
 	f := afterFixture(t, dir, "ccc")
+	plans := sharedPlans(f, filepath.Dir(plan))
 	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7", plansDir: plans})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1210,12 +1219,13 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 // code yet, and the note says so beneath the report.
 func TestStartAfterEqualsDefault(t *testing.T) {
 	f := afterFixture(t, "/code/repo.GH-7-base", "bbb")
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/code/repo.GH-7-base/.f10/plans/GH-7.md"}
+	plans := sharedPlans(f, t.TempDir())
+	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: filepath.Join(plans, "GH-7.md")}
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7"})
+	err := start(t.Context(), &out, startInput{main: "/code/repo", task: gh1, after: "GH-7", plansDir: plans})
 	if err != nil {
 		t.Fatal(err)
 	}

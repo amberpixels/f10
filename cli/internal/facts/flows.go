@@ -19,13 +19,9 @@ import (
 // DefaultFlow is the flow a project that declares none runs.
 const DefaultFlow = "plan implement pr"
 
-// legacyDriveChain is the chain `f10 drive` ran when project.md declared
-// none, folded into the default flow when old keys are converted.
-const legacyDriveChain = "plan judge ship review resolve finish"
-
 // Flow is one declared flow's entries as written: a list, or one string
 // split on whitespace and arrows, never on commas, which an argument may
-// hold. The old `review (local)` form stays one entry until normalizeEntry.
+// hold.
 type Flow []string
 
 // UnmarshalYAML accepts a sequence of entries or one string.
@@ -48,78 +44,54 @@ func (f *Flow) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // MarshalYAML writes the flow as one space-separated string, the shape
-// f10 init --migrate leaves.
+// f10 init writes.
 func (f Flow) MarshalYAML() (any, error) { return strings.Join(f, " "), nil }
 
-// splitFlow reads `plan implement → review (local) → pr`: whitespace and
-// arrows separate, and a parenthesised word joins the entry before it.
+// splitFlow reads `plan implement → review:local → pr`: whitespace and
+// arrows separate.
 func splitFlow(text string) Flow {
 	var out Flow
 
 	for tok := range strings.FieldsSeq(strings.NewReplacer("→", " ", "->", " ").Replace(text)) {
-		tok = strings.Trim(tok, "*_`")
-		if tok == "" {
-			continue
+		if tok = strings.Trim(tok, "*_`"); tok != "" {
+			out = append(out, tok)
 		}
-
-		if n := len(out); n > 0 && strings.Contains(out[n-1], "(") && !strings.Contains(out[n-1], ")") {
-			out[n-1] += " " + tok
-
-			continue
-		}
-
-		if n := len(out); n > 0 && strings.HasPrefix(tok, "(") {
-			out[n-1] += " " + tok
-
-			continue
-		}
-
-		out = append(out, tok)
 	}
 
 	return out
 }
 
-// normalizeEntry is an entry in the colon form, its label cut, and whether
-// it was written in the old parenthesised one: `review (CI)` is `review:ci`.
-func normalizeEntry(e string) (string, bool) {
+// unlabeled is an entry with its label cut.
+func unlabeled(e string) string {
 	e, _ = state.SplitLabel(e)
-	step, rest, paren := strings.Cut(e, "(")
-	if !paren {
-		return strings.TrimSpace(e), false
-	}
 
-	arg := strings.ToLower(strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(rest), ")")), "-"))
-
-	return strings.TrimSpace(step) + ":" + arg, true
+	return strings.TrimSpace(e)
 }
 
-// normalizeFlow is every entry in the colon form, their labels by index
-// (nil when none has one), and whether any entry was not in that form.
-func normalizeFlow(f []string) ([]string, []string, bool) {
+// splitLabels is every entry with its label cut, and the labels by index,
+// nil when none has one.
+func splitLabels(f []string) ([]string, []string) {
 	out := make([]string, 0, len(f))
 	labels := make([]string, len(f))
-	legacy, labeled := false, false
+	labeled := false
 
 	for i, e := range f {
-		n, old := normalizeEntry(e)
 		_, labels[i] = state.SplitLabel(e)
-		out = append(out, n)
-		legacy, labeled = legacy || old, labeled || labels[i] != ""
+		out = append(out, unlabeled(e))
+		labeled = labeled || labels[i] != ""
 	}
 
 	if !labeled {
 		labels = nil
 	}
 
-	return out, labels, legacy
+	return out, labels
 }
 
-// SplitEntry is an entry's step and its argument, in either form:
-// `review:local` and `review (local)` are both review and local.
+// SplitEntry is an entry's step and its argument: `review:local` is review
+// and local.
 func SplitEntry(e string) (string, string) {
-	e, _ = normalizeEntry(e)
-	step, arg, _ := strings.Cut(e, ":")
+	step, arg, _ := strings.Cut(unlabeled(e), ":")
 
 	return step, arg
 }
@@ -256,8 +228,8 @@ func checkFlow(name string, flow []string, others ...string) []string {
 		return append(bad, fmt.Sprintf("flows.%s: no entries", name))
 	}
 
-	entries, labels, _ := normalizeFlow(flow)
-	bad = append(bad, checkLabels(name, flow, entries, labels, others)...)
+	entries, labels := splitLabels(flow)
+	bad = append(bad, checkLabels(name, flow, labels, others)...)
 
 	for i, e := range entries {
 		step, arg, colon := strings.Cut(e, ":")
@@ -286,8 +258,8 @@ func checkFlow(name string, flow []string, others ...string) []string {
 }
 
 // checkLabels reports a label that is not lower kebab-case, repeats in its
-// flow, names a step, or sits on the old `review (local)` form.
-func checkLabels(name string, flow, entries, labels, others []string) []string {
+// flow, or names a step.
+func checkLabels(name string, flow, labels, others []string) []string {
 	var bad []string
 
 	seen := map[string]bool{}
@@ -301,9 +273,6 @@ func checkLabels(name string, flow, entries, labels, others []string) []string {
 				"as pr[pr-polish]", name, written))
 		case label == "":
 			continue
-		case strings.Contains(written, "("):
-			bad = append(bad, fmt.Sprintf("flows.%s: %q: the old `step (arg)` form takes no label; "+
-				"write %s[%s]", name, written, entries[i], label))
 		case !labelNameRE.MatchString(label):
 			bad = append(bad, fmt.Sprintf("flows.%s: %q: label %q is not lower kebab-case", name, written, label))
 		case slices.Contains(GenericSteps, label) || slices.Contains(others, label):
@@ -341,9 +310,8 @@ func validBy(arg string) bool {
 }
 
 // checkRemoteReview warns about a required CI review that cannot run: no
-// remote reviewer, or no pr or push before it. Warnings, since a legacy drive
-// chain converts to a trailing review:ci on a default that may open no PR. An
-// optional one (`ci?`) never warns: dropping it is what `?` asks for.
+// remote reviewer, or no pr or push before it. An optional one (`ci?`)
+// never warns: dropping it is what `?` asks for.
 func (e *Effective) checkRemoteReview() {
 	for _, name := range e.FlowNames() {
 		published := false
@@ -370,55 +338,6 @@ func (e *Effective) checkRemoteReview() {
 			break
 		}
 	}
-}
-
-// legacyFlows converts the old keys: each pipeline becomes a flow, led by
-// plan unless planless. The drive chain folds into default alone, since only
-// drive ran it; a trailing finish turns drive_finish on.
-func legacyFlows(pipes map[string][]string, planless, chain []string, remote bool) (map[string][]string, bool) {
-	flows := map[string][]string{}
-
-	if _, ok := pipes["default"]; !ok {
-		pipes = maps.Clone(pipes)
-		pipes["default"] = []string{"implement", "pr"} // the old default pipeline
-	}
-
-	for name, steps := range pipes {
-		var f []string
-		if !slices.Contains(planless, name) {
-			f = append(f, "plan")
-		}
-
-		entries, _, _ := normalizeFlow(steps)
-		flows[name] = append(f, entries...)
-	}
-
-	finish := len(chain) > 0 && chain[len(chain)-1] == "finish"
-
-	def, ok := flows["default"]
-	ship := slices.Index(chain, "ship")
-
-	if !ok || ship < 0 {
-		return flows, finish
-	}
-
-	if judge := slices.Index(chain, "judge"); judge >= 0 && judge < ship && !Planless(def) &&
-		judge > slices.Index(chain, "plan") {
-		def = slices.Insert(slices.Clone(def), 1, "judge")
-	}
-
-	reviews := slices.ContainsFunc(def, func(e string) bool { step, _ := SplitEntry(e); return step == "review" })
-	if slices.Index(chain, "review") > ship && !reviews {
-		if remote {
-			def = append(def, "review:ci")
-		} else {
-			def = append(def, "review:local")
-		}
-	}
-
-	flows["default"] = def
-
-	return flows, finish
 }
 
 // FlowNames is every declared flow, default first, then by name.
@@ -461,42 +380,17 @@ func flowsShown(flows, labels map[string][]string, names []string) string {
 	return strings.Join(shown, "; ")
 }
 
-// legacyFlowKeys are the frontmatter keys flows replaces.
-var legacyFlowKeys = []string{"pipelines", "planless", "pipeline_by_area", "drive_chain"}
-
-// resolveFlows settles flows, flow_by_area and drive_finish: the
-// frontmatter's flows, else the old keys and prose sections converted with
-// a warning, else the default.
-func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
-	var legacy []string
-
-	for _, key := range legacyFlowKeys {
-		if _, ok := fm.origin[key]; ok {
-			legacy = append(legacy, key)
-		}
-	}
-
-	prose := []string{}
-
-	for _, name := range []string{"Ship pipeline(s)", "Drive chain"} {
-		if strings.TrimSpace(declared[name].body) != "" {
-			prose = append(prose, "the "+name+" section in "+declared[name].file)
-		}
-	}
-
-	// a drive merges what it ships unless the project says its merges are a
-	// human's; a legacy chain says it by ending in finish or not
-	e.DriveFinish = true
-	finishOrigin := OriginDefault
-
-	switch {
-	case fm.Flows != nil:
+// resolveFlows settles flows and flow_by_area: the frontmatter's flows,
+// else the default.
+func (e *Effective) resolveFlows(fm *layered) {
+	if fm.Flows == nil {
+		e.Flows = map[string][]string{"default": strings.Fields(DefaultFlow)}
+		e.Facts = append(e.Facts, Fact{Key: "flows", Value: "default: " + DefaultFlow, Origin: OriginDefault})
+	} else {
 		e.Flows = map[string][]string{}
 
-		var old []string
-
 		for name, f := range fm.Flows {
-			entries, labels, paren := normalizeFlow(f)
+			entries, labels := splitLabels(f)
 			e.Flows[name] = entries
 
 			if labels != nil {
@@ -506,10 +400,6 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 
 				e.FlowLabels[name] = labels
 			}
-
-			if paren {
-				old = append(old, name)
-			}
 		}
 
 		// start and drive run default unasked, so a project naming only
@@ -518,66 +408,13 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 			e.Flows["default"] = strings.Fields(DefaultFlow)
 		}
 
-		if len(old) > 0 {
-			slices.Sort(old)
-			e.problem(
-				false,
-				"flows %s use the old `step (arg)` entry form; f10 init --migrate rewrites it to `step:arg`",
-				strings.Join(old, ", "),
-			)
-		}
-
-		if len(legacy)+len(prose) > 0 {
-			e.problem(false, "%s ignored, since flows is declared; f10 init --migrate removes them",
-				strings.Join(append(legacy, prose...), ", "))
-		}
-
 		e.Facts = append(e.Facts, Fact{
 			Key: "flows", Value: flowsShown(e.Flows, e.FlowLabels, e.FlowNames()),
 			Origin: "declared (" + fm.origin["flows"] + ", frontmatter)",
 		})
-		e.FlowByArea = fm.FlowByArea
-	case len(legacy)+len(prose) > 0:
-		pipes, planless := fm.pipelines()
-		if pipes == nil {
-			pipes, planless = prosePipelines(declared["Ship pipeline(s)"].body)
-		}
-
-		if pipes == nil {
-			pipes = map[string][]string{"default": {"implement", "pr"}}
-		}
-
-		chain := []string(fm.DriveChain)
-		if chain == nil {
-			chain = proseChain(declared["Drive chain"].body)
-		}
-
-		if len(chain) == 0 {
-			chain = strings.Fields(legacyDriveChain)
-		}
-
-		var finish bool
-
-		e.Flows, finish = legacyFlows(pipes, planless, lowered(chain), e.Review.Remote())
-		e.DriveFinish, finishOrigin = finish, "converted from the drive chain"
-
-		from := strings.Join(append(legacy, prose...), ", ")
-		e.problem(false, "%s converted to flows; f10 init --migrate rewrites them", from)
-		e.Facts = append(e.Facts, Fact{
-			Key: "flows", Value: flowsShown(e.Flows, e.FlowLabels, e.FlowNames()), Origin: "converted from " + from,
-		})
-		e.FlowByArea = cmpMap(fm.FlowByArea, fm.ByArea)
-	default:
-		e.Flows = map[string][]string{"default": strings.Fields(DefaultFlow)}
-		e.Facts = append(e.Facts, Fact{Key: "flows", Value: "default: " + DefaultFlow, Origin: OriginDefault})
-		e.FlowByArea = fm.FlowByArea
 	}
 
-	if fm.DriveFinish != "" {
-		e.DriveFinish, finishOrigin = fm.DriveFinish == "on", "declared ("+fm.origin["drive_finish"]+", frontmatter)"
-	}
-
-	e.Facts = append(e.Facts, Fact{Key: "drive_finish", Value: onOff(e.DriveFinish), Origin: finishOrigin})
+	e.FlowByArea = fm.FlowByArea
 
 	e.checkRemoteReview()
 
@@ -585,7 +422,7 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "flow_by_area",
 			Value:  mapShown(e.FlowByArea),
-			Origin: "declared (" + cmpOr(fm.origin["flow_by_area"], fm.origin["pipeline_by_area"]) + ", frontmatter)",
+			Origin: "declared (" + fm.origin["flow_by_area"] + ", frontmatter)",
 		})
 
 		for _, area := range slices.Sorted(maps.Keys(e.FlowByArea)) {
@@ -595,43 +432,4 @@ func (e *Effective) resolveFlows(fm *layered, declared map[string]section) {
 			}
 		}
 	}
-}
-
-// pipelines is the old pipelines key as plain lists, nil when unset.
-func (l *layered) pipelines() (map[string][]string, []string) {
-	if l.Pipelines == nil {
-		return nil, nil
-	}
-
-	pipes := map[string][]string{}
-	for name, steps := range l.Pipelines {
-		pipes[strings.ToLower(name)] = steps
-	}
-
-	return pipes, l.Planless
-}
-
-func lowered(list []string) []string {
-	out := make([]string, len(list))
-	for i, s := range list {
-		out[i] = strings.ToLower(s)
-	}
-
-	return out
-}
-
-func cmpMap(a, b map[string]string) map[string]string {
-	if a != nil {
-		return a
-	}
-
-	return b
-}
-
-func onOff(b bool) string {
-	if b {
-		return "on"
-	}
-
-	return "off"
 }

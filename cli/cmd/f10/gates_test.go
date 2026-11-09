@@ -14,16 +14,13 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
-	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-var gatePipeline = []string{"implement", "cleanup", "pr", "review (local)", "judge", "pr"}
+var gatePipeline = []string{"implement", "cleanup", "pr", "review:local", "judge", "pr"}
 
 func hookEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Event {
 	e := sessionEvent(at, session, kind, p)
@@ -72,12 +69,12 @@ func TestGatesDuringShip(t *testing.T) {
 		shipClaim(at(1), "s1", "implement"),
 		shipClaim(at(2), "s1", "cleanup"),
 		shipClaim(at(3), "s1", "pr"),
-		shipClaim(at(4), "s1", "review (local)"),
+		shipClaim(at(4), "s1", "review:local"),
 		// resolve called through the Skill tool inside ship: ship's, not manual
 		hookEvent(at(5), "s1", ledger.RunStarted, ledger.Payload{"skill": "resolve", "args": "FT-1"}),
 	}
 
-	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review (local)", Pipeline: gatePipeline}
+	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local", Pipeline: gatePipeline}
 
 	gates := taskGates(context.Background(), gateInput{
 		task: "FT-1", branch: "FT-1/thing", run: run, events: events, remoteFlow: true, now: at(6),
@@ -316,7 +313,7 @@ func TestGatesOutcomes(t *testing.T) {
 		Session:  "s1",
 		Task:     "FT-1",
 		Ship:     "done",
-		Pipeline: []string{"implement", "review (local)", "pr"},
+		Pipeline: []string{"implement", "review:local", "pr"},
 	}
 
 	for _, tc := range []struct {
@@ -618,44 +615,6 @@ func TestRenderGates(t *testing.T) {
 
 	if !strings.Contains(out.String(), "implement  done\n") || strings.Contains(out.String(), "L … ·") {
 		t.Errorf("a finished row lacks its gate lines:\n%s", out.String())
-	}
-}
-
-// A project migrated from pipelines and the default drive chain shows a
-// driven task the same gates, in the same order, as before flows.
-func TestGatesSameAfterMigration(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "project.md"),
-		"---\npipelines:\n  default: implement → cleanup → pr → review (local) → judge → pr\n---\n")
-
-	eff := facts.Build(&layout.Layout{Project: "demo", Layers: []layout.Layer{{Label: "main", Dir: dir}}},
-		&probe.Probes{})
-	flow := eff.Flows["default"]
-
-	if got := strings.Join(flow, " "); got != "plan judge implement cleanup pr review:local judge pr" {
-		t.Fatalf("migrated default = %q", got)
-	}
-
-	order := func(gates []gate) string {
-		var steps []string
-		for _, g := range gates {
-			steps = append(steps, strings.TrimSpace(g.Step+" "+g.Judged)+"="+g.text())
-		}
-
-		return strings.Join(steps, ", ")
-	}
-
-	before := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: gatePipeline, now: time.Now(),
-		chain: []string{"plan", "judge", "ship", "review", "resolve", "finish"},
-	})
-	after := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: facts.ShipEntries(flow), now: time.Now(),
-		chain: driveChain(shipFlow{}, eff.DriveFinish),
-	})
-
-	if order(before) != order(after) {
-		t.Errorf("gates drifted across the migration:\nbefore %s\nafter  %s", order(before), order(after))
 	}
 }
 

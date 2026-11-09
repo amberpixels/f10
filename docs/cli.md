@@ -33,10 +33,9 @@ A `flag provided but not defined` from `f10` means some other `f10` ran in place
 
 ```bash
 f10 init                 # register this checkout: write project.md from detection
-f10 init --migrate       # move the facts a project.md declares in prose into its frontmatter (adding only what it lacks), old keys into flows, and drive_finish and a Rounds line into paces
 f10 config [verify] [--json]   # the effective configuration, with the origin of every value; verify: the one verify line the loader prints
 f10 agents [<step>...] [--kind KIND] [--agent PROFILE] [--pace NAME] [--json]   # the merged agents map with each value's origin, or each step's resolved agent profile and what runs on it; the run's pace lays its effort dials on top
-f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace and the project's ceiling, each with what selects it, and drive_finish; with a name, that flow an entry per line with its dials and a labelled entry as written (`pr[pr-polish]`), an optional CI review (`ci?`) settled with the reason, the list /f10:ship runs; a dial the ceiling capped names the ceiling and what the pace had
+f10 flow [<name>] [--pace NAME] [--json]   # the declared flows under the run's pace and the project's ceiling, each with what selects it; with a name, that flow an entry per line with its dials and a labelled entry as written (`pr[pr-polish]`), an optional CI review (`ci?`) settled with the reason, the list /f10:ship runs; a dial the ceiling capped names the ceiling and what the pace had
 f10 completion <shell>   # the completion script for bash, zsh, fish or pwsh; --flow completes the declared flows
 f10 help [--all | --agent]   # the human commands; --all adds the plumbing the steps call; --agent prints one line per command for an agent's context
 f10 doctor [--json]      # check the plugin, the binary and the environment; changes nothing
@@ -157,12 +156,11 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.
   The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` still plans, and the plan step archives the saved one; `--discuss` names the plan's path.
   The report gains a `plan` row.
-  A worktree from before storage moved to main's ships its own plan when main has none for the task (start rerun on it).
   `f10 drive` reads main's plan the same way, when it starts the task's agent.
 - the agent is started with an `--add-dir` for each task-file dir of the storage root (`plans`, `reviews`, `verdicts`, `spikes`, `handoffs`, `lore`, `images`, created if missing) whenever that root lies outside the worktree, so its writes there ask no permission; `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
-  The path is in the shared storage root (in a base worktree from before storage moved to main's, that worktree's own), and a note beneath the report says when no checkout reaches it or the plan is not written yet.
+  The path is in the shared storage root, and a note beneath the report says when the plan is not written yet.
   A base still at the default branch's commit is noted as a task with no code yet.
   It fails before creating anything when the task has no branch
 - with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its line, the last of the body by convention) is read as `--after <id>` when that task has a branch, and noted beneath the report.
@@ -323,9 +321,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    `/f10:catchup`, or its next ship unless `catchup: off`, brings the default branch in before anything else runs and clears the mark.
    A note names each dependent.
 7. **The plan is archived**: `<storage root>/plans/<ID>.md` moves to `<storage root>/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken), within main's `.f10/` or the out-of-tree root.
-   A worktree from before storage moved to main's still holds its own `.f10/plans/<ID>.md`: it moves to main's archive, its older archived versions first.
    No plan is a note.
-   A plan that cannot be moved keeps the worktree and its branch, since such a worktree may hold the only copy and a rerun finds the task by its branch.
+   A plan that cannot be moved keeps the worktree and its branch, since a rerun finds the task by its branch.
    **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
    A merge reports the archived path as a `handoff` row.
    On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8), as `f10 start`'s `plan` row, the `plan`, `handoff`, `judge` and `review` rows of `f10 status <id>` and the `wrote` row of `f10 init` do, and a drive's copy of the report links when the drive writes to a terminal.
@@ -538,7 +535,7 @@ Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it aga
 `--foreground` runs the driver in this process, as the daemon itself runs each drive; it is for tests and debugging, and on a platform without unix sockets it is how every drive runs.
 
 **The record.**
-Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--parallel`, `--resume` and `--foreground`), the tasks with their `:profile`, the flow, the run-wide profile, `drive_finish`, the cap (`parallel`), the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
+Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--parallel`, `--resume` and `--foreground`), the tasks with their `:profile`, the flow, the run-wide profile, the cap (`parallel`), the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
 Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer`, `--every` and `--parallel` beside it.
 A rerun and a `--resume` keep the record's cap, unless they pass `--parallel`, which rewrites it.
 A driver still running reads the new cap at its next poll.
@@ -568,9 +565,8 @@ A cancelled record is never picked up again: the same command line starts a new 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
-   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` when the run's pace says `finish: on` and the project's ceiling allows it. A pace that sets no `finish` falls back to the old `drive_finish`, `on` by default.
-   A task whose ship ended as a spike (its spike report written) is closed right after ship whatever `drive_finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
-   A chain skill typed after the ids is refused, naming `--flow` and `drive_finish`.
+   It gives the chain, which is never typed: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the run's pace says `finish: off` or the project's ceiling forbids it. A pace that sets no `finish` finishes.
+   A task whose ship ended as a spike (its spike report written) is closed right after ship whatever the pace's `finish` says, since the close merges nothing, and the chain recorded on its branch gains `finish`; a dependent then starts on the default branch.
    `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--agent` starts every agent on that profile, read as start reads it, and `--model` is its model-only form; `<id>:<profile>` starts one task's agent on its own, which wins (`42:sonnet:low 43 --agent opus`).
@@ -604,12 +600,12 @@ A cancelled record is never picked up again: the same command line starts a new 
    Open agents are capped too, at twice the cap, because an idle session still holds its memory.
    The agent limit counts the tasks under way and the tasks asking, including agents an earlier run of the drive left open.
    A done or halted task's agent does not count, because the drive is finished with it.
-   Counting it would also stall a drive with `drive_finish` off, whose done tasks keep their agents open, so no task past the limit would ever start.
+   Counting it would also stall a drive at a pace with `finish: off`, whose done tasks keep their agents open, so no task past the limit would ever start.
    A task past either limit shows as `queued` in the report, `f10 drive list` and `f10 status`, and starts in the drive's order as slots free.
    A task whose agent an earlier run left open goes first, because it adds no session.
    A turn already running when the driver reaches the task is tracked and counted even past the cap, because the driver cannot stop it.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
-   A plan the main checkout saved for the task is read in place under start's rules (a worktree's own plan, from before storage moved to main's, wins).
+   A plan the main checkout saved for the task is read in place under start's rules.
    A checkout Herdr already shows, as an earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle shell.
    Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.

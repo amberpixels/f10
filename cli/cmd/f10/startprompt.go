@@ -9,15 +9,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 )
 
-// promptAgent prompts the task's agent in the worktree at path, falling back
-// to the bare name an agent started before the path hash still answers to.
-func promptAgent(ctx context.Context, path, id, suffix, text string) error {
-	_, err := promptAgentAs(ctx, path, id, suffix, text)
-
-	return err
-}
-
-// promptAgentAs is promptAgent, also naming the agent that took the text.
+// promptAgentAs prompts the task's agent in the worktree at path, falling
+// back to the bare name an agent started before the path hash still answers
+// to, and names the agent that took the text.
 func promptAgentAs(ctx context.Context, path, id, suffix, text string) (string, error) {
 	agent := agents(path)
 	name := agentctl.AgentName(id, suffix, path)

@@ -63,30 +63,23 @@ func TestReadRootCountsOpenFindings(t *testing.T) {
 	}
 }
 
-// The shared root is read once; a worktree's own .f10 only where it still
-// holds task files.
+// The shared root is the one root, even beside a worktree whose own .f10
+// holds task files; with no shared root, every checkout's is read.
 func TestStorageRoots(t *testing.T) {
-	main, fresh, legacy := t.TempDir(), t.TempDir(), t.TempDir()
+	main, fresh, stray := t.TempDir(), t.TempDir(), t.TempDir()
 	shared := filepath.Join(main, ".f10")
 
-	for _, d := range []string{
-		filepath.Join(shared, "plans"),
-		filepath.Join(fresh, ".f10", "instructions"),
-		filepath.Join(legacy, ".f10", "reviews"),
-	} {
-		if err := os.MkdirAll(d, 0o750); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.MkdirAll(filepath.Join(stray, ".f10", "reviews"), 0o750); err != nil {
+		t.Fatal(err)
 	}
 
-	wts := []gitx.Worktree{{Path: main}, {Path: fresh}, {Path: legacy}}
+	wts := []gitx.Worktree{{Path: main}, {Path: fresh}, {Path: stray}}
 
-	got := strings.Join(storageRoots(shared, wts), " ")
-	if want := shared + " " + filepath.Join(legacy, ".f10"); got != want {
-		t.Errorf("storageRoots = %q, want %q", got, want)
+	if got := strings.Join(storageRoots(shared, wts), " "); got != shared {
+		t.Errorf("storageRoots = %q, want %q", got, shared)
 	}
 
-	got = strings.Join(storageRoots("", wts[:2]), " ")
+	got := strings.Join(storageRoots("", wts[:2]), " ")
 	if want := shared + " " + filepath.Join(fresh, ".f10"); got != want {
 		t.Errorf("storageRoots with no shared root = %q, want %q", got, want)
 	}

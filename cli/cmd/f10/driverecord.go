@@ -144,13 +144,12 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 
 	if in.rec == nil {
 		in.rec = &drives.Record{
-			Created:     in.now(),
-			Args:        recordArgs(in.argv),
-			Flow:        in.args.flow,
-			Agent:       in.args.agent,
-			DriveFinish: slices.Contains(in.chain, "finish"),
-			Session:     in.session,
-			Parallel:    in.parallel,
+			Created:  in.now(),
+			Args:     recordArgs(in.argv),
+			Flow:     in.args.flow,
+			Agent:    in.args.agent,
+			Session:  in.session,
+			Parallel: in.parallel,
 		}
 
 		for i, t := range tasks {

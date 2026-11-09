@@ -144,7 +144,7 @@ func (in *driveInput) chainFor(fl shipFlow) []string {
 		return in.chain
 	}
 
-	return driveChain(fl, in.driveFinish)
+	return driveChain(fl)
 }
 
 // keepPace: a run's --pace wins and is recorded on the branch, since a
@@ -355,7 +355,7 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 }
 
 // closeAfterShip adds finish to a spike's chain that lacks it: a spike close
-// merges nothing, which drive_finish gates, and a spike left open keeps its
+// merges nothing, which the pace's finish gates, and a spike left open keeps its
 // dependents on an empty base. status reads the recorded chain.
 func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) error {
 	r.chain = append(slices.Clone(r.chain), "finish")

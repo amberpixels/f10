@@ -8,7 +8,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -39,25 +38,11 @@ type Layout struct {
 	MainRoot         string  // root of the main checkout; empty when git cannot name one
 	Project          string  // basename of the main checkout, or of the cwd outside git
 	StorageRoot      string  // where plans, reviews, verdicts and lore live: main's .f10 for every checkout, or the out-of-tree root
-	LegacyStorage    bool    // a linked worktree's own .f10 still holds task files, so it stays the storage root
 	Layering         string  // LayeringExtends or LayeringReplaces
 	LayeringDeclared bool    // a worktree project.md declares Layering
-	LayeringFrom     string  // "frontmatter" or "prose", when declared
 	Layers           []Layer // precedence order: later wins
 	Source           string  // human description; wording matches f10-load-project.sh
 	NestedIgnored    string  // a .f10/instructions below the root, noted and ignored
-}
-
-// HoldsTaskFiles says a worktree's own .f10 holds task files: any one of
-// these dirs keeps that worktree's storage root its own rather than main's.
-func HoldsTaskFiles(dotF10 string) bool {
-	for _, d := range []string{"plans", "reviews", "verdicts", "spikes"} {
-		if existingDir(filepath.Join(dotF10, d)) != "" {
-			return true
-		}
-	}
-
-	return false
 }
 
 // Locate finds the configuration layout for cwd. It never fails -
@@ -83,13 +68,8 @@ func Locate(ctx context.Context, cwd string) *Layout {
 	}
 
 	lay.Project = filepath.Base(baseRoot)
-	lay.StorageRoot = filepath.Join(baseRoot, ".f10")
-
 	// main's .f10 is every checkout's storage, so removing a worktree loses nothing
-	if here != baseRoot && HoldsTaskFiles(filepath.Join(here, ".f10")) {
-		lay.LegacyStorage = true
-		lay.StorageRoot = filepath.Join(here, ".f10")
-	}
+	lay.StorageRoot = filepath.Join(baseRoot, ".f10")
 
 	baseInstr := existingDir(filepath.Join(baseRoot, ".f10", "instructions"))
 
@@ -101,9 +81,9 @@ func Locate(ctx context.Context, cwd string) *Layout {
 	// only `replaces` in the worktree's own project.md takes main's place;
 	// any other value, or none, extends it
 	if wtInstr != "" && baseInstr != "" {
-		if decl, from := layeringDecl(filepath.Join(wtInstr, "project.md")); decl != "" {
-			lay.LayeringDeclared, lay.LayeringFrom = true, from
-			if strings.Contains(decl, "replaces") || strings.Contains(decl, "Replaces") {
+		if decl := layeringDecl(filepath.Join(wtInstr, "project.md")); decl != "" {
+			lay.LayeringDeclared = true
+			if decl == LayeringReplaces {
 				lay.Layering = LayeringReplaces
 			}
 		}
@@ -140,7 +120,6 @@ func Locate(ctx context.Context, cwd string) *Layout {
 				lay.Layers = []Layer{{Label: "out-of-tree", Dir: oot}}
 				lay.Source = "out-of-tree (~/.f10/" + lay.Project + ")"
 				lay.StorageRoot = filepath.Join(home, ".f10", lay.Project)
-				lay.LegacyStorage = false
 			}
 		}
 	}
@@ -189,32 +168,25 @@ func existingDir(path string) string {
 	return ""
 }
 
-// layeringDecl is the file's Layering declaration and where it was found,
-// frontmatter or prose. The patterns match the script's greps; the prose one
-// tolerates list markers, emphasis or code marks, and `-` or `:` after the word.
-func layeringDecl(projectMD string) (string, string) {
+// layeringDecl is the layering the file's frontmatter declares, "" for none.
+func layeringDecl(projectMD string) string {
 	data, err := os.ReadFile(projectMD)
 	if err != nil {
-		return "", ""
+		return ""
 	}
 
-	block, body, ok := frontmatter.Split(data)
-	if ok {
-		var fm struct {
-			Layering string `yaml:"layering"`
-		}
-
-		if yaml.Unmarshal(block, &fm) == nil && fm.Layering != "" {
-			return fm.Layering, "frontmatter"
-		}
+	block, _, ok := frontmatter.Split(data)
+	if !ok {
+		return ""
 	}
 
-	line := regexp.MustCompile("(?i)^\\s*[-*#]*\\s*[*_`]*layering[*_`]*\\s*[-:]")
-	for l := range strings.SplitSeq(string(body), "\n") {
-		if line.MatchString(l) {
-			return l, "prose"
-		}
+	var fm struct {
+		Layering string `yaml:"layering"`
 	}
 
-	return "", ""
+	if yaml.Unmarshal(block, &fm) != nil {
+		return ""
+	}
+
+	return fm.Layering
 }

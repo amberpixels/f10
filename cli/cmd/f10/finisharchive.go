@@ -15,7 +15,6 @@ import (
 // cannot move is an error, since removing the worktree would delete it.
 func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 	plan := taskPlan(worktree, plansDir, id)
-	src, own := filepath.Dir(plan), filepath.Join(worktree, ".f10", "plans")
 	dst := filepath.Join(main, ".f10", "plans", "archive")
 
 	if plansDir != "" {
@@ -28,17 +27,6 @@ func archivePlan(worktree, main, plansDir, id string) (string, string, error) {
 
 	if err := os.MkdirAll(dst, 0o750); err != nil {
 		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
-	}
-
-	// a worktree's own archived versions move first, so the current plan
-	// takes the highest number
-	if gitx.SamePath(src, own) && !gitx.SamePath(worktree, main) {
-		older, _ := filepath.Glob(filepath.Join(src, "archive", id+".*.md"))
-		for _, o := range older {
-			if err := os.Rename(o, freeArchiveName(dst, id)); err != nil {
-				return "", "", fmt.Errorf("archiving the prior plan at %s: %w", o, err)
-			}
-		}
 	}
 
 	target := freeArchiveName(dst, id)
@@ -94,15 +82,10 @@ func taskPlansDir(checkout, plansDir string) string {
 	return cmp.Or(plansDir, filepath.Join(checkout, ".f10", "plans"))
 }
 
-// taskPlan falls back to the checkout's own .f10/plans, which a worktree
-// from before storage moved to main's still holds.
+// taskPlan is the task's plan in the shared plans dir, else in the
+// checkout's own when there is no shared one.
 func taskPlan(checkout, plansDir, id string) string {
-	plan := filepath.Join(taskPlansDir(checkout, plansDir), id+".md")
-	if own := filepath.Join(checkout, ".f10", "plans", id+".md"); !exists(plan) && exists(own) {
-		return own
-	}
-
-	return plan
+	return filepath.Join(taskPlansDir(checkout, plansDir), id+".md")
 }
 
 // freeArchiveName numbers `<id>.<N>.md` the way steps/plan.md does.

@@ -39,10 +39,8 @@ type Declared struct {
 	LoreGate       string            `yaml:"lore_gate,omitempty"`      // what finish does with a failing lore check before a merge
 	StaleAfter     string            `yaml:"stale_after,omitempty"`    // a task older than this is judged before it is planned
 	DriverTimeout  string            `yaml:"driver_timeout,omitempty"` // one driver verb's limit, a Go duration
-	ReviewTraces   string            `yaml:"review_traces,omitempty"`  // the old spelling of traces, read and folded in
 	Flows          map[string]Flow   `yaml:"flows,omitempty"`
-	FlowByArea     map[string]string `yaml:"flow_by_area,omitempty"` // an area, in Roles' plain words, to the flow its tasks run
-	DriveFinish    string            `yaml:"drive_finish,omitempty"`
+	FlowByArea     map[string]string `yaml:"flow_by_area,omitempty"`  // an area, in Roles' plain words, to the flow its tasks run
 	DriveEnv       []string          `yaml:"drive_env,omitempty"`     // environment keys a drive passes to its commands, beyond the built-in ones
 	Watch          string            `yaml:"watch,omitempty"`         // what the daemon does for tasks no drive owns
 	WatchCatchup   string            `yaml:"watch_catchup,omitempty"` // the watcher also catches an undriven open PR up with its target
@@ -54,12 +52,6 @@ type Declared struct {
 	Paces          map[string]Pace   `yaml:"paces,omitempty"`   // a pace's name to its dials, laid over the built-ins key by key
 	Pace           string            `yaml:"pace,omitempty"`    // the pace a run takes when it names none
 	Ceiling        *Ceiling          `yaml:"ceiling,omitempty"` // the cap on every pace but the ones it excepts
-
-	// The keys flows replaces, read and converted with a warning.
-	Pipelines  map[string]Steps  `yaml:"pipelines,omitempty"`
-	Planless   []string          `yaml:"planless,omitempty"`
-	ByArea     map[string]string `yaml:"pipeline_by_area,omitempty"`
-	DriveChain Steps             `yaml:"drive_chain,omitempty"`
 }
 
 // TrackerDecl is the frontmatter's tracker key. Priority maps a contract
@@ -131,40 +123,9 @@ type VerifyDecl struct {
 	Paths []string `yaml:"paths,omitempty"`
 }
 
-// Steps is an ordered list of names, written as a YAML list or as one
-// `a → b → c` string.
-type Steps []string
-
-// UnmarshalYAML accepts a sequence of strings or one arrow-separated string.
-func (s *Steps) UnmarshalYAML(node *yaml.Node) error {
-	switch node.Kind {
-	case yaml.SequenceNode:
-		var list []string
-		if err := node.Decode(&list); err != nil {
-			return err
-		}
-
-		*s = trimSteps(list)
-	case yaml.ScalarNode:
-		*s = splitSteps(node.Value)
-	default:
-		return fmt.Errorf("line %d: a list or an `a → b` string", node.Line)
-	}
-
-	return nil
-}
-
-// splitSteps reads `implement → review (local) → pr`: arrows and commas
-// separate, so a step's own words and parentheses stay whole.
-func splitSteps(text string) Steps {
-	return trimSteps(strings.FieldsFunc(
-		strings.NewReplacer("→", ",", "->", ",").Replace(text),
-		func(r rune) bool { return r == ',' },
-	))
-}
-
-func trimSteps(list []string) Steps {
-	var out Steps
+// trimSteps is the list with markup and blanks cut.
+func trimSteps(list []string) []string {
+	var out []string
 
 	for _, step := range list {
 		if step = strings.Trim(strings.TrimSpace(step), "*_`"); step != "" {
@@ -175,9 +136,37 @@ func trimSteps(list []string) Steps {
 	return out
 }
 
-// decodeDeclared reads one frontmatter block with unknown keys refused.
+// retiredKeys name the key that replaced each retired one, because deleting
+// a retired key alone can change behavior: without drive_finish: off, a
+// drive merges.
+var retiredKeys = map[string]string{
+	"drive_finish":     "declare `ceiling: { finish: off }` to keep drives from merging, or `paces.<name>.finish` for one pace",
+	"review_traces":    "rename it to `traces`",
+	"pipelines":        "declare each pipeline under `flows`, led by `plan` unless it was planless",
+	"planless":         "drop `plan` from those `flows`",
+	"pipeline_by_area": "rename it to `flow_by_area`",
+	"drive_chain":      "fold its steps into `flows.default`; a pace's `finish` says whether drive merges",
+}
+
+// decodeDeclared reads one frontmatter block with unknown keys refused, and
+// a retired key refused with what replaced it.
 func decodeDeclared(block []byte) (Declared, error) {
 	var d Declared
+
+	var top map[string]yaml.Node
+	if yaml.Unmarshal(block, &top) == nil {
+		var bad []string
+
+		for _, key := range slices.Sorted(maps.Keys(top)) {
+			if repl, ok := retiredKeys[key]; ok {
+				bad = append(bad, key+" is retired: "+repl)
+			}
+		}
+
+		if len(bad) > 0 {
+			return Declared{}, errors.New(strings.Join(bad, "; "))
+		}
+	}
 
 	dec := yaml.NewDecoder(bytes.NewReader(block))
 	dec.KnownFields(true)
@@ -208,9 +197,7 @@ var vocab = map[string][]string{
 	"traces":          {"on", "off"},
 	"lore":            {"local", "committed"},
 	"lore_gate":       {"warn", "block"},
-	"review_traces":   {"on", "off"},
 	"report_back":     {"on", "off"},
-	"drive_finish":    {"on", "off"},
 	"watch":           {"report", "finish", "off"},
 	"watch_catchup":   {"on", "off"},
 }
@@ -263,8 +250,7 @@ var trackerKinds = map[string]string{
 	"jira":   "Jira",
 }
 
-// check reports every value outside its vocabulary, a malformed flow, and
-// a planless name that names no pipeline.
+// check reports every value outside its vocabulary and a malformed flow.
 func (d Declared) check() []string {
 	var bad []string
 
@@ -279,9 +265,7 @@ func (d Declared) check() []string {
 		"traces":          d.Traces,
 		"lore":            d.Lore,
 		"lore_gate":       d.LoreGate,
-		"review_traces":   d.ReviewTraces,
 		"report_back":     d.ReportBack,
-		"drive_finish":    d.DriveFinish,
 		"watch":           d.Watch,
 		"watch_catchup":   d.WatchCatchup,
 	} {
@@ -354,12 +338,6 @@ func (d Declared) check() []string {
 		bad = append(bad, fmt.Sprintf("pace: %q is not a lowercase name", d.Pace))
 	}
 
-	for _, name := range d.Planless {
-		if _, ok := d.Pipelines[name]; !ok {
-			bad = append(bad, fmt.Sprintf("planless: %q names no pipeline", name))
-		}
-	}
-
 	steps := FlowSteps(d.Flows)
 	for _, name := range slices.Sorted(maps.Keys(d.Flows)) {
 		bad = append(bad, checkFlow(name, d.Flows[name], steps...)...)
@@ -426,27 +404,6 @@ func (t TrackerDecl) checkPriority() []string {
 	return bad
 }
 
-// foldTraces moves the old spelling review_traces into traces before the
-// merge, so a later layer's statement wins whichever word it used. Both in
-// one layer is the ambiguity the block exists to end, so an error.
-func (d Declared) foldTraces(file string) (Declared, Problem, bool) {
-	switch {
-	case d.ReviewTraces == "":
-		return d, Problem{}, false
-	case d.Traces != "":
-		return d, Problem{
-			Error:   true,
-			Message: file + " frontmatter: traces and review_traces both declared; keep traces",
-		}, true
-	default:
-		d.Traces, d.ReviewTraces = d.ReviewTraces, ""
-
-		return d, Problem{
-			Message: file + " frontmatter: review_traces is now traces; f10 init --migrate renames it",
-		}, true
-	}
-}
-
 // layered is every layer's frontmatter merged key by key, a later layer
 // winning outright as its prose sections do; origin records who set each key.
 type layered struct {
@@ -482,15 +439,10 @@ func (l *layered) merge(d Declared, label string) {
 	set("driver_timeout", d.DriverTimeout != "", func() { l.DriverTimeout = d.DriverTimeout })
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
-	set("drive_finish", d.DriveFinish != "", func() { l.DriveFinish = d.DriveFinish })
 	set("drive_env", d.DriveEnv != nil, func() { l.DriveEnv = d.DriveEnv })
 	set("watch", d.Watch != "", func() { l.Watch = d.Watch })
 	set("watch_catchup", d.WatchCatchup != "", func() { l.WatchCatchup = d.WatchCatchup })
-	set("pipelines", d.Pipelines != nil, func() { l.Pipelines = d.Pipelines })
-	set("planless", d.Planless != nil, func() { l.Planless = d.Planless })
-	set("pipeline_by_area", d.ByArea != nil, func() { l.ByArea = d.ByArea })
 	set("report_back", d.ReportBack != "", func() { l.ReportBack = d.ReportBack })
-	set("drive_chain", d.DriveChain != nil, func() { l.DriveChain = d.DriveChain })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
 	set("verify", d.Verify != nil, func() { l.Verify = d.Verify })

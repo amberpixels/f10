@@ -43,10 +43,6 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	roots := []string{t.lay.StorageRoot}
-	if shared := t.sharedRoot(); shared != t.lay.StorageRoot {
-		roots = append(roots, shared)
-	}
-
 	_, err = fmt.Fprintln(cmd.Writer, staleness(created, t.eff.StaleAfter, time.Now(), roots, r.ID))
 
 	return err

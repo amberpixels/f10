@@ -336,7 +336,7 @@ func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 	}
 	t.Cleanup(func() { shell.Capture = prev })
 
-	cases := []struct{ name, review, want string }{
+	cases := []struct{ name, front, review, want string }{
 		{name: "no Review section", review: "", want: "declares no remote review"},
 		{
 			name:   "local-only section",
@@ -344,34 +344,29 @@ func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 			want:   "declares no remote review",
 		},
 		{
-			name: "a fact outside the vocabulary",
-			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - by pigeon\n" +
-				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n",
-			want: "Arrives as line(s) could not be read",
+			name:  "a fact outside the vocabulary",
+			front: "---\nreview:\n  reviewer: bot `claude[bot]`\n  arrives: by pigeon\n  trigger: automatic\n  done: posted, reaction `eyes`\n---\n",
+			want:  "Arrives as line(s) could not be read",
 		},
 		{
-			name: "threads on a comment",
-			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
-				"- **Trigger** - automatic\n- **Done, handled** - posted, thread resolved\n",
-			want: "does not arrive inline",
+			name:  "threads on a comment",
+			front: "---\nreview:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, thread resolved\n---\n",
+			want:  "does not arrive inline",
 		},
 		{
-			name: "a settled mark outside the vocabulary",
-			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
-				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - checkbox\n",
-			want: "settled line(s) could not be read",
+			name:  "a settled mark outside the vocabulary",
+			front: "---\nreview:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n  settled: checkbox\n---\n",
+			want:  "settled line(s) could not be read",
 		},
 		{
-			name: "a settled mark the same as handled",
-			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
-				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - reaction `eyes`\n",
-			want: "settled mark is the handled mark",
+			name:  "a settled mark the same as handled",
+			front: "---\nreview:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n  settled: reaction `eyes`\n---\n",
+			want:  "settled mark is the handled mark",
 		},
 		{
-			name: "settled threads on a comment",
-			review: "## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
-				"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n- **Settled** - thread resolved\n",
-			want: "settled line(s) could not be read",
+			name:  "settled threads on a comment",
+			front: "---\nreview:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n  done: posted, reaction `eyes`\n  settled: thread resolved\n---\n",
+			want:  "settled line(s) could not be read",
 		},
 	}
 
@@ -384,7 +379,7 @@ func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			md := "# demo\n\n## Tracker\n\nGitHub Issues. Task ids `GH-###`.\n\n" + c.review
+			md := c.front + "# demo\n\n## Tracker\n\nGitHub Issues. Task ids `GH-###`.\n\n" + c.review
 			if err := os.WriteFile(filepath.Join(dir, "project.md"), []byte(md), 0o600); err != nil {
 				t.Fatal(err)
 			}

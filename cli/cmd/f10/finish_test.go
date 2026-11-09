@@ -98,10 +98,11 @@ func (fx *finishFixture) workspaces(open bool) string {
 	return `{"result":{"workspaces":[` + main + `,` + task + `]}}`
 }
 
-func (fx *finishFixture) plan(t *testing.T, rel, body string) string {
+// plan writes GH-1's plan in the task's checkout, the plans dir the fixture reads.
+func (fx *finishFixture) plan(t *testing.T, body string) string {
 	t.Helper()
 
-	p := filepath.Join(fx.wt, ".f10", "plans", rel)
+	p := filepath.Join(fx.wt, ".f10", "plans", "GH-1.md")
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.traces = true
 	fx.in.method = "squash"
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"stale"}`
 	current := `{"body":"Adds the thing.\n\nCloses #1\n\n<!-- state {\"v\":1,\"task\":\"GH-1\",\"step\":\"judge\",\"round\":1} -->\n"}`
@@ -193,7 +194,7 @@ func TestFinishStateBlockFailureIsANote(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.traces = true
 	fx.in.method = "squash"
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"Adds the thing.\n"}`
 	merge := "gh pr merge GH-1 --squash --body Adds the thing.\n\nTask: GH-1\n"
@@ -354,7 +355,7 @@ func TestMergePullGhSquashSubject(t *testing.T) {
 func TestFinishMergesAndCleansUp(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	plan := fx.plan(t, "GH-1.md", "# plan")
+	plan := fx.plan(t, "# plan")
 	writeFile(t, filepath.Join(fx.main, ".f10", "reviews", "GH-1", "1.md"), "task: GH-1\nround: 1\n")
 
 	out, err := fx.run(t)
@@ -473,7 +474,7 @@ func TestFinishReleasesDependents(t *testing.T) {
 func TestFinishStopsWhenThePlanCannotBeArchived(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	// the archive dir's path is taken by a file, so it cannot be created
 	if err := os.MkdirAll(filepath.Join(fx.main, ".f10", "plans"), 0o755); err != nil {
@@ -541,7 +542,7 @@ func TestFinishStopsOnHostRefusal(t *testing.T) {
 			Stderr: "X Pull request #9 is not mergeable: the base branch policy prohibits the merge.",
 		},
 	)
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "base branch policy prohibits the merge") {
@@ -618,7 +619,7 @@ func TestFinishKeepsBranchWhenRetargetFails(t *testing.T) {
 	fx.openPR()
 	fx.f.script(ghStack, `[{"number":12,"url":"https://gh/pr/12","headRefName":"GH-2/next"}]`)
 	fx.f.fail("gh pr edit 12 --base main", shell.Result{Code: 1, Stderr: "GraphQL: Resource not accessible"})
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	_, err := fx.run(t)
 	if err == nil {
@@ -704,7 +705,7 @@ func TestFinishDefersAFailedPull(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.root = t.TempDir()
 	fx.openPR()
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 	fx.f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
 
 	out, err := fx.run(t)
@@ -784,7 +785,7 @@ func TestDeferredPullNote(t *testing.T) {
 func TestFinishKeepsTheWorktreeWhenThePlanIsNotArchived(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	blocker := filepath.Join(fx.main, ".f10", "plans", "archive")
 	if err := os.MkdirAll(filepath.Dir(blocker), 0o755); err != nil {
@@ -1019,7 +1020,7 @@ func TestFinishDefersWhenMergeIsNotInMain(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.fail("git merge-base --is-ancestor m3rge main", shell.Result{Code: 1})
 	fx.openPR()
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -1042,16 +1043,17 @@ func TestFinishDefersWhenMergeIsNotInMain(t *testing.T) {
 func TestFinishArchiveNumbering(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.plan(t, "GH-1.md", "current")
-	fx.plan(t, filepath.Join("archive", "GH-1.1.md"), "older")
+	fx.plan(t, "current")
 
 	archive := filepath.Join(fx.main, ".f10", "plans", "archive")
 	if err := os.MkdirAll(archive, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(archive, "GH-1.md"), []byte("first"), 0o644); err != nil {
-		t.Fatal(err)
+	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older"} {
+		if err := os.WriteFile(filepath.Join(archive, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	out, err := fx.run(t)
@@ -1605,7 +1607,7 @@ func TestFinishFindsTheIdPastAPrefix(t *testing.T) {
 				fx.f.answers[swap.Replace(key)] = fx.f.answers[key]
 			}
 
-			plan := fx.plan(t, "GH-1.md", "# plan")
+			plan := fx.plan(t, "# plan")
 			if inMain {
 				plan = fx.onMain(t, "# plan")
 				fx.f.script(worktrees, porcelain(branch, fx.main))
@@ -1798,7 +1800,7 @@ func TestFinishLocalLeavesThePROpen(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.script(unpushed, "")
-	fx.plan(t, "GH-1.md", "# plan")
+	fx.plan(t, "# plan")
 	fx.in.local = true
 
 	out, err := fx.run(t)
@@ -2200,29 +2202,6 @@ func TestFinishArchivesMainsSharedPlan(t *testing.T) {
 	}
 }
 
-// A worktree from before storage moved to main's still holds its plan and
-// the versions it archived: they move into the shared archive.
-func TestFinishArchivesALegacyWorktreesPlan(t *testing.T) {
-	fx := newFinishFixture(t)
-	fx.openPR()
-	fx.plan(t, "GH-1.md", "current")
-	fx.plan(t, filepath.Join("archive", "GH-1.1.md"), "older")
-
-	shared := filepath.Join(fx.main, ".f10", "plans")
-	fx.in.plansDir = shared
-
-	if _, err := fx.run(t); err != nil {
-		t.Fatal(err)
-	}
-
-	for name, body := range map[string]string{"GH-1.md": "older", "GH-1.1.md": "current"} {
-		got, err := os.ReadFile(filepath.Join(shared, "archive", name))
-		if err != nil || string(got) != body {
-			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
-		}
-	}
-}
-
 // Finish records the branch's size against the base it forked from,
 // lockfiles left out and the markdown share kept; nothing to measure records
 // nothing.
@@ -2521,7 +2500,7 @@ func TestFinishLoreGate(t *testing.T) {
 	t.Run("block", func(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
-		plan := fx.plan(t, "GH-1.md", "# plan")
+		plan := fx.plan(t, "# plan")
 		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
 
 		_, err := fx.run(t)

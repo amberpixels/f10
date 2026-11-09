@@ -494,8 +494,7 @@ func (r *row) block() (counts, bool) {
 	return counts{Step: b.Step, Round: b.Round, Open: b.Open, Asks: b.Asks}, true
 }
 
-// reviewStep reads an entry as the flow names it: `review:local` and
-// `review (local)` are review.
+// reviewStep reads an entry as the flow names it: `review:local` is review.
 func reviewStep(entry string) bool {
 	step, _ := facts.SplitEntry(entry)
 

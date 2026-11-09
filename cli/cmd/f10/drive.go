@@ -32,7 +32,7 @@ func driveCommand() *cli.Command {
 			"   f10 drive --resume N [--parallel N] [--answer [ID=]TEXT ...] | list [--all] | cancel N",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
-			"then finish when the pace's finish, else drive_finish, is on. A rerun keeps the flow a task's branch records.\n" +
+			"then finish unless the pace's finish is off. A rerun keeps the flow a task's branch records.\n" +
 			"--pace NAME runs every task at that pace (f10 config lists them), recorded on each branch so a rerun keeps it; " +
 			"a pace skips or tunes the flow's entries and never adds one.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
@@ -88,20 +88,15 @@ const (
 	cfgChain = "f10-chain"
 )
 
-// oldChainSkills are chain words typed after the ids, refused with a pointer
-// at the flow, which names the chain.
-var oldChainSkills = []string{"plan", "judge", "ship", "review", "resolve", "finish"}
-
-// driveChain is the skills drive prompts a task through; driveFinish is
-// the project's drive_finish, which a pace's finish word overrides.
-func driveChain(fl shipFlow, driveFinish bool) []string {
+// driveChain is the skills drive prompts a task through.
+func driveChain(fl shipFlow) []string {
 	var chain []string
 	if fl.plans() {
 		chain = append(chain, "plan")
 	}
 
 	chain = append(chain, "ship")
-	if fl.finishes(driveFinish) {
+	if fl.finishes() {
 		chain = append(chain, "finish")
 	}
 
@@ -126,15 +121,15 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if a.list {
-			return driveList(ctx, cmd.Writer, linksFor(cmd.Writer, false), t.refProject(ctx), t.sharedRoot(), a.all,
+			return driveList(ctx, cmd.Writer, linksFor(cmd.Writer, false), t.refProject(ctx), t.lay.StorageRoot, a.all,
 				rowFinishedFor(ctx, t))
 		}
 
-		if err := driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now()); err != nil {
+		if err := driveCancel(cmd.Writer, t.lay.StorageRoot, a.cancel, time.Now()); err != nil {
 			return err
 		}
 
-		closeDriveAsks(asks.Dir(), t.sharedRoot(), a.cancel, time.Now())
+		closeDriveAsks(asks.Dir(), t.lay.StorageRoot, a.cancel, time.Now())
 
 		return nil
 	}
@@ -161,7 +156,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
 	if a.resume > 0 {
-		rec, err := drives.Read(t.sharedRoot(), a.resume)
+		rec, err := drives.Read(t.lay.StorageRoot, a.resume)
 		if err != nil {
 			return err
 		}
@@ -191,7 +186,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	chain := driveChain(fl, t.eff.DriveFinish)
+	chain := driveChain(fl)
 
 	layers, err := agentLayers(t.eff, "")
 	if err != nil {
@@ -203,7 +198,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	h, hostErr := t.host()
 
 	if slices.Contains(chain, "finish") && hostErr != nil {
-		return fmt.Errorf("finish is on (the pace, or drive_finish), and finish merges through the host: %w", hostErr)
+		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
 	}
 
 	var pullOf func(context.Context, string) (pull, error)
@@ -214,7 +209,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in := &driveInput{
 		main:    main,
 		pull:    pullOf,
-		root:    t.sharedRoot(),
+		root:    t.lay.StorageRoot,
 		driver:  drv,
 		tracker: t.tracker(),
 		args:    a,
@@ -229,13 +224,12 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 			return resolvePacedFlow(t.eff, paces, p, fl.recorded())
 		},
-		driveFinish: t.eff.DriveFinish,
-		plansDir:    t.sharedPlansDir(),
-		settings:    claudeSettingsPath(),
-		layers:      layers,
-		title:       func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
-		started:     startedMove(t),
-		record:      recordAt,
+		plansDir: t.sharedPlansDir(),
+		settings: claudeSettingsPath(),
+		layers:   layers,
+		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		started:  startedMove(t),
+		record:   recordAt,
 		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
 			fin, err := driveFinishInput(t, main, h, req)
 			if err != nil {
