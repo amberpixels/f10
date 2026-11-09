@@ -77,7 +77,8 @@ const (
 	// prompt: Herdr reporting it working, or its run reporting.
 	startWindow = 2 * time.Minute
 	// stallGrace absorbs the Stop hook, which promotes a finished phase
-	// asynchronously after the agent already reads idle.
+	// asynchronously after the agent already reads idle. A long verify left
+	// in the background does not count against it (backgroundPending).
 	stallGrace = time.Minute
 	// maxSpan caps a range, since every id in it costs a tracker call.
 	maxSpan = 50

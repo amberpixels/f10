@@ -7,6 +7,7 @@ package state
 import (
 	"bufio"
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -134,6 +135,75 @@ func SessionModel(dir, session string) string {
 // WaitPath is the wait a session has open: what on and since when.
 func WaitPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".wait")
+}
+
+// Wait is the marker WaitPath holds: the reason, and for a dialog, the tool
+// and the tool call it is about.
+type Wait struct {
+	Reason string `json:"reason"`
+	Tool   string `json:"tool,omitempty"`
+	UseID  string `json:"tool_use_id,omitempty"`
+}
+
+// OpenWait is the wait the session has open, false for none.
+func OpenWait(dir, session string) (Wait, bool) {
+	var w Wait
+
+	raw, err := os.ReadFile(WaitPath(dir, session))
+	if err != nil || json.Unmarshal(raw, &w) != nil || w.Reason == "" {
+		return w, false
+	}
+
+	return w, true
+}
+
+// BackgroundPath marks background work a session's turn launched (a Bash
+// command with run_in_background, or a Monitor). It is a file of its own,
+// not a run field, because writing the run moves Updated, which a drive
+// reads as a turn beginning.
+func BackgroundPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".background")
+}
+
+// Background is the marker BackgroundPath holds. Parked is set once the
+// launching turn ended with the work pending.
+type Background struct {
+	At     time.Time `json:"at"`
+	Parked bool      `json:"parked,omitempty"`
+}
+
+// PendingBackground is the session's background mark, false for none.
+func PendingBackground(dir, session string) (Background, bool) {
+	var b Background
+
+	if dir == "" || session == "" {
+		return b, false
+	}
+
+	raw, err := os.ReadFile(BackgroundPath(dir, session))
+	if err != nil || json.Unmarshal(raw, &b) != nil || b.At.IsZero() {
+		return b, false
+	}
+
+	return b, true
+}
+
+// MarkBackground writes the session's background mark over any before it.
+func MarkBackground(dir, session string, b Background) error {
+	raw, err := json.Marshal(b)
+	if err != nil {
+		return fmt.Errorf("state: %w", err)
+	}
+
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("state: %w", err)
+	}
+
+	if err := os.WriteFile(BackgroundPath(dir, session), raw, 0o600); err != nil {
+		return fmt.Errorf("state: %w", err)
+	}
+
+	return nil
 }
 
 // Load reads one state file. A missing file is os.ErrNotExist, unwrapped

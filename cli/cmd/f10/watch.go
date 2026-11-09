@@ -339,15 +339,18 @@ type watchedTask struct {
 	id       string // the lead
 	branch   string
 	path     string
-	owner    string          // who holds its lease; "" for nobody
-	off      bool            // f10 watch off
-	pr       *forge.PR       // nil with no request, or no host
-	hostErr  error           // the host did not answer for its request this pass
-	localSHA string          // the branch's tip
-	run      *state.Run      // the newest run reported from its worktree
-	agent    agentctl.Status // "" with no workspace, or no listing
-	listed   bool            // the workspaces were listed, so "" is no workspace
-	ws       string          // its workspace, for a message
+	owner    string     // who holds its lease; "" for nobody
+	off      bool       // f10 watch off
+	pr       *forge.PR  // nil with no request, or no host
+	hostErr  error      // the host did not answer for its request this pass
+	localSHA string     // the branch's tip
+	run      *state.Run // the newest run reported from its worktree
+	// background is when run's session launched background work still
+	// pending, the zero time for none
+	background time.Time
+	agent      agentctl.Status // "" with no workspace, or no listing
+	listed     bool            // the workspaces were listed, so "" is no workspace
+	ws         string          // its workspace, for a message
 	// what a catchup needs, read after the pass's fetch under watch_catchup
 	fetched   bool     // origin was fetched and the fields below read
 	originSHA string   // origin's tip; "" when origin lacks the branch
@@ -644,7 +647,7 @@ func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool)
 	updated := run.Updated.UTC().Format(time.RFC3339)
 
 	for _, phase := range []string{"ship", "plan"} {
-		if stalled(t.agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace) {
+		if stalled(t.agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.background, now) {
 			return &watchReport{
 				Kind: watchStalled,
 				Text: fmt.Sprintf("agent idle while its run says %s %s", phase, run.PhaseText(phase)),
@@ -754,6 +757,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 
 		if runs := inRoot(live, path); len(runs) > 0 {
 			task.run = runs[0]
+			task.background = backgroundAt(in.stateDir, task.run)
 		}
 
 		if ws := workspaceAt(wss, path); ws != nil {

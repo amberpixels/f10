@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
@@ -287,8 +288,8 @@ func (in *driveInput) startVerify(ctx context.Context, r *driveRun) {
 
 // catchupSettled reads from git whether the agent's turn settled the
 // catchup, and verifies if it did; anything left is a failed attempt, whose
-// resend prompts again naming what is left, or with retry false (a stall,
-// maybe on a dialog typing could answer) a halt.
+// resend prompts again naming what is left, or with retry false (a prompt
+// the agent never took, maybe under a dialog typing could answer) a halt.
 func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveRun, retry bool) error {
 	id, dir := r.task.ref.ID, r.o.path
 
@@ -313,6 +314,28 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 	}
 
 	return nil
+}
+
+// catchupStalled reads a catchup turn that went idle without its report.
+// What git explains is left goes back to the agent, under the count of
+// attempts with nothing changed. An open dialog halts at once, because typing
+// the prompt again could answer it.
+func (in *driveInput) catchupStalled(
+	ctx context.Context,
+	w io.Writer,
+	r *driveRun,
+	run *state.Run,
+	halt driveResult,
+) error {
+	if run != nil {
+		if wt, ok := state.OpenWait(in.stateDir, run.Session); ok && wt.Reason != observe.WaitTurn {
+			in.end(ctx, w, r, halt)
+
+			return nil
+		}
+	}
+
+	return in.catchupSettled(ctx, w, r, true)
 }
 
 // catchupLeft says what keeps the branch from being caught up, "" for

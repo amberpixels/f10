@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // binaryCatchupFake is the drive's own catchup with git's integration and
@@ -616,5 +617,89 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 
 	if left, err := d.catchupLeft(t.Context(), run); err != nil || !strings.Contains(left, "a.go") {
 		t.Errorf("left = %q, %v, want the marker in a.go", left, err)
+	}
+}
+
+// A catchup turn that goes idle without its report, leaving what git
+// explains, is prompted again naming what is left; it halts only on the third
+// attempt with nothing changed, or at once over an open dialog.
+func TestDriveSendsAStalledCatchupBack(t *testing.T) {
+	conflict := "/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+		"settle them in place, keeping both sides, then conclude the rebase --driven"
+	again := "/f10:catchup the last catchup turn left it unsettled: 1 uncommitted paths in /code/repo.GH-1: " +
+		"settle it in place, keeping both sides, and commit --driven"
+
+	cases := map[string]struct {
+		settles bool // the second turn commits and reports
+		dialog  bool // a permission dialog is open when the turn stalls
+		want    string
+	}{
+		"settled on the second turn": {settles: true, want: "caught up with main, verify green"},
+		"never settled":              {want: "attempt 3 at"},
+		"under a permission dialog":  {dialog: true, want: "stopped without reporting"},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+
+			gitDir := t.TempDir()
+			stops := &binaryCatchupFake{stops: []bool{true}, onStop: func() { startRebase(t, gitDir) }}
+			fx.binaryCatchup(t, stops, gitDir)
+			fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+			for _, p := range []string{conflict, again, resumeGH1} {
+				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
+			}
+
+			fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+			turns := 0
+			fx.agent(t, func(prompt string) {
+				if prompt == resumeGH1 {
+					fx.writeRun(t, "done", "", "", "")
+
+					return
+				}
+
+				turns++
+
+				_ = os.RemoveAll(filepath.Join(gitDir, "rebase-merge"))
+
+				if tc.settles && turns == 2 {
+					fx.f.script("git status --porcelain", "")
+					fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+					fx.reports(t, fx.clock)
+
+					return
+				}
+
+				// the turn ends on a background command, its edit uncommitted
+				fx.f.script("git status --porcelain", " M a.go")
+
+				if tc.dialog {
+					wait := `{"reason":"permission","tool":"Bash"}`
+					if err := os.WriteFile(state.WaitPath(fx.in.stateDir, "s-GH-1"), []byte(wait), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+
+			err := fx.drive(t)
+			out := fx.out.String()
+
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("output lacks %q:\n%s", tc.want, out)
+			}
+
+			if tc.settles != (err == nil) {
+				t.Errorf("err = %v\n%s", err, out)
+			}
+
+			if got := fx.f.called("herdr agent prompt " + agentOf("GH-1") + " " + again); got == tc.dialog {
+				t.Errorf("prompt naming what is left sent = %v, want %v\n%s", got, !tc.dialog, out)
+			}
+		})
 	}
 }

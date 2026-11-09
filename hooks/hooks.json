@@ -45,7 +45,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Skill",
+        "matcher": "Skill|Bash|Monitor",
         "hooks": [
           {
             "type": "command",

@@ -491,6 +491,8 @@ The last two in the default hold the real U+F015A and U+F073A characters.
   A ship step loaded sets that step running.
   The issue capture creates names the task.
   `Stop` closes out whatever is still running.
+  `PreToolUse` on `Bash` and `Monitor` records background work a turn launches, and the turn's `Stop` keeps the record.
+  A drive reads an agent whose turn ended on that work as working, not stalled, until a later turn clears the record.
   `SessionStart` prunes dead state and refreshes the symlink.
 - **Steps** - each step makes one `f10-state.sh set` call as each phase opens and closes.
   The calls are **cosmetic and best-effort**, as `conventions/report.md` says.
