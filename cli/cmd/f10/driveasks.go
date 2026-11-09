@@ -4,15 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/asks"
-	"github.com/amberpixels/f10/cli/internal/daemon"
 )
 
 // raise puts a task's ask in the inbox, naming this drive, so an answer
@@ -93,11 +90,12 @@ func (in *driveInput) claimSent(r *driveRun, answer string) {
 	}
 }
 
-// resumeAnswered starts this drive again for an ask answered after it last
-// looked: the answer's claimer saw the drive's lease held and left it here.
-func (in *driveInput) resumeAnswered(ctx context.Context, tasks []driveTask) {
-	if in.rec == nil || in.asksDir == "" || in.resume == nil || in.draining.Load() || in.rec.Cancelled != nil {
-		return
+// resumeAnswered reports an ask answered after this drive last looked, for
+// which the drive must run again: the answer's claimer saw the drive's lease
+// held and left it here. Outside the daemon it names the command instead.
+func (in *driveInput) resumeAnswered(tasks []driveTask) bool {
+	if in.rec == nil || in.asksDir == "" || in.draining.Load() || in.rec.Cancelled != nil {
+		return false
 	}
 
 	untaken, _ := asks.Untaken(in.asksDir, in.root)
@@ -107,34 +105,20 @@ func (in *driveInput) resumeAnswered(ctx context.Context, tasks []driveTask) {
 			continue
 		}
 
+		if !in.daemonRun {
+			fmt.Fprintf(in.out, "%s was answered %s as this drive stopped: f10 drive --resume %d takes the answer\n",
+				a.Task, asks.Way(a.By), in.rec.Number)
+
+			return false
+		}
+
 		fmt.Fprintf(in.out, "%s was answered %s as this drive stopped: drive %d resumes for it\n",
 			a.Task, asks.Way(a.By), in.rec.Number)
 
-		if err := in.resume(ctx, in.rec.Number); err != nil {
-			fmt.Fprintf(in.out, "  resuming drive %d: %v; f10 drive --resume %d takes it\n",
-				in.rec.Number, err, in.rec.Number)
-		}
-
-		return
-	}
-}
-
-// resumeSelf has the daemon start drive n once this process is gone, since
-// the daemon attaches a resume to a drive still running.
-func (in *driveInput) resumeSelf(_ context.Context, n int) error {
-	if os.Getenv(daemon.NumberFileEnv) == "" {
-		fmt.Fprintf(in.out, "  f10 drive --resume %d takes the answer\n", n)
-
-		return nil
+		return true
 	}
 
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
-
-	return startDetached(exe, "asks", "resume", "--after-pid", strconv.Itoa(os.Getpid()),
-		"--drive", strconv.Itoa(n), "--root", in.root, "--main", in.main)
+	return false
 }
 
 // closeDriveAsks closes drive n's open asks: a cancelled drive leaves

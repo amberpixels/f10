@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"slices"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -252,7 +251,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 	if len(a.answers) == 0 {
 		req.Resume = a.resume
 		if a.resume == 0 {
-			req.Key = strings.Join(recordArgs(argv), " ")
+			req.Key = drives.Key(recordArgs(argv))
 		}
 	}
 
@@ -341,12 +340,14 @@ func followDrive(
 			return err
 		}
 
+		resumed := exit.Reason == daemon.ReasonUpgrade || exit.Reason == daemon.ReasonResumed
+
 		switch {
 		case exit.Code == 0:
 			return nil
-		case exit.Code != daemon.ExitDrained:
+		case exit.Code != daemon.ExitDrained && exit.Code != daemon.ExitResume:
 			return cli.Exit("", exit.Code)
-		case exit.Reason != daemon.ReasonUpgrade || exit.Drive == 0:
+		case !resumed || exit.Drive == 0:
 			fmt.Fprintf(
 				w,
 				"drive %d stopped with the f10 daemon: f10 drive --resume %d goes on\n",
@@ -357,16 +358,10 @@ func followDrive(
 			return cli.Exit("", exit.Code)
 		}
 
-		// the new daemon resumed it: follow it there, whatever its version
+		// the drive runs again, after an upgrade in the new daemon: follow
+		// it there, whatever that daemon's version
 		follow = true
-		req = daemon.Request{
-			Op:     daemon.OpRun,
-			Argv:   []string{"--resume", strconv.Itoa(exit.Drive)},
-			Dir:    req.Dir,
-			Root:   req.Root,
-			Env:    req.Env,
-			Resume: exit.Drive,
-		}
+		req = daemon.ResumeRequest(req.Root, req.Dir, req.Env, exit.Drive)
 	}
 }
 

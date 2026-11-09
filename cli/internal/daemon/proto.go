@@ -47,10 +47,15 @@ func LogPath(dir string) string { return filepath.Join(dir, "daemon.log") }
 // ExitPath is the file holding a drive log's exit, once its process ended.
 func ExitPath(log string) string { return log + ".exit" }
 
-// Why a drive exited ExitDrained.
+// ExitResume is a drive's exit when an answer came as it stopped: the
+// daemon that runs it starts it again with --resume.
+const ExitResume = 8
+
+// Why a drive exited ExitDrained or ExitResume.
 const (
 	ReasonUpgrade = "upgrade" // the next daemon resumes it
 	ReasonStopped = "stopped" // f10 daemon stop: it waits for its next run
+	ReasonResumed = "resumed" // this daemon started it again
 )
 
 // An Exit is how a drive's process ended: its code, why it drained, and
@@ -110,15 +115,21 @@ const (
 // A Request is one call: an op and what it needs.
 type Request struct {
 	Op      string   `json:"op"`
-	Version string   `json:"version,omitempty"` // hello: the client's
 	Argv    []string `json:"argv,omitempty"`    // run: drive's arguments, --foreground added by the daemon
 	Dir     string   `json:"dir,omitempty"`     // run: where the drive was typed; watch: the main checkout
 	Root    string   `json:"root,omitempty"`    // run, watch: the storage root, telling projects apart
 	Env     []string `json:"env,omitempty"`     // run, watch: the allowlisted environment
-	Key     string   `json:"key,omitempty"`     // run: the record's command line, joined; "" never attaches
+	Key     string   `json:"key,omitempty"`     // run: drives.Key of the command line; "" never attaches
 	Resume  int      `json:"resume,omitempty"`  // run: the record --resume names
 	Drain   bool     `json:"drain,omitempty"`   // stop: let each drive reach a tick boundary
 	Upgrade bool     `json:"upgrade,omitempty"` // stop: a newer daemon follows and resumes the drained drives
+}
+
+// ResumeRequest is the run request that picks drive n up again. It carries
+// no key: the daemon reads it from the live record, as it must for an older
+// client's resume, which sends none.
+func ResumeRequest(root, dir string, env []string, n int) Request {
+	return Request{Op: OpRun, Argv: []string{"--resume", strconv.Itoa(n)}, Dir: dir, Root: root, Env: env, Resume: n}
 }
 
 // A Reply answers one Request; Error set means it was refused.

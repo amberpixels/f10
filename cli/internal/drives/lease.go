@@ -44,6 +44,41 @@ func (h Holder) String() string {
 	return who
 }
 
+// line is h as its lock file holds it, its PID always this process.
+func (h Holder) line() string {
+	body := "pid=" + strconv.Itoa(os.Getpid())
+	if h.Drive > 0 {
+		body += " drive=" + strconv.Itoa(h.Drive)
+	}
+
+	if h.Watch {
+		body += " watch=1"
+	}
+
+	return body
+}
+
+// parseHolder reads a lock file's line; zero values for anything unreadable.
+func parseHolder(line string) Holder {
+	var h Holder
+
+	for field := range strings.FieldsSeq(line) {
+		k, v, _ := strings.Cut(field, "=")
+		n, _ := strconv.Atoi(v)
+
+		switch k {
+		case "pid":
+			h.PID = n
+		case "drive":
+			h.Drive = n
+		case "watch":
+			h.Watch = n == 1
+		}
+	}
+
+	return h
+}
+
 // A HeldError is a lease another process holds.
 type HeldError struct {
 	Key    string
@@ -55,18 +90,9 @@ func (e HeldError) Error() string {
 }
 
 // A Lease is a held lock, released by Release or by the process ending.
-type Lease struct {
-	f *os.File
-}
+type Lease = flock.Lease
 
-// retries absorb a reader's probe, which holds the lock for an instant.
-var (
-	retries    = 4
-	retryDelay = 50 * time.Millisecond
-)
-
-// lockPath is key's lock file. Lock files are never deleted: unlinking a
-// held one lets a second process lock a fresh inode under the same name.
+// lockPath is key's lock file under a storage root.
 func lockPath(root, key string) string {
 	return filepath.Join(root, Dir, "locks", strings.ReplaceAll(key, "/", "_")+".lock")
 }
@@ -79,52 +105,9 @@ func Acquire(root, key string, drive int) (*Lease, error) {
 
 // AcquireAs takes key's lease as h, whose PID is always this process.
 func AcquireAs(root, key string, h Holder) (*Lease, error) {
-	path := lockPath(root, key)
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return nil, fmt.Errorf("lease %s: %w", key, err)
-	}
+	l, err := flock.Acquire(lockPath(root, key), h.line())
 
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("lease %s: %w", key, err)
-	}
-
-	for i := 0; ; i++ {
-		err = flock.Exclusive(f)
-		if err == nil || !errors.Is(err, flock.ErrHeld) || i >= retries {
-			break
-		}
-
-		time.Sleep(retryDelay)
-	}
-
-	if errors.Is(err, flock.ErrHeld) {
-		h := readHolder(path)
-		_ = f.Close()
-
-		return nil, HeldError{Key: key, Holder: h}
-	}
-
-	if err != nil {
-		_ = f.Close()
-
-		return nil, fmt.Errorf("lease %s: %w", key, err)
-	}
-
-	body := "pid=" + strconv.Itoa(os.Getpid())
-	if h.Drive > 0 {
-		body += " drive=" + strconv.Itoa(h.Drive)
-	}
-
-	if h.Watch {
-		body += " watch=1"
-	}
-
-	if err := f.Truncate(0); err == nil {
-		_, _ = f.WriteAt([]byte(body+"\n"), 0) // the holder is a view; the lock is what owns
-	}
-
-	return &Lease{f: f}, nil
+	return l, named(key, err)
 }
 
 // awaitPoll is how often Await tries a held lease again.
@@ -150,65 +133,23 @@ func Await(ctx context.Context, root, key string, h Holder, wait time.Duration) 
 	}
 }
 
-// Release drops the lease; nil and a second call are fine.
-func (l *Lease) Release() {
-	if l == nil || l.f == nil {
-		return
-	}
-
-	_ = flock.Unlock(l.f)
-	_ = l.f.Close()
-	l.f = nil
-}
-
-// Probe reports who holds key's lease, false when nobody does. It takes a
-// shared lock for an instant, which Acquire's retries absorb.
+// Probe reports who holds key's lease, false when nobody does.
 func Probe(root, key string) (Holder, bool) {
-	path := lockPath(root, key)
-
-	f, err := os.Open(path)
-	if err != nil {
-		return Holder{}, false
-	}
-	defer f.Close()
-
-	if err := flock.Shared(f); err != nil {
-		if errors.Is(err, flock.ErrHeld) {
-			return readHolder(path), true
-		}
-
+	line, held := flock.Probe(lockPath(root, key))
+	if !held {
 		return Holder{}, false
 	}
 
-	_ = flock.Unlock(f)
-
-	return Holder{}, false
+	return parseHolder(line), true
 }
 
-// readHolder parses a lock file; zero values for anything unreadable.
-func readHolder(path string) Holder {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return Holder{}
+// named turns flock's HeldError into one naming key and its holder.
+func named(key string, err error) error {
+	if held := (flock.HeldError{}); errors.As(err, &held) {
+		return HeldError{Key: key, Holder: parseHolder(held.Holder)}
 	}
 
-	var h Holder
-
-	for field := range strings.FieldsSeq(string(b)) {
-		k, v, _ := strings.Cut(field, "=")
-		n, _ := strconv.Atoi(v)
-
-		switch k {
-		case "pid":
-			h.PID = n
-		case "drive":
-			h.Drive = n
-		case "watch":
-			h.Watch = n == 1
-		}
-	}
-
-	return h
+	return err
 }
 
 // DriveKey is a drive's own lease, held for the life of its process.

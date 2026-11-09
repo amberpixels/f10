@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,7 +22,7 @@ import (
 
 // drive runs the flow; nothing is created or prompted before the graph
 // passed validation.
-func drive(ctx context.Context, w io.Writer, in *driveInput) error {
+func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 	in.out, in.leases = w, map[string]*drives.Lease{}
 	in.resolveProfiles(w)
 
@@ -47,7 +48,18 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 
 	// runs after releaseAll: an answer claimed while this drive still held
 	// its lease is seen here, or by its claimer once the lease is free
-	defer in.resumeAnswered(context.WithoutCancel(ctx), tasks)
+	defer func() {
+		if !in.resumeAnswered(tasks) {
+			return
+		}
+
+		// the exit code is the daemon's cue, so a failure is said here
+		if _, coded := errors.AsType[cli.ExitCoder](err); err != nil && !coded {
+			fmt.Fprintln(w, "f10:", err)
+		}
+
+		err = cli.Exit("", daemon.ExitResume)
+	}()
 	defer in.releaseAll()
 
 	if err := in.takeAnswers(tasks); err != nil {
@@ -125,7 +137,9 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 			return cli.Exit("", daemon.ExitDrained)
 		}
 
-		if in.cancelled() {
+		in.refreshRecord()
+
+		if in.rec != nil && in.rec.Cancelled != nil {
 			for _, r := range runs {
 				if r.end == nil {
 					in.end(ctx, w, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})

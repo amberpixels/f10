@@ -66,15 +66,9 @@ func asksCommand() *cli.Command {
 			{
 				Name:      "resume",
 				Usage:     "resume the drive an answered ask belongs to",
-				ArgsUsage: "<key> | --drive N --root DIR --main DIR [--after-pid PID]",
+				ArgsUsage: "<key>",
 				Hidden:    true,
-				Flags: []cli.Flag{
-					&cli.IntFlag{Name: "drive"},
-					&cli.StringFlag{Name: "root"},
-					&cli.StringFlag{Name: "main"},
-					&cli.IntFlag{Name: "after-pid", Usage: "wait for this process to end first"},
-				},
-				Action: runAsksResume,
+				Action:    runAsksResume,
 			},
 			{
 				Name:   "hook",
@@ -542,23 +536,8 @@ func askLine(w io.Writer, in *bufio.Reader, q asks.Question) (string, error) {
 	}
 }
 
-// runAsksResume resumes a drive for an answer: the one an answered ask
-// names, or, from a drive that is ending, that drive once its process is
-// gone, since the daemon attaches a resume to a drive still running.
+// runAsksResume resumes the drive an answered ask names.
 func runAsksResume(ctx context.Context, cmd *cli.Command) error {
-	if n := cmd.Int("drive"); n > 0 {
-		if pid := cmd.Int("after-pid"); pid > 0 {
-			waitGone(pid, time.Minute)
-		}
-
-		a := asks.Ask{Drive: n, Root: cmd.String("root"), Main: cmd.String("main")}
-		if d := liveDeliver(); !d.live(a) {
-			return d.resume(ctx, cmd.Writer, a)
-		}
-
-		return nil
-	}
-
 	dir := asks.Dir()
 
 	a, isOpen, err := asks.Get(dir, cmd.Args().First())
@@ -594,14 +573,7 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
 	}
 
-	_, err := daemon.Call(ctx, dir, daemon.Request{
-		Op:     daemon.OpRun,
-		Argv:   []string{"--resume", n},
-		Dir:    a.Main,
-		Root:   a.Root,
-		Env:    driveEnv(os.Environ(), extra),
-		Resume: a.Drive,
-	}, 0)
+	_, err := daemon.Call(ctx, dir, daemon.ResumeRequest(a.Root, a.Main, driveEnv(os.Environ(), extra), a.Drive), 0)
 	if err != nil {
 		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
 	}

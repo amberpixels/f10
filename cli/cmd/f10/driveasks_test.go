@@ -7,31 +7,27 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/asks"
+	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// inboxFixture is a drive fixture with a record and an inbox, counting
-// notifications and resumes.
-func inboxFixture(t *testing.T, args ...string) (*driveFixture, *int, *[]int) {
+// inboxFixture is a drive fixture with a record and an inbox, as the daemon
+// runs it, counting notifications.
+func inboxFixture(t *testing.T, args ...string) (*driveFixture, *int) {
 	t.Helper()
 
 	fx := newDriveFixture(t, args...)
-	fx.in.root, fx.in.asksDir = t.TempDir(), t.TempDir()
+	fx.in.root, fx.in.asksDir, fx.in.daemonRun = t.TempDir(), t.TempDir(), true
 
-	notified, resumed := 0, []int{}
+	notified := 0
 	fx.in.notify = func(context.Context, asks.Ask) error {
 		notified++
 
 		return nil
 	}
-	fx.in.resume = func(_ context.Context, n int) error {
-		resumed = append(resumed, n)
 
-		return nil
-	}
-
-	return fx, &notified, &resumed
+	return fx, &notified
 }
 
 // asking scripts GH-1 sent judge, then stopping on a question.
@@ -56,7 +52,7 @@ func (fx *driveFixture) resumedOnAsk(t *testing.T) {
 // A task that asks puts its question in the inbox, naming the drive, and
 // the user is told once.
 func TestDriveRaisesAskIntoInbox(t *testing.T) {
-	fx, notified, resumed := inboxFixture(t, "GH-1", "judge")
+	fx, notified := inboxFixture(t, "GH-1", "judge")
 	fx.asking(t)
 
 	if err := fx.drive(t); exitCode(err) != ui.ExitAsk {
@@ -74,15 +70,15 @@ func TestDriveRaisesAskIntoInbox(t *testing.T) {
 		t.Errorf("ask = %+v", a)
 	}
 
-	if *notified != 1 || len(*resumed) != 0 {
-		t.Errorf("notified %d, resumed %v", *notified, *resumed)
+	if *notified != 1 || strings.Contains(fx.out.String(), "resumes for it") {
+		t.Errorf("notified %d, and the drive resumed\n%s", *notified, fx.out.String())
 	}
 }
 
 // An answer given through the inbox reaches the agent on the resume, as an
 // --answer would, and the ask reads taken.
 func TestDriveTakesInboxAnswer(t *testing.T) {
-	fx, _, _ := inboxFixture(t, "GH-1", "judge")
+	fx, _ := inboxFixture(t, "GH-1", "judge")
 	fx.resumedOnAsk(t)
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. stop", "{}")
 
@@ -116,7 +112,7 @@ func TestDriveTakesInboxAnswer(t *testing.T) {
 // An answer typed in the agent's pane already reached it: the resume sends
 // nothing and follows the turn.
 func TestDriveFollowsPaneAnswer(t *testing.T) {
-	fx, _, _ := inboxFixture(t, "GH-1", "judge")
+	fx, _ := inboxFixture(t, "GH-1", "judge")
 	fx.resumedOnAsk(t)
 
 	a, _, _ := asks.Raise(fx.in.asksDir, asks.Ask{
@@ -141,9 +137,9 @@ func TestDriveFollowsPaneAnswer(t *testing.T) {
 }
 
 // An answer claimed while the drive still held its lease is not lost: the
-// drive, once it lets go, resumes itself for it.
+// drive, once it lets go, exits for the daemon to start it again.
 func TestDriveResumesForLateAnswer(t *testing.T) {
-	fx, _, resumed := inboxFixture(t, "GH-1", "judge")
+	fx, _ := inboxFixture(t, "GH-1", "judge")
 	fx.asking(t)
 
 	// the user answers the moment they are told, before the drive exits
@@ -157,12 +153,31 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 		return err
 	}
 
-	if err := fx.drive(t); exitCode(err) != ui.ExitAsk {
-		t.Fatalf("err = %v\n%s", err, fx.out.String())
+	if err := fx.drive(t); exitCode(err) != daemon.ExitResume {
+		t.Fatalf("err = %v, want exit %d\n%s", err, daemon.ExitResume, fx.out.String())
 	}
 
-	if len(*resumed) != 1 || (*resumed)[0] != 1 {
-		t.Errorf("resumed %v, want drive 1", *resumed)
+	out := fx.out.String()
+	if !strings.Contains(out, "GH-1 was answered") || !strings.Contains(out, "drive 1 resumes for it") {
+		t.Errorf("out = %s", out)
+	}
+
+	// outside the daemon the drive ends as it would, naming the command
+	fx2, _ := inboxFixture(t, "GH-1", "judge")
+	fx2.in.daemonRun = false
+	fx2.asking(t)
+	fx2.in.notify = func(_ context.Context, a asks.Ask) error {
+		_, err := asks.Claim(fx2.in.asksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
+
+		return err
+	}
+
+	if err := fx2.drive(t); exitCode(err) != ui.ExitAsk {
+		t.Fatalf("foreground err = %v\n%s", err, fx2.out.String())
+	}
+
+	if !strings.Contains(fx2.out.String(), "f10 drive --resume 1 takes the answer") {
+		t.Errorf("foreground out = %s", fx2.out.String())
 	}
 }
 

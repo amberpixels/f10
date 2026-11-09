@@ -4,7 +4,6 @@ package main
 
 import (
 	"os/exec"
-	"time"
 )
 
 // startDetached starts exe and lets it go.
@@ -16,6 +15,3 @@ func startDetached(exe string, args ...string) error {
 
 	return cmd.Process.Release()
 }
-
-// waitGone returns at once: no daemon runs here to resume a drive.
-func waitGone(int, time.Duration) {}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -217,7 +218,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		defaultParallel: defaultParallel(),
 	}
 	in.sleep = in.wake
-	in.resume = in.resumeSelf
+	in.daemonRun = os.Getenv(daemon.NumberFileEnv) != ""
 
 	if spec, why := verifySpecOf(t.eff); why == "" {
 		in.catchup = newBinaryCatchup(catchupInput{
