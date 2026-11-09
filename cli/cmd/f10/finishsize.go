@@ -107,3 +107,14 @@ var recordSize = func(ctx context.Context, dir, branch, task string, s branchSiz
 		}),
 	})
 }
+
+// sizeRecorder measures the branch while it still differs from its base and
+// returns what records it, run only once the merge has landed.
+func sizeRecorder(ctx context.Context, in finishInput, branch, def string, local bool) func() {
+	size, sized := measureBranch(ctx, in.main, branch, def, local)
+	if !sized || size.files == 0 {
+		return func() {}
+	}
+
+	return func() { recordSize(ctx, in.main, branch, in.task.ID, size) }
+}

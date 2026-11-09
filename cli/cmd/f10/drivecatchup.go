@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -496,4 +497,343 @@ func unsetIfSet(ctx context.Context, dir, key string) error {
 	}
 
 	return gitx.UnsetConfig(ctx, dir, key)
+}
+
+// catchupSent is what the branch looked like when a catchup went out, for
+// the progress check a later conflict runs; a field left "" compares to
+// nothing, and origin, the target's remote-tracking ref, is "" when the
+// target is recorded nowhere.
+type catchupSent struct {
+	target, head, way, base, origin string
+	// pushed is origin's copy of the branch itself then, what the push after
+	// the catchup leases against; held is false once a push or a later skill
+	// made it stale
+	pushed string
+	held   bool
+	// integrated is set once this catchup rewrote the branch itself, after
+	// pushed was read, so the lease stays sound on a resend
+	integrated bool
+}
+
+// halts says why a conflict after this catchup halts the task, or "" when
+// another catchup can still make progress, as when the target moved.
+func (c *catchupSent) halts(target, head string, conflicts []gitx.Conflict, base string) string {
+	switch {
+	case c == nil:
+		return ""
+	case head != "" && head == c.head:
+		return "the catchup left the branch unchanged"
+	case target != "" && target == c.target:
+		return base + " has not moved since the catchup"
+	case len(conflicts) > 0 && conflictWay(conflicts) == c.way:
+		return "the same files conflict with " + base + " the same way again: " + conflictPaths(conflicts)
+	}
+
+	return ""
+}
+
+// conflictWay identifies conflicts by path and the blobs each side brought,
+// so the same path with another blob on either side is a new conflict.
+func conflictWay(conflicts []gitx.Conflict) string {
+	keys := make([]string, 0, len(conflicts))
+	for _, c := range conflicts {
+		keys = append(keys, c.Key())
+	}
+
+	return strings.Join(keys, ", ")
+}
+
+func conflictPaths(conflicts []gitx.Conflict) string {
+	paths := make([]string, 0, len(conflicts))
+	for _, c := range conflicts {
+		paths = append(paths, c.Path)
+	}
+
+	return strings.Join(paths, ", ")
+}
+
+// recordCatchup notes what the catchup about to go out starts from, for the
+// progress check a later conflict runs. A read git cannot answer halts: a
+// record made up would halt a healthy task, or loop on a doomed one.
+func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string) error {
+	target, base, err := in.catchupTarget(ctx, r, key)
+	if err != nil {
+		return err
+	}
+
+	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
+	if err != nil {
+		return fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
+	}
+
+	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
+	if err != nil {
+		return fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
+	}
+
+	origin, err := in.targetOrigin(ctx, r, key)
+	if err != nil {
+		return err
+	}
+
+	pushed, err := in.originTip(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	r.lastCatchup = &catchupSent{
+		target: target, head: head, way: conflictWay(conflicts), base: base, origin: origin,
+		pushed: pushed, held: true,
+	}
+
+	return nil
+}
+
+// originTip is origin's copy of the branch, fetched first when origin has
+// it, since a mark set earlier may follow no fetch at all.
+func (in *driveInput) originTip(ctx context.Context, r *driveRun) (string, error) {
+	tracking := "refs/remotes/origin/" + r.o.branch
+
+	pushed, err := gitx.Ref(ctx, r.o.path, tracking)
+	if err != nil || pushed == "" {
+		return pushed, err
+	}
+
+	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+		return "", fmt.Errorf("fetching origin before catching %s up: %w", r.o.branch, err)
+	}
+
+	if pushed, err = gitx.Ref(ctx, r.o.path, tracking); err != nil {
+		return "", fmt.Errorf("reading origin/%s: %w", r.o.branch, err)
+	}
+
+	return pushed, nil
+}
+
+// targetOrigin is the remote-tracking ref of what a mark's catchup brings
+// in; a base recorded nowhere gives "".
+func (in *driveInput) targetOrigin(ctx context.Context, r *driveRun, key string) (string, error) {
+	if key == cfgMoved {
+		after, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+cfgAfterBranch)
+		if err != nil || after == "" {
+			return "", err
+		}
+
+		return "refs/remotes/origin/" + after, nil
+	}
+
+	def, err := localDefault(ctx, in.main)
+	if err != nil {
+		return "", err
+	}
+
+	return "refs/remotes/origin/" + def, nil
+}
+
+// catchupTarget resolves a mark's target as the catchup step does, and the
+// progress check reads the target through this too, so the record and the
+// comparison never name different commits.
+func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string) (string, string, error) {
+	if key == cfgMoved {
+		target, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+key)
+		if err != nil {
+			return "", "", fmt.Errorf("reading the %s mark on %s: %w", key, r.o.branch, err)
+		}
+
+		return target, "its base", nil
+	}
+
+	return defaultTarget(ctx, in.main)
+}
+
+// conflictAgain says why a conflict after the catchup this drive sent makes
+// no progress, or "" to catch up again, and the conflict as attempts compare
+// it; the files conflicting now are named either way.
+func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string) (string, string, error) {
+	if r.lastCatchup == nil {
+		return "", "", nil
+	}
+
+	target, base, err := in.catchupTarget(ctx, r, key)
+	if err != nil {
+		return "", "", err
+	}
+
+	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
+	if err != nil {
+		return "", "", fmt.Errorf("reading the head of %s: %w", r.o.branch, err)
+	}
+
+	conflicts, err := gitx.Conflicts(ctx, r.o.path, target, "HEAD")
+	if err != nil {
+		return "", "", fmt.Errorf("reading what %s conflicts on: %w", r.o.branch, err)
+	}
+
+	reason := r.lastCatchup.halts(target, head, conflicts, base)
+	if reason != "" && len(conflicts) > 0 && !strings.HasSuffix(reason, conflictPaths(conflicts)) {
+		reason += "; conflicting: " + conflictPaths(conflicts)
+	}
+
+	if reason != "" {
+		reason = r.o.branch + " still conflicts with " + base + " after a catchup: " + reason
+	}
+
+	return reason, conflictWay(conflicts), nil
+}
+
+// catchupAttempt counts a catchup that did not bring the branch up to date,
+// and on the limit halts with the way to settle it by hand.
+func (in *driveInput) catchupAttempt(w io.Writer, r *driveRun, skill, reason, conflict string) *driveResult {
+	res := in.attemptAt(w, r, "catchup", conflict, halted(r.task.ref.ID, skill, reason))
+	if res != nil {
+		res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
+	}
+
+	return res
+}
+
+// pushCaughtUp pushes plain when the catchup merged, so origin's copy is an
+// ancestor, and with a lease against pushed when it rebased. Pushed must be
+// origin's sha when the catchup went out: a commit pushed while it ran is not
+// on a rebased branch, and a lease read after would let the push drop it.
+// With no such record (a resumed drive, a rerun) only a plain push goes out.
+func (in *driveInput) pushCaughtUp(ctx context.Context, w io.Writer, r *driveRun, skill, pushed, base string) error {
+	refused := originMovedError{branch: r.o.branch, base: base, path: r.o.path}
+
+	if c := r.lastCatchup; c != nil && c.held {
+		c.held = false
+
+		if pushed != c.pushed {
+			return refused
+		}
+	} else {
+		fastForward, err := gitx.IsAncestor(ctx, r.o.path, pushed, "HEAD")
+		if err != nil {
+			return err
+		}
+
+		if !fastForward {
+			refused.unseen = true
+
+			return refused
+		}
+	}
+
+	how, err := pushCaughtUp(ctx, r.o.path, r.o.branch, pushed, base)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", in.id(r.task.ref.ID), skill, r.o.branch, base, how)
+
+	return nil
+}
+
+// originMovedError refuses a force-push that could drop commits pushed to
+// the branch while its catchup ran: origin moved, or, unseen, nothing
+// recorded what origin held when the catchup went out.
+type originMovedError struct {
+	branch, base, path string
+	unseen             bool
+}
+
+func (e originMovedError) Error() string {
+	if e.unseen {
+		return fmt.Sprintf("%s caught up with %s, not pushed: the drive did not read origin/%s when the catchup "+
+			"went out, so a force-push could drop commits pushed since", e.branch, e.base, e.branch)
+	}
+
+	return fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed", e.branch, e.base, e.branch)
+}
+
+// pushHalted halts on a failed push, saying how to bring in what origin
+// gained when that is the cause.
+func pushHalted(id, skill string, err error) driveResult {
+	res := halted(id, skill, err.Error())
+
+	moved := originMovedError{}
+
+	switch {
+	case !errors.As(err, &moved):
+	case moved.unseen:
+		res.lines = append(res.lines, "next: check origin/"+moved.branch+" holds nothing "+moved.path+
+			" lacks, push it with --force-with-lease yourself, then rerun the drive")
+	default:
+		res.lines = append(res.lines, "next: bring origin/"+moved.branch+" into "+moved.path+
+			", then /f10:catchup there, then rerun the drive")
+	}
+
+	return res
+}
+
+// pushCatchup pushes a branch origin has once a catchup ended clean, so its
+// PR carries the integration before the next skill, but never commits origin
+// lacks: another task's unpushed work must not ride into this PR.
+func (in *driveInput) pushCatchup(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
+	id, branch := r.task.ref.ID, r.o.branch
+
+	halt := func(err error) *driveResult {
+		res := halted(id, "catchup", err.Error())
+		res.lines = append(res.lines, "next: rerun the drive")
+
+		return &res
+	}
+
+	pushed, err := gitx.Ref(ctx, r.o.path, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return halt(err)
+	}
+
+	if pushed == "" {
+		return nil
+	}
+
+	// fetched first, so a push made while the catchup ran shows here
+	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+		return halt(err)
+	}
+
+	if pushed, err = gitx.Ref(ctx, r.o.path, "refs/remotes/origin/"+branch); err != nil {
+		return halt(err)
+	}
+
+	head, err := gitx.Ref(ctx, r.o.path, "HEAD")
+	if err != nil {
+		return halt(err)
+	}
+
+	if head == pushed {
+		return nil
+	}
+
+	base := "its base"
+	if r.lastCatchup != nil {
+		base = r.lastCatchup.base
+	}
+
+	if c := r.lastCatchup; c != nil && c.origin != "" && c.target != "" {
+		seen, err := gitx.IsAncestor(ctx, r.o.path, c.target, c.origin)
+		if err != nil {
+			return halt(err)
+		}
+
+		if !seen {
+			fmt.Fprintf(w, "%s catchup: %s caught up with %s, not pushed: %s is not on origin yet\n",
+				in.id(id), branch, base, base)
+
+			return nil
+		}
+	}
+
+	if err := in.pushCaughtUp(ctx, w, r, "catchup", pushed, base); err != nil {
+		if errors.As(err, new(originMovedError)) {
+			res := pushHalted(id, "catchup", err)
+
+			return &res
+		}
+
+		return halt(err)
+	}
+
+	return nil
 }
