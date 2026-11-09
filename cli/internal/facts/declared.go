@@ -136,9 +136,37 @@ func trimSteps(list []string) []string {
 	return out
 }
 
-// decodeDeclared reads one frontmatter block with unknown keys refused.
+// retiredKeys name the key that replaced each retired one, because deleting
+// a retired key alone can change behavior: without drive_finish: off, a
+// drive merges.
+var retiredKeys = map[string]string{
+	"drive_finish":     "declare `ceiling: { finish: off }` to keep drives from merging, or `paces.<name>.finish` for one pace",
+	"review_traces":    "rename it to `traces`",
+	"pipelines":        "declare each pipeline under `flows`, led by `plan` unless it was planless",
+	"planless":         "drop `plan` from those `flows`",
+	"pipeline_by_area": "rename it to `flow_by_area`",
+	"drive_chain":      "fold its steps into `flows.default`; a pace's `finish` says whether drive merges",
+}
+
+// decodeDeclared reads one frontmatter block with unknown keys refused, and
+// a retired key refused with what replaced it.
 func decodeDeclared(block []byte) (Declared, error) {
 	var d Declared
+
+	var top map[string]yaml.Node
+	if yaml.Unmarshal(block, &top) == nil {
+		var bad []string
+
+		for _, key := range slices.Sorted(maps.Keys(top)) {
+			if repl, ok := retiredKeys[key]; ok {
+				bad = append(bad, key+" is retired: "+repl)
+			}
+		}
+
+		if len(bad) > 0 {
+			return Declared{}, errors.New(strings.Join(bad, "; "))
+		}
+	}
 
 	dec := yaml.NewDecoder(bytes.NewReader(block))
 	dec.KnownFields(true)

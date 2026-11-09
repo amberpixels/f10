@@ -254,7 +254,7 @@ func TestFinishArchivesALegacyWorktreesSpikeReport(t *testing.T) {
 	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
 	fx.f.script("git reset --hard", "")
 	fx.f.script("git clean -fd", "")
-	fx.plan(t, "GH-1.md", "Kind: spike\n")
+	fx.plan(t, "Kind: spike\n")
 	writeFile(t, filepath.Join(fx.wt, ".f10", "spikes", "GH-1.md"), "answer")
 	fx.f.fail("git worktree remove "+fx.wt, shell.Result{Code: 1, Stderr: "locked"})
 

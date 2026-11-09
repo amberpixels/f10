@@ -156,12 +156,11 @@ The command returns as soon as the prompt is submitted; the work happens in the 
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.
   The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` still plans, and the plan step archives the saved one; `--discuss` names the plan's path.
   The report gains a `plan` row.
-  A worktree from before storage moved to main's ships its own plan when main has none for the task (start rerun on it).
   `f10 drive` reads main's plan the same way, when it starts the task's agent.
 - the agent is started with an `--add-dir` for each task-file dir of the storage root (`plans`, `reviews`, `verdicts`, `spikes`, `handoffs`, `lore`, `images`, created if missing) whenever that root lies outside the worktree, so its writes there ask no permission; `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
-  The path is in the shared storage root (in a base worktree from before storage moved to main's, that worktree's own), and a note beneath the report says when no checkout reaches it or the plan is not written yet.
+  The path is in the shared storage root, and a note beneath the report says when the plan is not written yet.
   A base still at the default branch's commit is noted as a task with no code yet.
   It fails before creating anything when the task has no branch
 - with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its line, the last of the body by convention) is read as `--after <id>` when that task has a branch, and noted beneath the report.
@@ -322,9 +321,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    `/f10:catchup`, or its next ship unless `catchup: off`, brings the default branch in before anything else runs and clears the mark.
    A note names each dependent.
 7. **The plan is archived**: `<storage root>/plans/<ID>.md` moves to `<storage root>/plans/archive/<ID>.md` (`<ID>.<N>.md` when taken), within main's `.f10/` or the out-of-tree root.
-   A worktree from before storage moved to main's still holds its own `.f10/plans/<ID>.md`: it moves to main's archive, its older archived versions first.
    No plan is a note.
-   A plan that cannot be moved keeps the worktree and its branch, since such a worktree may hold the only copy and a rerun finds the task by its branch.
+   A plan that cannot be moved keeps the worktree and its branch, since a rerun finds the task by its branch.
    **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
    A merge reports the archived path as a `handoff` row.
    On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8), as `f10 start`'s `plan` row, the `plan`, `handoff`, `judge` and `review` rows of `f10 status <id>` and the `wrote` row of `f10 init` do, and a drive's copy of the report links when the drive writes to a terminal.
@@ -607,7 +605,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A task whose agent an earlier run left open goes first, because it adds no session.
    A turn already running when the driver reaches the task is tracked and counted even past the cap, because the driver cannot stop it.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
-   A plan the main checkout saved for the task is read in place under start's rules (a worktree's own plan, from before storage moved to main's, wins).
+   A plan the main checkout saved for the task is read in place under start's rules.
    A checkout Herdr already shows, as an earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle shell.
    Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.

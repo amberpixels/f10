@@ -751,7 +751,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	}
 
 	if dep != nil {
-		notes = append(notes, locatePlan(dep, in.plansDir, wts)...)
+		notes = append(notes, locatePlan(dep, in.plansDir)...)
 	}
 
 	path := worktreeOf(wts, name)
@@ -1088,30 +1088,16 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 	return fmt.Sprintf("%s %s is at the same commit as the default branch %s", base.flag, base.ref, def)
 }
 
-// locatePlan finds the base task's plan in the shared plans dir, else in the
-// base's worktree when that still keeps its own .f10. The notes name what
-// was not found, so a prompt that cannot cite the plan is explained.
-func locatePlan(dep *dependency, plansDir string, wts []gitx.Worktree) []string {
-	var candidates []string
-	if plansDir != "" {
-		candidates = append(candidates, filepath.Join(plansDir, dep.task+".md"))
-	}
-
-	if wt := worktreeOf(wts, dep.branch); wt != "" {
-		candidates = append(candidates, filepath.Join(wt, ".f10", "plans", dep.task+".md"))
-	}
-
-	if len(candidates) == 0 {
+// locatePlan finds the base task's plan in the shared plans dir. The notes
+// name what was not found, so a prompt that cannot cite the plan is explained.
+func locatePlan(dep *dependency, plansDir string) []string {
+	if plansDir == "" {
 		return []string{
-			dep.task + " has no checkout here, so its plan is out of reach: the prompt names the task alone",
+			dep.task + " has no shared plans dir here, so its plan is out of reach: the prompt names the task alone",
 		}
 	}
 
-	// the first that exists, else the first, which the note below names
-	dep.plan = candidates[0]
-	if i := slices.IndexFunc(candidates, exists); i >= 0 {
-		dep.plan = candidates[i]
-	}
+	dep.plan = filepath.Join(plansDir, dep.task+".md")
 
 	if _, err := os.Stat(dep.plan); err != nil {
 		return []string{fmt.Sprintf("%s has no plan yet at %s", dep.task, dep.plan)}

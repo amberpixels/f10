@@ -37,13 +37,18 @@ func TestDecodeDeclared(t *testing.T) {
 		t.Error("an unknown key decoded")
 	}
 
-	// the keys flows and paces replaced are outside the contract
-	for _, old := range []string{
-		"drive_finish: on", "review_traces: on", "pipelines: {default: [implement]}",
-		"planless: [local]", "pipeline_by_area: {ui: local}", "drive_chain: plan ship",
+	// the keys flows and paces replaced are refused, each naming its replacement
+	for old, want := range map[string]string{
+		"drive_finish: off":                 "ceiling: { finish: off }",
+		"review_traces: on":                 "`traces`",
+		"pipelines: {default: [implement]}": "`flows`",
+		"planless: [local]":                 "`flows`",
+		"pipeline_by_area: {ui: local}":     "`flow_by_area`",
+		"drive_chain: plan ship":            "`flows.default`",
 	} {
-		if _, err := decodeDeclared([]byte(old + "\n")); err == nil {
-			t.Errorf("%s decoded", old)
+		_, err := decodeDeclared([]byte(old + "\n"))
+		if err == nil || !strings.Contains(err.Error(), "is retired") || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want the retirement naming %s", old, err, want)
 		}
 	}
 
