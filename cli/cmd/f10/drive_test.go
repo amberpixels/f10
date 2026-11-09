@@ -103,7 +103,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 				return info, nil
 			},
-			plans: t.TempDir(),
+			storage: storage.Root(t.TempDir()),
 		},
 		args:     a,
 		argv:     args,
@@ -1927,16 +1927,16 @@ func TestFinishedTask(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			plans := t.TempDir()
+			root := storage.Root(t.TempDir())
 			if c.archived {
-				writePlan(t, filepath.Join(plans, "archive", "GH-1.2.md"))
+				writePlan(t, filepath.Join(root.Archive(), "GH-1.2.md"))
 			}
 
 			if c.livePlan {
-				writePlan(t, filepath.Join(plans, "GH-1.md"))
+				writePlan(t, root.Plan("GH-1"))
 			}
 
-			if got := finishedTask(taskInfo{closed: c.closed}, plans, "GH-1", c.branched); got != c.want {
+			if got := finishedTask(taskInfo{closed: c.closed}, root, "GH-1", c.branched); got != c.want {
 				t.Errorf("finishedTask = %v, want %v", got, c.want)
 			}
 		})

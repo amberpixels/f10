@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -44,7 +45,7 @@ func (t *target) rememberRefs(ctx context.Context, refs ...ledger.TaskRef) {
 func rowRefs(rows []row) []ledger.TaskRef {
 	refs := make([]ledger.TaskRef, 0, len(rows))
 	for _, r := range rows {
-		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, r.Title), URL: r.URL})
+		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(r.Title, r.ID), URL: r.URL})
 	}
 
 	return refs
@@ -53,39 +54,22 @@ func rowRefs(rows []row) []ledger.TaskRef {
 func childRefs(rows []childRow) []ledger.TaskRef {
 	refs := make([]ledger.TaskRef, 0, len(rows))
 	for _, r := range rows {
-		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, r.Title), URL: r.URL})
+		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(r.Title, r.ID), URL: r.URL})
 	}
 
 	return refs
 }
 
-// cleanTitle is title without a heading mark or a leading copy of the id,
-// so `# FT-12: Add it` from a driver and `Add it` from a host store alike.
-func cleanTitle(id, title string) string {
-	title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(title), "# "))
-
-	if id != "" && len(title) > len(id) && strings.EqualFold(title[:len(id)], id) {
-		rest := title[len(id):]
-		if r, ok := strings.CutPrefix(rest, ":"); ok {
-			return strings.TrimSpace(r)
-		}
-
-		if rest[0] == ' ' {
-			return strings.TrimSpace(rest)
-		}
-	}
-
-	return title
-}
-
 func docTitle(id, doc string) string {
-	return cleanTitle(id, taskTitle(strings.TrimLeft(doc, " \t\r\n")))
+	return tasktitle.Clean(taskTitle(strings.TrimLeft(doc, " \t\r\n")), id)
 }
 
 // driverTitle strips the prefix tracker.title wrote, as the host's titles
 // come stripped.
 func (t *target) driverTitle(r ref.Ref, doc string) string {
-	return cleanTitle(r.ID, t.eff.TitleTemplate.Strip(docTitle(r.ID, doc), r.ID, r.Number))
+	title := taskTitle(strings.TrimLeft(doc, " \t\r\n"))
+
+	return tasktitle.Clean(t.eff.TitleTemplate.Strip(title, r.ID, r.Number), r.ID)
 }
 
 // mdLink is the task as a markdown link, brackets in the title escaped so
@@ -235,7 +219,7 @@ func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, erro
 		return ledger.TaskRef{}, fmt.Errorf("%s returned no title for issue %s", h.Name, r.Number)
 	}
 
-	return ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, h.title(iss.Title, r.Number)), URL: iss.url()}, nil
+	return ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.url()}, nil
 }
 
 // linkBodyAfter links the body's `After: <id>` line to the base task, so a

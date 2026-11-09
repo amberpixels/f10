@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/timing"
@@ -539,5 +540,5 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 // branch and the checkout tie a row to the task.
 func (in gateInput) onTask(e ledger.Event) bool {
 	return (in.branch != "" && e.Branch == in.branch) ||
-		(in.checkout != "" && e.Checkout != "" && canonPath(e.Checkout) == canonPath(in.checkout))
+		(in.checkout != "" && e.Checkout != "" && gitx.Resolved(e.Checkout) == gitx.Resolved(in.checkout))
 }

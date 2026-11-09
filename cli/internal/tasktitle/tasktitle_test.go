@@ -86,3 +86,18 @@ func TestApplied(t *testing.T) {
 		t.Error("no template should count as applied")
 	}
 }
+
+func TestClean(t *testing.T) {
+	for in, want := range map[string]string{
+		"Add the index":           "Add the index",
+		"# FT-12: Add the index":  "Add the index",
+		"ft-12: Add the index":    "Add the index",
+		"FT-12 Add the index":     "Add the index",
+		"FT-123: not this id":     "FT-123: not this id",
+		"  Spaced: with a colon ": "Spaced: with a colon",
+	} {
+		if got := Clean(in, "FT-12"); got != want {
+			t.Errorf("Clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

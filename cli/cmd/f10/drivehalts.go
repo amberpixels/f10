@@ -155,5 +155,7 @@ func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string
 func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
 
 func stoppedRun(r *state.Run) bool {
-	return slices.ContainsFunc(state.Phases, func(p string) bool { return state.Stopped(r.Status(p)) })
+	_, stopped := r.StoppedPhase()
+
+	return stopped
 }

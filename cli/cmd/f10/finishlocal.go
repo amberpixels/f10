@@ -53,29 +53,13 @@ func landingBase(ctx context.Context, dir, def string) (string, error) {
 		return "", err
 	}
 
-	remote, err := gitx.Ref(ctx, dir, "refs/remotes/origin/"+def)
-	if err != nil {
-		return "", err
-	}
-
-	switch {
-	case local == "":
+	if local == "" {
 		return "", fmt.Errorf("cannot read %s here", def)
-	case remote == "" || remote == local:
-		return local, nil
 	}
 
-	behind, err := gitx.IsAncestor(ctx, dir, remote, local)
-	if err != nil || behind {
-		return local, err
-	}
+	sha, _, err := defaultTip(ctx, dir, def, divergeFail)
 
-	ahead, err := gitx.IsAncestor(ctx, dir, local, remote)
-	if err != nil || ahead {
-		return remote, err
-	}
-
-	return "", fmt.Errorf("%s and origin/%s have diverged: bring %s up to date with origin first", def, def, def)
+	return sha, err
 }
 
 // landLocal builds the merge in memory on landingBase so no checkout is
@@ -236,7 +220,7 @@ func closedIDs(in finishInput) []string {
 // the task's own reference. Other trackers, a driver's included, are not
 // closed by a commit, as on the PR path.
 func closingLines(in finishInput) string {
-	if !in.hostIssues || in.driver != nil {
+	if !in.hostCloses {
 		return ""
 	}
 
@@ -244,7 +228,7 @@ func closingLines(in finishInput) string {
 
 	for _, m := range in.task.MemberRefs() {
 		if m.ID == in.task.ID || slices.Contains(in.close, m.ID) {
-			lines = append(lines, "Closes #"+m.Number)
+			lines = append(lines, closingLine(m.Number))
 		}
 	}
 

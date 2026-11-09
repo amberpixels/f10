@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/taskid"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -253,8 +254,8 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 // shape also fits UTF-8 or ISO-8601. Neither ends on \b: `#` is not a word
 // character, so a placeholder inside markup would never match.
 var (
-	idPlaceholderRE = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-#+`)
-	idSampleRE      = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-\d+\b`)
+	idPlaceholderRE = regexp.MustCompile(`\b(` + taskid.Declared + `)-#+`)
+	idSampleRE      = regexp.MustCompile(`\b(` + taskid.Declared + `)-\d+\b`)
 )
 
 // idPrefix is the task id format's letters in Tracker prose, "" when none:
@@ -268,10 +269,6 @@ func idPrefix(declared string) string {
 
 	return ""
 }
-
-// The shape a usable prefix has: what idPlaceholderRE accepts, anchored,
-// since f10 init writes a derived prefix back and it must parse again.
-var prefixRE = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 // A one-word name this short with a digit is already an abbreviation; a
 // longer word gives up its first letters.
@@ -319,7 +316,7 @@ func ProjectPrefix(name string) string {
 	}
 
 	prefix := strings.ToUpper(derived.String())
-	if !prefixRE.MatchString(prefix) {
+	if !taskid.ValidPrefix(prefix) {
 		return ""
 	}
 

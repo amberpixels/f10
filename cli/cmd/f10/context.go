@@ -262,6 +262,10 @@ func (t *target) hostIssues() bool {
 	return kind == "" || kind.HostIssues() || !t.trackerDeclared()
 }
 
+// hostCloses reports that the host's issues are the tracker, so a merge's
+// closing keyword closes the task; a driver's tracker is never closed that way.
+func (t *target) hostCloses() bool { return t.hostIssues() && t.driver() == nil }
+
 func (t *target) trackerDeclared() bool {
 	for _, f := range t.eff.Facts {
 		if f.Key == "tracker.kind" {

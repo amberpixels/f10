@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -227,17 +228,5 @@ func readSettings(env *Env) settings {
 // samePath compares two paths after resolving symlinks, so /tmp and
 // /private/tmp are one directory.
 func samePath(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-
-	if ra, err := filepath.EvalSymlinks(a); err == nil {
-		a = ra
-	}
-
-	if rb, err := filepath.EvalSymlinks(b); err == nil {
-		b = rb
-	}
-
-	return filepath.Clean(a) == filepath.Clean(b)
+	return a != "" && b != "" && gitx.SamePath(a, b)
 }

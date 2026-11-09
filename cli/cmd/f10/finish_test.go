@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/fsx"
@@ -237,7 +236,7 @@ func TestFinishStateBlockFailureStopsABundle(t *testing.T) {
 	fx.openPR()
 	fx.in.traces = true
 	fx.in.method = "squash"
-	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
 	fx.f.answers["gh pr view GH-1 --json body"] = []shell.Result{
 		{Stdout: `{"body":"Closes #1\nCloses #2"}`},
 		{Code: 1, Stderr: "rate limited"},
@@ -302,7 +301,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 	fx.openPR()
 	fx.in.traces = true
 	fx.in.method = "squash"
-	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
 	fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`, `{"body":"Closes #1\nPart of #2"}`)
 	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 
@@ -1243,7 +1242,7 @@ func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 	fx.f.script("git diff --numstat --no-renames origin/main...refs/heads/GH-1", "10\t2\tcli/stats.go")
-	fx.in.task, fx.in.close = bundle12, []string{"GH-2"}
+	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{"GH-2"}, true
 	fx.in.loreStore = &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}
 
 	var sized []branchSize
@@ -1964,7 +1963,7 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			fx := newFinishFixture(t)
 			fx.noPull()
-			fx.in.method, fx.in.traces, fx.in.hostIssues = c.method, c.traces, true
+			fx.in.method, fx.in.traces, fx.in.hostCloses = c.method, c.traces, true
 			fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
 			fx.f.script(c.commit, c.sha)
 			fx.f.script("git merge --ff-only "+c.sha, "")
@@ -1986,7 +1985,7 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 
 	fx := newFinishFixture(t)
 	fx.noPull()
-	fx.in.method, fx.in.hostIssues = "rebase", true
+	fx.in.method, fx.in.hostCloses = "rebase", true
 	fx.f.script("git merge-base --is-ancestor m0 refs/heads/GH-1", "")
 	fx.f.script("git merge --ff-only t1", "")
 
@@ -1998,7 +1997,7 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 // Each member the merge closes gets a line: the lead, and the riders --close
 // names; a rider kept open, or a tracker that is not the host's, gets none.
 func TestClosingLines(t *testing.T) {
-	in := finishInput{task: bundle12, hostIssues: true}
+	in := finishInput{task: bundle12, hostCloses: true}
 	if got := closingLines(in); got != "Closes #1" {
 		t.Errorf("rider kept open: %q", got)
 	}
@@ -2008,14 +2007,9 @@ func TestClosingLines(t *testing.T) {
 		t.Errorf("rider closed: %q", got)
 	}
 
-	in.driver = &driver.Driver{}
+	in.hostCloses = false
 	if got := closingLines(in); got != "" {
-		t.Errorf("a driver's tracker: %q", got)
-	}
-
-	in.driver, in.hostIssues = nil, false
-	if got := closingLines(in); got != "" {
-		t.Errorf("not the host's issues: %q", got)
+		t.Errorf("not the host's issues, or a driver's tracker: %q", got)
 	}
 }
 
@@ -2025,7 +2019,7 @@ func TestFinishLocalRerunKeepsTheClosingNote(t *testing.T) {
 	for _, landed := range []string{"GH-1: Add the thing\n\nCloses #1\n", "GH-1: Add the thing\n"} {
 		fx := newFinishFixture(t)
 		fx.noPull()
-		fx.in.hostIssues = true
+		fx.in.hostCloses = true
 		fx.f.script("git rev-parse m0^{tree}", "tr33")
 		fx.f.script("git log --format=%B refs/remotes/origin/main..refs/heads/main", landed)
 
@@ -2912,7 +2906,7 @@ func TestFinishMergedWithoutWorktreeRunsOnAndKeepsTheBranch(t *testing.T) {
 		t.Fatalf("rerun: %v\n%s", err, out)
 	}
 
-	if !fx.f.called("git branch -D GH-1") || !planArchivedIn(plans, "GH-1") {
+	if !fx.f.called("git branch -D GH-1") || !storage.Root(filepath.Dir(plans)).PlanArchived("GH-1") {
 		t.Errorf("rerun calls: %v", fx.f.calls)
 	}
 }

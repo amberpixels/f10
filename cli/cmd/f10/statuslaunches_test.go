@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -43,7 +44,7 @@ func (fx launchFixture) worktree(t *testing.T, id string, run state.Run) {
 	path := filepath.Join(filepath.Dir(fx.repo), "demo."+id)
 	git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
 
-	run.Session, run.Task, run.Root = "agent-"+id, id, canonPath(path)
+	run.Session, run.Task, run.Root = "agent-"+id, id, gitx.Resolved(path)
 	if err := run.Save(fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}

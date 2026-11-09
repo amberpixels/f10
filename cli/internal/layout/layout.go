@@ -53,9 +53,9 @@ func Locate(ctx context.Context, cwd string) *Layout {
 
 	here := gitx.Out(ctx, cwd, "rev-parse", "--show-toplevel")
 	if here == "" {
-		here = canon(cwd)
+		here = gitx.Resolved(cwd)
 	} else {
-		here = canon(here)
+		here = gitx.Resolved(here)
 	}
 
 	lay.CheckoutRoot = here
@@ -131,7 +131,7 @@ func Locate(ctx context.Context, cwd string) *Layout {
 
 	// a config below the root is not a per-directory config - note it
 	// rather than pass it over silently
-	if canon(cwd) != here {
+	if gitx.Resolved(cwd) != here {
 		lay.NestedIgnored = existingDir(storage.InRepo(cwd).Instructions())
 	}
 
@@ -144,20 +144,11 @@ func mainWorktree(ctx context.Context, cwd string) string {
 	porcelain := gitx.Out(ctx, cwd, "worktree", "list", "--porcelain")
 	for line := range strings.SplitSeq(porcelain, "\n") {
 		if path, ok := strings.CutPrefix(line, "worktree "); ok {
-			return canon(path)
+			return gitx.Resolved(path)
 		}
 	}
 
 	return ""
-}
-
-// canon is the script's `cd dir && pwd -P`: the physical form of a path.
-func canon(path string) string {
-	if p, err := filepath.EvalSymlinks(path); err == nil {
-		return p
-	}
-
-	return path
 }
 
 // existingDir returns path when it is a directory, "" otherwise.

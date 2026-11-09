@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/taskid"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
@@ -487,10 +488,6 @@ func (r *Run) Backstop() bool {
 }
 
 var (
-	// a prefix holding digits counts only upper-case (K8S-12), so a word like
-	// x86-64 that opens a description stays a description
-	idToken       = regexp.MustCompile(`^(?:[A-Za-z]+|[A-Z][A-Z0-9]*)-\d+$`)
-	numberToken   = regexp.MustCompile(`^\d+$`)
 	pipelineWord  = regexp.MustCompile(`^\s*[A-Za-z][A-Za-z0-9_-]*:\s+(.*)$`)
 	dryRunPattern = "--dry-run"
 )
@@ -511,7 +508,7 @@ func isDescription(args string) bool {
 	}
 
 	first, _, _ := strings.Cut(toks[0], "+")
-	if strings.HasSuffix(first, ".md") || isURL(first) || idToken.MatchString(first) || numberToken.MatchString(first) {
+	if strings.HasSuffix(first, ".md") || isURL(first) || taskid.IsWord(first) || taskid.IsNumber(first) {
 		return false
 	}
 
@@ -532,7 +529,7 @@ func refTaskOf(args string) string {
 		return strings.TrimSuffix(filepath.Base(first), ".md")
 	case isURL(first):
 		return ""
-	case idToken.MatchString(first) || numberToken.MatchString(first):
+	case taskid.IsWord(first) || taskid.IsNumber(first):
 		return first
 	}
 
@@ -563,7 +560,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	if ref := refTaskOf(args); !createsTask(skill) && ref != "" && r.Task != "" {
 		upRef, upTask := strings.ToUpper(ref), strings.ToUpper(r.Task)
-		chain = upRef == upTask || (numberToken.MatchString(ref) && strings.HasSuffix(upTask, "-"+ref))
+		chain = upRef == upTask || (taskid.IsNumber(ref) && strings.HasSuffix(upTask, "-"+ref))
 	}
 
 	r.Skill = skill
@@ -591,7 +588,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 		// a full id ties the run to its board row before fetch reports; a
 		// bare number waits for fetch, which knows the prefix
-		if ref := refTaskOf(args); !createsTask(skill) && idToken.MatchString(ref) {
+		if ref := refTaskOf(args); !createsTask(skill) && taskid.IsWord(ref) {
 			r.Task = strings.ToUpper(ref)
 		}
 	}

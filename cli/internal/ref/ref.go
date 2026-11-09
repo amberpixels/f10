@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/taskid"
 )
 
 // Where a looked-up reference came from, so an error or a caller can name it.
@@ -29,6 +30,22 @@ const (
 
 // Separator joins a bundle's ids, `ABC-1+ABC-2`, lead first.
 const Separator = "+"
+
+// TypedMembers is each task a typed id names (`ft-1_v2+FT-2`), upper-cased
+// with its suffix dropped, lead first: the key drives and leases use.
+func TypedMembers(typed string) []string {
+	var out []string
+
+	for member := range strings.SplitSeq(typed, Separator) {
+		id, _ := SplitSuffix(member)
+		out = append(out, strings.ToUpper(id))
+	}
+
+	return out
+}
+
+// TypedLead is the first of TypedMembers.
+func TypedLead(typed string) string { return TypedMembers(typed)[0] }
 
 // ErrNoReference means the cascade ran out. It is wrapped with what each
 // tier had to offer: "none found" alone sends a reader to the wrong tier,
@@ -213,15 +230,10 @@ func (r Lookup) exhausted(ctx context.Context) error {
 	return fmt.Errorf("%w (%s)", ErrNoReference, strings.Join(why, "; "))
 }
 
-// numberRE is a typed reference: a bare number, `#123`, a prefixed id in any
-// case. A url's last path segment is held to the same shape, so a pasted
-// issue link is as good as the id it ends in.
-var numberRE = regexp.MustCompile(`^(?:([A-Za-z][A-Za-z0-9]*)-)?#?(\d+)$`)
-
 // suffixRE is a reference salted with a word (`1454-attempt2`, `GH-1_v2`):
 // `f10 start` salts the branch so a second worktree for one task can live
 // beside the first.
-var suffixRE = regexp.MustCompile(`^((?:[A-Za-z][A-Za-z0-9]*-)?#?\d+)[-_]([A-Za-z0-9][A-Za-z0-9_-]*)$`)
+var suffixRE = regexp.MustCompile(`^(` + taskid.Reference + `)[-_]([A-Za-z0-9][A-Za-z0-9_-]*)$`)
 
 // SplitSuffix separates a salted reference into the reference and its
 // suffix. A token without one, or a url, comes back whole with "".
@@ -232,7 +244,7 @@ func SplitSuffix(token string) (string, string) {
 	}
 
 	if m := suffixRE.FindStringSubmatch(token); m != nil {
-		return m[1], m[2]
+		return m[1], m[4]
 	}
 
 	return token, ""
@@ -259,22 +271,24 @@ func (r Lookup) parse(token, origin string) (Ref, error) {
 		probe = lastSegment(probe)
 	}
 
-	m := numberRE.FindStringSubmatch(strings.TrimPrefix(probe, "#"))
-	if m == nil {
+	// a url's last path segment is held to the same shape, so a pasted
+	// issue link is as good as the id it ends in
+	typed, number, ok := taskid.Parse(strings.TrimPrefix(probe, "#"))
+	if !ok {
 		return Ref{}, errors.New("not a task reference: " + token)
 	}
 
 	prefix := r.Prefix
-	if m[1] != "" {
-		prefix = strings.ToUpper(m[1])
+	if typed != "" {
+		prefix = strings.ToUpper(typed)
 	}
 
-	id := m[2]
+	id := number
 	if prefix != "" {
-		id = prefix + "-" + m[2]
+		id = prefix + "-" + number
 	}
 
-	return Ref{ID: id, Number: m[2], Origin: origin}, nil
+	return Ref{ID: id, Number: number, Origin: origin}, nil
 }
 
 func (r Lookup) bundled(ctx context.Context, token, origin string, members []string) (Ref, error) {

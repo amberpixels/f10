@@ -160,7 +160,7 @@ func checkoutTaskID(ctx context.Context, t *target) string {
 		return r.Label()
 	}
 
-	linked := t.lay.MainRoot != "" && canonPath(t.lay.MainRoot) != canonPath(t.lay.CheckoutRoot)
+	linked := t.lay.MainRoot != "" && gitx.Resolved(t.lay.MainRoot) != gitx.Resolved(t.lay.CheckoutRoot)
 	if !linked || gitx.Out(ctx, t.dir, "rev-parse", "--abbrev-ref", "HEAD") != "HEAD" {
 		return ""
 	}
@@ -458,18 +458,10 @@ func inRoot(runs []*state.Run, root string) []*state.Run {
 	var kept []*state.Run
 
 	for _, r := range runs {
-		if r.Root != "" && canonPath(r.Root) == canonPath(root) {
+		if r.Root != "" && gitx.Resolved(r.Root) == gitx.Resolved(root) {
 			kept = append(kept, r)
 		}
 	}
 
 	return kept
-}
-
-func canonPath(p string) string {
-	if c, err := filepath.EvalSymlinks(p); err == nil {
-		return c
-	}
-
-	return p
 }

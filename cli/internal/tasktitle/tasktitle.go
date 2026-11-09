@@ -83,6 +83,26 @@ func (t Template) Strip(title, id, n string) string {
 	return title
 }
 
+// Clean is title without a heading mark or a leading copy of id, whatever
+// the template, so `# FT-12: Add it` from a driver and `Add it` from a host
+// store alike in the ledger.
+func Clean(title, id string) string {
+	title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(title), "# "))
+
+	if id != "" && len(title) > len(id) && strings.EqualFold(title[:len(id)], id) {
+		rest := title[len(id):]
+		if r, ok := strings.CutPrefix(rest, ":"); ok {
+			return strings.TrimSpace(r)
+		}
+
+		if rest[0] == ' ' {
+			return strings.TrimSpace(rest)
+		}
+	}
+
+	return title
+}
+
 // Applied reports whether title is already written through the template,
 // whatever its shape, so a retitle leaves it alone.
 func (t Template) Applied(title, id, n string) bool {

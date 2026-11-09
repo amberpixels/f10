@@ -232,27 +232,12 @@ func (l *loreEnv) repoPath(p string) (string, error) {
 		abs = filepath.Join(l.cwd, p)
 	}
 
-	rel, err := filepath.Rel(physical(l.top), physical(abs))
+	rel, err := filepath.Rel(gitx.Resolved(l.top), gitx.Resolved(abs))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("%s is outside the repository at %s", p, l.top)
 	}
 
 	return filepath.ToSlash(rel), nil
-}
-
-// physical resolves symlinks in the longest existing prefix of p, so a cwd
-// under /tmp compares with git's /private/tmp.
-func physical(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-
-	dir, base := filepath.Split(filepath.Clean(p))
-	if dir == "" || filepath.Clean(dir) == p {
-		return p
-	}
-
-	return filepath.Join(physical(filepath.Clean(dir)), base)
 }
 
 func runLoreAdd(ctx context.Context, cmd *cli.Command) error {

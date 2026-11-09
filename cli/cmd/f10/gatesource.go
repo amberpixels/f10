@@ -54,26 +54,12 @@ func (src gateSource) storageFor(ctx context.Context, root string) string {
 // flow the drive took, the newest drive winning. A drive without --flow
 // records none, read as default: an area's pick is ship's to make.
 func driveFlows(root string) map[string]driveFlow {
-	recs, err := drives.List(root)
-	if err != nil {
-		return nil
-	}
-
 	out := map[string]driveFlow{}
 
-	for _, r := range recs {
-		if r.Cancelled != nil || r.Done() {
-			continue
-		}
-
-		_, running := drives.Probe(root, drives.DriveKey(r.Number))
-
-		for _, t := range r.Tasks {
-			lead, _, _ := strings.Cut(t.ID, ref.Separator)
-			lead, _ = ref.SplitSuffix(lead)
-
-			if key := strings.ToUpper(lead); out[key].name == "" {
-				out[key] = driveFlow{name: cmp.Or(r.Flow, "default"), running: running}
+	for _, d := range drives.Active(root) {
+		for _, t := range d.Tasks {
+			if lead := ref.TypedLead(t.ID); out[lead].name == "" {
+				out[lead] = driveFlow{name: cmp.Or(d.Flow, "default"), running: d.Running}
 			}
 		}
 	}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 // The catchup step is read as conflict resolution when a merge or rebase is
@@ -68,7 +70,7 @@ func TestCatchupInProgressLine(t *testing.T) {
 	// at the same commit and must not be the name printed.
 	t.Run("merge with a remote-tracking branch", func(t *testing.T) {
 		branch := gitOut(t, repo, "branch", "--show-current")
-		clone := canon(filepath.Join(t.TempDir(), "clone"))
+		clone := gitx.Resolved(filepath.Join(t.TempDir(), "clone"))
 		run(t, filepath.Dir(clone), "clone", "-q", repo, clone)
 		cloneGit := func(args ...string) {
 			t.Helper()

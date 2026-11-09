@@ -7,16 +7,15 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
@@ -493,7 +492,7 @@ func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 		}
 
 		head := r.Head()
-		seen[id] = finishedLazily(tr.plans, head.ID,
+		seen[id] = finishedLazily(tr.storage, head.ID,
 			func() (bool, error) { return hasTaskBranch(ctx, main, head.ID) },
 			func() taskInfo {
 				info, _ := tr.info(ctx, head) // an unread tracker leaves the archive to decide
@@ -507,17 +506,17 @@ func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 
 // finishedLazily is finishedTask with its reads made lazily: the tracker is
 // asked only when no branch, live plan or archived plan already decides.
-func finishedLazily(plans, id string, branched func() (bool, error), info func() taskInfo) bool {
+func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() taskInfo) bool {
 	if b, err := branched(); err != nil || b {
 		return false
 	}
 
 	var ti taskInfo
-	if !fsx.Exists(filepath.Join(plans, id+".md")) && !planArchivedIn(plans, id) {
+	if !root.PlanLive(id) && !root.PlanArchived(id) {
 		ti = info()
 	}
 
-	return finishedTask(ti, plans, id, false)
+	return finishedTask(ti, root, id, false)
 }
 
 func taskStanding(t drives.Task, running bool) string {

@@ -5,6 +5,7 @@ package storage
 import (
 	"path/filepath"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -59,6 +60,25 @@ func (r Root) Plans() string { return r.join(plans) }
 
 // Plan is the task's live plan.
 func (r Root) Plan(id string) string { return r.join(plans, id+".md") }
+
+// PlanLive reports the task's live plan; an empty root, in tests, has none.
+func (r Root) PlanLive(id string) bool { return r != "" && fsx.Exists(r.Plan(id)) }
+
+// PlanArchived reports an archived plan or spike report for the task with
+// no live plan beside it, since a re-plan archives the old plan too.
+func (r Root) PlanArchived(id string) bool {
+	if r == "" || r.PlanLive(id) {
+		return false
+	}
+
+	if fsx.Exists(filepath.Join(r.Archive(), id+".md")) {
+		return true
+	}
+
+	older, _ := filepath.Glob(filepath.Join(r.Archive(), id+".*.md"))
+
+	return len(older) > 0
+}
 
 // Archive is where finished and replaced plans move.
 func (r Root) Archive() string { return ArchiveOf(r.Plans()) }

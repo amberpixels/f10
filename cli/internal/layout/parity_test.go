@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
 type scriptFacts struct {
@@ -27,7 +29,7 @@ func TestParity(t *testing.T) {
 			name: "plain dir, no git, no instructions",
 			setup: func(t *testing.T, _ string) string {
 				t.Helper()
-				return canon(t.TempDir())
+				return gitx.Resolved(t.TempDir())
 			},
 		},
 		{
@@ -241,7 +243,7 @@ func runScript(t *testing.T, script, dir, home string) scriptFacts {
 func mkRepo(t *testing.T) string {
 	t.Helper()
 
-	dir := canon(t.TempDir())
+	dir := gitx.Resolved(t.TempDir())
 	run(t, dir, "init", "-q")
 	run(t, dir,
 		"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
@@ -256,7 +258,7 @@ func addWorktree(t *testing.T, mainRoot string) string {
 	wt := filepath.Join(t.TempDir(), "wt")
 	run(t, mainRoot, "worktree", "add", "-q", wt, "-b", "wt")
 
-	return canon(wt)
+	return gitx.Resolved(wt)
 }
 
 func writeInstr(t *testing.T, root string, files map[string]string) {
