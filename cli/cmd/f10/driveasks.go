@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -150,4 +151,101 @@ func closeDriveAsks(dir, root string, n int, now time.Time) {
 			_ = asks.Update(dir, a.Key(), func(x *asks.Ask) { x.TakenAt = now })
 		}
 	}
+}
+
+func (in *driveInput) takeAnswers(tasks []driveTask) error {
+	in.answer, in.answers = "", map[string]string{}
+
+	for _, a := range in.args.answers {
+		if id, text, ok := keyedAnswer(a, tasks); ok {
+			in.answers[id] = text
+
+			continue
+		}
+
+		if in.answer != "" {
+			return errors.New("several --answer values name no task: key each one, --answer GH-1=\"1. …\"")
+		}
+
+		in.answer = a
+	}
+
+	return nil
+}
+
+// keyedAnswer splits an --answer that names one of the drive's tasks into
+// its id and text; any other answer is bare, an "=" in its text included.
+func keyedAnswer(a string, tasks []driveTask) (string, string, bool) {
+	key, text, ok := strings.Cut(a, "=")
+	if !ok {
+		return "", "", false
+	}
+
+	i := slices.IndexFunc(tasks, func(t driveTask) bool { return strings.EqualFold(t.ref.ID, strings.TrimSpace(key)) })
+	if i < 0 {
+		return "", "", false
+	}
+
+	return tasks[i].ref.ID, strings.TrimSpace(text), true
+}
+
+func answerFlags(asking []string) string {
+	if len(asking) == 1 {
+		return ` --answer "1. … 2. …"`
+	}
+
+	var b strings.Builder
+	for _, id := range asking {
+		b.WriteString(` --answer "` + id + `=1. … 2. …"`)
+	}
+
+	return b.String()
+}
+
+// finishAnswer takes a bare answer only when it is merge or local, so one
+// meant for an agent's question stays there.
+func (in *driveInput) finishAnswer(id string) (string, error) {
+	if a, ok := in.answers[id]; ok {
+		delete(in.answers, id)
+		in.took(id, "finish", a)
+
+		if c := finishChoice(a); c != "" {
+			return c, nil
+		}
+
+		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLocal, finishMerge)
+	}
+
+	if c := finishChoice(in.answer); c != "" {
+		in.answer = ""
+		in.took(id, "finish", c)
+
+		return c, nil
+	}
+
+	return "", nil
+}
+
+func finishChoice(answer string) string {
+	a := strings.ToLower(strings.TrimSpace(answer))
+	a = strings.TrimSpace(strings.TrimPrefix(a, "1."))
+
+	if a == finishMerge || a == finishLocal {
+		return a
+	}
+
+	return ""
+}
+
+func (in *driveInput) takeAnswer(id string) string {
+	if a, ok := in.answers[id]; ok {
+		delete(in.answers, id)
+
+		return a
+	}
+
+	a := in.answer
+	in.answer = ""
+
+	return a
 }
