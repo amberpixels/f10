@@ -419,14 +419,11 @@ func (p *ReviewPR) FreshReactions(ctx context.Context, n Note) (map[string]bool,
 	return fresh, nil
 }
 
-// ErrNoComment is an inline review with no comment a reaction can land on.
-var ErrNoComment = errors.New("the review has no comment to react to")
-
 // React leaves emoji on n.
 func (p *ReviewPR) React(ctx context.Context, n Note, emoji string) error {
 	path, ok := p.reactionPath(n)
 	if !ok {
-		return ErrNoComment
+		return errors.New("the review has no comment to react to")
 	}
 
 	path, _, _ = strings.Cut(path, "?")
