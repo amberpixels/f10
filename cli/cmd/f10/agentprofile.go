@@ -19,19 +19,16 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// A step's agent profile comes from three layers of one map, later winning
-// key by key (the user's ~/.f10/agents.md, the project's agents:, a run's
-// flag as `default`), then `default` overlaid segment by segment by
-// `<step>` and `<step>.<kind>`. Only the task agent and the spawning steps
-// read a key; any other key is accepted and idle until a lever exists.
+// A step's profile is the merged agents map with a run's profile laid over
+// `default`, then `default` overlaid segment by segment by `<step>` and
+// `<step>.<kind>`. Only the task agent and the spawning steps read a key;
+// any other key is accepted and idle until a lever exists.
 
 // An agentEntry is one key of the merged map with where it came from.
 type agentEntry struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
 	Origin string `json:"origin"`
-
-	src facts.Origin // a key a file declared: the origin as a fact; zero for a run's profile
 }
 
 // agentMap is the merged map, by key.
@@ -40,37 +37,15 @@ type agentMap map[string]agentEntry
 // agentFlagOrigin is the origin of a profile a command line gave.
 const agentFlagOrigin = "--agent"
 
-// agentLayers merges the user's file, the project's map and a flag's
-// profile, later winning key by key. flag "" adds nothing.
-func agentLayers(eff *facts.Effective, flag string) (agentMap, error) {
+// agentMapOf is the map facts merged, each key with its layer.
+func agentMapOf(eff *facts.Effective) agentMap {
 	m := agentMap{}
 
-	user, path, err := readAgentsConfig()
-	if err != nil {
-		return nil, err
+	for key, value := range eff.Agents {
+		m[key] = agentEntry{Key: key, Value: value, Origin: eff.AgentsOrigin[key].String()}
 	}
 
-	for key, value := range user {
-		src := facts.DeclaredByUser(path)
-		m[key] = agentEntry{Key: key, Value: value, Origin: src.String(), src: src}
-	}
-
-	if eff != nil {
-		for key, value := range eff.Agents {
-			src := eff.AgentsOrigin[key]
-			m[key] = agentEntry{Key: key, Value: value, Origin: src.String(), src: src}
-		}
-	}
-
-	if flag = strings.TrimSpace(flag); flag != "" {
-		if _, err := agentctl.ParseProfile(flag); err != nil {
-			return nil, fmt.Errorf("--agent %w", err)
-		}
-
-		m = m.with(flag, agentFlagOrigin)
-	}
-
-	return m, nil
+	return m
 }
 
 // agentKeyFlag holds a run's profile in the map: a key no file can declare
@@ -139,7 +114,7 @@ func (m agentMap) withPace(set *facts.PaceSet, pace runPace) agentMap {
 
 	capped, caps := set.Capped(pace.name)
 
-	for step, d := range capped {
+	for step, d := range capped.Steps {
 		if d.Effort == "" || d.Off {
 			continue
 		}
@@ -334,33 +309,22 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	m, err := agentLayers(t.eff, cmd.String("agent"))
+	run, err := resolveRun(ctx, t.eff, runInput{
+		pace:    cmd.String("pace"),
+		profile: cmd.String("agent"),
+		main:    cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		branch:  gitx.CurrentBranch(ctx, t.lay.CheckoutRoot),
+	})
 	if err != nil {
 		return err
 	}
-
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	branch := gitx.CurrentBranch(ctx, t.lay.CheckoutRoot)
 
 	// no flag: the branch's record is what the task agent started on, so a
 	// spawning step's subagent follows it
-	if strings.TrimSpace(cmd.String("agent")) == "" {
-		if m, err = m.withBranch(ctx, main, branch); err != nil {
-			return err
-		}
-	}
-
-	paces, err := paceSet(t.eff)
+	m, err := run.agents(ctx)
 	if err != nil {
 		return err
 	}
-
-	pace, err := activePace(ctx, paces, cmd.String("pace"), main, branch)
-	if err != nil {
-		return err
-	}
-
-	m = m.withPace(paces, pace)
 
 	steps := cmd.Args().Slice()
 	if len(steps) == 0 {

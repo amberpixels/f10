@@ -48,7 +48,7 @@ func verifyRepo(t *testing.T) (*layout.Layout, *facts.Effective) {
 		Layers:       []layout.Layer{{Label: "main", Dir: instr}},
 	}
 
-	eff := facts.Build(lay, &probe.Probes{})
+	eff := facts.Build(lay, &probe.Probes{}, "")
 	if errs := eff.Errors(); errs != "" {
 		t.Fatalf("project.md: %s", errs)
 	}

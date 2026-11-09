@@ -141,7 +141,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if err := startProfile(cmd, t, &in); err != nil {
+	if err := startProfile(ctx, cmd, t, &in); err != nil {
 		return err
 	}
 
@@ -195,17 +195,12 @@ func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*targe
 		return nil, shipFlow{}, err
 	}
 
-	paces, err := paceSet(t.eff)
+	run, err := resolveRun(ctx, t.eff, runInput{pace: cmd.String("pace")})
 	if err != nil {
 		return nil, shipFlow{}, err
 	}
 
-	pace, err := activePace(ctx, paces, cmd.String("pace"), "", "")
-	if err != nil {
-		return nil, shipFlow{}, err
-	}
-
-	fl, err := resolvePacedFlow(t.eff, paces, pace.name, flowName)
+	fl, err := run.flow(flowName)
 	if err != nil {
 		return nil, shipFlow{}, err
 	}
@@ -306,13 +301,18 @@ func startDependency(
 
 // startProfile resolves the agent profile from --agent or --model over the
 // project's default.
-func startProfile(cmd *cli.Command, t *target, in *startInput) error {
+func startProfile(ctx context.Context, cmd *cli.Command, t *target, in *startInput) error {
 	flag, err := profileFlag(cmd.String("agent"), cmd.String("model"))
 	if err != nil {
 		return err
 	}
 
-	layers, err := agentLayers(t.eff, flag)
+	run, err := resolveRun(ctx, t.eff, runInput{pace: cmd.String("pace"), profile: flag})
+	if err != nil {
+		return err
+	}
+
+	layers, err := run.agents(ctx)
 	if err != nil {
 		return err
 	}

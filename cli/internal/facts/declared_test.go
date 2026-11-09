@@ -75,7 +75,7 @@ func buildWith(t *testing.T, main, worktree string) *Effective {
 		lay.Layers = append(lay.Layers, layout.Layer{Label: "worktree", Dir: dirWithProjectMD(t, worktree)})
 	}
 
-	return Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
+	return Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}}, "")
 }
 
 func TestBuildFrontmatter(t *testing.T) {
@@ -627,9 +627,9 @@ func TestAgents(t *testing.T) {
 		}
 	}
 
-	if f := factFor(t, eff, "agents"); f.Origin.String() != "declared (main + worktree, frontmatter)" ||
-		!strings.Contains(f.Value, "cleanup: haiku:low") {
-		t.Errorf("agents fact %+v", f)
+	if f := factFor(t, eff, "agents.cleanup"); f.Origin.String() != "declared (worktree, frontmatter)" ||
+		f.Value != "haiku:low" {
+		t.Errorf("agents.cleanup fact %+v", f)
 	}
 
 	for _, c := range []struct{ block, want string }{

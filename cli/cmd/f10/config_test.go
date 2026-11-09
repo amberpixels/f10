@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"maps"
 	"os"
 	"path/filepath"
@@ -149,34 +150,33 @@ func TestRenderHumanKeyValues(t *testing.T) {
 }
 
 // The merged agents map shows one row per key, the user's file under the
-// project's, each with its own origin, in place of the project's one fact.
+// project's, each with its own origin.
 func TestConfigShowsAgentsPerKey(t *testing.T) {
-	user := t.TempDir()
-	t.Setenv(userDirEnv, user)
+	repo := paceRepo(t, "flows:\n  default: plan review implement pr\nagents:\n  review: sonnet:low\n", "")
+	user := os.Getenv(userDirEnv)
+	if err := os.MkdirAll(user, 0o750); err != nil {
+		t.Fatal(err)
+	}
 
-	if err := os.WriteFile(filepath.Join(user, agentsConfigFile),
+	if err := os.WriteFile(filepath.Join(user, facts.UserAgentsFile),
 		[]byte("---\nagents:\n  default: opus:high\n  review: opus:max\n---\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	eff := &facts.Effective{
-		Agents:       map[string]string{"review": "sonnet:low"},
-		AgentsOrigin: map[string]facts.Origin{"review": facts.DeclaredFrontmatter("main")},
-		Facts: []facts.Fact{
-			{Key: "agents", Value: "review: sonnet:low", Origin: facts.DeclaredFrontmatter("main")},
-		},
+	var v view
+	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "config", "--json").must(t)), &v); err != nil {
+		t.Fatal(err)
 	}
-
-	v := &view{Facts: eff.Facts}
-	v.withAgents(eff)
 
 	got := map[string]string{}
 	for _, f := range v.Facts {
-		got[f.Key] = f.Value + " @ " + f.Origin.String()
+		if strings.HasPrefix(f.Key, "agents") {
+			got[f.Key] = f.Value + " @ " + f.Origin.String()
+		}
 	}
 
 	want := map[string]string{
-		"agents.default": "opus:high @ declared (user, " + filepath.Join(user, agentsConfigFile) + ")",
+		"agents.default": "opus:high @ declared (user, " + filepath.Join(user, facts.UserAgentsFile) + ")",
 		"agents.review":  "sonnet:low @ declared (main, frontmatter)",
 	}
 
@@ -185,14 +185,17 @@ func TestConfigShowsAgentsPerKey(t *testing.T) {
 	}
 
 	bad := []byte("---\nagents:\n  review: opus:huge\n---\n")
-	if err := os.WriteFile(filepath.Join(user, agentsConfigFile), bad, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(user, facts.UserAgentsFile), bad, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	v = &view{}
-	v.withAgents(eff)
+	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "config", "--json").must(t)), &v); err != nil {
+		t.Fatal(err)
+	}
 
-	if len(v.Problems) != 1 || !strings.Contains(v.Problems[0].Message, "agents.review") {
+	if !slices.ContainsFunc(v.Problems, func(p facts.Problem) bool {
+		return p.Error && strings.Contains(p.Message, "agents.review") && strings.Contains(p.Message, "agents.md")
+	}) {
 		t.Errorf("a refused user file is a problem: %+v", v.Problems)
 	}
 }
@@ -260,7 +263,7 @@ func TestVerifyLine(t *testing.T) {
 			}
 
 			pb := &probe.Probes{Verify: tc.signals}
-			eff := facts.Build(lay, pb)
+			eff := facts.Build(lay, pb, "")
 
 			if got := verifyLine(verifyFieldIn(eff.Fields)); got != tc.want {
 				t.Errorf("verifyLine = %q, want %q", got, tc.want)

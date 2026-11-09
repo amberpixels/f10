@@ -138,7 +138,7 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 		Review: &probe.Review{Reviewer: "claude[bot]", Trigger: "automatic", Workflow: ".github/workflows/review.yml"},
 	}
 
-	undeclared := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, pb)
+	undeclared := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, pb, "")
 
 	f := fieldByName(t, undeclared, "Review")
 	if f.Origin.Kind != OriginDetected || f.Source != ".github/workflows/review.yml" || !f.Prose {
@@ -156,14 +156,14 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "## Review\n\n- **Never flag** - vendored code\n")},
 		},
-	}, pb)
+	}, pb, "")
 
 	if declared.Review.Remote() {
 		t.Errorf("a declared local-only section still claims the workflow's reviewer: %+v", declared.Review)
 	}
 
 	none := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
-		&probe.Probes{CLI: probe.Signal{Value: "gh", Evidence: "well-known host github.com"}})
+		&probe.Probes{CLI: probe.Signal{Value: "gh", Evidence: "well-known host github.com"}}, "")
 
 	if f := fieldByName(t, none, "Review"); f.Origin.Kind != OriginAbsent {
 		t.Errorf("Review without a workflow = %+v, want absent", f)

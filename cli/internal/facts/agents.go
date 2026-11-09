@@ -50,7 +50,8 @@ func (e *Effective) FlowSteps() []string {
 }
 
 // resolveAgents records the merged agents map once the flows are known,
-// since a key is a step a flow names.
+// since a project's key is a step a flow names; the user's file serves
+// every project, so its keys were checked without the flows.
 func (e *Effective) resolveAgents(fm *layered) {
 	if fm.Agents == nil {
 		return
@@ -60,21 +61,17 @@ func (e *Effective) resolveAgents(fm *layered) {
 	e.Agents = map[string]string{}
 	e.AgentsOrigin = map[string]Origin{}
 
-	layers := map[string]bool{}
-
 	for _, key := range slices.Sorted(maps.Keys(fm.Agents)) {
-		if err := CheckAgentKey(key, steps); err != nil {
-			e.problem(true, "project.md frontmatter: %v", err)
+		origin := fm.originOf("agents." + key)
+
+		if origin.Layer != userLayer {
+			if err := CheckAgentKey(key, steps); err != nil {
+				e.problem(true, "project.md frontmatter: %v", err)
+			}
 		}
 
 		e.Agents[key] = fm.Agents[key]
-		e.AgentsOrigin[key] = DeclaredFrontmatter(fm.origin["agents."+key])
-		layers[fm.origin["agents."+key]] = true
+		e.AgentsOrigin[key] = origin
+		e.Facts = append(e.Facts, Fact{Key: "agents." + key, Value: e.Agents[key], Origin: origin})
 	}
-
-	e.Facts = append(e.Facts, Fact{
-		Key:    "agents",
-		Value:  mapShown(e.Agents),
-		Origin: declaredAcross(layers),
-	})
 }

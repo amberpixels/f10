@@ -65,31 +65,6 @@ type view struct {
 	Roots           []string             `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
 
-// withAgents puts the merged agents map on the view: one row per key in
-// the facts table, in place of the project's single agents fact, so each
-// value shows its own origin, the user's file included. A user file the
-// vocabulary refuses is a problem, shown like a project.md one.
-func (v *view) withAgents(eff *facts.Effective) {
-	m, err := agentLayers(eff, "")
-	if err != nil {
-		v.Problems = append(v.Problems, facts.Problem{Error: true, Message: err.Error()})
-
-		return
-	}
-
-	if len(m) == 0 {
-		return
-	}
-
-	v.Facts = slices.DeleteFunc(slices.Clone(v.Facts), func(f facts.Fact) bool { return f.Key == "agents" })
-
-	for _, key := range slices.Sorted(maps.Keys(m)) {
-		e := m[key]
-		v.Agents = append(v.Agents, e)
-		v.Facts = append(v.Facts, facts.Fact{Key: "agents." + key, Value: e.Value, Origin: e.src})
-	}
-}
-
 // A paceEntry is one pace key with its dials and the layer that set it.
 type paceEntry struct {
 	Key    string       `json:"key"` // <pace>.<step>, or pace for the default
@@ -97,54 +72,43 @@ type paceEntry struct {
 	Origin facts.Origin `json:"origin"`
 }
 
-// withPaces puts every pace key on the view, the user's file and the
-// built-ins included, in place of the project's paces and pace facts, and
-// each pace that breaks a flow as a problem.
-func (v *view) withPaces(eff *facts.Effective) {
-	set, err := paceSet(eff)
-	if err != nil {
-		v.Problems = append(v.Problems, facts.Problem{Error: true, Message: err.Error()})
-
-		return
+// withAgents and withPaces list the merged agents map and every pace key,
+// the user's file and the built-ins included; facts already holds each as a
+// fact and each problem.
+func (v *view) withAgents(eff *facts.Effective) {
+	for _, key := range slices.Sorted(maps.Keys(eff.Agents)) {
+		o := eff.AgentsOrigin[key]
+		v.Agents = append(v.Agents, agentEntry{Key: key, Value: eff.Agents[key], Origin: o.String()})
 	}
+}
 
-	v.Facts = slices.DeleteFunc(slices.Clone(v.Facts), func(f facts.Fact) bool {
-		return f.Key == "paces" || f.Key == "pace" || f.Key == "ceiling"
-	})
+func (v *view) withPaces(eff *facts.Effective) {
+	set := eff.PaceSet
 
 	for _, name := range set.Names() {
 		p := set.Paces[name]
-		if len(p) == 0 {
-			e := paceEntry{
-				Key:    "paces." + name,
-				Value:  "(no dials: flows run as declared)",
-				Origin: set.Origins[name],
-			}
-			v.Paces = append(v.Paces, e)
-			v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})
+		if p.Empty() {
+			v.Paces = append(v.Paces, paceEntry{
+				Key: "paces." + name, Value: "(no dials: flows run as declared)", Origin: set.Origins[name],
+			})
 
 			continue
 		}
 
-		for _, key := range slices.Sorted(maps.Keys(p)) {
-			e := paceEntry{Key: "paces." + name + "." + key, Value: p[key].Shown(), Origin: set.Origins[name+"."+key]}
-			v.Paces = append(v.Paces, e)
-			v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})
+		for _, key := range p.Keys() {
+			v.Paces = append(v.Paces, paceEntry{
+				Key: "paces." + name + "." + key, Value: p.Shown(key), Origin: set.Origins[name+"."+key],
+			})
 		}
 	}
 
 	if set.Default != "" {
 		v.Pace = &paceEntry{Key: "pace", Value: set.Default, Origin: set.DefaultOrigin}
-		v.Facts = append(v.Facts, facts.Fact{Key: "pace", Value: set.Default, Origin: set.DefaultOrigin})
-
-		if _, err := set.Lookup(set.Default); err != nil {
-			v.Problems = append(v.Problems, facts.Problem{Error: true, Message: "pace: " + err.Error()})
-		}
 	}
 
-	for _, key := range slices.Sorted(maps.Keys(set.Ceiling)) {
+	for _, key := range set.Ceiling.Keys() {
 		v.Ceiling = append(v.Ceiling, paceEntry{
-			Key: "ceiling." + key, Value: set.Ceiling[key].Shown(), Origin: set.CeilingOrigins[key],
+			Key: "ceiling." + key, Value: set.Ceiling.Shown(key), Origin: set.CeilingOrigins[key],
 		})
 	}
 
@@ -152,21 +116,6 @@ func (v *view) withPaces(eff *facts.Effective) {
 		v.Ceiling = append(v.Ceiling, paceEntry{
 			Key: "ceiling.except", Value: strings.Join(set.Except, ", "), Origin: set.ExceptOrigin,
 		})
-	}
-
-	for _, e := range v.Ceiling {
-		v.Facts = append(v.Facts, facts.Fact{Key: e.Key, Value: e.Value, Origin: e.Origin})
-	}
-
-	known := map[string]bool{}
-	for _, p := range v.Problems {
-		known[p.Message] = true
-	}
-
-	for _, bad := range set.PaceProblems(eff.Flows) {
-		if !known[bad] {
-			v.Problems = append(v.Problems, facts.Problem{Message: bad})
-		}
 	}
 }
 

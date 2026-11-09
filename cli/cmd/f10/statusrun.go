@@ -98,7 +98,7 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 	src := gateSource{
 		events: events,
 		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		flows:  t.eff.Flows,
+		eff:    t.eff,
 		review: t.eff.Review,
 		store:  &lore.Store{Root: loreRootFor(t)},
 		host:   h,

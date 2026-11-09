@@ -1,6 +1,7 @@
 package facts
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -17,36 +18,118 @@ import (
 // whichever flow runs. A pace tunes or skips the entries a flow has and
 // never adds one, since adding work is the flow's job.
 
-// PaceFinishKey is the one key that names no flow entry: whether a run that
-// would stop at an open PR goes on to finish.
+// PaceFinishKey is the key, written beside the step keys, that names no
+// flow entry: whether a run that would stop at an open PR goes on to finish.
 const PaceFinishKey = "finish"
 
 // PaceOriginBuiltin is the origin of a dial f10 ships.
 var PaceOriginBuiltin = OriginOf(OriginBuiltin)
 
-// Dials is one step's settings under a pace. Each field belongs to one
-// step (dialSteps); a zero field sets nothing.
+// Dials is one step's settings under a pace. Each field belongs to the step
+// its row in dials names; a zero field sets nothing.
 type Dials struct {
 	Off    bool   `yaml:"-"`
 	On     bool   `yaml:"-"` // a ceiling's word: the step runs under every pace
-	Finish string `yaml:"-"` // on or off, the finish key only
 	By     string `yaml:"by,omitempty"`
 	Rounds int    `yaml:"rounds,omitempty"`
 	Depth  string `yaml:"depth,omitempty"`
 	Effort string `yaml:"effort,omitempty"`
 	Marker string `yaml:"marker,omitempty"`
 
-	word   string // a scalar shorthand no rule read, refused by CheckPace
+	word   string // a scalar shorthand no rule read, refused by the checks
 	mapped bool   // written as a map, which the finish key refuses
 }
 
-// dialSteps is the step each dial belongs to, in the order they print.
-var dialSteps = []struct{ dial, step string }{
-	{"by", "review"},
-	{"rounds", "review"},
-	{"depth", "review"},
-	{"effort", "judge"},
-	{"marker", "pr"},
+// A dialSpec is everything one dial means, so reading, checking, capping
+// and resolving walk one table instead of a switch each.
+type dialSpec struct {
+	name, step string
+	get        func(Dials) string
+	set        func(*Dials, string)
+	check      func(string) string // why a value is refused; "" when it reads
+	order      []string            // fast to slow; nil leaves it uncappable
+	silent     string              // the value a cap reads an unset dial as; "" leaves it uncapped
+	agent      bool                // laid on the agents map, not on the flow entry
+}
+
+// dials is every dial, in the order they print.
+var dials = []dialSpec{
+	{
+		name: "by", step: "review",
+		get: func(d Dials) string { return d.By }, set: func(d *Dials, v string) { d.By = v },
+		check: func(v string) string {
+			if validBy(v) {
+				return ""
+			}
+
+			return "by " + v + " is not local, host, ci, local+ci, ci? or local+ci?"
+		},
+	},
+	{
+		name: "rounds", step: "review",
+		get: func(d Dials) string {
+			if d.Rounds == 0 {
+				return ""
+			}
+
+			return strconv.Itoa(d.Rounds)
+		},
+		set: func(d *Dials, v string) { d.Rounds, _ = strconv.Atoi(v) },
+		check: func(v string) string {
+			if v == "1" || v == "2" {
+				return ""
+			}
+
+			return "rounds " + v + " is not 1 or 2"
+		},
+		order:  []string{"1", "2"},
+		silent: "1", // an unset review runs one round, the fast end
+	},
+	{
+		name: "depth", step: "review",
+		get: func(d Dials) string { return d.Depth }, set: func(d *Dials, v string) { d.Depth = v },
+		check: func(v string) string {
+			if v == "full" || v == "light" {
+				return ""
+			}
+
+			return "depth " + v + " is not full or light"
+		},
+		order: []string{"light", "full"},
+	},
+	{
+		name: "effort", step: "judge",
+		get: func(d Dials) string { return d.Effort }, set: func(d *Dials, v string) { d.Effort = v },
+		check: func(v string) string {
+			prof, err := agentctl.ParseProfile(v)
+			if err == nil && (prof.Effort == "" || prof.Model != "" || prof.Kind != "") {
+				err = fmt.Errorf("%q is not an effort word", v)
+			}
+
+			if err != nil {
+				return fmt.Sprintf("effort %v", err)
+			}
+
+			return ""
+		},
+		// an unset effort keeps the agents map's, the project's own choice
+		order: agentctl.Kinds[agentctl.DefaultKind].Efforts,
+		agent: true,
+	},
+	{
+		name: "marker", step: "pr",
+		get: func(d Dials) string { return d.Marker }, set: func(d *Dials, v string) { d.Marker = v },
+		check: func(string) string { return "" },
+	},
+}
+
+func dialNames() []string {
+	names := make([]string, len(dials))
+	for i, s := range dials {
+		names[i] = s.name
+	}
+
+	return names
 }
 
 // UnmarshalYAML reads a map of dials or one scalar word; which word means
@@ -65,11 +148,12 @@ func (d *Dials) UnmarshalYAML(node *yaml.Node) error {
 	// node.Decode keeps no KnownFields, so an unknown dial is refused here
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i].Value
-		if !slices.ContainsFunc(dialSteps, func(s struct{ dial, step string }) bool { return s.dial == key }) {
+		if !slices.Contains(dialNames(), key) {
 			return fmt.Errorf(
-				"line %d: %q is not a dial (by, rounds, depth, effort, marker)",
+				"line %d: %q is not a dial (%s)",
 				node.Content[i].Line,
 				key,
+				strings.Join(dialNames(), ", "),
 			)
 		}
 	}
@@ -87,50 +171,14 @@ func (d *Dials) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// Pace is one pace's dials by step key.
-type Pace map[string]Dials
-
-// UnmarshalYAML reads each key's shorthand: off for any step, on or off
-// for finish, a half for review (`review: local`).
-func (p *Pace) UnmarshalYAML(node *yaml.Node) error {
-	var raw map[string]Dials
-	if err := node.Decode(&raw); err != nil {
-		return err
-	}
-
-	*p = Pace{}
-
-	for key, d := range raw {
-		key = strings.ToLower(strings.TrimSpace(key))
-
-		switch {
-		case d.word == "":
-		case key == PaceFinishKey && (d.word == "on" || d.word == "off"):
-			d = Dials{Finish: d.word}
-		case d.word == "off":
-			d = Dials{Off: true}
-		case d.word == "on":
-			d = Dials{On: true}
-		case key == "review" && d.word != "on":
-			d = Dials{By: d.word}
-		}
-
-		(*p)[key] = d
-	}
-
-	return nil
-}
-
-// MarshalYAML writes the shorthand a word stands for, so a migrated
-// finish or off reads back as it was written.
+// MarshalYAML writes the shorthand a word stands for, so a migrated off
+// reads back as it was written.
 func (d Dials) MarshalYAML() (any, error) {
 	switch {
 	case d.Off:
 		return "off", nil
 	case d.On:
 		return "on", nil
-	case d.Finish != "":
-		return d.Finish, nil
 	}
 
 	type plain Dials
@@ -138,44 +186,197 @@ func (d Dials) MarshalYAML() (any, error) {
 	return plain(d), nil
 }
 
-// Shown is the dials as `by local, rounds 2`, or off, on, or the finish word.
+// Shown is the dials as `by local, rounds 2`, or off or on.
 func (d Dials) Shown() string {
 	switch {
 	case d.Off:
 		return "off"
 	case d.On:
 		return "on"
-	case d.Finish != "":
-		return d.Finish
 	}
 
 	var parts []string
-	for _, s := range dialSteps {
-		if v := d.value(s.dial); v != "" {
-			parts = append(parts, s.dial+" "+v)
+	for _, s := range dials {
+		if v := s.get(d); v != "" {
+			parts = append(parts, s.name+" "+v)
 		}
 	}
 
 	return strings.Join(parts, ", ")
 }
 
-func (d Dials) value(dial string) string {
-	switch dial {
-	case "by":
-		return d.By
-	case "rounds":
-		if d.Rounds != 0 {
-			return strconv.Itoa(d.Rounds)
-		}
-	case "depth":
-		return d.Depth
-	case "effort":
-		return d.Effort
-	case "marker":
-		return d.Marker
+// Pace is one pace: dials by step, and the finish word beside them.
+type Pace struct {
+	Steps  map[string]Dials
+	Finish string // on or off; "" says nothing
+
+	finishBad bool // finish was written as something other than on or off
+}
+
+// UnmarshalYAML reads each key's shorthand: off for any step, a half for
+// review (`review: local`), and on or off for finish.
+func (p *Pace) UnmarshalYAML(node *yaml.Node) error {
+	var raw map[string]Dials
+	if err := node.Decode(&raw); err != nil {
+		return err
 	}
 
-	return ""
+	*p = Pace{Steps: map[string]Dials{}}
+
+	for key, d := range raw {
+		key = strings.ToLower(strings.TrimSpace(key))
+
+		if key == PaceFinishKey {
+			if d.mapped || (d.word != "on" && d.word != "off") {
+				p.finishBad = true
+			} else {
+				p.Finish = d.word
+			}
+
+			continue
+		}
+
+		switch {
+		case d.word == "":
+		case d.word == "off":
+			d = Dials{Off: true}
+		case d.word == "on":
+			d = Dials{On: true}
+		case key == "review":
+			d = Dials{By: d.word}
+		}
+
+		p.Steps[key] = d
+	}
+
+	return nil
+}
+
+// MarshalYAML writes the steps and finish side by side, as they are read.
+func (p Pace) MarshalYAML() (any, error) {
+	out := map[string]any{}
+	for key, d := range p.Steps {
+		out[key] = d
+	}
+
+	if p.Finish != "" {
+		out[PaceFinishKey] = p.Finish
+	}
+
+	return out, nil
+}
+
+// Keys is every key the pace sets, finish among the steps, sorted.
+func (p Pace) Keys() []string {
+	keys := slices.Collect(maps.Keys(p.Steps))
+	if p.written() {
+		keys = append(keys, PaceFinishKey)
+	}
+
+	slices.Sort(keys)
+
+	return keys
+}
+
+// Shown is one key's value as the pace states it.
+func (p Pace) Shown(key string) string {
+	if key == PaceFinishKey {
+		return p.Finish
+	}
+
+	return p.Steps[key].Shown()
+}
+
+// Empty reports a pace that sets nothing.
+func (p Pace) Empty() bool { return len(p.Steps) == 0 && !p.written() }
+
+// written reports a finish key the pace was given, well formed or not.
+func (p Pace) written() bool { return p.Finish != "" || p.finishBad }
+
+func (p Pace) clone() Pace {
+	c := p
+	c.Steps = maps.Clone(p.Steps)
+
+	if c.Steps == nil {
+		c.Steps = map[string]Dials{}
+	}
+
+	return c
+}
+
+// keyRules is what a pace and a ceiling check differently.
+type keyRules struct {
+	catchup  string                     // why the catchup key is refused
+	word     string                     // how a stray shorthand is corrected
+	refuse   func(string, Dials) string // a step's dials only this one refuses
+	ordered  bool                       // a cap needs an order from fast to slow
+	location string                     // paces.<name>. or ceiling.
+}
+
+// checkKeys reports what is wrong with each key of p, each line naming its
+// location.
+func checkKeys(p Pace, r keyRules) []string {
+	var bad []string
+
+	for _, key := range p.Keys() {
+		at := r.location + key
+
+		if key == PaceFinishKey {
+			if p.finishBad || (p.Finish != "on" && p.Finish != "off") {
+				bad = append(bad, at+": finish is on or off")
+			}
+
+			continue
+		}
+
+		d := p.Steps[key]
+
+		switch {
+		case key == "catchup":
+			bad = append(bad, at+": "+r.catchup)
+
+			continue
+		case !stepNameRE.MatchString(key):
+			bad = append(bad, fmt.Sprintf("%s: %q is not a step name", at, key))
+
+			continue
+		case d.word != "":
+			bad = append(bad, fmt.Sprintf("%s: %q is not a shorthand; %s", at, d.word, r.word))
+
+			continue
+		}
+
+		if why := r.refuse(key, d); why != "" {
+			bad = append(bad, at+": "+why)
+
+			continue
+		}
+
+		if r.ordered {
+			for _, s := range dials {
+				if s.order == nil && s.get(d) != "" {
+					bad = append(bad,
+						fmt.Sprintf("%s: %s has no order from fast to slow, so a ceiling cannot cap it", at, s.name))
+				}
+			}
+		}
+
+		for _, s := range dials {
+			if s.get(d) != "" && s.step != key {
+				bad = append(bad, fmt.Sprintf("%s: %s is a %s dial", at, s.name, s.step))
+			}
+		}
+
+		for _, s := range dials {
+			if v := s.get(d); v != "" {
+				if why := s.check(v); why != "" {
+					bad = append(bad, at+": "+why)
+				}
+			}
+		}
+	}
+
+	return bad
 }
 
 // CheckPace reports what is wrong with one pace, each line naming
@@ -187,77 +388,21 @@ func CheckPace(name string, p Pace) []string {
 		bad = append(bad, fmt.Sprintf("paces: %q is not a lowercase name", name))
 	}
 
-	for _, key := range slices.Sorted(maps.Keys(p)) {
-		d, at := p[key], "paces."+name+"."+key
-
-		switch {
-		case key == PaceFinishKey:
-			if d.Finish == "" || d.mapped {
-				bad = append(bad, at+": finish is on or off")
+	return append(bad, checkKeys(p, keyRules{
+		location: "paces." + name + ".",
+		catchup:  "catchup is never a flow entry; the catchup key picks merge, rebase or off",
+		word:     "write off, or a map of dials",
+		refuse: func(key string, d Dials) string {
+			switch {
+			case d.On:
+				return "on is a ceiling's word; a pace runs every entry it does not turn off"
+			case d.Off && key == "implement":
+				return "implement cannot be off, since a flow without it does no work"
 			}
 
-			continue
-		case key == "catchup":
-			bad = append(bad, at+": catchup is never a flow entry; the catchup key picks merge, rebase or off")
-
-			continue
-		case !stepNameRE.MatchString(key):
-			bad = append(bad, fmt.Sprintf("%s: %q is not a step name", at, key))
-
-			continue
-		case d.word != "":
-			bad = append(bad, fmt.Sprintf("%s: %q is not a shorthand; write off, or a map of dials", at, d.word))
-
-			continue
-		case d.On:
-			bad = append(bad, at+": on is a ceiling's word; a pace runs every entry it does not turn off")
-
-			continue
-		case d.Off && key == "implement":
-			bad = append(bad, at+": implement cannot be off, since a flow without it does no work")
-
-			continue
-		}
-
-		for _, s := range dialSteps {
-			if d.value(s.dial) != "" && s.step != key {
-				bad = append(bad, fmt.Sprintf("%s: %s is a %s dial", at, s.dial, s.step))
-			}
-		}
-
-		bad = append(bad, d.checkValues(at)...)
-	}
-
-	return bad
-}
-
-func (d Dials) checkValues(at string) []string {
-	var bad []string
-
-	if d.By != "" && !validBy(d.By) {
-		bad = append(bad, fmt.Sprintf("%s: by %s is not local, host, ci, local+ci, ci? or local+ci?", at, d.By))
-	}
-
-	if d.Rounds != 0 && d.Rounds != 1 && d.Rounds != 2 {
-		bad = append(bad, fmt.Sprintf("%s: rounds %d is not 1 or 2", at, d.Rounds))
-	}
-
-	if d.Depth != "" && d.Depth != "full" && d.Depth != "light" {
-		bad = append(bad, fmt.Sprintf("%s: depth %s is not full or light", at, d.Depth))
-	}
-
-	if d.Effort != "" {
-		prof, err := agentctl.ParseProfile(d.Effort)
-		if err == nil && (prof.Effort == "" || prof.Model != "" || prof.Kind != "") {
-			err = fmt.Errorf("%q is not an effort word", d.Effort)
-		}
-
-		if err != nil {
-			bad = append(bad, fmt.Sprintf("%s: effort %v", at, err))
-		}
-	}
-
-	return bad
+			return ""
+		},
+	})...)
 }
 
 // A Ceiling caps every pace but the ones Except names: a dial the pace
@@ -302,8 +447,12 @@ func (c *Ceiling) UnmarshalYAML(node *yaml.Node) error {
 // MarshalYAML writes the dials and except side by side, as they are read.
 func (c Ceiling) MarshalYAML() (any, error) {
 	out := map[string]any{}
-	for key, d := range c.Pace {
+	for key, d := range c.Pace.Steps {
 		out[key] = d
+	}
+
+	if c.Pace.Finish != "" {
+		out[PaceFinishKey] = c.Pace.Finish
 	}
 
 	if len(c.Except) > 0 {
@@ -314,56 +463,22 @@ func (c Ceiling) MarshalYAML() (any, error) {
 }
 
 // CheckCeiling reports what is wrong with a ceiling, each line naming
-// ceiling.<key>. A cap needs an order from fast to slow, so off, by and
-// marker are refused.
+// ceiling.<key>. A cap needs an order from fast to slow, so off and the
+// dials without one are refused.
 func CheckCeiling(c Ceiling) []string {
-	var bad []string
-
-	for _, key := range slices.Sorted(maps.Keys(c.Pace)) {
-		d, at := c.Pace[key], "ceiling."+key
-
-		switch {
-		case key == PaceFinishKey:
-			if d.Finish == "" || d.mapped {
-				bad = append(bad, at+": finish is on or off")
+	bad := checkKeys(c.Pace, keyRules{
+		location: "ceiling.",
+		catchup:  "catchup is never a flow entry",
+		word:     "write on, or a map of dials",
+		refuse: func(_ string, d Dials) string {
+			if d.Off {
+				return "a ceiling never skips a step; write on to keep it running under every pace"
 			}
 
-			continue
-		case key == "catchup":
-			bad = append(bad, at+": catchup is never a flow entry")
-
-			continue
-		case !stepNameRE.MatchString(key):
-			bad = append(bad, fmt.Sprintf("%s: %q is not a step name", at, key))
-
-			continue
-		case d.word != "":
-			bad = append(bad, fmt.Sprintf("%s: %q is not a shorthand; write on, or a map of dials", at, d.word))
-
-			continue
-		case d.Off:
-			bad = append(bad, at+": a ceiling never skips a step; write on to keep it running under every pace")
-
-			continue
-		}
-
-		for _, dial := range []string{"by", "marker"} {
-			if d.value(dial) != "" {
-				bad = append(
-					bad,
-					fmt.Sprintf("%s: %s has no order from fast to slow, so a ceiling cannot cap it", at, dial),
-				)
-			}
-		}
-
-		for _, s := range dialSteps {
-			if d.value(s.dial) != "" && s.step != key {
-				bad = append(bad, fmt.Sprintf("%s: %s is a %s dial", at, s.dial, s.step))
-			}
-		}
-
-		bad = append(bad, d.checkValues(at)...)
-	}
+			return ""
+		},
+		ordered: true,
+	})
 
 	for _, name := range c.Except {
 		if !flowNameRE.MatchString(name) {
@@ -379,25 +494,30 @@ func CheckCeiling(c Ceiling) []string {
 func BuiltinPaces() map[string]Pace {
 	return map[string]Pace{
 		"slow": {
-			"review":      {By: "local+ci?", Rounds: 2},
-			PaceFinishKey: {Finish: "off"},
+			Steps:  map[string]Dials{"review": {By: "local+ci?", Rounds: 2}},
+			Finish: "off",
 		},
 		"medium": {
-			PaceFinishKey: {Finish: "on"},
+			Steps:  map[string]Dials{},
+			Finish: "on",
 		},
 		"fast": {
-			"review":      {By: "local", Rounds: 1},
-			"judge":       {Effort: "low"},
-			PaceFinishKey: {Finish: "on"},
+			Steps: map[string]Dials{
+				"review": {By: "local", Rounds: 1},
+				"judge":  {Effort: "low"},
+			},
+			Finish: "on",
 		},
 		"ultra": {
-			"plan":        {Off: true},
-			"judge":       {Off: true},
-			"cleanup":     {Off: true},
-			"demo":        {Off: true},
-			"review":      {By: "local", Depth: "light"},
-			"pr":          {Marker: "fast"},
-			PaceFinishKey: {Finish: "on"},
+			Steps: map[string]Dials{
+				"plan":    {Off: true},
+				"judge":   {Off: true},
+				"cleanup": {Off: true},
+				"demo":    {Off: true},
+				"review":  {By: "local", Depth: "light"},
+				"pr":      {Marker: "fast"},
+			},
+			Finish: "on",
 		},
 	}
 }
@@ -407,7 +527,7 @@ func BuiltinPaces() map[string]Pace {
 type PaceSet struct {
 	Remote        bool // Review declares a remote reviewer, which an optional CI review needs
 	Paces         map[string]Pace
-	Origins       map[string]Origin // <pace>.<key> to the layer that set it
+	Origins       map[string]Origin // <pace> and <pace>.<key> to the layer that set it
 	Default       string            // pace: the pace a run takes when it names none; "" for none
 	DefaultOrigin Origin
 
@@ -429,26 +549,33 @@ func NewPaceSet() *PaceSet {
 // keeps the lower layer's judge. An empty pace still declares its name.
 func (s *PaceSet) Over(paces map[string]Pace, origin func(name, key string) Origin) {
 	for name, p := range paces {
-		if s.Paces[name] == nil {
-			s.Paces[name] = Pace{}
+		cur, ok := s.Paces[name]
+		if !ok {
+			cur = Pace{Steps: map[string]Dials{}}
 			s.Origins[name] = origin(name, "")
 		}
 
-		for key, d := range p {
-			s.Paces[name][key] = d
+		cur = cur.clone()
+
+		for key, d := range p.Steps {
+			cur.Steps[key] = d
 			s.Origins[name+"."+key] = origin(name, key)
 		}
+
+		if p.Finish != "" {
+			cur.Finish = p.Finish
+			s.Origins[name+"."+PaceFinishKey] = origin(name, PaceFinishKey)
+		}
+
+		s.Paces[name] = cur
 	}
 }
 
-// effortRank orders effort words from fast (low) to slow (max).
-func effortRank(word string) int {
-	return slices.Index(agentctl.Kinds[agentctl.DefaultKind].Efforts, word)
-}
+func dialRank(s dialSpec, v string) int { return slices.Index(s.order, v) }
 
 // Exempt says whether the ceiling leaves the named pace alone.
 func (s *PaceSet) Exempt(name string) bool {
-	return len(s.Ceiling) == 0 || slices.Contains(s.Except, name)
+	return s.Ceiling.Empty() || slices.Contains(s.Except, name)
 }
 
 // CeilingOrigin is how a dial the ceiling set names its source.
@@ -465,11 +592,7 @@ func (s *PaceSet) Capped(name string) (Pace, map[string]Dial) {
 		return src, nil
 	}
 
-	p := maps.Clone(src)
-	if p == nil {
-		p = Pace{}
-	}
-
+	p := src.clone()
 	caps := map[string]Dial{}
 	said := func(v string) string {
 		who := "pace " + name
@@ -484,18 +607,14 @@ func (s *PaceSet) Capped(name string) (Pace, map[string]Dial) {
 		return who + " said " + v
 	}
 
-	for key, c := range s.Ceiling {
-		d, origin := p[key], s.CeilingOrigin(key)
+	if s.Ceiling.Finish == "off" && p.Finish != "off" {
+		origin := s.CeilingOrigin(PaceFinishKey)
+		caps[PaceFinishKey] = Dial{Name: PaceFinishKey, Value: "off", Origin: origin, Capped: said(p.Finish)}
+		p.Finish = "off"
+	}
 
-		if key == PaceFinishKey {
-			if c.Finish == "off" && d.Finish != "off" {
-				caps[key] = Dial{Name: key, Value: "off", Origin: origin, Capped: said(d.Finish)}
-				p[key] = Dials{Finish: "off"}
-			}
-
-			continue
-		}
-
+	for key, c := range s.Ceiling.Steps {
+		d, origin := p.Steps[key], s.CeilingOrigin(key)
 		before := d
 
 		if c.On && d.Off {
@@ -503,23 +622,24 @@ func (s *PaceSet) Capped(name string) (Pace, map[string]Dial) {
 			d.Off = false
 		}
 
-		if c.Rounds == 2 && d.Rounds != 2 && !d.Off {
-			caps[key+".rounds"] = Dial{Name: "rounds", Value: "2", Origin: origin, Capped: said(d.value("rounds"))}
-			d.Rounds = 2
-		}
+		for _, spec := range dials {
+			limit, cur := spec.get(c), spec.get(d)
+			if limit == "" || spec.order == nil || d.Off {
+				continue
+			}
 
-		if c.Depth == "full" && d.Depth == "light" && !d.Off {
-			caps[key+".depth"] = Dial{Name: "depth", Value: "full", Origin: origin, Capped: said(d.Depth)}
-			d.Depth = "full"
-		}
+			if cur == "" && spec.silent == "" {
+				continue
+			}
 
-		if c.Effort != "" && d.Effort != "" && !d.Off && effortRank(d.Effort) < effortRank(c.Effort) {
-			caps[key+".effort"] = Dial{Name: "effort", Value: c.Effort, Origin: origin, Capped: said(d.Effort)}
-			d.Effort = c.Effort
+			if dialRank(spec, cmp.Or(cur, spec.silent)) < dialRank(spec, limit) {
+				caps[key+"."+spec.name] = Dial{Name: spec.name, Value: limit, Origin: origin, Capped: said(cur)}
+				spec.set(&d, limit)
+			}
 		}
 
 		if d != before {
-			p[key] = d
+			p.Steps[key] = d
 		}
 	}
 
@@ -535,7 +655,7 @@ func (s *PaceSet) Lookup(name string) (Pace, error) {
 		return p, nil
 	}
 
-	return nil, fmt.Errorf("no pace %q; the paces are %s (f10 config lists their dials)",
+	return Pace{}, fmt.Errorf("no pace %q; the paces are %s (f10 config lists their dials)",
 		name, strings.Join(s.Names(), ", "))
 }
 
@@ -585,19 +705,22 @@ func (r Resolved) Run() []string {
 	return run
 }
 
-// Labeled is the entries that run as written, each with its label: the
-// list /f10:ship runs and passes to its badge.
-func (r Resolved) Labeled() []string {
-	var run []string
+// RunFlow is the entries that run, each with its label.
+func (r Resolved) RunFlow() flow.Flow {
+	var run flow.Flow
 
 	for _, e := range r.Entries {
 		if e.Skipped == "" {
-			run = append(run, e.Parsed().Written())
+			run = append(run, e.Parsed())
 		}
 	}
 
 	return run
 }
+
+// Labeled is the entries that run as written, each with its label: the
+// list /f10:ship runs and passes to its badge.
+func (r Resolved) Labeled() []string { return r.RunFlow().Written() }
 
 // Parsed is the entry as it runs, with its label.
 func (e ResolvedEntry) Parsed() flow.Entry {
@@ -636,7 +759,7 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 	for _, entry := range declared {
 		step, arg := entry.Step, entry.Arg
 		e := ResolvedEntry{Entry: entry.String(), Declared: entry.String(), Step: step, Label: entry.Label}
-		d, ok := p[step]
+		d, ok := p.Steps[step]
 
 		if c, unskipped := caps[step+".run"]; unskipped {
 			e.Dials = append(e.Dials, c)
@@ -647,13 +770,13 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 		case d.Off:
 			e.Skipped = "off in " + from(step)
 		default:
-			for _, ds := range dialSteps {
-				v := d.value(ds.dial)
-				if v == "" || ds.step != step {
-					continue
+			for _, spec := range dials {
+				v := spec.get(d)
+				if v == "" || spec.step != step || spec.agent {
+					continue // an agent dial reaches the step through its profile (f10 agents)
 				}
 
-				if ds.dial == "by" {
+				if spec.name == "by" {
 					if arg != "" {
 						continue // the entry's argument names the half
 					}
@@ -661,7 +784,7 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 					e.Entry = step + ":" + v
 				}
 
-				e.Dials = append(e.Dials, dial(step, ds.dial, v))
+				e.Dials = append(e.Dials, dial(step, spec.name, v))
 			}
 		}
 
@@ -674,8 +797,8 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 		}
 
 		// The pr step runs the handoff itself, so it learns handoff: off from a
-		// dial; dialSteps cannot carry it, since it reads another step's key.
-		if h := p[handoffStep]; step == "pr" && e.Skipped == "" && h.Off {
+		// dial; the dial table cannot carry it, since it reads another step's key.
+		if h := p.Steps[handoffStep]; step == "pr" && e.Skipped == "" && h.Off {
 			e.Dials = append(e.Dials, Dial{Name: handoffStep, Value: "off", Origin: from(handoffStep)})
 		}
 
@@ -691,8 +814,8 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 		return r, fmt.Errorf("pace %s on the %s flow: %s", pace, flowName, strings.Join(bad, "; "))
 	}
 
-	if d, ok := p[PaceFinishKey]; ok && d.Finish != "" && flow.Of(run).Delivered() == "pr" {
-		fin := Dial{Name: PaceFinishKey, Value: d.Finish, Origin: from(PaceFinishKey)}
+	if p.Finish != "" && flow.Of(run).Delivered() == "pr" {
+		fin := Dial{Name: PaceFinishKey, Value: p.Finish, Origin: from(PaceFinishKey)}
 		if c, ok := caps[PaceFinishKey]; ok {
 			fin = c
 		}
@@ -765,79 +888,116 @@ func published(entries []ResolvedEntry) bool {
 	})
 }
 
-// pacesShown is each pace's keys as `fast: review (by local, rounds 1), finish (on)`.
-func pacesShown(paces map[string]Pace) string {
-	var shown []string
+// DefaultPaceName is the pace an unnamed run takes when no layer names one.
+const DefaultPaceName = "medium"
 
-	for _, name := range slices.Sorted(maps.Keys(paces)) {
-		var keys []string
-		for _, key := range slices.Sorted(maps.Keys(paces[name])) {
-			keys = append(keys, key+" ("+paces[name][key].Shown()+")")
-		}
-
-		shown = append(shown, name+": "+strings.Join(keys, ", "))
-	}
-
-	return strings.Join(shown, "; ")
-}
-
-// resolvePaces records the project's paces, default pace and ceiling. The
-// user's layer and the built-ins are the caller's to lay under them.
+// resolvePaces records the merged paces, default pace and ceiling, the
+// user's file under the project's layers, and builds the one pace set every
+// run resolves against.
 func (e *Effective) resolvePaces(fm *layered) {
-	layers := map[string]bool{}
-
 	if fm.Paces != nil {
 		e.Paces = map[string]Pace{}
 		e.PacesOrigin = map[string]Origin{}
 
 		for name, p := range fm.Paces {
-			e.Paces[name] = maps.Clone(p)
+			e.Paces[name] = p.clone()
+			e.PacesOrigin[name] = fm.originOf("paces." + name)
 
-			for key := range p {
-				o := fm.origin["paces."+name+"."+key]
-				e.PacesOrigin[name+"."+key] = DeclaredFrontmatter(o)
-				layers[o] = true
+			for _, key := range p.Keys() {
+				e.PacesOrigin[name+"."+key] = fm.originOf("paces." + name + "." + key)
 			}
 		}
 	}
 
 	if fm.Pace != "" {
 		e.Pace = fm.Pace
-		e.PaceOrigin = DeclaredFrontmatter(fm.origin["pace"])
-	}
-
-	if e.Paces != nil {
-		e.Facts = append(e.Facts, Fact{
-			Key:    "paces",
-			Value:  pacesShown(e.Paces),
-			Origin: declaredAcross(layers),
-		})
-	}
-
-	if e.Pace != "" {
-		e.Facts = append(e.Facts, Fact{Key: "pace", Value: e.Pace, Origin: e.PaceOrigin})
+		e.PaceOrigin = fm.originOf("pace")
 	}
 
 	e.resolveCeiling(fm)
 
-	if e.Paces == nil && e.Ceiling == nil {
-		return
-	}
-
-	// the user's file may change these paces, so a run reports the final
-	// word; this catches the project's own mistakes early
 	s := NewPaceSet()
 	s.Remote = e.Review.Remote()
-	s.Over(e.Paces, func(name, key string) Origin { return e.PacesOrigin[name+"."+key] })
-	s.Ceiling, s.CeilingOrigins, s.Except = e.Ceiling, e.CeilingOrigin, e.CeilingExcept
+	s.Over(e.Paces, func(name, key string) Origin {
+		if key == "" {
+			return e.PacesOrigin[name]
+		}
+
+		return e.PacesOrigin[name+"."+key]
+	})
+
+	if e.Pace != "" {
+		s.Default, s.DefaultOrigin = e.Pace, e.PaceOrigin
+	}
+
+	s.Ceiling, s.CeilingOrigins = e.Ceiling, e.CeilingOrigin
+	s.Except, s.ExceptOrigin = e.CeilingExcept, e.CeilingExceptOrigin
+	e.PaceSet = s
+
+	e.paceFacts()
+
+	for _, name := range s.Except {
+		if _, err := s.Lookup(name); err != nil {
+			e.problem(true, "ceiling.except (%s): %v", s.ExceptOrigin, err)
+		}
+	}
+
+	if s.Default != "" {
+		if _, err := s.Lookup(s.Default); err != nil {
+			e.problem(true, "pace: %v", err)
+		}
+	}
 
 	for _, bad := range s.PaceProblems(e.Flows) {
 		e.problem(false, "%s", bad)
 	}
 }
 
-// DefaultPaceName is the pace an unnamed run takes when no layer names one.
-const DefaultPaceName = "medium"
+// paceFacts is every pace key, the built-ins included, then the default
+// pace and the ceiling, each with the layer that set it.
+func (e *Effective) paceFacts() {
+	s := e.PaceSet
+
+	for _, name := range s.Names() {
+		p := s.Paces[name]
+		if p.Empty() {
+			e.Facts = append(e.Facts, Fact{
+				Key:    "paces." + name,
+				Value:  "(no dials: flows run as declared)",
+				Origin: s.Origins[name],
+			})
+
+			continue
+		}
+
+		for _, key := range p.Keys() {
+			e.Facts = append(e.Facts, Fact{
+				Key:    "paces." + name + "." + key,
+				Value:  p.Shown(key),
+				Origin: s.Origins[name+"."+key],
+			})
+		}
+	}
+
+	if s.Default != "" {
+		e.Facts = append(e.Facts, Fact{Key: "pace", Value: s.Default, Origin: s.DefaultOrigin})
+	}
+
+	for _, key := range s.Ceiling.Keys() {
+		e.Facts = append(
+			e.Facts,
+			Fact{Key: "ceiling." + key, Value: s.Ceiling.Shown(key), Origin: s.CeilingOrigins[key]},
+		)
+	}
+
+	if len(s.Except) > 0 {
+		e.Facts = append(e.Facts, Fact{
+			Key:    "ceiling.except",
+			Value:  strings.Join(s.Except, ", "),
+			Origin: s.ExceptOrigin,
+		})
+	}
+}
 
 // resolveCeiling records the merged ceiling with each key's layer.
 func (e *Effective) resolveCeiling(fm *layered) {
@@ -845,33 +1005,14 @@ func (e *Effective) resolveCeiling(fm *layered) {
 		return
 	}
 
-	e.Ceiling = fm.Ceiling.Pace
-	if e.Ceiling == nil {
-		e.Ceiling = Pace{}
-	}
-
+	e.Ceiling = fm.Ceiling.Pace.clone()
 	e.CeilingOrigin = map[string]Origin{}
-	layers := map[string]bool{}
 
-	var keys []string
-
-	for _, key := range slices.Sorted(maps.Keys(e.Ceiling)) {
-		e.CeilingOrigin[key] = DeclaredFrontmatter(fm.origin["ceiling."+key])
-		layers[fm.origin["ceiling."+key]] = true
-		keys = append(keys, key+" ("+e.Ceiling[key].Shown()+")")
+	for _, key := range e.Ceiling.Keys() {
+		e.CeilingOrigin[key] = fm.originOf("ceiling." + key)
 	}
-
-	value := strings.Join(keys, ", ")
 
 	if e.CeilingExcept = fm.Ceiling.Except; e.CeilingExcept != nil {
-		e.CeilingExceptOrigin = DeclaredFrontmatter(fm.origin["ceiling.except"])
-		layers[fm.origin["ceiling.except"]] = true
-		value += "; except " + strings.Join(e.CeilingExcept, ", ")
+		e.CeilingExceptOrigin = fm.originOf("ceiling.except")
 	}
-
-	e.Facts = append(e.Facts, Fact{
-		Key:    "ceiling",
-		Value:  value,
-		Origin: declaredAcross(layers),
-	})
 }

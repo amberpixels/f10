@@ -86,23 +86,27 @@ type Effective struct {
 	// nil unless that field is detected; the field's Value is their display.
 	VerifyCommands []string `json:"-"`
 	// Agents is agents: a step, `default` or `step.kind` to the profile it
-	// runs on, the layers merged key by key; AgentsOrigin names each key's
-	// layer. Nil when none is declared.
+	// runs on, the user's file and the project's layers merged key by key;
+	// AgentsOrigin names each key's layer. Nil when none is declared.
 	Agents       map[string]string `json:"agents,omitempty"`
 	AgentsOrigin map[string]Origin `json:"agentsOrigin,omitempty"`
-	// Paces is the project's paces: merged across its layers per pace and
-	// key, PacesOrigin naming each <pace>.<key>'s layer; nil when none is
-	// declared. Pace is the declared default, "" for none.
+	// Paces is the declared paces, the user's file under the project's
+	// layers, merged per pace and key, PacesOrigin naming each <pace> and
+	// <pace>.<key>'s layer; nil when none is declared. Pace is the declared
+	// default, "" for none.
 	Paces       map[string]Pace   `json:"paces,omitempty"`
 	PacesOrigin map[string]Origin `json:"pacesOrigin,omitempty"`
 	Pace        string            `json:"pace,omitempty"`
 	PaceOrigin  Origin            `json:"paceOrigin,omitzero"`
 	// Ceiling caps every pace but those CeilingExcept names, merged key by
-	// key across the layers; nil when none is declared.
-	Ceiling             Pace              `json:"ceiling,omitempty"`
+	// key across the layers; empty when none is declared.
+	Ceiling             Pace              `json:"ceiling,omitzero"`
 	CeilingOrigin       map[string]Origin `json:"ceilingOrigin,omitempty"`
 	CeilingExcept       []string          `json:"ceilingExcept,omitempty"`
 	CeilingExceptOrigin Origin            `json:"ceilingExceptOrigin,omitzero"`
+	// PaceSet is every pace a run can name: the built-ins, then the paces
+	// above, capped by the ceiling.
+	PaceSet *PaceSet `json:"-"`
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
@@ -159,7 +163,8 @@ type section struct {
 
 // Build merges the declared layers with detection and the contract's
 // defaults into one attributed view.
-func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
+// userDir holds the user's own files, the first layer; "" is none.
+func Build(lay *layout.Layout, pb *probe.Probes, userDir string) *Effective {
 	declared := map[string]section{}
 
 	var (
@@ -167,6 +172,8 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 		fm       layered
 		problems []Problem
 	)
+
+	problems = append(problems, fm.mergeUser(userDir)...)
 
 	// a field a later layer mentions wins outright, silence keeps the earlier
 	// layer's (conventions/context.md); the frontmatter follows the same rule

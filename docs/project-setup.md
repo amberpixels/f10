@@ -321,7 +321,7 @@ The dials are:
   `by` is who reviews in a bare `review` entry: `local`, `host`, `ci`, `local+ci`, `ci?` or `local+ci?`.
   `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (a second round once round one's resolve fixed something).
   `depth` is `full` or `light`, which gives the blind reviewer a short brief (`steps/review.md`).
-- `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it.
+- `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it and `f10 flow` does not list it on the judge entry.
   It reaches a judge that spawns an agent (`--blind`); a judge running inline stays on the task agent's profile.
 - `pr: { marker }`, a word the project's `pr` overlay gives a meaning, such as a title tag that makes CI run a short pipeline.
 - `finish: on | off`, whether `f10 drive` finishes a task whose run ends at an open PR.
@@ -348,6 +348,8 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
 3. The project's `paces:`, main's then the worktree's.
 
 The run's pace is, first to last: `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`, the pace the task's branch records, the project's `pace:`, the user's `pace:`.
+`f10 status` draws a task's gates from its flow under that pace, so an entry the pace skips shows no gate.
+A `~/.f10/paces.md` the vocabulary refuses is a problem naming the file, which stops every command that acts on facts but `f10 config`, `f10 init` and `f10 doctor`.
 With none of them, the run takes `medium`.
 Its one built-in dial is `finish: on`, and a project's `paces.medium` adds its own dials beside it.
 Untuned, it runs every flow as declared, an optional CI review (`ci?`) still settled.

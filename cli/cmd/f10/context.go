@@ -49,7 +49,9 @@ func targetFor(ctx context.Context, cmd *cli.Command) (*target, error) {
 func targetAt(ctx context.Context, dir string, scoped bool, cmdName string) (*target, error) {
 	lay := layout.Locate(ctx, dir)
 	pb := probe.Run(ctx, lay)
-	eff := facts.Build(lay, pb)
+	// no home to read is no user layer, not a failed command
+	userDir, _ := storage.UserFilesDir()
+	eff := facts.Build(lay, pb, userDir)
 
 	// a fact declared wrong stops every command that acts on facts; config,
 	// init and doctor are how it is seen and fixed, so they run anyway

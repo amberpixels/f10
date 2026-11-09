@@ -495,6 +495,36 @@ type layered struct {
 	Declared
 
 	origin map[string]string
+	user   map[string]string // a label the user's own file merged under, to that file's path
+}
+
+// originOf is the layer that set key: the user's file, or a project.md's
+// frontmatter.
+func (l *layered) originOf(key string) Origin {
+	label := l.origin[key]
+	if path, ok := l.user[label]; ok {
+		return DeclaredByUser(path)
+	}
+
+	return DeclaredFrontmatter(label)
+}
+
+// mergePace lays p over the pace at name, key by key, recording each key's
+// layer under prefix.
+func (l *layered) mergePace(into, p Pace, prefix, label string) Pace {
+	into = into.clone()
+
+	for key, dials := range p.Steps {
+		into.Steps[key] = dials
+		l.origin[prefix+key] = label
+	}
+
+	if p.written() {
+		into.Finish, into.finishBad = p.Finish, p.finishBad
+		l.origin[prefix+PaceFinishKey] = label
+	}
+
+	return into
 }
 
 func (l *layered) merge(d Declared, label string) {
@@ -532,27 +562,22 @@ func (l *layered) merge(d Declared, label string) {
 			l.Paces = map[string]Pace{}
 		}
 
-		if l.Paces[name] == nil {
-			l.Paces[name] = Pace{}
+		cur, ok := l.Paces[name]
+		if !ok {
+			l.origin["paces."+name] = label
 		}
 
-		for key, dials := range p {
-			l.Paces[name][key] = dials
-			l.origin["paces."+name+"."+key] = label
-		}
+		l.Paces[name] = l.mergePace(cur, p, "paces."+name+".", label)
 	}
 
 	// the ceiling merges key by key as paces do; except is one list, and a
 	// later layer's replaces it whole
 	if d.Ceiling != nil {
 		if l.Ceiling == nil {
-			l.Ceiling = &Ceiling{Pace: Pace{}}
+			l.Ceiling = &Ceiling{}
 		}
 
-		for key, dials := range d.Ceiling.Pace {
-			l.Ceiling.Pace[key] = dials
-			l.origin["ceiling."+key] = label
-		}
+		l.Ceiling.Pace = l.mergePace(l.Ceiling.Pace, d.Ceiling.Pace, "ceiling.", label)
 
 		if d.Ceiling.Except != nil {
 			l.Ceiling.Except = d.Ceiling.Except

@@ -953,13 +953,13 @@ func TestResolveShipFlow(t *testing.T) {
 		"Local":  {name: "local"},
 		"direct": {name: "direct", planless: true},
 	} {
-		if got, err := resolveShipFlow(eff, name); err != nil || got != want {
-			t.Errorf("resolveShipFlow(%q) = %+v, %v; want %+v", name, got, err, want)
+		if got, err := pacedFlowIn(eff, nil, "", name); err != nil || got != want {
+			t.Errorf("pacedFlow(%q) = %+v, %v; want %+v", name, got, err, want)
 		}
 	}
 
 	// an unknown name fails with the list f10 flow prints
-	_, err := resolveShipFlow(eff, "fast")
+	_, err := pacedFlowIn(eff, nil, "", "fast")
 	if err == nil || !strings.Contains(err.Error(), "declares no such flow") ||
 		!strings.Contains(err.Error(), "implement push") || !strings.Contains(err.Error(), "--flow direct") {
 		t.Errorf("unknown flow = %v", err)

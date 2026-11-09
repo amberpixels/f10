@@ -22,8 +22,8 @@ import (
 // gateSource is what every task's gates read alike.
 type gateSource struct {
 	events []ledger.Event
-	main   string // where the branch config lives
-	flows  map[string]flow.Flow
+	main   string           // where the branch config lives
+	eff    *facts.Effective // the flows, the paces and the review every task resolves against
 	review facts.Review
 	store  *lore.Store
 	host   *host
@@ -103,11 +103,11 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		}
 	}
 
-	if _, ok := src.flows[name]; !ok {
+	if _, ok := src.eff.Flows[name]; !ok {
 		name = "default"
 	}
 
-	in.pipeline = src.flows[name].Ship()
+	in.pipeline = src.pipeline(ctx, name, branch)
 
 	if src.host != nil && branch != "" && src.review.Remote() {
 		h := *src.host
@@ -121,6 +121,33 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	}
 
 	return taskGates(ctx, in)
+}
+
+// pipeline is what ship runs of the named flow under the task's pace: the
+// one its branch records, else the default. A pace that no longer resolves
+// leaves the flow as declared, since status must still show the task.
+func (src gateSource) pipeline(ctx context.Context, name, branch string) flow.Flow {
+	declared := src.eff.Flows[name]
+	if src.eff.PaceSet == nil {
+		return declared.Ship()
+	}
+
+	in := runInput{}
+	if src.main != "" {
+		in.main, in.branch = src.main, branch
+	}
+
+	run, err := resolveRun(ctx, src.eff, in)
+	if err != nil {
+		return declared.Ship()
+	}
+
+	entries, err := run.entries(name)
+	if err != nil {
+		return declared.Ship()
+	}
+
+	return entries.Ship()
 }
 
 func readRemote(ctx context.Context, h host, f facts.Review, branch string) remoteState {

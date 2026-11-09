@@ -146,9 +146,9 @@ func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, st
 // rerun that slows down must be able to take finish off; with none typed,
 // the branch's record wins over the project's default.
 func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) (shipFlow, string, error) {
-	recorded, err := branchmeta.Get(ctx, in.main, branch, branchmeta.Pace)
+	recorded, err := recordedPace(ctx, in.main, branch)
 	if err != nil {
-		return shipFlow{}, "", fmt.Errorf("reading the recorded pace: %w", err)
+		return shipFlow{}, "", err
 	}
 
 	switch {

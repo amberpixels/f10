@@ -1796,7 +1796,7 @@ func TestDriveSkillsFinishByDefault(t *testing.T) {
 	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 	set := facts.NewPaceSet()
 	set.Over(
-		map[string]facts.Pace{"mine": {"judge": {Off: true}}},
+		map[string]facts.Pace{"mine": {Steps: map[string]facts.Dials{"judge": {Off: true}}}},
 		func(string, string) facts.Origin { return facts.DeclaredIn("test") },
 	)
 
@@ -1805,7 +1805,7 @@ func TestDriveSkillsFinishByDefault(t *testing.T) {
 		"mine":   "plan ship finish",
 		"slow":   "plan ship",
 	} {
-		fl, err := resolvePacedFlow(eff, set, pace, "")
+		fl, err := pacedFlowIn(eff, set, pace, "")
 		if err != nil {
 			t.Fatal(err)
 		}
