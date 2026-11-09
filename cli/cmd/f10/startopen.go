@@ -51,12 +51,7 @@ type startInput struct {
 // the note beneath the report can quote it.
 func titleLookup(t *target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		s, err := t.hostTasks(driver.VerbBranch)
-		if err != nil {
-			return "", err
-		}
-
-		return s.h.issueTitle(ctx, number)
+		return t.tasks().Title(ctx, ref.Ref{Number: number})
 	}
 }
 

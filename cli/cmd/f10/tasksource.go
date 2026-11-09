@@ -31,6 +31,9 @@ type taskSource interface {
 	Children(ctx context.Context, r ref.Ref) ([]rawChild, error)
 	// Created is zero when the tracker keeps no date f10 can read.
 	Created(ctx context.Context, r ref.Ref) (time.Time, error)
+	// Title is the title alone, for a branch slug and a finished child's row.
+	// A driver declines it, so only the host's issues answer.
+	Title(ctx context.Context, r ref.Ref) (string, error)
 
 	Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, body string) (string, error)
 	Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p props) error
@@ -69,25 +72,6 @@ func (t *target) tasks() taskSource {
 	}
 
 	return fallbackSource{first: driverSource{t: t, d: d}, rest: rest}
-}
-
-// hostTasks is the host's issues alone, for the reads that never ask a
-// driver: the branch slug's title and a finished child's title. verb names
-// what the refusal says the driver declined.
-func (t *target) hostTasks(verb string) (hostSource, error) {
-	src := t.tasks()
-	if f, ok := src.(fallbackSource); ok {
-		src = f.rest
-	}
-
-	switch s := src.(type) {
-	case hostSource:
-		return s, nil
-	case refusedSource:
-		return hostSource{}, s.refuse(verb)
-	}
-
-	return hostSource{}, errors.New("no host issues source")
 }
 
 // refusedUpFront is the refusal a write gives before stdin is read; a
@@ -185,6 +169,15 @@ func (s fallbackSource) Created(ctx context.Context, r ref.Ref) (time.Time, erro
 	}
 
 	return at, err
+}
+
+func (s fallbackSource) Title(ctx context.Context, r ref.Ref) (string, error) {
+	title, err := s.first.Title(ctx, r)
+	if declined(err) {
+		return s.rest.Title(ctx, r)
+	}
+
+	return title, err
 }
 
 func (s fallbackSource) Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, body string) (string, error) {
@@ -305,6 +298,12 @@ func (s driverSource) Children(ctx context.Context, r ref.Ref) ([]rawChild, erro
 // Created has no driver verb; the contract's read carries no date f10 parses.
 func (driverSource) Created(context.Context, ref.Ref) (time.Time, error) {
 	return time.Time{}, driver.ErrUnsupported
+}
+
+// Title has no driver verb: a driver names the branch itself, and a slug
+// from its read would rename every branch on its tracker.
+func (driverSource) Title(context.Context, ref.Ref) (string, error) {
+	return "", driver.ErrUnsupported
 }
 
 func (s driverSource) Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, body string) (string, error) {
@@ -463,6 +462,10 @@ func (s hostSource) Created(ctx context.Context, r ref.Ref) (time.Time, error) {
 	return s.h.issueCreated(ctx, r.Number)
 }
 
+func (s hostSource) Title(ctx context.Context, r ref.Ref) (string, error) {
+	return s.h.issueTitle(ctx, r.Number)
+}
+
 func (s hostSource) Comment(ctx context.Context, _ io.Writer, r ref.Ref, body string) (string, error) {
 	url, err := s.h.CommentIssue(ctx, r.Number, body)
 	if err != nil {
@@ -491,8 +494,8 @@ func (s hostSource) Create(ctx context.Context, warnTo io.Writer, nt newTask) (r
 
 // refusedSource is a tracker f10 cannot reach: not the host's issues and no
 // driver taking the verb, or the host's issues with no host CLI. Reads fail
-// plainly, writes exit 3 so capture falls back to its adapters, as the
-// driver contract's own exit 3 does.
+// plainly. Writes exit 3 so capture falls back to its adapters, except that
+// comment and update with no host CLI fail plainly (refuseWrite).
 type refusedSource struct {
 	t     *target
 	d     *driver.Driver // the driver that declined, nil when none was found
@@ -552,6 +555,10 @@ func (s refusedSource) Children(context.Context, ref.Ref) ([]rawChild, error) {
 // host's issues with no CLI fail, since that tracker does carry a date.
 func (s refusedSource) Created(context.Context, ref.Ref) (time.Time, error) {
 	return time.Time{}, s.noCLI
+}
+
+func (s refusedSource) Title(context.Context, ref.Ref) (string, error) {
+	return "", s.refuse(driver.VerbBranch)
 }
 
 func (s refusedSource) Comment(context.Context, io.Writer, ref.Ref, string) (string, error) {

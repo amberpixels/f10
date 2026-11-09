@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -81,10 +82,10 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	_, err := notion.hostTasks("")
+	_, err := notion.tasks().Title(t.Context(), ref.Ref{Number: "7"})
 	if err == nil || !strings.Contains(err.Error(), "Notion") ||
 		!strings.Contains(err.Error(), filepath.Join(root, "driver")) {
-		t.Errorf("hostTasks() = %v, want the Notion refusal naming the driver path", err)
+		t.Errorf("Title() = %v, want the Notion refusal naming the driver path", err)
 	}
 
 	github := &target{
@@ -96,8 +97,8 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	if _, err := github.hostTasks(""); err != nil {
-		t.Errorf("a GitHub tracker = %v, want its host", err)
+	if _, ok := github.tasks().(hostSource); !ok {
+		t.Errorf("a GitHub tracker = %T, want its host", github.tasks())
 	}
 }
 
@@ -148,10 +149,10 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
 	}
 	for _, verb := range verbs {
-		_, err := tg.hostTasks(verb)
+		err := refusedSource{t: tg, d: tg.driver()}.refuse(verb)
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
 			!strings.Contains(err.Error(), verbNeeds[verb]) {
-			t.Errorf("hostTasks(%s) = %v, want the driver path, the verb and what needs it", verb, err)
+			t.Errorf("refuse(%s) = %v, want the driver path, the verb and what needs it", verb, err)
 		}
 	}
 
