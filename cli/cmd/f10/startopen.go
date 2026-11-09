@@ -230,75 +230,13 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		notes = append(notes, settled.slugNote)
 	}
 
-	wts, err := gitx.Worktrees(ctx, in.main)
+	path, notes, err := openWorktree(ctx, in, name, base, dep, existing, notes)
 	if err != nil {
 		return openedTask{}, err
 	}
 
-	if dep != nil {
-		notes = append(notes, locatePlan(dep, in.plansDir, wts)...)
-	}
-
-	path := worktreeOf(wts, name)
-
-	if in.pick != nil && !in.pick.landed() && !existing.remote {
-		note, err := syncPickup(ctx, in.main, name, path != "")
-		if err != nil {
-			return openedTask{}, err
-		}
-
-		notes = appendNote(notes, note)
-	}
-
-	switch {
-	case path != "":
-		notes = append(notes, "reused the existing worktree")
-	case existing.name != "":
-		if existing.remote {
-			if err := gitx.TrackBranch(ctx, in.main, name, false); err != nil {
-				return openedTask{}, err
-			}
-
-			notes = append(notes, "created "+name+" tracking origin/"+name)
-		}
-
-		if path, err = checkout(ctx, in.main, name, "", false); err != nil {
-			return openedTask{}, err
-		}
-	default:
-		// a base at the default branch's commit changes nothing, which is
-		// otherwise indistinguishable from no base at all
-		if n := sameAsDefaultNote(ctx, in.main, base, dep); n != "" {
-			notes = append(notes, n)
-		}
-
-		if path, err = checkout(ctx, in.main, name, base.ref, true); err != nil {
-			return openedTask{}, err
-		}
-	}
-
-	// the dependency is recorded once the branch exists, made or found: a
-	// branch started without --after can still be stacked by a second start
-	if dep != nil {
-		if err := recordDependency(ctx, in.main, name, dep); err != nil {
-			return openedTask{}, err
-		}
-	}
-
-	if in.pick != nil {
-		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgTaskID, in.task.ID); err != nil {
-			return openedTask{}, fmt.Errorf("linking %s to %s: %w", name, in.task.ID, err)
-		}
-	}
-
-	if in.pick != nil && in.pick.landed() {
-		notes = append(notes, landedNotes(ctx, in, name, existing.name == "")...)
-	}
-
-	if len(in.task.Riders()) > 0 {
-		if err := recordBundle(ctx, in.main, name, in.task); err != nil {
-			return openedTask{}, err
-		}
+	if notes, err = recordBranchFacts(ctx, in, name, dep, existing, notes); err != nil {
+		return openedTask{}, err
 	}
 
 	ws, wsNotes, err := agents(in.main).Open(ctx, path, name)
@@ -320,55 +258,8 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	profile := in.profile.Over(agentctl.Profile{})
 
 	if launch {
-		// the agent reads the plan in place: only a prompted agent is told of it
-		o.plan = planIf(taskPlan(path, in.plansDir, in.task.ID))
-
-		if err := makeStorageDirs(in.plansDir); err != nil {
+		if profile, notes, err = launchAgent(ctx, in, &o, name, path, agent, ws, profile, notes); err != nil {
 			return openedTask{}, err
-		}
-
-		// a rerun keeps the profile the branch records, unless a flag chose one
-		if !in.profileFlagged {
-			recorded, err := recordedProfile(ctx, in.main, name)
-			if err != nil {
-				return openedTask{}, err
-			}
-
-			if !recorded.IsDefault() {
-				profile = recorded
-			}
-		}
-
-		o.launch = &pendingLaunch{
-			agent:   agent,
-			profile: profile,
-			args:    agentArgs(profile, in.plansDir, path),
-			waiting: shellWait(in.progress, ws.Slot),
-		}
-		o.fresh = true
-		o.profile = profile
-
-		// the flow is the branch's fact from here on: status lists its gates,
-		// and a rerun of drive keeps it
-		if !in.flowKept && in.flow.recorded() != "" {
-			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgFlow, in.flow.recorded()); err != nil {
-				notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
-			}
-		}
-
-		if !in.flowKept && in.pace != "" {
-			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgPace, in.pace); err != nil {
-				notes = append(notes, "the pace was not recorded on the branch: "+err.Error())
-			}
-		}
-
-		// the profile is the branch's fact from here on, for a rerun and a
-		// reader of the branch (f10 board); a failed write loses nothing
-		// the agent needs
-		if !profile.IsDefault() {
-			if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgAgent, profile.String()); err != nil {
-				notes = append(notes, "the agent profile was not recorded on the branch: "+err.Error())
-			}
 		}
 	}
 
@@ -383,6 +274,169 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	o.notes = notes
 
 	return o, nil
+}
+
+// openWorktree reuses the branch's worktree or checks the branch out into a
+// new one, made from base when the branch is new, and returns its path.
+func openWorktree(
+	ctx context.Context,
+	in startInput,
+	name string,
+	base baseRef,
+	dep *dependency,
+	existing foundBranch,
+	notes []string,
+) (string, []string, error) {
+	wts, err := gitx.Worktrees(ctx, in.main)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if dep != nil {
+		notes = append(notes, locatePlan(dep, in.plansDir, wts)...)
+	}
+
+	path := worktreeOf(wts, name)
+
+	if in.pick != nil && !in.pick.landed() && !existing.remote {
+		note, err := syncPickup(ctx, in.main, name, path != "")
+		if err != nil {
+			return "", nil, err
+		}
+
+		notes = appendNote(notes, note)
+	}
+
+	switch {
+	case path != "":
+		notes = append(notes, "reused the existing worktree")
+	case existing.name != "":
+		if existing.remote {
+			if err := gitx.TrackBranch(ctx, in.main, name, false); err != nil {
+				return "", nil, err
+			}
+
+			notes = append(notes, "created "+name+" tracking origin/"+name)
+		}
+
+		if path, err = checkout(ctx, in.main, name, "", false); err != nil {
+			return "", nil, err
+		}
+	default:
+		// a base at the default branch's commit changes nothing, which is
+		// otherwise indistinguishable from no base at all
+		if n := sameAsDefaultNote(ctx, in.main, base, dep); n != "" {
+			notes = append(notes, n)
+		}
+
+		if path, err = checkout(ctx, in.main, name, base.ref, true); err != nil {
+			return "", nil, err
+		}
+	}
+
+	return path, notes, nil
+}
+
+// recordBranchFacts writes what the branch carries for later commands: its
+// dependency, a picked-up PR's task and a bundle's riders.
+func recordBranchFacts(
+	ctx context.Context,
+	in startInput,
+	name string,
+	dep *dependency,
+	existing foundBranch,
+	notes []string,
+) ([]string, error) {
+	// the dependency is recorded once the branch exists, made or found: a
+	// branch started without --after can still be stacked by a second start
+	if dep != nil {
+		if err := recordDependency(ctx, in.main, name, dep); err != nil {
+			return nil, err
+		}
+	}
+
+	if in.pick != nil {
+		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgTaskID, in.task.ID); err != nil {
+			return nil, fmt.Errorf("linking %s to %s: %w", name, in.task.ID, err)
+		}
+	}
+
+	if in.pick != nil && in.pick.landed() {
+		notes = append(notes, landedNotes(ctx, in, name, existing.name == "")...)
+	}
+
+	if len(in.task.Riders()) > 0 {
+		if err := recordBundle(ctx, in.main, name, in.task); err != nil {
+			return nil, err
+		}
+	}
+
+	return notes, nil
+}
+
+// launchAgent readies the agent a fresh workspace gets and records the flow,
+// pace and profile on the branch; it returns the profile it settled on.
+func launchAgent(
+	ctx context.Context,
+	in startInput,
+	o *openedTask,
+	name, path, agent string,
+	ws agentctl.Opened,
+	profile agentctl.Profile,
+	notes []string,
+) (agentctl.Profile, []string, error) {
+	// the agent reads the plan in place: only a prompted agent is told of it
+	o.plan = planIf(taskPlan(path, in.plansDir, in.task.ID))
+
+	if err := makeStorageDirs(in.plansDir); err != nil {
+		return profile, nil, err
+	}
+
+	// a rerun keeps the profile the branch records, unless a flag chose one
+	if !in.profileFlagged {
+		recorded, err := recordedProfile(ctx, in.main, name)
+		if err != nil {
+			return profile, nil, err
+		}
+
+		if !recorded.IsDefault() {
+			profile = recorded
+		}
+	}
+
+	o.launch = &pendingLaunch{
+		agent:   agent,
+		profile: profile,
+		args:    agentArgs(profile, in.plansDir, path),
+		waiting: shellWait(in.progress, ws.Slot),
+	}
+	o.fresh = true
+	o.profile = profile
+
+	// the flow is the branch's fact from here on: status lists its gates,
+	// and a rerun of drive keeps it
+	if !in.flowKept && in.flow.recorded() != "" {
+		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgFlow, in.flow.recorded()); err != nil {
+			notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
+		}
+	}
+
+	if !in.flowKept && in.pace != "" {
+		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgPace, in.pace); err != nil {
+			notes = append(notes, "the pace was not recorded on the branch: "+err.Error())
+		}
+	}
+
+	// the profile is the branch's fact from here on, for a rerun and a
+	// reader of the branch (f10 board); a failed write loses nothing
+	// the agent needs
+	if !profile.IsDefault() {
+		if err := gitx.SetConfig(ctx, in.main, "branch."+name+"."+cfgAgent, profile.String()); err != nil {
+			notes = append(notes, "the agent profile was not recorded on the branch: "+err.Error())
+		}
+	}
+
+	return profile, notes, nil
 }
 
 // A settledBranch is what start knows before creating anything.

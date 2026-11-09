@@ -82,28 +82,9 @@ const (
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
-	mode, err := startMode(cmd)
+	mode, flowName, after, base, err := startFlags(cmd)
 	if err != nil {
 		return err
-	}
-
-	flowName, err := flowFlags(cmd)
-	if err != nil {
-		return err
-	}
-
-	if flowName != "" && mode != modeDefault {
-		return fmt.Errorf(
-			"--flow %s and --%s are exclusive: --%s stops before ship, which runs the flow",
-			flowName,
-			mode,
-			mode,
-		)
-	}
-
-	after, base := strings.TrimSpace(cmd.String("after")), strings.TrimSpace(cmd.String("base"))
-	if after != "" && base != "" {
-		return errors.New("--base and --after are exclusive: one names a git ref, the other a task to depend on")
 	}
 
 	if err := agents("").Available(); err != nil {
@@ -115,22 +96,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("start needs a task id")
 	}
 
-	t, err := targetFor(ctx, cmd)
-	if err != nil {
-		return err
-	}
-
-	paces, err := paceSet(t.eff)
-	if err != nil {
-		return err
-	}
-
-	pace, err := activePace(ctx, paces, cmd.String("pace"), "", "")
-	if err != nil {
-		return err
-	}
-
-	fl, err := resolvePacedFlow(t.eff, paces, pace.name, flowName)
+	t, fl, err := startTarget(ctx, cmd, flowName)
 	if err != nil {
 		return err
 	}
@@ -149,47 +115,9 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	task := strings.TrimSpace(cmd.String("task"))
-
-	var (
-		r      ref.Ref
-		suffix string
-	)
-
-	if task, err = pickedTask(t.eff.IDPrefix, t.hostIssues(), pick, pr, task); err != nil {
+	r, suffix, err := startRef(ctx, cmd, t, token, pick, pr, flowName, after, base)
+	if err != nil {
 		return err
-	}
-
-	switch {
-	case pick != nil:
-		if err := refusePickupFlags(flowName, after, base); err != nil {
-			return err
-		}
-
-		if strings.Contains(task, ref.Separator) {
-			return fmt.Errorf("--task %s: a PR is picked up for one task, not a bundle", task)
-		}
-
-		if r, err = t.reference(ctx, task); err != nil {
-			return fmt.Errorf("%s: %w", pick.url, err)
-		}
-
-		r.Bundle = nil
-	default:
-		var id string
-
-		id, suffix = ref.SplitSuffix(token)
-
-		if r, err = t.reference(ctx, id); err != nil {
-			return err
-		}
-
-		if suffix != "" && r.Bundle != nil {
-			return fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
-		}
-
-		// any member starts, or reopens, the whole bundle under its lead
-		r = r.Head()
 	}
 
 	in := startInput{
@@ -220,6 +148,152 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	if err := startDependency(ctx, t, &in, r, pick, after, base); err != nil {
+		return err
+	}
+
+	if err := startProfile(cmd, t, &in); err != nil {
+		return err
+	}
+
+	in.progress = cmd.ErrWriter
+
+	if err := start(ctx, cmd.Writer, in); err != nil {
+		return err
+	}
+
+	recordLaunch(ctx, cmd, t, r, suffix)
+
+	return nil
+}
+
+// startFlags settles the mode and refuses the exclusive flag pairs before
+// anything is looked up.
+func startFlags(cmd *cli.Command) (string, string, string, string, error) {
+	mode, err := startMode(cmd)
+	if err != nil {
+		return "", "", "", "", err
+	}
+
+	flowName, err := flowFlags(cmd)
+	if err != nil {
+		return "", "", "", "", err
+	}
+
+	if flowName != "" && mode != modeDefault {
+		return "", "", "", "", fmt.Errorf(
+			"--flow %s and --%s are exclusive: --%s stops before ship, which runs the flow",
+			flowName,
+			mode,
+			mode,
+		)
+	}
+
+	after, base := strings.TrimSpace(cmd.String("after")), strings.TrimSpace(cmd.String("base"))
+	if after != "" && base != "" {
+		return "", "", "", "", errors.New(
+			"--base and --after are exclusive: one names a git ref, the other a task to depend on",
+		)
+	}
+
+	return mode, flowName, after, base, nil
+}
+
+// startTarget reads the project and the flow the run's pace resolves.
+func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*target, shipFlow, error) {
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return nil, shipFlow{}, err
+	}
+
+	paces, err := paceSet(t.eff)
+	if err != nil {
+		return nil, shipFlow{}, err
+	}
+
+	pace, err := activePace(ctx, paces, cmd.String("pace"), "", "")
+	if err != nil {
+		return nil, shipFlow{}, err
+	}
+
+	fl, err := resolvePacedFlow(t.eff, paces, pace.name, flowName)
+	if err != nil {
+		return nil, shipFlow{}, err
+	}
+
+	return t, fl, nil
+}
+
+// startRef is the task the run starts and its suffix: a picked-up PR's one
+// task, else the token's task, widened to its bundle's lead.
+func startRef(
+	ctx context.Context,
+	cmd *cli.Command,
+	t *target,
+	token string,
+	pick *pickup,
+	pr pull,
+	flowName, after, base string,
+) (ref.Ref, string, error) {
+	task := strings.TrimSpace(cmd.String("task"))
+
+	var (
+		r      ref.Ref
+		suffix string
+		err    error
+	)
+
+	if task, err = pickedTask(t.eff.IDPrefix, t.hostIssues(), pick, pr, task); err != nil {
+		return ref.Ref{}, "", err
+	}
+
+	switch {
+	case pick != nil:
+		if err := refusePickupFlags(flowName, after, base); err != nil {
+			return ref.Ref{}, "", err
+		}
+
+		if strings.Contains(task, ref.Separator) {
+			return ref.Ref{}, "", fmt.Errorf("--task %s: a PR is picked up for one task, not a bundle", task)
+		}
+
+		if r, err = t.reference(ctx, task); err != nil {
+			return ref.Ref{}, "", fmt.Errorf("%s: %w", pick.url, err)
+		}
+
+		r.Bundle = nil
+	default:
+		var id string
+
+		id, suffix = ref.SplitSuffix(token)
+
+		if r, err = t.reference(ctx, id); err != nil {
+			return ref.Ref{}, "", err
+		}
+
+		if suffix != "" && r.Bundle != nil {
+			return ref.Ref{}, "", fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
+		}
+
+		// any member starts, or reopens, the whole bundle under its lead
+		r = r.Head()
+	}
+
+	return r, suffix, nil
+}
+
+// startDependency fetches a picked-up PR, or settles the task this one is
+// stacked on: --after, else the body's After: line unless --base named a ref.
+func startDependency(
+	ctx context.Context,
+	t *target,
+	in *startInput,
+	r ref.Ref,
+	pick *pickup,
+	after, base string,
+) error {
+	var err error
+
 	switch {
 	case pick != nil:
 		if err := fetchPickup(ctx, in.main, pick); err != nil {
@@ -238,6 +312,12 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	return nil
+}
+
+// startProfile resolves the agent profile from --agent or --model over the
+// project's default.
+func startProfile(cmd *cli.Command, t *target, in *startInput) error {
 	flag, err := profileFlag(cmd.String("agent"), cmd.String("model"))
 	if err != nil {
 		return err
@@ -252,12 +332,12 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	in.profile, in.profileFlagged = resolved.Profile, flag != ""
 	in.notes = append(resolved.lines(claudeSettingsPath()), in.notes...)
 
-	in.progress = cmd.ErrWriter
+	return nil
+}
 
-	if err := start(ctx, cmd.Writer, in); err != nil {
-		return err
-	}
-
+// recordLaunch records the launch for status, then runs start's upkeep: the
+// watcher and the due janitor sweep.
+func recordLaunch(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suffix string) {
 	// the task is already open, so a failed launch record is a line, not a
 	// failed start
 	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
@@ -269,8 +349,6 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
-
-	return nil
 }
 
 // refuseNote stops a note no prompt can carry: only the prompts that stop
