@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The comment goes to the driver on stdin with the task's number, and the
@@ -43,8 +44,8 @@ func TestTaskCommentDeclinedAndFailed(t *testing.T) {
 	for name, script := range map[string]string{"no driver": "", "declined": "exit 3\n"} {
 		_, _, err := runAppStdin(t, strings.NewReader("hi\n"), "-C", createRepo(t, script), "task", "comment",
 			"FT-12").streams()
-		if exitCode(err) != exitNoWrite || !strings.Contains(err.Error(), "nothing was written") {
-			t.Errorf("%s: err = %v, want exit %d", name, err, exitNoWrite)
+		if exitCode(err) != ui.ExitDeclined || !strings.Contains(err.Error(), "nothing was written") {
+			t.Errorf("%s: err = %v, want exit %d", name, err, ui.ExitDeclined)
 		}
 	}
 
@@ -89,8 +90,8 @@ func TestTaskUpdateThroughTheDriver(t *testing.T) {
 	if _, _, err := runAppStdin(t, strings.NewReader(""), "-C", createRepo(t, "exit 3\n"), "task", "update",
 		"FT-12", "--status", "Done").streams(); exitCode(
 		err,
-	) != exitNoWrite {
-		t.Errorf("declined update: err = %v, want exit %d", err, exitNoWrite)
+	) != ui.ExitDeclined {
+		t.Errorf("declined update: err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 }
 
@@ -132,8 +133,8 @@ func TestTaskUpdateParentDeclinedAndRefused(t *testing.T) {
 
 	_, _, err := runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "update", "FT-12", "--status",
 		"Done", "--parent", "FT-7").streams()
-	if exitCode(err) != exitNoWrite || !strings.Contains(err.Error(), "the parent link was not") {
-		t.Errorf("declined parent: err = %v, want exit %d naming the link", err, exitNoWrite)
+	if exitCode(err) != ui.ExitDeclined || !strings.Contains(err.Error(), "the parent link was not") {
+		t.Errorf("declined parent: err = %v, want exit %d naming the link", err, ui.ExitDeclined)
 	}
 
 	if got := readFile(t, filepath.Join(repo, ".f10", "log")); !strings.HasPrefix(got, "update 12 --status Done\n") {
@@ -186,8 +187,8 @@ func TestHostRelink(t *testing.T) {
 
 	err := relinkTask(t.Context(), &bytes.Buffer{}, childTarget(t, "glab"), nil,
 		ref.Ref{ID: "FT-12", Number: "12"}, "7", false)
-	if exitCode(err) != exitNoWrite {
-		t.Errorf("glab relink: err = %v, want exit %d", err, exitNoWrite)
+	if exitCode(err) != ui.ExitDeclined {
+		t.Errorf("glab relink: err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 }
 

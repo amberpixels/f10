@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
@@ -165,7 +166,7 @@ func (t *target) tracker() tracker {
 // (a re-plan is pending work whatever the tracker says), and closed or its
 // plan archived, which catches a merge whose PR body closed no issue.
 func finishedTask(info taskInfo, plans, id string, hasBranch bool) bool {
-	if hasBranch || plans != "" && exists(filepath.Join(plans, id+".md")) {
+	if hasBranch || plans != "" && fsx.Exists(filepath.Join(plans, id+".md")) {
 		return false
 	}
 

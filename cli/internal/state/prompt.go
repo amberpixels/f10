@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/fsx"
 )
 
 const promptExt = ".prompted"
@@ -36,17 +38,9 @@ func MarkPrompt(dir, session, root string, at time.Time) error {
 		return fmt.Errorf("state: %w", err)
 	}
 
-	path := PromptedPath(dir, session)
-	tmp := path + "." + strconv.Itoa(os.Getpid())
 	body := "root " + oneLine(root) + "\nat " + strconv.FormatInt(at.UnixMilli(), 10) + "\n"
 
-	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
-		return fmt.Errorf("state: %w", err)
-	}
-
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-
+	if err := fsx.WriteFile(PromptedPath(dir, session), []byte(body), 0o600); err != nil {
 		return fmt.Errorf("state: %w", err)
 	}
 

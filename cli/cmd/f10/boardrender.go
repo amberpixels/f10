@@ -12,6 +12,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // renderBoard is a glance at the board; --json is the contract.
@@ -37,17 +39,25 @@ func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 		return
 	}
 
-	lay := newBoardLayout(m.Rows, nil, limit)
+	links := linksOn(limit > 0)
 
-	var last string
+	nodes := make([]tasktree.Node, len(m.Rows))
+	for i, r := range m.Rows {
+		nodes[i] = boardNode(r, "", false, links)
+	}
 
-	for _, r := range m.Rows {
-		if r.Group != last {
-			fmt.Fprintf(w, "\n%s\n", lay.faint.Render(r.Group))
-			last = r.Group
+	tree := tasktree.Tree{Align: true, Width: limit}
+	tree.Columns = tree.Measure(nodes)
+
+	for start := 0; start < len(m.Rows); {
+		end := start + 1
+		for end < len(m.Rows) && m.Rows[end].Group == m.Rows[start].Group {
+			end++
 		}
 
-		lay.line(w, r, "")
+		fmt.Fprintf(w, "\n%s\n", faint.Render(m.Rows[start].Group))
+		_ = tree.Write(w, nodes[start:end])
+		start = end
 	}
 }
 
@@ -116,7 +126,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 
 		switch {
 		case failed != "":
-			parts = append(parts, red.Render("failed")+"  "+faint.Render(cut(firstLine(failed), limit-nameW-10)))
+			parts = append(parts, red.Render("failed")+"  "+faint.Render(textx.Cut(firstLine(failed), limit-nameW-10)))
 		case b.View == lookaround.ViewFeed:
 			parts = append(parts, feedCounts(b, faint)...)
 		case inFlight == 0:
@@ -125,7 +135,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 			parts = append(parts, fmt.Sprintf("%d in flight", inFlight), fmt.Sprintf("%d waiting on you", waiting))
 
 			if oldest.Key != "" {
-				parts = append(parts, "oldest "+oldest.Key+" "+age(now, oldest.LastActivity))
+				parts = append(parts, "oldest "+oldest.Key+" "+textx.Age(now, oldest.LastActivity))
 			}
 		}
 
@@ -134,7 +144,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 				if !s.OK && !s.Skipped {
 					parts = append(
 						parts,
-						red.Render(s.Name+" failed")+"  "+faint.Render(cut(firstLine(s.Error), limit-nameW-40)),
+						red.Render(s.Name+" failed")+"  "+faint.Render(textx.Cut(firstLine(s.Error), limit-nameW-40)),
 					)
 				}
 			}
@@ -203,16 +213,11 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		at      time.Time
 	}
 
-	var (
-		rows  []boardLine
-		names []string
-		by    = map[string][]entry{}
-	)
+	by := map[string][]entry{}
 
 	add := func(project, person string, e entry) {
 		e.project = project
 		by[person] = append(by[person], e)
-		rows = append(rows, e.line)
 	}
 
 	for _, b := range boards {
@@ -222,7 +227,6 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		}
 
 		renderSources(w, b, label)
-		names = append(names, b.Project.Name)
 
 		for _, r := range b.Rows {
 			add(b.Project.Name, r.Who.Person, entry{
@@ -239,26 +243,23 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		}
 	}
 
-	if len(rows) == 0 {
+	if len(by) == 0 {
 		fmt.Fprintln(w, "nothing in flight, nothing next, nothing done in the window")
 
 		return
 	}
-
-	if len(boards) == 1 {
-		names = nil
-	}
-
-	lay := newBoardLayout(rows, names, limit)
 
 	persons := slices.Sorted(maps.Keys(by))
 	if i := slices.Index(persons, ""); i >= 0 {
 		persons = append(slices.Delete(persons, i, i+1), "")
 	}
 
-	for _, name := range persons {
-		fmt.Fprintf(w, "\n%s\n", lay.faint.Render(cmp.Or(name, "nobody")))
+	links := linksOn(limit > 0)
+	groups := make([][]tasktree.Node, len(persons))
 
+	var all []tasktree.Node
+
+	for i, name := range persons {
 		entries := by[name]
 		slices.SortStableFunc(entries, func(a, c entry) int {
 			if d := a.rank - c.rank; d != 0 {
@@ -269,21 +270,19 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		})
 
 		for _, e := range entries {
-			lay.line(w, e.line, e.project)
+			groups[i] = append(groups[i], boardNode(e.line, e.project, len(boards) > 1, links))
 		}
+
+		all = append(all, groups[i]...)
 	}
-}
 
-func age(now, t time.Time) string {
-	d := now.Sub(t)
+	tree := tasktree.Tree{Align: true, Width: limit}
+	tree.Columns = tree.Measure(all)
+	faint := lipgloss.NewStyle().Faint(true)
 
-	switch {
-	case d >= 24*time.Hour:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	case d >= time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dm", max(int(d.Minutes()), 0))
+	for i, name := range persons {
+		fmt.Fprintf(w, "\n%s\n", faint.Render(cmp.Or(name, "nobody")))
+		_ = tree.Write(w, groups[i])
 	}
 }
 
@@ -293,35 +292,11 @@ func firstLine(s string) string {
 	return line
 }
 
-func cut(s string, n int) string {
-	runes := []rune(s)
-	if n <= 8 || len(runes) <= n {
-		return s
-	}
+// boardNode is a board line as a tree row: the title fills what the
+// terminal leaves, and the tail (PRs, who, next) follows it.
+func boardNode(r boardLine, project string, withProject bool, links *taskLinks) tasktree.Node {
+	faint := func(s string) string { return lipgloss.NewStyle().Faint(true).Render(s) }
 
-	return string(runes[:n-1]) + "…"
-}
-
-type boardLayout struct {
-	keyW, stageW, projW, limit int
-	faint                      lipgloss.Style
-}
-
-func newBoardLayout(rows []boardLine, projects []string, limit int) boardLayout {
-	lay := boardLayout{limit: limit, faint: lipgloss.NewStyle().Faint(true)}
-
-	for _, r := range rows {
-		lay.keyW, lay.stageW = max(lay.keyW, len(r.Key)), max(lay.stageW, len(r.Stage))
-	}
-
-	for _, p := range projects {
-		lay.projW = max(lay.projW, len(p))
-	}
-
-	return lay
-}
-
-func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 	var tail []string
 
 	if r.PR != 0 {
@@ -345,18 +320,6 @@ func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 		tail = append(tail, r.Next)
 	}
 
-	// cut on runes: a byte offset would split a multibyte character
-	title := r.Title
-	fixed := lay.keyW + 2 + lay.stageW + 2 + 7 + 2 + len(strings.Join(tail, "  ")) + 4
-
-	if lay.projW > 0 {
-		fixed += lay.projW + 2
-	}
-
-	if runes := []rune(title); lay.limit > 0 && len(runes) > lay.limit-fixed && lay.limit-fixed > 8 {
-		title = string(runes[:lay.limit-fixed-1]) + "…"
-	}
-
 	// local and tracker are the common cases at a glance; the HTML shows
 	// every origin
 	from := ""
@@ -364,20 +327,22 @@ func (lay boardLayout) line(w io.Writer, r boardLine, project string) {
 		from = r.StageFrom
 	}
 
-	links := linksOn(lay.limit > 0)
 	links.Known(project, r.Key, r.URL)
-	key := links.ID(project, r.Key)
 
-	lead := ""
-	if lay.projW > 0 {
-		lead = lay.faint.Render(fmt.Sprintf("%-*s", lay.projW, project)) + "  "
+	var cells []tasktree.Cell
+	if withProject {
+		cells = append(cells, tasktree.Cell{Text: project, Render: faint})
 	}
 
-	fmt.Fprintf(w, "%s%s%s  %s  %s  %s  %s\n",
-		lead, key, strings.Repeat(" ", lay.keyW-len(r.Key)),
-		stageStyle(r.Stage).Render(fmt.Sprintf("%-*s", lay.stageW, r.Stage)),
-		lay.faint.Render(fmt.Sprintf("%-7s", from)),
-		title, lay.faint.Render(strings.Join(tail, "  ")))
+	cells = append(cells,
+		tasktree.Cell{Text: r.Key, Render: func(string) string { return links.ID(project, r.Key) }},
+		tasktree.Cell{Text: r.Stage, Render: func(s string) string { return stageStyle(r.Stage).Render(s) }},
+		tasktree.Cell{Text: from, Render: faint},
+		tasktree.Cell{Text: r.Title, Fill: true},
+		tasktree.Cell{Text: strings.Join(tail, "  "), Render: faint},
+	)
+
+	return tasktree.Node{Cells: cells}
 }
 
 func boardWho(r lookaround.Row) string {

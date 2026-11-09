@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"io"
 	"slices"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // launchesHead heads the tree of what this session launched.
@@ -84,7 +84,7 @@ func dropRows(rows []taskRow, drop func(taskRow) bool) []taskRow {
 func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []childRow {
 	launches, err := state.Launches(state.Dir(), sid)
 	if err != nil {
-		fmt.Fprintf(warn, "f10: reading this session's launches: %v\n", err)
+		ui.Warnf(warn, "reading this session's launches: %v", err)
 	}
 
 	if len(launches) == 0 {

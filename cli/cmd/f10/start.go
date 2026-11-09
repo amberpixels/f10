@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The start verb replaces three hand-offs across three tools, each a place
@@ -330,7 +331,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suf
 	// failed start
 	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
 	if err := state.AppendLaunch(state.Dir(), state.Session(), launch); err != nil {
-		fmt.Fprintf(cmd.ErrWriter, "f10: recording the launch: %v\n", err)
+		ui.Warnf(cmd.ErrWriter, "recording the launch: %v", err)
 	}
 
 	watchProject(ctx, cmd.ErrWriter, t)

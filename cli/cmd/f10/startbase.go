@@ -7,12 +7,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/urfave/cli/v3"
-
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // afterFromBody reads the task's body for an After: line. A body that
@@ -77,8 +77,8 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 		}
 
 		if len(open) > 0 {
-			return cli.Exit(fmt.Sprintf("f10: %s is a parent of %s: run /f10:drive %s to drive them, "+
-				"or start one subtask (f10 start %s)", m.ID, strings.Join(open, ", "), m.ID, open[0]), exitParent)
+			return ui.Exit(ui.ExitParent, "%s is a parent of %s: run /f10:drive %s to drive them, "+
+				"or start one subtask (f10 start %s)", m.ID, strings.Join(open, ", "), m.ID, open[0])
 		}
 	}
 
@@ -231,7 +231,7 @@ func locatePlan(dep *dependency, root storage.Root) []string {
 
 // planIf is path when a plan is there, else "".
 func planIf(path string) string {
-	if !exists(path) {
+	if !fsx.Exists(path) {
 		return ""
 	}
 

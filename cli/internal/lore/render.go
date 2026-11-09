@@ -176,13 +176,9 @@ func nonEmpty(values ...string) []string {
 	return out
 }
 
-func short(sha string) string {
-	if len(sha) > 12 {
-		return sha[:12]
-	}
-
-	return sha
-}
+// short matches gitx.ShortSHA; lore keeps its own copy because it stays
+// extractable (imports_test.go).
+func short(sha string) string { return sha[:min(len(sha), 7)] }
 
 func plural(n int, one, many string) string {
 	if n == 1 {

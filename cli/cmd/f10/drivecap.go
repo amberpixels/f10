@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // defaultParallel is a drive's cap with no --parallel: half the cores, since
@@ -114,7 +115,7 @@ func (in *driveInput) openGate(ctx context.Context, runs []*driveRun, wss []agen
 	// count; a done or halted task's agent is the user's now, and counting
 	// it would stop a drive without finish with tasks left
 	for _, r := range runs {
-		if (r.end == nil || r.end.code == exitAsk) && g.workspace(r) != nil {
+		if (r.end == nil || r.end.code == ui.ExitAsk) && g.workspace(r) != nil {
 			g.open++
 		}
 	}

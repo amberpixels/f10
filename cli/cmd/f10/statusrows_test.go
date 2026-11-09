@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 func TestStageOf(t *testing.T) {
@@ -296,7 +297,7 @@ func TestRenderRows(t *testing.T) {
 
 	out.Reset()
 
-	if err := encodeJSON(&out, rows[:1]); err != nil {
+	if err := ui.JSON(&out, rows[:1]); err != nil {
 		t.Fatal(err)
 	}
 

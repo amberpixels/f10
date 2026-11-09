@@ -120,7 +120,7 @@ type driveResult struct {
 	// drives is an end this drive gave the task, owned elsewhere or
 	// cancelled, which says nothing about the task itself
 	drives bool
-	// ask is the question an exitAsk end waits on, for the inbox
+	// ask is the question a ui.ExitAsk end waits on, for the inbox
 	ask string
 	// attempts are the failures a halt on the attempt rule counted
 	attempts []attempt

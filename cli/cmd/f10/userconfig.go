@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/frontmatter"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -129,24 +130,7 @@ func writeLastStandup(last standup.Last) error {
 		return err
 	}
 
-	tmp, err := os.CreateTemp(dir, ".standup-*.json")
-	if err != nil {
-		return err
-	}
-
-	defer os.Remove(tmp.Name())
-
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		_ = tmp.Close()
-
-		return err
-	}
-
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), filepath.Join(dir, standupStateFile))
+	return fsx.WriteFile(filepath.Join(dir, standupStateFile), append(data, '\n'), 0o600)
 }
 
 // standupConfig is the frontmatter of ~/.f10/standup.md. Unknown keys are

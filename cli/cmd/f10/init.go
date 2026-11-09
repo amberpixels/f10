@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // init registers a project by writing its project.md: the file's existence is
@@ -161,7 +162,7 @@ func excludeF10(ctx context.Context, root string) (string, error) {
 func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
-	limit := termWidth(w)
+	limit := ui.Width(w)
 
 	linkedHeaderRow(w, "wrote", path, wroteLink(w, path), limit, plain)
 	headerRow(w, "sections", strings.Join(d.Sections, ", "), limit, plain)

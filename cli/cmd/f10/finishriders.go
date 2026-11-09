@@ -14,10 +14,6 @@ import (
 // member, so a merge closes every one; which riders the PR really delivers
 // is the user's call, asked once: finish refuses to guess.
 
-// exitRiders is finish's exit when a bundle's riders have no --close
-// answer yet: the finish skill asks which the PR delivers and reruns.
-const exitRiders = 7
-
 const (
 	closeAll  = "all"
 	closeNone = "none"

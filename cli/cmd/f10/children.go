@@ -17,18 +17,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A parent's subtasks, as capture links them. Drive expands a parent into
 // these, so the rows carry what choosing among them needs.
-
-// exitNoParentLink is `task children`'s "the tracker has no parent link":
-// a normal answer the drive skill reads as "drive the id as given".
-const exitNoParentLink = 3
-
-// exitParent is start's exit for a parent with unfinished subtasks: the
-// start skill turns it into "drive them, or start one".
-const exitParent = 6
 
 var errNoParentLink = errors.New("the tracker has no parent link")
 
@@ -99,7 +92,7 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 
 	rows, err := t.tracker().children(ctx, r)
 	if errors.Is(err, errNoParentLink) {
-		return cli.Exit(fmt.Sprintf("f10: %s: %v", r.ID, err), exitNoParentLink)
+		return ui.Exit(ui.ExitDeclined, "%s: %v", r.ID, err)
 	}
 
 	if err != nil {
@@ -111,15 +104,8 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	plain := cmd.Bool("plain")
-	if cmd.Bool("json") || (!plain && !isTerminal(cmd.Writer)) {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(rows); err != nil {
-			return fmt.Errorf("encoding rows: %w", err)
-		}
-
-		return nil
+	if cmd.Bool("json") || (!plain && !ui.IsTerminal(cmd.Writer)) {
+		return ui.JSON(cmd.Writer, rows)
 	}
 
 	return writeTree(cmd.Writer, rows)

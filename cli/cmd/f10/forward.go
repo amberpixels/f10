@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The forward verb hands a command to the agent already working on a task:
@@ -32,10 +33,6 @@ func forwardCommand() *cli.Command {
 		Action:    runForward,
 	}
 }
-
-// exitHere is the code for "nothing to forward: the task is in this
-// checkout" - the driver contract's code for declining, read the same way.
-const exitHere = 3
 
 // drivenMarker tells a skill the run is driven from another session: no
 // interactive question, every ask through run state (modes/driven.md).
@@ -109,7 +106,7 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 	}
 
 	if reason := hereReason(in, name, path); reason != "" {
-		return cli.Exit("f10: "+reason, exitHere)
+		return ui.Exit(ui.ExitDeclined, "%s", reason)
 	}
 
 	if err := agents("").Available(); err != nil {

@@ -151,5 +151,5 @@ func retryPendingPull(ctx context.Context, root, main string) (string, bool) {
 		return note, true
 	}
 
-	return "pulled " + def + " up to " + shortSHA(sha) + ", which a finish had deferred", false
+	return "pulled " + def + " up to " + gitx.ShortSHA(sha) + ", which a finish had deferred", false
 }

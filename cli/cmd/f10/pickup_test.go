@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 func TestPullToken(t *testing.T) {
@@ -622,8 +623,8 @@ func TestPickedTask(t *testing.T) {
 	_, err := pickedTask("GH", true, pickGH, none, "")
 
 	var coder cli.ExitCoder
-	if !errors.As(err, &coder) || coder.ExitCode() != exitNoTask || !strings.Contains(err.Error(), "--task") {
-		t.Errorf("a PR naming no task = %v, want exit %d naming --task", err, exitNoTask)
+	if !errors.As(err, &coder) || coder.ExitCode() != ui.ExitDeclined || !strings.Contains(err.Error(), "--task") {
+		t.Errorf("a PR naming no task = %v, want exit %d naming --task", err, ui.ExitDeclined)
 	}
 
 	if got, err := pickedTask("GH", true, pickGH, pull{Body: "Closes #4"}, "GH-9"); got != "GH-9" || err != nil {

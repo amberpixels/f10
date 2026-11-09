@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The task noun goes through the project's driver, else the host's issues:
@@ -106,7 +107,7 @@ func taskCommand() *cli.Command {
 				Usage:     "list the task's open subtasks in After: order (exit 3: the tracker has no parent link)",
 				ArgsUsage: "[task-id]",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "json", Usage: "emit the rows as JSON"},
+					ui.JSONFlag("emit the rows as JSON"),
 					&cli.BoolFlag{Name: "open", Usage: "leave out finished rows too (merged, or the plan archived)"},
 					&cli.BoolFlag{
 						Name:  "plain",
@@ -205,7 +206,7 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 
 		// a person at a terminal opens the links themselves and would wait on
 		// the downloads; an agent gets local files in place of urls that expire
-		if !isTerminal(cmd.Writer) && !cmd.Bool("no-images") {
+		if !ui.IsTerminal(cmd.Writer) && !cmd.Bool("no-images") {
 			doc = withImages(ctx, doc, t.imagesDir(ctx, m.ID), images.Downloader{Authorize: githubAuth(ctx, t)})
 		}
 
@@ -534,7 +535,7 @@ func settlePriorities(rows []row, warn io.Writer) []row {
 	}
 
 	for _, v := range unknown {
-		fmt.Fprintf(warn, "f10: priority %q on %d row(s) is not one of %s; ignored\n",
+		ui.Warnf(warn, "priority %q on %d row(s) is not one of %s; ignored",
 			v, count[v], strings.Join(driver.Priorities, ", "))
 	}
 
@@ -601,19 +602,12 @@ func stripTitles(rows []row, titles tasktitle.Template) []row {
 // anything else the JSON. f10 never picks a winner among rows: choosing is
 // fzf's job in a shell and the agent's in a turn.
 func writeRows(w io.Writer, rows []row, none string) error {
-	if !isTerminal(w) {
+	if !ui.IsTerminal(w) {
 		for i := range rows {
 			rows[i].Body = ""
 		}
 
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(rows); err != nil {
-			return fmt.Errorf("encoding rows: %w", err)
-		}
-
-		return nil
+		return ui.JSON(w, rows)
 	}
 
 	if len(rows) == 0 {
@@ -664,10 +658,6 @@ func writeRows(w io.Writer, rows []row, none string) error {
 	return nil
 }
 
-// exitNoCreate is `task create`'s "no driver creates tasks here": a normal
-// answer the capture step reads as "use the project's Create adapter".
-const exitNoCreate = 3
-
 // mayExist follows every failed create but a driver's exit 4: the driver may
 // have made the task before failing, so running create again could make it twice.
 const mayExist = "the task may exist already: check the tracker before running create again"
@@ -684,9 +674,8 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
 	d := t.driver()
 	if d == nil && !t.createsOnHost() {
-		return cli.Exit("f10: no driver creates tasks here (looked for "+strings.Join(t.driverPaths(), ", ")+
-			"), and no host issues take them; "+
-			"create it through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+		return ui.Exit(ui.ExitDeclined, "no driver creates tasks here (looked for %s), and no host issues take them; "+
+			"create it through the project's Create adapter (project.md, Tracker)", strings.Join(t.driverPaths(), ", "))
 	}
 
 	in, err := io.ReadAll(cmd.Reader)
@@ -714,8 +703,8 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	if d != nil {
 		r, created.URL, err = driverCreate(ctx, cmd.ErrWriter, t, d, doc, args)
 		if errors.Is(err, driver.ErrUnsupported) && !t.createsOnHost() {
-			return cli.Exit("f10: the driver at "+d.Path+" declines `create`; "+
-				"create the task through the project's Create adapter (project.md, Tracker)", exitNoCreate)
+			return ui.Exit(ui.ExitDeclined, "the driver at %s declines `create`; "+
+				"create the task through the project's Create adapter (project.md, Tracker)", d.Path)
 		}
 	}
 
@@ -790,8 +779,8 @@ func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, v
 	}
 
 	if err := retitleOne(ctx, t, r.Number); err != nil {
-		fmt.Fprintf(warnTo, "f10: %s was %s, but its title was not written through tracker.title: %v; "+
-			"run `f10 task retitle %s`\n", r.ID, verb, err, r.ID)
+		ui.Warnf(warnTo, "%s was %s, but its title was not written through tracker.title: %v; "+
+			"run `f10 task retitle %s`", r.ID, verb, err, r.ID)
 	}
 }
 

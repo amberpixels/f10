@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -105,11 +106,11 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 		}
 	}
 
-	if exists(in.plan) {
+	if fsx.Exists(in.plan) {
 		s.plan = in.plan
 	}
 
-	if exists(in.handoff) {
+	if fsx.Exists(in.handoff) {
 		s.handoff = in.handoff
 	}
 

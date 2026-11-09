@@ -14,15 +14,12 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The task's write verbs go to the driver, else to the host's issues; a
 // tracker that is neither answers exit 3, which a ship run reads as "report
 // the shipment locally only".
-
-// exitNoWrite is comment's and update's "this tracker takes no such write
-// here": the driver declines it and the tracker has no host-issues fallback.
-const exitNoWrite = 3
 
 // mayPosted follows every failed comment: the tracker may have taken it
 // before failing, so posting again could post it twice.
@@ -261,7 +258,7 @@ func relinkTask(
 
 	err = h.relink(ctx, parent, r.Number)
 	if errors.Is(err, errGitLabNoIssueParent) {
-		return cli.Exit(fmt.Sprintf("f10: %v; %s", err, unwritten), exitNoWrite)
+		return ui.Exit(ui.ExitDeclined, "%v; %s", err, unwritten)
 	}
 
 	return err
@@ -332,8 +329,8 @@ func hostOrExit(t *target, d *driver.Driver, verb, unwritten string) (host, erro
 		why = "the driver at " + d.Path + " declines `" + verb + "`"
 	}
 
-	return host{}, cli.Exit(fmt.Sprintf("f10: %s, and a %s tracker has no host-issues fallback; %s",
-		why, t.eff.TrackerKind, unwritten), exitNoWrite)
+	return host{}, ui.Exit(ui.ExitDeclined, "%s, and a %s tracker has no host-issues fallback; %s",
+		why, t.eff.TrackerKind, unwritten)
 }
 
 func (h host) comment(ctx context.Context, number, body string) (string, error) {
@@ -616,14 +613,14 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if t.eff.TitleTemplate == "" {
-		fmt.Fprintln(cmd.ErrWriter, "f10: project.md declares no tracker.title; nothing to retitle")
+		ui.Warnf(cmd.ErrWriter, "project.md declares no tracker.title; nothing to retitle")
 
 		return nil
 	}
 
 	if !t.hostIssues() {
-		return cli.Exit(fmt.Sprintf("f10: retitle writes the host's issue titles, and a %s tracker is not the host's; "+
-			"nothing was written", t.eff.TrackerKind), exitNoWrite)
+		return ui.Exit(ui.ExitDeclined, "retitle writes the host's issue titles, and a %s tracker is not the host's; "+
+			"nothing was written", t.eff.TrackerKind)
 	}
 
 	all := cmd.Bool("all")
@@ -668,7 +665,7 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 		verb = "would retitle"
 	}
 
-	fmt.Fprintf(cmd.ErrWriter, "f10: %s %d issue(s)\n", verb, len(changes))
+	ui.Warnf(cmd.ErrWriter, "%s %d issue(s)", verb, len(changes))
 
 	return nil
 }
@@ -736,8 +733,8 @@ func hostCreate(
 
 	if parent = strings.TrimSpace(parent); parent != "" {
 		if err := linkUnder(ctx, t, h, parent, number); err != nil {
-			fmt.Fprintf(warnTo, "f10: %s was created, but not linked under %s: %v; "+
-				"link it by hand, and `f10 task children %s` confirms it\n", r.ID, parent, err, parent)
+			ui.Warnf(warnTo, "%s was created, but not linked under %s: %v; "+
+				"link it by hand, and `f10 task children %s` confirms it", r.ID, parent, err, parent)
 		}
 	}
 

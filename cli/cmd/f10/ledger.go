@@ -15,6 +15,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The ledger noun reads the local record of what runs did, ~/.f10/f10.db,
@@ -29,7 +31,7 @@ func ledgerCommand() *cli.Command {
 				Name:  "dump",
 				Usage: "print the recorded events, oldest first",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "json", Usage: "emit one JSON object per event"},
+					ui.JSONFlag("emit one JSON object per event"),
 					&cli.StringFlag{Name: "project", Usage: "only this project id (`.` for the current directory's)"},
 					&cli.StringFlag{Name: "task", Usage: "only this task id"},
 					&cli.StringFlag{Name: "session", Usage: "only this session id"},
@@ -104,18 +106,10 @@ func writeEvent(cmd *cli.Command, e ledger.Event) error {
 	}
 
 	_, err = fmt.Fprintf(cmd.Writer, "%s  %-8s  %-19s  %-8s  %-12s  %s\n",
-		e.At.Local().Format(time.DateTime), e.Source, e.Kind, orDash(eventTask(e)), orDash(e.Branch),
+		e.At.Local().Format(time.DateTime), e.Source, e.Kind, textx.OrDash(eventTask(e)), textx.OrDash(e.Branch),
 		strings.TrimSpace(string(payload)))
 
 	return err
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
 }
 
 // bundleOf is the bundle an event's branch ships when the event's task

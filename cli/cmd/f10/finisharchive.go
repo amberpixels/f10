@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -14,7 +15,7 @@ import (
 func archivePlan(root storage.Root, id string) (string, string, error) {
 	plan, dst := root.Plan(id), root.Archive()
 
-	if !exists(plan) {
+	if !fsx.Exists(plan) {
 		return "", fmt.Sprintf("no plan at %s, nothing archived", plan), nil
 	}
 
@@ -34,7 +35,7 @@ func archivePlan(root storage.Root, id string) (string, string, error) {
 // so the task's next PR starts its own series of rounds. N always counts
 // from 1, since a bare <id>/ under archive would read as a live directory.
 func archiveReviews(dir string, end seriesEnd) (string, error) {
-	if !exists(dir) {
+	if !fsx.Exists(dir) {
 		return "", nil
 	}
 
@@ -65,20 +66,14 @@ func removeImages(root storage.Root, id string) string {
 // freeArchiveName numbers `<id>.<N>.md` the way steps/plan.md does.
 func freeArchiveName(dir, id string) string {
 	candidate := filepath.Join(dir, id+".md")
-	if !exists(candidate) {
+	if !fsx.Exists(candidate) {
 		return candidate
 	}
 
 	for n := 1; ; n++ {
 		candidate = filepath.Join(dir, fmt.Sprintf("%s.%d.md", id, n))
-		if !exists(candidate) {
+		if !fsx.Exists(candidate) {
 			return candidate
 		}
 	}
-}
-
-func exists(path string) bool {
-	_, err := os.Stat(path)
-
-	return err == nil
 }

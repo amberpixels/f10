@@ -8,7 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The demo noun: no driver and no network behind it, like plan. A report is
@@ -41,12 +41,7 @@ func runDemoOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	opener := shell.Opener()
-	if opener == "" {
-		return fmt.Errorf("no opener on PATH: use --link to get the path (%s)", path)
-	}
-
-	return shell.Passthrough(ctx, t.dir, opener, path)
+	return ui.Open(ctx, t.dir, path)
 }
 
 // demoReport refuses a missing file rather than falling back to whatever

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // end prints the result now, so a halt or an ask is on screen when it
@@ -50,15 +51,15 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	})
 	// an asking task stays leased until the drive exits, since the drive
 	// runs on and resumes for its answer; another drive must not claim it
-	if res.code != exitAsk {
+	if res.code != ui.ExitAsk {
 		in.unlease(r, in.runs)
 	}
 
-	if res.code == exitAsk && res.ask != "" {
+	if res.code == ui.ExitAsk && res.ask != "" {
 		in.raise(ctx, r, strings.TrimPrefix(res.row, "asked at "), res.ask)
 	}
 
-	if res.code == exitHalted && !res.fromRun && !res.drives {
+	if res.code == ui.ExitHalted && !res.fromRun && !res.drives {
 		in.recordHalt(ctx, r, res)
 	}
 
@@ -78,7 +79,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 func halted(id, skill, reason string) driveResult {
 	return driveResult{
 		row:    "halted at " + skill,
-		code:   exitHalted,
+		code:   ui.ExitHalted,
 		lines:  []string{fmt.Sprintf("%s halted at %s: %s", id, skill, reason)},
 		skill:  skill,
 		reason: reason,

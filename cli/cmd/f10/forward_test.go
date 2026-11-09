@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A forwardFixture is the fakes plus a main checkout at /code/repo, GH-1's
@@ -172,8 +173,8 @@ func TestForwardDeclinesWhenTheTaskIsHere(t *testing.T) {
 			fx.f.script(worktrees, c.wts)
 
 			out, err := fx.forward(t)
-			if exitCode(err) != exitHere {
-				t.Fatalf("err = %v, want exit %d", err, exitHere)
+			if exitCode(err) != ui.ExitDeclined {
+				t.Fatalf("err = %v, want exit %d", err, ui.ExitDeclined)
 			}
 
 			if !strings.Contains(err.Error(), c.reason) {
@@ -200,8 +201,8 @@ func TestForwardOutsideHerdr(t *testing.T) {
 	fx = newForwardFixture(t)
 	fx.in.here = fwdWT
 
-	if _, err := fx.forward(t); exitCode(err) != exitHere {
-		t.Errorf("err = %v, want exit %d without Herdr", err, exitHere)
+	if _, err := fx.forward(t); exitCode(err) != ui.ExitDeclined {
+		t.Errorf("err = %v, want exit %d without Herdr", err, ui.ExitDeclined)
 	}
 }
 

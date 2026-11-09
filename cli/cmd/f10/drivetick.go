@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // drive runs the flow; nothing is created or prompted before the graph
@@ -103,7 +104,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		}
 
 		if why, ok := in.lease(r); !ok {
-			in.end(ctx, w, r, driveResult{row: why, code: exitHalted, drives: true})
+			in.end(ctx, w, r, driveResult{row: why, code: ui.ExitHalted, drives: true})
 		}
 	}
 
@@ -121,13 +122,13 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) error {
 		if in.draining.Load() {
 			fmt.Fprintf(w, "drive %d drained for an upgrade; the new daemon resumes it\n", in.number())
 
-			return cli.Exit("", exitDrained)
+			return cli.Exit("", daemon.ExitDrained)
 		}
 
 		if in.cancelled() {
 			for _, r := range runs {
 				if r.end == nil {
-					in.end(ctx, w, r, driveResult{row: "cancelled", code: exitHalted, drives: true})
+					in.end(ctx, w, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
 				}
 			}
 
@@ -240,7 +241,7 @@ func stopping(runs []*driveRun) bool {
 	asked, active, moving := false, false, false
 
 	for _, r := range runs {
-		asked = asked || r.end != nil && r.end.code == exitAsk
+		asked = asked || r.end != nil && r.end.code == ui.ExitAsk
 		active = active || r.active()
 		moving = moving || r.active() && !r.parked && !r.waiting
 	}

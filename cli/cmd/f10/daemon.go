@@ -344,7 +344,7 @@ func followDrive(
 		switch {
 		case exit.Code == 0:
 			return nil
-		case exit.Code != exitDrained:
+		case exit.Code != daemon.ExitDrained:
 			return cli.Exit("", exit.Code)
 		case exit.Reason != daemon.ReasonUpgrade || exit.Drive == 0:
 			fmt.Fprintf(

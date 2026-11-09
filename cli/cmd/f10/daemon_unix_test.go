@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The drives these tests run: a script typed as the argv's first word, and
@@ -105,8 +106,8 @@ func TestFollowDriveEndsWithItsCode(t *testing.T) {
 		runReq("echo drive 3; echo asks; exit 4"),
 		serving(t.Context(), dir, "0.1.0"),
 	)
-	if exitCode(err) != exitAsk {
-		t.Fatalf("err = %v, want exit %d", err, exitAsk)
+	if exitCode(err) != ui.ExitAsk {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitAsk)
 	}
 
 	if out.String() != "drive 3\nasks\n" {
@@ -138,8 +139,8 @@ func TestFollowDriveStopsWithAStop(t *testing.T) {
 
 	select {
 	case err := <-done:
-		if exitCode(err) != exitDrained {
-			t.Fatalf("err = %v, want exit %d", err, exitDrained)
+		if exitCode(err) != daemon.ExitDrained {
+			t.Fatalf("err = %v, want exit %d", err, daemon.ExitDrained)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the follower did not end on a stop")

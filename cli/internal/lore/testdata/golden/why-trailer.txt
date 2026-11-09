@@ -1,4 +1,4 @@
-api/limit.go:15  last changed in 29a8699ad42d, linked by the commit's trailer
+api/limit.go:15  last changed in 29a8699, linked by the commit's trailer
 
 == FT-1
 

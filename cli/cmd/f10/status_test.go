@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 func TestTaskRuns(t *testing.T) {
@@ -102,7 +103,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 
 	out.Reset()
 
-	if err := encodeJSON(&out, fb); err != nil {
+	if err := ui.JSON(&out, fb); err != nil {
 		t.Fatal(err)
 	}
 
@@ -528,7 +529,7 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 	out.Reset()
 
 	fb := fallback{Task: "GH-1", Others: []*state.Run{}, Verdicts: head.verdicts, Reviews: head.reviews}
-	if err := encodeJSON(&out, fb); err != nil {
+	if err := ui.JSON(&out, fb); err != nil {
 		t.Fatal(err)
 	}
 

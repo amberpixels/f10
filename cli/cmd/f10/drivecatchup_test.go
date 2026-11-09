@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // binaryCatchupFake is the drive's own catchup with git's integration and
@@ -360,7 +361,7 @@ func TestDriveHaltsARebaseNoTurnMoves(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if exitCode(err) != exitHalted || !strings.Contains(out, "attempt 3 at") ||
+	if exitCode(err) != ui.ExitHalted || !strings.Contains(out, "attempt 3 at") ||
 		!strings.Contains(out, "next: settle it with /f10:catchup in /code/repo.GH-1, then rerun the drive") {
 		t.Errorf("err = %v\n%s", err, out)
 	}
@@ -425,7 +426,7 @@ func TestDriveHaltsARedVerifyNoTurnFixes(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if exitCode(err) != exitHalted || !strings.Contains(out, "attempt 3 at") ||
+	if exitCode(err) != ui.ExitHalted || !strings.Contains(out, "attempt 3 at") ||
 		!strings.Contains(out, "verify is red after the catchup: just test failed") {
 		t.Errorf("err = %v\n%s", err, out)
 	}
@@ -444,7 +445,7 @@ func TestDriveHaltsACatchupUnderAStalledAgent(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if exitCode(err) != exitHalted || !strings.Contains(out, "is idle while its run says ship") {
+	if exitCode(err) != ui.ExitHalted || !strings.Contains(out, "is idle while its run says ship") {
 		t.Errorf("err = %v\n%s", err, out)
 	}
 
@@ -470,7 +471,7 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if exitCode(err) != exitHalted ||
+	if exitCode(err) != ui.ExitHalted ||
 		!strings.Contains(out, "the drive did not read origin/GH-1 when the catchup went out") {
 		t.Errorf("err = %v\n%s", err, out)
 	}

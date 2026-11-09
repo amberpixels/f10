@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/mdline"
@@ -417,21 +415,6 @@ func wrap(text string, width int) []string {
 	}
 
 	return append(lines, text)
-}
-
-// termWidth is 0 when piped, so output stays unwrapped for grep.
-func termWidth(w io.Writer) int {
-	f, ok := w.(*os.File)
-	if !ok {
-		return 0
-	}
-
-	width, _, err := term.GetSize(int(f.Fd()))
-	if err != nil {
-		return 0
-	}
-
-	return width
 }
 
 // styleOrigin keeps detection, declaration and defaults tellable apart at a

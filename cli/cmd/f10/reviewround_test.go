@@ -11,6 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/findings"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 func runRound(t *testing.T, repo string, args ...string) (string, error) {
@@ -78,8 +79,8 @@ func TestReviewRoundDeclines(t *testing.T) {
 	out, err := runRound(t, repo)
 
 	var code cli.ExitCoder
-	if !errors.As(err, &code) || code.ExitCode() != exitDeclined {
-		t.Fatalf("err = %v, want exit %d", err, exitDeclined)
+	if !errors.As(err, &code) || code.ExitCode() != ui.ExitDeclined {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 
 	for _, want := range []string{"latest:", "1.md", "decline:", "1.1 Missing check - no verdict"} {
@@ -105,8 +106,8 @@ func TestReviewRoundDeclinesAfterRoundTwo(t *testing.T) {
 	out, err := runRound(t, repo)
 
 	var code cli.ExitCoder
-	if !errors.As(err, &code) || code.ExitCode() != exitDeclined {
-		t.Fatalf("err = %v, want exit %d", err, exitDeclined)
+	if !errors.As(err, &code) || code.ExitCode() != ui.ExitDeclined {
+		t.Fatalf("err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 
 	for _, want := range []string{"2.md", "round 2 is the last; these wait", "1.1 Missing check - still open"} {
@@ -177,8 +178,8 @@ func wantDecline(t *testing.T, out string, err error, want string) {
 	t.Helper()
 
 	var code cli.ExitCoder
-	if !errors.As(err, &code) || code.ExitCode() != exitDeclined {
-		t.Fatalf("err = %v, want exit %d:\n%s", err, exitDeclined, out)
+	if !errors.As(err, &code) || code.ExitCode() != ui.ExitDeclined {
+		t.Fatalf("err = %v, want exit %d:\n%s", err, ui.ExitDeclined, out)
 	}
 
 	if !strings.Contains(out, want) {

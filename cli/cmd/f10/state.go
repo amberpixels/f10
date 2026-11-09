@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The state noun writes the run state the badge renders. The badge is
@@ -130,7 +131,7 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 	}
 
 	if ue, ok := errors.AsType[*state.UsageError](applyErr); ok {
-		return cli.Exit("f10-state: "+ue.Error(), 2)
+		return cli.Exit("f10-state: "+ue.Error(), ui.ExitUsage)
 	}
 
 	if err := cmp.Or(applyErr, err); err != nil {

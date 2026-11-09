@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -18,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The standup noun changes nothing, so it does not fetch. The user is their
@@ -39,7 +39,7 @@ func standupCommand() *cli.Command {
 				Usage: "read the checkouts of `NAME`, a group in ~/.f10/standup.md, instead of this one; repeatable",
 			},
 			&cli.BoolFlag{Name: "all", Usage: "read every checkout under F10_ROOTS instead of this one"},
-			&cli.BoolFlag{Name: "json", Usage: "emit the report as JSON (the schema is in docs/cli.md)"},
+			ui.JSONFlag("emit the report as JSON (the schema is in docs/cli.md)"),
 		},
 		Action: runStandup,
 		Commands: []*cli.Command{
@@ -133,10 +133,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	standup.SetDays(&rep, time.Local)
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		return enc.Encode(rep)
+		return ui.JSON(cmd.Writer, rep)
 	}
 
 	links := linksFor(cmd.Writer, false)

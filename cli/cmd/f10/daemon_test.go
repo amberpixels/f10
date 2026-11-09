@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // fastTurn scripts a judge sent to GH-1 whose agent Herdr never shows
@@ -59,8 +60,8 @@ func TestDriveWithoutAPromptMarkHalts(t *testing.T) {
 	}
 
 	err := fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, fx.out.String())
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, fx.out.String())
 	}
 
 	if !strings.Contains(fx.out.String(), "did not take the prompt") {
@@ -76,8 +77,8 @@ func TestDriveDrainsAtATick(t *testing.T) {
 	fx.onTick[1] = func() { fx.in.draining.Store(true) }
 
 	err := fx.drive(t)
-	if exitCode(err) != exitDrained {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitDrained, fx.out.String())
+	if exitCode(err) != daemon.ExitDrained {
+		t.Fatalf("err = %v, want exit %d\n%s", err, daemon.ExitDrained, fx.out.String())
 	}
 
 	if !strings.Contains(fx.out.String(), "drive 1 drained for an upgrade") {

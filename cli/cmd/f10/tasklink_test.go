@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
 const linkProject = "github.com/o/r"
@@ -251,9 +252,15 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 				limit = 120
 			}
 
-			lay := newBoardLayout(lines, nil, limit)
-			for _, l := range lines {
-				lay.line(&out, l, "")
+			links := linksOn(limit > 0)
+
+			nodes := make([]tasktree.Node, len(lines))
+			for i, l := range lines {
+				nodes[i] = boardNode(l, "", false, links)
+			}
+
+			if err := (tasktree.Tree{Align: true, Width: limit}).Write(&out, nodes); err != nil {
+				t.Fatal(err)
 			}
 
 			return out.String()

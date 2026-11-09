@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // titledHost is a gh host whose project declares tracker.title.
@@ -130,8 +131,8 @@ func TestTaskRetitleRefuses(t *testing.T) {
 	}
 
 	_, _, err = runAppStdin(t, strings.NewReader(""), "-C", repo, "task", "retitle", "--all").streams()
-	if exitCode(err) != exitNoWrite {
-		t.Errorf("notion tracker: err = %v, want exit %d", err, exitNoWrite)
+	if exitCode(err) != ui.ExitDeclined {
+		t.Errorf("notion tracker: err = %v, want exit %d", err, ui.ExitDeclined)
 	}
 }
 
