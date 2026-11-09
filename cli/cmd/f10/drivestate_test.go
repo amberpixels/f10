@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -20,13 +21,11 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "plan", "ship")
 	fx.adoptsGH1()
 
-	landed := "git config --get branch.GH-1." + cfgLanded
 	catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
 	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
 
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("plan", "GH-1", nil, shipFlow{}, false), "{}")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" plan", "")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
 	fx.f.script(catchup, "{}")
 	fx.f.script(resume, "{}")
 	fx.f.fail("git merge-tree --write-tree --no-messages main0 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
@@ -36,7 +35,7 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 	fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle, idle, working, idle)
 	fx.onTick[2] = func() {
 		fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
-		fx.f.script(landed, "main")
+		fx.f.meta.Seed("GH-1", branchmeta.Landed, "main")
 	}
 	fx.onTick[4] = func() { restored(fx, t) }
 	fx.onTick[6] = func() { fx.writeRun(t, "done", "", "", "") }

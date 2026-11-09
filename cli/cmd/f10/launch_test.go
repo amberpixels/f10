@@ -17,7 +17,6 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
-	f.script("git config branch.GH-1."+cfgAgent+" claude::high", "")
 
 	launch := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:7 -- " +
 		prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"

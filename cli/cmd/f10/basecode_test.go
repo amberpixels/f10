@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
+)
 
 // A base whose only commit is a merge of its own base's newer head, as the
 // catchup guard before implement leaves one, has no code: drive 6 released
@@ -10,7 +14,7 @@ func TestBaseHasCodeIgnoresMerges(t *testing.T) {
 
 	// FT-1/a is the base's base; FT-2/b stacks on it and merges its next commit
 	r.at(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
-	r.at(before, "config", "branch.FT-2/b."+cfgAfterBranch, "FT-1/a")
+	r.at(before, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
 	r.at(before, "checkout", "-q", "FT-1/a")
 	r.commit(during, "a2.go", "package main // a2\n", "a2")
 	r.at(during, "checkout", "-q", "FT-2/b")
@@ -33,7 +37,7 @@ func TestOriginBaseHasCode(t *testing.T) {
 	r := newCatchupRepo(t)
 
 	r.at(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
-	r.at(before, "config", "branch.FT-2/b."+cfgAfterBranch, "FT-1/a")
+	r.at(before, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
 	r.at(before, "checkout", "-q", "FT-1/a")
 	r.commit(during, "a2.go", "package main // a2\n", "a2")
 	r.at(during, "checkout", "-q", "FT-2/b")

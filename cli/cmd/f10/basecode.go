@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -26,7 +27,7 @@ func hasCodeAt(ctx context.Context, main, tip, branch, def, created string) bool
 
 	// a ref git cannot read would drop out of the --not list and count the
 	// base's own base as its commits, so it releases nobody this poll
-	fork, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAfterBranch)
+	fork, err := branchmeta.Get(ctx, main, branch, branchmeta.AfterBranch)
 	if err != nil {
 		return false
 	}

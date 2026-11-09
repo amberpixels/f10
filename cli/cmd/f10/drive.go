@@ -82,10 +82,6 @@ const (
 	stallGrace = time.Minute
 	// maxSpan caps a range, since every id in it costs a tracker call.
 	maxSpan = 50
-	// cfgDrive is the last skill drive saw a task finish (plan, ship or
-	// finish), under `branch.<name>.` beside f10-after: local, and deleted
-	// with the branch.
-	cfgDrive = "f10-drive"
 )
 
 func runDrive(ctx context.Context, cmd *cli.Command) error {

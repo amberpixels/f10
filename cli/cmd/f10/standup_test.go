@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -119,7 +120,8 @@ func TestUserCommits(t *testing.T) {
 
 func TestRecordedBases(t *testing.T) {
 	f := newFakes(t)
-	f.script(cfgDeps, "branch.FT-2/b.f10-after-branch FT-1/a\nbranch.FT-3.f10-after-branch FT-2/b")
+	f.meta.Seed("FT-2/b", branchmeta.AfterBranch, "FT-1/a")
+	f.meta.Seed("FT-3", branchmeta.AfterBranch, "FT-2/b")
 
 	got := recordedBases(t.Context(), ".")
 	if got["FT-2/b"] != "FT-1/a" || got["FT-3"] != "FT-2/b" || len(got) != 2 {
@@ -289,7 +291,6 @@ func scriptStandupGit(f *fakes, email, originHead string) {
 		strings.Join([]string{"a1", "me@x.io", "2026-10-14T10:00:00Z", "p1", "FT-2/b", "work"}, "\x1f"))
 	f.script("git log --format=%H "+sinceArg+" origin/main", "")
 	f.script(numstatShow+" a1", "")
-	f.script(cfgDeps, "")
 }
 
 func TestCollectStandupWithoutHostReportsCommitsOnly(t *testing.T) {
@@ -521,7 +522,7 @@ func TestCollectStandupToleratesAnUnknownParent(t *testing.T) {
 			"t0\x1fme@x.io\x1f2026-10-13T10:00:00Z\x1fp0\x1fFT-2/b\x1fold test tweak")
 	f.script("git log --format=%H "+sinceArg+" origin/main", "")
 	f.script(numstatShow+" t1 t0", "\x1et1\n\n1\t1\ta_test.go\n\x1et0\n\n1\t1\ta_test.go")
-	f.script(cfgDeps, "")
+
 	f.script("git check-attr linguist-generated -- a_test.go", "a_test.go: linguist-generated: unspecified")
 	f.script("git grep -l -E "+generatedHeader+" t1 t0 -- a_test.go", "")
 	f.script("gh api user", `{"login":"me"}`)

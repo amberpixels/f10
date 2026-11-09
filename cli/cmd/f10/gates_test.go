@@ -13,11 +13,11 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -723,12 +723,12 @@ func TestOutcomesTaskJudge(t *testing.T) {
 	}
 }
 
-func queued(action string) ref.DriveFinish {
-	return ref.DriveFinish{State: ref.FinishQueued, Action: action}
+func queued(action string) branchmeta.DriveFinish {
+	return branchmeta.DriveFinish{State: branchmeta.FinishQueued, Action: action}
 }
 
-func running(action string) ref.DriveFinish {
-	return ref.DriveFinish{State: ref.FinishRunning, Action: action}
+func running(action string) branchmeta.DriveFinish {
+	return branchmeta.DriveFinish{State: branchmeta.FinishRunning, Action: action}
 }
 
 // Drive's record of running finish turns the finish row from pending to
@@ -744,10 +744,10 @@ func TestGatesDriveFinish(t *testing.T) {
 		name   string
 		run    *state.Run
 		driven string
-		finish ref.DriveFinish
+		finish branchmeta.DriveFinish
 		want   string
 	}{
-		{"no record", shipped, "", ref.DriveFinish{}, gatePending},
+		{"no record", shipped, "", branchmeta.DriveFinish{}, gatePending},
 		{"ship not done", working, "", queued(""), gatePending},
 		{"queued", shipped, "", queued(""), "queued (drive)"},
 		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (drive)"},

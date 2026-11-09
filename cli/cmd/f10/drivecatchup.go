@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -64,8 +65,8 @@ func integrateBranch(
 	}
 
 	if p.found == foundGone {
-		for _, key := range []string{cfgAfter, cfgAfterBranch} {
-			if err := unsetIfSet(ctx, in.main, "branch."+p.branch+"."+key); err != nil {
+		for _, key := range []branchmeta.Key{branchmeta.After, branchmeta.AfterBranch} {
+			if err := branchmeta.UnsetIfSet(ctx, in.main, p.branch, key); err != nil {
 				return p, false, err
 			}
 		}
@@ -496,28 +497,17 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 // clearMarks unsets the catchup marks once the base is in and verify is
 // green, and records the base the branch now stands on, as the step does.
 func clearMarks(ctx context.Context, main, branch string, p catchupPlan) error {
-	for _, key := range []string{cfgLanded, cfgMoved} {
-		if err := unsetIfSet(ctx, main, "branch."+branch+"."+key); err != nil {
+	for _, key := range []branchmeta.Key{branchmeta.Landed, branchmeta.Moved} {
+		if err := branchmeta.UnsetIfSet(ctx, main, branch, key); err != nil {
 			return fmt.Errorf("clearing the %s mark on %s: %w", key, branch, err)
 		}
 	}
 
-	tip := "branch." + branch + "." + cfgTip
 	if p.found == foundAfter {
-		return gitx.SetConfig(ctx, main, tip, p.sha)
+		return branchmeta.Set(ctx, main, branch, branchmeta.Tip, p.sha)
 	}
 
-	return unsetIfSet(ctx, main, tip)
-}
-
-// unsetIfSet unsets key, which git refuses for a key not set.
-func unsetIfSet(ctx context.Context, dir, key string) error {
-	v, err := gitx.Config(ctx, dir, key)
-	if err != nil || v == "" {
-		return err
-	}
-
-	return gitx.UnsetConfig(ctx, dir, key)
+	return branchmeta.UnsetIfSet(ctx, main, branch, branchmeta.Tip)
 }
 
 // catchupSent is what the branch looked like when a catchup went out, for
@@ -576,7 +566,7 @@ func conflictPaths(conflicts []gitx.Conflict) string {
 // recordCatchup notes what the catchup about to go out starts from, for the
 // progress check a later conflict runs. A read git cannot answer halts: a
 // record made up would halt a healthy task, or loop on a doomed one.
-func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key string) error {
+func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key branchmeta.Key) error {
 	target, base, err := in.catchupTarget(ctx, r, key)
 	if err != nil {
 		return err
@@ -633,9 +623,9 @@ func (in *driveInput) originTip(ctx context.Context, r *driveRun) (string, error
 
 // targetOrigin is the remote-tracking ref of what a mark's catchup brings
 // in; a base recorded nowhere gives "".
-func (in *driveInput) targetOrigin(ctx context.Context, r *driveRun, key string) (string, error) {
-	if key == cfgMoved {
-		after, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+cfgAfterBranch)
+func (in *driveInput) targetOrigin(ctx context.Context, r *driveRun, key branchmeta.Key) (string, error) {
+	if key == branchmeta.Moved {
+		after, err := branchmeta.Get(ctx, in.main, r.o.branch, branchmeta.AfterBranch)
 		if err != nil || after == "" {
 			return "", err
 		}
@@ -654,9 +644,9 @@ func (in *driveInput) targetOrigin(ctx context.Context, r *driveRun, key string)
 // catchupTarget resolves a mark's target as the catchup step does, and the
 // progress check reads the target through this too, so the record and the
 // comparison never name different commits.
-func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string) (string, string, error) {
-	if key == cfgMoved {
-		target, err := gitx.Config(ctx, in.main, "branch."+r.o.branch+"."+key)
+func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key branchmeta.Key) (string, string, error) {
+	if key == branchmeta.Moved {
+		target, err := branchmeta.Get(ctx, in.main, r.o.branch, key)
 		if err != nil {
 			return "", "", fmt.Errorf("reading the %s mark on %s: %w", key, r.o.branch, err)
 		}
@@ -670,7 +660,7 @@ func (in *driveInput) catchupTarget(ctx context.Context, r *driveRun, key string
 // conflictAgain says why a conflict after the catchup this drive sent makes
 // no progress, or "" to catch up again, and the conflict as attempts compare
 // it; the files conflicting now are named either way.
-func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key string) (string, string, error) {
+func (in *driveInput) conflictAgain(ctx context.Context, r *driveRun, key branchmeta.Key) (string, string, error) {
 	if r.lastCatchup == nil {
 		return "", "", nil
 	}

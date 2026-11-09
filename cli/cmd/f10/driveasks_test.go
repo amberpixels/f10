@@ -47,7 +47,7 @@ func (fx *driveFixture) asking(t *testing.T) {
 func (fx *driveFixture) resumedOnAsk(t *testing.T) {
 	fx.adoptsGH1()
 	fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]")
-	fx.f.script("git config branch.GH-1."+cfgDrive+" judge", "")
+
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
 }

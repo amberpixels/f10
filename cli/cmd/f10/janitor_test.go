@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -48,7 +49,7 @@ func newJanitorFixture(t *testing.T) *janitorFixture {
 	f.script(originURL, "git@x:a/b.git")
 	f.script(remoteURL, "git@x:a/b.git")
 	f.script(worktrees, porcelain())
-	f.script(cfgDeps, "")
+
 	f.script(ghLogin, `{"login":"me"}`)
 
 	return fx
@@ -167,15 +168,12 @@ func TestJanitorReleasesDependents(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
-	fx.f.script(cfgDeps, "branch.GH-2.f10-after-branch GH-1/x")
-	fx.f.script("git config --get branch.GH-2.f10-after", "GH-1")
-	fx.f.script("git config --unset branch.GH-2.f10-after", "")
-	fx.f.script("git config --unset branch.GH-2.f10-after-branch", "")
-	fx.f.script("git config branch.GH-2.f10-landed GH-1", "")
+	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1/x")
+	fx.f.meta.Seed("GH-2", branchmeta.After, "GH-1")
 
 	out := fx.run(t)
 
-	if !fx.f.called("git config branch.GH-2.f10-landed GH-1") || !fx.f.called("git branch -D GH-1/x") {
+	if !fx.f.called("set branch.GH-2.f10-landed GH-1") || !fx.f.called("git branch -D GH-1/x") {
 		t.Errorf("dependent not released: %q\n%s", fx.f.calls, out)
 	}
 }
@@ -317,7 +315,7 @@ func TestJanitorClosedRequest(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
 	fx.request("GH-1/x", "CLOSED", "abc", "me")
-	fx.f.script(cfgDeps, "branch.GH-2.f10-after-branch GH-1/x")
+	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1/x")
 
 	if out := fx.run(t); fx.f.called("git branch -D") || !strings.Contains(out, "GH-2 started --after it") {
 		t.Errorf("with a dependent: out = %q", out)
@@ -522,7 +520,8 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
-	fx.f.script(linkedKeys, "branch.GH-1/x.f10-task GH-1\nbranch.GH-1/x.f10-tasks GH-2")
+	fx.f.meta.Seed("GH-1/x", branchmeta.Task, "GH-1")
+	fx.f.meta.Seed("GH-1/x", branchmeta.Riders, "GH-2")
 
 	rider := filepath.Join(fx.in.storage.Plans(), "GH-2.md")
 	if err := os.MkdirAll(fx.in.storage.Plans(), 0o755); err != nil {
@@ -535,6 +534,22 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 
 	if out := fx.run(t); exists(rider) {
 		t.Errorf("rider's plan not archived:\n%s", out)
+	}
+}
+
+// A branch whose name carries no id is still its linked task's: a merged
+// picked-up PR's branch goes, and that task's plan with it.
+func TestJanitorReadsALinkWithoutRiders(t *testing.T) {
+	fx := newJanitorFixture(t)
+	fx.branches(t, [3]string{"alice/fix", "abc", ""})
+	fx.request("alice/fix", "MERGED", "abc", "me")
+	fx.f.meta.Seed("alice/fix", branchmeta.Task, "GH-1")
+	plan := fx.plan(t)
+
+	out := fx.run(t)
+
+	if !fx.f.called("git branch -D alice/fix") || exists(plan) {
+		t.Errorf("a link-only branch was not cleared:\n%s\ncalls: %q", out, fx.f.calls)
 	}
 }
 
@@ -564,7 +579,7 @@ func TestJanitorReadsOriginByStartsShapes(t *testing.T) {
 	fx.f.script(allHeads, heads("main"))
 	fx.f.script(lsHeads, "abc\trefs/heads/revert-GH-1\nabc\trefs/heads/feat/GH-2-x")
 
-	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") || fx.f.called("git config --get branch.") {
+	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") || len(fx.f.meta.Writes()) > 0 {
 		t.Errorf("out = %q, calls %q", out, fx.f.calls)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -270,7 +270,7 @@ func (in *driveInput) poll(
 		return in.next(ctx, w, r)
 	}
 
-	if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
+	if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
 		return fmt.Errorf("recording %s done: %w", skill, err)
 	}
 
@@ -314,7 +314,7 @@ func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
 	return key != "" || err != nil
 }
 
-func (in *driveInput) mark(ctx context.Context, r *driveRun) (string, error) {
+func (in *driveInput) mark(ctx context.Context, r *driveRun) (branchmeta.Key, error) {
 	return markOn(ctx, in.main, r.o.branch)
 }
 

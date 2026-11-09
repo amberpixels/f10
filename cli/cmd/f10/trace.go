@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/trace"
@@ -270,7 +271,7 @@ func countFlag(cmd *cli.Command, name string) *int {
 }
 
 func branchAfter(ctx context.Context, dir, branch string) string {
-	return gitx.Out(ctx, dir, "config", "--get", "branch."+branch+"."+cfgAfter)
+	return branchmeta.Out(ctx, dir, branch, branchmeta.After)
 }
 
 // reviewCounts reads the three review flags: all or none, since a Review:

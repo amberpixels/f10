@@ -67,21 +67,25 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			task.after = base.Head().ID
 		}
 
-		branched, err := hasTaskBranch(ctx, in.main, r.ID)
+		x, err := loadBranchIndex(ctx, in.main)
 		if err != nil {
 			return err
 		}
 
+		first, err := x.any(ctx, r.ID)
+		if err != nil {
+			return err
+		}
+
+		branched := first != ""
 		if branched {
 			var local []string
 			if suffix == "" {
-				if local, err = linkedBranches(ctx, in.main, r.ID); err != nil {
-					return err
-				}
+				local = x.linked(r.ID)
 			}
 
 			if len(local) == 0 {
-				if local, err = branchesFor(ctx, in.main, "refs/heads/", r.ID, suffix); err != nil {
+				if local, err = x.under(ctx, "refs/heads/", r.ID, suffix); err != nil {
 					return err
 				}
 			}

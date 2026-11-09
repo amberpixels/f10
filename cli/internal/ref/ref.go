@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -25,33 +26,6 @@ const (
 	OriginBranch   = "branch"
 	OriginSession  = "session"
 )
-
-// TaskKey is the local config key under `branch.<name>.` linking a branch to
-// its task: a branch picked up from a PR need not carry the id in its name,
-// and a bundle's branch links its lead.
-const TaskKey = "f10-task"
-
-// RidersKey is the key, beside TaskKey, that lists a bundle's riders,
-// space-separated: the tasks one branch ships beside its lead.
-const RidersKey = "f10-tasks"
-
-// What `f10 start --after` records beside TaskKey. Finish swaps the After
-// keys for LandedKey so the next step brings the default branch in first;
-// MovedKey is drive's note that the base's head moved past the dependent,
-// for the next catchup, which clears both. TipKey is the base commit the
-// dependent was last built on: a catchup rebases onto from it once the
-// base's history is rewritten (squash-merged or rebased).
-const (
-	AfterKey       = "f10-after"
-	AfterBranchKey = "f10-after-branch"
-	LandedKey      = "f10-landed"
-	MovedKey       = "f10-base-moved"
-	TipKey         = "f10-base-tip"
-)
-
-// AgentKey is the whole profile (kind:model:effort) a start or drive gave
-// the branch's agent, read back on a rerun; absent for the kind's default.
-const AgentKey = "f10-agent"
 
 // Separator joins a bundle's ids, `ABC-1+ABC-2`, lead first.
 const Separator = "+"
@@ -196,22 +170,15 @@ func (r Lookup) parseBundle(token string) (Ref, error) {
 // bundleOf is the bundle local config records id in, lead first, or nil:
 // a branch whose riders list it, or whose linked lead it is.
 func (r Lookup) bundleOf(ctx context.Context, id string) ([]string, error) {
-	entries, err := gitx.ConfigEntries(ctx, r.Dir, `^branch\..*\.`+RidersKey+`$`)
+	records, err := branchmeta.LoadAll(ctx, r.Dir)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, e := range entries {
-		branch := strings.TrimSuffix(strings.TrimPrefix(e.Key, "branch."), "."+RidersKey)
-		riders := strings.Fields(e.Value)
-
-		lead, err := gitx.Config(ctx, r.Dir, "branch."+branch+"."+TaskKey)
-		if err != nil {
-			return nil, err
-		}
-
+	for _, rec := range records {
+		lead, riders := rec.Task, rec.Riders
 		if lead == "" {
-			lead = Match(r.Prefix, branch)
+			lead = Match(r.Prefix, rec.Branch)
 		}
 
 		if lead == "" || len(riders) == 0 {
@@ -337,22 +304,15 @@ func (r Lookup) fromBranch(ctx context.Context) (string, []string, error) {
 		return "", nil, nil
 	}
 
-	section := "branch." + branch + "."
-
-	id, err := gitx.Config(ctx, r.Dir, section+TaskKey)
+	rec, err := branchmeta.Load(ctx, r.Dir, branch)
 	if err != nil {
 		return "", nil, err
 	}
 
-	if id != "" {
-		riders, err := gitx.Config(ctx, r.Dir, section+RidersKey)
-		if err != nil {
-			return "", nil, err
-		}
-
+	if id := rec.Task; id != "" {
 		var members []string
-		if fields := strings.Fields(riders); len(fields) > 0 {
-			members = append([]string{id}, fields...)
+		if len(rec.Riders) > 0 {
+			members = append([]string{id}, rec.Riders...)
 		}
 
 		return id, members, nil

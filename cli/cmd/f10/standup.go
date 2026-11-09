@@ -14,6 +14,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -665,14 +666,12 @@ func refBranch(r string, remotes []string, def string) string {
 func recordedBases(ctx context.Context, main string) map[string]string {
 	out := map[string]string{}
 
-	for line := range strings.SplitSeq(gitx.Out(ctx, main, "config", "--get-regexp", `^branch\..*\.`+cfgAfterBranch+`$`), "\n") {
-		key, base, ok := strings.Cut(line, " ")
-		if !ok {
-			continue
+	// display only: an unreadable config records no base
+	records, _ := branchmeta.LoadAll(ctx, main)
+	for _, r := range records {
+		if r.AfterBranch != "" {
+			out[r.Branch] = r.AfterBranch
 		}
-
-		head := strings.TrimSuffix(strings.TrimPrefix(key, "branch."), "."+cfgAfterBranch)
-		out[head] = strings.TrimSpace(base)
 	}
 
 	return out

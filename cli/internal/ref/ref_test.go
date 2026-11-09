@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -194,28 +196,17 @@ func TestLookupExhausted(t *testing.T) {
 // A branch picked up from a PR carries no id: the f10-task link its local
 // config holds names the task, ahead of the branch name.
 func TestFromBranchReadsTheLink(t *testing.T) {
-	answers := map[string]string{
-		"rev-parse --abbrev-ref HEAD":                    "alice/fix-login",
-		"config --get branch.alice/fix-login." + TaskKey: "GH-9",
-	}
+	answers := map[string]string{"rev-parse --abbrev-ref HEAD": "alice/fix-login"}
+	fakeGit(t, answers)
 
-	prev := gitx.Exec
-	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
-		if out, ok := answers[strings.Join(args, " ")]; ok {
-			return out, nil
-		}
-
-		return "", &gitx.ExitError{Args: args, Code: 1}
-	}
-
-	t.Cleanup(func() { gitx.Exec = prev })
+	meta := branchmetatest.Use(t)
+	meta.Seed("alice/fix-login", branchmeta.Task, "GH-9")
 
 	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
 	if got, _, _ := r.fromBranch(t.Context()); got != "GH-9" {
 		t.Errorf("fromBranch with a link = %q, want GH-9", got)
 	}
 
-	delete(answers, "config --get branch.alice/fix-login."+TaskKey)
 	answers["rev-parse --abbrev-ref HEAD"] = "GH-3/slug"
 
 	if got, members, _ := r.fromBranch(t.Context()); got != "GH-3" || members != nil {
@@ -241,12 +232,11 @@ func fakeGit(t *testing.T, answers map[string]string) {
 // A bundle's branch answers with every member: from its recorded link and
 // riders, else from the ids its name spells.
 func TestFromBranchReadsTheBundle(t *testing.T) {
-	answers := map[string]string{
-		"rev-parse --abbrev-ref HEAD":                     "GH-1+GH-2/slug",
-		"config --get branch.GH-1+GH-2/slug." + TaskKey:   "GH-1",
-		"config --get branch.GH-1+GH-2/slug." + RidersKey: "GH-2 GH-5",
-	}
-	fakeGit(t, answers)
+	fakeGit(t, map[string]string{"rev-parse --abbrev-ref HEAD": "GH-1+GH-2/slug"})
+
+	meta := branchmetatest.Use(t)
+	meta.Seed("GH-1+GH-2/slug", branchmeta.Task, "GH-1")
+	meta.Seed("GH-1+GH-2/slug", branchmeta.Riders, "GH-2 GH-5")
 
 	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
 
@@ -259,7 +249,9 @@ func TestFromBranchReadsTheBundle(t *testing.T) {
 		t.Errorf("Find on a linked bundle = %s %v, want GH-1 [GH-1 GH-2 GH-5]", got.ID, got.Bundle)
 	}
 
-	delete(answers, "config --get branch.GH-1+GH-2/slug."+TaskKey)
+	if err := branchmeta.Unset(t.Context(), "", "GH-1+GH-2/slug", branchmeta.Task); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err = r.Find(t.Context(), "")
 	if err != nil {
@@ -274,10 +266,9 @@ func TestFromBranchReadsTheBundle(t *testing.T) {
 // Any member typed alone comes back as itself, carrying the bundle local
 // config records it in; Head is the lead every branch lookup uses.
 func TestFindResolvesAMemberToItsBundle(t *testing.T) {
-	fakeGit(t, map[string]string{
-		`config --get-regexp ^branch\..*\.` + RidersKey + `$`: "branch.GH-1+GH-2/slug." + RidersKey + " GH-2",
-		"config --get branch.GH-1+GH-2/slug." + TaskKey:       "GH-1",
-	})
+	meta := branchmetatest.Use(t)
+	meta.Seed("GH-1+GH-2/slug", branchmeta.Riders, "GH-2")
+	meta.Seed("GH-1+GH-2/slug", branchmeta.Task, "GH-1")
 
 	r := Lookup{Prefix: "GH", Dir: t.TempDir()}
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -31,8 +32,8 @@ func TestStartABundle(t *testing.T) {
 	const (
 		branch = "GH-1+GH-2/add-dark-mode"
 		path   = "/code/repo.GH-1+GH-2-add-dark-mode"
-		lead   = "git config branch." + branch + "." + cfgTaskID + " GH-1"
-		riders = "git config branch." + branch + "." + cfgRiders + " GH-2"
+		lead   = "set branch." + branch + "." + string(branchmeta.Task) + " GH-1"
+		riders = "set branch." + branch + "." + string(branchmeta.Riders) + " GH-2"
 	)
 
 	f := newFakes(t)
@@ -79,7 +80,7 @@ func TestSettleBundle(t *testing.T) {
 
 	t.Run("a rider in another bundle", func(t *testing.T) {
 		f := newFakes(t)
-		f.script(linkedKeys, "branch.GH-3+GH-2/x."+cfgRiders+" GH-2")
+		f.meta.Seed("GH-3+GH-2/x", branchmeta.Riders, "GH-2")
 		f.script(refsRider, "")
 
 		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
@@ -103,8 +104,8 @@ func TestSettleBundle(t *testing.T) {
 
 	t.Run("riders changed since start", func(t *testing.T) {
 		f := newFakes(t)
-		f.script("git config --get branch.GH-1+GH-3/x."+cfgRiders, "GH-3")
-		f.script("git config --get branch.GH-1+GH-3/x."+cfgTaskID, "GH-1")
+		f.meta.Seed("GH-1+GH-3/x", branchmeta.Riders, "GH-3")
+		f.meta.Seed("GH-1+GH-3/x", branchmeta.Task, "GH-1")
 
 		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
 		if err == nil || !strings.Contains(err.Error(), "ships GH-1+GH-3; riders are fixed at start") {
@@ -123,9 +124,10 @@ func TestSettleBundle(t *testing.T) {
 
 	t.Run("the bundle's own branch reopens", func(t *testing.T) {
 		f := newFakes(t)
-		f.script("git config --get branch.GH-1+GH-2/x."+cfgRiders, "GH-2")
-		f.script("git config --get branch.GH-1+GH-2/x."+cfgTaskID, "GH-1")
-		f.script(linkedKeys, "branch.GH-1+GH-2/x."+cfgTaskID+" GH-1\nbranch.GH-1+GH-2/x."+cfgRiders+" GH-2")
+		f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2")
+		f.meta.Seed("GH-1+GH-2/x", branchmeta.Task, "GH-1")
+		f.meta.Seed("GH-1+GH-2/x", branchmeta.Task, "GH-1")
+		f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2")
 		f.script(refsRider, "")
 
 		if _, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
@@ -153,18 +155,19 @@ func TestSettleBundle(t *testing.T) {
 }
 
 // Any member finds the bundle's branch through the recorded link.
-func TestLinkedBranchesFindsAnyMember(t *testing.T) {
+func TestLinkedFindsAnyMember(t *testing.T) {
 	f := newFakes(t)
-	f.script(linkedKeys, "branch.GH-1+GH-2/x."+cfgTaskID+" GH-1\nbranch.GH-1+GH-2/x."+cfgRiders+" GH-2 GH-3")
+	f.meta.Seed("GH-1+GH-2/x", branchmeta.Task, "GH-1")
+	f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2 GH-3")
 
 	for _, id := range []string{"GH-1", "GH-3", "gh-2"} {
-		if got, _ := linkedBranches(t.Context(), "/code/repo", id); strings.Join(got, ",") != "GH-1+GH-2/x" {
-			t.Errorf("linkedBranches(%s) = %v, want [GH-1+GH-2/x]", id, got)
+		if got := indexOf(t).linked(id); strings.Join(got, ",") != "GH-1+GH-2/x" {
+			t.Errorf("linked(%s) = %v, want [GH-1+GH-2/x]", id, got)
 		}
 	}
 
-	if got, _ := linkedBranches(t.Context(), "/code/repo", "GH-4"); got != nil {
-		t.Errorf("linkedBranches(GH-4) = %v, want none", got)
+	if got := indexOf(t).linked("GH-4"); got != nil {
+		t.Errorf("linked(GH-4) = %v, want none", got)
 	}
 }
 

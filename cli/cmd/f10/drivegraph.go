@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 )
 
 // Each task has at most one base: the f10-after its branch records once
@@ -32,7 +32,7 @@ func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []st
 		// the branch's copy wins: it is what start recorded, and what ship
 		// and pr act on; finish clears it, and the body then names a base
 		// that is finished, which is the same answer
-		recorded, err := gitx.Config(ctx, in.main, "branch."+t.branch+"."+cfgAfter)
+		recorded, err := branchmeta.Get(ctx, in.main, t.branch, branchmeta.After)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s: reading its recorded base: %w", t.ref.ID, err)
 		}

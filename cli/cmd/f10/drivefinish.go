@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
@@ -92,7 +93,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return nil
 	}
 
-	reason, conflict, err := in.conflictAgain(ctx, r, cfgLanded)
+	reason, conflict, err := in.conflictAgain(ctx, r, branchmeta.Landed)
 
 	switch {
 	case err != nil:
@@ -105,14 +106,14 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		}
 	}
 
-	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+cfgLanded, def); err != nil {
+	if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Landed, def); err != nil {
 		res := halted(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
 
 		return &res
 	}
 
 	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)
-	in.finishStep(ctx, w, branch, ref.FinishQueued, "catching up with "+base)
+	in.finishStep(ctx, w, branch, branchmeta.FinishQueued, "catching up with "+base)
 
 	return nil
 }
@@ -176,7 +177,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	buf := &linkBuffer{links: linkTerminal(w)}
 
-	in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, "starting")
+	in.finishStep(ctx, w, r.o.branch, branchmeta.FinishRunning, "starting")
 
 	err = in.finish(ctx, buf, driveFinish{
 		task:   task.ref,
@@ -184,7 +185,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		branch: r.o.branch,
 		pr:     pr,
 		progress: func(action string) {
-			in.finishStep(ctx, w, r.o.branch, ref.FinishRunning, action)
+			in.finishStep(ctx, w, r.o.branch, branchmeta.FinishRunning, action)
 		},
 		handoff:  func(lines []string) { hand = lines },
 		deferred: func(note string) { pulled, in.pullLine = note, note },
@@ -247,8 +248,8 @@ func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, a
 		return
 	}
 
-	rec := ref.DriveFinish{State: st, Action: action}
-	if err := gitx.SetConfig(ctx, in.main, "branch."+branch+"."+ref.FinishKey, rec.Format()); err != nil {
+	rec := branchmeta.DriveFinish{State: st, Action: action}
+	if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Finish, rec.Format()); err != nil {
 		fmt.Fprintf(w, "  recording finish's progress on %s: %v\n", branch, err)
 	}
 }
@@ -261,6 +262,6 @@ func (in *driveInput) parkFinish(ctx context.Context, r *driveRun) {
 		return
 	}
 
-	key := "branch." + r.o.branch + "." + ref.FinishKey
-	_ = gitx.SetConfig(ctx, in.main, key, ref.DriveFinish{State: ref.FinishQueued}.Format()) // a view only
+	_ = branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Finish,
+		branchmeta.DriveFinish{State: branchmeta.FinishQueued}.Format()) // a view only
 }

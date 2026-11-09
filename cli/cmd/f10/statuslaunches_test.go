@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -207,7 +208,7 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
-	git(t, fx.repo, "config", "branch.DM-5/work."+cfgAfter, "DM-3")
+	git(t, fx.repo, "config", branchmeta.After.For("DM-5/work"), "DM-3")
 
 	n := fx.drive(t, func(r *drives.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
 	fx.launch(t, state.LaunchStart, "DM-5")
@@ -243,7 +244,7 @@ func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-7", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-4", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
-	git(t, fx.repo, "config", "branch.DM-4/work."+cfgAfter, "DM-3")
+	git(t, fx.repo, "config", branchmeta.After.For("DM-4/work"), "DM-3")
 
 	fx.drive(t, func(r *drives.Record) { r.Tasks[2].After = "DM-7" }, "DM-3", "DM-7", "DM-4")
 

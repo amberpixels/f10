@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 )
@@ -171,13 +172,13 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 		{recorded: "ultra", run: "fast", want: "ultra", note: "kept the ultra pace"},
 	} {
 		f := newFakes(t)
-		f.script("git config --get branch.GH-1."+cfgPace, tc.recorded)
+		f.meta.Seed("GH-1", branchmeta.Pace, tc.recorded)
 
 		in := &driveInput{main: "/code/repo", args: driveArgs{pace: tc.flag}, paced: paced}
 
 		fl, note, err := in.keepPace(t.Context(), "GH-1", shipFlow{pace: tc.run})
 		if err != nil || fl.pace != tc.want || !strings.Contains(note, tc.note) ||
-			f.called("git config branch.GH-1."+cfgPace+" "+tc.flag) != tc.writes {
+			f.called("set branch.GH-1."+string(branchmeta.Pace)+" "+tc.flag) != tc.writes {
 			t.Errorf("recorded %q: pace %q, note %q, err %v, calls %v", tc.recorded, fl.pace, note, err, f.calls)
 		}
 	}
@@ -214,10 +215,8 @@ func TestStartRecordsThePace(t *testing.T) {
 	f.script(shaAfter, "ccc")
 	f.script(headRef, "origin/main")
 	f.script(shaMain, "bbb")
-	f.script(cfgTask, "")
-	f.script(cfgBranch, "")
 	f.script("git merge-base refs/heads/GH-1 refs/heads/GH-7/base", "ccc")
-	f.script("git config branch.GH-1."+cfgTip+" ccc", "")
+
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
@@ -233,7 +232,7 @@ func TestStartRecordsThePace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !f.called("git config branch.GH-1." + cfgPace + " ultra") {
+	if !f.called("set branch.GH-1." + string(branchmeta.Pace) + " ultra") {
 		t.Errorf("the pace was not recorded on the branch: %v", f.calls)
 	}
 }

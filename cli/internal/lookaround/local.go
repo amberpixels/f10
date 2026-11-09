@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -95,45 +96,25 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 		l.Branches[name] = Branch{}
 	}
 
-	pattern := `^branch\..*\.(` + strings.Join(
-		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.AgentKey, ref.FinishKey},
-		"|",
-	) + `)$`
-
-	entries, err := gitx.ConfigEntries(ctx, in.Main, pattern)
+	records, err := branchmeta.LoadAll(ctx, in.Main)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	for _, e := range entries {
-		rest := strings.TrimPrefix(e.Key, "branch.")
-
-		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.AgentKey, ref.FinishKey} {
-			name, ok := strings.CutSuffix(rest, "."+key)
-			if !ok {
-				continue
-			}
-
-			b := l.Branches[name]
-
-			switch key {
-			case ref.TaskKey:
-				b.Task = e.Value
-			case ref.RidersKey:
-				b.Riders = strings.Fields(e.Value)
-			case ref.AfterKey:
-				b.After = e.Value
-			case ref.AgentKey:
-				p := agentctl.ParseRecorded(e.Value)
-				b.Model, b.Agent = p.Model, p.Short()
-			case ref.FinishKey:
-				if d, ok := ref.ParseDriveFinish(e.Value); ok {
-					b.Finish = &d
-				}
-			}
-
-			l.Branches[name] = b
+	for _, r := range records {
+		if r.Task == "" && r.Riders == nil && r.After == "" && r.Agent == "" && r.Finish == nil {
+			continue
 		}
+
+		b := l.Branches[r.Branch]
+		b.Task, b.Riders, b.After, b.Finish = r.Task, r.Riders, r.After, r.Finish
+
+		if r.Agent != "" {
+			p := agentctl.ParseRecorded(r.Agent)
+			b.Model, b.Agent = p.Model, p.Short()
+		}
+
+		l.Branches[r.Branch] = b
 	}
 
 	dropDeadFinish(l.Branches, in.SharedRoot.Path(), prefix)

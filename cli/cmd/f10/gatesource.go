@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -102,17 +102,17 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	}
 
 	if branch != "" && src.main != "" {
-		in.driven = gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgDrive)
+		in.driven = branchmeta.Out(ctx, src.main, branch, branchmeta.Drive)
 		// the record says drive finishes the branch, and outlives a halted or
 		// killed drive; what finish is doing counts only under the lease
-		rec, ok := ref.ParseDriveFinish(gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+ref.FinishKey))
+		rec, ok := branchmeta.ParseDriveFinish(branchmeta.Out(ctx, src.main, branch, branchmeta.Finish))
 		if _, held := drives.Probe(src.shared, id); ok && held {
 			in.finish = rec
 		}
 
 		in.finishes = ok
 
-		if recorded := gitx.Out(ctx, src.main, "config", "--get", "branch."+branch+"."+cfgFlow); recorded != "" {
+		if recorded := branchmeta.Out(ctx, src.main, branch, branchmeta.Flow); recorded != "" {
 			name = recorded
 		}
 	}

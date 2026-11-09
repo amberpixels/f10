@@ -41,7 +41,7 @@ func finishRecords(w io.Writer, in finishInput, branch string) {
 // attemptRows matches the rows of the attempt finish acted on, since one
 // attempt finished leaves the task's others alive. A bare finish, or one
 // that found the lone <id>-* branch, types no suffix: the branch's ending
-// names the attempt, the same way branchesFor finds it.
+// names the attempt, the same way the branch index finds it.
 func attemptRows(in finishInput, branch string, rows []drives.Task) func(drives.Task) bool {
 	ofTask := func(row string) (string, bool) {
 		id, suffix := ref.SplitSuffix(row)

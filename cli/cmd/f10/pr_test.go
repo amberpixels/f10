@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
 
@@ -43,7 +44,7 @@ func stacked(t *testing.T) string {
 	git(t, dir, "push", "-q", "origin", "base")
 	git(t, dir, "switch", "-q", "-c", "feat")
 	commitFile(t, dir, "feat.txt")
-	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "base")
+	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
 
 	return dir
 }
@@ -55,14 +56,14 @@ func TestPRBase(t *testing.T) {
 		t.Errorf("stacked: base = %q, %v; want base", out, err)
 	}
 
-	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "gone")
+	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "gone")
 
 	out, errOut, err := runApp(t, "-C", dir, "pr", "base").streams()
 	if err != nil || out != "main\nfound: "+foundGone+"\n" || errOut != "" {
 		t.Errorf("gone: base = %q, %q, %v; want main and the typed found line, nothing on stderr", out, errOut, err)
 	}
 
-	git(t, dir, "config", "--unset", "branch.feat."+cfgAfterBranch)
+	git(t, dir, "config", "--unset", branchmeta.AfterBranch.For("feat"))
 
 	if out, _, err := runApp(t, "-C", dir, "pr", "base").streams(); err != nil || out != "main\n" {
 		t.Errorf("unrecorded: base = %q, %v; want main", out, err)
@@ -75,7 +76,7 @@ func TestPRBaseOriginRefusesALocalBase(t *testing.T) {
 	git(t, dir, "switch", "-q", "-c", "base")
 	commitFile(t, dir, "base.txt")
 	git(t, dir, "switch", "-q", "-c", "feat")
-	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "base")
+	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
 
 	_, _, err := runApp(t, "-C", dir, "pr", "base", "--origin").streams()
 	if err == nil || !strings.Contains(err.Error(), "not on origin") {
@@ -106,7 +107,7 @@ func TestPRDiffForksFromTheNewerBase(t *testing.T) {
 	commitFile(t, dir, "unpushed.txt")
 	git(t, dir, "switch", "-q", "-c", "feat2")
 	commitFile(t, dir, "feat2.txt")
-	git(t, dir, "config", "branch.feat2."+cfgAfterBranch, "base")
+	git(t, dir, "config", branchmeta.AfterBranch.For("feat2"), "base")
 
 	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "feat2.txt\n" {
@@ -215,7 +216,7 @@ func TestPRSubjectByTaskID(t *testing.T) {
 // id in its name.
 func TestBranchTask(t *testing.T) {
 	dir := prRepo(t)
-	git(t, dir, "config", "branch.picked-up."+cfgTaskID, "REPO-3")
+	git(t, dir, "config", branchmeta.Task.For("picked-up"), "REPO-3")
 
 	tg, err := targetAt(t.Context(), dir, false, "pr")
 	if err != nil {

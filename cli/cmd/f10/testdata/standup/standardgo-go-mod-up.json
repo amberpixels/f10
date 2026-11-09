@@ -18,7 +18,7 @@
     "git check-attr linguist-generated -- README.md go.mod go.sum merge.go merge_test.go presets.go standardgo.go": {
       "stdout": "README.md: linguist-generated: unspecified\ngo.mod: linguist-generated: unspecified\ngo.sum: linguist-generated: unspecified\nmerge.go: linguist-generated: unspecified\nmerge_test.go: linguist-generated: unspecified\npresets.go: linguist-generated: unspecified\nstandardgo.go: linguist-generated: unspecified"
     },
-    "git config --get-regexp ^branch\\..*\\.f10-after-branch$": {
+    "git config --get-regexp ^branch\\..*\\.f10-": {
       "stdout": "",
       "stderr": "git config: exit status 1",
       "code": 1

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -230,7 +231,7 @@ func TestPRCreateNeedsBothOnOrigin(t *testing.T) {
 	git(t, dir, "switch", "-q", "-c", "base")
 	commitFile(t, dir, "base.txt")
 	git(t, dir, "switch", "-q", "-c", "feat")
-	git(t, dir, "config", "branch.feat."+cfgAfterBranch, "base")
+	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
 
 	if _, _, err := runApp(t, "-C", dir, "pr", "create", "--title", "T", "--body-file", body).streams(); err == nil ||
 		!strings.Contains(err.Error(), "base base is not on origin") {

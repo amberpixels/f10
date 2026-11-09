@@ -17,6 +17,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -35,9 +36,6 @@ const watchStallGrace = 10 * time.Minute
 
 // watchFile records what each pass last reported, so a fact is told once.
 const watchFile = "watch.yaml"
-
-// cfgWatch is the branch config key `f10 watch off` sets to false.
-const cfgWatch = "f10-watch"
 
 // What a pass reports about a task.
 const (
@@ -180,17 +178,15 @@ func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
 		return fmt.Errorf("%s has no branch here: nothing to watch", r.ID)
 	}
 
-	key := "branch." + name + "." + cfgWatch
-
 	if on {
-		_ = gitx.UnsetConfig(ctx, main, key) // absent is fine
+		_ = branchmeta.Unset(ctx, main, name, branchmeta.Watch) // absent is fine
 
 		fmt.Fprintf(cmd.Writer, "%s is watched again\n", taskFact(ctx, cmd.Writer, main, r.ID).value)
 
 		return nil
 	}
 
-	if err := gitx.SetConfig(ctx, main, key, "false"); err != nil {
+	if err := branchmeta.Set(ctx, main, name, branchmeta.Watch, "false"); err != nil {
 		return err
 	}
 
@@ -820,7 +816,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 // handedBack counts a mark git cannot read as handed back, with a line naming
 // it: a finish must never run on a task the user may have taken back.
 func (in watchInput) handedBack(ctx context.Context, branch string) bool {
-	v, err := gitx.Config(ctx, in.main, "branch."+branch+"."+cfgWatch)
+	v, err := branchmeta.Get(ctx, in.main, branch, branchmeta.Watch)
 	if err != nil {
 		if in.warn != nil {
 			in.warn(fmt.Sprintf("%s skipped this pass: its f10 watch off mark could not be read: %v", branch, err))
@@ -1075,7 +1071,7 @@ func (in watchInput) sendCatchup(
 
 	// a stacked base read from its local branch only: its unpushed commits
 	// would ride into this request, so the catchup waits for its push
-	if target.key == cfgMoved {
+	if target.key == branchmeta.Moved {
 		on, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/remotes/origin/"+target.name)
 
 		switch {
@@ -1156,15 +1152,14 @@ func (in watchInput) sendCatchup(
 		return nil
 	}
 
-	mark := "branch." + task.branch + "." + target.key
-	if err := gitx.SetConfig(ctx, in.main, mark, target.value); err != nil {
+	if err := branchmeta.Set(ctx, in.main, task.branch, target.key, target.value); err != nil {
 		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.id, task.branch, target.name, err)
 
 		return nil
 	}
 
 	if err := in.prompt(ctx, task, driven("/f10:catchup")+" && "+watchClause); err != nil {
-		_ = gitx.UnsetConfig(ctx, in.main, mark) // nobody will clear it
+		_ = branchmeta.Unset(ctx, in.main, task.branch, target.key) // nobody will clear it
 
 		if errors.Is(err, agentctl.ErrAgentNotFound) {
 			return behind("no agent", fmt.Sprintf("%s moved past %s, and its agent was not found to catch it up",

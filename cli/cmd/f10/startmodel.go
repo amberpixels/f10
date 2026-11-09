@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -73,7 +73,7 @@ func agentArgs(p agentctl.Profile, root storage.Root, worktree string) []string 
 // recordedProfile is the profile a branch records under f10-agent, the
 // zero profile when it records none.
 func recordedProfile(ctx context.Context, main, branch string) (agentctl.Profile, error) {
-	v, err := gitx.Config(ctx, main, "branch."+branch+"."+cfgAgent)
+	v, err := branchmeta.Get(ctx, main, branch, branchmeta.Agent)
 	if err != nil {
 		return agentctl.Profile{}, fmt.Errorf("reading the recorded agent profile: %w", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -89,14 +90,19 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 		r = r.Head()
 		s.task = &r
 
-		// existingBranch, not taskCheckout: a branch pushed from another
+		// origin too, unlike taskCheckout: a branch pushed from another
 		// machine is only on origin, and still names the change
 		want, _, err := branchName(ctx, t.driver(), r, "", nil)
 		if err != nil {
 			return s, err
 		}
 
-		found, err := existingBranch(ctx, s.main, want, r.ID, "")
+		x, err := loadBranchIndex(ctx, s.main)
+		if err != nil {
+			return s, err
+		}
+
+		found, err := x.find(ctx, want, r.ID, "", policyLocalOrOrigin)
 		if err != nil {
 			return s, err
 		}
@@ -150,7 +156,7 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 // branchTask is the task a PR's head branch belongs to: its link, else the
 // id in its name; nil when neither names one the tracker resolves.
 func branchTask(ctx context.Context, t *target, main, branch string) *ref.Ref {
-	id, _ := gitx.Config(ctx, main, "branch."+branch+"."+ref.TaskKey)
+	id, _ := branchmeta.Get(ctx, main, branch, branchmeta.Task)
 	if id == "" && t.eff != nil {
 		id = ref.Matcher(t.eff.IDPrefix)(branch)
 	}

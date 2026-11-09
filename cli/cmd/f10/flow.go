@@ -22,10 +22,6 @@ import (
 // The flow verb lists the declared flows, the same list an unknown --flow
 // name fails with.
 
-// cfgFlow is the flow a started task runs, under `branch.<name>.` beside
-// f10-after, for status and for a rerun of drive.
-const cfgFlow = "f10-flow"
-
 func flowCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "flow",

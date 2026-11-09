@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -253,8 +254,8 @@ func TestCollectWatched(t *testing.T) {
 		worktrees,
 		porcelain("GH-1/x", "/code/repo.GH-1", "GH-2/y", "/code/repo.GH-2", "GH-3/z", "/code/repo.GH-3"),
 	)
-	fx.f.script("git config --get branch.GH-1/x."+cfgWatch, "")
-	fx.f.script("git config --get branch.GH-2/y."+cfgWatch, "false")
+
+	fx.f.meta.Seed("GH-2/y", branchmeta.Watch, "false")
 	fx.request("GH-1/x", "OPEN", "a1", "me")
 
 	root := t.TempDir()
@@ -376,10 +377,7 @@ func TestCollectWatchedSkipsAnUnreadableMark(t *testing.T) {
 	fx := newJanitorFixture(t)
 	fx.branches(t, [3]string{"GH-1/x", "a1", "a1"})
 	fx.f.script(worktrees, porcelain("GH-1/x", "/code/repo.GH-1"))
-	fx.f.fail(
-		"git config --get branch.GH-1/x."+cfgWatch,
-		shell.Result{Code: 128, Stderr: "fatal: unable to read config"},
-	)
+	fx.f.meta.FailRead("GH-1/x", branchmeta.Watch, errors.New("fatal: unable to read config"))
 
 	var warned []string
 

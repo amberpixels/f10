@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -24,9 +25,9 @@ var attemptLimit = 3
 // is a host call.
 type taskState struct {
 	head, origin string
-	code         bool   // the branch has commits of its own past the default branch
-	mark         string // the catchup mark on the branch, "" for none
-	busy         string // a merge or rebase in progress, or a dirty tree; "" for none
+	code         bool           // the branch has commits of its own past the default branch
+	mark         branchmeta.Key // the catchup mark on the branch, "" for none
+	busy         string         // a merge or rebase in progress, or a dirty tree; "" for none
 	plan         bool
 	pr           string // the open PR's number, "" for none or no host to ask
 	reviews      int    // review rounds written for the change
@@ -68,7 +69,7 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 // timestamp stay out, since they change on each turn that makes no progress.
 func (s taskState) fingerprint() string {
 	parts := []string{
-		s.head, s.origin, strconv.FormatBool(s.code), s.mark, s.busy, strconv.FormatBool(s.plan), s.pr,
+		s.head, s.origin, strconv.FormatBool(s.code), string(s.mark), s.busy, strconv.FormatBool(s.plan), s.pr,
 		strconv.Itoa(s.reviews), strconv.FormatBool(s.changeJudged),
 	}
 
@@ -158,7 +159,7 @@ func (in *driveInput) reconcile(ctx context.Context, w io.Writer, r *driveRun, s
 
 	for skills := in.skills(r); r.pos < len(skills) && s.has(skills[r.pos]); {
 		skill := skills[r.pos]
-		if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
+		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
 			return passed, fmt.Errorf("recording %s done: %w", skill, err)
 		}
 

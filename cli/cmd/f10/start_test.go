@@ -17,6 +17,8 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -42,12 +44,21 @@ type fakes struct {
 	absent []string
 	// launches are the agent starts argvLaunch answered for a test
 	launches []string
+	// meta holds the branch records; its writes join calls in order
+	meta *branchmetatest.Memory
 }
 
 func newFakes(t *testing.T) *fakes {
 	t.Helper()
 
 	f := &fakes{t: t, answers: map[string][]shell.Result{}, has: map[string]bool{"herdr": true}}
+	f.meta = branchmetatest.Use(t)
+	f.meta.OnWrite = func(w branchmetatest.Write) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+
+		f.calls = append(f.calls, w.String())
+	}
 	// Herdr shows no workspace until a test says otherwise
 	f.script("herdr workspace list", `{"result":{"workspaces":[]}}`)
 	// no local branch carries a task id past a prefix until a test says so
@@ -55,7 +66,7 @@ func newFakes(t *testing.T) *fakes {
 	// no branch is linked to a task, origin has no task branch, and finish
 	// measures an empty branch (so records no size), until a test says so
 	f.absent = []string{
-		linkedKeys, riderKeys, "git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
+		"git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
 		"git rev-list --ancestry-path --merges",
 		// no base tip is recorded until a test says so
 		"git merge-base refs/heads/",
@@ -114,42 +125,6 @@ func (f *fakes) answer(key string) shell.Result {
 			if strings.HasPrefix(key, p) {
 				return shell.Result{}
 			}
-		}
-
-		// no branch records riders until a test says so
-		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgRiders) {
-			return shell.Result{}
-		}
-
-		// no branch is stacked on another, for finish's size, until a test says so
-		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgAfterBranch) {
-			return shell.Result{}
-		}
-
-		// drive clears the chain an older drive stored on every branch it opens
-		if strings.HasPrefix(key, "git config --unset branch.") && strings.HasSuffix(key, ".f10-chain") {
-			return shell.Result{}
-		}
-
-		// drive records its finish's progress on every branch it finishes
-		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+ref.FinishKey) {
-			return shell.Result{}
-		}
-
-		// no branch records an agent profile until a test says so
-		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgAgent) {
-			return shell.Result{}
-		}
-
-		// start and drive record the flow on every branch they open, and
-		// none records one until a test says so
-		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+cfgFlow) {
-			return shell.Result{}
-		}
-
-		// nor a pace, until a test says so
-		if strings.HasPrefix(key, "git config ") && strings.Contains(key, "."+cfgPace) {
-			return shell.Result{}
 		}
 
 		// no rebase's state directory exists until a test says so
@@ -274,16 +249,14 @@ func fakeDriver(t *testing.T) *driver.Driver {
 }
 
 const (
-	linkedKeys = "git config --get-regexp " + cfgTaskKeys
-	riderKeys  = "git config --get-regexp ^branch\\..*\\." + cfgRiders + "$"
 	refsOrigin = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-1 refs/remotes/origin/GH-1-* refs/remotes/origin/GH-1+* refs/remotes/origin/GH-1+*/*"
 	refsLocal  = "git for-each-ref --format=%(refname) refs/heads/GH-1 refs/heads/GH-1-* refs/heads/GH-1+* refs/heads/GH-1+*/*"
 	refsAfter  = "git for-each-ref --format=%(refname) refs/heads/GH-7 refs/heads/GH-7-* refs/heads/GH-7+* refs/heads/GH-7+*/*"
 	refsAfterO = "git for-each-ref --format=%(refname) refs/remotes/origin/GH-7 refs/remotes/origin/GH-7-* refs/remotes/origin/GH-7+* refs/remotes/origin/GH-7+*/*"
 	allHeads   = "git for-each-ref --format=%(refname) refs/heads/"
 	shaAfter   = "git rev-parse --verify --quiet GH-7/base"
-	cfgTask    = "git config branch.GH-1.f10-after GH-7"
-	cfgBranch  = "git config branch.GH-1.f10-after-branch GH-7/base"
+	cfgTask    = "set branch.GH-1.f10-after GH-7"
+	cfgBranch  = "set branch.GH-1.f10-after-branch GH-7/base"
 	worktrees  = "git worktree list --porcelain"
 	shaLocal   = "git rev-parse --verify --quiet refs/heads/release/1.2"
 	shaRemote  = "git rev-parse --verify --quiet refs/remotes/release/1.2"
@@ -575,9 +548,9 @@ func TestTaskBranch(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsAfter, heads("GH-7/thing"))
 
-		got, err := taskBranch(t.Context(), "/code/repo", "GH-7")
+		got, err := indexOf(t).after(t.Context(), "GH-7")
 		if err != nil || got != "GH-7/thing" {
-			t.Errorf("taskBranch = %q, %v", got, err)
+			t.Errorf("after = %q, %v", got, err)
 		}
 
 		if f.called("git for-each-ref --format=%(refname) refs/remotes") {
@@ -590,9 +563,9 @@ func TestTaskBranch(t *testing.T) {
 		f.script(refsAfter, "")
 		f.script(refsAfterO, "refs/remotes/origin/GH-7")
 
-		got, err := taskBranch(t.Context(), "/code/repo", "GH-7")
+		got, err := indexOf(t).after(t.Context(), "GH-7")
 		if err != nil || got != "origin/GH-7" {
-			t.Errorf("taskBranch = %q, %v", got, err)
+			t.Errorf("after = %q, %v", got, err)
 		}
 	})
 
@@ -601,8 +574,8 @@ func TestTaskBranch(t *testing.T) {
 		f.script(refsAfter, "")
 		f.script(refsAfterO, "")
 
-		if _, err := taskBranch(t.Context(), "/code/repo", "GH-7"); err == nil {
-			t.Error("taskBranch found a branch where none exists")
+		if _, err := indexOf(t).after(t.Context(), "GH-7"); err == nil {
+			t.Error("after found a branch where none exists")
 		}
 	})
 
@@ -611,9 +584,9 @@ func TestTaskBranch(t *testing.T) {
 		f.script(refsAfter, "")
 		f.script(allHeads, heads("main", "feat/GH-7-base"))
 
-		got, err := taskBranch(t.Context(), "/code/repo", "GH-7")
+		got, err := indexOf(t).after(t.Context(), "GH-7")
 		if err != nil || got != "feat/GH-7-base" {
-			t.Errorf("taskBranch = %q, %v", got, err)
+			t.Errorf("after = %q, %v", got, err)
 		}
 
 		if f.called("git for-each-ref --format=%(refname) refs/remotes") {
@@ -625,7 +598,7 @@ func TestTaskBranch(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsAfter, heads("GH-7", "GH-7-attempt2"))
 
-		_, err := taskBranch(t.Context(), "/code/repo", "GH-7")
+		_, err := indexOf(t).after(t.Context(), "GH-7")
 		if err == nil || !strings.Contains(err.Error(), "GH-7-attempt2") {
 			t.Errorf("err = %v, want the candidates named", err)
 		}
@@ -739,7 +712,7 @@ func TestExistingBranch(t *testing.T) {
 		{
 			name:   "a prefixed branch linked to another task",
 			heads:  heads("feat/GH-1-followup"),
-			linked: "branch.feat/GH-1-followup.f10-task GH-5",
+			linked: "feat/GH-1-followup", // linked to GH-5
 			want:   "GH-1",
 			got:    "",
 		},
@@ -765,13 +738,13 @@ func TestExistingBranch(t *testing.T) {
 			f.script(allHeads, c.heads)
 
 			if c.linked != "" {
-				f.script(linkedKeys, c.linked)
+				f.meta.Seed(c.linked, branchmeta.Task, "GH-5")
 			}
 
-			got, err := existingBranch(t.Context(), "/code/repo", c.want, "GH-1", c.suffix)
+			got, err := indexOf(t).find(t.Context(), c.want, "GH-1", c.suffix, policyLocalOrOrigin)
 			if c.wantErr {
 				if err == nil {
-					t.Fatalf("existingBranch = %+v, want an error", got)
+					t.Fatalf("find = %+v, want an error", got)
 				}
 
 				for name := range strings.FieldsSeq(strings.ReplaceAll(c.refs+c.heads, "refs/heads/", "")) {
@@ -788,7 +761,7 @@ func TestExistingBranch(t *testing.T) {
 			}
 
 			if got.name != c.got || got.remote {
-				t.Errorf("existingBranch = %+v, want %q, local", got, c.got)
+				t.Errorf("find = %+v, want %q, local", got, c.got)
 			}
 		})
 	}
@@ -1018,7 +991,7 @@ func TestStartWithWorktrunk(t *testing.T) {
 		t.Error("git created the worktree although wt is installed")
 	}
 
-	if f.called("git config branch.GH-1." + cfgAfter) {
+	if f.called("set branch.GH-1." + string(branchmeta.After)) {
 		t.Error("a dependency was recorded although --after was not given")
 	}
 
@@ -1084,10 +1057,8 @@ func TestStartWithGitAlone(t *testing.T) {
 	f.script(shaAfter, "ccc")
 	f.script(headRef, "origin/main")
 	f.script(shaMain, "bbb")
-	f.script(cfgTask, "")
-	f.script(cfgBranch, "")
 	f.script("git merge-base refs/heads/GH-1 refs/heads/GH-7/base", "ccc")
-	f.script("git config branch.GH-1."+cfgTip+" ccc", "")
+
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 GH-7/base", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
@@ -1112,11 +1083,11 @@ func TestStartWithGitAlone(t *testing.T) {
 		t.Error("wt was run although it is not installed")
 	}
 
-	if !f.called("git config branch.GH-1." + cfgFlow + " local") {
+	if !f.called("set branch.GH-1." + string(branchmeta.Flow) + " local") {
 		t.Error("the flow was not recorded on the branch")
 	}
 
-	if !f.called(cfgTask) || !f.called(cfgBranch) || !f.called("git config branch.GH-1."+cfgTip+" ccc") {
+	if !f.called(cfgTask) || !f.called(cfgBranch) || !f.called("set branch.GH-1."+string(branchmeta.Tip)+" ccc") {
 		t.Errorf("the dependency was not recorded: %v", f.calls)
 	}
 
@@ -1149,8 +1120,6 @@ func afterFixture(t *testing.T, dir, shaBase string) *fakes {
 	f.script(shaAfter, shaBase)
 	f.script(headRef, "origin/main")
 	f.script(shaMain, "bbb")
-	f.script(cfgTask, "")
-	f.script(cfgBranch, "")
 	f.script(worktrees, porcelain("GH-7/base", dir), porcelain("GH-7/base", dir, "GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create --base GH-7/base GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
@@ -1292,7 +1261,7 @@ func TestStartRefusesMissingAfter(t *testing.T) {
 		t.Fatalf("err = %v, want the missing base refused", err)
 	}
 
-	if f.called("wt ") || f.called("git worktree add") || f.called("git config branch.") || f.called("herdr") {
+	if f.called("wt ") || f.called("git worktree add") || f.called("set branch.") || f.called("herdr") {
 		t.Errorf("something was created after the refusal: %v", f.calls)
 	}
 }
@@ -1426,8 +1395,7 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 	f.script(refsLocal, heads("GH-1"))
 	f.script(refsAfter, heads("GH-7"))
 	f.script("git rev-parse --verify --quiet GH-7", "ccc")
-	f.script("git config branch.GH-1.f10-after GH-7", "")
-	f.script("git config branch.GH-1.f10-after-branch GH-7", "")
+
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", reopened)
 	f.script("herdr agent get pane:7", agentFound)
@@ -1451,7 +1419,7 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 		t.Error("an agent was started in a workspace that already had one")
 	}
 
-	if !f.called("git config branch.GH-1.f10-after-branch GH-7") {
+	if !f.called("set branch.GH-1.f10-after-branch GH-7") {
 		t.Error("the dependency was not recorded on the existing branch")
 	}
 
@@ -1895,7 +1863,7 @@ func TestStartRefusesAParent(t *testing.T) {
 		}
 
 		for _, c := range f.calls {
-			if !strings.HasPrefix(c, "git for-each-ref") && !strings.HasPrefix(c, linkedKeys) {
+			if !strings.HasPrefix(c, "git for-each-ref") {
 				t.Errorf("%q ran for the check, which only looks for the task's branch", c)
 			}
 		}
@@ -1971,4 +1939,16 @@ func TestChecksParent(t *testing.T) {
 	if checksParent(modeDefault, pickGH) || checksParent(modePlan, pickGH) {
 		t.Error("a PR pickup refuses a parent")
 	}
+}
+
+// indexOf loads a branch index from the records the test holds now.
+func indexOf(t *testing.T) *branchIndex {
+	t.Helper()
+
+	x, err := loadBranchIndex(t.Context(), "/code/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return x
 }

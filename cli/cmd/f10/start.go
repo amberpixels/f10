@@ -69,17 +69,6 @@ const (
 	modeDiscuss = "discuss"
 )
 
-const (
-	cfgAfter       = ref.AfterKey
-	cfgAfterBranch = ref.AfterBranchKey
-	cfgLanded      = ref.LandedKey
-	cfgMoved       = ref.MovedKey
-	cfgTip         = ref.TipKey
-	cfgAgent       = ref.AgentKey
-	cfgTaskID      = ref.TaskKey
-	cfgRiders      = ref.RidersKey
-)
-
 func runStart(ctx context.Context, cmd *cli.Command) error {
 	mode, flowName, after, base, err := startFlags(cmd)
 	if err != nil {

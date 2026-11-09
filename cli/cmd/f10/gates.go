@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/timing"
 )
@@ -77,10 +77,10 @@ type gateInput struct {
 
 	run      *state.Run // live, or the ledger's last claim; nil for none
 	events   []ledger.Event
-	driven   string          // the last skill drive saw finish: plan, ship or finish
-	finishes bool            // drive finishes the branch: its finish record is there
-	finish   ref.DriveFinish // drive's record of running finish, zero for none or a drive gone
-	pipeline flow.Flow       // ship's entries of the branch's flow, when the run recorded none
+	driven   string                 // the last skill drive saw finish: plan, ship or finish
+	finishes bool                   // drive finishes the branch: its finish record is there
+	finish   branchmeta.DriveFinish // drive's record of running finish, zero for none or a drive gone
+	pipeline flow.Flow              // ship's entries of the branch's flow, when the run recorded none
 	// remoteFlow is a remote reviewer declared: it reviews every PR
 	remoteFlow bool
 

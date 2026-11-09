@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
@@ -131,6 +132,9 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	}
 
 	f := newFakes(t)
+	// the recorded calls answer the branch records, as git did when recording
+	t.Cleanup(branchmeta.SetBackend(branchmeta.Git{}))
+
 	f.absent = append(
 		f.absent,
 		"git log --no-show-signature --format=%H %ae",

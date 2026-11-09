@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/flow"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -105,7 +105,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		// the agent got there before a drive that stopped could see it
 		fmt.Fprintf(w, "%s %s: already done\n", in.id(id), skill)
 
-		if err := gitx.SetConfig(ctx, in.main, "branch."+r.o.branch+"."+cfgDrive, skill); err != nil {
+		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
 			return fmt.Errorf("recording %s done: %w", skill, err)
 		}
 
