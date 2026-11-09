@@ -160,7 +160,7 @@ func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 	merge := "gh pr merge GH-1 --squash --body Adds the thing.\n\nCloses #1\n\nTask: GH-1\n"
 	fx.f.script(ghView, open, prMerged)
 	fx.f.script("gh pr view GH-1 --json body", current)
-	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ", "git config --get branch.GH-1.f10-after")
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 	fx.f.script(merge, "")
 	edited := captureBodyEdits(t)
 
@@ -302,7 +302,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 	fx.in.method = "squash"
 	fx.in.task, fx.in.close = bundle12, []string{}
 	fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`, `{"body":"Closes #1\nPart of #2"}`)
-	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ", "git config --get branch.GH-1.f10-after")
+	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 
 	merge := "gh pr merge GH-1 --squash --body Closes #1\nPart of #2\n\nTask: GH-1\nTask: GH-2\n"
 	fx.f.script(merge, "")

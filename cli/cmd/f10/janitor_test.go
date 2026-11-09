@@ -579,7 +579,7 @@ func TestJanitorReadsOriginByStartsShapes(t *testing.T) {
 	fx.f.script(allHeads, heads("main"))
 	fx.f.script(lsHeads, "abc\trefs/heads/revert-GH-1\nabc\trefs/heads/feat/GH-2-x")
 
-	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") || fx.f.called("git config --get branch.") {
+	if out := fx.run(t); out != "nothing to clear" || fx.f.called("gh ") || len(fx.f.meta.Writes()) > 0 {
 		t.Errorf("out = %q, calls %q", out, fx.f.calls)
 	}
 }

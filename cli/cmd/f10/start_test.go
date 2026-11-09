@@ -1057,8 +1057,6 @@ func TestStartWithGitAlone(t *testing.T) {
 	f.script(shaAfter, "ccc")
 	f.script(headRef, "origin/main")
 	f.script(shaMain, "bbb")
-	f.script(cfgTask, "")
-	f.script(cfgBranch, "")
 	f.script("git merge-base refs/heads/GH-1 refs/heads/GH-7/base", "ccc")
 
 	f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
@@ -1122,8 +1120,6 @@ func afterFixture(t *testing.T, dir, shaBase string) *fakes {
 	f.script(shaAfter, shaBase)
 	f.script(headRef, "origin/main")
 	f.script(shaMain, "bbb")
-	f.script(cfgTask, "")
-	f.script(cfgBranch, "")
 	f.script(worktrees, porcelain("GH-7/base", dir), porcelain("GH-7/base", dir, "GH-1", "/code/repo.GH-1"))
 	f.script("wt switch --no-cd --yes --format json --create --base GH-7/base GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
