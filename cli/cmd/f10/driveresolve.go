@@ -95,7 +95,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			}
 		}
 
-		task.finished = finishedTask(info, in.tracker.plans, r.ID, branched)
+		task.finished = finishedTask(info, in.tracker.storage, r.ID, branched)
 
 		if !ranged && !task.finished && !branched {
 			for _, m := range r.MemberRefs() {
@@ -229,7 +229,7 @@ func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error)
 		return false, fmt.Errorf("%s: %w", base.ID, err)
 	}
 
-	return finishedTask(info, in.tracker.plans, base.ID, false), nil
+	return finishedTask(info, in.tracker.storage, base.ID, false), nil
 }
 
 func sharedMember(a, b ref.Ref) string {

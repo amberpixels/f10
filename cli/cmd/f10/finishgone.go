@@ -5,12 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A goneError is a checkout a finish that stopped halfway left: no branch,
@@ -28,7 +25,7 @@ func (e goneError) Unwrap() error { return e.err }
 // the refusal, which guards branches start never made.
 func finishGone(ctx context.Context, w io.Writer, in finishInput, gone goneError) error {
 	if gone.branch == "" {
-		if !planArchived(in) {
+		if !in.storage.PlanArchived(in.task.ID) {
 			return finishParent(ctx, w, in, gone)
 		}
 
@@ -256,25 +253,4 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 	finishRecords(w, in, in.branch)
 
 	return nil
-}
-
-// planArchived wants an archived plan with no live one beside it, since a
-// re-plan archives the old plan too.
-func planArchived(in finishInput) bool {
-	return planArchivedIn(in.storage.Plans(), in.task.ID)
-}
-
-func planArchivedIn(plans, id string) bool {
-	if fsx.Exists(filepath.Join(plans, id+".md")) {
-		return false
-	}
-
-	dir := storage.ArchiveOf(plans)
-	if fsx.Exists(filepath.Join(dir, id+".md")) {
-		return true
-	}
-
-	older, _ := filepath.Glob(filepath.Join(dir, id+".*.md"))
-
-	return len(older) > 0
 }

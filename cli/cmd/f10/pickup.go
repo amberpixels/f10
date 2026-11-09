@@ -56,9 +56,6 @@ func digits(s string) bool {
 	return s != "" && strings.Trim(s, "0123456789") == ""
 }
 
-// closingRE reads any closing keyword before any issue number.
-var closingRE = regexp.MustCompile(fmt.Sprintf(closingKeyword, `\d+`))
-
 // pickupTask prefers a closing keyword's issue (this repository's only) on a
 // host-issues tracker, else an id in the body, title or branch, in that order.
 func pickupTask(prefix string, hostIssues bool, p pull) string {

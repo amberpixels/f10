@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -78,7 +77,7 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 
 	var notes []string
 
-	if in.driver != nil {
+	if !in.hostCloses {
 		if len(closing) > 0 {
 			notes = append(notes, "the tracker is not the host, so the merge closes no rider: close "+
 				strings.Join(refIDs(closing), ", ")+" there")
@@ -137,27 +136,6 @@ func refIDs(refs []ref.Ref) []string {
 	}
 
 	return ids
-}
-
-// closingKeyword is GitHub's and GitLab's closing keywords before an issue,
-// by `#n` or by its url; the issue number's pattern goes in place of %s.
-// Pickup reads with the same pattern, so what finish keeps open is what it finds.
-const closingKeyword = `(?i)\b(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving|` +
-	`implement(?:s|ed|ing)?):?\s+(#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`
-
-// keepOpen turns `Closes #12` into `Part of #12`, so the merge leaves it open.
-func keepOpen(body, number string) string {
-	re := regexp.MustCompile(fmt.Sprintf(closingKeyword, regexp.QuoteMeta(number)))
-
-	return re.ReplaceAllString(body, "Part of $1")
-}
-
-// closeAgain undoes keepOpen.
-func closeAgain(body, number string) string {
-	re := regexp.MustCompile(fmt.Sprintf(`\bPart of (#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`,
-		regexp.QuoteMeta(number)))
-
-	return re.ReplaceAllString(body, "Closes $1")
 }
 
 func (h host) reopenIssue(ctx context.Context, number string) error {

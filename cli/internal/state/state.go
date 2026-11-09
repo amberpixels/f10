@@ -415,6 +415,32 @@ func Stopped(status string) bool {
 	return status == "failed" || status == "partial" || status == "blocked"
 }
 
+// Furthest is the last phase the run has left: its status is neither
+// pending nor unset. A run that left none is at its first phase.
+func (r *Run) Furthest() string {
+	phase := Phases[0]
+
+	for _, p := range Phases {
+		if s := r.Status(p); s != "pending" && s != "" {
+			phase = p
+		}
+	}
+
+	return phase
+}
+
+// StoppedPhase is the last phase whose status is one a run halts on, and
+// false when none is.
+func (r *Run) StoppedPhase() (string, bool) {
+	for _, p := range slices.Backward(Phases) {
+		if Stopped(r.Status(p)) {
+			return p, true
+		}
+	}
+
+	return "", false
+}
+
 // PhaseText is the status with its step where one belongs to it: `running:
 // implement`, `blocked at judge`. The leaf is a pipeline step, so only ship
 // carries one, except plan's judge, which fetch runs before planning.

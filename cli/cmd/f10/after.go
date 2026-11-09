@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -95,7 +94,7 @@ type tracker struct {
 	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
 	// allChildren is children with the closed ones kept, for status
 	allChildren func(ctx context.Context, task ref.Ref) ([]childRow, error)
-	plans       string             // the plans dir: finish archives a finished task's plan under it
+	storage     storage.Root       // where a finished task's plan is archived
 	titles      tasktitle.Template // tracker.title, whose prefix comes off each child's title
 }
 
@@ -106,8 +105,6 @@ func (t *target) tracker() tracker {
 	if main == "" {
 		main = t.lay.CheckoutRoot
 	}
-
-	plans := t.lay.StorageRoot.Plans()
 
 	tr := tracker{
 		resolve: t.reference,
@@ -139,8 +136,8 @@ func (t *target) tracker() tracker {
 				pull:   iss.pull(),
 			}, nil
 		},
-		plans:  plans,
-		titles: t.eff.TitleTemplate,
+		storage: t.lay.StorageRoot,
+		titles:  t.eff.TitleTemplate,
 	}
 
 	children := func(keepClosed bool) func(context.Context, ref.Ref) ([]childRow, error) {
@@ -165,12 +162,12 @@ func (t *target) tracker() tracker {
 // finishedTask is the one "is this task done with": no branch, no live plan
 // (a re-plan is pending work whatever the tracker says), and closed or its
 // plan archived, which catches a merge whose PR body closed no issue.
-func finishedTask(info taskInfo, plans, id string, hasBranch bool) bool {
-	if hasBranch || plans != "" && fsx.Exists(filepath.Join(plans, id+".md")) {
+func finishedTask(info taskInfo, root storage.Root, id string, hasBranch bool) bool {
+	if hasBranch || root.PlanLive(id) {
 		return false
 	}
 
-	return info.closed || plans != "" && planArchivedIn(plans, id)
+	return info.closed || root.PlanArchived(id)
 }
 
 // hasTaskBranch reports a branch of the task, linked, local or on origin.
@@ -216,7 +213,7 @@ func bodyAfter(ctx context.Context, tr tracker, main string, task ref.Ref, body 
 		return "", "", fmt.Errorf("%s's body says After: %s: %w", task.ID, base.ID, err)
 	}
 
-	if finishedTask(info, tr.plans, base.ID, false) {
+	if finishedTask(info, tr.storage, base.ID, false) {
 		return "", fmt.Sprintf("After: %s is finished, so the branch is based on the default branch", base.ID), nil
 	}
 

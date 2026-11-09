@@ -335,3 +335,20 @@ func TestMembers(t *testing.T) {
 		t.Errorf("Match on a bundle branch = %q, want the lead ABC-1", got)
 	}
 }
+
+func TestTypedMembers(t *testing.T) {
+	for typed, want := range map[string]string{
+		"FT-1":        "FT-1",
+		"ft-1_v2":     "FT-1",
+		"FT-2+ft-3-x": "FT-2 FT-3",
+		"12":          "12",
+	} {
+		if got := strings.Join(TypedMembers(typed), " "); got != want {
+			t.Errorf("TypedMembers(%q) = %q, want %q", typed, got, want)
+		}
+	}
+
+	if got := TypedLead("ft-2_a+FT-3"); got != "FT-2" {
+		t.Errorf("TypedLead = %q", got)
+	}
+}

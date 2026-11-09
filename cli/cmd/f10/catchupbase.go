@@ -278,22 +278,11 @@ func (p *catchupPlan) findBase(ctx context.Context, in catchupInput, def string)
 
 	p.mark = string(branchmeta.Landed) + " " + def
 
-	sha, err = gitx.Ref(ctx, in.main, "refs/remotes/origin/"+def)
-	if err != nil || sha != "" {
-		p.base, p.sha = "origin/"+def, sha
-		return err
-	}
-
 	if fromOrigin {
-		return fmt.Errorf("origin/%s is missing: the PR's target cannot be read", def)
+		return p.originBase(ctx, in.main, def, p.how)
 	}
 
-	sha, err = gitx.Ref(ctx, in.main, "refs/heads/"+def)
-	if err == nil && sha == "" {
-		err = fmt.Errorf("cannot read %s here, locally or on origin", def)
-	}
-
-	p.base, p.sha = def, sha
+	p.sha, p.base, err = defaultTip(ctx, in.main, def, originFirst)
 
 	return err
 }

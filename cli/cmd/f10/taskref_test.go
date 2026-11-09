@@ -11,21 +11,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-func TestCleanTitle(t *testing.T) {
-	for in, want := range map[string]string{
-		"Add the index":           "Add the index",
-		"# FT-12: Add the index":  "Add the index",
-		"ft-12: Add the index":    "Add the index",
-		"FT-12 Add the index":     "Add the index",
-		"FT-123: not this id":     "FT-123: not this id",
-		"  Spaced: with a colon ": "Spaced: with a colon",
-	} {
-		if got := cleanTitle("FT-12", in); got != want {
-			t.Errorf("cleanTitle(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestRefLine(t *testing.T) {
 	k := ledger.TaskRef{Title: "Fix [the] parser", URL: "https://x/12"}
 

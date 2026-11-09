@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -118,7 +119,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 	)
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	plans := t.tracker().plans
+	root := t.tracker().storage
 	bases := map[string]string{} // siblings share a base: resolve it once
 
 	for _, tok := range tokens {
@@ -141,7 +142,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 
 		// a finished task reads nothing further: its row would only drop
 		branched, err := hasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, plans, r.ID, branched)) {
+		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, root, r.ID, branched)) {
 			continue
 		}
 
@@ -155,7 +156,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 	// still reads, so a failed lookup says nothing
 	known := t.taskRefs(ctx, refs, false, false, io.Discard)
 	for i := range kids {
-		kids[i].Title, kids[i].URL = cleanTitle(kids[i].ID, known[kids[i].ID].Title), known[kids[i].ID].URL
+		kids[i].Title, kids[i].URL = tasktitle.Clean(known[kids[i].ID].Title, kids[i].ID), known[kids[i].ID].URL
 	}
 
 	return childTree(kids)
@@ -193,7 +194,7 @@ func launchBase(
 		out = r.Head().ID
 
 		has, err := hasTaskBranch(ctx, main, out)
-		if err != nil || finishedTask(taskInfo{}, t.tracker().plans, out, has) {
+		if err != nil || finishedTask(taskInfo{}, t.tracker().storage, out, has) {
 			out = ""
 		}
 	}
@@ -212,16 +213,16 @@ func driveTasks(root, n string) []drives.Task {
 		return nil
 	}
 
-	rec, err := drives.Read(root, num)
-	if err != nil || rec.Cancelled != nil || rec.Done() {
+	d, ok := drives.ActiveOne(root, num)
+	if !ok {
 		return nil
 	}
 
-	if _, running := drives.Probe(root, drives.DriveKey(num)); !running {
-		for i := range rec.Tasks {
-			rec.Tasks[i].Queued = false
+	if !d.Running {
+		for i := range d.Tasks {
+			d.Tasks[i].Queued = false
 		}
 	}
 
-	return rec.Tasks
+	return d.Tasks
 }

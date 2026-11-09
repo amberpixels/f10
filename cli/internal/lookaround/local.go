@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -125,7 +124,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 
 	for _, r := range runs {
 		for _, wt := range wts {
-			if r.Root != "" && canon(r.Root) == canon(wt.Path) {
+			if r.Root != "" && gitx.Resolved(r.Root) == gitx.Resolved(wt.Path) {
 				l.Runs = append(l.Runs, *r)
 
 				break
@@ -149,7 +148,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 		// rows carry; Herdr may report the path through a symlink
 		for _, ws := range list {
 			for _, wt := range l.Worktrees {
-				if ws.Path != "" && canon(ws.Path) == canon(wt.Path) {
+				if ws.Path != "" && gitx.Resolved(ws.Path) == gitx.Resolved(wt.Path) {
 					l.Workspaces[wt.Path] = Workspace{ID: ws.ID, Label: ws.Label, AgentStatus: string(ws.Status)}
 				}
 			}
@@ -297,14 +296,6 @@ func dirEntries(dir string) []fs.DirEntry {
 	return entries
 }
 
-func canon(p string) string {
-	if c, err := filepath.EvalSymlinks(p); err == nil {
-		return c
-	}
-
-	return p
-}
-
 // collectTips is every local branch's last commit time, one git call: the
 // feed of a checkout with no host to read.
 func collectTips(ctx context.Context, main string) ([]Tip, error) {
@@ -347,7 +338,9 @@ func dropDeadFinish(branches map[string]Branch, root, prefix string) {
 		}
 
 		lead := b.Task
-		if lead == "" {
+		if lead != "" {
+			lead = ref.TypedLead(lead)
+		} else {
 			if members := ref.Members(prefix, name); members != nil {
 				lead = members[0]
 			} else {

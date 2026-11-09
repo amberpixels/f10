@@ -71,35 +71,7 @@ func defaultTarget(ctx context.Context, main string) (string, string, error) {
 }
 
 func defaultTargetOf(ctx context.Context, main, def string) (string, string, error) {
-	local, err := gitx.Ref(ctx, main, "refs/heads/"+def)
-	if err != nil {
-		return "", "", fmt.Errorf("reading %s: %w", def, err)
-	}
-
-	remote, err := gitx.Ref(ctx, main, "refs/remotes/origin/"+def)
-	if err != nil {
-		return "", "", fmt.Errorf("reading origin/%s: %w", def, err)
-	}
-
-	switch {
-	case local == "" && remote == "":
-		return "", "", fmt.Errorf("cannot read %s here", def)
-	case remote == "":
-		return local, def, nil
-	case local == "":
-		return remote, "origin/" + def, nil
-	}
-
-	holds, err := gitx.IsAncestor(ctx, main, remote, local)
-
-	switch {
-	case err != nil:
-		return "", "", err
-	case holds:
-		return local, def, nil
-	}
-
-	return remote, "origin/" + def, nil
+	return defaultTip(ctx, main, def, divergeOrigin)
 }
 
 func markOn(ctx context.Context, main, branch string) (branchmeta.Key, error) {

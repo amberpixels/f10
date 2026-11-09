@@ -63,13 +63,7 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipme
 // currentPhase is the furthest phase a run has reached, with its status:
 // `capture running`, `ship blocked at judge`.
 func currentPhase(r *state.Run) string {
-	phase := state.Phases[0]
-
-	for _, p := range state.Phases {
-		if r.Status(p) != "pending" {
-			phase = p
-		}
-	}
+	phase := r.Furthest()
 
 	return phase + " " + r.PhaseText(phase)
 }

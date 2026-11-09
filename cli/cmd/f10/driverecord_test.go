@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -551,17 +552,17 @@ func TestFinishedLazily(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			plans := t.TempDir()
+			root := storage.Root(t.TempDir())
 			if c.archived {
-				writePlan(t, filepath.Join(plans, "archive", "GH-1.md"))
+				writePlan(t, filepath.Join(root.Archive(), "GH-1.md"))
 			}
 
 			if c.live {
-				writePlan(t, filepath.Join(plans, "GH-1.md"))
+				writePlan(t, root.Plan("GH-1"))
 			}
 
 			asked := false
-			got := finishedLazily(plans, "GH-1",
+			got := finishedLazily(root, "GH-1",
 				func() (bool, error) { return c.branched, nil },
 				func() taskInfo { asked = true; return taskInfo{closed: c.closed} })
 

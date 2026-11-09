@@ -138,11 +138,9 @@ func (r *row) driveFinishes() bool {
 }
 
 func stoppedText(r *row) string {
-	phase := "ship"
-	for _, p := range []string{"capture", "plan"} {
-		if st := r.run.Status(p); st == "failed" || st == "partial" || st == "blocked" {
-			phase = p
-		}
+	phase, ok := r.run.StoppedPhase()
+	if !ok {
+		phase = "ship"
 	}
 
 	out := phase + " " + r.run.PhaseText(phase)

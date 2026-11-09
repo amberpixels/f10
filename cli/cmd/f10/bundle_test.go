@@ -305,7 +305,7 @@ func TestFinishKeepsARiderOpen(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fx := newFinishFixture(t)
 			fx.openPR()
-			fx.in.task, fx.in.close = bundle12, tc.close
+			fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, tc.close, true
 			fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`)
 			fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 
@@ -336,7 +336,7 @@ func TestFinishReopensAKeptRiderAfterTheMerge(t *testing.T) {
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 	fx.f.script("gh issue reopen 2", "")
-	fx.in.task, fx.in.close = bundle12, []string{}
+	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -394,25 +394,32 @@ func TestLedgerMatchesABundleMember(t *testing.T) {
 	}
 }
 
-// A tracker that is not the host closes nothing on merge: no closed row, no
-// body edit, and the notes name what to close there.
+// A tracker that is not the host closes nothing on merge, a driver's or a
+// declared one without a driver: no closed row, no body edit, and the notes
+// name what to close there.
 func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
-	fx := newFinishFixture(t)
-	fx.openPR()
-	fx.in.task, fx.in.close, fx.in.driver = bundle12, []string{"GH-2"}, fakeDriver(t)
-	fx.f.fail("driver branch 1", shell.Result{Code: 3})
+	for _, withDriver := range []bool{true, false} {
+		fx := newFinishFixture(t)
+		fx.openPR()
+		fx.in.task, fx.in.close = bundle12, []string{"GH-2"}
 
-	out, err := fx.run(t)
-	if err != nil {
-		t.Fatal(err)
-	}
+		if withDriver {
+			fx.in.driver = fakeDriver(t)
+			fx.f.fail("driver branch 1", shell.Result{Code: 3})
+		}
 
-	if strings.Contains(out, "closed:") || fx.f.called("gh pr view GH-1 --json body") {
-		t.Errorf("a driver tracker reported or edited a close:\n%s\n%v", out, fx.f.calls)
-	}
+		out, err := fx.run(t)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if !strings.Contains(out, "close GH-2 there") {
-		t.Errorf("report does not name the rider to close by hand:\n%s", out)
+		if strings.Contains(out, "closed:") || fx.f.called("gh pr view GH-1 --json body") {
+			t.Errorf("driver %v: a non-host tracker reported or edited a close:\n%s\n%v", withDriver, out, fx.f.calls)
+		}
+
+		if !strings.Contains(out, "close GH-2 there") {
+			t.Errorf("driver %v: report does not name the rider to close by hand:\n%s", withDriver, out)
+		}
 	}
 }
 

@@ -200,8 +200,8 @@ type finishInput struct {
 	host   host
 	method string // the merge method project.md declares, "" for none
 	traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
-	// hostIssues: the tracker is the host's issues, which a commit's closing keyword closes
-	hostIssues bool
+	// hostCloses: a merge's closing keyword closes the task (target.hostCloses)
+	hostCloses bool
 	// loreStore feeds the report's lore line and the pre-merge check (nil reads
 	// nothing); gate is lore_gate: warn notes a failing check, block refuses
 	loreStore *lore.Store
@@ -251,7 +251,7 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 		host:       h.at(main),
 		method:     t.eff.MergeMethod,
 		traces:     t.eff.Traces,
-		hostIssues: t.hostIssues(),
+		hostCloses: t.hostCloses(),
 		loreStore:  &lore.Store{Root: loreRootFor(t)},
 		gate:       t.eff.LoreGate,
 		storage:    t.lay.StorageRoot,
@@ -261,9 +261,9 @@ func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
 	}
 }
 
-// closeTaskFor treats a driver as settleRiders does: not the host, so nil.
+// closeTaskFor closes the task on the host only where the host is the tracker.
 func closeTaskFor(t *target, h host) func(context.Context, ref.Ref) error {
-	if t.driver() != nil || !t.hostIssues() {
+	if !t.hostCloses() {
 		return nil
 	}
 

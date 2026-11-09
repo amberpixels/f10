@@ -266,7 +266,7 @@ func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
 	if err == nil {
 		t.rememberRefs(
 			ctx,
-			ledger.TaskRef{ID: r.ID, Title: cleanTitle(r.ID, h.title(iss.Title, r.Number)), URL: iss.url()},
+			ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(h.title(iss.Title, r.Number), r.ID), URL: iss.url()},
 		)
 	}
 

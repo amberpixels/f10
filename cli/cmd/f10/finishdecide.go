@@ -470,7 +470,7 @@ func (a *afterMerge) done(id, ended string) error {
 // appendClosed adds the riders the merge closed; a tracker that is not the
 // host closes nothing on merge.
 func appendClosed(rows []fact, in finishInput, local bool) []fact {
-	if len(in.close) == 0 || in.driver != nil || local {
+	if len(in.close) == 0 || !in.hostCloses || local {
 		return rows
 	}
 
