@@ -22,6 +22,7 @@ func TestBackgroundMarkFollowsTheTurns(t *testing.T) {
 	}
 	launch, plain := bash(true), bash(false)
 	monitor := event(t, "s1", "PreToolUse", "Monitor")
+	agent := event(t, "s1", "PreToolUse", "Agent")
 	stop := event(t, "s1", "Stop", "")
 	read := event(t, "s1", "PreToolUse", "Bash")
 	prompt := event(t, "s1", "UserPromptSubmit", "")
@@ -37,6 +38,7 @@ func TestBackgroundMarkFollowsTheTurns(t *testing.T) {
 		{name: "a woken turn that ends with no tool call", run: true, events: [][]byte{launch, stop, stop}},
 		{name: "tools in the launching turn keep it", run: true, events: [][]byte{launch, plain, stop}, want: true},
 		{name: "a Monitor launches too", run: true, events: [][]byte{monitor, stop}, want: true},
+		{name: "a subagent launches too", run: true, events: [][]byte{agent, stop}, want: true},
 		{name: "a new prompt clears it", run: true, events: [][]byte{launch, stop, prompt}},
 		{name: "a foreground command marks nothing", run: true, events: [][]byte{plain, stop}},
 		{name: "a session with no run marks nothing", events: [][]byte{launch, stop}},

@@ -703,3 +703,82 @@ func TestDriveSendsAStalledCatchupBack(t *testing.T) {
 		})
 	}
 }
+
+// FT-422 through the drive: the catchup turn ends idle on a background go
+// test, its edit uncommitted, and reports minutes later. The mark the hook
+// left keeps the drive from reading a stall, so nothing is resent.
+func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
+	conflict := "/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+		"settle them in place, keeping both sides, then conclude the rebase --driven"
+
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+
+	gitDir := t.TempDir()
+	stops := &binaryCatchupFake{stops: []bool{true}, onStop: func() { startRebase(t, gitDir) }}
+	fx.binaryCatchup(t, stops, gitDir)
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+	for _, p := range []string{conflict, resumeGH1} {
+		fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
+	}
+
+	fx.f.script("git config branch.GH-1."+cfgDrive+" ship", "")
+
+	parked := false
+
+	fx.agent(t, func(prompt string) {
+		if prompt == resumeGH1 {
+			fx.writeRun(t, "done", "", "", "")
+
+			return
+		}
+
+		_ = os.RemoveAll(filepath.Join(gitDir, "rebase-merge"))
+		fx.f.script("git status --porcelain", " M a.go")
+
+		mark := state.Background{At: fx.clock, Parked: true}
+		if err := state.MarkBackground(fx.in.stateDir, "s-GH-1", mark); err != nil {
+			t.Fatal(err)
+		}
+
+		parked = true
+	})
+
+	// the background job finishes well past the grace; the woken turn commits
+	// and reports
+	waited := 0
+
+	for tick := 1; tick <= 120; tick++ {
+		look := fx.onTick[tick]
+		fx.onTick[tick] = func() {
+			look()
+
+			if !parked {
+				return
+			}
+
+			waited++
+
+			if waited == 6 {
+				parked = false
+				_ = os.Remove(state.BackgroundPath(fx.in.stateDir, "s-GH-1"))
+				fx.f.script("git status --porcelain", "")
+				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+				fx.reports(t, fx.clock)
+			}
+		}
+	}
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if err != nil || strings.Contains(out, "attempt 1 of") ||
+		!strings.Contains(out, "caught up with main, verify green") || !strings.Contains(out, "GH-1:    done: ship") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+
+	if waited < 6 {
+		t.Errorf("the turn reported after %d looks, want the drive to wait 6", waited)
+	}
+}

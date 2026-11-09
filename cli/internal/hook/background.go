@@ -9,8 +9,8 @@ import (
 
 // background keeps the session's background mark, which a drive reads as the
 // agent working: a launch marks it, the launching turn's Stop parks it, and a
-// later turn clears it. Launches come from PreToolUse because it is
-// synchronous; the async PostToolUse can land after the turn's Stop.
+// later turn clears it. Launches come from PreToolUse, which fires before the
+// tool runs, so it lands ahead of the turn's Stop where a PostToolUse may not.
 func background(env *Env, sid string, p Payload) {
 	if sid == "" {
 		return
@@ -50,14 +50,16 @@ func background(env *Env, sid string, p Payload) {
 	}
 }
 
-// launches reports a tool call that leaves work running past its turn.
+// launches reports a tool call that leaves work running past its turn. An
+// Agent call counts whatever its input says, since hosts that run subagents
+// in the background do so by default.
 func launches(p Payload) bool {
 	if p.Event != "PreToolUse" {
 		return false
 	}
 
 	switch p.ToolName {
-	case "Monitor":
+	case "Monitor", "Agent":
 		return true
 	case "Bash":
 		var in struct {
