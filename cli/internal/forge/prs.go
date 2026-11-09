@@ -19,7 +19,7 @@ const prFields = "number,title,state,url,body,author,baseRefName,headRefName,hea
 func (h Host) PR(ctx context.Context, selector string) (PR, error) {
 	var p pull
 
-	err := h.Decode(ctx, &p, h.Pick(
+	err := h.decode(ctx, &p, h.pick(
 		[]string{"pr", "view", selector, "--json", prFields},
 		[]string{"mr", "view", selector, "-F", "json"},
 	)...)
@@ -31,7 +31,7 @@ func (h Host) PR(ctx context.Context, selector string) (PR, error) {
 func (h Host) OpenPRs(ctx context.Context, limit int) ([]PR, error) {
 	var found []pull
 
-	err := h.Decode(ctx, &found, h.Pick(
+	err := h.decode(ctx, &found, h.pick(
 		[]string{"pr", "list", "--json", "number,title,state,url", "--limit", strconv.Itoa(limit)},
 		[]string{"mr", "list", "-F", "json", "--per-page", strconv.Itoa(limit)},
 	)...)
@@ -49,7 +49,7 @@ func (h Host) OpenPRs(ctx context.Context, limit int) ([]PR, error) {
 func (h Host) StackedPRs(ctx context.Context, branch string) ([]PR, error) {
 	var found []pull
 
-	err := h.Decode(ctx, &found, h.Pick(
+	err := h.decode(ctx, &found, h.pick(
 		[]string{
 			"pr",
 			"list",
@@ -76,7 +76,7 @@ func (h Host) StackedPRs(ctx context.Context, branch string) ([]PR, error) {
 // ShowPR prints the request to the terminal through the CLI, or opens it in
 // the browser.
 func (h Host) ShowPR(ctx context.Context, number string, web bool) error {
-	args := h.Pick([]string{"pr", "view", number}, []string{"mr", "view", number})
+	args := h.pick([]string{"pr", "view", number}, []string{"mr", "view", number})
 	if web {
 		args = append(args, "--web")
 	}
@@ -86,7 +86,7 @@ func (h Host) ShowPR(ctx context.Context, number string, web bool) error {
 
 // Sigil is how the host writes a request's number: #n, or GitLab's !n.
 func (h Host) Sigil() string {
-	if h.GLab() {
+	if h.glab() {
 		return "!"
 	}
 
@@ -95,12 +95,12 @@ func (h Host) Sigil() string {
 
 // SharedNumbers reports whether issues and requests share one counter, so
 // a bare #n may name either; GitLab numbers them apart.
-func (h Host) SharedNumbers() bool { return !h.GLab() }
+func (h Host) SharedNumbers() bool { return !h.glab() }
 
 // HeadRef is the ref a request's head lives under on origin, fetchable
 // after its branch is deleted.
 func (h Host) HeadRef(number string) string {
-	if h.GLab() {
+	if h.glab() {
 		return "refs/merge-requests/" + number + "/head"
 	}
 
@@ -116,7 +116,7 @@ func (h Host) HeadRef(number string) string {
 // replaces the whole commit message, so the title goes on top. gh's squash
 // gets the title as its subject, else GitHub uses a lone commit's subject.
 func (h Host) MergePR(ctx context.Context, p PR, branch, method, body string) (PR, error) {
-	args := h.Pick(
+	args := h.pick(
 		[]string{"pr", "merge", branch},
 		[]string{"mr", "merge", branch, "--remove-source-branch", "--auto-merge=false", "--yes"},
 	)
@@ -124,20 +124,20 @@ func (h Host) MergePR(ctx context.Context, p PR, branch, method, body string) (P
 		args = append(args, method)
 	}
 
-	if !h.GLab() && method == "--squash" && p.Title != "" {
+	if !h.glab() && method == "--squash" && p.Title != "" {
 		args = append(args, "--subject", p.Title+" (#"+strconv.Itoa(p.Number)+")")
 	}
 
 	if body != "" {
 		flag := "--body"
-		if h.GLab() {
+		if h.glab() {
 			flag, body = "--squash-message", p.Title+"\n\n"+body
 		}
 
 		args = append(args, flag, body)
 	}
 
-	if _, err := h.Run(ctx, args...); err != nil {
+	if _, err := h.run(ctx, args...); err != nil {
 		return PR{}, err
 	}
 
@@ -149,7 +149,7 @@ func (h Host) MergePR(ctx context.Context, p PR, branch, method, body string) (P
 func (h Host) Retarget(ctx context.Context, number int, base string) error {
 	n := strconv.Itoa(number)
 
-	_, err := h.Run(ctx, h.Pick(
+	_, err := h.run(ctx, h.pick(
 		[]string{"pr", "edit", n, "--base", base},
 		[]string{"mr", "update", n, "--target-branch", base},
 	)...)
@@ -168,7 +168,7 @@ func (h Host) DeleteBranch(ctx context.Context, branch string) error {
 		segments[i] = url.PathEscape(s)
 	}
 
-	_, err := h.Run(ctx, h.Pick(
+	_, err := h.run(ctx, h.pick(
 		[]string{"api", "-X", "DELETE", "repos/{owner}/{repo}/git/refs/heads/" + strings.Join(segments, "/")},
 		[]string{"api", "-X", "DELETE", "projects/:fullpath/repository/branches/" + url.PathEscape(branch)},
 	)...)
@@ -180,12 +180,12 @@ func (h Host) DeleteBranch(ctx context.Context, branch string) error {
 // fixes one strategy per project: "--squash" when its squash option is on,
 // else "" for its plain merge.
 func (h Host) MergeMethods(ctx context.Context) ([]string, error) {
-	if h.GLab() {
+	if h.glab() {
 		var repo struct {
 			SquashOption string `json:"squash_option"`
 		}
 
-		if err := h.Decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
+		if err := h.decode(ctx, &repo, "repo", "view", "-F", "json"); err != nil {
 			return nil, err
 		}
 
@@ -202,7 +202,7 @@ func (h Host) MergeMethods(ctx context.Context) ([]string, error) {
 		Rebase bool `json:"rebaseMergeAllowed"`
 	}
 
-	err := h.Decode(ctx, &repo, "repo", "view", "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed")
+	err := h.decode(ctx, &repo, "repo", "view", "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed")
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (h Host) MergeMethods(ctx context.Context) ([]string, error) {
 // takes it: GitLab's "merge" is its plain merge, which takes no flag.
 func (h Host) MethodFor(declared string) string {
 	method := strings.ToLower(declared)
-	if h.GLab() && method == "merge" {
+	if h.glab() && method == "merge" {
 		return ""
 	}
 
@@ -237,7 +237,7 @@ func (h Host) MethodFor(declared string) string {
 func (h Host) PRBody(ctx context.Context, branch string) (string, error) {
 	var p pull
 
-	err := h.Decode(ctx, &p, h.Pick(
+	err := h.decode(ctx, &p, h.pick(
 		[]string{"pr", "view", branch, "--json", "body"},
 		[]string{"mr", "view", branch, "-F", "json"},
 	)...)

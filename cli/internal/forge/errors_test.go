@@ -24,7 +24,7 @@ func TestRunClassifiesNotFound(t *testing.T) {
 	} {
 		script(t, map[string]string{c.cli + " pr view 9": "FAIL " + c.stderr})
 
-		_, err := Host{Name: c.cli}.Run(context.Background(), "pr", "view", "9")
+		_, err := Host{Name: c.cli}.run(context.Background(), "pr", "view", "9")
 
 		if got := errors.Is(err, ErrNotFound); got != c.missing {
 			t.Errorf("%s %q: ErrNotFound = %v, want %v", c.cli, c.stderr, got, c.missing)

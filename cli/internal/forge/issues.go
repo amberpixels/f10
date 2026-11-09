@@ -155,7 +155,7 @@ func (h Host) mustIssue(iss Issue, err error) (Issue, error) {
 func (h Host) readIssue(ctx context.Context, number, fields string) (Issue, error) {
 	var iss issue
 
-	err := h.Decode(ctx, &iss, h.Pick(
+	err := h.decode(ctx, &iss, h.pick(
 		[]string{"issue", "view", number, "--json", fields},
 		[]string{"issue", "view", number, "-F", "json"},
 	)...)
@@ -186,7 +186,7 @@ func (h Host) Issues(ctx context.Context, query string, limit int) ([]Issue, err
 	glabArgs = append(glabArgs, "--output", "json", "--per-page", strconv.Itoa(limit))
 
 	var found []issue
-	if err := h.Decode(ctx, &found, h.Pick(ghArgs, glabArgs)...); err != nil {
+	if err := h.decode(ctx, &found, h.pick(ghArgs, glabArgs)...); err != nil {
 		return nil, err
 	}
 
@@ -199,10 +199,10 @@ const allIssuesPage = 100
 // AllIssues is every issue in any state, numbers and titles only. Neither
 // CLI's issue list includes requests, so nothing here filters them.
 func (h Host) AllIssues(ctx context.Context) ([]Issue, error) {
-	if !h.GLab() {
+	if !h.glab() {
 		var all []issue
 
-		err := h.Decode(ctx, &all, "issue", "list", "--state", "all", "--json", "number,title", "--limit", "100000")
+		err := h.decode(ctx, &all, "issue", "list", "--state", "all", "--json", "number,title", "--limit", "100000")
 
 		return issues(all), err
 	}
@@ -211,7 +211,7 @@ func (h Host) AllIssues(ctx context.Context) ([]Issue, error) {
 
 	for page := 1; ; page++ {
 		var found []issue
-		if err := h.Decode(ctx, &found, "issue", "list", "--all", "--output", "json",
+		if err := h.decode(ctx, &found, "issue", "list", "--all", "--output", "json",
 			"--per-page", strconv.Itoa(allIssuesPage), "--page", strconv.Itoa(page)); err != nil {
 			return nil, err
 		}
@@ -240,7 +240,7 @@ func (h Host) CommentIssue(ctx context.Context, number, body string) (string, er
 		return "", err
 	}
 
-	out, err := h.Run(ctx, h.Pick(
+	out, err := h.run(ctx, h.pick(
 		[]string{"issue", "comment", number, "--body", body},
 		[]string{"issue", "note", number, "--message", body},
 	)...)
@@ -281,7 +281,7 @@ func (h Host) EditIssue(ctx context.Context, number string, e IssueEdit) error {
 
 	var unassign []string
 
-	if e.Assignee != "" && !h.GLab() {
+	if e.Assignee != "" && !h.glab() {
 		// gh reads @me as the signed-in login, which must stay on
 		keep := e.Assignee
 		if keep == "@me" {
@@ -300,13 +300,13 @@ func (h Host) EditIssue(ctx context.Context, number string, e IssueEdit) error {
 		}
 	}
 
-	_, err := h.Run(ctx, h.editIssueArgs(number, e, unassign)...)
+	_, err := h.run(ctx, h.editIssueArgs(number, e, unassign)...)
 
 	return err
 }
 
 func (h Host) editIssueArgs(number string, e IssueEdit, unassign []string) []string {
-	if h.GLab() {
+	if h.glab() {
 		args := []string{"issue", "update", number}
 		if e.Title != "" {
 			args = append(args, "--title", e.Title)
@@ -358,7 +358,7 @@ func (h Host) SetIssueOpen(ctx context.Context, number string, open bool) error 
 		verb = "reopen"
 	}
 
-	_, err := h.Run(ctx, "issue", verb, number)
+	_, err := h.run(ctx, "issue", verb, number)
 
 	return err
 }
@@ -368,7 +368,7 @@ var issueNumberRe = regexp.MustCompile(`/issues/(\d+)\b`)
 // CreateIssue returns the new issue's url and number, read from the url the
 // CLI prints: a list query afterwards could find another create's issue.
 func (h Host) CreateIssue(ctx context.Context, title, body string, labels []string) (string, string, error) {
-	args := h.Pick(
+	args := h.pick(
 		[]string{"issue", "create", "--title", title, "--body", body},
 		[]string{"issue", "create", "--title", title, "--description", body, "--no-editor", "--yes"},
 	)
@@ -377,7 +377,7 @@ func (h Host) CreateIssue(ctx context.Context, title, body string, labels []stri
 		args = append(args, "--label", l)
 	}
 
-	out, err := h.Run(ctx, args...)
+	out, err := h.run(ctx, args...)
 	if err != nil {
 		return "", "", err
 	}
@@ -405,7 +405,7 @@ type Child struct {
 // Children reads an issue's linked children: GitHub sub-issues, or GitLab
 // work-item children. A host without either answers ErrUnsupported.
 func (h Host) Children(ctx context.Context, number string) ([]Child, error) {
-	if h.GLab() {
+	if h.glab() {
 		return h.childItems(ctx, number)
 	}
 
@@ -419,7 +419,7 @@ func (h Host) subIssues(ctx context.Context, number string) ([]Child, error) {
 		Name string `json:"name"`
 	}
 
-	found, err := DecodePages[struct {
+	found, err := decodePages[struct {
 		Number  int     `json:"number"`
 		Title   string  `json:"title"`
 		State   string  `json:"state"`
@@ -516,7 +516,7 @@ func (h Host) childItems(ctx context.Context, number string) ([]Child, error) {
 		} `json:"data"`
 	}
 
-	err = h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+childItemsQuery,
+	err = h.decode(ctx, &payload, "api", "graphql", "-f", "query="+childItemsQuery,
 		"-f", "path="+path, "-f", "iid="+number)
 	if err != nil {
 		if strings.Contains(err.Error(), "doesn't exist on type") {
@@ -561,7 +561,7 @@ func (h Host) projectPath(ctx context.Context) (string, error) {
 		Path string `json:"path_with_namespace"`
 	}
 
-	err := h.Decode(ctx, &repo, "repo", "view", "-F", "json")
+	err := h.decode(ctx, &repo, "repo", "view", "-F", "json")
 
 	return repo.Path, err
 }
@@ -570,7 +570,7 @@ func (h Host) projectPath(ctx context.Context) (string, error) {
 // has: GitHub gives an issue one parent, and links by the child's database
 // id, not its number.
 func (h Host) LinkParent(ctx context.Context, parent, child string) error {
-	if h.GLab() {
+	if h.glab() {
 		return ErrNoIssueParent
 	}
 
@@ -579,7 +579,7 @@ func (h Host) LinkParent(ctx context.Context, parent, child string) error {
 		return err
 	}
 
-	_, err = h.Run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
+	_, err = h.run(ctx, "api", "-X", "POST", "repos/{owner}/{repo}/issues/"+parent+"/sub_issues",
 		"-F", "sub_issue_id="+strconv.FormatInt(link.ID, 10), "-F", "replace_parent=true")
 
 	return err
@@ -588,7 +588,7 @@ func (h Host) LinkParent(ctx context.Context, parent, child string) error {
 // Unlink takes child out from under the parent it has; an issue with none
 // is left alone, so a rerun is safe.
 func (h Host) Unlink(ctx context.Context, child string) error {
-	if h.GLab() {
+	if h.glab() {
 		return ErrNoIssueParent
 	}
 
@@ -604,7 +604,7 @@ func (h Host) Unlink(ctx context.Context, child string) error {
 		return fmt.Errorf("issue %s names its parent as %q, not an api url", child, link.ParentURL)
 	}
 
-	_, err = h.Run(ctx, "api", "-X", "DELETE", "repos/"+apiPath+"/sub_issue",
+	_, err = h.run(ctx, "api", "-X", "DELETE", "repos/"+apiPath+"/sub_issue",
 		"-F", "sub_issue_id="+strconv.FormatInt(link.ID, 10))
 
 	return err
@@ -618,7 +618,7 @@ type issueLink struct {
 func (h Host) issueLink(ctx context.Context, number string) (issueLink, error) {
 	var link issueLink
 
-	err := h.Decode(ctx, &link, "api", "repos/{owner}/{repo}/issues/"+number)
+	err := h.decode(ctx, &link, "api", "repos/{owner}/{repo}/issues/"+number)
 
 	return link, err
 }
@@ -631,7 +631,7 @@ func (h Host) RepoURL(ctx context.Context) (string, error) {
 		WebURL string `json:"web_url"`
 	}
 
-	if err := h.Decode(ctx, &payload, h.Pick(
+	if err := h.decode(ctx, &payload, h.pick(
 		[]string{"repo", "view", "--json", "url"},
 		[]string{"repo", "view", "-F", "json"},
 	)...); err != nil {
@@ -662,7 +662,7 @@ func (h Host) repoPage(ctx context.Context, gh, glab string) (string, error) {
 		return "", err
 	}
 
-	if h.GLab() {
+	if h.glab() {
 		return url + glab, nil
 	}
 
@@ -672,11 +672,11 @@ func (h Host) repoPage(ctx context.Context, gh, glab string) (string, error) {
 // Token is gh's auth token, for fetching GitHub attachments the CLI cannot;
 // "" on glab, whose attachments need none.
 func (h Host) Token(ctx context.Context) (string, error) {
-	if h.GLab() {
+	if h.glab() {
 		return "", nil
 	}
 
-	out, err := h.Run(ctx, "auth", "token")
+	out, err := h.run(ctx, "auth", "token")
 
 	return strings.TrimSpace(out), err
 }

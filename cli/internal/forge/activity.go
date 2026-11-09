@@ -84,13 +84,13 @@ const ActivityQuery = `query($q: String!, $quiet: String!, $since: DateTime!, $e
 // Activity reads what the repository did since since: one paged query on
 // GitHub, on GitLab a list of the updated merge requests read one by one.
 func (h Host) Activity(ctx context.Context, since time.Time) (Activity, error) {
-	if h.GLab() {
+	if h.glab() {
 		return h.mrActivity(ctx, since)
 	}
 
 	at := since.UTC().Format(time.RFC3339)
 
-	out, err := h.Run(ctx, "api", "graphql", "--paginate", "-f", "query="+ActivityQuery,
+	out, err := h.run(ctx, "api", "graphql", "--paginate", "-f", "query="+ActivityQuery,
 		"-F", "q=repo:{owner}/{repo} is:pr updated:>="+at,
 		"-F", "quiet=repo:{owner}/{repo} is:pr is:open updated:<"+at+" sort:created-asc",
 		"-F", "since="+at)
@@ -335,7 +335,7 @@ func (h Host) mrRewrites(ctx context.Context, iid int, since time.Time, commits 
 		CreatedAt time.Time `json:"created_at"`
 	}
 
-	versions, err := DecodePages[version](
+	versions, err := decodePages[version](
 		ctx, h, fmt.Sprintf("projects/:fullpath/merge_requests/%d/versions?per_page=100", iid),
 	)
 	if err != nil {
@@ -370,7 +370,7 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 		return out, nil
 	}
 
-	if h.GLab() {
+	if h.glab() {
 		found := make([][]PR, len(ids))
 		errs := make([]error, len(ids))
 		sem := make(chan struct{}, mrParallel)
@@ -425,7 +425,7 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 		} `json:"data"`
 	}
 
-	if err := h.Decode(ctx, &payload, args...); err != nil {
+	if err := h.decode(ctx, &payload, args...); err != nil {
 		return nil, err
 	}
 
@@ -448,12 +448,12 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 // Branches is every branch the host has, one paged listing: what the
 // board asks of every merged request at once.
 func (h Host) Branches(ctx context.Context) (map[string]bool, error) {
-	path := h.Pick(
+	path := h.pick(
 		[]string{"repos/{owner}/{repo}/branches?per_page=100"},
 		[]string{"projects/:fullpath/repository/branches?per_page=100"},
 	)[0]
 
-	found, err := DecodePages[struct {
+	found, err := decodePages[struct {
 		Name string `json:"name"`
 	}](ctx, h, path)
 	if err != nil {

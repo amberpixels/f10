@@ -67,7 +67,7 @@ type Note struct {
 func (h Host) OpenReviews(ctx context.Context, number string) (*ReviewPR, error) {
 	p := &ReviewPR{h: h}
 
-	if h.GLab() {
+	if h.glab() {
 		if err := p.loadMergeRequest(ctx, number); err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ func issuePath(tail string) string { return "repos/{owner}/{repo}/" + tail }
 // by username alone, with no suffix anyone could forge, so a declared
 // `[bot]` is dropped there; on GitHub SameLogin's rule stands.
 func (h Host) IsLogin(declared, login string) bool {
-	if h.GLab() {
+	if h.glab() {
 		declared = strings.TrimSuffix(declared, "[bot]")
 	}
 
@@ -129,11 +129,11 @@ func (p *ReviewPR) Comments(ctx context.Context, want func(login string) bool) (
 	}
 
 	path := issuePath("issues/" + p.Number + "/comments?per_page=100")
-	if p.h.GLab() {
+	if p.h.glab() {
 		path = p.mrPath("notes?per_page=100")
 	}
 
-	notes, err := DecodePages[note](ctx, p.h, path)
+	notes, err := decodePages[note](ctx, p.h, path)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (p *ReviewPR) Comments(ctx context.Context, want func(login string) bool) (
 // accepts, its line comments folded into the body. GitLab has no review
 // object, so its reviewer's resolvable discussions fold into one.
 func (p *ReviewPR) InlineReviews(ctx context.Context, want func(login string) bool) ([]Note, error) {
-	if p.h.GLab() {
+	if p.h.glab() {
 		return p.discussions(ctx, want)
 	}
 
@@ -183,7 +183,7 @@ func (p *ReviewPR) InlineReviews(ctx context.Context, want func(login string) bo
 		} `json:"user"`
 	}
 
-	reviews, err := DecodePages[pullReview](ctx, p.h, issuePath("pulls/"+p.Number+"/reviews?per_page=100"))
+	reviews, err := decodePages[pullReview](ctx, p.h, issuePath("pulls/"+p.Number+"/reviews?per_page=100"))
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (p *ReviewPR) ThreadsResolved(ctx context.Context, n Note) (bool, error) {
 		return false, nil
 	}
 
-	if p.h.GLab() {
+	if p.h.glab() {
 		return n.Concluded, nil
 	}
 
@@ -264,10 +264,10 @@ func (p *ReviewPR) ResolveThreads(ctx context.Context, threads []string) error {
 	for _, id := range threads {
 		var err error
 
-		if p.h.GLab() {
-			_, err = p.h.Run(ctx, "api", "-X", "PUT", p.mrPath("discussions/"+id+"?resolved=true"))
+		if p.h.glab() {
+			_, err = p.h.run(ctx, "api", "-X", "PUT", p.mrPath("discussions/"+id+"?resolved=true"))
 		} else {
-			_, err = p.h.Run(ctx, "api", "graphql", "-f", "query="+resolveThreadMutation, "-F", "id="+id)
+			_, err = p.h.run(ctx, "api", "graphql", "-f", "query="+resolveThreadMutation, "-F", "id="+id)
 		}
 
 		if err != nil {
@@ -281,7 +281,7 @@ func (p *ReviewPR) ResolveThreads(ctx context.Context, threads []string) error {
 // Checks is every check run on the head named name, or on GitLab every job
 // of the head pipeline; a finished job's log is its body.
 func (p *ReviewPR) Checks(ctx context.Context, name string) ([]Note, error) {
-	if p.h.GLab() {
+	if p.h.glab() {
 		return p.pipelineJobs(ctx, name)
 	}
 
@@ -302,7 +302,7 @@ func (p *ReviewPR) Checks(ctx context.Context, name string) ([]Note, error) {
 		} `json:"check_runs"`
 	}
 
-	err := p.h.Decode(ctx, &payload, "api", issuePath("commits/"+p.HeadSHA+"/check-runs?per_page=100"))
+	err := p.h.decode(ctx, &payload, "api", issuePath("commits/"+p.HeadSHA+"/check-runs?per_page=100"))
 	if err != nil {
 		return nil, err
 	}
@@ -337,11 +337,11 @@ func (p *ReviewPR) RequestReview(ctx context.Context, login string) error {
 		"api", "-X", "POST", issuePath("pulls/" + p.Number + "/requested_reviewers"),
 		"-f", "reviewers[]=" + login,
 	}
-	if p.h.GLab() {
+	if p.h.glab() {
 		args = []string{"mr", "update", p.Number, "--reviewer", "+" + login}
 	}
 
-	_, err := p.h.Run(ctx, args...)
+	_, err := p.h.run(ctx, args...)
 
 	return err
 }
@@ -350,7 +350,7 @@ func (p *ReviewPR) RequestReview(ctx context.Context, login string) error {
 // host's time for it, zero when the host gives none.
 func (p *ReviewPR) Comment(ctx context.Context, text string) (string, time.Time, error) {
 	path := issuePath("issues/" + p.Number + "/comments")
-	if p.h.GLab() {
+	if p.h.glab() {
 		path = p.mrPath("notes")
 	}
 
@@ -360,7 +360,7 @@ func (p *ReviewPR) Comment(ctx context.Context, text string) (string, time.Time,
 		CreatedAt time.Time `json:"created_at"`
 	}
 
-	if err := p.h.Decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+text); err != nil {
+	if err := p.h.decode(ctx, &posted, "api", "-X", "POST", path, "-f", "body="+text); err != nil {
 		return "", time.Time{}, err
 	}
 
@@ -404,7 +404,7 @@ func (p *ReviewPR) FreshReactions(ctx context.Context, n Note) (map[string]bool,
 		User      user      `json:"user"`
 	}
 
-	if err := p.h.Decode(ctx, &reactions, "api", path); err != nil {
+	if err := p.h.decode(ctx, &reactions, "api", path); err != nil {
 		return nil, err
 	}
 
@@ -432,11 +432,11 @@ func (p *ReviewPR) React(ctx context.Context, n Note, emoji string) error {
 	path, _, _ = strings.Cut(path, "?")
 
 	field := "content=" + emoji
-	if p.h.GLab() {
+	if p.h.glab() {
 		field = "name=" + emoji
 	}
 
-	_, err := p.h.Run(ctx, "api", "-X", "POST", path, "-f", field)
+	_, err := p.h.run(ctx, "api", "-X", "POST", path, "-f", field)
 
 	return err
 }
@@ -446,7 +446,7 @@ func (p *ReviewPR) EditBody(ctx context.Context, n Note, body string) error {
 	var args []string
 
 	switch {
-	case p.h.GLab():
+	case p.h.glab():
 		args = []string{"api", "-X", "PUT", p.mrPath("notes/" + cmp.Or(n.CommentID, n.ID)), "-f", "body=" + body}
 	case n.Inline:
 		args = []string{
@@ -456,7 +456,7 @@ func (p *ReviewPR) EditBody(ctx context.Context, n Note, body string) error {
 		args = []string{"api", "-X", "PATCH", issuePath("issues/comments/" + n.ID), "-f", "body=" + body}
 	}
 
-	_, err := p.h.Run(ctx, args...)
+	_, err := p.h.run(ctx, args...)
 
 	return err
 }
@@ -477,7 +477,7 @@ func (p *ReviewPR) loadPull(ctx context.Context, number string) error {
 		args = append(args, number)
 	}
 
-	if err := p.h.Decode(ctx, &pr, append(args, "--json", "number,url,headRefOid,commits")...); err != nil {
+	if err := p.h.decode(ctx, &pr, append(args, "--json", "number,url,headRefOid,commits")...); err != nil {
 		return err
 	}
 
@@ -502,7 +502,7 @@ func (p *ReviewPR) loadMergeRequest(ctx context.Context, number string) error {
 		args = append(args, number)
 	}
 
-	if err := p.h.Decode(ctx, &mr, append(args, "-F", "json")...); err != nil {
+	if err := p.h.decode(ctx, &mr, append(args, "-F", "json")...); err != nil {
 		return err
 	}
 
@@ -513,7 +513,7 @@ func (p *ReviewPR) loadMergeRequest(ctx context.Context, number string) error {
 		CommittedDate time.Time `json:"committed_date"`
 	}
 
-	commits, err := DecodePages[mrCommit](ctx, p.h, p.mrPath("commits?per_page=100"))
+	commits, err := decodePages[mrCommit](ctx, p.h, p.mrPath("commits?per_page=100"))
 	if err != nil {
 		return err
 	}
@@ -538,7 +538,7 @@ func (p *ReviewPR) foldReviewComments(ctx context.Context, review *Note) error {
 		UpdatedAt time.Time `json:"updated_at"`
 	}
 
-	comments, err := DecodePages[reviewComment](
+	comments, err := decodePages[reviewComment](
 		ctx, p.h, issuePath("pulls/"+p.Number+"/reviews/"+review.ID+"/comments?per_page=100"),
 	)
 	if err != nil {
@@ -616,7 +616,7 @@ func (p *ReviewPR) reviewThreads(ctx context.Context) ([]reviewThread, error) {
 		} `json:"data"`
 	}
 
-	err := p.h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+reviewThreadsQuery,
+	err := p.h.decode(ctx, &payload, "api", "graphql", "-f", "query="+reviewThreadsQuery,
 		"-F", "owner="+p.owner, "-F", "name="+p.repo, "-F", "number="+p.Number)
 	if err != nil {
 		return nil, err
@@ -648,7 +648,7 @@ func (p *ReviewPR) loadRepo(ctx context.Context) error {
 		} `json:"owner"`
 	}
 
-	if err := p.h.Decode(ctx, &repo, "repo", "view", "--json", "owner,name"); err != nil {
+	if err := p.h.decode(ctx, &repo, "repo", "view", "--json", "owner,name"); err != nil {
 		return err
 	}
 
@@ -682,7 +682,7 @@ func (p *ReviewPR) discussions(ctx context.Context, want func(login string) bool
 		} `json:"notes"`
 	}
 
-	discussions, err := DecodePages[discussion](ctx, p.h, p.mrPath("discussions?per_page=100"))
+	discussions, err := decodePages[discussion](ctx, p.h, p.mrPath("discussions?per_page=100"))
 	if err != nil {
 		return nil, err
 	}
@@ -755,7 +755,7 @@ func (p *ReviewPR) pipelineJobs(ctx context.Context, name string) ([]Note, error
 		FinishedAt time.Time `json:"finished_at"`
 	}
 
-	jobs, err := DecodePages[job](
+	jobs, err := decodePages[job](
 		ctx, p.h, "projects/:fullpath/pipelines/"+strconv.FormatInt(pipeline.ID, 10)+"/jobs?per_page=100",
 	)
 	if err != nil {
@@ -783,7 +783,7 @@ func (p *ReviewPR) pipelineJobs(ctx context.Context, name string) ([]Note, error
 		}
 
 		if concluded {
-			if trace, err := p.h.Run(ctx, "api", "projects/:fullpath/jobs/"+id+"/trace"); err == nil {
+			if trace, err := p.h.run(ctx, "api", "projects/:fullpath/jobs/"+id+"/trace"); err == nil {
 				n.Body = strings.TrimSpace(trace)
 			}
 		}
@@ -806,7 +806,7 @@ func (p *ReviewPR) reactionPath(n Note) (string, bool) {
 		id = n.CommentID
 	}
 
-	if p.h.GLab() {
+	if p.h.glab() {
 		return p.mrPath("notes/" + id + "/award_emoji?per_page=100"), true
 	}
 

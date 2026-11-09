@@ -356,7 +356,7 @@ func (p pull) checks() string {
 // commits and force-pushes, and others' they reviewed or merged since
 // since.
 func (h Host) Pulls(ctx context.Context, login string, since time.Time) ([]PR, error) {
-	if h.GLab() {
+	if h.glab() {
 		return h.standupMRs(ctx, login, since)
 	}
 
@@ -397,7 +397,7 @@ func (h Host) Pulls(ctx context.Context, login string, since time.Time) ([]PR, e
 // PullsSince is what a board reads: every open request, and every one
 // merged since since, each with the board's fields and no commits.
 func (h Host) PullsSince(ctx context.Context, since time.Time) ([]PR, error) {
-	if h.GLab() {
+	if h.glab() {
 		open, err := h.listMRs(ctx, url.Values{"state": {"opened"}, "per_page": {"100"}})
 		if err != nil {
 			return nil, err
@@ -434,7 +434,7 @@ const HeadFields = "number,state,headRefName,headRefOid,baseRefName,url,author,c
 func (h Host) PullsByHead(ctx context.Context, branch string) ([]PR, error) {
 	var out []PR
 
-	if h.GLab() {
+	if h.glab() {
 		var err error
 		if out, err = h.listMRs(ctx, url.Values{
 			"source_branch": {branch}, "state": {"all"}, "per_page": {"100"},
@@ -443,7 +443,7 @@ func (h Host) PullsByHead(ctx context.Context, branch string) ([]PR, error) {
 		}
 	} else {
 		var found []pull
-		if err := h.Decode(ctx, &found, "pr", "list", "--head", branch, "--state", "all",
+		if err := h.decode(ctx, &found, "pr", "list", "--head", branch, "--state", "all",
 			"--json", HeadFields, "--limit", "100"); err != nil {
 			return nil, err
 		}
@@ -467,7 +467,7 @@ func (h Host) DefaultBranchName(ctx context.Context) (string, error) {
 		DefaultBranch string `json:"default_branch"`
 	}
 
-	err := h.Decode(ctx, &repo, h.Pick(
+	err := h.decode(ctx, &repo, h.pick(
 		[]string{"repo", "view", "--json", "defaultBranchRef"},
 		[]string{"repo", "view", "-F", "json"},
 	)...)
@@ -487,12 +487,12 @@ func (h Host) DefaultBranchName(ctx context.Context) (string, error) {
 // for inside the list query, gh's GraphQL refuses a node count past its
 // limit.
 func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
-	path := h.Pick(
+	path := h.pick(
 		[]string{fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/commits?per_page=100", number)},
 		[]string{fmt.Sprintf("projects/:fullpath/merge_requests/%d/commits?per_page=100", number)},
 	)[0]
 
-	commits, err := DecodePages[struct {
+	commits, err := decodePages[struct {
 		SHA     string `json:"sha"`
 		Parents []struct {
 			SHA string `json:"sha"`
@@ -541,7 +541,7 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 func (h Host) SearchPRs(ctx context.Context, query, fields string) ([]PR, error) {
 	var found []pull
 
-	err := h.Decode(ctx, &found, "pr", "list", "--state", "all", "--search", query,
+	err := h.decode(ctx, &found, "pr", "list", "--state", "all", "--search", query,
 		"--json", fields, "--limit", strconv.Itoa(PRLimit))
 	if err != nil {
 		return nil, err
@@ -588,7 +588,7 @@ func foreignPulls(login string, reviewed, merged []PR) []PR {
 
 // listMRs is one page walk of the MR list API with the query given.
 func (h Host) listMRs(ctx context.Context, q url.Values) ([]PR, error) {
-	found, err := DecodePages[pull](ctx, h, "projects/:fullpath/merge_requests?"+q.Encode())
+	found, err := decodePages[pull](ctx, h, "projects/:fullpath/merge_requests?"+q.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -672,7 +672,7 @@ func (h Host) MRReviews(ctx context.Context, iid int) ([]Review, error) {
 		Author    user      `json:"author"`
 	}
 
-	notes, err := DecodePages[note](ctx, h, fmt.Sprintf("projects/:fullpath/merge_requests/%d/notes?per_page=100", iid))
+	notes, err := decodePages[note](ctx, h, fmt.Sprintf("projects/:fullpath/merge_requests/%d/notes?per_page=100", iid))
 	if err != nil {
 		return nil, err
 	}
@@ -700,7 +700,7 @@ func (h Host) MRReviews(ctx context.Context, iid int) ([]Review, error) {
 func (h Host) PullDiff(ctx context.Context, number int) (string, error) {
 	n := strconv.Itoa(number)
 
-	return h.Run(ctx, h.Pick([]string{"pr", "diff", n}, []string{"mr", "diff", n})...)
+	return h.run(ctx, h.pick([]string{"pr", "diff", n}, []string{"mr", "diff", n})...)
 }
 
 // A Comment is one plain comment on a request, oldest first.
@@ -723,9 +723,9 @@ func (h Host) PullComments(ctx context.Context, number int) ([]Comment, error) {
 
 	var notes []note
 
-	if h.GLab() {
+	if h.glab() {
 		var err error
-		if notes, err = DecodePages[note](ctx, h,
+		if notes, err = decodePages[note](ctx, h,
 			fmt.Sprintf("projects/:fullpath/merge_requests/%d/notes?sort=asc&per_page=100", number)); err != nil {
 			return nil, err
 		}
@@ -733,7 +733,7 @@ func (h Host) PullComments(ctx context.Context, number int) ([]Comment, error) {
 		var p struct {
 			Comments []note `json:"comments"`
 		}
-		if err := h.Decode(ctx, &p, "pr", "view", strconv.Itoa(number), "--json", "comments"); err != nil {
+		if err := h.decode(ctx, &p, "pr", "view", strconv.Itoa(number), "--json", "comments"); err != nil {
 			return nil, err
 		}
 
@@ -780,7 +780,7 @@ func (h Host) PRForcePushes(ctx context.Context, number int, login string) ([]Fo
 		} `json:"data"`
 	}
 
-	err := h.Decode(ctx, &payload, "api", "graphql", "-f", "query="+ForcePushesQuery,
+	err := h.decode(ctx, &payload, "api", "graphql", "-f", "query="+ForcePushesQuery,
 		"-F", "owner={owner}", "-F", "name={repo}", "-F", "number="+strconv.Itoa(number))
 	if err != nil {
 		return nil, err
@@ -808,7 +808,7 @@ func (h Host) MRForcePushes(ctx context.Context, iid int, since time.Time) ([]Fo
 		CreatedAt time.Time `json:"created_at"`
 	}
 
-	versions, err := DecodePages[version](
+	versions, err := decodePages[version](
 		ctx,
 		h,
 		fmt.Sprintf("projects/:fullpath/merge_requests/%d/versions?per_page=100", iid),
