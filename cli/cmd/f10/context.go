@@ -259,13 +259,13 @@ func (t *target) issues(declined string) (host, error) {
 func (t *target) hostIssues() bool {
 	kind := t.eff.TrackerKind
 
-	return kind == "" || kind == "GitHub Issues" || kind == "GitLab work items" || !t.trackerDeclared()
+	return kind == "" || kind.HostIssues() || !t.trackerDeclared()
 }
 
 func (t *target) trackerDeclared() bool {
 	for _, f := range t.eff.Facts {
 		if f.Key == "tracker.kind" {
-			return strings.HasPrefix(f.Origin, "declared")
+			return f.Origin.Declared()
 		}
 	}
 

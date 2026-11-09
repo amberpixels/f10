@@ -27,12 +27,12 @@ func TestStaleAt(t *testing.T) {
 		{"over 3w", 22 * 24 * time.Hour, "3w", true},
 		{"undeclared", 1000 * 24 * time.Hour, "", false},
 	} {
-		if got := staleAt(now.Add(-tc.age), tc.staleAfter, now); got != tc.want {
+		if got := staleAt(now.Add(-tc.age), staleOf(tc.staleAfter), now); got != tc.want {
 			t.Errorf("%s: staleAt = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 
-	if staleAt(time.Time{}, "10d", now) {
+	if staleAt(time.Time{}, staleOf("10d"), now) {
 		t.Error("no created date read as stale")
 	}
 }
@@ -65,15 +65,15 @@ func TestStaleness(t *testing.T) {
 	old := now.Add(-60 * 24 * time.Hour)
 	day := 24 * time.Hour
 
-	if got := staleness(old, "", now, nil, "FT-1"); got != staleFresh {
+	if got := staleness(old, staleOf(""), now, nil, "FT-1"); got != staleFresh {
 		t.Errorf("undeclared = %q", got)
 	}
 
-	if got := staleness(time.Time{}, "3w", now, nil, "FT-1"); got != staleUndated {
+	if got := staleness(time.Time{}, staleOf("3w"), now, nil, "FT-1"); got != staleUndated {
 		t.Errorf("no date = %q", got)
 	}
 
-	if got := staleness(now.Add(-day), "3w", now, nil, "FT-1"); got != staleFresh {
+	if got := staleness(now.Add(-day), staleOf("3w"), now, nil, "FT-1"); got != staleFresh {
 		t.Errorf("young = %q", got)
 	}
 
@@ -83,18 +83,18 @@ func TestStaleness(t *testing.T) {
 	writeVerdict(t, root, "FT-1", "2", "plan FT-1", "proceed", now.Add(-day))
 	writeVerdict(t, root, "FT-1", "3", "task FT-1", "proceed", now.Add(-30*day))
 
-	if got := staleness(old, "3w", now, []string{root}, "FT-1"); got != staleNeeds {
+	if got := staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != staleNeeds {
 		t.Errorf("no recent task proceed = %q", got)
 	}
 
 	older := writeVerdict(t, root, "FT-1", "4", "task FT-1", "proceed", now.Add(-5*day))
 	newer := writeVerdict(t, main, "FT-1", "1", "task FT-1", "proceed", now.Add(-2*day))
 
-	if got := staleness(old, "3w", now, []string{root}, "FT-1"); got != staleJudged+" "+older {
+	if got := staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != staleJudged+" "+older {
 		t.Errorf("recent proceed = %q, want %s", got, older)
 	}
 
-	if got := staleness(old, "3w", now, []string{root, main}, "FT-1"); got != staleJudged+" "+newer {
+	if got := staleness(old, staleOf("3w"), now, []string{root, main}, "FT-1"); got != staleJudged+" "+newer {
 		t.Errorf("newest across roots = %q, want %s", got, newer)
 	}
 }
@@ -198,10 +198,18 @@ func TestTaskStaleCreatedAt(t *testing.T) {
 		t.Errorf("bad --created = %v", err)
 	}
 
-	tg.eff.TrackerKind = "Jira"
-	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: "declared"})
+	tg.eff.TrackerKind = facts.TrackerJira
+	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
 	if at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, ""); err != nil || !at.IsZero() {
 		t.Errorf("non-host tracker = %v, %v; want undated", at, err)
 	}
+}
+
+// staleOf is a stale_after value as the frontmatter writes it; "" is off.
+func staleOf(value string) facts.StaleAfter {
+	var s facts.StaleAfter
+	_ = s.UnmarshalText([]byte(value))
+
+	return s
 }

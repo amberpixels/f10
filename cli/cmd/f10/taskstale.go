@@ -36,7 +36,7 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 	var created time.Time
 
 	// no stale_after: nothing to judge, so the tracker is never asked
-	if _, err := facts.ParseStaleAfter(t.eff.StaleAfter); err == nil {
+	if t.eff.StaleAfter != 0 {
 		if created, err = t.createdAt(ctx, r, cmd.String("created")); err != nil {
 			return err
 		}
@@ -74,11 +74,11 @@ func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Ti
 
 // staleness is the line task stale prints. A proceed on the task within
 // stale_after clears it, searched in every root a worktree's verdicts may sit in.
-func staleness(created time.Time, staleAfter string, now time.Time, roots []string, id string) string {
-	d, err := facts.ParseStaleAfter(staleAfter)
+func staleness(created time.Time, staleAfter facts.StaleAfter, now time.Time, roots []string, id string) string {
+	d := time.Duration(staleAfter)
 
 	switch {
-	case err != nil:
+	case d <= 0:
 		return staleFresh
 	case created.IsZero():
 		return staleUndated

@@ -14,7 +14,7 @@ import (
 // belong to the repository (GH-12 in two repositories is two issues), so
 // each is its own project; any other tracker is shared by kind and prefix.
 func (t *target) standupTracker() (standup.Tracker, string) {
-	tr := standup.Tracker{Kind: t.eff.TrackerKind, Prefix: t.eff.IDPrefix}
+	tr := standup.Tracker{Kind: t.eff.TrackerKind.String(), Prefix: t.eff.IDPrefix}
 
 	if tr.Prefix != "" && (t.driver() != nil || !t.hostIssues()) {
 		tr.Key = "tracker\x00" + tr.Kind + "\x00" + tr.Prefix

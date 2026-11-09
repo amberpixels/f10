@@ -141,7 +141,7 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 	undeclared := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"}, pb)
 
 	f := fieldByName(t, undeclared, "Review")
-	if f.Origin != OriginDetected || f.Source != ".github/workflows/review.yml" || !f.Prose {
+	if f.Origin.Kind != OriginDetected || f.Source != ".github/workflows/review.yml" || !f.Prose {
 		t.Errorf("Review field = %+v, want detected prose from the workflow", f)
 	}
 
@@ -165,7 +165,7 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 	none := Build(&layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
 		&probe.Probes{CLI: probe.Signal{Value: "gh", Evidence: "well-known host github.com"}})
 
-	if f := fieldByName(t, none, "Review"); f.Origin != OriginAbsent {
+	if f := fieldByName(t, none, "Review"); f.Origin.Kind != OriginAbsent {
 		t.Errorf("Review without a workflow = %+v, want absent", f)
 	}
 }

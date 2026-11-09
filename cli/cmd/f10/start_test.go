@@ -485,7 +485,7 @@ func TestHostRefusesPullRequests(t *testing.T) {
 		t.Context(),
 		"FT-35",
 		"35",
-		"",
+		0,
 	); err == nil ||
 		!strings.Contains(err.Error(), "#35 is a pull request") {
 		t.Errorf("issueDoc = %v", err)
@@ -536,7 +536,10 @@ func TestHostIssueDocLabels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		doc, _, err := newHost(tt.host, "/code/repo").issueDoc(t.Context(), "FT-"+tt.number, tt.number, tt.stale)
+		doc, _, err := newHost(
+			tt.host,
+			"/code/repo",
+		).issueDoc(t.Context(), "FT-"+tt.number, tt.number, staleOf(tt.stale))
 		if err != nil || !strings.Contains(doc, tt.want) {
 			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
 		}

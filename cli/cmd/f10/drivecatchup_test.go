@@ -481,31 +481,29 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 }
 
 func TestVerifySpecOf(t *testing.T) {
-	field := func(origin, value string) *facts.Effective {
+	field := func(origin facts.Origin, value string) *facts.Effective {
 		return &facts.Effective{Fields: []facts.Field{{Name: "Verify", Origin: origin, Value: value}}}
 	}
+
+	main := facts.DeclaredIn("main")
+
+	// detection hands the commands over typed; the display Value is never split
+	detected := field(facts.OriginOf(facts.OriginDetected), "just lint / just test")
+	detected.VerifyCommands = []string{"just lint", "just test"}
 
 	cases := map[string]struct {
 		eff  *facts.Effective
 		cmds []string
 		ok   bool
 	}{
-		"list": {&facts.Effective{Verify: []facts.VerifyDecl{{Run: "go test ./..."}}}, nil, true},
-		"detected": {
-			field(facts.OriginDetected, "just lint / just test"),
-			[]string{"just lint", "just test"},
-			true,
-		},
-		"init's heading": {
-			field("declared (main)", "`just lint` / `just test`"),
-			[]string{"just lint", "just test"},
-			true,
-		},
-		"prose heading":   {field("declared (main)", "`just test`; never run `just e2e`"), nil, false},
-		"two-line prose":  {field("declared (main)", "`just test`\nnever run e2e"), nil, false},
-		"judgment":        {field(facts.OriginJudgment, "go test ./..."), nil, false},
-		"nothing at all":  {field(facts.OriginAbsent, ""), nil, false},
-		"empty backticks": {field("declared (main)", "`` / `x`"), nil, false},
+		"list":            {&facts.Effective{Verify: []facts.VerifyDecl{{Run: "go test ./..."}}}, nil, true},
+		"detected":        {detected, []string{"just lint", "just test"}, true},
+		"init's heading":  {field(main, "`just lint` / `just test`"), []string{"just lint", "just test"}, true},
+		"prose heading":   {field(main, "`just test`; never run `just e2e`"), nil, false},
+		"two-line prose":  {field(main, "`just test`\nnever run e2e"), nil, false},
+		"judgment":        {field(facts.OriginOf(facts.OriginJudgment), "go test ./..."), nil, false},
+		"nothing at all":  {field(facts.OriginOf(facts.OriginAbsent), ""), nil, false},
+		"empty backticks": {field(main, "`` / `x`"), nil, false},
 	}
 
 	for name, tc := range cases {

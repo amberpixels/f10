@@ -31,9 +31,9 @@ type view struct {
 	Layering        string               `json:"layering"`
 	Visibility      string               `json:"visibility"`
 	Storage         string               `json:"storage"`
-	TrackerKind     string               `json:"trackerKind,omitempty"`
+	TrackerKind     facts.TrackerKind    `json:"trackerKind,omitempty"`
 	IDPrefix        string               `json:"idPrefix,omitempty"`
-	IDPrefixOrigin  string               `json:"idPrefixOrigin,omitempty"`
+	IDPrefixOrigin  facts.Origin         `json:"idPrefixOrigin,omitzero"`
 	IDPrefixDerived bool                 `json:"idPrefixDerived,omitempty"`
 	PriorityLabels  map[string]string    `json:"priorityLabels,omitempty"` // host label to priority level, from tracker.priority
 	TrackerStatus   map[string]string    `json:"trackerStatus,omitempty"`  // started and shipped to the tracker's words, from tracker.status
@@ -45,10 +45,17 @@ type view struct {
 	Traces          bool                 `json:"traces"`
 	Lore            string               `json:"lore"`
 	LoreGate        string               `json:"loreGate"`
-	StaleAfter      string               `json:"staleAfter,omitempty"`
+	StaleAfter      facts.StaleAfter     `json:"staleAfter,omitempty"`
+	DriverTimeout   string               `json:"driverTimeout"` // driver_timeout, as a Go duration
 	Flows           map[string]flow.Flow `json:"flows"`
 	FlowByArea      map[string]string    `json:"flowByArea,omitempty"`
+	DriveEnv        []string             `json:"driveEnv,omitempty"`
+	Watch           string               `json:"watch"`
+	WatchCatchup    bool                 `json:"watchCatchup"`
 	ReportBack      bool                 `json:"reportBack"`
+	UpkeepPaths     []string             `json:"upkeepPaths,omitempty"`
+	Verify          []facts.VerifyDecl   `json:"verify,omitempty"`
+	VerifyOrigin    facts.Origin         `json:"verifyOrigin,omitzero"`
 	Agents          []agentEntry         `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
 	Paces           []paceEntry          `json:"paces,omitempty"`   // every pace's keys, built-ins under the user's under the project's, each with its origin
 	Pace            *paceEntry           `json:"pace,omitempty"`    // the default pace, when any layer names one
@@ -79,15 +86,15 @@ func (v *view) withAgents(eff *facts.Effective) {
 	for _, key := range slices.Sorted(maps.Keys(m)) {
 		e := m[key]
 		v.Agents = append(v.Agents, e)
-		v.Facts = append(v.Facts, facts.Fact{Key: "agents." + key, Value: e.Value, Origin: e.Origin})
+		v.Facts = append(v.Facts, facts.Fact{Key: "agents." + key, Value: e.Value, Origin: e.src})
 	}
 }
 
 // A paceEntry is one pace key with its dials and the layer that set it.
 type paceEntry struct {
-	Key    string `json:"key"` // <pace>.<step>, or pace for the default
-	Value  string `json:"value"`
-	Origin string `json:"origin"`
+	Key    string       `json:"key"` // <pace>.<step>, or pace for the default
+	Value  string       `json:"value"`
+	Origin facts.Origin `json:"origin"`
 }
 
 // withPaces puts every pace key on the view, the user's file and the
@@ -236,9 +243,16 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		Lore:            eff.Lore,
 		LoreGate:        eff.LoreGate,
 		StaleAfter:      eff.StaleAfter,
+		DriverTimeout:   eff.DriverTimeout.String(),
 		Flows:           eff.Flows,
 		FlowByArea:      eff.FlowByArea,
+		DriveEnv:        eff.DriveEnv,
+		Watch:           eff.Watch,
+		WatchCatchup:    eff.WatchCatchup,
 		ReportBack:      eff.ReportBack,
+		UpkeepPaths:     eff.UpkeepPaths,
+		Verify:          eff.Verify,
+		VerifyOrigin:    eff.VerifyOrigin,
 		Facts:           eff.Facts,
 		Problems:        eff.Problems,
 		Roots:           projects.Roots(),

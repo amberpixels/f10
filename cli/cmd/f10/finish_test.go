@@ -2730,8 +2730,8 @@ func TestCloseTaskFor(t *testing.T) {
 		t.Error("host issues: no close")
 	}
 
-	tg.eff.TrackerKind = "Jira"
-	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: "declared"})
+	tg.eff.TrackerKind = facts.TrackerJira
+	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
 	if closeTaskFor(tg, newHost("gh", tg.dir)) != nil {
 		t.Error("a Jira tracker: a close was bound")

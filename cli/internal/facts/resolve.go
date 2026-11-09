@@ -1,7 +1,6 @@
 package facts
 
 import (
-	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -19,7 +18,7 @@ import (
 type Fact struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
-	Origin string `json:"origin"`
+	Origin Origin `json:"origin"`
 }
 
 // A Problem is something wrong with the declaration. An error stops the
@@ -33,7 +32,7 @@ type Problem struct {
 type source struct {
 	set    bool
 	shown  string // the value as config prints it
-	origin string
+	origin Origin
 }
 
 // settle records the frontmatter's fact, else the default, and reports
@@ -50,6 +49,24 @@ func (e *Effective) settle(key string, fm source, def Fact) bool {
 	}
 
 	return false
+}
+
+// scalar records a registry key's fact, the frontmatter's value else its
+// default, and returns the value in force.
+func (e *Effective) scalar(fm *layered, key string) string {
+	k := scalarNamed(key)
+
+	if value := *k.field(&fm.Declared); value != "" {
+		e.Facts = append(e.Facts, Fact{Key: key, Value: value, Origin: DeclaredFrontmatter(fm.origin[key])})
+
+		return value
+	}
+
+	if k.def != "" {
+		e.Facts = append(e.Facts, Fact{Key: key, Value: k.def, Origin: OriginOf(OriginDefault)})
+	}
+
+	return k.def
 }
 
 func (e *Effective) problem(isError bool, format string, args ...any) {
@@ -77,17 +94,16 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 			return source{}
 		}
 
-		return source{set: true, shown: shown, origin: "declared (" + fm.origin[key] + ", frontmatter)"}
+		return source{set: true, shown: shown, origin: DeclaredFrontmatter(fm.origin[key])}
 	}
 
-	if e.settle("visibility", fmSource("visibility", fm.Visibility),
-		Fact{Key: "visibility", Value: "stealth", Origin: OriginDefault}) {
-		e.Visibility = fm.Visibility
-	}
+	e.Visibility = e.scalar(fm, "visibility")
 
-	storageDefault := Fact{Key: "storage", Value: "in-repo", Origin: OriginDefault}
+	// out-of-tree declares itself by location, so finding it there is
+	// detection, not the registry's default
+	storageDefault := Fact{Key: "storage", Value: "in-repo", Origin: OriginOf(OriginDefault)}
 	if outOfTree(lay) {
-		storageDefault = Fact{Key: "storage", Value: "out-of-tree", Origin: OriginDetected}
+		storageDefault = Fact{Key: "storage", Value: "out-of-tree", Origin: OriginOf(OriginDetected)}
 		e.Storage = "out-of-tree"
 	}
 
@@ -97,55 +113,32 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 
 	// layering is layout's to read, since it decides which files load
 	if lay.LayeringDeclared {
-		e.Facts = append(
-			e.Facts,
-			Fact{Key: "layering", Value: lay.Layering, Origin: "declared (worktree, frontmatter)"},
-		)
+		e.Facts = append(e.Facts, Fact{Key: "layering", Value: lay.Layering, Origin: DeclaredFrontmatter("worktree")})
 	}
 
 	e.resolveTracker(fm, fmSource, lay, pb)
-	e.resolveHosting(fm, fmSource)
+	e.resolveHosting(fm)
 
-	e.ReportBack = fm.ReportBack != "off"
-	if fm.ReportBack != "" {
-		e.Facts = append(e.Facts, Fact{
-			Key:    "report_back",
-			Value:  fm.ReportBack,
-			Origin: "declared (" + fm.origin["report_back"] + ", frontmatter)",
-		})
-	}
-
-	e.Watch = cmp.Or(fm.Watch, "finish")
-	if fm.Watch != "" {
-		e.Facts = append(e.Facts, Fact{
-			Key:    "watch",
-			Value:  fm.Watch,
-			Origin: "declared (" + fm.origin["watch"] + ", frontmatter)",
-		})
-	}
-
-	// off unless declared: an unattended catchup pushed
-	// with a lease is the riskiest thing the watcher does
-	e.settle("watch_catchup", fmSource("watch_catchup", fm.WatchCatchup),
-		Fact{Key: "watch_catchup", Value: "off", Origin: OriginDefault})
-	e.WatchCatchup = fm.WatchCatchup == "on"
+	e.ReportBack = e.scalar(fm, "report_back") != "off"
+	e.Watch = e.scalar(fm, "watch")
+	e.WatchCatchup = e.scalar(fm, "watch_catchup") == "on"
 
 	if e.UpkeepPaths = fm.Standup.Upkeep; e.UpkeepPaths != nil {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "standup.upkeep",
 			Value:  strings.Join(e.UpkeepPaths, ", "),
-			Origin: "declared (" + fm.origin["standup"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["standup"]),
 		})
 	}
 
 	// frontmatter only: the prose heading stays the commands of a project
 	// that scopes none, and the rules of one that does
 	if e.Verify = fm.Verify; e.Verify != nil {
-		e.VerifyOrigin = "declared (" + fm.origin["verify"] + ")"
+		e.VerifyOrigin = DeclaredIn(fm.origin["verify"])
 		e.Facts = append(e.Facts, Fact{
 			Key:    "verify",
 			Value:  verifyShown(e.Verify),
-			Origin: "declared (" + fm.origin["verify"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["verify"]),
 		})
 	}
 
@@ -165,8 +158,12 @@ func (e *Effective) resolveTracker(
 	lay *layout.Layout,
 	pb *probe.Probes,
 ) {
-	fmKind := trackerKinds[fm.Tracker.Kind]
-	if e.settle("tracker.kind", fmSource("tracker", fmKind), Fact{}) {
+	fmKind := TrackerKind(fm.Tracker.Kind)
+	if !slices.Contains(TrackerKinds, fmKind) {
+		fmKind = "" // check() reports it
+	}
+
+	if e.settle("tracker.kind", fmSource("tracker", fmKind.String()), Fact{}) {
 		e.TrackerKind = fmKind
 	} else {
 		e.TrackerKind = cliTrackerKind(pb)
@@ -174,12 +171,12 @@ func (e *Effective) resolveTracker(
 
 	fmPrefix := idPrefix(fm.Tracker.ID)
 	if e.settle("tracker.id", fmSource("tracker", fmPrefix), Fact{}) {
-		e.IDPrefix, e.IDPrefixOrigin = fmPrefix, "declared ("+fm.origin["tracker"]+", frontmatter)"
+		e.IDPrefix, e.IDPrefixOrigin = fmPrefix, DeclaredFrontmatter(fm.origin["tracker"])
 	} else {
 		// no declared id format: the project's own name settles the prefix,
 		// until f10 init writes it down
 		if e.IDPrefix = ProjectPrefix(lay.Project); e.IDPrefix != "" {
-			e.IDPrefixOrigin = "derived from project name " + lay.Project
+			e.IDPrefixOrigin = DerivedFrom(lay.Project)
 			e.IDPrefixDerived = true
 			e.Facts = append(e.Facts, Fact{Key: "tracker.id", Value: e.IDPrefix, Origin: e.IDPrefixOrigin})
 		}
@@ -191,7 +188,7 @@ func (e *Effective) resolveTracker(
 		e.Facts = append(e.Facts, Fact{
 			Key:    "tracker.priority",
 			Value:  priorityShown(fm.Tracker.Priority),
-			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["tracker"]),
 		})
 	}
 
@@ -201,7 +198,7 @@ func (e *Effective) resolveTracker(
 		e.Facts = append(e.Facts, Fact{
 			Key:    "tracker.title",
 			Value:  fm.Tracker.Title,
-			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["tracker"]),
 		})
 	}
 
@@ -210,7 +207,7 @@ func (e *Effective) resolveTracker(
 		e.Facts = append(e.Facts, Fact{
 			Key:    "tracker.status",
 			Value:  mapShown(fm.Tracker.Status),
-			Origin: "declared (" + fm.origin["tracker"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["tracker"]),
 		})
 	}
 }
@@ -258,53 +255,23 @@ func priorityShown(declared map[string]Labels) string {
 	return strings.Join(shown, "; ")
 }
 
-func (e *Effective) resolveHosting(
-	fm *layered,
-	fmSource func(key, shown string) source,
-) {
-	if e.settle("merge_method", fmSource("merge_method", fm.MergeMethod), Fact{}) {
-		e.MergeMethod = fm.MergeMethod
+func (e *Effective) resolveHosting(fm *layered) {
+	e.MergeMethod = e.scalar(fm, "merge_method")
+	e.Catchup = e.scalar(fm, "catchup")
+	e.CatchupStacked = e.scalar(fm, "catchup_stacked")
+	e.Traces = e.scalar(fm, "traces") == "on"
+	e.Lore = e.scalar(fm, "lore")
+	e.LoreGate = e.scalar(fm, "lore_gate")
+
+	// the default, off, does not parse, and leaves the duration zero
+	if d, err := ParseStaleAfter(e.scalar(fm, "stale_after")); err == nil {
+		e.StaleAfter = StaleAfter(d)
 	}
-
-	e.Catchup = "rebase"
-	if e.settle("catchup", fmSource("catchup", fm.Catchup),
-		Fact{Key: "catchup", Value: "rebase", Origin: OriginDefault}) {
-		e.Catchup = fm.Catchup
-	}
-
-	// a stacked base is merged unless the project takes the replay a rebase risks
-	if e.settle("catchup_stacked", fmSource("catchup_stacked", fm.CatchupStacked),
-		Fact{Key: "catchup_stacked", Value: "merge", Origin: OriginDefault}) {
-		e.CatchupStacked = fm.CatchupStacked
-	} else {
-		e.CatchupStacked = "merge"
-	}
-
-	e.settle("traces", fmSource("traces", fm.Traces),
-		Fact{Key: "traces", Value: "off", Origin: OriginDefault})
-	e.Traces = fm.Traces == "on"
-
-	e.settle("lore", fmSource("lore", fm.Lore),
-		Fact{Key: "lore", Value: "local", Origin: OriginDefault})
-
-	e.Lore = cmp.Or(fm.Lore, "local")
-
-	e.settle("lore_gate", fmSource("lore_gate", fm.LoreGate),
-		Fact{Key: "lore_gate", Value: "warn", Origin: OriginDefault})
-
-	e.LoreGate = cmp.Or(fm.LoreGate, "warn")
-
-	e.settle("stale_after", fmSource("stale_after", fm.StaleAfter),
-		Fact{Key: "stale_after", Value: "off", Origin: OriginDefault})
-	e.StaleAfter = fm.StaleAfter
-
-	e.settle("driver_timeout", fmSource("driver_timeout", fm.DriverTimeout),
-		Fact{Key: "driver_timeout", Value: driver.DefaultTimeout.String(), Origin: OriginDefault})
 
 	// a bad value is already a problem that stops the command; the default
 	// stands in until then
 	e.DriverTimeout = driver.DefaultTimeout
-	if d, err := ParseDriverTimeout(fm.DriverTimeout); err == nil {
+	if d, err := ParseDriverTimeout(e.scalar(fm, "driver_timeout")); err == nil {
 		e.DriverTimeout = d
 	}
 
@@ -312,7 +279,7 @@ func (e *Effective) resolveHosting(
 		e.Facts = append(e.Facts, Fact{
 			Key:    "drive_env",
 			Value:  strings.Join(fm.DriveEnv, ", "),
-			Origin: "declared (" + fm.origin["drive_env"] + ", frontmatter)",
+			Origin: DeclaredFrontmatter(fm.origin["drive_env"]),
 		})
 	}
 
@@ -336,7 +303,10 @@ func (e *Effective) resolveReview(
 		// one, has already said there is none
 		if detected := reviewBody(pb); detected != "" && !declared {
 			e.Review = parseReview(detected)
-			e.Facts = append(e.Facts, Fact{Key: "review", Value: reviewShown(e.Review), Origin: OriginDetected})
+			e.Facts = append(
+				e.Facts,
+				Fact{Key: "review", Value: reviewShown(e.Review), Origin: OriginOf(OriginDetected)},
+			)
 		}
 	}
 }
@@ -352,12 +322,12 @@ func outOfTree(lay *layout.Layout) bool {
 }
 
 // cliTrackerKind is what the CLI routing implies when nothing declares one.
-func cliTrackerKind(pb *probe.Probes) string {
+func cliTrackerKind(pb *probe.Probes) TrackerKind {
 	switch pb.CLI.Value {
 	case "gh":
-		return "GitHub Issues"
+		return TrackerGitHub
 	case "glab":
-		return "GitLab work items"
+		return TrackerGitLab
 	}
 
 	return ""

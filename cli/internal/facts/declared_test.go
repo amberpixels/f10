@@ -2,6 +2,7 @@ package facts
 
 import (
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -88,20 +89,20 @@ func TestBuildFrontmatter(t *testing.T) {
 		t.Fatalf("problems: %+v", eff.Problems)
 	}
 
-	if eff.Visibility != "public" || eff.TrackerKind != "GitLab work items" || eff.IDPrefix != "AB" ||
+	if eff.Visibility != "public" || eff.TrackerKind != TrackerGitLab || eff.IDPrefix != "AB" ||
 		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || eff.CatchupStacked != "rebase" || len(eff.Flows) != 2 ||
 		!eff.WatchCatchup || eff.Review.Reviewer != "claude[bot]" {
 		t.Errorf("typed facts = %+v", eff)
 	}
 
 	for _, f := range eff.Facts {
-		if f.Key == "merge_method" && f.Origin != "declared (main, frontmatter)" {
+		if f.Key == "merge_method" && f.Origin.String() != "declared (main, frontmatter)" {
 			t.Errorf("merge_method origin = %q", f.Origin)
 		}
 	}
 
 	// the prose below the block still parses as it always has
-	if f := fieldByName(t, eff, "Verify"); f.Origin != "declared (main)" {
+	if f := fieldByName(t, eff, "Verify"); f.Origin.String() != "declared (main)" {
 		t.Errorf("Verify = %+v", f)
 	}
 }
@@ -124,7 +125,7 @@ func TestBuildFrontmatterLayersKeyByKey(t *testing.T) {
 func TestBuildTrackerNameInCode(t *testing.T) {
 	eff := buildWith(t, "---\ntracker:\n  kind: github\n---\n"+
 		"## Tracker\n\n- **Create** - invoke the `create-notion-task` skill\n", "")
-	if eff.TrackerKind != "GitHub Issues" || len(eff.Problems) != 0 {
+	if eff.TrackerKind != TrackerGitHub || len(eff.Problems) != 0 {
 		t.Errorf("a skill name is no tracker: kind %q, problems %+v", eff.TrackerKind, eff.Problems)
 	}
 }
@@ -150,7 +151,7 @@ func TestStandupUpkeep(t *testing.T) {
 	}
 
 	if !slices.ContainsFunc(eff.Facts, func(f Fact) bool {
-		return f.Key == "standup.upkeep" && f.Origin == "declared (main, frontmatter)"
+		return f.Key == "standup.upkeep" && f.Origin.String() == "declared (main, frontmatter)"
 	}) {
 		t.Errorf("no attributed standup.upkeep fact in %+v", eff.Facts)
 	}
@@ -176,13 +177,13 @@ func TestVerifyList(t *testing.T) {
 	}
 
 	if len(eff.Verify) != 2 || eff.Verify[0].Run != "just lint" || eff.Verify[1].Paths != nil ||
-		eff.VerifyOrigin != "declared (main)" {
+		eff.VerifyOrigin.String() != "declared (main)" {
 		t.Errorf("verify = %+v from %q", eff.Verify, eff.VerifyOrigin)
 	}
 
 	if !slices.ContainsFunc(eff.Facts, func(f Fact) bool {
 		return f.Key == "verify" && f.Value == "just lint (cli/**); just test (every diff)" &&
-			f.Origin == "declared (main, frontmatter)"
+			f.Origin.String() == "declared (main, frontmatter)"
 	}) {
 		t.Errorf("no attributed verify fact in %+v", eff.Facts)
 	}
@@ -192,7 +193,7 @@ func TestVerifyList(t *testing.T) {
 		"---\nverify:\n  - run: just lint\n  - run: just test\n---\n",
 		"---\nverify:\n  - run: go test ./...\n---\n",
 	)
-	if len(wt.Verify) != 1 || wt.Verify[0].Run != "go test ./..." || wt.VerifyOrigin != "declared (worktree)" {
+	if len(wt.Verify) != 1 || wt.Verify[0].Run != "go test ./..." || wt.VerifyOrigin.String() != "declared (worktree)" {
 		t.Errorf("worktree verify = %+v from %q", wt.Verify, wt.VerifyOrigin)
 	}
 
@@ -218,17 +219,17 @@ func TestVerifyList(t *testing.T) {
 // value wins with its origin.
 func TestTraces(t *testing.T) {
 	none := buildWith(t, "# demo\n", "")
-	if f := tracesFact(t, none); none.Traces || f.Value != "off" || f.Origin != OriginDefault {
+	if f := tracesFact(t, none); none.Traces || f.Value != "off" || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %v, %+v", none.Traces, f)
 	}
 
 	on := buildWith(t, "---\ntraces: on\n---\n# demo\n", "")
-	if f := tracesFact(t, on); !on.Traces || f.Value != "on" || f.Origin != "declared (main, frontmatter)" {
+	if f := tracesFact(t, on); !on.Traces || f.Value != "on" || f.Origin.String() != "declared (main, frontmatter)" {
 		t.Errorf("declared on = %v, %+v", on.Traces, f)
 	}
 
 	layered := buildWith(t, "---\ntraces: on\n---\n", "---\ntraces: off\n---\n")
-	if f := tracesFact(t, layered); layered.Traces || f.Origin != "declared (worktree, frontmatter)" {
+	if f := tracesFact(t, layered); layered.Traces || f.Origin.String() != "declared (worktree, frontmatter)" {
 		t.Errorf("worktree off = %v, %+v", layered.Traces, f)
 	}
 
@@ -258,12 +259,17 @@ func factFor(t *testing.T, eff *Effective, key string) Fact {
 // lore is local unless declared and takes only local or committed.
 func TestLore(t *testing.T) {
 	none := buildWith(t, "# demo\n", "")
-	if f := factFor(t, none, "lore"); none.Lore != "local" || f.Origin != OriginDefault {
+	if f := factFor(t, none, "lore"); none.Lore != "local" || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %q, %+v", none.Lore, f)
 	}
 
 	committed := buildWith(t, "---\nlore: committed\n---\n# demo\n", "")
-	if f := factFor(t, committed, "lore"); committed.Lore != "committed" || f.Origin != "declared (main, frontmatter)" {
+	if f := factFor(
+		t,
+		committed,
+		"lore",
+	); committed.Lore != "committed" ||
+		f.Origin.String() != "declared (main, frontmatter)" {
 		t.Errorf("declared committed = %q, %+v", committed.Lore, f)
 	}
 
@@ -283,7 +289,7 @@ func TestTrackerPriority(t *testing.T) {
 		t.Fatalf("problems: %+v", eff.Problems)
 	}
 
-	if eff.IDPrefix != "FT" || eff.TrackerKind != "GitHub Issues" {
+	if eff.IDPrefix != "FT" || eff.TrackerKind != TrackerGitHub {
 		t.Errorf("tracker beside the map = %q, %q", eff.IDPrefix, eff.TrackerKind)
 	}
 
@@ -300,7 +306,7 @@ func TestTrackerPriority(t *testing.T) {
 
 	i := slices.IndexFunc(eff.Facts, func(f Fact) bool { return f.Key == "tracker.priority" })
 	if i < 0 || eff.Facts[i].Value != "high: P1, priority:high; low: P3" ||
-		eff.Facts[i].Origin != "declared (main, frontmatter)" {
+		eff.Facts[i].Origin.String() != "declared (main, frontmatter)" {
 		t.Errorf("fact = %+v", eff.Facts)
 	}
 
@@ -399,7 +405,7 @@ func TestCatchupOff(t *testing.T) {
 // branch: merge unless declared, rebase on request, nothing else.
 func TestCatchupStacked(t *testing.T) {
 	none := buildWith(t, "# demo\n", "")
-	if f := factFor(t, none, "catchup_stacked"); none.CatchupStacked != "merge" || f.Origin != OriginDefault {
+	if f := factFor(t, none, "catchup_stacked"); none.CatchupStacked != "merge" || f.Origin.Kind != OriginDefault {
 		t.Errorf("default = %q (%s), want merge by default", none.CatchupStacked, f.Origin)
 	}
 
@@ -415,12 +421,22 @@ func TestCatchupStacked(t *testing.T) {
 
 func TestStaleAfter(t *testing.T) {
 	none := buildWith(t, "# demo\n", "")
-	if f := factFor(t, none, "stale_after"); none.StaleAfter != "" || f.Origin != OriginDefault || f.Value != "off" {
+	if f := factFor(
+		t,
+		none,
+		"stale_after",
+	); none.StaleAfter != 0 || f.Origin.Kind != OriginDefault ||
+		f.Value != "off" {
 		t.Errorf("undeclared = %q, %+v", none.StaleAfter, f)
 	}
 
 	for _, v := range []string{"10d", "3w"} {
-		if eff := buildWith(t, "---\nstale_after: "+v+"\n---\n", ""); eff.StaleAfter != v || eff.Errors() != "" {
+		if eff := buildWith(
+			t,
+			"---\nstale_after: "+v+"\n---\n",
+			"",
+		); eff.StaleAfter.String() != v ||
+			eff.Errors() != "" {
 			t.Errorf("%s: stale_after %q, errors %q", v, eff.StaleAfter, eff.Errors())
 		}
 	}
@@ -431,7 +447,11 @@ func TestStaleAfter(t *testing.T) {
 		}
 	}
 
-	if eff := buildWith(t, "---\nstale_after: 3w\n---\n", "---\nstale_after: 10d\n---\n"); eff.StaleAfter != "10d" {
+	if eff := buildWith(
+		t,
+		"---\nstale_after: 3w\n---\n",
+		"---\nstale_after: 10d\n---\n",
+	); eff.StaleAfter.String() != "10d" {
 		t.Errorf("stale_after = %q, want the worktree's 10d", eff.StaleAfter)
 	}
 
@@ -446,7 +466,7 @@ func TestDriverTimeout(t *testing.T) {
 		t,
 		none,
 		"driver_timeout",
-	); none.DriverTimeout != 30*time.Second || f.Origin != OriginDefault ||
+	); none.DriverTimeout != 30*time.Second || f.Origin.Kind != OriginDefault ||
 		f.Value != "30s" {
 		t.Errorf("undeclared = %s, %+v", none.DriverTimeout, f)
 	}
@@ -543,13 +563,13 @@ func TestWatch(t *testing.T) {
 // watch_catchup is off unless declared, and takes only on or off.
 func TestWatchCatchup(t *testing.T) {
 	none := buildWith(t, "", "")
-	if f := factFor(t, none, "watch_catchup"); none.WatchCatchup || f.Origin != OriginDefault {
+	if f := factFor(t, none, "watch_catchup"); none.WatchCatchup || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %v, %+v", none.WatchCatchup, f)
 	}
 
 	on := buildWith(t, "---\nwatch_catchup: on\n---\n", "")
 	if f := factFor(t, on, "watch_catchup"); !on.WatchCatchup || on.Errors() != "" ||
-		f.Origin != "declared (main, frontmatter)" {
+		f.Origin.String() != "declared (main, frontmatter)" {
 		t.Errorf("declared on = %v, errors %q, %+v", on.WatchCatchup, on.Errors(), f)
 	}
 
@@ -561,12 +581,17 @@ func TestWatchCatchup(t *testing.T) {
 // lore_gate warns unless declared and takes only warn or block.
 func TestLoreGate(t *testing.T) {
 	none := buildWith(t, "# demo\n", "")
-	if f := factFor(t, none, "lore_gate"); none.LoreGate != "warn" || f.Origin != OriginDefault {
+	if f := factFor(t, none, "lore_gate"); none.LoreGate != "warn" || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %q, %+v", none.LoreGate, f)
 	}
 
 	block := buildWith(t, "---\nlore_gate: block\n---\n# demo\n", "")
-	if f := factFor(t, block, "lore_gate"); block.LoreGate != "block" || f.Origin != "declared (main, frontmatter)" {
+	if f := factFor(
+		t,
+		block,
+		"lore_gate",
+	); block.LoreGate != "block" ||
+		f.Origin.String() != "declared (main, frontmatter)" {
 		t.Errorf("declared block = %q, %+v", block.LoreGate, f)
 	}
 
@@ -597,12 +622,12 @@ func TestAgents(t *testing.T) {
 		"cleanup": "declared (worktree, frontmatter)",
 		"judge":   "declared (worktree, frontmatter)",
 	} {
-		if eff.AgentsOrigin[key] != origin {
+		if eff.AgentsOrigin[key].String() != origin {
 			t.Errorf("agents.%s origin %q, want %q", key, eff.AgentsOrigin[key], origin)
 		}
 	}
 
-	if f := factFor(t, eff, "agents"); f.Origin != "declared (main + worktree, frontmatter)" ||
+	if f := factFor(t, eff, "agents"); f.Origin.String() != "declared (main + worktree, frontmatter)" ||
 		!strings.Contains(f.Value, "cleanup: haiku:low") {
 		t.Errorf("agents fact %+v", f)
 	}
@@ -627,5 +652,20 @@ func TestAgents(t *testing.T) {
 
 	if eff := buildWith(t, "---\nvisibility: public\n---\n", ""); eff.Agents != nil {
 		t.Errorf("no map declared leaves agents nil: %v", eff.Agents)
+	}
+}
+
+// Every single-word key is in the scalar registry, since check, merge,
+// scaffold and resolve only see the keys it lists.
+func TestScalarKeysCoverDeclared(t *testing.T) {
+	for f := range reflect.TypeFor[Declared]().Fields() {
+		if f.Type.Kind() != reflect.String {
+			continue
+		}
+
+		key, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+		if !slices.ContainsFunc(scalarKeys, func(k scalarKey) bool { return k.key == key }) {
+			t.Errorf("%s (%s) is a string key the scalar registry lacks", key, f.Name)
+		}
 	}
 }

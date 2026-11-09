@@ -149,12 +149,12 @@ func ceilingShown(set *facts.PaceSet, pace string) string {
 	}
 
 	if set.Exempt(pace) {
-		return "not applied: pace " + pace + " is in except (" + set.ExceptOrigin + ")"
+		return "not applied: pace " + pace + " is in except (" + set.ExceptOrigin.String() + ")"
 	}
 
 	var parts []string
 	for _, key := range slices.Sorted(maps.Keys(set.Ceiling)) {
-		parts = append(parts, key+" "+set.Ceiling[key].Shown()+" ("+set.CeilingOrigins[key]+")")
+		parts = append(parts, key+" "+set.Ceiling[key].Shown()+" ("+set.CeilingOrigins[key].String()+")")
 	}
 
 	return strings.Join(parts, ", ")

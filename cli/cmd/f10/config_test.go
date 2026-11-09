@@ -71,19 +71,23 @@ func sampleView() *view {
 		StorageRoot:  "/repo/.f10",
 		Instructions: "main",
 		Facts: []facts.Fact{
-			{Key: "visibility", Value: "stealth", Origin: facts.OriginDefault},
-			{Key: "merge_method", Value: "squash", Origin: "declared (main, frontmatter)"},
+			{Key: "visibility", Value: "stealth", Origin: facts.OriginOf(facts.OriginDefault)},
+			{Key: "merge_method", Value: "squash", Origin: facts.DeclaredFrontmatter("main")},
 			// the widest row: 12 + 2 + 8 + 2 + 61 = 85 cells
-			{Key: "stale_after", Value: strings.Repeat("x", 61), Origin: "declared (main, frontmatter)"},
+			{Key: "stale_after", Value: strings.Repeat("x", 61), Origin: facts.DeclaredFrontmatter("main")},
 		},
 		Fields: []facts.Field{
-			{Name: "Project", Value: "Go.", Origin: "declared (main)"},
+			{Name: "Project", Value: "Go.", Origin: facts.DeclaredIn("main")},
 			{
 				Name:   "Tracker",
 				Value:  "- **Fetch** - `gh issue view <n> --comments`\n- **Create** - `gh issue create`",
-				Origin: "declared (main)",
+				Origin: facts.DeclaredIn("main"),
 			},
-			{Name: "Verify", Value: "Run lint.\n- **Then** - tests\n- plain bullet - here", Origin: "declared (main)"},
+			{
+				Name:   "Verify",
+				Value:  "Run lint.\n- **Then** - tests\n- plain bullet - here",
+				Origin: facts.DeclaredIn("main"),
+			},
 		},
 	}
 }
@@ -157,9 +161,9 @@ func TestConfigShowsAgentsPerKey(t *testing.T) {
 
 	eff := &facts.Effective{
 		Agents:       map[string]string{"review": "sonnet:low"},
-		AgentsOrigin: map[string]string{"review": "declared (main, frontmatter)"},
+		AgentsOrigin: map[string]facts.Origin{"review": facts.DeclaredFrontmatter("main")},
 		Facts: []facts.Fact{
-			{Key: "agents", Value: "review: sonnet:low", Origin: "declared (main, frontmatter)"},
+			{Key: "agents", Value: "review: sonnet:low", Origin: facts.DeclaredFrontmatter("main")},
 		},
 	}
 
@@ -168,7 +172,7 @@ func TestConfigShowsAgentsPerKey(t *testing.T) {
 
 	got := map[string]string{}
 	for _, f := range v.Facts {
-		got[f.Key] = f.Value + " @ " + f.Origin
+		got[f.Key] = f.Value + " @ " + f.Origin.String()
 	}
 
 	want := map[string]string{

@@ -198,7 +198,7 @@ func TestScaffoldRoundTrip(t *testing.T) {
 	after := Build(declaring, detected)
 
 	for _, name := range d.Sections {
-		if f := fieldByName(t, after, name); f.Origin != "declared (main)" {
+		if f := fieldByName(t, after, name); f.Origin.String() != "declared (main)" {
 			t.Errorf("%s reads %q after init wrote it, want declared (main)", name, f.Origin)
 		}
 	}

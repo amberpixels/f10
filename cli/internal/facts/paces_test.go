@@ -86,13 +86,13 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 		t.Errorf("fast = %+v", got)
 	}
 
-	if e.PacesOrigin["fast.review"] != "declared (worktree, frontmatter)" ||
-		e.PacesOrigin["fast.judge"] != "declared (main, frontmatter)" {
+	if e.PacesOrigin["fast.review"].String() != "declared (worktree, frontmatter)" ||
+		e.PacesOrigin["fast.judge"].String() != "declared (main, frontmatter)" {
 		t.Errorf("origins = %v", e.PacesOrigin)
 	}
 
 	s := NewPaceSet()
-	s.Over(e.Paces, func(name, key string) string { return e.PacesOrigin[name+"."+key] })
+	s.Over(e.Paces, func(name, key string) Origin { return e.PacesOrigin[name+"."+key] })
 
 	if s.Paces["fast"]["finish"].Finish != "on" || s.Origins["fast.finish"] != PaceOriginBuiltin {
 		t.Errorf("the built-in finish under the project's fast = %+v, %q", s.Paces["fast"], s.Origins["fast.finish"])
@@ -135,7 +135,7 @@ func TestResolveFlow(t *testing.T) {
 	}
 
 	// a bare review takes the pace's half
-	s.Over(map[string]Pace{"remote": {"review": {By: "ci"}}}, func(string, string) string { return "test" })
+	s.Over(map[string]Pace{"remote": {"review": {By: "ci"}}}, func(string, string) Origin { return DeclaredIn("test") })
 
 	if r, _ := s.ResolveFlow("x", flowOf([]string{"implement", "pr", "review"}), "remote"); r.Run()[2] != "review:ci" {
 		t.Errorf("bare review under remote = %v", r.Run())
@@ -170,7 +170,7 @@ func TestPaceHandoffOffReachesPR(t *testing.T) {
 	d := decodePaces(t, "paces:\n  quiet:\n    handoff: off\n")
 
 	s := NewPaceSet()
-	s.Over(d.Paces, func(string, string) string { return "test" })
+	s.Over(d.Paces, func(string, string) Origin { return DeclaredIn("test") })
 
 	r, err := s.ResolveFlow("default", flowOf(strings.Fields("implement pr review:local pr")), "quiet")
 	if err != nil {
@@ -205,7 +205,7 @@ func TestPaceHandoffOff(t *testing.T) {
 	d := decodePaces(t, "paces:\n  quiet:\n    handoff: off\n")
 
 	s := NewPaceSet()
-	s.Over(d.Paces, func(string, string) string { return "test" })
+	s.Over(d.Paces, func(string, string) Origin { return DeclaredIn("test") })
 
 	r, err := s.ResolveFlow("default", flowOf(strings.Fields("implement handoff pr")), "quiet")
 	if err != nil {
@@ -247,7 +247,7 @@ func TestPaceFinishOnlyAtAPR(t *testing.T) {
 // and shows as a problem at load.
 func TestPaceThatBreaksAFlow(t *testing.T) {
 	s := NewPaceSet()
-	s.Over(map[string]Pace{"noplan": {"plan": {Off: true}}}, func(string, string) string { return "test" })
+	s.Over(map[string]Pace{"noplan": {"plan": {Off: true}}}, func(string, string) Origin { return DeclaredIn("test") })
 
 	flows := map[string][]string{"default": strings.Fields("plan judge implement pr")}
 
@@ -325,9 +325,9 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 		t.Errorf("ceiling = %+v, except %v", e.Ceiling, e.CeilingExcept)
 	}
 
-	if e.CeilingOrigin["finish"] != "declared (main, frontmatter)" ||
-		e.CeilingOrigin["judge"] != "declared (worktree, frontmatter)" ||
-		e.CeilingExceptOrigin != "declared (worktree, frontmatter)" {
+	if e.CeilingOrigin["finish"].String() != "declared (main, frontmatter)" ||
+		e.CeilingOrigin["judge"].String() != "declared (worktree, frontmatter)" ||
+		e.CeilingExceptOrigin.String() != "declared (worktree, frontmatter)" {
 		t.Errorf("origins = %v, except %q", e.CeilingOrigin, e.CeilingExceptOrigin)
 	}
 }
@@ -342,7 +342,8 @@ func TestCeilingCaps(t *testing.T) {
 		"cleanup":     {On: true},
 		"review":      {Rounds: 2, Depth: "full"},
 	}
-	set.CeilingOrigins = map[string]string{PaceFinishKey: "main", "cleanup": "main", "review": "main"}
+	main := DeclaredFrontmatter("main")
+	set.CeilingOrigins = map[string]Origin{PaceFinishKey: main, "cleanup": main, "review": main}
 
 	for pace, want := range map[string]string{
 		"medium": "plan judge implement cleanup pr review judge pr",
@@ -358,7 +359,8 @@ func TestCeilingCaps(t *testing.T) {
 			t.Errorf("%s: run %q, want %q", pace, got, want)
 		}
 
-		if r.Finish == nil || r.Finish.Value != "off" || r.Finish.Origin != "ceiling (main)" || r.Finish.Capped == "" {
+		if r.Finish == nil || r.Finish.Value != "off" || r.Finish.Origin != "ceiling (declared (main, frontmatter))" ||
+			r.Finish.Capped == "" {
 			t.Errorf("%s: finish %+v", pace, r.Finish)
 		}
 

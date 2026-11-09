@@ -138,7 +138,7 @@ func (h host) issue(ctx context.Context, number, fields string) (issue, error) {
 	return iss, err
 }
 
-func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (string, issue, error) {
+func (h host) issueDoc(ctx context.Context, id, number string, staleAfter facts.StaleAfter) (string, issue, error) {
 	iss, err := h.issue(ctx, number, "number,title,state,labels,createdAt,url,body,comments")
 	if err != nil {
 		return "", issue{}, err
@@ -160,7 +160,7 @@ func (h host) issueDoc(ctx context.Context, id, number, staleAfter string) (stri
 
 		// the comparison is made here so fetch reads it, never works it out
 		if staleAt(at, staleAfter, time.Now()) {
-			created += " (stale: older than " + staleAfter + ")"
+			created += " (stale: older than " + staleAfter.String() + ")"
 		}
 	}
 
@@ -198,10 +198,8 @@ func (h host) issueCreated(ctx context.Context, number string) (time.Time, error
 
 // staleAt is task read's stale mark and task stale's age check in one place,
 // so the two never disagree; an undeclared or bad stale_after is never stale.
-func staleAt(created time.Time, staleAfter string, now time.Time) bool {
-	d, err := facts.ParseStaleAfter(staleAfter)
-
-	return err == nil && !created.IsZero() && now.Sub(created) > d
+func staleAt(created time.Time, staleAfter facts.StaleAfter, now time.Time) bool {
+	return staleAfter > 0 && !created.IsZero() && now.Sub(created) > time.Duration(staleAfter)
 }
 
 func (h host) issueURL(ctx context.Context, number string) (string, error) {

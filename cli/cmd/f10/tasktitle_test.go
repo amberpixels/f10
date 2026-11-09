@@ -36,7 +36,7 @@ func TestHostReadsStripTheTitle(t *testing.T) {
 
 	h := titledHost()
 
-	doc, _, err := h.issueDoc(t.Context(), "FT-12", "12", "")
+	doc, _, err := h.issueDoc(t.Context(), "FT-12", "12", 0)
 	if err != nil || !strings.HasPrefix(doc, "# FT-12: Drive halts\n") {
 		t.Errorf("issueDoc = %q, %v", doc, err)
 	}
@@ -158,7 +158,7 @@ func TestRetitleAfter(t *testing.T) {
 	tg := &target{
 		dir: t.TempDir(),
 		pb:  &probe.Probes{CLI: probe.Signal{Value: "gh"}},
-		eff: &facts.Effective{TrackerKind: "GitHub Issues", IDPrefix: "FT", TitleTemplate: "{id}: {title}"},
+		eff: &facts.Effective{TrackerKind: facts.TrackerGitHub, IDPrefix: "FT", TitleTemplate: "{id}: {title}"},
 	}
 	r := ref.Ref{ID: "FT-12", Number: "12"}
 

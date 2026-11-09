@@ -120,7 +120,7 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 func factDefault(eff *facts.Effective, key string) bool {
 	for _, f := range eff.Facts {
 		if f.Key == key {
-			return f.Origin == facts.OriginDefault
+			return f.Origin.Kind == facts.OriginDefault
 		}
 	}
 

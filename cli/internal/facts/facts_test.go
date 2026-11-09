@@ -113,12 +113,12 @@ func TestBuildMergesLayersFieldLevel(t *testing.T) {
 	eff := Build(lay, &probe.Probes{})
 
 	verify := fieldByName(t, eff, "Verify")
-	if verify.Value != "go test ./..." || verify.Origin != "declared (worktree)" {
+	if verify.Value != "go test ./..." || verify.Origin.String() != "declared (worktree)" {
 		t.Errorf("worktree field did not win: %+v", verify)
 	}
 
 	project := fieldByName(t, eff, "Project")
-	if project.Value != "main says" || project.Origin != "declared (main)" {
+	if project.Value != "main says" || project.Origin.String() != "declared (main)" {
 		t.Errorf("silence did not keep main's field: %+v", project)
 	}
 }
@@ -133,24 +133,27 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 
 	eff := Build(lay, pb)
 
-	for name, want := range map[string]struct{ origin, value string }{
+	for name, want := range map[string]struct {
+		origin OriginKind
+		value  string
+	}{
 		"Project":    {origin: OriginDetected, value: "Go (go.mod)"},
 		"Tracker":    {origin: OriginDetected, value: "GitHub Issues (via gh)"},
 		"Visibility": {origin: OriginDefault, value: "stealth"},
 		"Roles":      {origin: OriginAbsent, value: ""},
 	} {
 		f := fieldByName(t, eff, name)
-		if f.Origin != want.origin || f.Value != want.value {
+		if f.Origin.Kind != want.origin || f.Value != want.value {
 			t.Errorf("%s = %q (%s), want %q (%s)", name, f.Value, f.Origin, want.value, want.origin)
 		}
 	}
 
-	if eff.Visibility != "stealth" || eff.TrackerKind != "GitHub Issues" {
+	if eff.Visibility != "stealth" || eff.TrackerKind != TrackerGitHub {
 		t.Errorf("sub-facts: visibility=%q trackerKind=%q", eff.Visibility, eff.TrackerKind)
 	}
 
 	// the host names the tracker's kind, the project's own name its ids
-	if eff.IDPrefix != "DEM" || eff.IDPrefixOrigin != "derived from project name demo" {
+	if eff.IDPrefix != "DEM" || eff.IDPrefixOrigin.String() != "derived from project name demo" {
 		t.Errorf("id prefix = %q (%s), want DEM derived from the project name", eff.IDPrefix, eff.IDPrefixOrigin)
 	}
 
@@ -178,7 +181,7 @@ func TestBuildVisibilityProseSetsNothing(t *testing.T) {
 	}
 
 	f := fieldByName(t, eff, "Visibility")
-	if f.Origin != "declared (main)" {
+	if f.Origin.String() != "declared (main)" {
 		t.Errorf("visibility origin = %q", f.Origin)
 	}
 }
@@ -239,7 +242,7 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 
 	eff := Build(lay, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
 
-	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin != "declared (main, frontmatter)" {
+	if eff.IDPrefix != "ABC" || eff.IDPrefixOrigin.String() != "declared (main, frontmatter)" {
 		t.Errorf("id prefix = %q (%s), want ABC declared (main, frontmatter)", eff.IDPrefix, eff.IDPrefixOrigin)
 	}
 }
@@ -249,7 +252,7 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 func TestBuildUnusableProjectName(t *testing.T) {
 	eff := Build(&layout.Layout{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}})
 
-	if eff.IDPrefix != "" || eff.IDPrefixOrigin != "" {
+	if eff.IDPrefix != "" || eff.IDPrefixOrigin != (Origin{}) {
 		t.Errorf("id prefix = %q (%s), want none", eff.IDPrefix, eff.IDPrefixOrigin)
 	}
 }
