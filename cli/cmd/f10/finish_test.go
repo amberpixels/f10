@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -24,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The fixture every finish test starts from: GH-1's branch is checked out
@@ -383,7 +385,7 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 
 	// the task's next PR starts its own series of review rounds
 	reviews := filepath.Join(fx.main, ".f10", "reviews", "archive", "GH-1.1")
-	if !exists(filepath.Join(reviews, "1.md")) || !strings.Contains(out, reviews) {
+	if !fsx.Exists(filepath.Join(reviews, "1.md")) || !strings.Contains(out, reviews) {
 		t.Errorf("findings not archived to %s:\n%s", reviews, out)
 	}
 
@@ -1276,7 +1278,7 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 	fx.openPR()
 	fx.in.root = t.TempDir()
 
-	halted := func() *drives.Outcome { return &drives.Outcome{Row: "halted at catchup", Code: exitHalted} }
+	halted := func() *drives.Outcome { return &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted} }
 	for _, tasks := range [][]drives.Task{
 		{{ID: "GH-1", Outcome: halted()}, {ID: "GH-2", Outcome: halted()}},
 		{{ID: "GH-1", Outcome: halted()}},
@@ -1369,7 +1371,7 @@ func TestFinishAlreadyFinished(t *testing.T) {
 
 	fx.in.root = t.TempDir()
 
-	halted := &drives.Outcome{Row: "halted at catchup", Code: exitHalted}
+	halted := &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}
 
 	rec := &drives.Record{Tasks: []drives.Task{{ID: "GH-1", Outcome: halted}}}
 	if err := drives.Create(fx.in.root, rec); err != nil {
@@ -2774,7 +2776,7 @@ func TestFinishPrintsAndArchivesTheHandoff(t *testing.T) {
 	}
 
 	archived := filepath.Join(filepath.Dir(src), "archive", "GH-1.md")
-	if exists(src) || !exists(archived) {
+	if fsx.Exists(src) || !fsx.Exists(archived) {
 		t.Errorf("handoff not archived to %s:\n%s", archived, out)
 	}
 
@@ -2831,7 +2833,7 @@ func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if exists(src) || strings.Contains(out, handoffBody) || strings.Contains(out, "handoff") {
+	if fsx.Exists(src) || strings.Contains(out, handoffBody) || strings.Contains(out, "handoff") {
 		t.Errorf("--local printed or kept the handoff:\n%s", out)
 	}
 }
@@ -2858,8 +2860,10 @@ func TestFinishMergedWithoutWorktreePrintsTheHandoff(t *testing.T) {
 	}
 
 	archived := filepath.Join(filepath.Dir(src), "archive", "GH-1.md")
-	if exists(src) || !exists(archived) || !strings.Contains(out, "handoff:") || !strings.Contains(out, archived) ||
-		!strings.Contains(out, "\n\n"+handoffBody+"\n") || strings.Join(handed, "\n") != handoffBody {
+	if fsx.Exists(src) || !fsx.Exists(archived) || !strings.Contains(out, "handoff:") ||
+		!strings.Contains(out, archived) ||
+		!strings.Contains(out, "\n\n"+handoffBody+"\n") ||
+		strings.Join(handed, "\n") != handoffBody {
 		t.Errorf("handed = %q, report:\n%s", handed, out)
 	}
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,11 +16,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
-
-// exitDeclined is `review round`'s "no next round": a normal end for the
-// review step, which prints the decline and stops.
-const exitDeclined = 3
 
 // runReviewRound needs no remote review declared: the host is read only for
 // the PR a series belongs to, and a branch checked out elsewhere, or a
@@ -47,18 +43,15 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 	st.PR, st.Archived = series.pr, series.archived
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(st); err != nil {
-			return fmt.Errorf("encoding rounds: %w", err)
+		if err := ui.JSON(cmd.Writer, st); err != nil {
+			return err
 		}
 	} else if _, err := fmt.Fprint(cmd.Writer, roundsDoc(st)); err != nil {
 		return err
 	}
 
 	if st.Decline != "" {
-		return cli.Exit("", exitDeclined)
+		return cli.Exit("", ui.ExitDeclined)
 	}
 
 	return nil
@@ -198,14 +191,14 @@ func alreadyMerged(ctx context.Context, dir, base string) bool {
 func seriesClosed(ctx context.Context, dir string, f *findings.File, h host, hostErr error, warn io.Writer) bool {
 	if n := strings.TrimLeft(f.PR, "#!"); digits(n) {
 		if hostErr != nil {
-			fmt.Fprintf(warn, "f10: cannot read %s (%v), so its series of rounds goes on\n", f.PR, hostErr)
+			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, hostErr)
 
 			return false
 		}
 
 		p, err := h.pullNumber(ctx, n)
 		if err != nil {
-			fmt.Fprintf(warn, "f10: cannot read %s (%v), so its series of rounds goes on\n", f.PR, err)
+			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, err)
 
 			return false
 		}

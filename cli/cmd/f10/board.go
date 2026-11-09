@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The board noun reads the host, the tracker and this machine, each a
@@ -49,10 +50,7 @@ func boardCommand() *cli.Command {
 			},
 			&cli.BoolFlag{Name: "detail", Usage: "with --all or --group, every project's rows instead of a line each"},
 			&cli.StringFlag{Name: "by", Usage: "group rows by `person` across projects"},
-			&cli.BoolFlag{
-				Name:  "json",
-				Usage: "emit the Board JSON (the schema is docs/board.schema.json); an array over several projects",
-			},
+			ui.JSONFlag("emit the Board JSON (the schema is docs/board.schema.json); an array over several projects"),
 			&cli.BoolFlag{
 				Name:  "html",
 				Usage: "emit one static HTML page: the Board JSON embedded, drawn by an inlined renderer; opens from disk",
@@ -145,7 +143,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("--html draws one project: name one with -C, or none")
 	case format != "" && several:
 		var buf bytes.Buffer
-		if err := encodeJSON(&buf, boards); err != nil {
+		if err := ui.JSON(&buf, boards); err != nil {
 			return err
 		}
 
@@ -158,11 +156,11 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 
 		return emitBoard(cmd.Writer, cmd.String("out"), data)
 	case by == "person":
-		renderByPerson(cmd.Writer, boards, termWidth(cmd.Writer))
+		renderByPerson(cmd.Writer, boards, ui.Width(cmd.Writer))
 	case summary:
-		renderSummary(cmd.Writer, boards, now, termWidth(cmd.Writer))
+		renderSummary(cmd.Writer, boards, now, ui.Width(cmd.Writer))
 	case !several:
-		renderBoard(cmd.Writer, boards[0], termWidth(cmd.Writer))
+		renderBoard(cmd.Writer, boards[0], ui.Width(cmd.Writer))
 	default:
 		faint := lipgloss.NewStyle().Faint(true).Bold(true)
 
@@ -172,7 +170,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 			}
 
 			fmt.Fprintln(cmd.Writer, faint.Render("## "+b.Project.Name))
-			renderBoard(cmd.Writer, b, termWidth(cmd.Writer))
+			renderBoard(cmd.Writer, b, ui.Width(cmd.Writer))
 		}
 	}
 
@@ -203,7 +201,7 @@ func boardBytes(b lookaround.Board, format string) ([]byte, error) {
 	if format == boardHTML {
 		err = renderBoardHTML(&buf, b)
 	} else {
-		err = encodeJSON(&buf, b)
+		err = ui.JSON(&buf, b)
 	}
 
 	if err != nil {

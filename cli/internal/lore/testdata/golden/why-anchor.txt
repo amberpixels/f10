@@ -1,4 +1,4 @@
-plain.go:4  last changed in 21d7cecb3101, linked by an anchor at the commit; the commit carries no trailer naming a change with entries
+plain.go:4  last changed in 21d7cec, linked by an anchor at the commit; the commit carries no trailer naming a change with entries
 
 == FT-5
 

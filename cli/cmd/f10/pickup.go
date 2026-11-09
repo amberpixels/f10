@@ -17,9 +17,6 @@ import (
 // branch worth tracking: its worktree is made at the commit it landed as, on
 // a branch named for the task, for a post-merge review.
 
-// exitNoTask: the start skill asks for the id and reruns with --task.
-const exitNoTask = 3
-
 type pickup struct {
 	number string
 	url    string

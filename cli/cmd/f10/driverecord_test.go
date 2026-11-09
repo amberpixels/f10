@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A task another drive holds is skipped, naming that drive: nothing is
@@ -34,8 +35,8 @@ func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 	defer other.Release()
 
 	err = fx.drive(t)
-	if exitCode(err) != exitHalted {
-		t.Fatalf("err = %v, want exit %d\n%s", err, exitHalted, fx.out.String())
+	if exitCode(err) != ui.ExitHalted {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, fx.out.String())
 	}
 
 	want := "GH-1:    owned by drive 7 (pid " + strconv.Itoa(os.Getpid()) + ")"
@@ -63,7 +64,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
-	if err := fx.drive(t); exitCode(err) != exitAsk {
+	if err := fx.drive(t); exitCode(err) != ui.ExitAsk {
 		t.Fatalf("err = %v", err)
 	}
 
@@ -76,7 +77,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != "asked at judge" || o.Code != exitAsk {
+	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != "asked at judge" || o.Code != ui.ExitAsk {
 		t.Errorf("recorded outcome = %+v", o)
 	}
 
@@ -277,7 +278,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 		}
 	}
 
-	if err := fx.drive(t); exitCode(err) != exitHalted {
+	if err := fx.drive(t); exitCode(err) != ui.ExitHalted {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
@@ -306,8 +307,8 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 	root := t.TempDir()
 	rec := &drives.Record{Args: []string{"GH-1", "GH-2", "GH-3"}, Tasks: []drives.Task{
-		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: exitHalted}},
-		{ID: "GH-2", Outcome: &drives.Outcome{Row: "halted at catchup", Code: exitHalted}},
+		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
+		{ID: "GH-2", Outcome: &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
 		{ID: "GH-3", Skill: "ship"},
 	}}
 
@@ -348,7 +349,7 @@ func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 func TestDriveListLeavesARunningDrive(t *testing.T) {
 	root := t.TempDir()
 	rec := &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{
-		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: exitHalted}},
+		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
 	}}
 
 	if err := drives.Create(root, rec); err != nil {

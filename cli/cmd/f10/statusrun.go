@@ -14,6 +14,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // writeRuns prints runs, each with its gates, or encodes them under --json.
@@ -32,10 +34,10 @@ func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipme
 			}
 		}
 
-		return encodeJSON(cmd.Writer, out)
+		return ui.JSON(cmd.Writer, out)
 	}
 
-	limit := termWidth(cmd.Writer)
+	limit := ui.Width(cmd.Writer)
 
 	if head != nil {
 		if err := writeReport(cmd.Writer, head.facts(), nil); err != nil {
@@ -120,8 +122,8 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
 	plain := lipgloss.NewStyle()
 
-	headerRow(w, "task", valueOr(r.Task), limit, plain)
-	headerRow(w, "url", valueOr(r.URL), limit, plain)
+	headerRow(w, "task", textx.OrDash(r.Task), limit, plain)
+	headerRow(w, "url", textx.OrDash(r.URL), limit, plain)
 	renderRunRows(w, r, gates, showRoot, agent, now, limit)
 }
 
@@ -136,7 +138,7 @@ func renderRunRows(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent
 	}
 
 	if showRoot {
-		headerRow(w, "root", valueOr(r.Root), limit, faint)
+		headerRow(w, "root", textx.OrDash(r.Root), limit, faint)
 	}
 
 	for _, p := range state.Phases {
@@ -167,20 +169,16 @@ func renderRunRows(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent
 		headerRow(w, "final", final, limit, faint)
 	}
 
-	age := ago(now, r.Updated)
+	age := "unknown"
+	if !r.Updated.IsZero() {
+		age = textx.Age(now, r.Updated) + " ago"
+	}
+
 	if !r.Live(now, state.TTL()) {
 		age += " (stale)"
 	}
 
 	headerRow(w, "updated", age, limit, faint)
-}
-
-func valueOr(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
 }
 
 // statusStyle is the badge's palette: shape first, color second, so the
@@ -203,26 +201,5 @@ func statusStyle(status string) lipgloss.Style {
 		return s.Faint(true).Foreground(lipgloss.Color("2"))
 	default:
 		return s.Faint(true)
-	}
-}
-
-// ago is a duration a human reads at a glance: seconds under a minute,
-// then the largest whole unit that fits.
-func ago(now, then time.Time) string {
-	if then.IsZero() {
-		return "unknown"
-	}
-
-	d := now.Sub(then).Round(time.Second)
-
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
 }

@@ -13,19 +13,17 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v3"
-	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The lore noun only resolves the root and the paths and hands over to
 // internal/lore; docs/lore.md is the spec.
 func loreCommand() *cli.Command {
-	jsonFlag := func() cli.Flag { return &cli.BoolFlag{Name: "json", Usage: "emit JSON"} }
-
 	return &cli.Command{
 		Name:  "lore",
 		Usage: "the why behind the code: entries per change, why a line is the way it is, lessons for a file",
@@ -95,21 +93,21 @@ func loreCommand() *cli.Command {
 				Name:      "show",
 				Usage:     "the change's effective entries, the intent first, then by time; a task id lists each of its PRs' changes, newest first",
 				ArgsUsage: "<change>",
-				Flags:     []cli.Flag{jsonFlag()},
+				Flags:     []cli.Flag{ui.JSONFlag("emit JSON")},
 				Action:    runLoreShow,
 			},
 			{
 				Name:      "why",
 				Usage:     "why a line is the way it is: its change's intent, latest verdict, and the entries on the line",
 				ArgsUsage: "<path:line[@rev]>",
-				Flags:     []cli.Flag{jsonFlag()},
+				Flags:     []cli.Flag{ui.JSONFlag("emit JSON")},
 				Action:    runLoreWhy,
 			},
 			{
 				Name:      "lessons",
 				Usage:     "the lessons to read before editing a file",
 				ArgsUsage: "<path>",
-				Flags:     []cli.Flag{jsonFlag()},
+				Flags:     []cli.Flag{ui.JSONFlag("emit JSON")},
 				Action:    runLoreLessons,
 			},
 			{
@@ -351,7 +349,7 @@ func loreBody(cmd *cli.Command) (string, error) {
 		return string(data), nil
 	}
 
-	if term.IsTerminal(int(os.Stdin.Fd())) {
+	if ui.StdinTerminal() {
 		return "", errors.New("an entry needs a body: -m TEXT, -F FILE, or stdin")
 	}
 
@@ -440,7 +438,7 @@ func runLoreShow(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, all)
+		return ui.JSON(cmd.Writer, all)
 	}
 
 	return nil
@@ -525,7 +523,7 @@ func runLoreWhy(ctx context.Context, cmd *cli.Command) error {
 	switch {
 	case errors.Is(err, lore.ErrNoRecord):
 		if cmd.Bool("json") {
-			return encodeJSON(cmd.Writer, lore.WhyResult{Path: path, Line: line, Rev: rev, Records: []lore.Record{}})
+			return ui.JSON(cmd.Writer, lore.WhyResult{Path: path, Line: line, Rev: rev, Records: []lore.Record{}})
 		}
 
 		_, err = fmt.Fprintln(cmd.Writer, "no record")
@@ -536,7 +534,7 @@ func runLoreWhy(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, res)
+		return ui.JSON(cmd.Writer, res)
 	}
 
 	return lore.RenderWhy(cmd.Writer, res)
@@ -568,7 +566,7 @@ func runLoreLessons(ctx context.Context, cmd *cli.Command) error {
 			lessons = []lore.Entry{}
 		}
 
-		return encodeJSON(cmd.Writer, lessons)
+		return ui.JSON(cmd.Writer, lessons)
 	}
 
 	return lore.RenderLessons(cmd.Writer, path, lessons)

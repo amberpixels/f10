@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The finish verb is start's inverse. Nothing local moves until the merge
@@ -79,10 +80,6 @@ func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, s
 }
 
 var errNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
-
-// exitForeign is finish's exit when the PR is someone else's and no flag
-// says what to do with it: the finish skill asks, and reruns with one.
-const exitForeign = 3
 
 func runFinish(ctx context.Context, cmd *cli.Command) error {
 	if cmd.Bool("merge") && cmd.Bool("local") {
@@ -156,11 +153,11 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	err = finish(ctx, cmd.Writer, in)
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
-		return cli.Exit("f10: "+fp.Error(), exitForeign)
+		return ui.Exit(ui.ExitDeclined, "%v", fp)
 	}
 
 	if re := (ridersError{}); errors.As(err, &re) {
-		return cli.Exit("f10: "+re.Error(), exitRiders)
+		return ui.Exit(ui.ExitRiders, "%v", re)
 	}
 
 	return err

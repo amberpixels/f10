@@ -7,6 +7,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // broken is git failing to read rather than finding nothing: a lock, a
@@ -52,7 +53,7 @@ func TestDriveHaltsFinishWhenGitCannotRead(t *testing.T) {
 
 	err := fx.drive(t)
 
-	if exitCode(err) != exitHalted || fx.f.called("git push") || fx.f.called("finish GH-1") {
+	if exitCode(err) != ui.ExitHalted || fx.f.called("git push") || fx.f.called("finish GH-1") {
 		t.Fatalf("err = %v, calls %q\n%s", err, fx.f.calls, fx.out.String())
 	}
 }

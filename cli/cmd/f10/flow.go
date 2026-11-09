@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The flow verb lists the declared flows, the same list an unknown --flow
@@ -33,7 +33,7 @@ func flowCommand() *cli.Command {
 			"an optional CI review (ci?) settled.",
 		Flags: []cli.Flag{
 			paceFlag(),
-			&cli.BoolFlag{Name: "json", Usage: "emit the same list as JSON"},
+			ui.JSONFlag("emit the same list as JSON"),
 		},
 		Action: runFlow,
 	}
@@ -99,14 +99,7 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(v); err != nil {
-			return fmt.Errorf("encoding flows: %w", err)
-		}
-
-		return nil
+		return ui.JSON(cmd.Writer, v)
 	}
 
 	return writeFlows(cmd.Writer, v)

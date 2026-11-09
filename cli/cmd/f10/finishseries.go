@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -33,7 +34,7 @@ func seriesLore(in *finishInput, end *seriesEnd) string {
 // since the archive is what counts a task's PRs for its lore change; a series
 // already closed with the same PR or head (finish run again) adds none.
 func closeSeries(dir string, end seriesEnd) (string, error) {
-	if exists(dir) {
+	if fsx.Exists(dir) {
 		return archiveReviews(dir, end)
 	}
 

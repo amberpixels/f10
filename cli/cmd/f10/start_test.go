@@ -27,6 +27,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A fakes stands in for git, wt, herdr and the driver: every call recorded,
@@ -1828,7 +1829,7 @@ func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 	}
 }
 
-// A parent with unfinished subtasks is refused with exitParent, reading no
+// A parent with unfinished subtasks is refused with ui.ExitParent, reading no
 // more than whether the task has a branch; a started task, one whose subtasks
 // are all finished and one with none start.
 func TestStartRefusesAParent(t *testing.T) {
@@ -1851,8 +1852,8 @@ func TestStartRefusesAParent(t *testing.T) {
 		err := refuseStartParent(t.Context(), in)
 
 		var coder cli.ExitCoder
-		if !errors.As(err, &coder) || coder.ExitCode() != exitParent {
-			t.Fatalf("err = %v, want exit %d", err, exitParent)
+		if !errors.As(err, &coder) || coder.ExitCode() != ui.ExitParent {
+			t.Fatalf("err = %v, want exit %d", err, ui.ExitParent)
 		}
 
 		for _, want := range []string{"GH-1 is a parent of GH-2, GH-4", "/f10:drive GH-1", "f10 start GH-2"} {

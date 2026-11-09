@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v3"
-	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
@@ -25,6 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // asksConfigFile is the user's ask settings in ~/.f10; f10 only reads it.
@@ -49,7 +49,7 @@ func asksCommand() *cli.Command {
 			{
 				Name:   "list",
 				Usage:  "the open asks, then those answered in the last day",
-				Flags:  []cli.Flag{&cli.BoolFlag{Name: "json", Usage: "print JSON, for /f10:asks"}},
+				Flags:  []cli.Flag{ui.JSONFlag("print JSON, for /f10:asks")},
 				Action: runAsksList,
 			},
 			{
@@ -87,7 +87,7 @@ func asksCommand() *cli.Command {
 }
 
 func runAsks(ctx context.Context, cmd *cli.Command) error {
-	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+	if ui.Interactive() {
 		return walkAsks(ctx, cmd.Writer, bufio.NewReader(os.Stdin), asks.Dir(), liveDeliver())
 	}
 
@@ -155,10 +155,7 @@ func listAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSO
 			out.Answered = append(out.Answered, viewOf(a))
 		}
 
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-
-		return enc.Encode(out)
+		return ui.JSON(w, out)
 	}
 
 	if len(open) == 0 {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // taskLinks prints task ids for people: an id becomes a terminal link when
@@ -22,13 +23,7 @@ type taskLinks struct {
 }
 
 // linkTerminal is swapped in tests, which write to a buffer.
-var linkTerminal = func(w io.Writer) bool {
-	if b, ok := w.(*linkBuffer); ok {
-		return b.links
-	}
-
-	return isTerminal(w)
-}
+var linkTerminal = ui.IsTerminal
 
 // linkBuffer holds output its caller copies on to another writer, so it
 // links when that writer would.
@@ -37,6 +32,9 @@ type linkBuffer struct {
 
 	links bool
 }
+
+// Terminal makes the buffer read as the writer it is copied on to.
+func (b *linkBuffer) Terminal() bool { return b.links }
 
 // linksFor links only on a terminal: piped output, --plain and --json are
 // parsed by agents and scripts, which escape codes would break.

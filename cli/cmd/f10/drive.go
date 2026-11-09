@@ -57,15 +57,6 @@ func driveCommand() *cli.Command {
 	}
 }
 
-// Exit codes beyond start's: an ask the skill relays, and any other halt.
-const (
-	exitAsk    = 4
-	exitHalted = 5
-	// exitDrained is a drive stopped for a daemon upgrade, its record kept
-	// for the new daemon to resume; only the daemon and its clients see it
-	exitDrained = daemon.ExitDrained
-)
-
 const (
 	// defaultEvery is the fallback look: a run-state write wakes a drive
 	// sooner (drivewait.go)

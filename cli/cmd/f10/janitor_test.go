@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -136,11 +137,11 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 
 	out := fx.run(t)
 
-	if !exists(filepath.Join(reviews, "archive", "GH-1.1", "1.md")) {
+	if !fsx.Exists(filepath.Join(reviews, "archive", "GH-1.1", "1.md")) {
 		t.Errorf("findings not archived:\n%s", out)
 	}
 
-	if exists(handoff) || !exists(filepath.Join(filepath.Dir(handoff), "archive", "GH-1.md")) {
+	if fsx.Exists(handoff) || !fsx.Exists(filepath.Join(filepath.Dir(handoff), "archive", "GH-1.md")) {
 		t.Errorf("handoff not archived:\n%s", out)
 	}
 
@@ -154,7 +155,7 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 		}
 	}
 
-	if exists(plan) || !exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-1.md")) {
+	if fsx.Exists(plan) || !fsx.Exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-1.md")) {
 		t.Errorf("plan not archived:\n%s", out)
 	}
 
@@ -216,7 +217,7 @@ func TestJanitorKeepsABranchAheadOfItsRequest(t *testing.T) {
 			t.Errorf("tips %v: out = %q", c.tips, out)
 		}
 
-		if !exists(filepath.Join(fx.in.storage.Plans(), "GH-1.md")) {
+		if !fsx.Exists(filepath.Join(fx.in.storage.Plans(), "GH-1.md")) {
 			t.Errorf("tips %v: plan moved", c.tips)
 		}
 	}
@@ -400,16 +401,16 @@ func TestJanitorDryRun(t *testing.T) {
 
 	out := fx.run(t)
 
-	if !exists(reviews) || !strings.Contains(out, "would archive "+reviews) {
+	if !fsx.Exists(reviews) || !strings.Contains(out, "would archive "+reviews) {
 		t.Errorf("dry run moved or left out the findings:\n%s", out)
 	}
 
-	if !exists(handoff) || !strings.Contains(out, "would archive "+handoff) {
+	if !fsx.Exists(handoff) || !strings.Contains(out, "would archive "+handoff) {
 		t.Errorf("dry run moved or left out the handoff:\n%s", out)
 	}
 
 	if fx.f.called("git branch -D") || fx.f.called("gh api -X DELETE") || fx.f.called("git update-ref") ||
-		!exists(plan) {
+		!fsx.Exists(plan) {
 		t.Errorf("dry run changed something: %q", fx.f.calls)
 	}
 
@@ -430,7 +431,7 @@ func TestJanitorKeepsThePlanOfATaskStillOpen(t *testing.T) {
 
 	out := fx.run(t)
 
-	if !fx.f.called("git branch -D GH-1/x") || !exists(plan) || !strings.Contains(out, "GH-1-2 still uses it") {
+	if !fx.f.called("git branch -D GH-1/x") || !fsx.Exists(plan) || !strings.Contains(out, "GH-1-2 still uses it") {
 		t.Errorf("out = %q", out)
 	}
 }
@@ -506,11 +507,11 @@ func TestJanitorKeepsAPlanWrittenAfterTheRequestEnded(t *testing.T) {
 
 	out := fx.run(t)
 
-	if !fx.f.called("git branch -D GH-1/x") || !exists(plan) || !strings.Contains(out, "written after") {
+	if !fx.f.called("git branch -D GH-1/x") || !fsx.Exists(plan) || !strings.Contains(out, "written after") {
 		t.Errorf("out = %q", out)
 	}
 
-	if !exists(images) {
+	if !fsx.Exists(images) {
 		t.Error("the kept plan lost its images")
 	}
 }
@@ -532,7 +533,7 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if out := fx.run(t); exists(rider) {
+	if out := fx.run(t); fsx.Exists(rider) {
 		t.Errorf("rider's plan not archived:\n%s", out)
 	}
 }
@@ -548,7 +549,7 @@ func TestJanitorReadsALinkWithoutRiders(t *testing.T) {
 
 	out := fx.run(t)
 
-	if !fx.f.called("git branch -D alice/fix") || exists(plan) {
+	if !fx.f.called("git branch -D alice/fix") || fsx.Exists(plan) {
 		t.Errorf("a link-only branch was not cleared:\n%s\ncalls: %q", out, fx.f.calls)
 	}
 }
@@ -567,7 +568,7 @@ func TestJanitorArchivesARidersPlan(t *testing.T) {
 
 	out := fx.run(t)
 
-	if exists(rider) || !exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-2.md")) {
+	if fsx.Exists(rider) || !fsx.Exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-2.md")) {
 		t.Errorf("rider's plan not archived:\n%s", out)
 	}
 }
@@ -615,7 +616,7 @@ func TestJanitorFailureKeepsTheBranch(t *testing.T) {
 
 		out := fx.run(t)
 
-		if !strings.Contains(out, "kept GH-1/x: "+c.want) || !exists(plan) || !fx.f.called("git branch -D GH-2/y") {
+		if !strings.Contains(out, "kept GH-1/x: "+c.want) || !fsx.Exists(plan) || !fx.f.called("git branch -D GH-2/y") {
 			t.Errorf("%s: out = %q", c.fail, out)
 		}
 	}

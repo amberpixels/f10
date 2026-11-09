@@ -3,24 +3,25 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The status noun reads what the badge reads and says the rest: which step
@@ -33,7 +34,7 @@ func statusCommand() *cli.Command {
 		ArgsUsage: "[task-id]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "all", Usage: "every live run on this machine, not only this repo's"},
-			&cli.BoolFlag{Name: "json", Usage: "emit the same runs as JSON"},
+			ui.JSONFlag("emit the same runs as JSON"),
 			&cli.BoolFlag{
 				Name: "plain",
 				Usage: "print a parent's, a finished task's or the launched-here tree as plain text, without urls, " +
@@ -215,10 +216,10 @@ func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, 
 		fb := taskFallback(ctx, *in, others, ship)
 
 		if cmd.Bool("json") {
-			return true, encodeJSON(cmd.Writer, fb)
+			return true, ui.JSON(cmd.Writer, fb)
 		}
 
-		fb.render(cmd.Writer, termWidth(cmd.Writer), linksFor(cmd.Writer, cmd.Bool("plain")).on)
+		fb.render(cmd.Writer, ui.Width(cmd.Writer), linksFor(cmd.Writer, cmd.Bool("plain")).on)
 
 		return true, nil
 	}
@@ -274,7 +275,7 @@ func routeTask(warn io.Writer, rt taskRoute) (*taskStatusInput, []taskRow, error
 	case cerr == nil && len(rows) > 0:
 		return nil, rows, nil
 	case cerr != nil && !errors.Is(cerr, errNoParentLink):
-		fmt.Fprintf(warn, "f10: reading the subtasks: %v\n", cerr)
+		ui.Warnf(warn, "reading the subtasks: %v", cerr)
 	}
 
 	row, ferr := rt.finished()
@@ -381,7 +382,7 @@ func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run, 
 		fb.Others = []*state.Run{} // an empty list, not null, for a JSON reader
 	}
 
-	if exists(in.plan) {
+	if fsx.Exists(in.plan) {
 		fb.Plan = in.plan
 	}
 
@@ -409,7 +410,7 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 	headerRow(w, "run", "none for "+fb.Task+" in "+fb.Root, limit, faint)
 
 	for _, r := range fb.Others {
-		headerRow(w, "agent", valueOr(r.Task)+" · "+currentPhase(r), limit, plain)
+		headerRow(w, "agent", textx.OrDash(r.Task)+" · "+currentPhase(r), limit, plain)
 	}
 
 	if fb.PRState != "" {
@@ -421,7 +422,7 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 // one row is a finished task alone, or encodes them under --json.
 func writeTaskRows(cmd *cli.Command, rows []taskRow, parent string) error {
 	if cmd.Bool("json") {
-		return encodeJSON(cmd.Writer, rows)
+		return ui.JSON(cmd.Writer, rows)
 	}
 
 	v := rowView{parent: parent, plain: cmd.Bool("plain")}
@@ -431,33 +432,12 @@ func writeTaskRows(cmd *cli.Command, rows []taskRow, parent string) error {
 
 	switch {
 	case v.plain:
-		v.width = plainWidth()
-	case isTerminal(cmd.Writer):
-		v.term, v.width = true, termWidth(cmd.Writer)
+		v.width = ui.PlainWidth()
+	case ui.IsTerminal(cmd.Writer):
+		v.term, v.width = true, ui.Width(cmd.Writer)
 	}
 
 	return renderRows(cmd.Writer, rows, v)
-}
-
-// plainWidth is the width plain output is cut to: $COLUMNS, else 100, as
-// a skill relays it into a pane whose width the binary cannot read.
-func plainWidth() int {
-	if n, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && n > 0 {
-		return n
-	}
-
-	return 100
-}
-
-func encodeJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-
-	if err := enc.Encode(v); err != nil {
-		return fmt.Errorf("encoding status: %w", err)
-	}
-
-	return nil
 }
 
 // checkoutRoot is the repo a plain terminal asks about: -C's target or the

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -22,11 +23,11 @@ import (
 func taskSpike(checkout string, root storage.Root, id string) string {
 	for _, dir := range []string{root.Spikes(), storage.InRepo(checkout).Spikes()} {
 		p := filepath.Join(dir, id+".md")
-		if !exists(p) {
+		if !fsx.Exists(p) {
 			continue
 		}
 
-		if plan := root.Plan(id); exists(plan) && !spikePlan(plan) {
+		if plan := root.Plan(id); fsx.Exists(plan) && !spikePlan(plan) {
 			return ""
 		}
 

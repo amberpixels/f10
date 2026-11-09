@@ -15,7 +15,9 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/flock"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // Statuses a phase can hold, in the order the usage text lists them.
@@ -168,16 +170,7 @@ func (r *Run) Save(dir string, now time.Time) error {
 		b.WriteString(kv[0] + " " + oneLine(kv[1]) + "\n")
 	}
 
-	path := Path(dir, r.Session)
-	tmp := path + "." + strconv.Itoa(os.Getpid())
-
-	if err := os.WriteFile(tmp, []byte(b.String()), 0o600); err != nil {
-		return fmt.Errorf("state: %w", err)
-	}
-
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-
+	if err := fsx.WriteFile(Path(dir, r.Session), []byte(b.String()), 0o600); err != nil {
 		return fmt.Errorf("state: %w", err)
 	}
 
@@ -655,8 +648,8 @@ func settled(status string) bool {
 func (r *Run) Show(w io.Writer, now time.Time) {
 	row := func(label, value string) { fmt.Fprintf(w, "%-8s %s\n", label, value) }
 
-	row("task", cmpDash(r.Task))
-	row("url", cmpDash(r.URL))
+	row("task", textx.OrDash(r.Task))
+	row("url", textx.OrDash(r.URL))
 
 	if r.Root != "" {
 		row("root", r.Root)
@@ -672,15 +665,7 @@ func (r *Run) Show(w io.Writer, now time.Time) {
 		}
 	}
 
-	row("updated", strconv.FormatInt(int64(now.Sub(r.Updated).Seconds()), 10)+"s ago")
-}
-
-func cmpDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
+	row("updated", textx.Age(now, r.Updated)+" ago")
 }
 
 // Glyph is the status line's default shape for a status; the renderer's

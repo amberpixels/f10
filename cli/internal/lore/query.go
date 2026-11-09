@@ -212,7 +212,8 @@ func recordFor(change string, entries, matched []Entry) Record {
 	return r
 }
 
-// sameCommit matches an abbreviated sha against a full one, either way.
+// sameCommit matches gitx.SameCommit; lore keeps its own copy because it
+// stays extractable (imports_test.go).
 func sameCommit(a, b string) bool {
 	if len(a) < 7 || len(b) < 7 {
 		return false

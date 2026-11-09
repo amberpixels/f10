@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/timing"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The stats verb is active time per task and step: every wait on the user is
@@ -36,7 +37,7 @@ func statsCommand() *cli.Command {
 func runStats(ctx context.Context, cmd *cli.Command) error {
 	since, err := facts.ParseStaleAfter(cmd.String("since"))
 	if err != nil {
-		return cli.Exit("f10 stats: --since: "+err.Error(), 2)
+		return ui.Exit(ui.ExitUsage, "stats: --since: %v", err)
 	}
 
 	t, err := targetFor(ctx, cmd)

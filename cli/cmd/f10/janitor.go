@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -432,7 +433,7 @@ func (j *sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx
 	}
 
 	if err := gitx.FetchCommit(ctx, j.in.main, p.HeadSHA); err != nil {
-		return nil, fmt.Errorf("fetching its head %s: %w", abbrev(p.HeadSHA), err)
+		return nil, fmt.Errorf("fetching its head %s: %w", gitx.ShortSHA(p.HeadSHA), err)
 	}
 
 	return gitx.Unlanded(ctx, j.in.main, def, tip, p.HeadSHA)
@@ -440,7 +441,7 @@ func (j *sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx
 
 // describeLost names the oldest lost commit, and counts the rest.
 func describeLost(lost []gitx.Cherry) string {
-	first := fmt.Sprintf("%q (%s)", lost[0].Subject, abbrev(lost[0].SHA))
+	first := fmt.Sprintf("%q (%s)", lost[0].Subject, gitx.ShortSHA(lost[0].SHA))
 
 	switch len(lost) {
 	case 1:
@@ -450,14 +451,6 @@ func describeLost(lost []gitx.Cherry) string {
 	default:
 		return fmt.Sprintf("%s and %d more commits", first, len(lost)-1)
 	}
-}
-
-func abbrev(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-
-	return sha
 }
 
 // sweepUnpushed removes a branch finish would read as never pushed once its
@@ -613,7 +606,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		plan := j.in.storage.Plan(id)
 
 		switch {
-		case !exists(plan):
+		case !fsx.Exists(plan):
 		case len(left[id]) > 0:
 			j.say("kept the plan for %s: %s still uses it", id, strings.Join(left[id], ", "))
 
@@ -660,7 +653,7 @@ func (j *sweeper) archiveReviews(id string, end seriesEnd) {
 
 	switch {
 	case j.in.dry:
-		if exists(reviews) {
+		if fsx.Exists(reviews) {
 			j.say("would archive %s", reviews)
 		}
 	default:
@@ -680,7 +673,7 @@ func (j *sweeper) archiveHandoff(id string) {
 
 	switch {
 	case j.in.dry:
-		if exists(src) {
+		if fsx.Exists(src) {
 			j.say("would archive %s", src)
 		}
 	default:

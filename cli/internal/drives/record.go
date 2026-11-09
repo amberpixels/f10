@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/amberpixels/f10/cli/internal/fsx"
 )
 
 // A Record is one drive, kept at <storage root>/drives/<n>.yaml: what it
@@ -180,12 +182,7 @@ func Update(root string, n int, change func(*Record)) (*Record, error) {
 		return nil, fmt.Errorf("drive %d: %w", n, err)
 	}
 
-	tmp := recordPath(root, n) + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return nil, fmt.Errorf("drive %d: %w", n, err)
-	}
-
-	if err := os.Rename(tmp, recordPath(root, n)); err != nil {
+	if err := fsx.WriteFile(recordPath(root, n), b, 0o600); err != nil {
 		return nil, fmt.Errorf("drive %d: %w", n, err)
 	}
 

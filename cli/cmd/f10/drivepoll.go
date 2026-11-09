@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // phaseRunning reports run's plan or ship phase still running: the two
@@ -330,7 +331,7 @@ func (*driveInput) verdict(task driveTask, skill string, run *state.Run) driveRe
 	if run.Ask != "" {
 		return driveResult{
 			row:   "asked at " + skill,
-			code:  exitAsk,
+			code:  ui.ExitAsk,
 			lines: []string{fmt.Sprintf("%s asks at %s: %s", id, skill, run.Ask)},
 			ask:   run.Ask,
 		}

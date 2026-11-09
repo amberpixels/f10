@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // `task report` renders the facts block a skill's report opens with, so the
@@ -74,7 +75,7 @@ func writeParentTree(ctx context.Context, cmd *cli.Command, t *target, token str
 	kids, err := t.tracker().children(ctx, r)
 	switch {
 	case errors.Is(err, errNoParentLink):
-		fmt.Fprintf(cmd.ErrWriter, "f10: %s: %v: no subtasks to list\n", r.ID, err)
+		ui.Warnf(cmd.ErrWriter, "%s: %v: no subtasks to list", r.ID, err)
 	case err != nil:
 		return err
 	}

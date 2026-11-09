@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -82,23 +83,13 @@ func handoffLines(path, id string, tip func() string) []string {
 	}
 
 	lines := strings.Split(h.body, "\n")
-	if at := tip(); at != "" && !sameCommit(h.head, at) {
+	if at := tip(); at != "" && !gitx.SameCommit(h.head, at) {
 		stale := fmt.Sprintf("the handoff was written at %s, the branch merged at %s: "+
-			"it does not cover the later commits, so check them before deploying", shortSHA(h.head), shortSHA(at))
+			"it does not cover the later commits, so check them before deploying", gitx.ShortSHA(h.head), gitx.ShortSHA(at))
 		lines = append([]string{stale}, lines...)
 	}
 
 	return lines
-}
-
-// sameCommit takes an abbreviated sha as its full one, so a handoff whose
-// head was copied short is not reported stale against its own commit.
-func sameCommit(a, b string) bool {
-	if len(a) > len(b) {
-		a, b = b, a
-	}
-
-	return len(a) >= 7 && strings.HasPrefix(b, a)
 }
 
 // branchTip is the local branch's commit, which the handoff step records as
@@ -126,7 +117,7 @@ func archiveHandoff(root storage.Root, id string) (string, error) {
 // so a failure before the report leaves the file for the rerun to print.
 func handoffTarget(root storage.Root, id string) (string, string) {
 	src := taskHandoff(root, id)
-	if !exists(src) {
+	if !fsx.Exists(src) {
 		return src, ""
 	}
 

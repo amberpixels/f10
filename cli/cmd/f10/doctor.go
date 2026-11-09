@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/doctor"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 func doctorCommand() *cli.Command {
@@ -23,7 +23,7 @@ func doctorCommand() *cli.Command {
 		Name:  "doctor",
 		Usage: "check the plugin, the binary and the environment they run in; changes nothing",
 		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "json", Usage: "emit one object per check"},
+			ui.JSONFlag("emit one object per check"),
 		},
 		Action: runDoctor,
 	}
@@ -55,11 +55,8 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 	})
 
 	if cmd.Bool("json") {
-		enc := json.NewEncoder(cmd.Writer)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(results); err != nil {
-			return fmt.Errorf("encoding checks: %w", err)
+		if err := ui.JSON(cmd.Writer, results); err != nil {
+			return err
 		}
 	} else {
 		renderDoctor(cmd.Writer, results)

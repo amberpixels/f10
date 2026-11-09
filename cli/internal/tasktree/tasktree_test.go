@@ -113,3 +113,33 @@ func TestAlignCountsAnIconAsOneColumn(t *testing.T) {
 		t.Errorf("columns do not line up:\n%s", b.String())
 	}
 }
+
+// A Fill cell takes what Width leaves, the cells after it follow it
+// unpadded, and Columns lines up trees written one after another.
+func TestFillAndColumns(t *testing.T) {
+	row := func(id, title, tail string) Node {
+		return Node{Cells: []Cell{{Text: id}, {Text: title, Fill: true}, {Text: tail}}}
+	}
+
+	first := []Node{row("FT-1", "a title long enough to need cutting at this width", "#12")}
+	second := []Node{row("FT-1234", "short", "")}
+
+	tree := Tree{Align: true, Width: 40}
+	tree.Columns = tree.Measure(append(append([]Node{}, first...), second...))
+
+	var b strings.Builder
+
+	if err := tree.Write(&b, first); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tree.Write(&b, second); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "FT-1     a title long enough to ne…  #12\n" +
+		"FT-1234  short\n"
+	if b.String() != want {
+		t.Errorf("got:\n%q\nwant:\n%q", b.String(), want)
+	}
+}

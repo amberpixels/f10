@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // The pr noun needs nothing declared: the CLI follows from the git remote,
@@ -144,7 +145,7 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if s.lookupErr != nil {
-		fmt.Fprintf(cmd.ErrWriter, "f10: no PR read (%v), so the base is the recorded or default branch\n", s.lookupErr)
+		ui.Warnf(cmd.ErrWriter, "no PR read (%v), so the base is the recorded or default branch", s.lookupErr)
 	}
 
 	// the same base diff forks from, so a step reading both sees one answer;
@@ -191,7 +192,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if s.lookupErr != nil {
-		fmt.Fprintf(cmd.ErrWriter, "f10: no PR read (%v), so the base is the recorded or default branch\n", s.lookupErr)
+		ui.Warnf(cmd.ErrWriter, "no PR read (%v), so the base is the recorded or default branch", s.lookupErr)
 	}
 
 	var out string
@@ -243,8 +244,8 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 				why = fmt.Sprintf("it does not merge: %v", err)
 			}
 
-			fmt.Fprintf(cmd.ErrWriter,
-				"f10: %s merged into %s shows nothing new (%s), so the diff is from where it forked\n",
+			ui.Warnf(cmd.ErrWriter,
+				"%s merged into %s shows nothing new (%s), so the diff is from where it forked",
 				s.branch, base, why)
 
 			from, err := forkPoint(ctx, dir, head, base)

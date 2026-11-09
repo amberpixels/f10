@@ -166,7 +166,7 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 		p := r.resolve(r.input(guard))
 		wantPlan(t, p, pushed, foundAfter, methodMerge)
 
-		if !strings.HasPrefix(p.how, string(branchmeta.Moved)+": "+short(pushed)) {
+		if !strings.HasPrefix(p.how, string(branchmeta.Moved)+": "+gitx.ShortSHA(pushed)) {
 			t.Errorf("guard %q: how %q, want it to name the mark", guard, p.how)
 		}
 
