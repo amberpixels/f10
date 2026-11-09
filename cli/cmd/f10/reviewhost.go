@@ -262,12 +262,9 @@ func (rv *reviewer) revision(r remoteReview) string {
 		return strings.NewReplacer("[x]", "[ ]", "[X]", "[ ]").Replace(box)
 	})
 
-	for _, mark := range []struct{ kind, text string }{
-		{rv.facts.Handled, rv.facts.HandledText},
-		{rv.facts.Settled, rv.facts.SettledText},
-	} {
-		if mark.kind == facts.HandledMarker && mark.text != "" {
-			body = strings.ReplaceAll(body, mark.text, "")
+	for _, mark := range []facts.Mark{rv.facts.HandledMark(), rv.facts.SettledMark()} {
+		if mark.Kind == facts.HandledMarker && mark.Text != "" {
+			body = strings.ReplaceAll(body, mark.Text, "")
 		}
 	}
 
@@ -401,10 +398,8 @@ var checkboxRE = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ xX])\]`)
 // not handle round two.
 func (rv *reviewer) isHandled(ctx context.Context, r remoteReview) (bool, error) {
 	switch rv.facts.Handled {
-	case facts.HandledReaction:
-		return rv.hasFreshReaction(ctx, r, rv.facts.HandledText)
-	case facts.HandledMarker:
-		return rv.facts.HandledText != "" && strings.Contains(r.stored, rv.facts.HandledText), nil
+	case facts.HandledReaction, facts.HandledMarker:
+		return rv.hasMark(ctx, r, rv.facts.HandledMark())
 	case facts.HandledCheckbox:
 		m := checkboxRE.FindStringSubmatch(r.stored)
 
@@ -422,13 +417,36 @@ func (rv *reviewer) isSettled(ctx context.Context, r remoteReview) (bool, error)
 		return false, nil
 	}
 
-	switch rv.facts.Settled {
+	return rv.hasMark(ctx, r, rv.facts.SettledMark())
+}
+
+// hasMark reads a reaction or a marker, the two kinds handled and settled
+// share; any other kind reads as absent.
+func (rv *reviewer) hasMark(ctx context.Context, r remoteReview, m facts.Mark) (bool, error) {
+	switch m.Kind {
 	case facts.HandledReaction:
-		return rv.hasFreshReaction(ctx, r, rv.facts.SettledText)
+		return rv.hasFreshReaction(ctx, r, m.Text)
 	case facts.HandledMarker:
-		return rv.facts.SettledText != "" && strings.Contains(r.stored, rv.facts.SettledText), nil
+		return m.Text != "" && strings.Contains(r.stored, m.Text), nil
 	default:
 		return false, nil
+	}
+}
+
+// leaveMark posts a reaction or appends a marker; ok is false for any other
+// kind, which the caller handles or refuses.
+func (rv *reviewer) leaveMark(ctx context.Context, r remoteReview, m facts.Mark) (string, bool, error) {
+	switch m.Kind {
+	case facts.HandledReaction:
+		msg, err := rv.react(ctx, r, m.Text)
+
+		return msg, true, err
+	case facts.HandledMarker:
+		msg, err := rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+m.Text, "marker appended")
+
+		return msg, true, err
+	default:
+		return "", false, nil
 	}
 }
 
@@ -463,11 +481,11 @@ func (rv *reviewer) ack(ctx context.Context, r remoteReview) (string, error) {
 		return "a check run carries no handled marker: a new push starts a new run", nil
 	}
 
+	if msg, ok, err := rv.leaveMark(ctx, r, rv.facts.HandledMark()); ok {
+		return msg, err
+	}
+
 	switch rv.facts.Handled {
-	case facts.HandledReaction:
-		return rv.react(ctx, r, rv.facts.HandledText)
-	case facts.HandledMarker:
-		return rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+rv.facts.HandledText, "marker appended")
 	case facts.HandledCheckbox:
 		// the first box only: isHandled reads the first, and the rest may be
 		// the reviewer's own list, which ticking would read as all fixed
@@ -497,13 +515,10 @@ func (rv *reviewer) settle(ctx context.Context, r remoteReview) (string, error) 
 		return "a check run carries no settled marker: the findings file is the record", nil
 	}
 
-	switch rv.facts.Settled {
-	case facts.HandledReaction:
-		return rv.react(ctx, r, rv.facts.SettledText)
-	case facts.HandledMarker:
-		return rv.patchBody(ctx, r, strings.TrimRight(r.stored, "\n")+"\n\n"+rv.facts.SettledText, "marker appended")
-	default:
-		return "", errors.New("project.md declares no review settled mark: declare `settled` " +
-			"(reaction `<emoji>` or marker \"<text>\") under review")
+	if msg, ok, err := rv.leaveMark(ctx, r, rv.facts.SettledMark()); ok {
+		return msg, err
 	}
+
+	return "", errors.New("project.md declares no review settled mark: declare `settled` " +
+		"(reaction `<emoji>` or marker \"<text>\") under review")
 }

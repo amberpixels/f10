@@ -1,12 +1,9 @@
 package main
 
 import (
-	"cmp"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -124,12 +121,11 @@ type roundFile struct {
 }
 
 // reviewRounds counts every findings file of the task, in round order, one
-// entry per half the file holds. A prior-round block counts with its round
-// only when the round reopened it.
+// entry per half the file holds.
 func reviewRounds(storageRoot, task string) []roundFile {
 	var rounds []roundFile
 
-	for _, path := range numbered(storage.Root(storageRoot).Reviews(task)) {
+	for _, path := range findings.Series(storage.Root(storageRoot).Reviews(task)) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -140,59 +136,26 @@ func reviewRounds(storageRoot, task string) []roundFile {
 			continue
 		}
 
-		// indexed by remote: the local half, then the remote one
-		var halves [2]*roundFile
-
-		half := func(remote bool) *roundFile {
-			i := 0
-			if remote {
-				i = 1
-			}
-
-			if halves[i] == nil {
-				halves[i] = &roundFile{round: reviewRound{Round: f.Round}, remote: remote, at: modTime(path)}
-			}
-
-			return halves[i]
-		}
-
 		// a half the header names shows even with nothing found, a file
 		// naming none the local one
 		local, remote := f.Halves()
-		if remote {
-			half(true)
-		}
 
-		if local || !remote {
-			half(false)
-		}
+		for _, isRemote := range []bool{false, true} {
+			t := f.TallyHalf(isRemote)
 
-		for _, fd := range f.Findings {
-			if fd.Prior && !findings.Reopens(fd.Status) {
+			shown := t.Found > 0 || (isRemote && remote) || (!isRemote && (local || !remote))
+			if !shown {
 				continue
 			}
 
-			h := half(f.Remote(fd))
-			h.round.Found++
-
-			if !fd.Prior {
-				h.raised++
-			}
-
-			switch v, _, _ := strings.Cut(strings.ToLower(fd.Verdict), " "); v {
-			case "fix":
-				h.round.Fixed++
-			case "skip":
-				h.round.Skipped++
-			case "ask", "":
-				h.round.Ask++
-			}
-		}
-
-		for _, h := range halves {
-			if h != nil {
-				rounds = append(rounds, *h)
-			}
+			rounds = append(rounds, roundFile{
+				round: reviewRound{
+					Round: f.Round, Found: t.Found, Fixed: t.Fixed, Skipped: t.Skipped, Ask: t.Open,
+				},
+				raised: t.Raised,
+				remote: isRemote,
+				at:     modTime(path),
+			})
 		}
 	}
 
@@ -211,7 +174,7 @@ type verdictFile struct {
 func judgeFiles(storageRoot, task string) []verdictFile {
 	var out []verdictFile
 
-	for _, path := range numbered(storage.Root(storageRoot).Verdicts(task)) {
+	for _, path := range verdict.Series(storage.Root(storageRoot).Verdicts(task)) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -245,45 +208,6 @@ func modTime(path string) time.Time {
 	}
 
 	return fi.ModTime()
-}
-
-// numbered is dir's `<n>.md` files by n, so 10.md sorts after 9.md.
-func numbered(dir string) []string {
-	type file struct {
-		n    int
-		path string
-	}
-
-	var files []file
-
-	for _, e := range dirEntries(dir) {
-		name, ok := strings.CutSuffix(e.Name(), ".md")
-		if !ok || e.IsDir() {
-			continue
-		}
-
-		if n, err := strconv.Atoi(name); err == nil {
-			files = append(files, file{n, filepath.Join(dir, e.Name())})
-		}
-	}
-
-	slices.SortFunc(files, func(a, b file) int { return cmp.Compare(a.n, b.n) })
-
-	paths := make([]string, len(files))
-	for i, f := range files {
-		paths[i] = f.path
-	}
-
-	return paths
-}
-
-func dirEntries(dir string) []os.DirEntry {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-
-	return entries
 }
 
 // reviewText is one round's counts, or each round's, named, when there are

@@ -32,24 +32,14 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	name, err := reviewsKey(ctx, t, cmd.Args().First())
+	dir, series, err := openReviews(ctx, t, cmd.Args().First(), cmd.ErrWriter)
 	if err != nil {
 		return err
 	}
 
-	dir := t.lay.StorageRoot.Reviews(name)
-
-	var series roundSeries
-
-	if s, err := resolvePRSubject(ctx, t, cmd.Args().First()); err == nil && s.here {
-		if series, err = seriesOf(ctx, t, s, dir, cmd.ErrWriter); err != nil {
-			return err
-		}
-	}
-
-	st := findings.Status{Dir: dir, Decline: findings.Merged, Latest: latestRound(dir)}
+	st := findings.Status{Dir: dir, Decline: findings.Merged, Latest: findings.Latest(dir)}
 	if !series.merged {
-		if st, err = findings.Rounds(dir, numbered(dir)); err != nil {
+		if st, err = findings.Rounds(dir, findings.Series(dir)); err != nil {
 			return err
 		}
 	}
@@ -72,6 +62,28 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return nil
+}
+
+// openReviews is the findings directory review round and lore change both
+// read, and what the branch says about its series. A branch checked out
+// elsewhere, or a subject that does not resolve, gets no series read, so a
+// closed one is archived only where its branch lives.
+func openReviews(ctx context.Context, t *target, explicit string, warn io.Writer) (string, roundSeries, error) {
+	key, err := reviewsKey(ctx, t, explicit)
+	if err != nil {
+		return "", roundSeries{}, err
+	}
+
+	dir := t.lay.StorageRoot.Reviews(key)
+
+	s, err := resolvePRSubject(ctx, t, explicit)
+	if err != nil || !s.here {
+		return dir, roundSeries{}, nil //nolint:nilerr // the rounds the directory holds still answer
+	}
+
+	series, err := seriesOf(ctx, t, s, dir, warn)
+
+	return dir, series, err
 }
 
 // reviewsKey names a task's findings directory: the task id (a bundle's
@@ -124,7 +136,7 @@ func seriesOf(ctx context.Context, t *target, s prSubject, dir string, warn io.W
 		return series, nil
 	}
 
-	latest := latestRound(dir)
+	latest := findings.Latest(dir)
 	if latest == "" {
 		return series, nil
 	}
@@ -209,15 +221,6 @@ func seriesClosed(ctx context.Context, dir string, f *findings.File, h host, hos
 	reachable, err := gitx.IsAncestor(ctx, dir, sha, "HEAD")
 
 	return err == nil && !reachable
-}
-
-// latestRound is the highest-numbered round file in dir, or "".
-func latestRound(dir string) string {
-	if files := numbered(dir); len(files) > 0 {
-		return files[len(files)-1]
-	}
-
-	return ""
 }
 
 func roundsDoc(st findings.Status) string {

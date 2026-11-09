@@ -187,7 +187,7 @@ func readRoot(root storage.Root, l *Local) []string {
 			continue
 		}
 
-		path, n := latest(root.Reviews(e.Name()))
+		path := findings.Latest(root.Reviews(e.Name()))
 		if path == "" {
 			continue
 		}
@@ -206,22 +206,12 @@ func readRoot(root storage.Root, l *Local) []string {
 			continue
 		}
 
-		fd := Findings{Round: n}
+		fd := Findings{Round: storage.NumberOf(path)}
 		if r, err := strconv.Atoi(f.Round); err == nil {
 			fd.Round = r
 		}
 
-		// a prior block takes a verdict only in the statuses that reopen
-		// it; a settled one carries none
-		for _, fi := range f.Findings {
-			if fi.Prior && !findings.Reopens(fi.Status) {
-				continue
-			}
-
-			if v := strings.ToLower(fi.Verdict); v == "" || strings.HasPrefix(v, "ask") {
-				fd.Open++
-			}
-		}
+		fd.Open = f.Tally().Open
 
 		if info, err := os.Stat(path); err == nil {
 			fd.At = info.ModTime()
@@ -237,7 +227,7 @@ func readRoot(root storage.Root, l *Local) []string {
 			continue
 		}
 
-		path, _ := latest(root.Verdicts(e.Name()))
+		path := verdict.Latest(root.Verdicts(e.Name()))
 		if path == "" {
 			continue
 		}
@@ -296,23 +286,6 @@ func finishedFrom(events []ledger.Event, resolve func(string) string, l *Local) 
 			l.Finished[id] = true
 		}
 	}
-}
-
-func latest(dir string) (string, int) {
-	best, n := "", -1
-
-	for _, e := range dirEntries(dir) {
-		name, ok := strings.CutSuffix(e.Name(), ".md")
-		if !ok {
-			continue
-		}
-
-		if i, err := strconv.Atoi(name); err == nil && i > n {
-			best, n = filepath.Join(dir, e.Name()), i
-		}
-	}
-
-	return best, n
 }
 
 func dirEntries(dir string) []fs.DirEntry {
