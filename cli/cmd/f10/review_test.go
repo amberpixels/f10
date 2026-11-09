@@ -1067,3 +1067,13 @@ func TestReviewStaleReadsAStickyCommentAtItsLastEdit(t *testing.T) {
 		t.Error("an automatic-only trigger reads as triggerable")
 	}
 }
+
+// The GraphQL documents forge sends for review threads, as gh's argv carries
+// them; a change in forge shows here as an unscripted call.
+const (
+	reviewThreadsQuery = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
+		"{ pullRequest(number: $number) { reviewThreads(first: 100) { nodes { id isResolved " +
+		"comments(first: 1) { nodes { pullRequestReview { databaseId } } } } } } } }"
+
+	resolveThreadMutation = "mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }"
+)
