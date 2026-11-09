@@ -436,3 +436,23 @@ func TestPRColumnIcons(t *testing.T) {
 		t.Errorf("a short F10_STATUS_GLYPHS replaced the icons: %q", got)
 	}
 }
+
+// Status shows a ledger claim without the wait and done it recorded.
+func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
+	r := &state.Run{Ship: "blocked", Leaf: "implement", Wait: "FT-2", Done: "catchup"}
+	e := ledger.Event{Task: "FT-1", Kind: ledger.StateSet, Payload: ledger.NewPayload(ledger.EncodeClaim(r, nil))}
+
+	if got := claimRun(e); got.Ship != "blocked" || got.Leaf != "implement" || got.Wait != "" || got.Done != "" {
+		t.Errorf("claim %+v", got)
+	}
+}
+
+// A halt drive records reads back through the ledger's readers.
+func TestHaltPayloadReadsBack(t *testing.T) {
+	p := haltPayload(driveResult{skill: "ship", reason: "stalled"})
+
+	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
+	if e.Skill() != "ship" || e.Reason() != "stalled" {
+		t.Errorf("halt %v", e.Payload.Val)
+	}
+}

@@ -3,10 +3,8 @@ package main
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"maps"
 	"slices"
 	"strings"
@@ -58,20 +56,7 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		task = r.ID
 	}
 
-	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
-
-	l, err := ledger.OpenRead(ctx, ledger.Path())
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil // nothing recorded yet
-	}
-
-	if err != nil {
-		return err
-	}
-
-	defer l.Close()
-
-	events, err := l.List(ctx, ledger.Filter{Project: ledger.Where(ctx, t.dir).Project})
+	events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: ledger.Where(ctx, t.dir).Project})
 	if err != nil {
 		return err
 	}
@@ -191,12 +176,12 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 			continue
 		}
 
-		lines, ok := count(e.Payload.Val["lines"])
+		lines, ok := e.Payload.Val.Int("lines")
 		if !ok {
 			continue
 		}
 
-		md, _ := count(e.Payload.Val["md_lines"])
+		md, _ := e.Payload.Val.Int("md_lines")
 		r := row(e.Task, e.At)
 		r.lines, r.md = &lines, md
 	}
@@ -370,18 +355,6 @@ func median(vs []float64) (float64, bool) {
 	}
 
 	return s[len(s)/2], true
-}
-
-// count reads a payload number: float64 once stored as JSON, int as built.
-func count(v any) (int, bool) {
-	switch n := v.(type) {
-	case float64:
-		return int(n), true
-	case int:
-		return n, true
-	}
-
-	return 0, false
 }
 
 func percent(part, whole int) int {

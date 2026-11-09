@@ -156,19 +156,7 @@ type ledgerTask struct {
 // readLedger reads the project's events once. A ledger that is missing or
 // will not open has nothing to say: status only reads.
 func readLedger(ctx context.Context, main string) []ledger.Event {
-	_ = ledger.Sync(ctx) // a failed replay still reads what the database holds
-
-	l, err := ledger.OpenRead(ctx, ledger.Path())
-	if err != nil {
-		return nil
-	}
-
-	defer l.Close()
-
-	events, err := l.List(ctx, ledger.Filter{Project: ledger.Where(ctx, main).Project})
-	if err != nil {
-		return nil
-	}
+	events, _ := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: ledger.Where(ctx, main).Project})
 
 	return events
 }
@@ -196,71 +184,24 @@ func ledgerFor(events []ledger.Event, id string, resolve func(string) string) le
 				lt.halt = nil
 			}
 		case e.Kind == ledger.PROpened:
-			lt.pr = cmp.Or(payloadString(p, "url"), lt.pr)
+			lt.pr = cmp.Or(p.String("url"), lt.pr)
 		case e.Kind == ledger.Pushed:
 			lt.pushed = true
 		case e.Kind == ledger.TaskHalted:
-			lt.halt = &ledgerHalt{skill: payloadString(p, "skill"), reason: payloadString(p, "reason"), at: e.At}
+			lt.halt = &ledgerHalt{skill: e.Skill(), reason: e.Reason(), at: e.At}
 		}
 	}
 
 	return lt
 }
 
-// claimRun reads a recorded `f10 state` call back as the run it left.
+// claimRun reads a recorded `f10 state` call back as the run it left, minus
+// its wait and done: status reads those from a live run only.
 func claimRun(e ledger.Event) *state.Run {
-	p := e.Payload.Val
+	r := ledger.DecodeClaim(e).Run
+	r.Wait, r.Done = "", ""
 
-	return &state.Run{
-		Session:  e.Session,
-		Task:     e.Task,
-		Root:     e.Checkout,
-		Capture:  payloadString(p, "capture"),
-		Plan:     payloadString(p, "plan"),
-		Ship:     payloadString(p, "ship"),
-		Leaf:     payloadString(p, "leaf"),
-		Final:    payloadString(p, "final"),
-		Pipeline: payloadStrings(p, "pipeline"),
-		Labels:   payloadStrings(p, "labels"),
-		At:       payloadInt(p, "at"),
-		Note:     payloadString(p, "note"),
-		Next:     payloadString(p, "next"),
-		Ask:      payloadString(p, "ask"),
-		Updated:  e.At,
-	}
-}
-
-// payloadStrings is a list the payload holds as JSON, its strings only.
-func payloadStrings(p ledger.Payload, key string) []string {
-	raw, _ := p[key].([]any)
-
-	var out []string
-
-	for _, v := range raw {
-		if s, ok := v.(string); ok {
-			out = append(out, s)
-		}
-	}
-
-	return out
-}
-
-// payloadInt is a number the payload holds; JSON gives it as a float.
-func payloadInt(p ledger.Payload, key string) int {
-	switch n := p[key].(type) {
-	case float64:
-		return int(n)
-	case int:
-		return n
-	}
-
-	return 0
-}
-
-func payloadString(p ledger.Payload, key string) string {
-	s, _ := p[key].(string)
-
-	return s
+	return &r
 }
 
 // rowSource is what gathering rows reads from, bound once per status call.

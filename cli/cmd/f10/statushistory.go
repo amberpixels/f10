@@ -88,7 +88,7 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 
 		switch e.Kind {
 		case ledger.RunStarted:
-			skill := payloadString(e.Payload.Val, "skill")
+			skill := e.Skill()
 			if !slices.Contains(state.Phases, skill) {
 				continue
 			}

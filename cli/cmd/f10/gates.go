@@ -488,7 +488,7 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 	for _, e := range in.events {
 		switch e.Kind {
 		case ledger.RunStarted:
-			s := payloadString(e.Payload.Val, "skill")
+			s := e.Skill()
 
 			if mark != nil && e.Session == mark.session && e.At.After(mark.at) {
 				mark = nil
@@ -504,7 +504,7 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 				continue
 			}
 
-			args := strings.Fields(payloadString(e.Payload.Val, "args"))
+			args := strings.Fields(e.Payload.Val.String("args"))
 			if slices.Contains(args, "ci") != remote {
 				continue
 			}
@@ -517,7 +517,7 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 			mark = &startMark{at: e.At, session: e.Session, via: via}
 		case ledger.StateSet:
 			// blocked is a driven ship waiting to resume, not its end
-			switch payloadString(e.Payload.Val, "ship") {
+			switch e.Payload.Val.String("ship") {
 			case "done", "failed", "partial":
 				inShip[e.Session] = false
 			}

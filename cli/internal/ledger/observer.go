@@ -282,15 +282,12 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	for _, e := range prior {
 		switch e.Kind {
 		case ReviewRoundOpened:
-			if e.Payload.Val["round"] == f.Round && e.Payload.Val["reviewed"] == f.Reviewed {
+			if e.Payload.Val.String("round") == f.Round && e.Payload.Val.String("reviewed") == f.Reviewed {
 				opened = true
 			}
 		case FindingVerdict:
-			round, _ := e.Payload.Val["round"].(string)
-			id, _ := e.Payload.Val["finding"].(string)
-			v, _ := e.Payload.Val["verdict"].(string)
-			st, _ := e.Payload.Val["status"].(string)
-			last[round+"/"+id] = v + "|" + st
+			p := e.Payload.Val
+			last[p.String("round")+"/"+p.String("finding")] = p.String("verdict") + "|" + p.String("status")
 		}
 	}
 
@@ -391,7 +388,7 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 // taskless reports a row that belongs to no task even in a session that has
 // one: a verdict on an idea judged mid-task is not that task's verdict.
 func taskless(e *Event) bool {
-	return e.Kind == JudgeVerdict && e.Payload.Val["idea"] == true
+	return e.Kind == JudgeVerdict && e.Payload.Val.Bool("idea")
 }
 
 // payloadOf is an observation's own fields, Meta left out: the row's

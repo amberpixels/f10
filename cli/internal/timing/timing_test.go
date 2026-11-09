@@ -371,3 +371,18 @@ func TestWindowsDropAWindowAnUnendedWaitRunsInto(t *testing.T) {
 		t.Errorf("windows %+v", ws)
 	}
 }
+
+// A claim built in memory holds its place as an int, a stored one as a
+// float64; both name the entry's label.
+func TestWindowsLabelAClaimByItsPlace(t *testing.T) {
+	for _, at := range []any{2, float64(2)} {
+		c := claim(0, "ship", "running", "pr")
+		c.Payload.Val["labels"] = []any{"", "pr-polish"}
+		c.Payload.Val["at"] = at
+
+		ws := Windows(join(run(0, "ship"), c, wait(2, 4, "question"), claim(10, "ship", "done")))
+		if len(ws) == 0 || ws[0].Step != "pr" || ws[0].Label != "pr-polish" {
+			t.Errorf("at %T: windows %+v", at, ws)
+		}
+	}
+}
