@@ -21,7 +21,7 @@ func verifyFieldIn(fields []facts.Field) facts.Field {
 		}
 	}
 
-	return facts.Field{Name: name, Origin: facts.OriginAbsent}
+	return facts.Field{Name: name, Origin: facts.OriginOf(facts.OriginAbsent)}
 }
 
 // verifyLine is the verify the steps run, resolved once: its origin, the
@@ -30,20 +30,20 @@ func verifyLine(f facts.Field) string {
 	body := strings.TrimSpace(f.Value)
 
 	switch {
-	case strings.HasPrefix(f.Origin, "declared") && !strings.Contains(body, "\n"):
-		return "verify: " + f.Origin + "  " + body + "\n"
-	case strings.HasPrefix(f.Origin, "declared"):
+	case f.Origin.Declared() && !strings.Contains(body, "\n"):
+		return "verify: " + f.Origin.String() + "  " + body + "\n"
+	case f.Origin.Declared():
 		var b strings.Builder
 
-		b.WriteString("verify: " + f.Origin + "\n")
+		b.WriteString("verify: " + f.Origin.String() + "\n")
 
 		for line := range strings.SplitSeq(body, "\n") {
 			b.WriteString("  " + line + "\n")
 		}
 
 		return b.String()
-	case f.Origin == facts.OriginDetected || f.Origin == facts.OriginJudgment:
-		return "verify: " + f.Origin + " (" + f.Source + ")  " + body + "\n"
+	case f.Origin.Kind == facts.OriginDetected || f.Origin.Kind == facts.OriginJudgment:
+		return "verify: " + f.Origin.String() + " (" + f.Source + ")  " + body + "\n"
 	default:
 		return "verify: absent  nothing declared or detected: find the commands the repo uses, and suggest declaring them under Verify in project.md\n"
 	}
@@ -112,7 +112,7 @@ func scopedVerifyLine(eff *facts.Effective, prose facts.Field, base string, chan
 	switch {
 	case diffErr != nil:
 		b.WriteString(
-			"verify: " + eff.VerifyOrigin + ", every command: the diff could not be read (" + diffErr.Error() + ")\n",
+			"verify: " + eff.VerifyOrigin.String() + ", every command: the diff could not be read (" + diffErr.Error() + ")\n",
 		)
 
 		for _, c := range eff.Verify {
@@ -127,7 +127,9 @@ func scopedVerifyLine(eff *facts.Effective, prose facts.Field, base string, chan
 		b.WriteString("verify: nothing to check  the diff against " + base + " touches none of " +
 			strings.Join(patterns, ", ") + verifyRerun + "\n")
 	default:
-		b.WriteString("verify: " + eff.VerifyOrigin + ", scoped to the diff against " + base + verifyRerun + "\n")
+		b.WriteString(
+			"verify: " + eff.VerifyOrigin.String() + ", scoped to the diff against " + base + verifyRerun + "\n",
+		)
 
 		for _, p := range run {
 			why := "every diff"
@@ -144,7 +146,7 @@ func scopedVerifyLine(eff *facts.Effective, prose facts.Field, base string, chan
 	}
 
 	// labelled, so a command the prose still names is not read as one to run
-	if strings.HasPrefix(prose.Origin, "declared") {
+	if prose.Origin.Declared() {
 		b.WriteString("  rules from the Verify heading, not commands:\n")
 
 		for line := range strings.SplitSeq(strings.TrimSpace(prose.Value), "\n") {

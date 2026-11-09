@@ -62,8 +62,8 @@ func paceSet(eff *facts.Effective) (*facts.PaceSet, error) {
 		return nil, err
 	}
 
-	userOrigin := "declared (user, " + path + ")"
-	s.Over(user.Paces, func(string, string) string { return userOrigin })
+	userOrigin := facts.DeclaredByUser(path)
+	s.Over(user.Paces, func(string, string) facts.Origin { return userOrigin })
 
 	if user.Pace != "" {
 		s.Default, s.DefaultOrigin = user.Pace, userOrigin
@@ -71,7 +71,7 @@ func paceSet(eff *facts.Effective) (*facts.PaceSet, error) {
 
 	if eff != nil {
 		s.Remote = eff.Review.Remote()
-		s.Over(eff.Paces, func(name, key string) string { return eff.PacesOrigin[name+"."+key] })
+		s.Over(eff.Paces, func(name, key string) facts.Origin { return eff.PacesOrigin[name+"."+key] })
 
 		if eff.Pace != "" {
 			s.Default, s.DefaultOrigin = eff.Pace, eff.PaceOrigin
@@ -122,7 +122,7 @@ func activePace(ctx context.Context, s *facts.PaceSet, flag, main, branch string
 	}
 
 	if rp.name == "" && s.Default != "" {
-		rp = runPace{name: s.Default, origin: s.DefaultOrigin}
+		rp = runPace{name: s.Default, origin: s.DefaultOrigin.String()}
 	}
 
 	if rp.name == "" {

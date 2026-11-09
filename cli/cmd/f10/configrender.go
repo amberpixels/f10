@@ -56,7 +56,7 @@ func renderHuman(w io.Writer, v *view, limit int) {
 		// a derived prefix holds only until something declares one, and the
 		// plan files it has already named will not follow a change
 		if v.IDPrefixDerived {
-			header = append(header, headerLine{"", v.IDPrefixOrigin + " - `f10 init` declares it", faint})
+			header = append(header, headerLine{"", v.IDPrefixOrigin.String() + " - `f10 init` declares it", faint})
 		}
 	}
 
@@ -379,17 +379,17 @@ func renderProse(w io.Writer, value string, limit int) {
 // displayOrigins drops the layer qualifier on "declared" unless more than
 // one declaring layer is in play; the full origin stays in --json.
 func displayOrigins(fields []facts.Field) []string {
-	declared := map[string]bool{}
+	declared := map[facts.Origin]bool{}
 	for _, f := range fields {
-		if strings.HasPrefix(f.Origin, "declared") {
+		if f.Origin.Declared() {
 			declared[f.Origin] = true
 		}
 	}
 
 	origins := make([]string, len(fields))
 	for i, f := range fields {
-		origins[i] = f.Origin
-		if len(declared) == 1 && strings.HasPrefix(f.Origin, "declared") {
+		origins[i] = f.Origin.String()
+		if len(declared) == 1 && f.Origin.Declared() {
 			origins[i] = "declared"
 		}
 	}
@@ -436,13 +436,13 @@ func termWidth(w io.Writer) int {
 
 // styleOrigin keeps detection, declaration and defaults tellable apart at a
 // glance in the origin column.
-func styleOrigin(origin string) lipgloss.Style {
-	switch {
-	case origin == facts.OriginDetected:
+func styleOrigin(origin facts.Origin) lipgloss.Style {
+	switch origin.Kind {
+	case facts.OriginDetected:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // cyan
-	case strings.HasPrefix(origin, "declared"):
+	case facts.OriginDeclared:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	case origin == facts.OriginDefault || origin == facts.OriginJudgment:
+	case facts.OriginDefault, facts.OriginJudgment:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
 	default: // absent
 		return lipgloss.NewStyle().Faint(true)

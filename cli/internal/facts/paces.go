@@ -22,7 +22,7 @@ import (
 const PaceFinishKey = "finish"
 
 // PaceOriginBuiltin is the origin of a dial f10 ships.
-const PaceOriginBuiltin = "built-in"
+var PaceOriginBuiltin = OriginOf(OriginBuiltin)
 
 // Dials is one step's settings under a pace. Each field belongs to one
 // step (dialSteps); a zero field sets nothing.
@@ -407,27 +407,27 @@ func BuiltinPaces() map[string]Pace {
 type PaceSet struct {
 	Remote        bool // Review declares a remote reviewer, which an optional CI review needs
 	Paces         map[string]Pace
-	Origins       map[string]string // <pace>.<key> to the layer that set it
+	Origins       map[string]Origin // <pace>.<key> to the layer that set it
 	Default       string            // pace: the pace a run takes when it names none; "" for none
-	DefaultOrigin string
+	DefaultOrigin Origin
 
 	Ceiling        Pace              // the project's cap on every pace Except does not name
-	CeilingOrigins map[string]string // <key> to the layer that set it
+	CeilingOrigins map[string]Origin // <key> to the layer that set it
 	Except         []string
-	ExceptOrigin   string
+	ExceptOrigin   Origin
 }
 
 // NewPaceSet is the built-ins alone.
 func NewPaceSet() *PaceSet {
-	s := &PaceSet{Paces: map[string]Pace{}, Origins: map[string]string{}}
-	s.Over(BuiltinPaces(), func(string, string) string { return PaceOriginBuiltin })
+	s := &PaceSet{Paces: map[string]Pace{}, Origins: map[string]Origin{}}
+	s.Over(BuiltinPaces(), func(string, string) Origin { return PaceOriginBuiltin })
 
 	return s
 }
 
 // Over lays paces on the set, key by key: a layer tuning fast's review
 // keeps the lower layer's judge. An empty pace still declares its name.
-func (s *PaceSet) Over(paces map[string]Pace, origin func(name, key string) string) {
+func (s *PaceSet) Over(paces map[string]Pace, origin func(name, key string) Origin) {
 	for name, p := range paces {
 		if s.Paces[name] == nil {
 			s.Paces[name] = Pace{}
@@ -453,7 +453,7 @@ func (s *PaceSet) Exempt(name string) bool {
 
 // CeilingOrigin is how a dial the ceiling set names its source.
 func (s *PaceSet) CeilingOrigin(key string) string {
-	return "ceiling (" + s.CeilingOrigins[key] + ")"
+	return "ceiling (" + s.CeilingOrigins[key].String() + ")"
 }
 
 // Capped is the pace with the ceiling laid on, and each replaced dial keyed
@@ -624,7 +624,7 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 
 	p, caps := s.Capped(pace)
 
-	from := func(key string) string { return "pace " + pace + " (" + s.Origins[pace+"."+key] + ")" }
+	from := func(key string) string { return "pace " + pace + " (" + s.Origins[pace+"."+key].String() + ")" }
 	dial := func(key, name, value string) Dial {
 		if c, ok := caps[key+"."+name]; ok {
 			return c
@@ -788,29 +788,29 @@ func (e *Effective) resolvePaces(fm *layered) {
 
 	if fm.Paces != nil {
 		e.Paces = map[string]Pace{}
-		e.PacesOrigin = map[string]string{}
+		e.PacesOrigin = map[string]Origin{}
 
 		for name, p := range fm.Paces {
 			e.Paces[name] = maps.Clone(p)
 
 			for key := range p {
 				o := fm.origin["paces."+name+"."+key]
-				e.PacesOrigin[name+"."+key] = "declared (" + o + ", frontmatter)"
-				layers["declared ("+o+", frontmatter)"] = true
+				e.PacesOrigin[name+"."+key] = DeclaredFrontmatter(o)
+				layers[o] = true
 			}
 		}
 	}
 
 	if fm.Pace != "" {
 		e.Pace = fm.Pace
-		e.PaceOrigin = "declared (" + fm.origin["pace"] + ", frontmatter)"
+		e.PaceOrigin = DeclaredFrontmatter(fm.origin["pace"])
 	}
 
 	if e.Paces != nil {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "paces",
 			Value:  pacesShown(e.Paces),
-			Origin: strings.Join(slices.Sorted(maps.Keys(layers)), " + "),
+			Origin: declaredAcross(layers),
 		})
 	}
 
@@ -828,7 +828,7 @@ func (e *Effective) resolvePaces(fm *layered) {
 	// word; this catches the project's own mistakes early
 	s := NewPaceSet()
 	s.Remote = e.Review.Remote()
-	s.Over(e.Paces, func(name, key string) string { return e.PacesOrigin[name+"."+key] })
+	s.Over(e.Paces, func(name, key string) Origin { return e.PacesOrigin[name+"."+key] })
 	s.Ceiling, s.CeilingOrigins, s.Except = e.Ceiling, e.CeilingOrigin, e.CeilingExcept
 
 	for _, bad := range s.PaceProblems(e.Flows) {
@@ -850,29 +850,28 @@ func (e *Effective) resolveCeiling(fm *layered) {
 		e.Ceiling = Pace{}
 	}
 
-	e.CeilingOrigin = map[string]string{}
+	e.CeilingOrigin = map[string]Origin{}
 	layers := map[string]bool{}
 
 	var keys []string
 
 	for _, key := range slices.Sorted(maps.Keys(e.Ceiling)) {
-		o := "declared (" + fm.origin["ceiling."+key] + ", frontmatter)"
-		e.CeilingOrigin[key] = o
-		layers[o] = true
+		e.CeilingOrigin[key] = DeclaredFrontmatter(fm.origin["ceiling."+key])
+		layers[fm.origin["ceiling."+key]] = true
 		keys = append(keys, key+" ("+e.Ceiling[key].Shown()+")")
 	}
 
 	value := strings.Join(keys, ", ")
 
 	if e.CeilingExcept = fm.Ceiling.Except; e.CeilingExcept != nil {
-		e.CeilingExceptOrigin = "declared (" + fm.origin["ceiling.except"] + ", frontmatter)"
-		layers[e.CeilingExceptOrigin] = true
+		e.CeilingExceptOrigin = DeclaredFrontmatter(fm.origin["ceiling.except"])
+		layers[fm.origin["ceiling.except"]] = true
 		value += "; except " + strings.Join(e.CeilingExcept, ", ")
 	}
 
 	e.Facts = append(e.Facts, Fact{
 		Key:    "ceiling",
 		Value:  value,
-		Origin: strings.Join(slices.Sorted(maps.Keys(layers)), " + "),
+		Origin: declaredAcross(layers),
 	})
 }

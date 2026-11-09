@@ -119,8 +119,8 @@ type StandupDecl struct {
 // VerifyDecl is one verify command and the paths it checks, in standup's
 // glob syntax; a command with no paths runs on every diff.
 type VerifyDecl struct {
-	Run   string   `yaml:"run"`
-	Paths []string `yaml:"paths,omitempty"`
+	Run   string   `json:"run"             yaml:"run"`
+	Paths []string `json:"paths,omitempty" yaml:"paths,omitempty"`
 }
 
 // trimSteps is the list with markup and blanks cut.
@@ -185,21 +185,127 @@ func decodeDeclared(block []byte) (Declared, error) {
 	return d, nil
 }
 
-// The vocabularies the scalar keys accept.
-var vocab = map[string][]string{
-	"visibility":      {"stealth", "public"},
-	"storage":         {"in-repo", "out-of-tree"},
-	"layering":        {layout.LayeringExtends, layout.LayeringReplaces},
-	"tracker.kind":    {"github", "gitlab", "notion", "jira"},
-	"merge_method":    {"squash", "merge", "rebase"},
-	"catchup":         {"rebase", "merge", "off"},
-	"catchup_stacked": {"merge", "rebase"},
-	"traces":          {"on", "off"},
-	"lore":            {"local", "committed"},
-	"lore_gate":       {"warn", "block"},
-	"report_back":     {"on", "off"},
-	"watch":           {"report", "finish", "off"},
-	"watch_catchup":   {"on", "off"},
+// A scalarKey is one frontmatter key holding a single word, so it is
+// declared once here and every list that handles such keys reads the table:
+// the check, the layer merge, scaffold's emptiness test and resolve's facts.
+type scalarKey struct {
+	key   string
+	field func(*Declared) *string
+	vocab []string           // the words it accepts; nil when parse checks it
+	parse func(string) error // checks a value no fixed word list covers, such as a duration
+	def   string             // what f10 config shows when no layer sets it; "" shows nothing
+}
+
+var scalarKeys = []scalarKey{
+	{
+		key:   "visibility",
+		field: func(d *Declared) *string { return &d.Visibility },
+		vocab: []string{"stealth", "public"},
+		def:   "stealth",
+	},
+	{
+		key:   "storage",
+		field: func(d *Declared) *string { return &d.Storage },
+		vocab: []string{"in-repo", "out-of-tree"},
+		def:   "in-repo",
+	},
+	{
+		key:   "layering",
+		field: func(d *Declared) *string { return &d.Layering },
+		vocab: []string{layout.LayeringExtends, layout.LayeringReplaces},
+	},
+	{
+		key:   "merge_method",
+		field: func(d *Declared) *string { return &d.MergeMethod },
+		vocab: []string{"squash", "merge", "rebase"},
+	},
+	{
+		key:   "catchup",
+		field: func(d *Declared) *string { return &d.Catchup },
+		vocab: []string{"rebase", "merge", "off"},
+		def:   "rebase",
+	},
+	// a stacked base is merged unless the project takes the replay a rebase risks
+	{
+		key:   "catchup_stacked",
+		field: func(d *Declared) *string { return &d.CatchupStacked },
+		vocab: []string{"merge", "rebase"},
+		def:   "merge",
+	},
+	{key: "traces", field: func(d *Declared) *string { return &d.Traces }, vocab: []string{"on", "off"}, def: "off"},
+	{
+		key:   "lore",
+		field: func(d *Declared) *string { return &d.Lore },
+		vocab: []string{"local", "committed"},
+		def:   "local",
+	},
+	{
+		key:   "lore_gate",
+		field: func(d *Declared) *string { return &d.LoreGate },
+		vocab: []string{"warn", "block"},
+		def:   "warn",
+	},
+	{
+		key:   "stale_after",
+		field: func(d *Declared) *string { return &d.StaleAfter },
+		parse: discard(ParseStaleAfter),
+		def:   "off",
+	},
+	{
+		key:   "driver_timeout",
+		field: func(d *Declared) *string { return &d.DriverTimeout },
+		parse: discard(ParseDriverTimeout),
+		def:   driver.DefaultTimeout.String(),
+	},
+	{
+		key:   "watch",
+		field: func(d *Declared) *string { return &d.Watch },
+		vocab: []string{"report", "finish", "off"},
+		def:   "finish",
+	},
+	// off unless declared: an unattended catchup pushed with a lease is the
+	// riskiest thing the watcher does
+	{
+		key:   "watch_catchup",
+		field: func(d *Declared) *string { return &d.WatchCatchup },
+		vocab: []string{"on", "off"},
+		def:   "off",
+	},
+	{
+		key:   "report_back",
+		field: func(d *Declared) *string { return &d.ReportBack },
+		vocab: []string{"on", "off"},
+		def:   "on",
+	},
+	{key: "pace", field: func(d *Declared) *string { return &d.Pace }, parse: checkPaceName},
+}
+
+// scalarNamed is the registry's entry for key; a key the table lacks is a
+// programming error.
+func scalarNamed(key string) scalarKey {
+	for _, k := range scalarKeys {
+		if k.key == key {
+			return k
+		}
+	}
+
+	panic("facts: no scalar key " + key)
+}
+
+func discard[T any](parse func(string) (T, error)) func(string) error {
+	return func(value string) error {
+		_, err := parse(value)
+
+		return err
+	}
+}
+
+func checkPaceName(value string) error {
+	if !flowNameRE.MatchString(value) {
+		return fmt.Errorf("%q is not a lowercase name", value)
+	}
+
+	return nil
 }
 
 // staleAfterRE is a stale_after value: whole days or weeks. Hours mean
@@ -242,48 +348,31 @@ func ParseDriverTimeout(value string) (time.Duration, error) {
 	return d, nil
 }
 
-// trackerKinds maps the declared kind to the name the rest of f10 shows.
-var trackerKinds = map[string]string{
-	"github": "GitHub Issues",
-	"gitlab": "GitLab work items",
-	"notion": "Notion",
-	"jira":   "Jira",
-}
-
 // check reports every value outside its vocabulary and a malformed flow.
 func (d Declared) check() []string {
 	var bad []string
 
-	for key, value := range map[string]string{
-		"visibility":      d.Visibility,
-		"storage":         d.Storage,
-		"layering":        d.Layering,
-		"tracker.kind":    d.Tracker.Kind,
-		"merge_method":    d.MergeMethod,
-		"catchup":         d.Catchup,
-		"catchup_stacked": d.CatchupStacked,
-		"traces":          d.Traces,
-		"lore":            d.Lore,
-		"lore_gate":       d.LoreGate,
-		"report_back":     d.ReportBack,
-		"watch":           d.Watch,
-		"watch_catchup":   d.WatchCatchup,
-	} {
-		if value != "" && !slices.Contains(vocab[key], value) {
-			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", key, value, strings.Join(vocab[key], ", ")))
+	for _, k := range scalarKeys {
+		value := *k.field(&d)
+
+		switch {
+		case value == "":
+		case k.parse != nil:
+			if err := k.parse(value); err != nil {
+				bad = append(bad, k.key+": "+err.Error())
+			}
+		case !slices.Contains(k.vocab, value):
+			bad = append(bad, fmt.Sprintf("%s: %q is not one of %s", k.key, value, strings.Join(k.vocab, ", ")))
 		}
 	}
 
-	if d.StaleAfter != "" {
-		if _, err := ParseStaleAfter(d.StaleAfter); err != nil {
-			bad = append(bad, "stale_after: "+err.Error())
+	if kind := TrackerKind(d.Tracker.Kind); kind != "" && !slices.Contains(TrackerKinds, kind) {
+		words := make([]string, len(TrackerKinds))
+		for i, k := range TrackerKinds {
+			words[i] = string(k)
 		}
-	}
 
-	if d.DriverTimeout != "" {
-		if _, err := ParseDriverTimeout(d.DriverTimeout); err != nil {
-			bad = append(bad, "driver_timeout: "+err.Error())
-		}
+		bad = append(bad, fmt.Sprintf("tracker.kind: %q is not one of %s", kind, strings.Join(words, ", ")))
 	}
 
 	for _, key := range d.DriveEnv {
@@ -332,10 +421,6 @@ func (d Declared) check() []string {
 
 	if d.Ceiling != nil {
 		bad = append(bad, CheckCeiling(*d.Ceiling)...)
-	}
-
-	if d.Pace != "" && !flowNameRE.MatchString(d.Pace) {
-		bad = append(bad, fmt.Sprintf("pace: %q is not a lowercase name", d.Pace))
 	}
 
 	steps := FlowSteps(d.Flows)
@@ -417,6 +502,13 @@ func (l *layered) merge(d Declared, label string) {
 		l.origin = map[string]string{}
 	}
 
+	for _, k := range scalarKeys {
+		if value := *k.field(&d); value != "" {
+			*k.field(&l.Declared) = value
+			l.origin[k.key] = label
+		}
+	}
+
 	set := func(key string, ok bool, apply func()) {
 		if ok {
 			apply()
@@ -425,28 +517,13 @@ func (l *layered) merge(d Declared, label string) {
 		}
 	}
 
-	set("visibility", d.Visibility != "", func() { l.Visibility = d.Visibility })
-	set("storage", d.Storage != "", func() { l.Storage = d.Storage })
-	set("layering", d.Layering != "", func() { l.Layering = d.Layering })
 	set("tracker", !d.Tracker.empty(), func() { l.Tracker = d.Tracker })
-	set("merge_method", d.MergeMethod != "", func() { l.MergeMethod = d.MergeMethod })
-	set("catchup", d.Catchup != "", func() { l.Catchup = d.Catchup })
-	set("catchup_stacked", d.CatchupStacked != "", func() { l.CatchupStacked = d.CatchupStacked })
-	set("traces", d.Traces != "", func() { l.Traces = d.Traces })
-	set("lore", d.Lore != "", func() { l.Lore = d.Lore })
-	set("lore_gate", d.LoreGate != "", func() { l.LoreGate = d.LoreGate })
-	set("stale_after", d.StaleAfter != "", func() { l.StaleAfter = d.StaleAfter })
-	set("driver_timeout", d.DriverTimeout != "", func() { l.DriverTimeout = d.DriverTimeout })
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
 	set("drive_env", d.DriveEnv != nil, func() { l.DriveEnv = d.DriveEnv })
-	set("watch", d.Watch != "", func() { l.Watch = d.Watch })
-	set("watch_catchup", d.WatchCatchup != "", func() { l.WatchCatchup = d.WatchCatchup })
-	set("report_back", d.ReportBack != "", func() { l.ReportBack = d.ReportBack })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
 	set("verify", d.Verify != nil, func() { l.Verify = d.Verify })
-	set("pace", d.Pace != "", func() { l.Pace = d.Pace })
 
 	// paces merge per pace and per key, as agents do: a worktree tuning
 	// fast's review keeps main's fast judge

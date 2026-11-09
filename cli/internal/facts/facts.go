@@ -20,22 +20,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
-// Origins an effective value can have. Declared origins are qualified by
-// the layer label at build time: "declared (main)", "declared (worktree)".
-const (
-	OriginDetected = "detected"
-	OriginDefault  = "default"
-	OriginAbsent   = "absent"
-	// OriginJudgment is guidance the probe could not turn into commands
-	OriginJudgment = "judgment"
-)
-
 // A Field is one effective configuration value with its provenance.
 type Field struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
-	Prose  bool   `json:"prose,omitempty"`  // multi-line prose, not a scalar
-	Origin string `json:"origin"`           // "detected", "declared (<layer>)", "default", "judgment", "absent"
+	Prose  bool   `json:"prose,omitempty"` // multi-line prose, not a scalar
+	Origin Origin `json:"origin"`
 	Source string `json:"source,omitempty"` // file for declared, evidence for detected
 }
 
@@ -45,13 +35,13 @@ type Effective struct {
 	Unrecognized []Field `json:"unrecognized,omitempty"`
 
 	// The fixed-vocabulary sub-facts.
-	Layering        string `json:"layering"`
-	Visibility      string `json:"visibility"`
-	Storage         string `json:"storage"`
-	TrackerKind     string `json:"trackerKind,omitempty"`
-	IDPrefix        string `json:"idPrefix,omitempty"`        // "ABC", "F10" - the task id format's letters
-	IDPrefixOrigin  string `json:"idPrefixOrigin,omitempty"`  // "declared (<layer>)" or "derived from project name <name>"
-	IDPrefixDerived bool   `json:"idPrefixDerived,omitempty"` // the prefix came from the project's name, not a declaration
+	Layering        string      `json:"layering"`
+	Visibility      string      `json:"visibility"`
+	Storage         string      `json:"storage"`
+	TrackerKind     TrackerKind `json:"trackerKind,omitempty"`
+	IDPrefix        string      `json:"idPrefix,omitempty"`        // "ABC", "F10" - the task id format's letters
+	IDPrefixOrigin  Origin      `json:"idPrefixOrigin,omitzero"`   // declared, or derived from the project's name
+	IDPrefixDerived bool        `json:"idPrefixDerived,omitempty"` // the prefix came from the project's name, not a declaration
 
 	// PriorityLabels is tracker.priority inverted: a lower-cased host label
 	// to the level it carries; nil when none is declared.
@@ -77,7 +67,7 @@ type Effective struct {
 	Traces         bool                 `json:"traces"`                // traces: on; a step's commits carry trailers, the squash commit keeps the task, a review or judge after the PR leaves a status and a comment
 	Lore           string               `json:"lore"`                  // local: lore under the storage root; committed: .lore/ at the checkout root
 	LoreGate       string               `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
-	StaleAfter     string               `json:"staleAfter,omitempty"`  // stale_after: a task older than this is judged before it is planned; "" is off
+	StaleAfter     StaleAfter           `json:"staleAfter,omitzero"`   // stale_after: a task older than this is judged before it is planned; zero is off
 	DriverTimeout  time.Duration        `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
 	Flows          map[string]flow.Flow `json:"flows"`                 // a flow's name to its entries, written as declared
 	FlowByArea     map[string]string    `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
@@ -90,25 +80,28 @@ type Effective struct {
 	// scopes to the diff; VerifyOrigin names its layer. Nil when undeclared,
 	// and the Verify field is the whole of verify.
 	Verify       []VerifyDecl `json:"verify,omitempty"`
-	VerifyOrigin string       `json:"verifyOrigin,omitempty"`
+	VerifyOrigin Origin       `json:"verifyOrigin,omitzero"`
+	// VerifyCommands are the commands detection picked for the Verify field,
+	// nil unless that field is detected; the field's Value is their display.
+	VerifyCommands []string `json:"-"`
 	// Agents is agents: a step, `default` or `step.kind` to the profile it
 	// runs on, the layers merged key by key; AgentsOrigin names each key's
 	// layer. Nil when none is declared.
 	Agents       map[string]string `json:"agents,omitempty"`
-	AgentsOrigin map[string]string `json:"agentsOrigin,omitempty"`
+	AgentsOrigin map[string]Origin `json:"agentsOrigin,omitempty"`
 	// Paces is the project's paces: merged across its layers per pace and
 	// key, PacesOrigin naming each <pace>.<key>'s layer; nil when none is
 	// declared. Pace is the declared default, "" for none.
 	Paces       map[string]Pace   `json:"paces,omitempty"`
-	PacesOrigin map[string]string `json:"pacesOrigin,omitempty"`
+	PacesOrigin map[string]Origin `json:"pacesOrigin,omitempty"`
 	Pace        string            `json:"pace,omitempty"`
-	PaceOrigin  string            `json:"paceOrigin,omitempty"`
+	PaceOrigin  Origin            `json:"paceOrigin,omitzero"`
 	// Ceiling caps every pace but those CeilingExcept names, merged key by
 	// key across the layers; nil when none is declared.
 	Ceiling             Pace              `json:"ceiling,omitempty"`
-	CeilingOrigin       map[string]string `json:"ceilingOrigin,omitempty"`
+	CeilingOrigin       map[string]Origin `json:"ceilingOrigin,omitempty"`
 	CeilingExcept       []string          `json:"ceilingExcept,omitempty"`
-	CeilingExceptOrigin string            `json:"ceilingExceptOrigin,omitempty"`
+	CeilingExceptOrigin Origin            `json:"ceilingExceptOrigin,omitzero"`
 
 	// Facts is every typed value with its origin; Problems what is wrong
 	// with how they were declared.
@@ -206,8 +199,8 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 
 	eff := &Effective{
 		Layering:   lay.Layering,
-		Visibility: "stealth",
-		Storage:    "in-repo",
+		Visibility: scalarNamed("visibility").def,
+		Storage:    scalarNamed("storage").def,
 		Problems:   problems,
 	}
 
@@ -216,7 +209,7 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 			Name:   sec.name,
 			Value:  sec.body,
 			Prose:  isProse(sec.body),
-			Origin: "declared (" + sec.layer + ")",
+			Origin: DeclaredIn(sec.layer),
 			Source: sec.file,
 		})
 	}
@@ -233,7 +226,7 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 				Name:   name,
 				Value:  value,
 				Prose:  isProse(value),
-				Origin: "declared (" + sec.layer + ")",
+				Origin: DeclaredIn(sec.layer),
 				Source: sec.file,
 			}
 		} else {
@@ -242,6 +235,10 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 
 		if field.Name == "" {
 			continue // a field with nothing to say for this checkout
+		}
+
+		if name == "Verify" && field.Origin.Kind == OriginDetected {
+			eff.VerifyCommands, _ = detectedVerify(pb.Verify)
 		}
 
 		eff.Fields = append(eff.Fields, field)
@@ -342,70 +339,88 @@ func fallbackFor(name string, lay *layout.Layout, pb *probe.Probes) Field {
 			return Field{}
 		}
 
-		return Field{Name: name, Value: lay.Layering, Origin: OriginDefault}
+		return Field{Name: name, Value: lay.Layering, Origin: OriginOf(OriginDefault)}
 	case "Tracker":
 		return detectedTracker(name, pb)
 	case "Hosting & PR":
 		if pb.Host == "" {
-			return Field{Name: name, Origin: OriginAbsent}
+			return Field{Name: name, Origin: OriginOf(OriginAbsent)}
 		}
 
 		return Field{
 			Name:   name,
 			Value:  pb.Host + " (" + pb.CLI.Value + ")",
-			Origin: OriginDetected,
+			Origin: OriginOf(OriginDetected),
 			Source: pb.CLI.Evidence,
 		}
 	case "Verify":
 		return verifyField(name, pb.Verify)
 	case "Visibility":
-		return Field{Name: name, Value: "stealth", Origin: OriginDefault}
+		return Field{Name: name, Value: "stealth", Origin: OriginOf(OriginDefault)}
 	case "Storage":
 		return storageField(name, lay)
 	case "Review":
 		// the local half has nothing to infer; the remote one a workflow may name
 		if body := reviewBody(pb); body != "" {
-			return Field{Name: name, Value: body, Prose: true, Origin: OriginDetected, Source: pb.Review.Workflow}
+			return Field{
+				Name:   name,
+				Value:  body,
+				Prose:  true,
+				Origin: OriginOf(OriginDetected),
+				Source: pb.Review.Workflow,
+			}
 		}
 
-		return Field{Name: name, Origin: OriginAbsent}
+		return Field{Name: name, Origin: OriginOf(OriginAbsent)}
 	default: // Roles, Guardrails: nothing infers them
-		return Field{Name: name, Origin: OriginAbsent}
+		return Field{Name: name, Origin: OriginOf(OriginAbsent)}
 	}
 }
 
 // verifyField is verify resolved once, for `f10 config` and the project load
 // alike: the commands as Value, the files that named them as Source.
 func verifyField(name string, signals []probe.Signal) Field {
-	picked, judgment := probe.VerifyPicked(signals)
-	if len(picked) == 0 {
-		return Field{Name: name, Origin: OriginAbsent}
+	values, judgment := detectedVerify(signals)
+	if len(values) == 0 {
+		return Field{Name: name, Origin: OriginOf(OriginAbsent)}
 	}
 
-	values := make([]string, 0, len(picked))
-	evidence := make([]string, 0, len(picked))
+	picked, _ := probe.VerifyPicked(signals)
 
+	evidence := make([]string, 0, len(picked))
 	for _, s := range picked {
-		values = append(values, s.Value)
 		evidence = append(evidence, s.Evidence)
 	}
 
 	f := Field{
 		Name:   name,
 		Value:  strings.Join(values, " / "),
-		Origin: OriginDetected,
+		Origin: OriginOf(OriginDetected),
 		Source: strings.Join(evidence, ", "),
 	}
 	if judgment {
-		f.Value, f.Origin = strings.Join(values, "; "), OriginJudgment
+		f.Value, f.Origin = strings.Join(values, "; "), OriginOf(OriginJudgment)
 	}
 
 	return f
 }
 
+// detectedVerify is the commands detection picked, and whether they are
+// only guidance left to judgment.
+func detectedVerify(signals []probe.Signal) ([]string, bool) {
+	picked, judgment := probe.VerifyPicked(signals)
+
+	values := make([]string, 0, len(picked))
+	for _, s := range picked {
+		values = append(values, s.Value)
+	}
+
+	return values, judgment
+}
+
 func detectedList(name string, signals []probe.Signal) Field {
 	if len(signals) == 0 {
-		return Field{Name: name, Origin: OriginAbsent}
+		return Field{Name: name, Origin: OriginOf(OriginAbsent)}
 	}
 
 	values := make([]string, 0, len(signals))
@@ -419,7 +434,7 @@ func detectedList(name string, signals []probe.Signal) Field {
 	return Field{
 		Name:   name,
 		Value:  strings.Join(values, ", "),
-		Origin: OriginDetected,
+		Origin: OriginOf(OriginDetected),
 		Source: strings.Join(evidence, ", "),
 	}
 }
@@ -427,13 +442,28 @@ func detectedList(name string, signals []probe.Signal) Field {
 func detectedTracker(name string, pb *probe.Probes) Field {
 	switch pb.CLI.Value {
 	case "gh":
-		return Field{Name: name, Value: "GitHub Issues (via gh)", Origin: OriginDetected, Source: pb.CLI.Evidence}
+		return Field{
+			Name:   name,
+			Value:  "GitHub Issues (via gh)",
+			Origin: OriginOf(OriginDetected),
+			Source: pb.CLI.Evidence,
+		}
 	case "glab":
-		return Field{Name: name, Value: "GitLab work items (via glab)", Origin: OriginDetected, Source: pb.CLI.Evidence}
+		return Field{
+			Name:   name,
+			Value:  "GitLab work items (via glab)",
+			Origin: OriginOf(OriginDetected),
+			Source: pb.CLI.Evidence,
+		}
 	case "unknown":
-		return Field{Name: name, Value: "unknown - " + pb.CLI.Evidence, Origin: OriginDetected, Source: pb.CLI.Evidence}
+		return Field{
+			Name:   name,
+			Value:  "unknown - " + pb.CLI.Evidence,
+			Origin: OriginOf(OriginDetected),
+			Source: pb.CLI.Evidence,
+		}
 	default:
-		return Field{Name: name, Origin: OriginAbsent}
+		return Field{Name: name, Origin: OriginOf(OriginAbsent)}
 	}
 }
 
@@ -445,13 +475,13 @@ func storageField(name string, lay *layout.Layout) Field {
 			return Field{
 				Name:   name,
 				Value:  "out-of-tree (" + string(lay.StorageRoot) + ")",
-				Origin: OriginDetected,
+				Origin: OriginOf(OriginDetected),
 				Source: l.Dir,
 			}
 		}
 	}
 
-	return Field{Name: name, Value: "in-repo (" + string(lay.StorageRoot) + ")", Origin: OriginDefault}
+	return Field{Name: name, Value: "in-repo (" + string(lay.StorageRoot) + ")", Origin: OriginOf(OriginDefault)}
 }
 
 // parseFile splits one project.md into contract sections, opened by a

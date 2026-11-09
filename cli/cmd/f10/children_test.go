@@ -211,8 +211,8 @@ func TestChildrenDriverDeclines(t *testing.T) {
 	writeDriver(t, tg.lay.StorageRoot.Path())
 	tg.eff = &facts.Effective{
 		IDPrefix:    "FT",
-		TrackerKind: "Notion",
-		Facts:       []facts.Fact{{Key: "tracker.kind", Value: "Notion", Origin: "declared (main, frontmatter)"}},
+		TrackerKind: facts.TrackerNotion,
+		Facts:       []facts.Fact{{Key: "tracker.kind", Value: "Notion", Origin: facts.DeclaredFrontmatter("main")}},
 	}
 
 	shell.Capture = func(context.Context, string, string, ...string) (shell.Result, error) {

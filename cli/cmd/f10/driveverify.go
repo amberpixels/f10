@@ -39,15 +39,15 @@ func verifySpecOf(eff *facts.Effective) (verifySpec, string) {
 	body := strings.TrimSpace(f.Value)
 
 	switch {
-	case f.Origin == facts.OriginDetected:
-		return verifySpec{cmds: strings.Split(body, " / ")}, ""
-	case strings.HasPrefix(f.Origin, "declared"):
+	case f.Origin.Kind == facts.OriginDetected:
+		return verifySpec{cmds: eff.VerifyCommands}, ""
+	case f.Origin.Declared():
 		if cmds, ok := backticked(body); ok {
 			return verifySpec{cmds: cmds}, ""
 		}
 
 		return verifySpec{}, "the Verify heading is prose, not commands"
-	case f.Origin == facts.OriginJudgment:
+	case f.Origin.Kind == facts.OriginJudgment:
 		return verifySpec{}, "verify is left to judgment: nothing declared or detected names its commands"
 	}
 
