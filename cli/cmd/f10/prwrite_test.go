@@ -18,8 +18,8 @@ const (
 	postTopLevel  = "gh api -X POST repos/{owner}/{repo}/issues/4/comments -f body=done"
 )
 
-func headPR() pull {
-	return pull{Number: 4, State: "OPEN", URL: "https://gh/o/r/pull/4", HeadRefOID: "abcdef123"}
+func headPR() forge.PR {
+	return forge.PR{Number: 4, Status: forge.Open, URL: "https://gh/o/r/pull/4", HeadSHA: "abcdef123"}
 }
 
 func TestCommentOncePosts(t *testing.T) {
@@ -164,7 +164,7 @@ func TestStatusOnceTakesAPushAheadOfTheHead(t *testing.T) {
 
 	t.Cleanup(func() { shell.Capture = prev })
 
-	p := pull{Number: 4, State: "OPEN", URL: "u", HeadRefOID: head}
+	p := forge.PR{Number: 4, Status: forge.Open, URL: "u", HeadSHA: head}
 	s := forge.CommitStatus{Name: "judge", State: "success", Description: "ok"}
 
 	line, err := statusOnce(t.Context(), &bytes.Buffer{}, newHost("gh", dir), p, pushed[:7], s)
@@ -176,7 +176,7 @@ func TestStatusOnceTakesAPushAheadOfTheHead(t *testing.T) {
 		t.Context(),
 		&bytes.Buffer{},
 		newHost("gh", dir),
-		pull{HeadRefOID: pushed},
+		forge.PR{HeadSHA: pushed},
 		head[:7],
 		s,
 	); err == nil {
@@ -188,7 +188,7 @@ func TestMineLine(t *testing.T) {
 	f := newFakes(t)
 	f.script("gh api user", `{"login":"Me"}`, `{"login":"other"}`)
 
-	h, p := newHost("gh", t.TempDir()), pull{Author: pullUser{Login: "me"}}
+	h, p := newHost("gh", t.TempDir()), forge.PR{Author: "me"}
 
 	for _, want := range []string{"mine: yes\n", "mine: no\n"} {
 		if got := mineLine(t.Context(), &bytes.Buffer{}, h, p); got != want {
@@ -201,20 +201,20 @@ func TestMineLineUnknown(t *testing.T) {
 	f := newFakes(t)
 	f.fail("gh api user", shell.Result{Code: 1, Stderr: "auth"})
 
-	if got := mineLine(t.Context(), &bytes.Buffer{}, newHost("gh", t.TempDir()), pull{}); got != "mine: unknown\n" {
+	if got := mineLine(t.Context(), &bytes.Buffer{}, newHost("gh", t.TempDir()), forge.PR{}); got != "mine: unknown\n" {
 		t.Errorf("mineLine = %q; a failed login read is unknown, never no", got)
 	}
 }
 
 func TestRequireOpen(t *testing.T) {
 	if err := requireOpen(
-		pull{State: "MERGED", URL: "u"},
+		forge.PR{Status: forge.Merged, URL: "u"},
 	); err == nil ||
 		err.Error() != "u is merged: nothing written" {
 		t.Errorf("merged: err = %v", err)
 	}
 
-	if err := requireOpen(pull{State: "opened"}); err != nil {
+	if err := requireOpen(forge.PR{Status: forge.Open}); err != nil {
 		t.Errorf("glab's opened: err = %v", err)
 	}
 }
@@ -263,8 +263,10 @@ func TestPRCreateNeedsBothOnOrigin(t *testing.T) {
 func TestCreatePullReadsTheURLBack(t *testing.T) {
 	f := newFakes(t)
 	f.script("gh pr create --head feat --base base --title T --body B --label x --draft", "noise\n")
-	f.script("gh pr view feat --json state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author",
-		`{"state":"OPEN","url":"https://gh/o/r/pull/9","number":9}`)
+	f.script(
+		"gh pr view feat --json number,title,state,url,body,author,baseRefName,headRefName,headRefOid,isCrossRepository,mergeStateStatus,mergeCommit,mergedAt,mergedBy,closedAt",
+		`{"state":"OPEN","url":"https://gh/o/r/pull/9","number":9}`,
+	)
 
 	got, err := newHost("gh", t.TempDir()).createPull(t.Context(),
 		forge.NewPull{Head: "feat", Base: "base", Title: "T", Body: "B", Labels: []string{"x"}, Draft: true})

@@ -62,16 +62,16 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 			return s, err
 		}
 
-		p, err := h.pullNumber(ctx, strconv.Itoa(n))
+		p, err := h.PR(ctx, strconv.Itoa(n))
 		if err != nil {
 			return s, err
 		}
 
-		if s.branch = p.head(); s.branch == "" {
+		if s.branch = p.Head; s.branch == "" {
 			return s, fmt.Errorf("%s returned no head branch for #%d", h.Name, n)
 		}
 
-		s.number, s.target, withPull = n, p.base(), false
+		s.number, s.target, withPull = n, p.Base, false
 		s.remote = refSHA(ctx, s.main, "refs/heads/"+s.branch) == ""
 		s.task = branchTask(ctx, t, s.main, s.branch)
 	case token == "":

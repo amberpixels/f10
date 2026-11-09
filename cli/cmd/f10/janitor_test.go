@@ -630,7 +630,7 @@ func TestDeleteRemoteBranchEscapesTheName(t *testing.T) {
 	f.script("glab api -X DELETE projects/:fullpath/repository/branches/GH-1%2Fa%23b", "")
 
 	for _, name := range []string{"gh", "glab"} {
-		if err := newHost(name, "/code/repo").deleteRemoteBranch(t.Context(), "GH-1/a#b"); err != nil {
+		if err := newHost(name, "/code/repo").DeleteBranch(t.Context(), "GH-1/a#b"); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

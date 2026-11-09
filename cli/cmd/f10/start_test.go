@@ -442,11 +442,20 @@ func TestSlugify(t *testing.T) {
 // asked for and the whole issue glab answers with.
 func TestHostIssueTitle(t *testing.T) {
 	f := newFakes(t)
-	f.script("gh issue view 1 --json title,url", `{"title":"Add dark mode","url":"https://github.com/o/r/issues/1"}`)
+	f.script(
+		"gh issue view 1 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Add dark mode","url":"https://github.com/o/r/issues/1"}`,
+	)
 	f.script("glab issue view 1 -F json", `{"iid":1,"title":"Dunkelmodus","web_url":"https://x"}`)
-	f.fail("gh issue view 2 --json title,url", shell.Result{Code: 1, Stderr: "no issue 2"})
-	f.script("gh issue view 3 --json title,url", `{"title":""}`)
-	f.script("gh issue view 4 --json title,url", `{"title":"Merged PR","url":"https://github.com/o/r/pull/4"}`)
+	f.fail(
+		"gh issue view 2 --json number,title,state,labels,createdAt,url,body,assignees",
+		shell.Result{Code: 1, Stderr: "no issue 2"},
+	)
+	f.script("gh issue view 3 --json number,title,state,labels,createdAt,url,body,assignees", `{"title":""}`)
+	f.script(
+		"gh issue view 4 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Merged PR","url":"https://github.com/o/r/pull/4"}`,
+	)
 
 	for name, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
 		got, err := newHost(name, "/code/repo").issueTitle(t.Context(), "1")
@@ -476,8 +485,8 @@ func TestHostIssueTitle(t *testing.T) {
 func TestHostRefusesPullRequests(t *testing.T) {
 	f := newFakes(t)
 	pr := `{"number":35,"title":"Merged PR","url":"https://github.com/o/r/pull/35"}`
-	f.script("gh issue view 35 --json number,title,state,labels,createdAt,url,body,comments", pr)
-	f.script("gh issue view 35 --json url", pr)
+	f.script("gh issue view 35 --json number,title,state,labels,createdAt,url,body,assignees,comments", pr)
+	f.script("gh issue view 35 --json number,title,state,labels,createdAt,url,body,assignees", pr)
 	f.script("glab issue view 7 -F json", `{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7"}`)
 
 	gh := newHost("gh", "/code/repo")
@@ -505,12 +514,12 @@ func TestHostRefusesPullRequests(t *testing.T) {
 // and url, whichever shape the host gives them in.
 func TestHostIssueDocLabels(t *testing.T) {
 	f := newFakes(t)
-	f.script("gh issue view 12 --json number,title,state,labels,createdAt,url,body,comments",
+	f.script("gh issue view 12 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":12,"title":"Crash","state":"OPEN","labels":[{"name":"bug"},{"name":"draft"}],`+
 			`"url":"https://github.com/o/r/issues/12","body":"boom"}`)
-	f.script("gh issue view 13 --json number,title,state,labels,createdAt,url,body,comments",
+	f.script("gh issue view 13 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":13,"title":"Plain","state":"OPEN","labels":[],"url":"https://github.com/o/r/issues/13"}`)
-	f.script("gh issue view 14 --json number,title,state,labels,createdAt,url,body,comments",
+	f.script("gh issue view 14 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":14,"title":"Old","state":"OPEN","labels":[{"name":"bug"}],"createdAt":"2026-09-20T23:30:00-02:00",`+
 			`"url":"https://github.com/o/r/issues/14"}`)
 	f.script("glab issue view 7 -F json",

@@ -162,7 +162,7 @@ type ghFake struct {
 	edited string // the body the last edit carried: gh's --body-file, glab's --description
 }
 
-const stateView = "gh pr view %s --json state,url,number,title,body,baseRefName,mergeStateStatus,mergeCommit,author"
+const stateView = "gh pr view %s --json number,title,state,url,body,author,baseRefName,headRefName,headRefOid,isCrossRepository,mergeStateStatus,mergeCommit,mergedAt,mergedBy,closedAt"
 
 // fakeGH scripts gh: the PR view for branch, the signed-in login, and an
 // edit that records the body it was given. A view starting ERR: is the

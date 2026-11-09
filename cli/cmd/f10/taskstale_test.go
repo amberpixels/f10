@@ -101,10 +101,13 @@ func TestStaleness(t *testing.T) {
 
 func TestHostIssueCreated(t *testing.T) {
 	f := newFakes(t)
-	f.script("gh issue view 14 --json createdAt,url",
+	f.script("gh issue view 14 --json number,title,state,labels,createdAt,url,body,assignees",
 		`{"createdAt":"2026-09-20T23:30:00-02:00","url":"https://github.com/o/r/issues/14"}`)
 	f.script("glab issue view 7 -F json", `{"iid":7,"created_at":"2026-10-01T08:00:00Z","web_url":"https://x"}`)
-	f.script("gh issue view 4 --json createdAt,url", `{"url":"https://github.com/o/r/pull/4"}`)
+	f.script(
+		"gh issue view 4 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"url":"https://github.com/o/r/pull/4"}`,
+	)
 
 	at, err := newHost("gh", "/code/repo").issueCreated(t.Context(), "14")
 	if err != nil || at.UTC().Format(time.DateOnly) != "2026-09-21" {
@@ -172,9 +175,12 @@ func TestTaskStaleCommand(t *testing.T) {
 // included; a failing host is the plain error, never a refetch hint.
 func TestTaskStaleCreatedAt(t *testing.T) {
 	f := newFakes(t)
-	f.script("gh issue view 14 --json createdAt,url",
+	f.script("gh issue view 14 --json number,title,state,labels,createdAt,url,body,assignees",
 		`{"createdAt":"2026-09-20T23:30:00Z","url":"https://github.com/o/r/issues/14"}`)
-	f.fail("gh issue view 15 --json createdAt,url", shell.Result{Code: 1, Stderr: "rate limited"})
+	f.fail(
+		"gh issue view 15 --json number,title,state,labels,createdAt,url,body,assignees",
+		shell.Result{Code: 1, Stderr: "rate limited"},
+	)
 
 	tg := childTarget(t, "gh")
 

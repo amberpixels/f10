@@ -9,7 +9,7 @@ import (
 // GitHub that is its check runs and its commit statuses; on GitLab its
 // last pipeline.
 func (h Host) CommitCI(ctx context.Context, sha string) (*CI, error) {
-	if h.GLab() {
+	if h.glab() {
 		var commit struct {
 			LastPipeline *struct {
 				Status    string    `json:"status"`
@@ -17,7 +17,7 @@ func (h Host) CommitCI(ctx context.Context, sha string) (*CI, error) {
 			} `json:"last_pipeline"`
 		}
 
-		if err := h.Decode(ctx, &commit, "api", "projects/:fullpath/repository/commits/"+sha); err != nil {
+		if err := h.decode(ctx, &commit, "api", "projects/:fullpath/repository/commits/"+sha); err != nil {
 			return nil, err
 		}
 
@@ -35,7 +35,7 @@ func (h Host) CommitCI(ctx context.Context, sha string) (*CI, error) {
 		} `json:"check_runs"`
 	}
 
-	if err := h.Decode(ctx, &runs, "api", "repos/{owner}/{repo}/commits/"+sha+"/check-runs?per_page=100"); err != nil {
+	if err := h.decode(ctx, &runs, "api", "repos/{owner}/{repo}/commits/"+sha+"/check-runs?per_page=100"); err != nil {
 		return nil, err
 	}
 
@@ -46,7 +46,7 @@ func (h Host) CommitCI(ctx context.Context, sha string) (*CI, error) {
 		} `json:"statuses"`
 	}
 
-	if err := h.Decode(ctx, &status, "api", "repos/{owner}/{repo}/commits/"+sha+"/status"); err != nil {
+	if err := h.decode(ctx, &status, "api", "repos/{owner}/{repo}/commits/"+sha+"/status"); err != nil {
 		return nil, err
 	}
 

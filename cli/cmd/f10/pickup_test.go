@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -40,14 +41,14 @@ func TestPullToken(t *testing.T) {
 }
 
 func TestPickupTask(t *testing.T) {
-	gh := func(body, title, branch string) pull {
-		return pull{URL: "https://github.com/o/r/pull/30", Body: body, Title: title, HeadRefName: branch}
+	gh := func(body, title, branch string) forge.PR {
+		return forge.PR{URL: "https://github.com/o/r/pull/30", Body: body, Title: title, Head: branch}
 	}
 
 	cases := []struct {
 		name       string
 		hostIssues bool
-		p          pull
+		p          forge.PR
 		want       string
 	}{
 		{name: "closing keyword", hostIssues: true, p: gh("Some text.\n\nCloses #12", "", "alice/x"), want: "GH-12"},
@@ -71,9 +72,9 @@ func TestPickupTask(t *testing.T) {
 		{
 			name:       "a GitLab issue url",
 			hostIssues: true,
-			p: pull{
-				WebURL:      "https://gitlab.com/g/p/-/merge_requests/3",
-				Description: "Closes https://gitlab.com/g/p/-/issues/9",
+			p: forge.PR{
+				URL:  "https://gitlab.com/g/p/-/merge_requests/3",
+				Body: "Closes https://gitlab.com/g/p/-/issues/9",
 			},
 			want: "GH-9",
 		},
@@ -87,57 +88,56 @@ func TestPickupTask(t *testing.T) {
 }
 
 func TestRefusePull(t *testing.T) {
-	open := pull{State: "OPEN", URL: "https://gh/pull/3", HeadRefName: "x"}
+	open := forge.PR{Status: forge.Open, URL: "https://gh/pull/3", Head: "x"}
 	if err := refusePull(open); err != nil {
 		t.Errorf("an open PR from origin was refused: %v", err)
 	}
 
 	fork := open
-	fork.IsCrossRepository = true
+	fork.Fork = true
 
 	if err := refusePull(fork); err == nil || !strings.Contains(err.Error(), "forks are not supported yet") {
 		t.Errorf("a fork PR = %v, want the fork refusal", err)
 	}
 
-	glFork := pull{
-		State:           "opened",
-		WebURL:          "https://gl/mr/3",
-		SourceBranch:    "x",
-		SourceProjectID: 2,
-		TargetProjectID: 1,
+	glFork := forge.PR{
+		Status: forge.Open,
+		URL:    "https://gl/mr/3",
+		Head:   "x",
+		Fork:   true,
 	}
 	if err := refusePull(glFork); err == nil {
 		t.Error("a GitLab MR from another project was not refused")
 	}
 
 	merged := open
-	merged.State = "MERGED"
+	merged.Status = forge.Merged
 
 	if err := refusePull(merged); err == nil || !strings.Contains(err.Error(), "no merge commit") {
 		t.Errorf("a merged PR with no merge commit = %v, want it refused for that", err)
 	}
 
-	merged.MergeCommit.OID = "abc"
+	merged.Landed = "abc"
 
 	if err := refusePull(merged); err != nil {
 		t.Errorf("a merged PR was refused: %v", err)
 	}
 
 	closed := open
-	closed.State = "CLOSED"
+	closed.Status = forge.Closed
 
 	if err := refusePull(closed); err == nil || !strings.Contains(err.Error(), "no head commit") {
 		t.Errorf("a closed PR with no head commit = %v, want it refused for that", err)
 	}
 
-	closed.HeadRefOID = "def"
+	closed.HeadSHA = "def"
 
 	if err := refusePull(closed); err != nil {
 		t.Errorf("a closed PR was refused: %v", err)
 	}
 
 	headless := open
-	headless.HeadRefName = ""
+	headless.Head = ""
 
 	if err := refusePull(headless); err == nil {
 		t.Error("an open PR with no head branch was not refused")
@@ -145,7 +145,7 @@ func TestRefusePull(t *testing.T) {
 
 	for _, state := range []string{"", "DRAFT"} {
 		unknown := merged
-		unknown.State = state
+		unknown.Status = forge.Status(state)
 
 		if err := refusePull(unknown); err == nil || !strings.Contains(err.Error(), "open, merged and closed") {
 			t.Errorf("a PR in state %q = %v, want it refused", state, err)
@@ -162,12 +162,12 @@ var pickGH = &pickup{
 }
 
 func TestPickupOf(t *testing.T) {
-	p := pull{URL: pickGH.url, HeadRefName: pickGH.branch}
+	p := forge.PR{URL: pickGH.url, Head: pickGH.branch}
 	if got := newHost("gh", "").pickupOf("30", p); *got != *pickGH {
 		t.Errorf("pickupOf on gh = %+v", got)
 	}
 
-	gl := newHost("glab", "").pickupOf("7", pull{WebURL: "https://gl/mr/7", SourceBranch: "b"})
+	gl := newHost("glab", "").pickupOf("7", forge.PR{URL: "https://gl/mr/7", Head: "b"})
 	if gl.view != "f10 pr view --comments 7" || gl.diff != "f10 pr diff 7" || gl.branch != "b" {
 		t.Errorf("pickupOf on glab = %+v", gl)
 	}
@@ -177,7 +177,7 @@ func TestPickupOf(t *testing.T) {
 	}
 
 	closed := p
-	closed.State, closed.HeadRefOID = "CLOSED", "def4567"
+	closed.Status, closed.HeadSHA = forge.Closed, "def4567"
 	closed.ClosedAt = time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
 
 	got := newHost("gh", "").pickupOf("30", closed)
@@ -187,13 +187,13 @@ func TestPickupOf(t *testing.T) {
 	}
 
 	// glab names nobody for a squash it did itself, and keeps its MR heads under its own ref
-	glMerged := pull{WebURL: "https://gl/mr/7", SourceBranch: "b", State: "merged", SquashCommitSHA: "aaa"}
+	glMerged := forge.PR{URL: "https://gl/mr/7", Head: "b", Status: forge.Merged, Landed: "aaa"}
 	got = newHost("glab", "").pickupOf("7", glMerged)
 	if got.sha != "aaa" || got.state != "merged" || got.headRef != "" {
 		t.Errorf("pickupOf on a merged MR = %+v", got)
 	}
 
-	glClosed := pull{WebURL: "https://gl/mr/7", SourceBranch: "b", State: "closed", SHA: "bbb"}
+	glClosed := forge.PR{URL: "https://gl/mr/7", Head: "b", Status: forge.Closed, HeadSHA: "bbb"}
 	got = newHost("glab", "").pickupOf("7", glClosed)
 	if got.sha != "bbb" || got.headRef != "refs/merge-requests/7/head" {
 		t.Errorf("pickupOf on a closed MR = %+v", got)
@@ -201,10 +201,10 @@ func TestPickupOf(t *testing.T) {
 }
 
 // mergedPull is pickGH's PR merged by alice, as gh answers for it.
-func mergedPull() pull {
-	p := pull{URL: pickGH.url, HeadRefName: pickGH.branch, State: "MERGED", HeadRefOID: "def4567"}
-	p.MergeCommit.OID = "abc1234abc"
-	p.MergedBy.Login = "alice"
+func mergedPull() forge.PR {
+	p := forge.PR{URL: pickGH.url, Head: pickGH.branch, Status: forge.Merged, HeadSHA: "def4567"}
+	p.Landed = "abc1234abc"
+	p.MergedBy = "alice"
 	p.MergedAt = time.Date(2026, 10, 12, 15, 0, 0, 0, time.UTC)
 
 	return p
@@ -618,7 +618,7 @@ func TestLinkedBranchCountsForAfter(t *testing.T) {
 // A PR naming no task exits 3, which the start skill turns into a question;
 // --task wins over what the PR names; --task with no PR is refused.
 func TestPickedTask(t *testing.T) {
-	none := pull{URL: pickGH.url, Title: "fix login", HeadRefName: pickGH.branch}
+	none := forge.PR{URL: pickGH.url, Title: "fix login", Head: pickGH.branch}
 
 	_, err := pickedTask("GH", true, pickGH, none, "")
 
@@ -627,33 +627,20 @@ func TestPickedTask(t *testing.T) {
 		t.Errorf("a PR naming no task = %v, want exit %d naming --task", err, ui.ExitDeclined)
 	}
 
-	if got, err := pickedTask("GH", true, pickGH, pull{Body: "Closes #4"}, "GH-9"); got != "GH-9" || err != nil {
+	if got, err := pickedTask("GH", true, pickGH, forge.PR{Body: "Closes #4"}, "GH-9"); got != "GH-9" || err != nil {
 		t.Errorf("--task with a PR = %q, %v; want GH-9", got, err)
 	}
 
-	if got, err := pickedTask("GH", true, pickGH, pull{Body: "Closes #4"}, ""); got != "GH-4" || err != nil {
+	if got, err := pickedTask("GH", true, pickGH, forge.PR{Body: "Closes #4"}, ""); got != "GH-4" || err != nil {
 		t.Errorf("a PR naming its task = %q, %v; want GH-4", got, err)
 	}
 
-	if _, err := pickedTask("GH", true, nil, pull{}, "GH-9"); err == nil {
+	if _, err := pickedTask("GH", true, nil, forge.PR{}, "GH-9"); err == nil {
 		t.Error("--task with no PR was not refused")
 	}
 
-	if got, err := pickedTask("GH", true, nil, pull{}, ""); got != "" || err != nil {
+	if got, err := pickedTask("GH", true, nil, forge.PR{}, ""); got != "" || err != nil {
 		t.Errorf("no PR and no --task = %q, %v", got, err)
-	}
-}
-
-// Only the host's "no such PR" turns a #n back into a task id; a login or
-// network failure is the error.
-func TestNoSuchPull(t *testing.T) {
-	no := errors.New("gh: GraphQL: Could not resolve to a PullRequest with the number of 85. (repository.pullRequest)")
-	if !noSuchPull(no) {
-		t.Error("gh's no-such-PR answer was not recognised")
-	}
-
-	if noSuchPull(errors.New("gh: To get started with GitHub CLI, please run:  gh auth login")) {
-		t.Error("a logged-out gh was read as no PR")
 	}
 }
 
@@ -723,7 +710,7 @@ func TestClosingKeywordsAgree(t *testing.T) {
 			host = "https://gitlab.com/o/r/-/merge_requests/30"
 		}
 
-		picked := pickupTask("GH", true, pull{URL: host, Body: body, HeadRefName: "x"}) == "GH-12"
+		picked := pickupTask("GH", true, forge.PR{URL: host, Body: body, Head: "x"}) == "GH-12"
 
 		if !rewritten || !picked {
 			t.Errorf("%q: finish rewrites %v, pickup finds %v; want both", body, rewritten, picked)

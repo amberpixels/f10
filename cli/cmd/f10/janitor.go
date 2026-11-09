@@ -396,13 +396,13 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 		}
 	}
 
-	stacked, err := j.in.host.stackedPulls(ctx, b.name)
+	stacked, err := j.in.host.StackedPRs(ctx, b.name)
 	if err != nil {
 		return "listing the requests based on it failed: " + err.Error()
 	}
 
 	if len(stacked) > 0 {
-		return stacked[0].url() + " is based on it, and deleting the branch would close it"
+		return stacked[0].URL + " is based on it, and deleting the branch would close it"
 	}
 
 	if p.Status != forge.Merged {
@@ -526,7 +526,7 @@ func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 	}
 
 	if dropOrigin {
-		if err := j.in.host.deleteRemoteBranch(ctx, b.name); err != nil {
+		if err := j.in.host.DeleteBranch(ctx, b.name); err != nil {
 			j.say("kept %s: deleting origin/%s failed: %v", b.name, b.name, err)
 
 			return false
