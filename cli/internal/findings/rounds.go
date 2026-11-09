@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // LastRound is the highest round a task gets: round two exists so fixes get
@@ -70,7 +71,7 @@ func Rounds(dir string, paths []string) (Status, error) {
 
 		files = append(files, f)
 
-		if i, err := strconv.Atoi(strings.TrimSuffix(filepath.Base(path), ".md")); err == nil {
+		if i := storage.NumberOf(path); i >= 0 {
 			n = i
 		}
 
