@@ -126,7 +126,10 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 
 		switch {
 		case failed != "":
-			parts = append(parts, red.Render("failed")+"  "+faint.Render(textx.Cut(firstLine(failed), limit-nameW-10)))
+			parts = append(
+				parts,
+				red.Render("failed")+"  "+faint.Render(cutError(firstLine(failed), limit, limit-nameW-10)),
+			)
 		case b.View == lookaround.ViewFeed:
 			parts = append(parts, feedCounts(b, faint)...)
 		case inFlight == 0:
@@ -144,7 +147,11 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 				if !s.OK && !s.Skipped {
 					parts = append(
 						parts,
-						red.Render(s.Name+" failed")+"  "+faint.Render(textx.Cut(firstLine(s.Error), limit-nameW-40)),
+						red.Render(
+							s.Name+" failed",
+						)+"  "+faint.Render(
+							cutError(firstLine(s.Error), limit, limit-nameW-40),
+						),
 					)
 				}
 			}
@@ -284,6 +291,16 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		fmt.Fprintf(w, "\n%s\n", faint.Render(cmp.Or(name, "nobody")))
 		_ = tree.Write(w, groups[i])
 	}
+}
+
+// cutError keeps an error whole when piped (limit 0), and never cuts it
+// below ten columns, where what is left would say nothing.
+func cutError(s string, limit, n int) string {
+	if limit <= 0 {
+		return s
+	}
+
+	return textx.Cut(s, max(n, 10))
 }
 
 func firstLine(s string) string {
