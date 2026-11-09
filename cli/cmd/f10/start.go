@@ -162,7 +162,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	recordLaunch(ctx, cmd, t, r, suffix)
+	afterStart(ctx, cmd, t, r, suffix)
 
 	return nil
 }
@@ -335,9 +335,9 @@ func startProfile(cmd *cli.Command, t *target, in *startInput) error {
 	return nil
 }
 
-// recordLaunch records the launch for status, then runs start's upkeep: the
+// afterStart records the launch for status, then runs start's upkeep: the
 // watcher and the due janitor sweep.
-func recordLaunch(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suffix string) {
+func afterStart(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suffix string) {
 	// the task is already open, so a failed launch record is a line, not a
 	// failed start
 	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}

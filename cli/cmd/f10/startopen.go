@@ -258,7 +258,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	profile := in.profile.Over(agentctl.Profile{})
 
 	if launch {
-		if profile, notes, err = launchAgent(ctx, in, &o, name, path, agent, ws, profile, notes); err != nil {
+		if profile, notes, err = prepareLaunch(ctx, in, &o, name, path, agent, ws, profile, notes); err != nil {
 			return openedTask{}, err
 		}
 	}
@@ -374,9 +374,10 @@ func recordBranchFacts(
 	return notes, nil
 }
 
-// launchAgent readies the agent a fresh workspace gets and records the flow,
-// pace and profile on the branch; it returns the profile it settled on.
-func launchAgent(
+// prepareLaunch readies the launch a fresh workspace gets, for start to run,
+// and records the flow, pace and profile on the branch; it returns the
+// profile it settled on.
+func prepareLaunch(
 	ctx context.Context,
 	in startInput,
 	o *openedTask,
