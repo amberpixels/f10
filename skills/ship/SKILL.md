@@ -62,7 +62,6 @@ An entry may end in a `[label]` (`pr[pr-polish]`), a display name only: run the 
 A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, which builds a yellow verdict's changes itself, routed as the **judge** step says before and after `pr`.
 A `pr` entry opens the branch's PR, or refreshes it when one is open, so a flow may name `pr` again after review or judge to bring the description up to date.
 A flow with no leading `plan` is **planless**: it writes no plan file, and a brief inline plan in chat stands in for it unless a saved one exists.
-The old keys (`pipelines`, `planless`, `drive_chain`) still read, converted to flows with a warning that names `f10 init --migrate`, and so does the old entry form `review (local)`.
 Free-text input also skips capture and fetch, so the run has no task id.
 A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
 Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.

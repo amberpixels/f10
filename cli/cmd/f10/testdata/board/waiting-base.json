@@ -22,8 +22,8 @@
     "git symbolic-ref --short refs/remotes/origin/HEAD": {
       "stdout": "origin/main"
     },
-    "git config --get-regexp ^branch\\..*\\.(f10-task|f10-tasks|f10-after|f10-model|f10-agent|f10-finish)$": {
-      "stdout": "branch.FT-7/rate.f10-model opus"
+    "git config --get-regexp ^branch\\..*\\.(f10-task|f10-tasks|f10-after|f10-agent|f10-finish)$": {
+      "stdout": "branch.FT-7/rate.f10-agent opus"
     },
     "git log --no-show-signature --format=%H %ae origin/main..FT-7/rate": {
       "stdout": "00000000000000000000000000000000000000a1 ann@acme.example\n00000000000000000000000000000000000000a2 ann@acme.example\n00000000000000000000000000000000000000a3"

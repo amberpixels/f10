@@ -18,16 +18,14 @@ import (
 // A Record is one drive, kept at <storage root>/drives/<n>.yaml: what it
 // was started with, the answers given, and how each task ended.
 type Record struct {
-	Number      int        `yaml:"number"`
-	Created     time.Time  `yaml:"created"`
-	Args        []string   `yaml:"args"` // the command line, --answer, --every, --parallel and --foreground dropped
-	Tasks       []Task     `yaml:"tasks"`
-	Flow        string     `yaml:"flow,omitempty"`
-	Agent       string     `yaml:"agent,omitempty"` // the run-wide --agent (or --model) as typed
-	Model       string     `yaml:"model,omitempty"` // the run-wide --model of a record from before profiles, read only
-	DriveFinish bool       `yaml:"drive_finish"`
-	Cancelled   *time.Time `yaml:"cancelled,omitempty"`
-	Session     string     `yaml:"session,omitempty"` // the session that created it, "" from a plain terminal
+	Number    int        `yaml:"number"`
+	Created   time.Time  `yaml:"created"`
+	Args      []string   `yaml:"args"` // the command line, --answer, --every, --parallel and --foreground dropped
+	Tasks     []Task     `yaml:"tasks"`
+	Flow      string     `yaml:"flow,omitempty"`
+	Agent     string     `yaml:"agent,omitempty"` // the run-wide --agent (or --model) as typed
+	Cancelled *time.Time `yaml:"cancelled,omitempty"`
+	Session   string     `yaml:"session,omitempty"` // the session that created it, "" from a plain terminal
 	// Parallel is the cap on tasks running a skill at once, as the drive
 	// took it; a rerun or a resume keeps it unless it passes --parallel
 	Parallel int `yaml:"parallel,omitempty"`
@@ -40,7 +38,6 @@ type Record struct {
 type Task struct {
 	ID      string   `yaml:"id"`               // as typed, a suffix included
 	Agent   string   `yaml:"agent,omitempty"`  // its own :profile as typed
-	Model   string   `yaml:"model,omitempty"`  // its own :model from before profiles, read only
 	After   string   `yaml:"after,omitempty"`  // the base its body's After: line named, as an id
 	Skill   string   `yaml:"skill,omitempty"`  // in flight, "" for none
 	Queued  bool     `yaml:"queued,omitempty"` // held back by the drive's cap

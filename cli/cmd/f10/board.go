@@ -384,7 +384,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			LedgerPath: ledger.Path(),
 			ProjectID:  place.Project,
 			Agents:     reachableAgents(main),
-			SharedRoot: t.sharedRoot(),
+			SharedRoot: t.lay.StorageRoot,
 			Resolve:    t.idOf(ctx),
 		}
 	}

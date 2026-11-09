@@ -49,13 +49,9 @@ const (
 	TipKey         = "f10-base-tip"
 )
 
-// ModelKey is the model older starts recorded; AgentKey is the whole profile
-// (kind:model:effort) a start or drive gave the branch's agent, read back on
-// a rerun. Both absent for the kind's default.
-const (
-	ModelKey = "f10-model"
-	AgentKey = "f10-agent"
-)
+// AgentKey is the whole profile (kind:model:effort) a start or drive gave
+// the branch's agent, read back on a rerun; absent for the kind's default.
+const AgentKey = "f10-agent"
 
 // Separator joins a bundle's ids, `ABC-1+ABC-2`, lead first.
 const Separator = "+"

@@ -27,14 +27,8 @@ const excludeLine = ".f10/"
 
 func initCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "init",
-		Usage: "register this checkout: write .f10/instructions/project.md from what detection found",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "migrate",
-				Usage: "move the facts an existing project.md declares in prose into its frontmatter; deletes nothing",
-			},
-		},
+		Name:   "init",
+		Usage:  "register this checkout: write .f10/instructions/project.md from what detection found",
 		Action: runInit,
 	}
 }
@@ -46,10 +40,6 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	lay := t.lay
-
-	if cmd.Bool("migrate") {
-		return runMigrate(cmd.Writer, filepath.Join(lay.StorageRoot, "instructions", "project.md"))
-	}
 
 	path, err := destination(lay)
 	if err != nil {
@@ -186,76 +176,6 @@ func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	}
 
 	headerRow(w, "next", "write the Project line: what this project is, in a sentence", limit, plain)
-}
-
-// runMigrate leaves the superseded prose in place: it is the user's text,
-// theirs to delete once the block reads right.
-func runMigrate(w io.Writer, path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("%s: nothing to migrate - f10 init writes a new one", path)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	m, err := facts.Migrate(data, path)
-	if err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-
-	limit := termWidth(w)
-
-	if len(m.Moved) == 0 {
-		headerRow(w, "unchanged", path+" declares no fact in prose", limit, lipgloss.NewStyle())
-
-		return nil
-	}
-
-	if err := rewrite(path, m.Content, info.Mode().Perm()); err != nil {
-		return err
-	}
-
-	linkedHeaderRow(w, "wrote", path, wroteLink(w, path), limit, lipgloss.NewStyle())
-	headerRow(w, "moved", strings.Join(m.Moved, ", "), limit, lipgloss.NewStyle())
-
-	for i, where := range m.Superseded {
-		label := ""
-		if i == 0 {
-			label = "delete"
-		}
-
-		headerRow(w, label, where, limit, lipgloss.NewStyle().Faint(true))
-	}
-
-	for _, note := range m.Notes {
-		headerRow(w, "note", note, limit, lipgloss.NewStyle())
-	}
-
-	next := "delete that prose, then `f10 config` should show no warning"
-	if len(m.Superseded) == 0 {
-		next = "run `f10 config`: the moved facts should show as declared, with no warning"
-	}
-
-	headerRow(w, "next", next, limit, lipgloss.NewStyle())
-
-	return nil
-}
-
-func rewrite(path, content string, mode os.FileMode) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, mode)
-	if err != nil {
-		return fmt.Errorf("opening %s: %w", path, err)
-	}
-	defer f.Close()
-
-	if _, err := f.WriteString(content); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-
-	return f.Close()
 }
 
 // wroteLink is the file:// url of the written project.md, on a terminal only.

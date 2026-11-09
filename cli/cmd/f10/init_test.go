@@ -239,79 +239,8 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 	}
 }
 
-func TestInitMigrate(t *testing.T) {
-	isolateEnv(t)
-
-	repo := mkRepo(t)
-	path := filepath.Join(repo, ".f10", "instructions", "project.md")
-	prose := "# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n\n" +
-		"## Ship pipelines\n\n- **local**: `implement → commit`\n"
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(path, []byte(prose), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	out, err := runApp(t, "-C", repo, "init", "--migrate").outErr()
-	if err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	written, _ := os.ReadFile(path)
-	if !strings.HasPrefix(string(written), "---\n") || !strings.HasSuffix(string(written), prose) {
-		t.Errorf("want a block above the untouched prose:\n%s", written)
-	}
-
-	for _, want := range []string{"moved", "flows", "delete"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("report missing %q:\n%s", want, out)
-		}
-	}
-
-	if _, err := runApp(t, "-C", repo, "init", "--migrate").outErr(); err == nil ||
-		!strings.Contains(err.Error(), "already has") {
-		t.Errorf("a second migrate = %v", err)
-	}
-}
-
-// A frontmatter still saying review_traces is renamed to traces in place;
-// nothing is superseded, so the report points at config instead of at prose
-// to delete.
-func TestInitMigrateRenamesTraces(t *testing.T) {
-	isolateEnv(t)
-
-	repo := mkRepo(t)
-	path := filepath.Join(repo, ".f10", "instructions", "project.md")
-	md := "---\nreview_traces: on\n---\n# demo\n"
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(path, []byte(md), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	out, err := runApp(t, "-C", repo, "init", "--migrate").outErr()
-	if err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	written, _ := os.ReadFile(path)
-	if string(written) != "---\ntraces: on\n---\n# demo\n" {
-		t.Errorf("renamed file:\n%s", written)
-	}
-
-	if !strings.Contains(out, "traces") || strings.Contains(out, "delete") || !strings.Contains(out, "f10 config") {
-		t.Errorf("report:\n%s", out)
-	}
-}
-
-// A fact the two places declare differently stops the commands that act on
-// facts; config still runs, since it is how the problem is seen.
+// A value outside a key's vocabulary stops the commands that act on facts;
+// config still runs, since it is how the problem is seen.
 func TestDeclarationErrorStopsCommands(t *testing.T) {
 	isolateEnv(t)
 
@@ -322,7 +251,7 @@ func TestDeclarationErrorStopsCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	md := "---\nmerge_method: rebase\n---\n## Hosting & PR\n\nmerge method: squash\n"
+	md := "---\nmerge_method: fast-forward\n---\n## Hosting & PR\n\ngithub.com\n"
 	if err := os.WriteFile(path, []byte(md), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +265,7 @@ func TestDeclarationErrorStopsCommands(t *testing.T) {
 	}
 
 	out, err := run("config")
-	if err != nil || !strings.Contains(out, "error: merge_method") {
+	if err != nil || !strings.Contains(out, `merge_method: "fast-forward" is not one of`) {
 		t.Errorf("config = %v:\n%s", err, out)
 	}
 }

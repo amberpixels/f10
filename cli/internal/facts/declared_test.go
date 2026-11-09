@@ -1,14 +1,12 @@
 package facts
 
 import (
-	"errors"
 	"maps"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 )
@@ -16,25 +14,19 @@ import (
 func TestDecodeDeclared(t *testing.T) {
 	d, err := decodeDeclared([]byte(
 		"merge_method: squash\n" +
-			"pipelines:\n  default: implement → review (local) → pr\n  local: [implement, commit]\n" +
-			"planless: [local]\n" +
-			"drive_chain: plan -> ship, finish\n" +
+			"flows:\n  default: plan → implement → pr\n  local: [implement, commit]\n" +
 			"tracker: {kind: github, id: FT-###}\n",
 	))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got := strings.Join(d.Pipelines["default"], "|"); got != "implement|review (local)|pr" {
+	if got := strings.Join(d.Flows["default"], "|"); got != "plan|implement|pr" {
 		t.Errorf("arrow form = %q", got)
 	}
 
-	if got := strings.Join(d.Pipelines["local"], "|"); got != "implement|commit" {
+	if got := strings.Join(d.Flows["local"], "|"); got != "implement|commit" {
 		t.Errorf("list form = %q", got)
-	}
-
-	if got := strings.Join(d.DriveChain, "|"); got != "plan|ship|finish" {
-		t.Errorf("drive chain = %q", got)
 	}
 
 	if bad := d.check(); len(bad) > 0 {
@@ -45,12 +37,21 @@ func TestDecodeDeclared(t *testing.T) {
 		t.Error("an unknown key decoded")
 	}
 
+	// the keys flows and paces replaced are outside the contract
+	for _, old := range []string{
+		"drive_finish: on", "review_traces: on", "pipelines: {default: [implement]}",
+		"planless: [local]", "pipeline_by_area: {ui: local}", "drive_chain: plan ship",
+	} {
+		if _, err := decodeDeclared([]byte(old + "\n")); err == nil {
+			t.Errorf("%s decoded", old)
+		}
+	}
+
 	bad := Declared{
 		MergeMethod: "fast-forward",
 		Tracker:     TrackerDecl{ID: "tasks"},
-		Planless:    []string{"direct"},
 	}.check()
-	for _, want := range []string{"merge_method", "tracker.id", "planless"} {
+	for _, want := range []string{"merge_method", "tracker.id"} {
 		if !slices.ContainsFunc(bad, func(b string) bool { return strings.HasPrefix(b, want) }) {
 			t.Errorf("check misses %s: %v", want, bad)
 		}
@@ -84,7 +85,7 @@ func TestBuildFrontmatter(t *testing.T) {
 
 	if eff.Visibility != "public" || eff.TrackerKind != "GitLab work items" || eff.IDPrefix != "AB" ||
 		eff.MergeMethod != "rebase" || eff.Catchup != "merge" || eff.CatchupStacked != "rebase" || len(eff.Flows) != 2 ||
-		!eff.DriveFinish || !eff.WatchCatchup || eff.Review.Reviewer != "claude[bot]" {
+		!eff.WatchCatchup || eff.Review.Reviewer != "claude[bot]" {
 		t.Errorf("typed facts = %+v", eff)
 	}
 
@@ -115,45 +116,6 @@ func TestBuildFrontmatterLayersKeyByKey(t *testing.T) {
 	}
 }
 
-func TestBuildProseFallback(t *testing.T) {
-	eff := buildWith(t, "# demo\n\n## Hosting & PR\n\ngithub.com. **merge method**: `squash`.\n\n"+
-		"## Ship pipelines\n\n- **default**: `implement → pr`\n- **local**: implement → commit\n"+
-		"- **direct** (planless): `implement → push`\n\n## Drive chain\n\n`plan` → ship\n", "")
-
-	// the prose pipelines and chain convert to flows: the chain names no
-	// judge, review or finish, so nothing folds into default
-	if eff.MergeMethod != "squash" || eff.DriveFinish {
-		t.Errorf("merge method %q, drive finish %v", eff.MergeMethod, eff.DriveFinish)
-	}
-
-	if got := strings.Join(eff.Flows["direct"], " "); got != "implement push" {
-		t.Errorf("direct = %q, want it planless", got)
-	}
-
-	if got := strings.Join(eff.Flows["default"], " "); got != "plan implement pr" {
-		t.Errorf("default = %q", got)
-	}
-
-	if eff.Errors() != "" || len(eff.Problems) != 2 ||
-		!strings.Contains(eff.Problems[0].Message, "converted to flows") ||
-		!strings.Contains(eff.Problems[1].Message, "f10 init --migrate") {
-		t.Errorf("want a conversion and a migrate warning, got %+v", eff.Problems)
-	}
-}
-
-func TestBuildBothPlaces(t *testing.T) {
-	differ := buildWith(t, "---\nmerge_method: rebase\n---\n## Hosting & PR\n\nmerge method: squash\n", "")
-	if !strings.Contains(differ.Errors(), "merge_method") || differ.MergeMethod != "rebase" {
-		t.Errorf("a disagreement is not an error: %+v", differ.Problems)
-	}
-
-	same := buildWith(t, "---\nmerge_method: squash\n---\n## Hosting & PR\n\nmerge method: squash\n", "")
-	if same.Errors() != "" || len(same.Problems) != 1 ||
-		!strings.Contains(same.Problems[0].Message, "delete the prose") {
-		t.Errorf("agreeing places should warn once: %+v", same.Problems)
-	}
-}
-
 func TestBuildTrackerNameInCode(t *testing.T) {
 	eff := buildWith(t, "---\ntracker:\n  kind: github\n---\n"+
 		"## Tracker\n\n- **Create** - invoke the `create-notion-task` skill\n", "")
@@ -166,50 +128,6 @@ func TestBuildFrontmatterErrors(t *testing.T) {
 	eff := buildWith(t, "---\nmerge_method: fast\nshipping: yes\n---\n", "")
 	if !strings.Contains(eff.Errors(), "shipping") {
 		t.Errorf("errors = %q", eff.Errors())
-	}
-}
-
-func TestMigrate(t *testing.T) {
-	prose := "# demo\n\n## Visibility\n\nstealth\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n\n" +
-		"## Hosting & PR\n\nOpen PRs with gh. merge method: squash.\n\n" +
-		"## Ship pipeline(s)\n\n- **local**: `implement → commit`\n\n" +
-		"## Review\n\n- **Reviewer** - bot `claude[bot]`\n- **Arrives as** - issue comment\n" +
-		"- **Trigger** - automatic\n- **Done, handled** - posted, reaction `eyes`\n" +
-		"- **Settled** - reaction `rocket`\n"
-
-	m, err := Migrate([]byte(prose), "project.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	block, body, ok := frontmatter.Split([]byte(m.Content))
-	if !ok || string(body) != prose {
-		t.Fatalf("the prose did not survive under the block:\n%s", m.Content)
-	}
-
-	d, err := decodeDeclared(block)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if d.Visibility != "stealth" || d.Tracker.ID != "DM-###" || d.Tracker.Kind != "github" ||
-		d.MergeMethod != "squash" || strings.Join(d.Flows["local"], " ") != "plan implement commit" ||
-		strings.Join(
-			d.Flows["default"],
-			" ",
-		) != "plan judge implement pr review:ci" || d.DriveFinish != "" || d.Review.Reviewer != "bot `claude[bot]`" ||
-		d.Review.Settled != "reaction `rocket`" {
-		t.Errorf("migrated = %+v", d)
-	}
-
-	// the migrated file reads the same facts, now from the frontmatter
-	before, after := buildWith(t, prose, ""), buildWith(t, m.Content, "")
-	if before.Review != after.Review || before.MergeMethod != after.MergeMethod || before.IDPrefix != after.IDPrefix {
-		t.Errorf("facts drifted across the migration:\n%+v\n%+v", before, after)
-	}
-
-	if _, err := Migrate([]byte(m.Content), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
-		t.Errorf("a second migration = %v", err)
 	}
 }
 
@@ -350,41 +268,6 @@ func TestLore(t *testing.T) {
 	}
 }
 
-// review_traces, the old spelling, still reads as traces with a warning
-// naming the migration; folded per layer, so a worktree's old spelling
-// still overrides main's new one. Both in one layer is an error.
-func TestReviewTracesIsDeprecatedTraces(t *testing.T) {
-	old := buildWith(t, "---\nreview_traces: on\n---\n# demo\n", "")
-	if f := tracesFact(t, old); !old.Traces || f.Origin != "declared (main, frontmatter)" {
-		t.Errorf("old spelling = %v, %+v", old.Traces, f)
-	}
-
-	if old.Errors() != "" {
-		t.Errorf("the old spelling is an error: %q", old.Errors())
-	}
-
-	if !slices.ContainsFunc(old.Problems, func(p Problem) bool {
-		return !p.Error && strings.Contains(p.Message, "review_traces is now traces")
-	}) {
-		t.Errorf("no migration warning in %+v", old.Problems)
-	}
-
-	layered := buildWith(t, "---\ntraces: off\n---\n", "---\nreview_traces: on\n---\n")
-	if f := tracesFact(t, layered); !layered.Traces || f.Origin != "declared (worktree, frontmatter)" {
-		t.Errorf("worktree's old spelling lost to main = %v, %+v", layered.Traces, f)
-	}
-
-	both := buildWith(t, "---\ntraces: on\nreview_traces: off\n---\n", "")
-	if !strings.Contains(both.Errors(), "both declared") {
-		t.Errorf("errors = %q", both.Errors())
-	}
-
-	bad := buildWith(t, "---\nreview_traces: yes\n---\n", "")
-	if !strings.Contains(bad.Errors(), "review_traces") {
-		t.Errorf("errors = %q", bad.Errors())
-	}
-}
-
 // tracker.priority: a level outside the vocabulary or a label under two
 // levels is an error; an empty level is not.
 func TestTrackerPriority(t *testing.T) {
@@ -441,26 +324,6 @@ func TestTrackerPriority(t *testing.T) {
 	}
 }
 
-// A frontmatter block with the old spelling is renamed in place, nothing
-// else in the file moving; one without it has nothing left to migrate.
-func TestMigrateRenamesReviewTraces(t *testing.T) {
-	file := "---\n# traces first\nreview_traces: on\nmerge_method: squash\n---\n# demo\n\nreview_traces: in prose stays\n"
-
-	m, err := Migrate([]byte(file), "project.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := "---\n# traces first\ntraces: on\nmerge_method: squash\n---\n# demo\n\nreview_traces: in prose stays\n"
-	if m.Content != want || strings.Join(m.Moved, ",") != "traces" || len(m.Superseded) != 0 {
-		t.Errorf("migration = %+v", m)
-	}
-
-	if _, err := Migrate([]byte(want), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
-		t.Errorf("nothing left = %v", err)
-	}
-}
-
 // The report-back facts: the status map, the area map onto declared
 // flows, and report_back on unless declared off; a worktree's area map
 // replaces main's whole and may name main's flows.
@@ -511,16 +374,15 @@ func TestBuildReportBackFacts(t *testing.T) {
 	}
 }
 
-// catchup: off turns ship's guard off, declared in the frontmatter or in
-// the legacy Hosting & PR prose; an unknown method is still an error.
+// catchup: off turns ship's guard off; the Hosting & PR prose sets
+// nothing, and an unknown method is still an error.
 func TestCatchupOff(t *testing.T) {
-	for _, md := range []string{
-		"---\ncatchup: off\n---\n",
-		"# demo\n\n## Hosting & PR\n\ngithub.com. catchup: off\n",
-	} {
-		if eff := buildWith(t, md, ""); eff.Catchup != "off" || eff.Errors() != "" {
-			t.Errorf("%q: catchup %q, errors %q", md, eff.Catchup, eff.Errors())
-		}
+	if eff := buildWith(t, "---\ncatchup: off\n---\n", ""); eff.Catchup != "off" || eff.Errors() != "" {
+		t.Errorf("catchup %q, errors %q", eff.Catchup, eff.Errors())
+	}
+
+	if eff := buildWith(t, "# demo\n\n## Hosting & PR\n\ngithub.com. catchup: off\n", ""); eff.Catchup != "rebase" {
+		t.Errorf("prose catchup read: %q", eff.Catchup)
 	}
 
 	if eff := buildWith(t, "---\ncatchup: squash\n---\n", ""); !strings.Contains(eff.Errors(), "catchup") {
@@ -636,73 +498,6 @@ func TestTrackerTitle(t *testing.T) {
 
 	if none := buildWith(t, "---\ntracker: {id: FT-###}\n---\n", ""); none.TitleTemplate != "" {
 		t.Errorf("no key gave template %q", none.TitleTemplate)
-	}
-}
-
-// Under a block, --migrate adds each prose fact the block lacks, keeping
-// its order and comments, and leaves a fact both declare alone.
-func TestMigrateLiftsProseUnderABlock(t *testing.T) {
-	file := "---\n# kept\nvisibility: stealth\n---\n# demo\n\n## Hosting & PR\n\nOpen PRs with gh. merge method: squash.\n"
-
-	m, err := Migrate([]byte(file), "project.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.HasPrefix(m.Content, "---\n# kept\nvisibility: stealth\nmerge_method: squash\n---\n") ||
-		strings.Join(m.Moved, ",") != "merge_method" ||
-		strings.Join(m.Superseded, ",") != "merge_method: `merge method:` in the Hosting & PR section" {
-		t.Errorf("migration = %+v", m)
-	}
-
-	if eff := buildWith(t, m.Content, ""); slices.ContainsFunc(eff.Problems, func(p Problem) bool {
-		return strings.Contains(p.Message, "read from the prose")
-	}) {
-		t.Errorf("still read from prose: %+v", eff.Problems)
-	}
-
-	if _, err := Migrate([]byte(m.Content), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
-		t.Errorf("a second migration = %v", err)
-	}
-
-	both := "---\nmerge_method: squash\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n"
-	if _, err := Migrate([]byte(both), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
-		t.Errorf("a fact both declare = %v", err)
-	}
-
-	tracker := "---\ntracker: {kind: github}\n---\n# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n"
-
-	m, err = Migrate([]byte(tracker), "project.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	d, err := decodeDeclared([]byte(strings.Split(m.Content, "---\n")[1]))
-	if err != nil || d.Tracker.Kind != "github" || d.Tracker.ID != "DM-###" ||
-		strings.Join(m.Moved, ",") != "tracker.id" {
-		t.Errorf("tracker id not lifted into the mapping: %v %+v\n%s", err, m, m.Content)
-	}
-	// an empty or comment-only block, and a null tracker, still take the facts
-	for _, file := range []string{
-		"---\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n",
-		"---\n# only a comment\n---\n# demo\n\n## Hosting & PR\n\nmerge method: squash.\n",
-		"---\ntracker:\n---\n# demo\n\n## Tracker\n\nGitHub Issues. Task ids `DM-###`.\n",
-	} {
-		m, err := Migrate([]byte(file), "project.md")
-		if err != nil {
-			t.Errorf("%q: %v", file, err)
-
-			continue
-		}
-
-		eff := buildWith(t, m.Content, "")
-		proseRead := slices.ContainsFunc(eff.Problems, func(p Problem) bool {
-			return strings.Contains(p.Message, "read from the prose")
-		})
-		if eff.Errors() != "" || proseRead ||
-			strings.Contains(file, "comment") && !strings.Contains(m.Content, "---\n# only a comment\n") {
-			t.Errorf("%q migrated to\n%s\nproblems %+v", file, m.Content, eff.Problems)
-		}
 	}
 }
 

@@ -196,7 +196,7 @@ These are the terms the skills, and the rest of this README, use.
   Resolve re-verifies the fixes and puts every `ask` to you in one questionnaire.
   Your stated choice beats the reviewer.
   One round is the default.
-  A second round runs only when round one fixed six or more findings, when the run's pace says `review: { rounds: 2 }` (or, for a review outside a flow, `project.md → Review` says `Rounds: 2`), or when you ask for it.
+  A second round runs only when round one fixed six or more findings, when the run's pace says `review: { rounds: 2 }`, or when you ask for it.
   The second round reports on every prior finding first.
   There is no third round, so whatever is still open goes to you.
   A review is local (before the PR) or CI or human (after it), and each flow places it or leaves it out.

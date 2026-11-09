@@ -41,7 +41,7 @@ func driveCommand() *cli.Command {
 			"   f10 drive --resume N [--parallel N] [--answer [ID=]TEXT ...] | list [--all] | cancel N",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
-			"then finish when the pace's finish, else drive_finish, is on. A rerun keeps the flow a task's branch records.\n" +
+			"then finish unless the pace's finish is off. A rerun keeps the flow a task's branch records.\n" +
 			"--pace NAME runs every task at that pace (f10 config lists them), recorded on each branch so a rerun keeps it; " +
 			"a pace skips or tunes the flow's entries and never adds one.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
@@ -97,20 +97,15 @@ const (
 	cfgChain = "f10-chain"
 )
 
-// oldChainSkills are chain words typed after the ids, refused with a pointer
-// at the flow, which names the chain.
-var oldChainSkills = []string{"plan", "judge", "ship", "review", "resolve", "finish"}
-
-// driveChain is the skills drive prompts a task through; driveFinish is
-// the project's drive_finish, which a pace's finish word overrides.
-func driveChain(fl shipFlow, driveFinish bool) []string {
+// driveChain is the skills drive prompts a task through.
+func driveChain(fl shipFlow) []string {
 	var chain []string
 	if fl.plans() {
 		chain = append(chain, "plan")
 	}
 
 	chain = append(chain, "ship")
-	if fl.finishes(driveFinish) {
+	if fl.finishes() {
 		chain = append(chain, "finish")
 	}
 
@@ -135,15 +130,15 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		if a.list {
-			return driveList(ctx, cmd.Writer, linksFor(cmd.Writer, false), t.refProject(ctx), t.sharedRoot(), a.all,
+			return driveList(ctx, cmd.Writer, linksFor(cmd.Writer, false), t.refProject(ctx), t.lay.StorageRoot, a.all,
 				rowFinishedFor(ctx, t))
 		}
 
-		if err := driveCancel(cmd.Writer, t.sharedRoot(), a.cancel, time.Now()); err != nil {
+		if err := driveCancel(cmd.Writer, t.lay.StorageRoot, a.cancel, time.Now()); err != nil {
 			return err
 		}
 
-		closeDriveAsks(asks.Dir(), t.sharedRoot(), a.cancel, time.Now())
+		closeDriveAsks(asks.Dir(), t.lay.StorageRoot, a.cancel, time.Now())
 
 		return nil
 	}
@@ -170,7 +165,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
 	if a.resume > 0 {
-		rec, err := drives.Read(t.sharedRoot(), a.resume)
+		rec, err := drives.Read(t.lay.StorageRoot, a.resume)
 		if err != nil {
 			return err
 		}
@@ -200,7 +195,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	chain := driveChain(fl, t.eff.DriveFinish)
+	chain := driveChain(fl)
 
 	layers, err := agentLayers(t.eff, "")
 	if err != nil {
@@ -212,7 +207,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	h, hostErr := t.host()
 
 	if slices.Contains(chain, "finish") && hostErr != nil {
-		return fmt.Errorf("finish is on (the pace, or drive_finish), and finish merges through the host: %w", hostErr)
+		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
 	}
 
 	var pullOf func(context.Context, string) (pull, error)
@@ -223,7 +218,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in := &driveInput{
 		main:    main,
 		pull:    pullOf,
-		root:    t.sharedRoot(),
+		root:    t.lay.StorageRoot,
 		driver:  drv,
 		tracker: t.tracker(),
 		args:    a,
@@ -238,13 +233,12 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 			return resolvePacedFlow(t.eff, paces, p, fl.recorded())
 		},
-		driveFinish: t.eff.DriveFinish,
-		plansDir:    t.sharedPlansDir(),
-		settings:    claudeSettingsPath(),
-		layers:      layers,
-		title:       func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
-		started:     startedMove(t),
-		record:      recordAt,
+		plansDir: t.sharedPlansDir(),
+		settings: claudeSettingsPath(),
+		layers:   layers,
+		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		started:  startedMove(t),
+		record:   recordAt,
 		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
 			fin, err := driveFinishInput(t, main, h, req)
 			if err != nil {
@@ -347,8 +341,6 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 			continue
 		}
 
-		skill := strings.ToLower(strings.Trim(tok, ","))
-
 		switch {
 		case tok == "":
 			continue
@@ -366,11 +358,6 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 			}
 
 			a.span = true
-		case isArrow(tok):
-			continue
-		case slices.Contains(oldChainSkills, skill):
-			return driveArgs{}, fmt.Errorf("%s: drive takes no chain; it runs the project's flow "+
-				"(f10 flow lists them, --flow picks one), and drive_finish says whether it ends with finish", tok)
 		case strings.HasPrefix(tok, "-"):
 			return driveArgs{}, fmt.Errorf(
 				"unknown flag %s: drive takes --flow, --local, --pace, --agent, --model, --parallel, --answer, --every, --resume "+
@@ -543,10 +530,6 @@ func splitProfile(tok string) (string, string, error) {
 	return tok, "", nil
 }
 
-func isArrow(tok string) bool {
-	return tok == "→" || tok == "->" || tok == ","
-}
-
 // driveInput is everything drive needs once the target is settled, so the
 // flow can be tested without a checkout, a clock or a wait.
 type driveInput struct {
@@ -561,19 +544,18 @@ type driveInput struct {
 	resolve func(name string) (shipFlow, error) // a declared flow by name, at the run's pace
 	// paced is a flow at another pace, for a branch that records one; nil
 	// keeps the run's
-	paced       func(fl shipFlow, pace string) (shipFlow, error)
-	driveFinish bool     // drive_finish, which a pace's finish word overrides
-	plansDir    string   // the plans dir every checkout shares
-	settings    string   // claude's settings file, which names the model a bad --model falls back to
-	layers      agentMap // the user's and the project's agents map; nil for none
-	title       func(ref.Ref) func(context.Context) (string, error)
-	started     func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
-	finish      func(ctx context.Context, w io.Writer, req driveFinish) error
-	stateDir    string
-	session     string // the session that typed the command, inherited through the daemon's environment
-	ttl         time.Duration
-	now         func() time.Time
-	sleep       func(context.Context, time.Duration) error
+	paced    func(fl shipFlow, pace string) (shipFlow, error)
+	plansDir string   // the plans dir every checkout shares
+	settings string   // claude's settings file, which names the model a bad --model falls back to
+	layers   agentMap // the user's and the project's agents map; nil for none
+	title    func(ref.Ref) func(context.Context) (string, error)
+	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
+	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
+	stateDir string
+	session  string // the session that typed the command, inherited through the daemon's environment
+	ttl      time.Duration
+	now      func() time.Time
+	sleep    func(context.Context, time.Duration) error
 	// record puts an event in the ledger, placed in dir; nil records nothing
 	record func(ctx context.Context, dir string, e ledger.Event)
 	// pull reads a branch's PR on the host when the drive reconciles a
@@ -1701,7 +1683,7 @@ func (in *driveInput) chainFor(fl shipFlow) []string {
 		return in.chain
 	}
 
-	return driveChain(fl, in.driveFinish)
+	return driveChain(fl)
 }
 
 // keepPace: a run's --pace wins and is recorded on the branch, since a
@@ -2052,7 +2034,7 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 }
 
 // closeAfterShip adds finish to a spike's chain that lacks it: a spike close
-// merges nothing, which drive_finish gates, and a spike left open keeps its
+// merges nothing, which the pace's finish gates, and a spike left open keeps its
 // dependents on an empty base. status reads the recorded chain.
 func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) error {
 	r.chain = append(slices.Clone(r.chain), "finish")

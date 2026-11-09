@@ -54,12 +54,11 @@ type flowRow struct {
 }
 
 type flowView struct {
-	Pace        string            `json:"pace,omitempty"`
-	PaceOrigin  string            `json:"paceOrigin,omitempty"`
-	Ceiling     string            `json:"ceiling,omitempty"` // the cap on the pace, or why it does not apply
-	Flows       []flowRow         `json:"flows"`
-	DriveFinish bool              `json:"driveFinish"`
-	FlowByArea  map[string]string `json:"flowByArea,omitempty"`
+	Pace       string            `json:"pace,omitempty"`
+	PaceOrigin string            `json:"paceOrigin,omitempty"`
+	Ceiling    string            `json:"ceiling,omitempty"` // the cap on the pace, or why it does not apply
+	Flows      []flowRow         `json:"flows"`
+	FlowByArea map[string]string `json:"flowByArea,omitempty"`
 }
 
 func runFlow(ctx context.Context, cmd *cli.Command) error {
@@ -127,7 +126,7 @@ func flowsView(eff *facts.Effective) flowView {
 // pacedFlowsView is every flow with its entries under pace; a flow the
 // pace breaks keeps its declared entries and says why.
 func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flowView {
-	v := flowView{DriveFinish: eff.DriveFinish, FlowByArea: eff.FlowByArea, Pace: pace.name, PaceOrigin: pace.origin}
+	v := flowView{FlowByArea: eff.FlowByArea, Pace: pace.name, PaceOrigin: pace.origin}
 	v.Ceiling = ceilingShown(set, pace.name)
 
 	for _, name := range eff.FlowNames() {
@@ -257,7 +256,7 @@ func selectors(name string) []string {
 }
 
 func writeFlows(w io.Writer, v flowView) error {
-	width := len("drive_finish")
+	width := len("flow_by_area")
 	if v.Ceiling != "" {
 		width = max(width, len("ceiling"))
 	}
@@ -298,13 +297,6 @@ func writeFlows(w io.Writer, v flowView) error {
 		}
 	}
 
-	finish := "off: f10 drive stops after ship"
-	if v.DriveFinish {
-		finish = "on: f10 drive ends each task with finish"
-	}
-
-	fmt.Fprintf(&b, "%-*s  %s\n", width, "drive_finish", finish)
-
 	for _, area := range sortedKeys(v.FlowByArea) {
 		fmt.Fprintf(&b, "%-*s  %s runs %s\n", width, "flow_by_area", area, v.FlowByArea[area])
 	}
@@ -333,17 +325,13 @@ type shipFlow struct {
 	planless bool
 	byArea   bool
 	pace     string // the pace it runs at, "" for none
-	finish   string // the pace's finish for a run ending at a PR: on, off, or "" to leave drive_finish
+	finish   string // the pace's finish for a run ending at a PR: on, off, or "" for none
 }
 
 // finishes says whether drive ends the task with finish: the pace's word
-// when it has one, else drive_finish.
-func (f shipFlow) finishes(driveFinish bool) bool {
-	if f.finish != "" {
-		return f.finish == "on"
-	}
-
-	return driveFinish
+// when it has one, else on, so a drive merges what it ships.
+func (f shipFlow) finishes() bool {
+	return f.finish != "off"
 }
 
 func (f shipFlow) word() string {
@@ -403,8 +391,8 @@ func resolvePacedFlow(eff *facts.Effective, set *facts.PaceSet, pace, name strin
 
 	if name == "" && len(eff.FlowByArea) > 0 {
 		// ship picks the flow, so whether it ends at a PR, and so whether
-		// the pace's finish applies, is unknown: drive_finish decides, unless
-		// the ceiling forbids finishing, which holds whatever the flow
+		// the pace's finish applies, is unknown: drive finishes, unless the
+		// ceiling forbids finishing, which holds whatever the flow
 		fl := shipFlow{byArea: true, pace: pace}
 		if _, caps := set.Capped(pace); caps[facts.PaceFinishKey].Value == "off" {
 			fl.finish = "off"

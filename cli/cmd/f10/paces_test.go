@@ -75,9 +75,12 @@ func TestFlowUnderAPace(t *testing.T) {
 		}
 	}
 
-	// no pace named: medium, empty, so the flow as declared, an entry per line
-	if out := runApp(t, "-C", repo, "flow", "default").must(t); out != "pace: medium (default)\n"+strings.ReplaceAll(
-		"plan judge implement cleanup pr review:local judge pr", " ", "\n")+"\n" {
+	// no pace named: medium, which only finishes, so the flow as declared,
+	// an entry per line, then its finish
+	want := "pace: medium (default)\n" +
+		strings.ReplaceAll("plan judge implement cleanup pr review:local judge pr", " ", "\n") +
+		"\nfinish        on (pace medium (built-in))\n"
+	if out := runApp(t, "-C", repo, "flow", "default").must(t); out != want {
 		t.Errorf("no pace:\n%s", out)
 	}
 
@@ -124,30 +127,26 @@ func TestPaceUserFileRefused(t *testing.T) {
 }
 
 // A pace that skips plan drops /f10:plan from drive's chain, and its
-// finish word beats drive_finish.
+// finish word decides whether the chain ends in finish.
 func TestPaceShapesTheDriveChain(t *testing.T) {
 	eff := &facts.Effective{Flows: map[string][]string{"default": strings.Fields("plan judge implement pr")}}
 	set := facts.NewPaceSet()
 
 	for pace, want := range map[string]string{
-		"":      "plan ship",
-		"fast":  "plan ship finish",
-		"slow":  "plan ship",
-		"ultra": "ship finish",
+		"":       "plan ship finish",
+		"medium": "plan ship finish",
+		"fast":   "plan ship finish",
+		"slow":   "plan ship",
+		"ultra":  "ship finish",
 	} {
 		fl, err := resolvePacedFlow(eff, set, pace, "")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveChain(fl, false), " "); got != want {
+		if got := strings.Join(driveChain(fl), " "); got != want {
 			t.Errorf("%q: chain %q, want %q", pace, got, want)
 		}
-	}
-
-	slow, _ := resolvePacedFlow(eff, set, "slow", "")
-	if got := strings.Join(driveChain(slow, true), " "); got != "plan ship" {
-		t.Errorf("slow's finish off under drive_finish on = %q", got)
 	}
 }
 
@@ -307,7 +306,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveChain(fl, true), " "); got != "plan ship" {
+		if got := strings.Join(driveChain(fl), " "); got != "plan ship" {
 			t.Errorf("%s under finish off: %q", pace, got)
 		}
 	}
@@ -319,7 +318,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := strings.Join(driveChain(fl, false), " "); got != "plan ship finish" {
+	if got := strings.Join(driveChain(fl), " "); got != "plan ship finish" {
 		t.Errorf("excepted fast: %q", got)
 	}
 }

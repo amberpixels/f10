@@ -272,16 +272,7 @@ func (t *target) trackerDeclared() bool {
 }
 
 func (t *target) sharedPlansDir() string {
-	return filepath.Join(t.sharedRoot(), "plans")
-}
-
-// sharedRoot is the storage root every checkout shares.
-func (t *target) sharedRoot() string {
-	if t.lay.LegacyStorage && t.lay.MainRoot != "" {
-		return filepath.Join(t.lay.MainRoot, ".f10")
-	}
-
-	return t.lay.StorageRoot
+	return filepath.Join(t.lay.StorageRoot, "plans")
 }
 
 // outOfTree says the storage root is ~/.f10/<project>, outside every checkout.

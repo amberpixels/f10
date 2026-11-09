@@ -222,13 +222,8 @@ func loreNote(store *lore.Store, change string) string {
 	return "lore: " + strings.Join(parts, ", ")
 }
 
-// localLoreRoot is shared by every checkout: main's, when a worktree still
-// keeps its own .f10.
+// localLoreRoot is the lore dir every checkout shares.
 func localLoreRoot(lay *layout.Layout) string {
-	if lay.LegacyStorage && lay.MainRoot != "" {
-		return filepath.Join(lay.MainRoot, ".f10", "lore")
-	}
-
 	return filepath.Join(lay.StorageRoot, "lore")
 }
 

@@ -1,9 +1,6 @@
 package ref
 
-import (
-	"strconv"
-	"strings"
-)
+import "strings"
 
 // FinishKey is `f10 drive`'s record, beside TaskKey, of where its finish of
 // the branch stands. Whether the drive still runs is its task's lease, never
@@ -37,17 +34,9 @@ func (d DriveFinish) Running() bool {
 }
 
 // ParseDriveFinish reads FinishKey's value; false for one that is empty
-// or malformed. A leading pid, as an older drive wrote, is skipped.
+// or malformed.
 func ParseDriveFinish(s string) (DriveFinish, bool) {
-	s = strings.TrimSpace(s)
-
-	if first, rest, ok := strings.Cut(s, " "); ok {
-		if _, err := strconv.Atoi(first); err == nil {
-			s = strings.TrimSpace(rest)
-		}
-	}
-
-	st, action, _ := strings.Cut(s, " ")
+	st, action, _ := strings.Cut(strings.TrimSpace(s), " ")
 	st = strings.TrimSuffix(st, ":")
 
 	if st != FinishQueued && st != FinishRunning {

@@ -718,7 +718,7 @@ func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
 		host:   h,
 	}
 
-	src.shared = t.sharedRoot()
+	src.shared = t.lay.StorageRoot
 	src.driveFlows = driveFlows(src.shared)
 
 	return src

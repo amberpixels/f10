@@ -15,7 +15,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -96,7 +95,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	}
 
 	pattern := `^branch\..*\.(` + strings.Join(
-		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.AgentKey, ref.FinishKey},
+		[]string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.AgentKey, ref.FinishKey},
 		"|",
 	) + `)$`
 
@@ -108,7 +107,7 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 	for _, e := range entries {
 		rest := strings.TrimPrefix(e.Key, "branch.")
 
-		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.ModelKey, ref.AgentKey, ref.FinishKey} {
+		for _, key := range []string{ref.TaskKey, ref.RidersKey, ref.AfterKey, ref.AgentKey, ref.FinishKey} {
 			name, ok := strings.CutSuffix(rest, "."+key)
 			if !ok {
 				continue
@@ -123,11 +122,6 @@ func collectLocal(ctx context.Context, in LocalInputs, prefix string, now time.T
 				b.Riders = strings.Fields(e.Value)
 			case ref.AfterKey:
 				b.After = e.Value
-			case ref.ModelKey:
-				// the record from before profiles; a profile on the same branch wins
-				if b.Model == "" {
-					b.Model = e.Value
-				}
 			case ref.AgentKey:
 				p := agentctl.ParseRecorded(e.Value)
 				b.Model, b.Agent = p.Model, p.Short()
@@ -364,20 +358,16 @@ func dirEntries(dir string) []fs.DirEntry {
 	return entries
 }
 
-// storageRoots are the .f10 dirs holding task files: the shared root plus
-// any worktree's own that still holds some; with no shared root, every
-// checkout's.
+// storageRoots are the .f10 dirs holding task files: the shared root, or
+// with none, every checkout's.
 func storageRoots(shared string, wts []gitx.Worktree) []string {
-	var roots []string
 	if shared != "" {
-		roots = append(roots, shared)
+		return []string{shared}
 	}
 
+	roots := make([]string, 0, len(wts))
 	for _, wt := range wts {
-		root := filepath.Join(wt.Path, ".f10")
-		if shared == "" || (canon(root) != canon(shared) && layout.HoldsTaskFiles(root)) {
-			roots = append(roots, root)
-		}
+		roots = append(roots, filepath.Join(wt.Path, ".f10"))
 	}
 
 	return roots

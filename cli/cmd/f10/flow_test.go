@@ -25,7 +25,7 @@ func TestFlowAndConfigAgree(t *testing.T) {
 	}
 
 	if err := os.WriteFile(path, []byte("---\nflows:\n  default: plan judge implement pr\n"+
-		"  local: plan implement commit\n  direct: implement push\ndrive_finish: on\n---\n"), 0o600); err != nil {
+		"  local: plan implement commit\n  direct: implement push\n---\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,7 +39,7 @@ func TestFlowAndConfigAgree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(flows.Flows) != 3 || flows.Flows[0].Name != "default" || !flows.DriveFinish || !config.DriveFinish {
+	if len(flows.Flows) != 3 || flows.Flows[0].Name != "default" {
 		t.Fatalf("flows = %+v", flows)
 	}
 
@@ -52,7 +52,6 @@ func TestFlowAndConfigAgree(t *testing.T) {
 	human := runApp(t, "-C", repo, "flow").must(t)
 	for _, want := range []string{
 		"(f10 start, f10 drive)", "(--local, --flow local)", "(--flow direct)",
-		"drive_finish  on: f10 drive ends each task with finish",
 	} {
 		if !strings.Contains(human, want) {
 			t.Errorf("f10 flow misses %q:\n%s", want, human)
@@ -116,7 +115,7 @@ func TestCompletingFlow(t *testing.T) {
 // planless run still plans a task whose recorded flow leads with plan.
 func TestChainForAKeptFlow(t *testing.T) {
 	direct := shipFlow{name: "direct", planless: true}
-	in := &driveInput{flow: direct, chain: driveChain(direct, true), driveFinish: true}
+	in := &driveInput{flow: direct, chain: driveChain(direct)}
 
 	if got := strings.Join(in.chainFor(direct), " "); got != "ship finish" {
 		t.Errorf("the run's own flow = %q", got)
@@ -148,7 +147,7 @@ func TestFlowByArea(t *testing.T) {
 		t.Errorf("prompt = %q, want ship alone", got)
 	}
 
-	if got := strings.Join(driveChain(fl, false), " "); got != "ship" {
+	if got := strings.Join(driveChain(fl), " "); got != "ship finish" {
 		t.Errorf("drive chain = %q, want ship plans as the area's flow says", got)
 	}
 
@@ -179,9 +178,10 @@ func TestFlowPrintsEntryLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// medium's finish line follows the last entry
 	lines := strings.Split(strings.TrimSpace(runApp(t, "-C", repo, "flow", "default").must(t)), "\n")
-	if last := lines[len(lines)-1]; last != "pr[pr-polish]" {
-		t.Errorf("f10 flow default ends %q, want pr[pr-polish]:\n%s", last, strings.Join(lines, "\n"))
+	if last := lines[len(lines)-2]; last != "pr[pr-polish]" {
+		t.Errorf("f10 flow default's last entry is %q, want pr[pr-polish]:\n%s", last, strings.Join(lines, "\n"))
 	}
 
 	paced := runApp(t, "-C", repo, "flow", "default", "--pace", "fast").must(t)

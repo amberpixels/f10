@@ -80,7 +80,7 @@ func TestParity(t *testing.T) {
 			},
 		},
 		{
-			name: "worktree replacing main",
+			name: "worktree whose prose Layering line still extends main",
 			setup: func(t *testing.T, _ string) string {
 				t.Helper()
 				repo := mkRepo(t)
@@ -101,19 +101,6 @@ func TestParity(t *testing.T) {
 				wt := addWorktree(t, repo)
 				writeInstr(t, wt, map[string]string{
 					"project.md": "---\nlayering: replaces\n---\n# Go rewrite\n",
-				})
-				return wt
-			},
-		},
-		{
-			name: "worktree replacing main, Layering in a code span",
-			setup: func(t *testing.T, _ string) string {
-				t.Helper()
-				repo := mkRepo(t)
-				writeInstr(t, repo, map[string]string{"project.md": "- **Project** - main\n"})
-				wt := addWorktree(t, repo)
-				writeInstr(t, wt, map[string]string{
-					"project.md": "- `Layering`: replaces main\n- **Project** - Go rewrite\n",
 				})
 				return wt
 			},

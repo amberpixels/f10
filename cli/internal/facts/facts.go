@@ -81,7 +81,6 @@ type Effective struct {
 	Flows          map[string][]string `json:"flows"`                 // a flow's name to its entries, in the colon form
 	FlowLabels     map[string][]string `json:"flowLabels,omitempty"`  // a flow's name to its entries' display labels by index; only flows with one
 	FlowByArea     map[string]string   `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
-	DriveFinish    bool                `json:"driveFinish"`           // drive_finish: f10 drive ends each task with finish
 	DriveEnv       []string            `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
 	Watch          string              `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
 	WatchCatchup   bool                `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
@@ -115,9 +114,6 @@ type Effective struct {
 	// with how they were declared.
 	Facts    []Fact    `json:"facts"`
 	Problems []Problem `json:"problems,omitempty"`
-
-	proseRead [][2]string // file, key: a fact settled from prose
-	twice     [][2]string // file, key: a fact both places declare alike
 }
 
 // contractFields is the project.md contract, in presentation order: the
@@ -142,23 +138,17 @@ func canonicalName(declared string) string {
 	}, norm)
 
 	aliases := map[string]string{
-		"project":       "Project",
-		"layering":      "Layering",
-		"roles":         "Roles",
-		"tracker":       "Tracker",
-		"hosting":       "Hosting & PR",
-		"hostingpr":     "Hosting & PR",
-		"shippipeline":  "Ship pipeline(s)",
-		"shippipelines": "Ship pipeline(s)",
-		"pipeline":      "Ship pipeline(s)",
-		"pipelines":     "Ship pipeline(s)",
-		"drivechain":    "Drive chain",
-		"chain":         "Drive chain",
-		"verify":        "Verify",
-		"review":        "Review",
-		"guardrails":    "Guardrails",
-		"visibility":    "Visibility",
-		"storage":       "Storage",
+		"project":    "Project",
+		"layering":   "Layering",
+		"roles":      "Roles",
+		"tracker":    "Tracker",
+		"hosting":    "Hosting & PR",
+		"hostingpr":  "Hosting & PR",
+		"verify":     "Verify",
+		"review":     "Review",
+		"guardrails": "Guardrails",
+		"visibility": "Visibility",
+		"storage":    "Storage",
 	}
 
 	return aliases[norm]
@@ -204,13 +194,6 @@ func Build(lay *layout.Layout, pb *probe.Probes) *Effective {
 			for _, bad := range d.check() {
 				problems = append(problems, Problem{Error: true, Message: file + " frontmatter: " + bad})
 			}
-
-			folded, p, found := d.foldTraces(file)
-			if found {
-				problems = append(problems, p)
-			}
-
-			d = folded
 
 			fm.merge(d, layer.Label)
 		}

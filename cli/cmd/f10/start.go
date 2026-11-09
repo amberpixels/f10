@@ -81,7 +81,6 @@ const (
 	cfgLanded      = ref.LandedKey
 	cfgMoved       = ref.MovedKey
 	cfgTip         = ref.TipKey
-	cfgModel       = ref.ModelKey
 	cfgAgent       = ref.AgentKey
 	cfgTaskID      = ref.TaskKey
 	cfgRiders      = ref.RidersKey
@@ -273,7 +272,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	watchProject(ctx, cmd.ErrWriter, t)
 
-	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.sharedRoot(), janitorStamp), time.Now(),
+	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot, janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 
 	return nil
@@ -1193,15 +1192,9 @@ func recordTip(ctx context.Context, dir, branch, base string) error {
 	return nil
 }
 
-// promptAgent prompts the task's agent in the worktree at path, falling back
-// to the bare name an agent started before the path hash still answers to.
-func promptAgent(ctx context.Context, path, id, suffix, text string) error {
-	_, err := promptAgentAs(ctx, path, id, suffix, text)
-
-	return err
-}
-
-// promptAgentAs is promptAgent, also naming the agent that took the text.
+// promptAgentAs prompts the task's agent in the worktree at path, falling
+// back to the bare name an agent started before the path hash still answers
+// to, and names the agent that took the text.
 func promptAgentAs(ctx context.Context, path, id, suffix, text string) (string, error) {
 	agent := agents(path)
 	name := agentctl.AgentName(id, suffix, path)

@@ -101,7 +101,7 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 		return runWatchPass(ctx, cmd, t)
 	}
 
-	store, err := loadWatchStore(t.sharedRoot())
+	store, err := loadWatchStore(t.lay.StorageRoot)
 	if err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 	}
 
 	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	root := t.sharedRoot()
+	root := t.lay.StorageRoot
 
 	in := watchInput{
 		main:     main,
@@ -296,7 +296,7 @@ var watchProject = func(ctx context.Context, w io.Writer, t *target) {
 
 	_, err = daemon.Call(ctx, dir, daemon.Request{
 		Op:   daemon.OpWatch,
-		Root: t.sharedRoot(),
+		Root: t.lay.StorageRoot,
 		Dir:  cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
 		Env:  driveEnv(os.Environ(), t.eff.DriveEnv),
 	}, 0)

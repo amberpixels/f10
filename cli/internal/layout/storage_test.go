@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
+// Main's .f10 is every worktree's storage root, even one whose own .f10
+// holds task files.
 func TestStorageRoot(t *testing.T) {
 	cases := []struct {
-		name       string
-		setup      func(t *testing.T, repo, wt string)
-		wantOwn    bool // the worktree's own .f10, else main's
-		wantLegacy bool
+		name  string
+		setup func(t *testing.T, repo, wt string)
 	}{
 		{name: "worktree with no .f10", setup: func(*testing.T, string, string) {}},
 		{
@@ -27,8 +27,6 @@ func TestStorageRoot(t *testing.T) {
 				t.Helper()
 				mkdir(t, filepath.Join(wt, ".f10", "verdicts"))
 			},
-			wantOwn:    true,
-			wantLegacy: true,
 		},
 	}
 
@@ -40,16 +38,8 @@ func TestStorageRoot(t *testing.T) {
 			wt := addWorktree(t, repo)
 			tc.setup(t, repo, wt)
 
-			lay := Locate(t.Context(), wt)
-
-			want := filepath.Join(repo, ".f10")
-			if tc.wantOwn {
-				want = filepath.Join(wt, ".f10")
-			}
-
-			if lay.StorageRoot != want || lay.LegacyStorage != tc.wantLegacy {
-				t.Errorf("Locate = %q, legacy %v; want %q, legacy %v",
-					lay.StorageRoot, lay.LegacyStorage, want, tc.wantLegacy)
+			if lay := Locate(t.Context(), wt); lay.StorageRoot != filepath.Join(repo, ".f10") {
+				t.Errorf("Locate = %q, want main's .f10", lay.StorageRoot)
 			}
 		})
 	}

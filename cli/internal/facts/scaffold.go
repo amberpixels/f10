@@ -1,8 +1,12 @@
 package facts
 
 import (
+	"bytes"
+	"fmt"
 	"slices"
 	"strings"
+
+	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -139,4 +143,46 @@ func verifyBody(pb *probe.Probes) string {
 	}
 
 	return strings.Join(commands, " / ")
+}
+
+// renderDeclared writes a frontmatter block, fences included, or "" when
+// nothing is declared.
+func renderDeclared(d Declared) (string, error) {
+	if isEmpty(d) {
+		return "", nil
+	}
+
+	var b bytes.Buffer
+
+	enc := yaml.NewEncoder(&b)
+	enc.SetIndent(2)
+
+	if err := enc.Encode(d); err != nil {
+		return "", fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	if err := enc.Close(); err != nil {
+		return "", fmt.Errorf("rendering frontmatter: %w", err)
+	}
+
+	return "---\n" + b.String() + "---\n", nil
+}
+
+func isEmpty(d Declared) bool {
+	return d.Visibility == "" && d.Storage == "" && d.Layering == "" && d.Tracker.empty() &&
+		d.MergeMethod == "" && d.Catchup == "" && d.CatchupStacked == "" && d.Traces == "" && d.Lore == "" && d.StaleAfter == "" && d.DriverTimeout == "" &&
+		d.Flows == nil && d.FlowByArea == nil && d.DriveEnv == nil && d.Watch == "" && d.WatchCatchup == "" &&
+		d.ReportBack == "" && d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil &&
+		d.Verify == nil && d.Agents == nil && d.Paces == nil && d.Pace == "" && d.Ceiling == nil
+}
+
+// kindKey is the frontmatter word for a tracker kind's shown name.
+func kindKey(kind string) string {
+	for key, name := range trackerKinds {
+		if name == kind {
+			return key
+		}
+	}
+
+	return ""
 }

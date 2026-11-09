@@ -1,7 +1,6 @@
 package facts
 
 import (
-	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -79,7 +78,7 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 	fm.merge(decodePaces(t, "paces:\n  fast: { review: { rounds: 1, depth: light } }\n"), "worktree")
 
 	e := &Effective{Flows: map[string][]string{"default": strings.Fields(DefaultFlow)}}
-	e.resolvePaces(&fm, section{})
+	e.resolvePaces(&fm)
 
 	if got := e.Paces["fast"]; got["review"].Depth != "light" || !got["judge"].Off {
 		t.Errorf("fast = %+v", got)
@@ -106,7 +105,7 @@ func TestResolveFlow(t *testing.T) {
 		pace, run, finish string
 	}{
 		{"", "plan judge implement cleanup pr review:local judge pr", ""},
-		{"medium", "plan judge implement cleanup pr review:local judge pr", ""},
+		{"medium", "plan judge implement cleanup pr review:local judge pr", "on"},
 		{"slow", "plan judge implement cleanup pr review:local judge pr", "off"}, // the argument keeps local
 		{"fast", "plan judge implement cleanup pr review:local judge pr", "on"},
 		{"ultra", "implement pr review:local pr", "on"},
@@ -317,7 +316,7 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 	fm.merge(decodePaces(t, "ceiling: { judge: { effort: high }, except: [fast] }\n"), "worktree")
 
 	e := &Effective{Flows: map[string][]string{"default": strings.Fields(DefaultFlow)}}
-	e.resolvePaces(&fm, section{})
+	e.resolvePaces(&fm)
 
 	if e.Ceiling["finish"].Finish != "off" || e.Ceiling["judge"].Effort != "high" ||
 		strings.Join(e.CeilingExcept, ",") != "fast" {
@@ -427,86 +426,6 @@ func dialValue(dials []Dial, name string) string {
 	}
 
 	return ""
-}
-
-// drive_finish and a Rounds line read as the default pace's dials, with a
-// warning; a dial the paces declare wins.
-func TestOldPaceKeysConvert(t *testing.T) {
-	eff := buildWith(t, "---\ndrive_finish: off\n---\n# demo\n\n## Review\n\nRounds: 2\n", "")
-
-	if eff.Paces["medium"]["finish"].Finish != "off" || eff.Paces["medium"]["review"].Rounds != 2 {
-		t.Errorf("medium = %+v", eff.Paces["medium"])
-	}
-
-	if !strings.HasPrefix(eff.PacesOrigin["medium.finish"], "converted from drive_finish") ||
-		!strings.HasPrefix(eff.PacesOrigin["medium.review"], "converted from Rounds: 2") {
-		t.Errorf("origins = %v", eff.PacesOrigin)
-	}
-
-	if len(eff.Problems) != 2 ||
-		!strings.Contains(eff.Problems[0].Message+eff.Problems[1].Message, "f10 init --migrate") {
-		t.Errorf("problems = %+v", eff.Problems)
-	}
-
-	slow := buildWith(
-		t,
-		"---\npace: slow\npaces:\n  slow: { review: { by: ci } }\n---\n# demo\n\n## Review\n\n- **Rounds**: 2\n",
-		"",
-	)
-	if r := slow.Paces["slow"]["review"]; r.By != "ci" || r.Rounds != 2 {
-		t.Errorf("slow review = %+v", r)
-	}
-
-	both := buildWith(t, "---\ndrive_finish: off\npaces:\n  medium: { finish: on }\n---\n# demo\n", "")
-	if both.Paces["medium"]["finish"].Finish != "on" || len(both.Problems) != 1 ||
-		!strings.Contains(both.Problems[0].Message, "drive_finish ignored") {
-		t.Errorf("finish %+v, problems %+v", both.Paces["medium"], both.Problems)
-	}
-}
-
-// --migrate moves drive_finish and a Rounds line into the default pace,
-// keeping comments, and a second run has nothing to do.
-func TestMigratePaces(t *testing.T) {
-	file := "---\n# merges\ndrive_finish: off\nmerge_method: squash\n---\n# demo\n\n## Review\n\nRounds: 2\n"
-
-	m, err := Migrate([]byte(file), "project.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := "---\n# merges\npaces:\n  medium:\n    finish: off\n    review:\n      rounds: 2\nmerge_method: squash\n---\n"
-	if !strings.HasPrefix(m.Content, want) {
-		t.Errorf("content =\n%s\nwant prefix\n%s", m.Content, want)
-	}
-
-	if strings.Join(m.Moved, ",") != "paces" || len(m.Superseded) != 1 || len(m.Notes) != 1 ||
-		!strings.Contains(m.Notes[0], "ceiling") {
-		t.Errorf("moved %v, superseded %v, notes %v", m.Moved, m.Superseded, m.Notes)
-	}
-
-	if _, err := Migrate([]byte(m.Content), "project.md"); !errors.Is(err, ErrHasFrontmatter) {
-		t.Errorf("a second migration = %v", err)
-	}
-
-	// the half shorthand becomes a map beside rounds, on the declared pace
-	fast, err := Migrate(
-		[]byte("---\npace: fast\npaces:\n  fast: { review: local }\n---\n# demo\n\n## Review\n\nRounds: 2\n"),
-		"project.md",
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	d, err := decodeDeclared([]byte(strings.Split(fast.Content, "---\n")[1]))
-	if err != nil || d.Paces["fast"]["review"].By != "local" || d.Paces["fast"]["review"].Rounds != 2 {
-		t.Errorf("fast = %+v, %v\n%s", d.Paces["fast"], err, fast.Content)
-	}
-
-	// drive_finish on is what medium already does: the key goes, no dial
-	on, err := Migrate([]byte("---\ndrive_finish: on\nmerge_method: squash\n---\n"), "project.md")
-	if err != nil || on.Content != "---\nmerge_method: squash\n---\n" {
-		t.Errorf("on = %+v, %v", on, err)
-	}
 }
 
 // An optional CI review settles where the flow resolves: kept with a remote

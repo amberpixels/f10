@@ -127,15 +127,8 @@ here="$(canon "${here:-$(pwd -P)}")"
 main="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
 if [ -n "${main:-}" ]; then main="$(canon "$main")"; fi
 proj="$(basename "${main:-$here}")"
-storage="$here/.f10"
-
-# in-repo storage is main's .f10 for every checkout, so removing a worktree loses nothing; a
-# worktree whose own .f10 already holds task files predates that and keeps them until it finishes
-legacy=""
-if [ -n "${main:-}" ] && [ "$here" != "$main" ]; then
-  for d in plans reviews verdicts spikes; do [ -d "$here/.f10/$d" ] && legacy=1; done
-  [ -n "$legacy" ] || storage="$main/.f10"
-fi
+# in-repo storage is main's .f10 for every checkout, so removing a worktree loses nothing
+storage="${main:-$here}/.f10"
 
 # the base layer is main's, or simply this checkout's where git cannot name a main worktree
 base_label="main"
@@ -155,18 +148,12 @@ frontmatter_key() {
     NR > 1 && index($0, key ":") == 1 { sub("^" key ":[[:space:]]*", ""); print; exit }' "$1" 2>/dev/null
 }
 
-# `layering: replaces` in the worktree's frontmatter (or, for one release, a `Layering - replaces
-# main` prose line) drops main's layer; anything else extends it. Always extending would leak
-# main's stack into a worktree that rewrote it.
+# `layering: replaces` in the worktree's frontmatter drops main's layer; anything else extends
+# it. Always extending would leak main's stack into a worktree that rewrote it.
 layering="extends"
 if [ -n "$wt_instr" ] && [ -n "$base_instr" ]; then
   decl="$(frontmatter_key "$wt_instr/project.md" layering)"
-  if [ -z "$decl" ]; then
-    # shellcheck disable=SC2016 # deliberate: the backtick is a literal code mark around the word
-    decl="$(grep -im1 -E '^[[:space:]]*[-*#]*[[:space:]]*[*_`]*Layering[*_`]*[[:space:]]*[-:]' \
-      "$wt_instr/project.md" 2>/dev/null)"
-  fi
-  case "$decl" in *[Rr]eplaces*) layering="replaces" ;; esac
+  case "$decl" in *replaces*) layering="replaces" ;; esac
 fi
 
 l1_label=""
@@ -215,7 +202,7 @@ print_layer() {
     cat "$2/project.md"
     echo
     if [ "$(head -n1 "$2/project.md" | tr -d '[:space:]')" != "---" ]; then
-      echo "note: this project.md has no frontmatter; the binary reads its facts from prose for one release (\`f10 init --migrate\`)"
+      echo "note: this project.md has no frontmatter, so the binary reads none of its facts and takes every default"
     fi
   fi
   for s in $steps; do
@@ -268,9 +255,6 @@ if [ -n "$l1_dir" ]; then
   echo "instructions files: $files"
 fi
 echo "storage root: $storage  (plans -> $storage/plans/)"
-if [ -n "$legacy" ] && [ "$storage" = "$here/.f10" ]; then
-  echo "note: storage is this worktree's own .f10 - it holds task files from before storage moved to main's"
-fi
 # a config below the root is not a per-directory config - say so rather than pass it over silently
 if [ "$(canon "$cwd")" != "$here" ] && [ -d "$cwd/.f10/instructions" ]; then
   echo "note: ignoring nested $cwd/.f10/instructions - loading is anchored to the checkout root"

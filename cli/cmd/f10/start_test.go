@@ -133,10 +133,8 @@ func (f *fakes) answer(key string) shell.Result {
 			return shell.Result{}
 		}
 
-		// no branch records an agent profile, nor a model from before profiles,
-		// until a test says so
-		if strings.HasPrefix(key, "git config --get branch.") &&
-			(strings.HasSuffix(key, "."+cfgAgent) || strings.HasSuffix(key, "."+cfgModel)) {
+		// no branch records an agent profile until a test says so
+		if strings.HasPrefix(key, "git config --get branch.") && strings.HasSuffix(key, "."+cfgAgent) {
 			return shell.Result{}
 		}
 

@@ -3,7 +3,6 @@ package facts
 import (
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -376,15 +374,17 @@ func CheckCeiling(c Ceiling) []string {
 	return bad
 }
 
-// BuiltinPaces are the paces f10 ships. medium is empty: naming it runs
-// every flow as declared, the way to switch a faster default off.
+// BuiltinPaces are the paces f10 ships. medium only finishes: naming it
+// runs every flow as declared, the way to switch a faster default off.
 func BuiltinPaces() map[string]Pace {
 	return map[string]Pace{
 		"slow": {
 			"review":      {By: "local+ci?", Rounds: 2},
 			PaceFinishKey: {Finish: "off"},
 		},
-		"medium": {},
+		"medium": {
+			PaceFinishKey: {Finish: "on"},
+		},
 		"fast": {
 			"review":      {By: "local", Rounds: 1},
 			"judge":       {Effort: "low"},
@@ -802,10 +802,9 @@ func pacesShown(paces map[string]Pace) string {
 	return strings.Join(shown, "; ")
 }
 
-// resolvePaces records the project's paces, default pace and ceiling, the
-// old drive_finish and Rounds line read as dials. The user's layer and the
-// built-ins are the caller's to lay under them.
-func (e *Effective) resolvePaces(fm *layered, review section) {
+// resolvePaces records the project's paces, default pace and ceiling. The
+// user's layer and the built-ins are the caller's to lay under them.
+func (e *Effective) resolvePaces(fm *layered) {
 	layers := map[string]bool{}
 
 	if fm.Paces != nil {
@@ -826,10 +825,6 @@ func (e *Effective) resolvePaces(fm *layered, review section) {
 	if fm.Pace != "" {
 		e.Pace = fm.Pace
 		e.PaceOrigin = "declared (" + fm.origin["pace"] + ", frontmatter)"
-	}
-
-	for _, origin := range e.convertOldPaceKeys(fm, review) {
-		layers[origin] = true
 	}
 
 	if e.Paces != nil {
@@ -864,94 +859,6 @@ func (e *Effective) resolvePaces(fm *layered, review section) {
 
 // DefaultPaceName is the pace an unnamed run takes when no layer names one.
 const DefaultPaceName = "medium"
-
-// convertOldPaceKeys reads drive_finish and a `Rounds: 2` line as dials of
-// the project's default pace, unless its paces already set them, and
-// returns the origins it wrote.
-func (e *Effective) convertOldPaceKeys(fm *layered, review section) []string {
-	name := e.Pace
-	if name == "" {
-		name = DefaultPaceName
-	}
-
-	var origins []string
-
-	put := func(key, origin string, apply func(*Dials)) {
-		if e.Paces == nil {
-			e.Paces, e.PacesOrigin = map[string]Pace{}, map[string]string{}
-		}
-
-		if e.Paces[name] == nil {
-			e.Paces[name] = Pace{}
-		}
-
-		d := e.Paces[name][key]
-		apply(&d)
-		e.Paces[name][key] = d
-
-		if prior := e.PacesOrigin[name+"."+key]; prior != "" {
-			origin = prior + " + " + origin
-		}
-
-		e.PacesOrigin[name+"."+key] = origin
-		origins = append(origins, origin)
-	}
-
-	if fm.DriveFinish != "" {
-		if e.Paces[name][PaceFinishKey].Finish != "" {
-			e.problem(
-				false,
-				"drive_finish ignored for pace %s, since paces.%s.finish is declared; f10 init --migrate removes it",
-				name,
-				name,
-			)
-		} else {
-			put(PaceFinishKey, "converted from drive_finish ("+fm.origin["drive_finish"]+")", func(d *Dials) {
-				*d = Dials{Finish: fm.DriveFinish}
-			})
-			e.problem(false, "drive_finish is read as paces.%s.finish; f10 init --migrate rewrites it", name)
-		}
-	}
-
-	if n := proseRounds(review.body); n != 0 {
-		where := "the Review section"
-		if review.file != "" {
-			where += " in " + review.file
-		}
-
-		if e.Paces[name]["review"].Rounds != 0 {
-			e.problem(false, "Rounds: %d in %s ignored for pace %s, since paces.%s.review sets rounds; delete the line",
-				n, where, name, name)
-		} else {
-			put("review", "converted from Rounds: "+strconv.Itoa(n)+" ("+where+")", func(d *Dials) { d.Rounds = n })
-			e.problem(false, "Rounds: %d in %s is read as paces.%s.review.rounds; f10 init --migrate rewrites it",
-				n, where, name)
-		}
-	}
-
-	return origins
-}
-
-// roundsRE is the Review section's `Rounds: 2` line, bold or a list item.
-var roundsRE = regexp.MustCompile(`(?i)^rounds\s*:\s*([12])\b`)
-
-// proseRounds is the number a Review section's Rounds line names, 0 for none.
-func proseRounds(body string) int {
-	for line := range strings.SplitSeq(body, "\n") {
-		if item, ok := mdline.Item(line); ok {
-			line = item
-		}
-
-		line = strings.TrimSpace(strings.ReplaceAll(line, "*", ""))
-		if m := roundsRE.FindStringSubmatch(line); m != nil {
-			n, _ := strconv.Atoi(m[1])
-
-			return n
-		}
-	}
-
-	return 0
-}
 
 // resolveCeiling records the merged ceiling with each key's layer.
 func (e *Effective) resolveCeiling(fm *layered) {
