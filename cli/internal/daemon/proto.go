@@ -173,6 +173,11 @@ const ExitNothingWatched = 7
 // number to, once the record is open.
 const NumberFileEnv = "F10_DRIVE_FILE"
 
+// ResumeEnv is set on every drive a daemon runs that starts an ExitResume
+// again. A drive under an older daemon, which lacks it, names the --resume
+// command instead of exiting for a restart that never comes.
+const ResumeEnv = "F10_DRIVE_RESUMES"
+
 // ErrNotRunning is a socket nobody listens on.
 var ErrNotRunning = errors.New("no f10 daemon is running")
 

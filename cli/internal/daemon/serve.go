@@ -331,7 +331,7 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 	cmd := exec.CommandContext(context.WithoutCancel(s.ctx), name, args...)
 	numberFile := path + ".drive"
 	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, f, f
-	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile)
+	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile, ResumeEnv+"=1")
 
 	if err := cmd.Start(); err != nil {
 		_ = f.Close()

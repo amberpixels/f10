@@ -218,7 +218,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		defaultParallel: defaultParallel(),
 	}
 	in.sleep = in.wake
-	in.daemonRun = os.Getenv(daemon.NumberFileEnv) != ""
+	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""
 
 	if spec, why := verifySpecOf(t.eff); why == "" {
 		in.catchup = newBinaryCatchup(catchupInput{

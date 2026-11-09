@@ -68,8 +68,8 @@ type driveInput struct {
 	asksDir string
 	notify  func(context.Context, asks.Ask) error
 
-	// daemonRun is a drive the daemon runs: an answer that came after it
-	// stopped looking ends it ExitResume, and the daemon starts it again
+	// daemonRun is a drive a daemon runs that restarts it: an answer that
+	// came after it stopped looking ends it ExitResume for that restart
 	daemonRun bool
 
 	// links prints this drive's task ids for people, under project

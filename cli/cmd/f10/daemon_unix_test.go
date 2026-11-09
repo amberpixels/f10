@@ -202,3 +202,27 @@ func TestFollowDriveFollowsAnUpgrade(t *testing.T) {
 		t.Errorf("daemon left running = %+v, %v", st, err)
 	}
 }
+
+// A drive that exits for a resume is followed into its restarted run, and
+// the follower ends with that run's code.
+func TestFollowDriveFollowsAResume(t *testing.T) {
+	dir := shortRunDir(t)
+
+	var out syncBuffer
+
+	err := followDrive(
+		t.Context(),
+		&out,
+		dir,
+		"0.1.0",
+		runReq(`echo 5 > "$F10_DRIVE_FILE"; echo drive 5; sleep 0.3; exit 8`),
+		serving(t.Context(), dir, "0.1.0"),
+	)
+	if err != nil {
+		t.Fatalf("err = %v\n%s", err, out.String())
+	}
+
+	if got := out.String(); !strings.Contains(got, "drive 5\n") || !strings.Contains(got, "resumed\n") {
+		t.Errorf("output = %q, want both runs", got)
+	}
+}
