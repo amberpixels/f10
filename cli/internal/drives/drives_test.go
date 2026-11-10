@@ -313,3 +313,29 @@ func TestCatchupFingerprint(t *testing.T) {
 		t.Error("the same state gave another fingerprint")
 	}
 }
+
+// A task's phase round-trips, and a record written before phases were kept
+// reads with none.
+func TestTaskPhase(t *testing.T) {
+	root := t.TempDir()
+
+	rec := &Record{Args: []string{"GH-1"}, Tasks: []Task{{ID: "GH-1", Phase: PhaseParked}}}
+	if err := Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Read(root, rec.Number)
+	if err != nil || got.Tasks[0].Phase != PhaseParked {
+		t.Fatalf("read back %+v, %v", got, err)
+	}
+
+	old := []byte("number: 7\nargs: [GH-1]\ntasks:\n  - id: GH-1\n    skill: ship\n    queued: true\n")
+	if err := os.WriteFile(Path(root, 7), old, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err = Read(root, 7)
+	if err != nil || got.Tasks[0].Phase != "" || !got.Tasks[0].Queued {
+		t.Fatalf("an old record read as %+v, %v", got, err)
+	}
+}

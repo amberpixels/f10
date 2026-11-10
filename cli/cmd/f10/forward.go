@@ -124,7 +124,7 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 			agents(in.main).Name(), path, name, in.task.ID)
 	}
 
-	if err := refuseStalled(in, ws, agentctl.AgentName(in.task.ID, in.suffix, path), path); err != nil {
+	if err := refuseStalled(in.stall(), ws, agentctl.AgentName(in.task.ID, in.suffix, path), path); err != nil {
 		return err
 	}
 
@@ -155,10 +155,22 @@ func hereReason(in forwardInput, name, path string) string {
 	return ""
 }
 
+// A stallCheck is what refuseStalled reads run state with: runs updated
+// before since were written by an agent that is gone.
+type stallCheck struct {
+	stateDir   string
+	ttl        time.Duration
+	now, since time.Time
+}
+
+func (in forwardInput) stall() stallCheck {
+	return stallCheck{stateDir: in.stateDir, ttl: in.ttl, now: in.now, since: in.since}
+}
+
 // refuseStalled stops a forward to an agent idle while its run says running:
 // it sits on something f10 cannot see (a permission dialog, a question asked
 // outside driven mode), and a prompt behind that would wait with it.
-func refuseStalled(in forwardInput, ws *agentctl.Workspace, agent, root string) error {
+func refuseStalled(in stallCheck, ws *agentctl.Workspace, agent, root string) error {
 	if ws.Status != agentctl.StatusIdle {
 		return nil
 	}

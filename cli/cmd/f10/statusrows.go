@@ -78,6 +78,10 @@ func stageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
 		return stageWaiting, "on " + r.Wait
 	case r != nil && stoppedRun(r):
 		return stageHalted, cmp.Or(r.LeafShown(), r.Furthest())
+	case f.DrivePhase == drives.PhaseParked:
+		return stageWaiting, "on " + cmp.Or(f.Base, "its base")
+	case f.DrivePhase == drives.PhaseWaiting:
+		return stageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
 	case r == nil && f.Queued:
 		return stageQueued, ""
 	case r == nil && f.Base != "" && !baseDone && f.Driven:
@@ -223,8 +227,9 @@ func (src rowSource) readRequests(ctx context.Context, kids []childRow) map[stri
 func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, lookaround.TaskFacts) {
 	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
 	f := lookaround.TaskFacts{
-		Queued: k.queued,
-		Driven: src.driven[strings.ToUpper(k.ID)],
+		Queued:     k.queued,
+		DrivePhase: k.phase,
+		Driven:     src.driven[strings.ToUpper(k.ID)],
 	}
 
 	if k.Finished {

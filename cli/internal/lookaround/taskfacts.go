@@ -32,6 +32,7 @@ type TaskFacts struct {
 	BaseFrom     string // FromLocal (the branch), FromTrace (the state block) or FromGuessed (the task body)
 	Driven       bool   // a running drive lists it
 	Queued       bool   // its drive's cap holds it back
+	DrivePhase   string // where its running drive says it stands, a drives.Phase name
 	Findings     *Findings
 	Verdict      string
 }

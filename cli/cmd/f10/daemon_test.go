@@ -103,8 +103,10 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 	wakeStep = 10 * time.Millisecond
 	t.Cleanup(func() { wakeStep = time.Second })
 
-	in := &driveInput{stateDir: t.TempDir()}
-	in.runs = []*driveRun{{opened: true, o: openedTask{path: "/code/repo.GH-1"}}}
+	in := &driveInput{
+		stateDir: t.TempDir(),
+	}
+	in.runs = []*driveRun{{phase: atRunning, o: openedTask{path: "/code/repo.GH-1"}}}
 
 	write := func(name, root string) {
 		time.Sleep(50 * time.Millisecond)

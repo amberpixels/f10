@@ -89,7 +89,10 @@ func TestDriveKeepsTheRecordedFlow(t *testing.T) {
 		f := newFakes(t)
 		f.meta.Seed("GH-1", branchmeta.Flow, tc.recorded)
 
-		in := &driveInput{main: "/code/repo", resolve: resolve}
+		in := &driveInput{
+			main:    "/code/repo",
+			resolve: resolve,
+		}
 
 		fl, note, err := in.keepFlow(t.Context(), "GH-1")
 		if err != nil || fl.recorded() != tc.want || !strings.Contains(note, tc.note) ||
@@ -116,7 +119,9 @@ func TestCompletingFlow(t *testing.T) {
 // run still plans a task whose recorded flow leads with plan.
 func TestSkillsOfAKeptFlow(t *testing.T) {
 	direct := shipFlow{name: "direct", planless: true}
-	in := &driveInput{flow: direct}
+	in := &driveInput{
+		flow: direct,
+	}
 
 	if got := strings.Join(in.skills(&driveRun{flow: direct}), " "); got != "ship finish" {
 		t.Errorf("the run's own flow = %q", got)
@@ -161,7 +166,10 @@ func TestFlowByArea(t *testing.T) {
 
 	f := newFakes(t)
 
-	in := &driveInput{main: "/code/repo", flow: fl}
+	in := &driveInput{
+		main: "/code/repo",
+		flow: fl,
+	}
 	if kept, note, err := in.keepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
 		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "set branch.") }) {
 		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
