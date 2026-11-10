@@ -8,13 +8,13 @@ import (
 	"maps"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -308,33 +308,17 @@ func checkPaceName(value string) error {
 	return nil
 }
 
-// staleAfterRE is a stale_after value: whole days or weeks. Hours mean
-// nothing against a tracker's created date, and a month has no fixed length.
-var staleAfterRE = regexp.MustCompile(`^([1-9]\d*)([dw])$`)
-
 // envKeyRE is an environment variable name, as drive_env lists them.
 var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // ParseStaleAfter reads a stale_after value, `10d` or `3w`.
 func ParseStaleAfter(value string) (time.Duration, error) {
-	m := staleAfterRE.FindStringSubmatch(value)
-
-	var n int
-	if m != nil {
-		n, _ = strconv.Atoi(m[1])
+	days, err := calendar.OffsetDays(value)
+	if err != nil {
+		return 0, err
 	}
 
-	// a count past 3650 is a typo, and a large one would overflow the Duration
-	if n == 0 || n > 3650 {
-		return 0, fmt.Errorf("%q is not a number of days or weeks, like 10d or 3w", value)
-	}
-
-	unit := 24 * time.Hour
-	if m[2] == "w" {
-		unit *= 7
-	}
-
-	return time.Duration(n) * unit, nil
+	return time.Duration(days) * 24 * time.Hour, nil
 }
 
 // ParseDriverTimeout reads a driver_timeout value, a positive Go duration

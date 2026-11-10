@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-// gitRepo is a real repo a test builds. TestMain already keeps the
-// developer's git config out, so identity comes from the repo's own config.
 // Dates the git fixtures commit at: before a period, during it, and after.
 const (
 	before = "2026-10-10T10:00:00Z"
@@ -17,6 +15,8 @@ const (
 	later  = "2026-10-14T12:00:00Z"
 )
 
+// gitRepo is a real repo a test builds. TestMain already keeps the
+// developer's git config out, so identity comes from the repo's own config.
 type gitRepo struct {
 	t   *testing.T
 	dir string

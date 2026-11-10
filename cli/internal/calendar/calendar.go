@@ -4,7 +4,7 @@
 package calendar
 
 import (
-	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -51,10 +51,31 @@ const (
 	Windows
 )
 
-// maxOffset caps the count: a larger one is a typo.
-const maxOffset = 3650
-
+// offsetRE is a count of whole days or weeks. Hours mean nothing against a
+// tracker's created date, and a month has no fixed length.
 var offsetRE = regexp.MustCompile(`^([1-9]\d*)([dw])$`)
+
+// OffsetDays reads a count of days or weeks (10d, 3w) as days. Both
+// stats --since and stale_after read this one grammar.
+func OffsetDays(value string) (int, error) {
+	m := offsetRE.FindStringSubmatch(value)
+
+	var n int
+	if m != nil {
+		n, _ = strconv.Atoi(m[1])
+	}
+
+	// a count past 3650 is a typo, and a large one would overflow a Duration
+	if n == 0 || n > 3650 {
+		return 0, fmt.Errorf("%q is not a number of days or weeks, like 10d or 3w", value)
+	}
+
+	if m[2] == "w" {
+		n *= 7
+	}
+
+	return n, nil
+}
 
 // fixedClock is years' clock read at one instant, so every period a run
 // cuts starts from the same now.
@@ -74,13 +95,8 @@ func Parse(arg string, now time.Time, forms Forms, workdays func() (Workdays, er
 		// input --since rejects
 		opts = []years.ParserOption{years.WithLayouts(time.RFC3339Nano, time.DateOnly)}
 	case Offsets:
-		m := offsetRE.FindStringSubmatch(arg)
-		if m == nil {
-			return years.Period{}, errors.New("not a count of days or weeks")
-		}
-
-		if n, _ := strconv.Atoi(m[1]); n > maxOffset {
-			return years.Period{}, errors.New("too many days")
+		if _, err := OffsetDays(arg); err != nil {
+			return years.Period{}, err
 		}
 
 		opts = []years.ParserOption{years.AcceptRelativeOffsets()}

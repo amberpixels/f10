@@ -195,11 +195,6 @@ func TestRenderStandup(t *testing.T) {
 	}
 }
 
-// scriptStandupGit answers the git reads collectStandup makes, with one
-// commit of the user's on FT-2/b and origin/HEAD as given.
-// A host CLI that fails is the command's error, never commits only.
-// Without origin/HEAD the host names the default branch; without a host
-// either, standup refuses rather than read landed commits as unfinished.
 // Upkeep-only tasks leave the per-task lines for one line of their own.
 func TestRenderStandupFoldsUpkeep(t *testing.T) {
 	r := standup.Standup{Since: standupSince, Projects: []standup.Project{{Tasks: []standup.Task{

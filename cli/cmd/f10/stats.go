@@ -372,7 +372,7 @@ func percent(part, whole int) int {
 func statsCutoff(arg string, now time.Time) (time.Time, error) {
 	p, err := calendar.Parse(arg, now, calendar.Offsets, nil)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("%q is not a number of days or weeks, like 10d or 3w", arg)
+		return time.Time{}, err
 	}
 
 	return p.Start, nil
