@@ -35,7 +35,7 @@ func rowDone(t drives.Task) bool {
 }
 
 func setFinished(t *drives.Task) {
-	t.Skill, t.Queued, t.Outcome = "", false, &drives.Outcome{Row: rowFinished}
+	t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{Row: rowFinished}
 }
 
 // markFinished moves drive n's open rows that match to finished, under the

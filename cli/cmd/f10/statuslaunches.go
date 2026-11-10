@@ -63,6 +63,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		after   string // the base the drive recorded
 		started bool
 		queued  bool
+		phase   string
 	}
 
 	var tokens []token
@@ -73,7 +74,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
 			for _, task := range driveTasks(t.lay.StorageRoot.Path(), l.Value) {
-				tokens = append(tokens, token{text: task.ID, after: task.After, queued: task.Queued})
+				tokens = append(tokens, token{text: task.ID, after: task.After, queued: task.Queued, phase: task.Phase})
 			}
 		}
 	}
@@ -96,7 +97,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		}
 
 		r = r.Head()
-		k := childRow{ID: r.ID, suffix: suffix, queued: tok.queued}
+		k := childRow{ID: r.ID, suffix: suffix, queued: tok.queued, phase: tok.phase}
 
 		if slices.ContainsFunc(
 			kids,
@@ -170,8 +171,8 @@ func launchBase(
 }
 
 // driveTasks is drive n's tasks as typed, none once the drive is done or
-// cancelled, or its record is gone. Queued holds only while the driver
-// runs: a stopped drive frees no slot.
+// cancelled, or its record is gone. Queued, parked and waiting hold only
+// while the driver runs: a stopped drive holds no task back.
 func driveTasks(root, n string) []drives.Task {
 	num, err := strconv.Atoi(n)
 	if err != nil {
@@ -185,7 +186,7 @@ func driveTasks(root, n string) []drives.Task {
 
 	if !d.Running {
 		for i := range d.Tasks {
-			d.Tasks[i].Queued = false
+			d.Tasks[i].Queued, d.Tasks[i].Phase = false, ""
 		}
 	}
 

@@ -94,7 +94,8 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		return err
 	}
 
-	r.o, r.opened, r.pos, r.flow, r.finishes = o, true, pos, fl, finishes
+	r.o, r.pos, r.flow, r.finishes = o, pos, fl, finishes
+	in.enter(r, atRunning)
 	if o.fresh {
 		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
 	}
@@ -217,8 +218,10 @@ func (in *driveInput) position(ctx context.Context, o openedTask, skills []strin
 // caught up before any skill, finish included; finish waits for the base,
 // and a branch that conflicts is marked landed and caught up first.
 func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
-	wasWaiting, held := r.waiting, r.holdsSlot()
-	r.waiting = false
+	wasWaiting, held := r.phase == atWaiting, r.holdsSlot()
+	if wasWaiting {
+		in.enter(r, atRunning)
+	}
 
 	spike, err := in.spikeDone(ctx, r)
 	if err != nil {
@@ -241,24 +244,28 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	// a drive resumed onto a ship stopped before pr waits for origin, not code
-	if skill == "ship" && r.base != nil && !r.parked {
+	if skill == "ship" && r.base != nil && r.phase != atParked {
 		if run, _ := in.run(r.o.path); originWait(run) {
 			r.parkedOrigin = true
 		}
 	}
 
 	if skill != "finish" && r.base != nil && !in.baseReady(ctx, r) {
-		if !r.parked {
+		if r.phase != atParked {
 			fmt.Fprintf(w, "%s %s: waiting on %s for %s\n",
 				in.id(r.task.ref.ID), skill, in.id(r.base.task.ref.ID), r.waitsFor())
 		}
 
-		r.parked = true
+		in.enter(r, atParked)
 
 		return nil
 	}
 
-	r.parked, r.parkedHead, r.parkedOrigin = false, "", false
+	if r.phase == atParked {
+		in.enter(r, atRunning)
+	}
+
+	r.parkedHead, r.parkedOrigin = "", false
 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
@@ -266,7 +273,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 			in.finishStep(ctx, w, r.o.branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
-		r.waiting = true
+		in.enter(r, atWaiting)
 
 		return nil
 	}
@@ -390,7 +397,8 @@ func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *s
 		return in.next(ctx, w, r)
 	}
 
-	r.parked, r.parkedHead, r.waitHead = true, head, head
+	r.parkedHead, r.waitHead = head, head
+	in.enter(r, atParked)
 
 	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
 
@@ -442,7 +450,8 @@ func (in *driveInput) parkForOrigin(ctx context.Context, w io.Writer, r *driveRu
 		return in.next(ctx, w, r)
 	}
 
-	r.parked, r.parkedHead = true, ""
+	r.parkedHead = ""
+	in.enter(r, atParked)
 
 	fmt.Fprintf(w, "%s ship: waiting on %s for origin\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
 

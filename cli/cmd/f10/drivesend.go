@@ -22,8 +22,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	}
 
 	run = r.current(run)
-	r.skill, r.sentAt, r.begun, r.idleSince, r.attached = skill, in.now(), false, time.Time{}, false
-	r.typed, r.enterRetried = "", false
+	r.turn = turn{skill: skill, sentAt: in.now(), retry: r.retry}
 
 	// a skill after the catchup may push the branch itself
 	if c := r.lastCatchup; c != nil && skill != "catchup" {

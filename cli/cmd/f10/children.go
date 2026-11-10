@@ -64,6 +64,7 @@ type childRow struct {
 	number int
 	suffix string // a launched start's worktree suffix: the checkout read is that one
 	queued bool   // a drive's cap holds it back
+	phase  string // where its drive's record says it stands, a drives.Phase name
 }
 
 type rawChild struct {

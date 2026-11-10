@@ -911,10 +911,10 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 // An ask ends the drive only once every active task is held on a base, or
 // none is active; a held task with no ask anywhere keeps it polling.
 func TestStoppingOnAnAsk(t *testing.T) {
-	asked := func() *driveRun { return &driveRun{opened: true, end: &driveResult{code: ui.ExitAsk}} }
-	moving := func() *driveRun { return &driveRun{opened: true} }
-	parked := func() *driveRun { return &driveRun{opened: true, parked: true} }
-	waiting := func() *driveRun { return &driveRun{opened: true, waiting: true} }
+	asked := func() *driveRun { return &driveRun{phase: atRunning, end: &driveResult{code: ui.ExitAsk}} }
+	moving := func() *driveRun { return &driveRun{phase: atRunning} }
+	parked := func() *driveRun { return &driveRun{phase: atParked} }
+	waiting := func() *driveRun { return &driveRun{phase: atWaiting} }
 
 	cases := map[string]struct {
 		runs []*driveRun
@@ -3185,7 +3185,7 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	fx.oneAttempt(t)
 	fx.f.script(headRef, "origin/main")
-	b := &driveRun{opened: true, o: openedTask{branch: "GH-2"}}
+	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-2"}}
 
 	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1")
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o1")
@@ -3482,7 +3482,7 @@ func TestDriveWithoutFinishWritesNoRecord(t *testing.T) {
 // finished one's went with its branch.
 func TestDriveEndParksFinishRecord(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	r := &driveRun{opened: true, finishes: true, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{phase: atRunning, finishes: true, o: openedTask{branch: "GH-1"}}
 
 	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "asked at finish", code: ui.ExitAsk})
 
@@ -3728,8 +3728,8 @@ func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
 // ship goes again at pr, which then targets the default branch.
 func TestDriveResendsAnOriginWaitOnceItsBaseFinished(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
-	r := &driveRun{opened: true, base: b, o: openedTask{branch: "GH-2"}, task: driveTask{ref: ref.Ref{ID: "GH-2"}}}
+	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	r := &driveRun{phase: atRunning, base: b, o: openedTask{branch: "GH-2"}, task: driveTask{ref: ref.Ref{ID: "GH-2"}}}
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
 
 	run := &state.Run{Ship: "blocked", Leaf: "pr", Wait: "GH-1"}
@@ -3806,13 +3806,13 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-2", "ship")
-			b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+			b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
 			if tc.through {
 				b.end = &driveResult{row: "done: ship"}
 			}
 
 			r := &driveRun{
-				opened: true, base: b, skill: "ship", waitHead: tc.waitHead,
+				phase: atRunning, base: b, skill: "ship", waitHead: tc.waitHead,
 				o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
 				task: driveTask{ref: ref.Ref{ID: "GH-2"}},
 			}
@@ -3833,9 +3833,9 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 // alone does not read as a base ready to resend to.
 func TestDriveHoldsAResumedOriginWait(t *testing.T) {
 	fx := newDriveFixture(t, "GH-2", "ship")
-	b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
 	r := &driveRun{
-		opened: true, base: b,
+		phase: atRunning, base: b,
 		o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
 		task: driveTask{ref: ref.Ref{ID: "GH-2"}},
 	}
@@ -3847,8 +3847,8 @@ func TestDriveHoldsAResumedOriginWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !r.parked || !r.parkedOrigin || !strings.Contains(out.String(), "GH-2 ship: waiting on GH-1 for origin") {
-		t.Errorf("parked = %v, origin = %v, output = %s", r.parked, r.parkedOrigin, out.String())
+	if r.phase != atParked || !r.parkedOrigin || !strings.Contains(out.String(), "GH-2 ship: waiting on GH-1 for origin") {
+		t.Errorf("phase = %v, origin = %v, output = %s", r.phase, r.parkedOrigin, out.String())
 	}
 }
 
@@ -3897,8 +3897,8 @@ func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
 // stop it cannot resume, and ship's own guard brings the base in anyway.
 func TestDriveMarksNoParkedTask(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}}
-	r := &driveRun{opened: true, parked: true, base: b, o: openedTask{branch: "GH-2"}}
+	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{phase: atParked, base: b, o: openedTask{branch: "GH-2"}}
 
 	if err := fx.in.markMoved(t.Context(), io.Discard, []*driveRun{b, r}, nil); err != nil {
 		t.Fatal(err)
@@ -4126,19 +4126,19 @@ func TestResumeShownUsesTheLabel(t *testing.T) {
 // cancelled drive leaves no test suite running behind it.
 func TestDriveEndStopsARunningVerify(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	r := &driveRun{opened: true, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}}
 
 	log := filepath.Join(t.TempDir(), "verify.log")
-	r.verifying = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
+	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
 		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
 	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
 
 	select {
-	case <-r.verifying.done:
-		if !errors.Is(r.verifying.err, context.Canceled) {
-			t.Errorf("verify ended with %v, want it cancelled", r.verifying.err)
+	case <-r.job.done:
+		if !errors.Is(r.job.err, context.Canceled) {
+			t.Errorf("verify ended with %v, want it cancelled", r.job.err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the verify still runs after its run ended")
@@ -4152,13 +4152,13 @@ func TestLeaveRunsHaltsAVerifyBeforeReturning(t *testing.T) {
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
 
 	log := filepath.Join(t.TempDir(), "verify.log")
-	r.verifying = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
+	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
 		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
 	fx.in.leaveRuns(t.Context(), []*driveRun{r})
 
-	if !r.verifying.finished() {
+	if !r.job.finished() {
 		t.Fatal("leaveRuns returned with the verify still running")
 	}
 }

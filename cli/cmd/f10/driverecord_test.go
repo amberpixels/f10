@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -571,4 +572,48 @@ func TestFinishedLazily(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The record names where a task stands as its phase moves: held by the cap,
+// running, parked on its base, waiting at finish, ended; queued is kept
+// beside the phase for readers that know only it.
+func TestRecordFollowsThePhase(t *testing.T) {
+	root := t.TempDir()
+
+	rec := &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	in := &driveInput{root: root, rec: rec, out: io.Discard}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+
+	want := func(phase string, queued bool) {
+		t.Helper()
+
+		got, err := drives.Read(root, rec.Number)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if task := got.Tasks[0]; task.Phase != phase || task.Queued != queued {
+			t.Errorf("task = %+v, want phase %q queued %v", task, phase, queued)
+		}
+	}
+
+	in.queue(io.Discard, r)
+	want(drives.PhaseQueued, true)
+
+	in.unqueue(r)
+	in.enter(r, atRunning)
+	want(drives.PhaseRunning, false)
+
+	in.enter(r, atParked)
+	want(drives.PhaseParked, false)
+
+	in.enter(r, atWaiting)
+	want(drives.PhaseWaiting, false)
+
+	in.end(t.Context(), io.Discard, r, driveResult{row: "done: ship"})
+	want(drives.PhaseEnded, false)
 }

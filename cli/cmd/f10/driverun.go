@@ -127,69 +127,120 @@ type driveResult struct {
 // base has a commit, then active with one skill in flight or waiting at
 // finish for its base, then ended with its row.
 type driveRun struct {
-	task      driveTask
-	base      *driveRun // the listed base, or nil for none or one outside the list
-	o         openedTask
-	opened    bool
-	flow      shipFlow // the flow this task ships through: its branch's record, else the run's
-	finishes  bool     // drive ends the task with finish: the pace says so, or a spike closes
-	pos       int      // the index in its skills of the skill in flight, or the next one
-	skill     string   // what is in flight: one of its skills, or catchup
-	sentAt    time.Time
-	begun     bool
-	idleSince time.Time
-	// attached is set when the drive found the turn already running, so the
-	// skill it reports, not the one the drive meant to send, says how it ended
-	attached bool
+	task     driveTask
+	base     *driveRun // the listed base, or nil for none or one outside the list
+	o        openedTask
+	phase    runPhase
+	flow     shipFlow // the flow this task ships through: its branch's record, else the run's
+	finishes bool     // drive ends the task with finish: the pace says so, or a spike closes
+	pos      int      // the index in its skills of the skill in flight, or the next one
 	end      *driveResult
 	// freshAt is when this drive opened the task to start its agent: run
 	// state older than it was written by an agent that is gone, and is not read
 	freshAt time.Time
+	// parkedHead is the base's head when a ship parked itself, so only a
+	// commit after it sends ship again, never the same empty base; waitHead
+	// is the base head the last park read, so a base that committed before
+	// the drive saw the stop is sent once, never looped
+	parkedHead, waitHead string
+	// parkedOrigin is set while a ship that stopped before pr waits for its
+	// base's branch on origin, which the PR targets, not for its code
+	parkedOrigin bool
+	// attempts are the failures in a row of the action in flight
+	attempts []attempt
+	// job is the verify the drive runs after its own catchup, polled in
+	// place of the agent while the phase is verifying
+	job *verifyJob
+
+	turn
+	catchupState
+}
+
+// A turn is the skill in flight and what the poll has seen of it; each send
+// starts a new one.
+type turn struct {
+	skill  string // one of the task's skills, or catchup
+	sentAt time.Time
+	begun  bool
+	// attached is set when the drive found the turn already running, so the
+	// skill it reports, not the one the drive meant to send, says how it ended
+	attached  bool
+	idleSince time.Time
+	// typed is the send's text when it went through the agent's input box,
+	// "" when it went on the command line, and typedTo the agent that took
+	// it; enterRetried is set once the poll checked that box
+	typed        string
+	typedTo      string
+	enterRetried bool
+	// retry marks a send after a failed attempt: it prompts whatever the run
+	// says, and holds across sends until a prompt goes out
+	retry bool
+}
+
+// catchupState is what the drive's catchups keep across turns.
+type catchupState struct {
 	// lastCatchup is the catchup this drive last sent for the task, kept on
 	// the drive record: the push after it leases against its origin tip, and
 	// a conflict after it counts by its fingerprint
 	lastCatchup *drives.Catchup
-	// waiting is set while finish waits for the base to be through: no turn
-	// is in flight, so the poll only asks next again
-	waiting bool
-	// parked is set while a skill waits for its base's code, the same
-	// way. parkedHead is the base's head when a ship parked itself, so only
-	// a commit after it sends ship again, never the same empty base.
-	parked     bool
-	parkedHead string
-	// parkedOrigin is set while a ship that stopped before pr waits for its
-	// base's branch on origin, which the PR targets, not for its code
-	parkedOrigin bool
-	// waitHead is the base head the last park read, so a base that
-	// committed before the drive saw the stop is sent once, never looped
-	waitHead string
-	// queued is set while the drive's cap holds the task: unopened, or
-	// open with its next skill unsent
-	queued bool
-	// typed is the last send's text when it went through the agent's input
-	// box, "" when it went on the command line, and typedTo the agent that
-	// took it; enterRetried is set once the poll checked that box
-	typed        string
-	typedTo      string
-	enterRetried bool
-	// attempts are the failures in a row of the action in flight; resend
-	// sends it again at the next poll, and retry marks that send, so it
-	// prompts whatever the run says
-	attempts []attempt
-	resend   bool
-	retry    bool
-	// verifying is the verify the drive runs after its own catchup, polled
-	// in place of the agent; toldCatchup is set once the line saying why the
-	// agent verifies was printed
-	verifying   *verifyJob
-	toldCatchup bool
 	// catchupPlan is the base the drive's own catchup integrated, and
 	// catchupLeft what git showed unsettled after the agent's last turn
 	catchupPlan *catchupPlan
 	catchupLeft string
+	// toldCatchup is set once the line saying why the agent verifies was printed
+	toldCatchup bool
 }
 
-func (r *driveRun) active() bool { return r.opened && r.end == nil }
+// runPhase is where an opened or held task stands between polls.
+type runPhase int
+
+const (
+	atPending   runPhase = iota // not opened: its base has no commit, or it was never reached
+	atHeld                      // not opened: the cap holds it
+	atRunning                   // a skill in flight, or about to be sent
+	atQueued                    // opened, its next skill held by the cap
+	atVerifying                 // the drive's own verify after a catchup runs, in job
+	atRetrying                  // an attempt failed: the next poll sends the action again
+	atParked                    // a skill waits for its base's code
+	atWaiting                   // finish waits for its base to be through
+)
+
+// recorded is the phase as the drive record names it.
+func (p runPhase) recorded() string {
+	switch p {
+	case atHeld, atQueued:
+		return drives.PhaseQueued
+	case atRunning:
+		return drives.PhaseRunning
+	case atVerifying:
+		return drives.PhaseVerifying
+	case atRetrying:
+		return drives.PhaseRetrying
+	case atParked:
+		return drives.PhaseParked
+	case atWaiting:
+		return drives.PhaseWaiting
+	}
+
+	return drives.PhasePending
+}
+
+func (r *driveRun) opened() bool { return r.phase != atPending && r.phase != atHeld }
+
+func (r *driveRun) active() bool { return r.opened() && r.end == nil }
+
+// queued: the cap holds the task, opened or not.
+func (r *driveRun) queued() bool { return r.phase == atHeld || r.phase == atQueued }
+
+// enter moves r to phase p and writes its standing to the record.
+func (in *driveInput) enter(r *driveRun, p runPhase) {
+	if r.phase == p {
+		return
+	}
+
+	r.phase = p
+	in.saveTask(r, func(t *drives.Task) { t.Phase, t.Queued = p.recorded(), r.queued() })
+}
 
 // skills is what drive prompts r through, in order; a spike its pace does
 // not finish gets finish once it closes.

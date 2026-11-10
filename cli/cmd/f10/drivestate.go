@@ -266,7 +266,7 @@ func (in *driveInput) failed(ctx context.Context, w io.Writer, r *driveRun, halt
 		return err
 	}
 
-	r.resend = true
+	in.enter(r, atRetrying)
 
 	return nil
 }

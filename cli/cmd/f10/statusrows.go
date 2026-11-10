@@ -70,8 +70,9 @@ type rowFacts struct {
 	halt     *ledgerHalt // a halt drive recorded after the run's last claim
 	after    string
 	baseDone bool
-	queued   bool // its drive's cap holds it back
-	driven   bool // a running drive lists it
+	queued   bool   // its drive's cap holds it back
+	phase    string // where its running drive says it stands, a drives.Phase name
+	driven   bool   // a running drive lists it
 }
 
 type ledgerHalt struct {
@@ -94,6 +95,10 @@ func stageOf(f rowFacts) (string, string) {
 		return stageWaiting, "on " + r.Wait
 	case r != nil && stoppedRun(r):
 		return stageHalted, cmp.Or(r.LeafShown(), r.Furthest())
+	case f.phase == drives.PhaseParked:
+		return stageWaiting, "on " + cmp.Or(f.after, "its base")
+	case f.phase == drives.PhaseWaiting:
+		return stageWaiting, "to finish after " + cmp.Or(f.after, "its base")
 	case r == nil && f.queued:
 		return stageQueued, ""
 	case r == nil && f.after != "" && !f.baseDone && f.driven:
@@ -259,6 +264,7 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts)
 		finished: k.Finished,
 		after:    k.After,
 		queued:   k.queued,
+		phase:    k.phase,
 		driven:   src.driven[strings.ToUpper(k.ID)],
 	}
 	lt := ledgerFor(src.events, k.ID, src.idOf)

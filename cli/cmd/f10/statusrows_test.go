@@ -53,6 +53,16 @@ func TestStageOf(t *testing.T) {
 		},
 		{"base done", rowFacts{after: "FT-1", baseDone: true}, stageNotStarted, ""},
 		{"queued", rowFacts{queued: true, after: "FT-1"}, stageQueued, ""},
+		{
+			"parked by its drive",
+			rowFacts{run: run("skipped", "done", "upcoming", ""), after: "FT-1", phase: drives.PhaseParked},
+			stageWaiting, "on FT-1",
+		},
+		{
+			"finish waits for its base",
+			rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}, after: "FT-1", phase: drives.PhaseWaiting},
+			stageWaiting, "to finish after FT-1",
+		},
 		{"nothing", rowFacts{}, stageNotStarted, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -258,7 +258,7 @@ func stopping(runs []*driveRun) bool {
 	for _, r := range runs {
 		asked = asked || r.end != nil && r.end.code == ui.ExitAsk
 		active = active || r.active()
-		moving = moving || r.active() && !r.parked && !r.waiting
+		moving = moving || r.active() && r.phase != atParked && r.phase != atWaiting
 	}
 
 	return !active || asked && !moving
@@ -279,7 +279,7 @@ func (in *driveInput) startRunnable(
 	}
 
 	for _, r := range gate.order(runs) {
-		if r.opened || r.end != nil {
+		if r.opened() || r.end != nil {
 			continue
 		}
 
@@ -318,7 +318,7 @@ func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 		return true
 	}
 
-	if !b.opened || b.end != nil {
+	if !b.opened() || b.end != nil {
 		return false
 	}
 
@@ -352,7 +352,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 		// a parked ship's own guard brings the base in when it resumes, and
 		// so does one the cap queued after parking; an attached turn may be
 		// a catchup, which a mark mid-turn would halt
-		if !r.active() || r.parked || r.queued || r.skill == "catchup" || r.attached || b == nil || !b.opened {
+		if !r.active() || r.phase == atParked || r.queued() || r.skill == "catchup" || r.attached || b == nil || !b.opened() {
 			continue
 		}
 

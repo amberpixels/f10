@@ -210,7 +210,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			in.loadLinks(t.Context(), &out, []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
 
 			runs := []*driveRun{
-				{task: driveTask{ref: ref.Ref{ID: "FT-1"}}, queued: true},
+				{task: driveTask{ref: ref.Ref{ID: "FT-1"}}, phase: atHeld},
 				{task: driveTask{ref: ref.Ref{ID: "FT-2"}}},
 			}
 			if err := in.report(&out, runs, nil); err != nil {

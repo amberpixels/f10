@@ -36,11 +36,11 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 
 			halted[id] = r.end.code == ui.ExitHalted
 			code = max(code, r.end.code)
-		case r.queued:
+		case r.queued():
 			rows = append(rows, fact{label: shown, value: "queued"})
-		case r.active() && r.parked:
+		case r.active() && r.phase == atParked:
 			rows = append(rows, fact{label: shown, value: "waiting on " + in.id(r.base.task.ref.ID)})
-		case r.active() && r.waiting:
+		case r.active() && r.phase == atWaiting:
 			rows = append(rows, fact{label: shown, value: "waiting for " + in.id(r.base.task.ref.ID)})
 		case r.active():
 			rows = append(rows, fact{label: shown, value: "running " + r.skill})

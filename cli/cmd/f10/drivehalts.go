@@ -25,18 +25,18 @@ func (in *driveInput) leaveRuns(ctx context.Context, runs []*driveRun) {
 			in.parkFinish(ctx, r)
 		}
 
-		if r.verifying != nil {
-			r.verifying.halt()
+		if r.job != nil {
+			r.job.halt()
 		}
 	}
 }
 
 func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
-	r.end, r.queued = &res, false
+	r.end = &res
 
 	// a cancelled or halted run takes its catchup's verify with it
-	if r.verifying != nil {
-		r.verifying.stop()
+	if r.job != nil {
+		r.job.stop()
 	}
 
 	// a finished task's branch took the record with it
@@ -45,7 +45,7 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	}
 
 	in.saveTask(r, func(t *drives.Task) {
-		t.Skill, t.Queued, t.Outcome = "", false, &drives.Outcome{Row: res.row, Code: res.code}
+		t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{Row: res.row, Code: res.code}
 	})
 	// an asking task stays leased until the drive exits, since the drive
 	// runs on and resumes for its answer; another drive must not claim it

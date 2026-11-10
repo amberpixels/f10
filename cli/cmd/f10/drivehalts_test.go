@@ -17,7 +17,7 @@ func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 	var out bytes.Buffer
 
 	in := &driveInput{out: &out}
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, opened: true}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, phase: atRunning}
 
 	wrapped := fmt.Errorf("sending: %w", halt("GH-1", "ship", "no agent"))
 	if err := in.onTask(t.Context(), &out, r, wrapped); err != nil {
@@ -28,7 +28,7 @@ func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 		t.Fatalf("end = %+v\n%s", r.end, out.String())
 	}
 
-	other := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-2"}}, opened: true}
+	other := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-2"}}, phase: atRunning}
 	boom := errors.New("herdr is gone")
 
 	if err := in.onTask(t.Context(), &out, other, boom); !errors.Is(err, boom) || other.end != nil {

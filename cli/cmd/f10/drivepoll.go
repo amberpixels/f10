@@ -68,22 +68,22 @@ func (in *driveInput) poll(
 ) error {
 	id, skill := r.task.ref.ID, r.skill
 
-	if r.waiting || r.parked || r.queued {
+	switch r.phase {
+	case atWaiting, atParked, atQueued:
 		return in.next(ctx, w, r)
-	}
-
-	if job := r.verifying; job != nil {
+	case atVerifying:
+		job := r.job
 		if !job.finished() {
 			return nil
 		}
 
-		r.verifying = nil
+		r.job = nil
+		in.enter(r, atRunning)
 
 		return in.verified(ctx, w, r, job)
-	}
-
-	if r.resend {
-		r.resend, r.retry = false, true
+	case atRetrying:
+		in.enter(r, atRunning)
+		r.retry = true
 
 		return in.send(ctx, w, r, r.skill)
 	}

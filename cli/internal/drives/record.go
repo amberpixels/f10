@@ -39,16 +39,31 @@ type Record struct {
 
 // A Task is one task of a drive, as typed, and where it stands.
 type Task struct {
-	ID      string   `yaml:"id"`               // as typed, a suffix included
-	Agent   string   `yaml:"agent,omitempty"`  // its own :profile as typed
-	After   string   `yaml:"after,omitempty"`  // the base its body's After: line named, as an id
-	Skill   string   `yaml:"skill,omitempty"`  // in flight, "" for none
-	Queued  bool     `yaml:"queued,omitempty"` // held back by the drive's cap
+	ID     string `yaml:"id"`               // as typed, a suffix included
+	Agent  string `yaml:"agent,omitempty"`  // its own :profile as typed
+	After  string `yaml:"after,omitempty"`  // the base its body's After: line named, as an id
+	Skill  string `yaml:"skill,omitempty"`  // in flight, "" for none
+	Queued bool   `yaml:"queued,omitempty"` // held back by the drive's cap; Phase says it too, for older readers
+	// Phase is where the task stands: one of the Phase names, "" in a record
+	// written before it was kept
+	Phase   string   `yaml:"phase,omitempty"`
 	Outcome *Outcome `yaml:"outcome,omitempty"`
 	// Catchup is the catchup the drive last sent for the task, so a resumed
 	// drive still leases its push; the repeat count stays in the drive's memory
 	Catchup *Catchup `yaml:"catchup,omitempty"`
 }
+
+// The phases a drive record names a task's standing by.
+const (
+	PhasePending   = "pending"   // not opened yet
+	PhaseQueued    = "queued"    // held back by the drive's cap
+	PhaseRunning   = "running"   // a skill in flight
+	PhaseVerifying = "verifying" // the drive's own verify after a catchup
+	PhaseRetrying  = "retrying"  // sending its action again after a failed attempt
+	PhaseParked    = "parked"    // a skill waits for its base's code
+	PhaseWaiting   = "waiting"   // finish waits for its base to be through
+	PhaseEnded     = "ended"     // its outcome is in
+)
 
 // An Outcome is a task's row in the drive's report and its exit code.
 type Outcome struct {

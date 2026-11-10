@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
@@ -157,8 +156,7 @@ func (in *driveInput) catchupPrompt(
 	ws *agentctl.Workspace,
 	steering string,
 ) error {
-	r.sentAt, r.begun, r.idleSince, r.attached = in.now(), false, time.Time{}, false
-	r.typed, r.enterRetried = "", false
+	r.turn = turn{skill: r.skill, sentAt: in.now(), retry: r.retry}
 
 	return in.prompt(ctx, w, r, ws, "catchup", steering)
 }
@@ -174,7 +172,8 @@ func catchupHalt(r *driveRun, reason string) driveResult {
 func (in *driveInput) startVerify(ctx context.Context, r *driveRun) {
 	dir, log := r.o.path, filepath.Join(cmp.Or(in.root, os.TempDir()), "catchup", r.task.ref.ID+".log")
 
-	r.verifying = startVerifyJob(ctx, func(ctx context.Context) (verifyRun, error) {
+	in.enter(r, atVerifying)
+	r.job = startVerifyJob(ctx, func(ctx context.Context) (verifyRun, error) {
 		return in.catchup.verify(ctx, dir, log)
 	})
 }

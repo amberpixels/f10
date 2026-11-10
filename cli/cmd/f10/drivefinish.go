@@ -228,7 +228,7 @@ func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, a
 // stops short of finish: status reads the record as "drive finishes this
 // branch", so it stays, and never claims a finish running with no drive.
 func (in *driveInput) parkFinish(ctx context.Context, r *driveRun) {
-	if !r.opened || !r.finishes {
+	if !r.opened() || !r.finishes {
 		return
 	}
 
