@@ -230,7 +230,7 @@ func (in *driveInput) poll(
 				"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
 				workspaceName(ws), idleWhile(run, skill)))
 
-			if skill == "catchup" && in.catchup != nil {
+			if skill == "catchup" {
 				return in.catchupStalled(ctx, w, r, run, halt)
 			}
 
@@ -242,33 +242,8 @@ func (in *driveInput) poll(
 
 	fmt.Fprintf(w, "%s %s: done\n", in.id(id), skill)
 
-	if skill == "catchup" && in.catchup != nil {
-		return in.catchupSettled(ctx, w, r, true)
-	}
-
 	if skill == "catchup" {
-		if reason := in.unsettled(ctx, r); reason != "" {
-			if res := in.catchupAttempt(w, r, "catchup", "the catchup did not end clean: "+reason, reason); res != nil {
-				in.end(ctx, w, r, *res)
-
-				return nil
-			}
-
-			r.resend = true
-
-			return nil
-		}
-
-		// the count of a conflict's catchups clears only once the entry it
-		// guarded goes through, or a conflict that never settles loops
-
-		if res := in.pushCatchup(ctx, w, r); res != nil {
-			in.end(ctx, w, r, *res)
-
-			return nil
-		}
-
-		return in.next(ctx, w, r)
+		return in.catchupSettled(ctx, w, r, true)
 	}
 
 	if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
@@ -281,34 +256,20 @@ func (in *driveInput) poll(
 	return in.next(ctx, w, r)
 }
 
-// guardAgain halts a ship whose guard conflicted again without progress, or
-// nil to catch up again; a mark git cannot read is left to next, which halts.
+// guardAgain halts a ship whose guard conflicted the same way three times
+// after the drive's catchups, or nil to catch up again; a mark git cannot
+// read is left to next, which halts.
 func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
-	if r.lastCatchup == nil {
-		return nil
-	}
-
 	key, err := in.mark(ctx, r)
 	if err != nil || key == "" {
 		return nil
 	}
 
-	reason, conflict, err := in.conflictAgain(ctx, r, key)
-
-	switch {
-	case err != nil:
-		res := halted(r.task.ref.ID, "ship", err.Error())
-
-		return &res
-	case reason != "":
-		return in.catchupAttempt(w, r, "ship", reason, conflict)
-	}
-
-	return nil
+	return in.conflictAttempt(ctx, w, r, "ship", key)
 }
 
-// marked counts a mark git cannot read as marked: the catchup it sends ends
-// in unsettled, which names the read and halts.
+// marked counts a mark git cannot read as marked: the catchup it sends
+// cannot settle, and names the read when it halts.
 func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
 	key, err := in.mark(ctx, r)
 
@@ -317,10 +278,6 @@ func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
 
 func (in *driveInput) mark(ctx context.Context, r *driveRun) (branchmeta.Key, error) {
 	return markOn(ctx, in.main, r.o.branch)
-}
-
-func (in *driveInput) unsettled(ctx context.Context, r *driveRun) string {
-	return branchUnsettled(ctx, in.main, r.o.path, r.o.branch)
 }
 
 // verdict reads a stopped run: an ask goes to the user, anything else is the

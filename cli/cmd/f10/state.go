@@ -50,6 +50,8 @@ func stateCommand() *cli.Command {
 				func(r *state.Run, a cli.Args) error { return r.SetAsk(a.Get(0)) }),
 			verb("wait", "<base-task>", "the base task a driven ship stopped for, its branch without code yet",
 				func(r *state.Run, a cli.Args) error { return r.SetWait(a.Get(0)) }),
+			verb("stop", "guard", "the kind of stop ship left: guard for its catchup guard",
+				func(r *state.Run, a cli.Args) error { return r.SetStop(a.Get(0)) }),
 			verb("done", "<step>", "record that a step with no phase of its own (catchup) reported",
 				func(r *state.Run, a cli.Args) error { return r.SetDone(a.Get(0), time.Now()) }),
 			verb("final", "<step>", "declare the ship pipeline's last step",

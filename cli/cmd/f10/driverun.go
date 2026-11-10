@@ -51,10 +51,8 @@ type driveInput struct {
 	// pull reads a branch's PR on the host when the drive reconciles a
 	// task; nil, with no host, reads none
 	pull func(ctx context.Context, branch string) (forge.PR, error)
-	// catchup is the catchup the drive runs itself; nil sends the whole
-	// catchup to the agent, for catchupWhy
-	catchup    *binaryCatchup
-	catchupWhy string
+	// catchup is the engine the drive catches a branch up through
+	catchup *catchupEngine
 
 	answer   string                      // a bare --answer, until the first task stopped on a question takes it
 	answers  map[string]string           // --answer ID=text, by task id, until that task takes it
@@ -151,10 +149,10 @@ type driveRun struct {
 	// freshAt is when this drive opened the task to start its agent: run
 	// state older than it was written by an agent that is gone, and is not read
 	freshAt time.Time
-	// lastCatchup is the catchup this drive last sent for the task, so a
-	// conflict after it is judged by progress, not counted: the drive
-	// catches up again while the target moves, and halts once it stops
-	lastCatchup *catchupSent
+	// lastCatchup is the catchup this drive last sent for the task, kept on
+	// the drive record: the push after it leases against its origin tip, and
+	// a conflict after it counts by its fingerprint
+	lastCatchup *drives.Catchup
 	// waiting is set while finish waits for the base to be through: no turn
 	// is in flight, so the poll only asks next again
 	waiting bool
@@ -183,7 +181,7 @@ type driveRun struct {
 	retry    bool
 	// verifying is the verify the drive runs after its own catchup, polled
 	// in place of the agent; toldCatchup is set once the line saying why the
-	// agent catches up was printed
+	// agent verifies was printed
 	verifying   *verifyJob
 	toldCatchup bool
 	// catchupPlan is the base the drive's own catchup integrated, and

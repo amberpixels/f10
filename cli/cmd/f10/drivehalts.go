@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -130,13 +129,10 @@ func blockedRun(run *state.Run) bool {
 	return slices.ContainsFunc(state.Phases, func(p string) bool { return run.Status(p) == "blocked" })
 }
 
-// guardStop reports a ship stop shaped like the catchup guard's: failed
-// or partial with no question, at an entry the guard runs before. A
-// judge's stop is blocked, and a driven catchup stops at leaf catchup.
+// guardStop reports the stop ship's catchup guard left, by the kind it
+// recorded: failed or partial, marked as the guard's.
 func guardStop(run *state.Run) bool {
-	step := flow.Parse(run.Leaf).Step
-
-	return run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") && slices.Contains(flow.Guarded, step)
+	return run.Stop == state.StopGuard && (run.Ship == "failed" || run.Ship == "partial")
 }
 
 // baseHead is the base branch's head, "none" for no branch, or why git
@@ -148,6 +144,12 @@ func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string
 	}
 
 	return cmp.Or(head, "none"), ""
+}
+
+// awaitsDecision is a stop a catchup must not run over: a question or a
+// blocked decision, not one a catchup leaves in place (heldStop).
+func awaitsDecision(run *state.Run) bool {
+	return run != nil && stoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
 }
 
 // heldStop is a ship stop a catchup leaves in place: the guard's, or a
