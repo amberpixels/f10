@@ -564,7 +564,7 @@ func TestRenderGates(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	renderRun(&out, r, gates, false, "", time.Now(), 0)
+	runRows(&out, r, runView{gates: gates, now: time.Now()})
 
 	for _, want := range []string{
 		"ship            running: review (local)\n",
@@ -822,7 +822,7 @@ func TestDriveFlows(t *testing.T) {
 	}
 	defer lease.Release()
 
-	got := driveFlows(root)
+	got := driveFlows(drives.Active(root))
 	want := map[string]driveFlow{
 		"FT-1": {name: "prose", running: true},
 		"FT-2": {name: "prose", running: true},

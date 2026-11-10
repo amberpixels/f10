@@ -5,10 +5,8 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -91,22 +89,13 @@ func hookTaskID(ctx context.Context, cwd, url string) string {
 	return r.ID
 }
 
-// hookStatusText runs `f10 status` in this process and says whether it
-// printed a question a driven agent waits on.
+// hookStatusText is what a bare `f10 status` prints for the session in the
+// hook's directory, and whether it printed a question a driven agent waits on.
 func hookStatusText(ctx context.Context, session string) (string, bool) {
-	if err := os.Setenv("F10_SESSION_ID", session); err != nil {
-		return "", false
+	dir, err := os.Getwd()
+	if err != nil {
+		return "f10: " + err.Error(), false
 	}
 
-	var out bytes.Buffer
-
-	app := newApp()
-	app.Writer, app.ErrWriter = &out, &out
-
-	asks := &statusAsks{}
-	if err := app.Run(context.WithValue(ctx, statusAsksKey{}, asks), []string{"f10", "status"}); err != nil {
-		fmt.Fprintln(&out, "f10:", err)
-	}
-
-	return strings.TrimSpace(out.String()), asks.printed
+	return statusText(ctx, dir, session)
 }

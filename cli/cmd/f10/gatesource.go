@@ -56,10 +56,10 @@ func (src gateSource) storageFor(ctx context.Context, root string) string {
 // driveFlows maps each task of a drive neither cancelled nor done to the
 // flow the drive took, the newest drive winning. A drive without --flow
 // records none, read as default: an area's pick is ship's to make.
-func driveFlows(root string) map[string]driveFlow {
+func driveFlows(active []drives.Live) map[string]driveFlow {
 	out := map[string]driveFlow{}
 
-	for _, d := range drives.Active(root) {
+	for _, d := range active {
 		for _, t := range d.Tasks {
 			if lead := ref.TypedLead(t.ID); out[lead].name == "" {
 				// a record that no longer parses keeps its flow, under no pace
