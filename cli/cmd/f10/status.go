@@ -343,7 +343,7 @@ func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	var own, others []*state.Run
 
 	for _, r := range runs {
-		fresh := r.Task == "" && state.OpensPhase(r.Skill) && (r.Capture == "pending" || r.Capture == "skipped")
+		fresh := r.Task == "" && state.OpensPhase(r.Skill) && (r.Capture == state.Upcoming || r.Capture == "skipped")
 
 		if strings.EqualFold(r.Task, id) || fresh {
 			own = append(own, r)

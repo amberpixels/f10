@@ -2,9 +2,9 @@ v 1
 task FT-12
 url 
 root /work/acme
-capture pending
+capture upcoming
 plan running
-ship pending
+ship upcoming
 leaf 
 at 
 final 

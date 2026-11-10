@@ -363,7 +363,7 @@ The image is a drawing, not a screenshot, because outside a patched terminal fon
 
 | glyph | phase state |
 |---|---|
-| `○` | pending - has not run |
+| `○` | upcoming - not reached yet |
 | `◎` | running |
 | `●` | done |
 | `◉` | prior - done before this run (`/f10:ship ABC-1` reusing a saved plan) |
@@ -469,7 +469,7 @@ A state file older than the TTL stops rendering.
 | `F10_STATE_TTL` | `86400` | seconds before a badge reads as stale |
 | `F10_STATE_COLOR` | `1` | `0` (or `NO_COLOR`) for shapes without color |
 | `F10_STATE_LINK` | `1` | `0` to drop the hyperlink on the task id |
-| `F10_STATE_GLYPHS` | `○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺` | pending, running, done, skipped, failed, prior, partial, blocked |
+| `F10_STATE_GLYPHS` | `○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺` | upcoming, running, done, skipped, failed, prior, partial, blocked |
 
 An override of `F10_STATE_GLYPHS` must give all eight positions.
 The last two in the default hold the real U+F015A and U+F073A characters.
@@ -500,7 +500,7 @@ The last two in the default hold the real U+F015A and U+F073A characters.
 
 Steps report precisely, and hooks report reliably.
 For example, `Stop` closes a run whose last badge call the agent dropped.
-A phase left `pending` means that nobody reported on it.
+A phase left `upcoming` means that nobody reported on it.
 
 Both writers also append to a local ledger, `~/.f10/f10.db`, a SQLite file outside every repo.
 The ledger records:

@@ -21,14 +21,14 @@ import (
 
 func TestTaskRuns(t *testing.T) {
 	ship := &state.Run{Session: "ship", Task: "gh-1", Capture: "prior", Plan: "done", Ship: "blocked", Ask: "1. Merge?"}
-	fresh := &state.Run{Session: "fresh", Skill: "ship", Capture: "pending", Plan: "pending", Ship: "pending"}
-	fetching := &state.Run{Session: "fetching", Skill: "ship", Capture: "skipped", Plan: "running", Ship: "pending"}
-	capture := &state.Run{Session: "capture", Capture: "running", Plan: "pending", Ship: "pending"}
-	other := &state.Run{Session: "other", Task: "GH-7", Capture: "done", Plan: "running", Ship: "pending"}
+	fresh := &state.Run{Session: "fresh", Skill: "ship", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
+	fetching := &state.Run{Session: "fetching", Skill: "ship", Capture: "skipped", Plan: "running", Ship: "upcoming"}
+	capture := &state.Run{Session: "capture", Capture: "running", Plan: "upcoming", Ship: "upcoming"}
+	other := &state.Run{Session: "other", Task: "GH-7", Capture: "done", Plan: "running", Ship: "upcoming"}
 	// a later session in the worktree that only caught up: `state done` starts
 	// its run fresh, with no skill, since the hook seeds phase skills alone
-	catchup := &state.Run{Session: "catchup", Capture: "pending", Plan: "pending", Ship: "pending", Done: "catchup"}
-	planning := &state.Run{Session: "planning", Skill: "plan", Capture: "pending", Plan: "running", Ship: "pending"}
+	catchup := &state.Run{Session: "catchup", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming", Done: "catchup"}
+	planning := &state.Run{Session: "planning", Skill: "plan", Capture: "upcoming", Plan: "running", Ship: "upcoming"}
 
 	own, others := taskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
 
@@ -61,7 +61,7 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 
 	h := newHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: plan, host: &h}
-	capture := &state.Run{Capture: "running", Plan: "pending", Ship: "pending"}
+	capture := &state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}
 
 	var out bytes.Buffer
 	taskFallback(t.Context(), in, []*state.Run{capture}, shipment{}).render(&out, 0, false)
@@ -222,8 +222,8 @@ func TestCurrentPhase(t *testing.T) {
 		run  state.Run
 		want string
 	}{
-		{state.Run{Capture: "pending", Plan: "pending", Ship: "pending"}, "capture pending"},
-		{state.Run{Capture: "running", Plan: "pending", Ship: "pending"}, "capture running"},
+		{state.Run{Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}, "capture upcoming"},
+		{state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}, "capture running"},
 		{state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge"}, "ship blocked at judge"},
 	} {
 		if got := currentPhase(&tc.run); got != tc.want {
@@ -253,7 +253,7 @@ func TestBareStatusReadsTheBranchTask(t *testing.T) {
 
 	for _, r := range []*state.Run{
 		{Session: "own", Task: "DM-5", Root: repo, Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
-		{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "pending"},
+		{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "upcoming"},
 	} {
 		if err := r.Save(dir, time.Now()); err != nil {
 			t.Fatal(err)
@@ -283,7 +283,7 @@ func TestBareStatusKeepsTheSessionRunForATaskWithNoBranch(t *testing.T) {
 	t.Setenv("F10_SESSION_ID", "sess-1")
 	t.Chdir(repo)
 
-	r := &state.Run{Session: "sess-1", Task: "DM-9", Root: repo, Capture: "done", Plan: "running", Ship: "pending"}
+	r := &state.Run{Session: "sess-1", Task: "DM-9", Root: repo, Capture: "done", Plan: "running", Ship: "upcoming"}
 	if err := r.Save(dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@
 # 2: that is a typo in step prose, and staying silent would freeze the badge.
 #
 # Usage:
-#   f10-state.sh set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
+#   f10-state.sh set <capture|plan|ship> <upcoming|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
 #   f10-state.sh ask <text>             the question a driven run stopped on, options included
@@ -51,9 +51,9 @@ phases="capture plan ship"
 
 st_leaf=""
 st_updated=0
-st_capture="pending"
-st_plan="pending"
-st_ship="pending"
+st_capture="upcoming"
+st_plan="upcoming"
+st_ship="upcoming"
 
 sid=""
 file=""
@@ -107,7 +107,7 @@ load() {
 # with its own baseline and width. ◐ (U+25D0) is missing from JetBrains Mono, Fira Code and Hack,
 # so the first six are circles-by-fill those fonts all carry. partial (U+F015A) and blocked
 # (U+F073A) have no portable circle, so they bet on Nerd Font Material Design icons.
-# Override with F10_STATE_GLYPHS="<pending> <running> <done> <skipped> <failed> <prior> <partial> <blocked>".
+# Override with F10_STATE_GLYPHS="<upcoming> <running> <done> <skipped> <failed> <prior> <partial> <blocked>".
 read -r -a glyph_set <<<"${F10_STATE_GLYPHS:-○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺}"
 
 # These two set globals instead of printing: render calls them per phase on every refresh, and
@@ -136,7 +136,7 @@ color_for() {
     partial) _color=$'\033[1;33m' ;; # failed's weight in yellow: stopped, but the work survived
     blocked) _color=$'\033[1;35m' ;; # neither red nor yellow: nothing broke, someone said no
     prior) _color=$'\033[2;32m' ;;   # done's green, dimmed: it happened, just not in this run
-    *) _color=$'\033[2m' ;;          # pending and skipped are both "nothing happening here"
+    *) _color=$'\033[2m' ;;          # upcoming and skipped are both "nothing happening here"
   esac
 }
 
@@ -317,7 +317,7 @@ case "${1:-}" in
     cat >&2 <<'USAGE'
 f10-state.sh - where an f10 run is right now, for the status line to render.
 
-  set <capture|plan|ship> <pending|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
+  set <capture|plan|ship> <upcoming|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
   task <id> [<url>]        record the task this run is about
   note <reason> [<next>]   why a run stopped, and what unblocks it
   ask <text>               the question a driven run stopped on, options included

@@ -3,8 +3,8 @@ task
 url 
 root /work/acme
 capture running
-plan pending
-ship pending
+plan upcoming
+ship upcoming
 leaf 
 at 
 final 

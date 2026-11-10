@@ -25,7 +25,7 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 
 | glyph | state |
 |---|---|
-| `○` | pending |
+| `○` | upcoming |
 | `◎` | running |
 | `●` | done |
 | `◉` | prior: done before this run, a saved plan reused |

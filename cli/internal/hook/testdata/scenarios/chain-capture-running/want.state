@@ -2,9 +2,9 @@ v 1
 task FT-12
 url https://github.com/acme/app/issues/12
 root /work/acme
-capture pending
-plan pending
-ship pending
+capture upcoming
+plan upcoming
+ship upcoming
 leaf 
 at 
 final 
