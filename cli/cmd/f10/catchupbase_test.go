@@ -302,7 +302,7 @@ func TestShipStopped(t *testing.T) {
 	}
 
 	for status, want := range map[string]bool{"failed": true, "partial": true, "running": false, "blocked": false} {
-		if err := (&state.Run{Session: "sess-1", Ship: status}).Save(dir, time.Now()); err != nil {
+		if err := (&state.Run{Session: "sess-1", Ship: status}).Save(t.Context(), dir, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 

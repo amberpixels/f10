@@ -175,7 +175,7 @@ func TestPipelineRoundTrip(t *testing.T) {
 		t.Fatalf("pipeline %q final %q, want %q final pr", r.Pipeline, r.Final, want)
 	}
 
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +188,7 @@ func TestPipelineRoundTrip(t *testing.T) {
 		t.Errorf("loaded pipeline %q, want %q", got.Pipeline, want)
 	}
 
-	got.Seed("ship", "GH-9", "")
+	got.Seed(t.Context(), "ship", "GH-9", "")
 
 	if got.Pipeline != nil || got.Final != "" {
 		t.Errorf("Seed kept pipeline %q final %q", got.Pipeline, got.Final)
@@ -233,7 +233,7 @@ func TestLeafPlace(t *testing.T) {
 		}
 
 		if i == 5 {
-			if err := r.Save(dir, time.Now()); err != nil {
+			if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 
@@ -323,7 +323,7 @@ func TestRenderParity(t *testing.T) {
 	render := func(r *Run) string {
 		t.Helper()
 
-		if err := r.Save(dir, time.Now()); err != nil {
+		if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 
@@ -396,7 +396,7 @@ func TestSaveFlattensAndRoundTrips(t *testing.T) {
 	r := Fresh("s")
 	r.Root, r.Skill, r.Note = "/work/acme", "ship", "two\nlines"
 
-	if err := r.Save(dir, time.Unix(1_800_000_000, 0)); err != nil {
+	if err := r.Save(t.Context(), dir, time.Unix(1_800_000_000, 0)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -430,7 +430,7 @@ func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := r.Save(dir, time.Unix(1_800_000_200, 0)); err != nil {
+	if err := r.Save(t.Context(), dir, time.Unix(1_800_000_200, 0)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -456,7 +456,7 @@ func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
 	}
 
 	_ = back.SetDone("catchup", time.Unix(1_800_000_300, 0))
-	back.Seed("ship", "GH-1", "")
+	back.Seed(t.Context(), "ship", "GH-1", "")
 
 	if back.Done != "" || !back.DoneAt.IsZero() {
 		t.Errorf("a new skill's seed kept the signal: %+v", back)
@@ -482,7 +482,7 @@ func TestStopKindRoundTripsAndRetires(t *testing.T) {
 		t.Fatalf("the failing set dropped the kind written before it: %v, %+v", err, r)
 	}
 
-	if err := r.Save(dir, time.Unix(1_800_000_200, 0)); err != nil {
+	if err := r.Save(t.Context(), dir, time.Unix(1_800_000_200, 0)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -500,7 +500,7 @@ func TestStopKindRoundTripsAndRetires(t *testing.T) {
 	}
 
 	_ = back.SetStop(StopGuard)
-	back.Seed("ship", "GH-1", "")
+	back.Seed(t.Context(), "ship", "GH-1", "")
 
 	if back.Stop != "" {
 		t.Errorf("a new skill's seed kept the kind: %+v", back)
@@ -616,9 +616,9 @@ func TestInject(t *testing.T) {
 
 	// a new run (seed) and a dropped badge (clear) are not a new context
 	r := Fresh("s3")
-	r.Seed("plan", "GH-2", dir)
+	r.Seed(t.Context(), "plan", "GH-2", dir)
 
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -658,7 +658,7 @@ func TestSeedRecordsTheTask(t *testing.T) {
 	} {
 		t.Run(tc.skill+" "+tc.args, func(t *testing.T) {
 			r := Fresh("s")
-			r.Seed(tc.skill, tc.args, "")
+			r.Seed(t.Context(), tc.skill, tc.args, "")
 
 			if r.Task != tc.want {
 				t.Errorf("Task = %q, want %q", r.Task, tc.want)
@@ -675,9 +675,9 @@ func TestSeedRecordsTheTask(t *testing.T) {
 // as it does for a letter-only prefix.
 func TestSeedChainsADigitPrefix(t *testing.T) {
 	r := Fresh("s")
-	r.Seed("plan", "K8S-12", "")
+	r.Seed(t.Context(), "plan", "K8S-12", "")
 	r.Plan = "done"
-	r.Seed("ship", "K8S-12", "")
+	r.Seed(t.Context(), "ship", "K8S-12", "")
 
 	if r.Task != "K8S-12" || r.Plan != "done" {
 		t.Errorf("task %q plan %q, want K8S-12 and the plan kept done", r.Task, r.Plan)
@@ -701,7 +701,7 @@ func TestRenderCountsAsks(t *testing.T) {
 	}
 
 	r := &Run{Session: "asks", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -732,7 +732,7 @@ func TestRenderRecordsModel(t *testing.T) {
 	dir := t.TempDir()
 
 	r := &Run{Session: "s1", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -778,7 +778,7 @@ func TestPipelineLabels(t *testing.T) {
 		t.Errorf("leaf %q at %d shown %q text %q", r.Leaf, r.At, r.LeafShown(), r.PhaseText("ship"))
 	}
 
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -818,7 +818,7 @@ func TestPipelineLabels(t *testing.T) {
 		t.Errorf("an unlabelled pipeline has labels %q", plain.Labels)
 	}
 
-	if err := plain.Save(dir, time.Now()); err != nil {
+	if err := plain.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 

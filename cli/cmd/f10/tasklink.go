@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -129,7 +130,7 @@ func taskFact(ctx context.Context, w io.Writer, dir, id string) fact {
 
 	project := ""
 	if links.on {
-		project = projectOf(ctx, dir)
+		project = target.ProjectOf(ctx, dir)
 	}
 
 	links.Load(ctx, project, id)

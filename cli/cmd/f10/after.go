@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -98,30 +99,30 @@ type tracker struct {
 
 // tracker binds the lookups to this target: the driver's `read` for the
 // body where the project has one, the host's issue otherwise.
-func (t *target) tracker() tracker {
-	main := t.lay.MainRoot
+func trackerFor(t *target.Target) tracker {
+	main := t.Layout.MainRoot
 	if main == "" {
-		main = t.lay.CheckoutRoot
+		main = t.Layout.CheckoutRoot
 	}
 
 	tr := tracker{
-		resolve: t.reference,
+		resolve: t.Reference,
 		info: func(ctx context.Context, task ref.Ref) (taskInfo, error) {
-			return t.tasks().Info(ctx, task)
+			return tasksFor(t).Info(ctx, task)
 		},
-		storage: t.lay.StorageRoot,
-		titles:  t.eff.TitleTemplate,
+		storage: t.Layout.StorageRoot,
+		titles:  t.Effective.TitleTemplate,
 	}
 
 	children := func(keepClosed bool) func(context.Context, ref.Ref) ([]childRow, error) {
 		return func(ctx context.Context, task ref.Ref) ([]childRow, error) {
-			raw, err := t.rawChildren(ctx, task)
+			raw, err := rawChildrenFor(ctx, t, task)
 			if err != nil {
 				return nil, err
 			}
 
 			rows, err := shapeChildren(ctx, tr, main, raw, keepClosed)
-			t.rememberRefs(ctx, childRefs(rows)...)
+			rememberRefsFor(ctx, t, childRefs(rows)...)
 
 			return rows, err
 		}

@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -145,7 +146,7 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 	root := cmd.String("root")
 
 	// outside git only --root can name the store, and paths stay cwd-relative
-	top, err := gitx.Exec(ctx, cwd, "rev-parse", "--show-toplevel")
+	top, err := gitx.Toplevel(ctx, cwd)
 	if err != nil {
 		if root == "" {
 			return nil, fmt.Errorf("lore needs a git repository or --root: %w", err)
@@ -160,7 +161,7 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 			return nil, err
 		}
 	default:
-		t, err := targetFor(ctx, cmd)
+		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -175,12 +176,12 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 	}, nil
 }
 
-func loreRootFor(t *target) string {
-	if t.eff.Lore == "committed" {
-		return filepath.Join(t.lay.CheckoutRoot, ".lore")
+func loreRootFor(t *target.Target) string {
+	if t.Effective.Lore == "committed" {
+		return filepath.Join(t.Layout.CheckoutRoot, ".lore")
 	}
 
-	return localLoreRoot(t.lay)
+	return localLoreRoot(t.Layout)
 }
 
 // loreNote names each missing kind, so a change that reached finish without a
@@ -460,7 +461,7 @@ func runLoreChange(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("lore change takes at most one task id")
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}

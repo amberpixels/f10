@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -133,7 +134,7 @@ func prCommand() *cli.Command {
 }
 
 func runPRBase(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -180,7 +181,7 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 // runPRDiff reads the checkout's own state where it can: a branch checked out
 // here is diffed with its uncommitted work, which no pushed PR holds.
 func runPRDiff(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 	var out string
 
 	if s.number > 0 && !s.here {
-		h, err := t.host()
+		h, err := hostOf(t)
 		if err != nil {
 			return err
 		}
@@ -284,7 +285,7 @@ func patchFiles(patch string) string {
 }
 
 func runPRView(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -321,7 +322,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}
@@ -363,12 +364,12 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 }
 
 func runPROpen(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // The drive verb runs tasks through their flow and exits when every
@@ -87,7 +88,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if a.list || a.cancel > 0 {
-		t, err := targetFor(ctx, cmd)
+		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return err
 		}
@@ -97,18 +98,18 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				ctx,
 				cmd.Writer,
 				linksFor(cmd.Writer, false),
-				t.refProject(ctx),
-				t.lay.StorageRoot.Path(),
+				t.RefProject(ctx),
+				t.Layout.StorageRoot.Path(),
 				a.all,
 				rowFinishedFor(ctx, t),
 			)
 		}
 
-		if err := driveCancel(cmd.Writer, t.lay.StorageRoot.Path(), a.cancel, time.Now()); err != nil {
+		if err := driveCancel(cmd.Writer, t.Layout.StorageRoot.Path(), a.cancel, time.Now()); err != nil {
 			return err
 		}
 
-		closeDriveAsks(asks.Dir(), t.lay.StorageRoot.Path(), a.cancel, time.Now())
+		closeDriveAsks(asks.Dir(), t.Layout.StorageRoot.Path(), a.cancel, time.Now())
 
 		return nil
 	}
@@ -122,7 +123,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -135,7 +136,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
 	if a.resume > 0 {
-		rec, err := drives.Read(t.lay.StorageRoot.Path(), a.resume)
+		rec, err := drives.Read(t.Layout.StorageRoot.Path(), a.resume)
 		if err != nil {
 			return err
 		}
@@ -150,7 +151,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		argv = rec.Args
 	}
 
-	run, err := resolveRun(ctx, t.eff, runInput{pace: a.pace})
+	run, err := resolveRun(ctx, t.Effective, runInput{pace: a.pace})
 	if err != nil {
 		return err
 	}
@@ -161,11 +162,11 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// the drive lays --agent and each task's suffix on per task
-	layers := agentMapOf(t.eff)
+	layers := agentMapOf(t.Effective)
 
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	drv := t.driver()
-	h, hostErr := t.host()
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+	drv := t.Driver()
+	h, hostErr := hostOf(t)
 
 	if fl.finishes() && hostErr != nil {
 		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
@@ -178,7 +179,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 	in := &driveInput{
 		main:    main,
-		root:    t.lay.StorageRoot.Path(),
+		root:    t.Layout.StorageRoot.Path(),
 		args:    a,
 		argv:    argv,
 		flow:    fl,
@@ -190,7 +191,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 			return run.flowAt(p, fl.recorded())
 		},
-		storage:         t.lay.StorageRoot,
+		storage:         t.Layout.StorageRoot,
 		settings:        claudeSettingsPath(),
 		layers:          layers,
 		stateDir:        state.Dir(),
@@ -200,7 +201,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		defaultParallel: defaultParallel(),
 		pull:            pullOf,
 		driver:          drv,
-		tracker:         t.tracker(),
+		tracker:         trackerFor(t),
 		title:           func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		started:         startedMove(t),
 		record:          recordAt,
@@ -218,8 +219,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in.sleep = in.wake
 	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""
 
-	spec, why := verifySpecOf(t.eff)
-	in.catchup = newCatchupEngine(catchupPolicy(t.eff), spec, why, t.eff.Traces, main)
+	spec, why := verifySpecOf(t.Effective)
+	in.catchup = newCatchupEngine(catchupPolicy(t.Effective), spec, why, t.Effective.Traces, main)
 
 	if drain != nil {
 		go func() {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -94,17 +95,17 @@ func reviewCommand() *cli.Command {
 
 // remoteReviewer refuses before any host call, each refusal naming what to fix.
 func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	f := t.eff.Review
+	f := t.Effective.Review
 	if err := f.Validate(); err != nil {
 		return nil, err
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 func daemonCommand() *cli.Command {
@@ -114,7 +115,7 @@ func writeDaemonStatus(ctx context.Context, w io.Writer, links *taskLinks, rep d
 			// daemon runs drives for several
 			project := ""
 			if links.on {
-				project = projectOf(ctx, r.Dir)
+				project = target.ProjectOf(ctx, r.Dir)
 			}
 
 			ids := make([]string, 0, len(rec.Tasks))
@@ -192,12 +193,12 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		t, err := targetFor(ctx, cmd)
+		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
-		if path = daemon.FindLog(dir, t.lay.StorageRoot.Path(), n); path == "" {
+		if path = daemon.FindLog(dir, t.Layout.StorageRoot.Path(), n); path == "" {
 			return fmt.Errorf("no daemon log for drive %d in this project", n)
 		}
 	}
@@ -225,7 +226,7 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []string, a driveArgs) error {
+func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driveArgs) error {
 	dir, ver := daemon.RunDir(), daemonVersion()
 
 	cwd, err := os.Getwd()
@@ -237,14 +238,14 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target, argv []stri
 		Op:   daemon.OpRun,
 		Argv: argv,
 		Dir:  cwd,
-		Root: t.lay.StorageRoot.Path(),
-		Env:  driveEnv(os.Environ(), t.eff.DriveEnv),
+		Root: t.Layout.StorageRoot.Path(),
+		Env:  driveEnv(os.Environ(), t.Effective.DriveEnv),
 	}
 
 	// a rerun may attach to the drive still running, which reads its cap
 	// from the record each tick
 	if a.parallel > 0 {
-		setDriveParallel(w, t.lay.StorageRoot.Path(), argv, a)
+		setDriveParallel(w, t.Layout.StorageRoot.Path(), argv, a)
 	}
 
 	// a drive given answers starts its own process, so the answers reach it

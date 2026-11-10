@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -35,7 +36,7 @@ type statusPrinted struct {
 // read once whichever paths the call takes. The ledger, the gate source and
 // the drives are read on first use: the session-run and listing paths need none.
 type statusReader struct {
-	t       *target
+	t       *target.Target
 	now     time.Time
 	main    string // where the branch config and the ledger's project live
 	live    []*state.Run
@@ -50,14 +51,14 @@ type statusReader struct {
 	active     []drives.Live // the drive records, read once for both the rows and the gates
 }
 
-func newStatusReader(t *target, now time.Time) (*statusReader, error) {
+func newStatusReader(t *target.Target, now time.Time) (*statusReader, error) {
 	live, err := state.List(state.Dir(), now, state.TTL())
 	if err != nil {
 		return nil, err
 	}
 
 	return &statusReader{
-		t: t, now: now, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), live: live, host: t.optionalHost(),
+		t: t, now: now, main: cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot), live: live, host: optionalHostOf(t),
 	}, nil
 }
 
@@ -74,11 +75,11 @@ func (rd *statusReader) gateSource(ctx context.Context) gateSource {
 		rd.gates = gateSource{
 			events: rd.ledger(ctx),
 			main:   rd.main,
-			eff:    rd.t.eff,
-			review: rd.t.eff.Review,
+			eff:    rd.t.Effective,
+			review: rd.t.Effective.Review,
 			store:  &lore.Store{Root: loreRootFor(rd.t)},
 			host:   rd.host,
-			shared: rd.t.lay.StorageRoot.Path(),
+			shared: rd.t.Layout.StorageRoot.Path(),
 		}
 		rd.gates.driveFlows = driveFlows(rd.drives())
 	})
@@ -88,7 +89,7 @@ func (rd *statusReader) gateSource(ctx context.Context) gateSource {
 
 // drives is the drive records neither cancelled nor done.
 func (rd *statusReader) drives() []drives.Live {
-	rd.drivesOnce.Do(func() { rd.active = drives.Active(rd.t.lay.StorageRoot.Path()) })
+	rd.drivesOnce.Do(func() { rd.active = drives.Active(rd.t.Layout.StorageRoot.Path()) })
 
 	return rd.active
 }
@@ -96,7 +97,7 @@ func (rd *statusReader) drives() []drives.Live {
 // idOf turns a reference as typed into an id, read once per call.
 func (rd *statusReader) idOf(ctx context.Context) func(string) string {
 	if rd.resolve == nil {
-		rd.resolve = rd.t.idOf(ctx)
+		rd.resolve = rd.t.IDOf(ctx)
 	}
 
 	return rd.resolve
@@ -116,15 +117,15 @@ func (rd *statusReader) rows(ctx context.Context) rowSource {
 		live:    rd.live,
 		events:  rd.ledger(ctx),
 		main:    rd.main,
-		storage: rd.t.lay.StorageRoot,
-		prefix:  rd.t.eff.IDPrefix,
+		storage: rd.t.Layout.StorageRoot,
+		prefix:  rd.t.Effective.IDPrefix,
 		checkout: func(ctx context.Context, id, suffix string) (string, string) {
-			r, err := rd.t.reference(ctx, id)
+			r, err := rd.t.Reference(ctx, id)
 			if err != nil {
 				return "", ""
 			}
 
-			name, root, err := taskCheckout(ctx, rd.main, rd.t.driver(), r, suffix)
+			name, root, err := taskCheckout(ctx, rd.main, rd.t.Driver(), r, suffix)
 			if err != nil {
 				return "", ""
 			}
@@ -145,7 +146,7 @@ func (rd *statusReader) rows(ctx context.Context) rowSource {
 func (rd *statusReader) task(ctx context.Context, v statusView, token string, guessed bool) (statusPrinted, error) {
 	id, suffix := ref.SplitSuffix(token)
 
-	r, err := rd.t.reference(ctx, id)
+	r, err := rd.t.Reference(ctx, id)
 	if err != nil {
 		return statusPrinted{}, err
 	}
@@ -203,7 +204,7 @@ func (rd *statusReader) task(ctx context.Context, v statusView, token string, gu
 //
 //nolint:lostfield // a read: readShipment fills the fields
 func (rd *statusReader) shipment(ctx context.Context, in taskStatusInput, runs []*state.Run) shipment {
-	known := ledger.LookupRefs(ctx, rd.t.refProject(ctx), []string{in.id})[in.id]
+	known := ledger.LookupRefs(ctx, rd.t.RefProject(ctx), []string{in.id})[in.id]
 	s := readShipment(ctx, in, rd.ledger(ctx), known)
 
 	if len(runs) == 0 {

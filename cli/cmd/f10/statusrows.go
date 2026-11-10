@@ -517,7 +517,7 @@ func pullNumber(url string) string {
 // parentRows is `status <id>` for a parent: its children, closed ones
 // included, as rows. errNoParentLink, or no rows, is not a parent.
 func (rd *statusReader) parentRows(ctx context.Context, r ref.Ref) ([]taskRow, error) {
-	kids, err := rd.t.tracker().allChildren(ctx, r)
+	kids, err := trackerFor(rd.t).allChildren(ctx, r)
 	if err != nil || len(kids) == 0 {
 		return nil, err
 	}
@@ -528,7 +528,7 @@ func (rd *statusReader) parentRows(ctx context.Context, r ref.Ref) ([]taskRow, e
 // finishedRow is `status <id>` for a task with no branch left: one done
 // row when the ledger, the tracker or the plan archive says it finished.
 func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *taskRow {
-	tr := rd.t.tracker()
+	tr := trackerFor(rd.t)
 	info, _ := tr.info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
 	lt := lookaround.FoldLedger(rd.ledger(ctx), r.ID, rd.idOf(ctx))
@@ -539,9 +539,9 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *taskRow {
 	}
 
 	k := childRow{ID: r.ID, Finished: true}
-	if title, err := rd.t.tasks().Title(ctx, r); err == nil {
+	if title, err := tasksFor(rd.t).Title(ctx, r); err == nil {
 		k.Title = title
-		rd.t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
+		rememberRefsFor(ctx, rd.t, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
 	}
 
 	rows := rd.rows(ctx).rowsFrom(ctx, []childRow{k})

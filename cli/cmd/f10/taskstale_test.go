@@ -184,30 +184,30 @@ func TestTaskStaleCreatedAt(t *testing.T) {
 
 	tg := childTarget(t, "gh")
 
-	at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, "")
+	at, err := createdAtFor(t.Context(), tg, ref.Ref{ID: "FT-14", Number: "14"}, "")
 	if err != nil || at.Format(time.DateOnly) != "2026-09-20" {
 		t.Errorf("host date = %v, %v", at, err)
 	}
 
-	_, err = tg.createdAt(t.Context(), ref.Ref{ID: "FT-15", Number: "15"}, "")
+	_, err = createdAtFor(t.Context(), tg, ref.Ref{ID: "FT-15", Number: "15"}, "")
 	if err == nil || !strings.Contains(err.Error(), "rate limited") || strings.Contains(err.Error(), "fetch adapter") {
 		t.Errorf("failing host = %v, want gh's error alone", err)
 	}
 
-	at, err = tg.createdAt(t.Context(), ref.Ref{ID: "FT-16", Number: "16"}, "2020-01-02")
+	at, err = createdAtFor(t.Context(), tg, ref.Ref{ID: "FT-16", Number: "16"}, "2020-01-02")
 	if err != nil || at.Format(time.DateOnly) != "2020-01-02" {
 		t.Errorf("--created = %v, %v; want no host call", at, err)
 	}
 
-	if _, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-16", Number: "16"}, "2020-13-01"); err == nil ||
+	if _, err := createdAtFor(t.Context(), tg, ref.Ref{ID: "FT-16", Number: "16"}, "2020-13-01"); err == nil ||
 		!strings.Contains(err.Error(), "YYYY-MM-DD") {
 		t.Errorf("bad --created = %v", err)
 	}
 
-	tg.eff.TrackerKind = facts.TrackerJira
-	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
+	tg.Effective.TrackerKind = facts.TrackerJira
+	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
-	if at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, ""); err != nil || !at.IsZero() {
+	if at, err := createdAtFor(t.Context(), tg, ref.Ref{ID: "FT-14", Number: "14"}, ""); err != nil || !at.IsZero() {
 		t.Errorf("non-host tracker = %v, %v; want undated", at, err)
 	}
 }

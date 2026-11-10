@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -20,25 +21,13 @@ import (
 // `task ref` hands them out from the ledger's task refs, which every
 // tracker read f10 makes fills, and asks the tracker only on a miss.
 
-// projectOf is the ledger's project id for dir. A var, so tests that fake
-// git leave the task refs alone.
-var projectOf = func(ctx context.Context, dir string) string { return ledger.Where(ctx, dir).Project }
-
-// refProject is the ledger's project id for this target, read once: status
-// and drive write refs for every task they show.
-func (t *target) refProject(ctx context.Context) string {
-	t.projectOnce.Do(func() { t.project = projectOf(ctx, t.dir) })
-
-	return t.project
-}
-
 // rememberRefs records refs as this project's; it never fails its caller.
-func (t *target) rememberRefs(ctx context.Context, refs ...ledger.TaskRef) {
+func rememberRefsFor(ctx context.Context, t *target.Target, refs ...ledger.TaskRef) {
 	if len(refs) == 0 {
 		return
 	}
 
-	ledger.RememberRefs(ctx, t.refProject(ctx), refs...)
+	ledger.RememberRefs(ctx, t.RefProject(ctx), refs...)
 }
 
 func rowRefs(rows []row) []ledger.TaskRef {
@@ -65,10 +54,10 @@ func docTitle(id, doc string) string {
 
 // driverTitle strips the prefix tracker.title wrote, as the host's titles
 // come stripped.
-func (t *target) driverTitle(r ref.Ref, doc string) string {
+func driverTitleFor(t *target.Target, r ref.Ref, doc string) string {
 	title := taskTitle(strings.TrimLeft(doc, " \t\r\n"))
 
-	return tasktitle.Clean(t.eff.TitleTemplate.Strip(title, r.ID, r.Number), r.ID)
+	return tasktitle.Clean(t.Effective.TitleTemplate.Strip(title, r.ID, r.Number), r.ID)
 }
 
 // mdLink is the task as a markdown link, brackets in the title escaped so
@@ -85,7 +74,7 @@ func runTaskRef(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("ref needs a task id")
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -99,12 +88,12 @@ func runTaskRef(ctx context.Context, cmd *cli.Command) error {
 			continue
 		}
 
-		if r, err := t.reference(ctx, token); err == nil {
+		if r, err := t.Reference(ctx, token); err == nil {
 			refs[i] = r
 		}
 	}
 
-	known := t.taskRefs(ctx, refs, md, cmd.Bool("fresh"), cmd.ErrWriter)
+	known := taskRefsFor(t, ctx, refs, md, cmd.Bool("fresh"), cmd.ErrWriter)
 
 	for i, token := range tokens {
 		if _, err := fmt.Fprintln(cmd.Writer, refLine(token, refs[i].ID, known[refs[i].ID], md)); err != nil {
@@ -131,13 +120,13 @@ func refLine(token, id string, k ledger.TaskRef, md bool) string {
 // taskRefs asks the tracker only for a task the ledger lacks (or lacks a
 // url for, with md), or for every task with fresh; a tracker that cannot
 // answer leaves the task out, with a note on warn.
-func (t *target) taskRefs(
+func taskRefsFor(t *target.Target,
 	ctx context.Context,
 	refs []ref.Ref,
 	md, fresh bool,
 	warn io.Writer,
 ) map[string]ledger.TaskRef {
-	project := t.refProject(ctx)
+	project := t.RefProject(ctx)
 
 	var ids []string
 
@@ -159,7 +148,7 @@ func (t *target) taskRefs(
 			continue
 		}
 
-		k, err := t.lookupRef(ctx, r)
+		k, err := lookupRefFor(ctx, t, r)
 		if err != nil {
 			ui.Warnf(warn, "%s: %v", r.ID, err)
 			delete(known, r.ID)
@@ -178,25 +167,26 @@ func (t *target) taskRefs(
 	return known
 }
 
-func (t *target) lookupRef(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) {
-	return t.tasks().Ref(ctx, r)
+//nolint:lostfield // a lookup through the target, not a conversion of it
+func lookupRefFor(ctx context.Context, t *target.Target, r ref.Ref) (ledger.TaskRef, error) {
+	return tasksFor(t).Ref(ctx, r)
 }
 
 // linkBodyAfter links the body's `After: <id>` line to the base task, so a
 // tracker reader sees what it waits for; a base f10 cannot title stays
 // bare, since create never fails over a link.
-func (t *target) linkBodyAfter(ctx context.Context, doc string, warn io.Writer) string {
+func linkBodyAfterFor(ctx context.Context, t *target.Target, doc string, warn io.Writer) string {
 	id := afterIn(doc)
 	if id == "" {
 		return doc
 	}
 
-	r, err := t.reference(ctx, id)
+	r, err := t.Reference(ctx, id)
 	if err != nil {
 		return doc
 	}
 
-	k := t.taskRefs(ctx, []ref.Ref{r}, true, false, warn)[r.ID]
+	k := taskRefsFor(t, ctx, []ref.Ref{r}, true, false, warn)[r.ID]
 	if k.Title == "" || k.URL == "" {
 		return doc
 	}

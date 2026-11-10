@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -180,4 +182,31 @@ func priorityOf(names []string, priorities map[string]string) string {
 	}
 
 	return level
+}
+
+// optionalHost is the host, or nil for a checkout with no host CLI: a
+// reader that works without one skips it rather than failing.
+func optionalHostOf(t *target.Target) *host {
+	h, err := hostOf(t)
+	if err != nil {
+		return nil
+	}
+
+	return &h
+}
+
+// host is the CLI the probe settled on; a wrong guess opens the wrong site,
+// so "unknown" refuses rather than picking.
+func hostOf(t *target.Target) (host, error) {
+	switch t.Probes.CLI.Value {
+	case "gh", "glab":
+		h := newHost(t.Probes.CLI.Value, t.Dir)
+		if t.Effective != nil {
+			h.titles, h.prefix = t.Effective.TitleTemplate, t.Effective.IDPrefix
+		}
+
+		return h, nil
+	default:
+		return host{}, errors.New("no host CLI for this checkout: " + t.Probes.CLI.Evidence)
+	}
 }

@@ -128,7 +128,7 @@ func TestTraceTrailersIgnoreTheSessionTask(t *testing.T) {
 	t.Setenv("F10_SESSION_ID", "sess-1")
 
 	run := &state.Run{Session: "sess-1", Task: "DM-5"}
-	if err := run.Save(dir, time.Now()); err != nil {
+	if err := run.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 

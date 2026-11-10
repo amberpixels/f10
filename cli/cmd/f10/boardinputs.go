@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 func boardPeople(people []person) []lookaround.Person {
@@ -102,13 +103,19 @@ func collectBoards(
 
 // boardInputs binds the collectors to the target. A checkout with no origin
 // remote is local only: no host, and no tracker but a driver.
-func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time, remote bool) lookaround.Inputs {
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+func boardInputs(
+	ctx context.Context,
+	t *target.Target,
+	warn io.Writer,
+	since time.Time,
+	remote bool,
+) lookaround.Inputs {
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	place := ledger.Where(ctx, main)
 
 	in := lookaround.Inputs{
-		Project: lookaround.Project{ID: place.Project, Name: t.lay.Project, Remote: remote},
-		Prefix:  t.eff.IDPrefix,
+		Project: lookaround.Project{ID: place.Project, Name: t.Layout.Project, Remote: remote},
+		Prefix:  t.Effective.IDPrefix,
 		Since:   since,
 	}
 
@@ -122,24 +129,24 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			return nil, err
 		}
 
-		return boardTasks(settlePriorities(rows, warn), t.eff.IDPrefix), nil
+		return boardTasks(settlePriorities(rows, warn), t.Effective.IDPrefix), nil
 	}
 
-	if t.pb.RemoteURL == "" {
+	if t.Probes.RemoteURL == "" {
 		in.Project.LocalOnly = true
 
-		if t.driver() == nil {
+		if t.Driver() == nil {
 			in.Tasks = nil
 		}
-	} else if h, err := t.host(); err != nil {
+	} else if h, err := hostOf(t); err != nil {
 		in.HostError = err.Error()
 	} else {
 		in.Host = &h.Host
 		in.Project.Host = h.Name
 
-		if t.eff.Review.Remote() {
+		if t.Effective.Review.Remote() {
 			in.RemoteOpen = func(ctx context.Context, number int) (bool, error) {
-				rv, err := newReviewer(ctx, h, t.eff.Review, strconv.Itoa(number))
+				rv, err := newReviewer(ctx, h, t.Effective.Review, strconv.Itoa(number))
 				if err != nil {
 					return false, err
 				}
@@ -164,8 +171,8 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 			LedgerPath: ledger.Path(),
 			ProjectID:  place.Project,
 			Agents:     reachableAgents(main),
-			SharedRoot: t.lay.StorageRoot,
-			Resolve:    t.idOf(ctx),
+			SharedRoot: t.Layout.StorageRoot,
+			Resolve:    t.IDOf(ctx),
 		}
 	}
 

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -54,13 +55,13 @@ type newTask struct {
 // tasks is the driver with the host's issues behind it, the host alone, or
 // a refusal; only a driver's exit 3 reaches the second. Built per call, so
 // a target whose facts change never answers from a stale choice.
-func (t *target) tasks() taskSource {
-	d := t.driver()
+func tasksFor(t *target.Target) taskSource {
+	d := t.Driver()
 
 	var rest taskSource = refusedSource{t: t, d: d}
 
-	if t.hostIssues() {
-		if h, err := t.host(); err != nil {
+	if t.HostIssues() {
+		if h, err := hostOf(t); err != nil {
 			rest = refusedSource{t: t, d: d, noCLI: err}
 		} else {
 			rest = hostSource{t: t, h: h}
@@ -76,8 +77,8 @@ func (t *target) tasks() taskSource {
 
 // refusedUpFront is the refusal a write gives before stdin is read; a
 // driver may still take the verb, so only a source with no driver refuses.
-func (t *target) refusedUpFront() (refusedSource, bool) {
-	s, ok := t.tasks().(refusedSource)
+func refusedUpFrontFor(t *target.Target) (refusedSource, bool) {
+	s, ok := tasksFor(t).(refusedSource)
 
 	return s, ok
 }
@@ -219,7 +220,7 @@ func (s fallbackSource) Create(ctx context.Context, warnTo io.Writer, nt newTask
 // driverSource runs the project's driver. A declined verb comes back as
 // driver.ErrUnsupported, unwrapped, for fallbackSource to read.
 type driverSource struct {
-	t *target
+	t *target.Target
 	d *driver.Driver
 }
 
@@ -230,9 +231,9 @@ func (s driverSource) Read(ctx context.Context, r ref.Ref) (string, ledger.TaskR
 		return "", ledger.TaskRef{}, err
 	}
 
-	doc = oneIDHeading(doc, r, s.t.eff.TitleTemplate)
+	doc = oneIDHeading(doc, r, s.t.Effective.TitleTemplate)
 
-	return doc, ledger.TaskRef{ID: r.ID, Title: s.t.driverTitle(r, doc)}, nil
+	return doc, ledger.TaskRef{ID: r.ID, Title: driverTitleFor(s.t, r, doc)}, nil
 }
 
 //nolint:lostfield // a lookup by id, not a conversion
@@ -242,7 +243,7 @@ func (s driverSource) Ref(ctx context.Context, r ref.Ref) (ledger.TaskRef, error
 		return ledger.TaskRef{}, err
 	}
 
-	k := ledger.TaskRef{ID: r.ID, Title: s.t.driverTitle(r, doc)}
+	k := ledger.TaskRef{ID: r.ID, Title: driverTitleFor(s.t, r, doc)}
 	if url, err := s.d.Run(ctx, driver.VerbURL, r.Number); err == nil {
 		k.URL = strings.TrimSpace(url)
 	}
@@ -362,7 +363,7 @@ func (s driverSource) rows(ctx context.Context, what, verb string, args ...strin
 		return nil, fmt.Errorf("parsing driver %s rows: %w", what, err)
 	}
 
-	return stripTitles(rows, s.t.eff.TitleTemplate), nil
+	return stripTitles(rows, s.t.Effective.TitleTemplate), nil
 }
 
 // write runs a verb taking stdin and passes its warning on; a declined
@@ -378,13 +379,13 @@ func (s driverSource) write(ctx context.Context, warnTo io.Writer, in, verb stri
 
 // hostSource is the host's issues as the tracker.
 type hostSource struct {
-	t *target
+	t *target.Target
 	h host
 }
 
 //nolint:lostfield // a lookup by id, not a conversion
 func (s hostSource) Read(ctx context.Context, r ref.Ref) (string, ledger.TaskRef, error) {
-	doc, iss, err := s.h.issueDoc(ctx, r.ID, r.Number, s.t.eff.StaleAfter)
+	doc, iss, err := s.h.issueDoc(ctx, r.ID, r.Number, s.t.Effective.StaleAfter)
 	if err != nil {
 		return "", ledger.TaskRef{}, err
 	}
@@ -430,11 +431,11 @@ func (s hostSource) URL(ctx context.Context, r ref.Ref) (string, error) {
 func (s hostSource) Index(ctx context.Context) (string, error) { return s.h.IssuesURL(ctx) }
 
 func (s hostSource) List(ctx context.Context, limit int) ([]row, error) {
-	return s.h.listIssues(ctx, "", s.t.eff.IDPrefix, s.t.eff.PriorityLabels, limit)
+	return s.h.listIssues(ctx, "", s.t.Effective.IDPrefix, s.t.Effective.PriorityLabels, limit)
 }
 
 func (s hostSource) Search(ctx context.Context, query string) ([]row, error) {
-	return s.h.listIssues(ctx, query, s.t.eff.IDPrefix, s.t.eff.PriorityLabels, issuePage)
+	return s.h.listIssues(ctx, query, s.t.Effective.IDPrefix, s.t.Effective.PriorityLabels, issuePage)
 }
 
 func (s hostSource) Children(ctx context.Context, r ref.Ref) ([]rawChild, error) {
@@ -476,7 +477,7 @@ func (s hostSource) Comment(ctx context.Context, _ io.Writer, r ref.Ref, body st
 }
 
 func (s hostSource) Update(ctx context.Context, _ io.Writer, r ref.Ref, p props) error {
-	return s.h.update(ctx, r.Number, p, s.t.eff.PriorityLabels)
+	return s.h.update(ctx, r.Number, p, s.t.Effective.PriorityLabels)
 }
 
 func (s hostSource) Relink(ctx context.Context, _ io.Writer, r ref.Ref, parent, unwritten string) error {
@@ -497,7 +498,7 @@ func (s hostSource) Create(ctx context.Context, warnTo io.Writer, nt newTask) (r
 // plainly. Writes exit 3 so capture falls back to its adapters, except that
 // comment and update with no host CLI fail plainly (refuseWrite).
 type refusedSource struct {
-	t     *target
+	t     *target.Target
 	d     *driver.Driver // the driver that declined, nil when none was found
 	noCLI error          // set when the tracker is the host's issues and no CLI reaches it
 }
@@ -583,9 +584,9 @@ func (s refusedSource) why(verb string) string {
 		return s.noCLI.Error()
 	}
 
-	head := "project.md declares a " + s.t.eff.TrackerKind.String() + " tracker, which has no host-issues fallback, and "
+	head := "project.md declares a " + s.t.Effective.TrackerKind.String() + " tracker, which has no host-issues fallback, and "
 	if s.d == nil {
-		return head + "no driver was found (looked for " + strings.Join(s.t.driverPaths(), ", ") + ")"
+		return head + "no driver was found (looked for " + strings.Join(s.t.DriverPaths(), ", ") + ")"
 	}
 
 	need := ""

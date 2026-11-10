@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // A plan is a markdown file named after its task, so the reference that
@@ -47,7 +48,7 @@ func runPlanRead(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	return writeDoc(ctx, cmd.Writer, t.dir, string(data))
+	return writeDoc(ctx, cmd.Writer, t.Dir, string(data))
 }
 
 func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
@@ -71,24 +72,24 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("no editor: set $EDITOR, or use --link to get the path (%s)", path)
 	}
 
-	return shell.Passthrough(ctx, t.dir, editor[0], append(editor[1:], path)...)
+	return shell.Passthrough(ctx, t.Dir, editor[0], append(editor[1:], path)...)
 }
 
 // planFile never falls back to another plan: that is how a run ends up
 // reading the wrong task's work.
-func planFile(ctx context.Context, cmd *cli.Command) (*target, string, error) {
-	t, err := targetFor(ctx, cmd)
+func planFile(ctx context.Context, cmd *cli.Command) (*target.Target, string, error) {
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return nil, "", err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return nil, "", err
 	}
 
 	// a bundle's plan is the lead's file, whichever member was named
-	path := filepath.Join(t.pb.PlansDir, r.Head().ID+".md")
+	path := filepath.Join(t.Probes.PlansDir, r.Head().ID+".md")
 	if _, err := os.Stat(path); err != nil {
 		return nil, "", fmt.Errorf("no plan for %s at %s", memberLabel(r), path)
 	}

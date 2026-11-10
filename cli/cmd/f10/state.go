@@ -133,7 +133,7 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 	if session := state.Session(); session == "" {
 		_, err = change(state.Fresh(""), false)
 	} else {
-		err = state.Update(state.Dir(), session, stateLockWait, now, change)
+		err = state.Update(ctx, state.Dir(), session, stateLockWait, now, change)
 	}
 
 	if ue, ok := errors.AsType[*state.UsageError](applyErr); ok {

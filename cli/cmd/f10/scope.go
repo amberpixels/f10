@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // A scope is the projects a command answers for at once: every -C in order,
@@ -107,12 +108,12 @@ func parseRepo(entry, prefix string) (repoRef, error) {
 
 // scopeItems is what the flags name, in scope order, before anything is bound.
 func scopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPath string) ([]scopeItem, error) {
-	sels, groups := checkoutFlags(cmd), cmd.StringSlice("group")
+	sels, groups := target.CheckoutFlags(cmd), cmd.StringSlice("group")
 
 	var items []scopeItem
 
 	for _, sel := range sels {
-		dir, err := checkoutDir(sel)
+		dir, err := target.CheckoutDir(sel)
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +155,7 @@ func scopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPat
 
 // scoped reports whether the flags name a scope at all.
 func scoped(cmd *cli.Command) bool {
-	return len(checkoutFlags(cmd))+len(cmd.StringSlice("group")) > 0 || cmd.Bool("all")
+	return len(target.CheckoutFlags(cmd))+len(cmd.StringSlice("group")) > 0 || cmd.Bool("all")
 }
 
 // A scopeEntry is one bound project, or the error binding it, for the command
@@ -163,7 +164,7 @@ type scopeEntry struct {
 	dir    string
 	main   string // the main checkout, for a board of a checkout that would not bind
 	id     string // its project id, the normalised remote
-	target *target
+	target *target.Target
 	repo   *repoRef
 	err    error
 }
@@ -194,7 +195,7 @@ func bindScope(ctx context.Context, items []scopeItem, cmdName string) []scopeEn
 		e := scopeEntry{dir: it.dir, main: main, id: ledger.Where(ctx, main).Project}
 		ids[e.id] = true
 
-		if e.target, e.err = targetAt(ctx, it.dir, true, cmdName); e.err != nil {
+		if e.target, e.err = target.At(ctx, it.dir, true, cmdName); e.err != nil {
 			e.err = fmt.Errorf("%s: %w", it.dir, e.err)
 		}
 
@@ -223,14 +224,14 @@ func bindScope(ctx context.Context, items []scopeItem, cmdName string) []scopeEn
 
 // standupTargets fails on a checkout that fails, named: dropping it would
 // leave its work out of a report meant to be whole.
-func standupTargets(ctx context.Context, cmd *cli.Command) ([]*target, error) {
+func standupTargets(ctx context.Context, cmd *cli.Command) ([]*target.Target, error) {
 	if !scoped(cmd) {
-		t, err := targetFor(ctx, cmd)
+		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return nil, err
 		}
 
-		return []*target{t}, nil
+		return []*target.Target{t}, nil
 	}
 
 	items, err := scopeItems(cmd, standupConfigFile, nil, "")
@@ -238,7 +239,7 @@ func standupTargets(ctx context.Context, cmd *cli.Command) ([]*target, error) {
 		return nil, err
 	}
 
-	var targets []*target
+	var targets []*target.Target
 
 	for _, e := range bindScope(ctx, items, cmd.Name) {
 		switch {

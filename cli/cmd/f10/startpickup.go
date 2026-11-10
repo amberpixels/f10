@@ -5,18 +5,19 @@ import (
 	"errors"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // pickupFor is the PR the start argument names, or nil for a task id; a
 // bare #n the host knows as no PR is a task id.
-func pickupFor(ctx context.Context, t *target, token string) (*pickup, forge.PR, error) {
+func pickupFor(ctx context.Context, t *target.Target, token string) (*pickup, forge.PR, error) {
 	number, probe := pullToken(token)
 	if number == "" {
 		return nil, forge.PR{}, nil
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 
 	switch {
 	case err != nil && probe:

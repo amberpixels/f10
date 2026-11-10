@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
@@ -466,9 +467,9 @@ func driveList(
 // rowFinishedFor checks a record's row, an id as typed, by finishedTask, as
 // drive and status do; a row that names no task, or a git error, reads as
 // unfinished, since a wrong yes hides a halt.
-func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	tr := t.tracker()
+func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+	tr := trackerFor(t)
 	seen := map[string]bool{} // a task several records list is checked once
 
 	return func(row string) bool {
@@ -479,7 +480,7 @@ func rowFinishedFor(ctx context.Context, t *target) func(string) bool {
 
 		seen[id] = false
 
-		r, err := t.reference(ctx, id)
+		r, err := t.Reference(ctx, id)
 		if err != nil {
 			return false
 		}

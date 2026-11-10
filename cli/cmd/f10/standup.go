@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -153,7 +154,7 @@ func loadStandupLinks(ctx context.Context, links *taskLinks, rep standup.Standup
 			ids = append(append(ids, t.ID), t.Riders...)
 		}
 
-		links.LoadAs(ctx, projectOf(ctx, p.Repos[0].Checkout), p.Name, ids...)
+		links.LoadAs(ctx, target.ProjectOf(ctx, p.Repos[0].Checkout), p.Name, ids...)
 	}
 }
 

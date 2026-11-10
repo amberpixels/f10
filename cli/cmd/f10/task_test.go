@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -79,7 +80,7 @@ func TestGithubAuthScopesTheToken(t *testing.T) {
 
 	t.Setenv("PATH", bin)
 
-	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
 	auth := githubAuth(context.Background(), tg)
 	if auth == nil {
@@ -131,7 +132,7 @@ func TestListURLs(t *testing.T) {
 func TestTaskListURL(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.script("driver index", "https://tracker.example.com/board\n")
 
@@ -153,7 +154,7 @@ func TestTaskListURL(t *testing.T) {
 func TestTaskRows(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.script(
 		"driver list",
@@ -190,7 +191,7 @@ func TestTaskRows(t *testing.T) {
 		t.Errorf("fallback without a map = %+v, %v", rows, err)
 	}
 
-	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
+	tg.Effective.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
 	rows, err = taskRows(t.Context(), tg, issuePage)
 	if err != nil {
@@ -215,7 +216,7 @@ func TestTaskRows(t *testing.T) {
 func TestWriteTaskListRanksAndWarns(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.script("driver list", `[{"id":"FT-1","title":"a","priority":"Highest"},{"id":"FT-2","title":"b"},`+
 		`{"id":"FT-3","title":"c","priority":"low"},{"id":"FT-4","title":"d","priority":"HIGH"},`+
@@ -250,7 +251,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 		`[{"number":7,"title":"low","state":"OPEN","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"none","state":"OPEN","labels":[]},`+
 			`{"number":9,"title":"high","state":"OPEN","labels":[{"name":"P1"}]}]`)
-	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
+	tg.Effective.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
 	out.Reset()
 	warn.Reset()

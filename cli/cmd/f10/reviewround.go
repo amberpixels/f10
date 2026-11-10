@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -23,7 +24,7 @@ import (
 // the PR a series belongs to, and a branch checked out elsewhere, or a
 // subject that does not resolve, gets the rounds the directory holds.
 func runReviewRound(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -61,13 +62,13 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 // read, and what the branch says about its series. A branch checked out
 // elsewhere, or a subject that does not resolve, gets no series read, so a
 // closed one is archived only where its branch lives.
-func openReviews(ctx context.Context, t *target, explicit string, warn io.Writer) (string, roundSeries, error) {
+func openReviews(ctx context.Context, t *target.Target, explicit string, warn io.Writer) (string, roundSeries, error) {
 	key, err := reviewsKey(ctx, t, explicit)
 	if err != nil {
 		return "", roundSeries{}, err
 	}
 
-	dir := t.lay.StorageRoot.Reviews(key)
+	dir := t.Layout.StorageRoot.Reviews(key)
 
 	s, err := resolvePRSubject(ctx, t, explicit)
 	if err != nil || !s.here {
@@ -81,8 +82,8 @@ func openReviews(ctx context.Context, t *target, explicit string, warn io.Writer
 
 // reviewsKey names a task's findings directory: the task id (a bundle's
 // lead), else the branch with `/` as `-` for work no task names.
-func reviewsKey(ctx context.Context, t *target, explicit string) (string, error) {
-	r, err := t.reference(ctx, explicit)
+func reviewsKey(ctx context.Context, t *target.Target, explicit string) (string, error) {
+	r, err := t.Reference(ctx, explicit)
 	if err == nil {
 		return r.Head().ID, nil
 	}
@@ -91,7 +92,7 @@ func reviewsKey(ctx context.Context, t *target, explicit string) (string, error)
 		return "", err
 	}
 
-	branch := gitx.CurrentBranch(ctx, t.dir)
+	branch := gitx.CurrentBranch(ctx, t.Dir)
 	if branch == "" {
 		return "", fmt.Errorf("%w, and no branch is checked out to name the findings directory", err)
 	}
@@ -109,10 +110,10 @@ type roundSeries struct {
 
 // seriesOf checks for a merged branch first, so a branch left over after its
 // PR merged declines instead of archiving rounds and opening a new series.
-func seriesOf(ctx context.Context, t *target, s prSubject, dir string, warn io.Writer) (roundSeries, error) {
+func seriesOf(ctx context.Context, t *target.Target, s prSubject, dir string, warn io.Writer) (roundSeries, error) {
 	series := roundSeries{pr: "none"}
 
-	h, hostErr := t.host()
+	h, hostErr := hostOf(t)
 	if s.number > 0 {
 		series.pr = "#" + strconv.Itoa(s.number)
 		if hostErr == nil {

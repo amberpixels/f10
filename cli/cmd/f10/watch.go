@@ -24,6 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // The watcher reconciles a project's tasks that no drive owns, from the
@@ -95,7 +96,7 @@ func watchCommand() *cli.Command {
 }
 
 func runWatch(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -104,14 +105,14 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 		return runWatchPass(ctx, cmd, t)
 	}
 
-	store, err := loadWatchStore(t.lay.StorageRoot.Path())
+	store, err := loadWatchStore(t.Layout.StorageRoot.Path())
 	if err != nil {
 		return err
 	}
 
 	w := cmd.Writer
-	fmt.Fprintf(w, "watch    %s\n", t.eff.Watch)
-	fmt.Fprintf(w, "catchup  %s\n", onOff(t.eff.WatchCatchup))
+	fmt.Fprintf(w, "watch    %s\n", t.Effective.Watch)
+	fmt.Fprintf(w, "catchup  %s\n", onOff(t.Effective.WatchCatchup))
 
 	if len(store) == 0 {
 		fmt.Fprintln(w, "nothing reported yet")
@@ -128,7 +129,7 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 
 	links, project := linksFor(w, false), ""
 	if links.on {
-		project = t.refProject(ctx)
+		project = t.RefProject(ctx)
 	}
 
 	links.Load(ctx, project, ids...)
@@ -161,20 +162,20 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 }
 
 func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return err
 	}
 
 	r = r.Head()
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 
-	name, _, err := taskCheckout(ctx, main, t.driver(), r, "")
+	name, _, err := taskCheckout(ctx, main, t.Driver(), r, "")
 	if err != nil {
 		return err
 	}
@@ -205,29 +206,29 @@ func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
 	return nil
 }
 
-func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
-	if t.eff.Watch == "off" {
+func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error {
+	if t.Effective.Watch == "off" {
 		return cli.Exit("watch: off in this project", daemon.ExitNothingWatched)
 	}
 
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	root := t.lay.StorageRoot.Path()
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+	root := t.Layout.StorageRoot.Path()
 
 	in := watchInput{
 		main:     main,
 		root:     root,
-		mode:     t.eff.Watch,
+		mode:     t.Effective.Watch,
 		jan:      janitorFor(t),
 		stateDir: state.Dir(),
 		ttl:      state.TTL(),
 		now:      time.Now,
 		out:      lineReporter{w: cmd.Writer},
 		warn:     func(line string) { fmt.Fprintln(cmd.Writer, line) },
-		catchup:  t.eff.WatchCatchup,
-		storage:  t.lay.StorageRoot,
+		catchup:  t.Effective.WatchCatchup,
+		storage:  t.Layout.StorageRoot,
 		// a pass stays short, so verify is always the agent's turn
-		engine: newCatchupEngine(catchupPolicy(t.eff), verifySpec{}, "the watcher leaves verify to the agent",
-			t.eff.Traces, main),
+		engine: newCatchupEngine(catchupPolicy(t.Effective), verifySpec{}, "the watcher leaves verify to the agent",
+			t.Effective.Traces, main),
 	}
 
 	if b := reachableAgents(main); b != nil {
@@ -270,8 +271,8 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target) error {
 // none runs. It never replaces or waits out a running daemon (f10 drive's
 // job, which can tell the user), and an error is one warning, never a failed
 // command. A variable so tests start no daemon.
-var watchProject = func(ctx context.Context, w io.Writer, t *target) {
-	if !daemon.Supported || t.eff.Watch == "off" {
+var watchProject = func(ctx context.Context, w io.Writer, t *target.Target) {
+	if !daemon.Supported || t.Effective.Watch == "off" {
 		return
 	}
 
@@ -301,9 +302,9 @@ var watchProject = func(ctx context.Context, w io.Writer, t *target) {
 
 	_, err = daemon.Call(ctx, dir, daemon.Request{
 		Op:   daemon.OpWatch,
-		Root: t.lay.StorageRoot.Path(),
-		Dir:  cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		Env:  driveEnv(os.Environ(), t.eff.DriveEnv),
+		Root: t.Layout.StorageRoot.Path(),
+		Dir:  cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Env:  driveEnv(os.Environ(), t.Effective.DriveEnv),
 	}, 0)
 	if err != nil {
 		fmt.Fprintf(w, "watch: warning: %v\n", err)
@@ -769,7 +770,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 // watcherFinish holds the lease as the watcher and refuses anything but a
 // merged request. It writes no drive finish record: the board would read
 // the watcher as a drive.
-func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root string, task watchedTask) error {
+func watcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, root string, task watchedTask) error {
 	lease, err := drives.AcquireAs(root, task.id, drives.Holder{Watch: true})
 	if err != nil {
 		return err
@@ -780,12 +781,12 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target, main, root strin
 		return err
 	}
 
-	r, err := t.reference(ctx, task.id)
+	r, err := t.Reference(ctx, task.id)
 	if err != nil {
 		return err
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}
@@ -1082,8 +1083,8 @@ func (in watchInput) pushFailed(task watchedTask, rec *drives.Catchup, err error
 func (in watchInput) sendCatchup(
 	ctx context.Context, task watchedTask, failed *drives.Catchup, store map[string]watchReport,
 ) *watchReport {
-	pr, target := task.pr, task.target
-	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || target.sha == "" {
+	pr, aim := task.pr, task.target
+	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || aim.sha == "" {
 		return nil
 	}
 
@@ -1092,13 +1093,13 @@ func (in watchInput) sendCatchup(
 			Kind: watchBehind,
 			Text: text,
 			Next: "/f10:catchup in " + task.path,
-			Key:  watchBehind + " " + target.sha + " " + reason,
+			Key:  watchBehind + " " + aim.sha + " " + reason,
 		}
 	}
 
-	st, err := readTarget(ctx, in.main, target, pr.Base, task.localSHA, task.originSHA)
+	st, err := readTarget(ctx, in.main, aim, pr.Base, task.localSHA, task.originSHA)
 
-	switch base := strings.TrimPrefix(target.name, "origin/"); {
+	switch base := strings.TrimPrefix(aim.name, "origin/"); {
 	case err != nil:
 		in.warnf("%s skipped this pass: %v", task.id, err)
 
@@ -1114,13 +1115,13 @@ func (in watchInput) sendCatchup(
 		// a worktree behind origin would rebase a stale branch; one ahead of
 		// it holds work the request has not seen
 		return behind("diverged", fmt.Sprintf("%s moved past %s, whose tip is not origin's: not caught up",
-			target.name, task.branch))
+			aim.name, task.branch))
 	}
 
 	// a mark already on the branch (a finish that landed its base, a ship guard
 	// stopped on a conflict, a failed watcher catchup) is a catchup owed that
 	// nobody else sends: set again below
-	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+task.branch)
+	has, err := gitx.IsAncestor(ctx, in.main, aim.sha, "refs/heads/"+task.branch)
 
 	switch {
 	case err != nil:
@@ -1133,7 +1134,7 @@ func (in watchInput) sendCatchup(
 
 	if task.ws == "" || in.prompt == nil {
 		return behind("no agent", fmt.Sprintf("%s moved past %s, and no agent is in its workspace to catch it up",
-			target.name, task.branch))
+			aim.name, task.branch))
 	}
 
 	if task.busy != "" {
@@ -1141,14 +1142,14 @@ func (in watchInput) sendCatchup(
 	}
 
 	if failed != nil {
-		conflicts, err := gitx.Conflicts(ctx, task.path, target.sha, "HEAD")
+		conflicts, err := gitx.Conflicts(ctx, task.path, aim.sha, "HEAD")
 		if err != nil {
 			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.id, task.branch, err)
 
 			return nil
 		}
 
-		if drives.Fingerprint(target.sha, conflictWay(conflicts), "") == failed.Fingerprint {
+		if drives.Fingerprint(aim.sha, conflictWay(conflicts), "") == failed.Fingerprint {
 			return nil
 		}
 	}
@@ -1171,21 +1172,21 @@ func (in watchInput) sendCatchup(
 	return in.integrate(ctx, task, store, behind)
 }
 
-// integrate marks the branch behind its target, integrates through the
+// integrate marks the branch behind its aim, integrates through the
 // engine and prompts the agent with what is left; a prompt that cannot go
 // out puts the branch back as it was.
 func (in watchInput) integrate(
 	ctx context.Context, task watchedTask, store map[string]watchReport, behind func(string, string) *watchReport,
 ) *watchReport {
-	target := task.target
+	aim := task.target
 
-	if err := branchmeta.Set(ctx, in.main, task.branch, target.key, target.value); err != nil {
-		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.id, task.branch, target.name, err)
+	if err := branchmeta.Set(ctx, in.main, task.branch, aim.key, aim.value); err != nil {
+		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.id, task.branch, aim.name, err)
 
 		return nil
 	}
 
-	unmark := func() { _ = branchmeta.Unset(ctx, in.main, task.branch, target.key) } // nobody will clear it
+	unmark := func() { _ = branchmeta.Unset(ctx, in.main, task.branch, aim.key) } // nobody will clear it
 
 	// readTargets fetched origin for this pass
 	rec, err := catchupRecord(
@@ -1193,7 +1194,7 @@ func (in watchInput) integrate(
 		in.main,
 		task.path,
 		task.branch,
-		target.key,
+		aim.key,
 		in.now(),
 		&fetchOnce{done: task.fetched},
 	)
@@ -1204,7 +1205,7 @@ func (in watchInput) integrate(
 		return nil
 	}
 
-	rec.Base = target.name
+	rec.Base = aim.name
 
 	tasks := []string{task.id}
 
@@ -1218,7 +1219,7 @@ func (in watchInput) integrate(
 		unmark()
 
 		return behind("integrate", fmt.Sprintf("%s moved past %s, and catching it up failed: %v",
-			target.name, task.branch, err))
+			aim.name, task.branch, err))
 	}
 
 	if !stopped && (p.method == methodNone || p.method == methodSkip) {
@@ -1227,7 +1228,7 @@ func (in watchInput) integrate(
 		return nil
 	}
 
-	steering := in.engine.cleanSteering(cmp.Or(p.base, target.name))
+	steering := in.engine.cleanSteering(cmp.Or(p.base, aim.name))
 	if stopped {
 		paths, _ := gitx.Unmerged(ctx, task.path)
 		steering = in.engine.conflictSteering(p, task.branch, "the watcher", paths)
@@ -1239,19 +1240,19 @@ func (in watchInput) integrate(
 
 		if errors.Is(err, agentctl.ErrAgentNotFound) {
 			return behind("no agent", fmt.Sprintf("%s moved past %s, and its agent was not found to catch it up",
-				target.name, task.branch))
+				aim.name, task.branch))
 		}
 
 		return behind("prompt", fmt.Sprintf("%s moved past %s, and prompting its agent failed: %v",
-			target.name, task.branch, err))
+			aim.name, task.branch, err))
 	}
 
 	setCatchup(store, task.id, rec)
 
 	return &watchReport{
 		Kind: watchCatchup,
-		Text: fmt.Sprintf("catching %s up with %s, which moved past it", task.branch, target.name),
-		Key:  watchCatchup + " sent " + target.sha + " " + rec.Head,
+		Text: fmt.Sprintf("catching %s up with %s, which moved past it", task.branch, aim.name),
+		Key:  watchCatchup + " sent " + aim.sha + " " + rec.Head,
 	}
 }
 

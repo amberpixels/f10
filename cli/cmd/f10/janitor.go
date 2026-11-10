@@ -21,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // The janitor catches the task branches that went around finish: a PR merged
@@ -46,7 +47,7 @@ func janitorCommand() *cli.Command {
 }
 
 func runJanitor(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -55,7 +56,7 @@ func runJanitor(ctx context.Context, cmd *cli.Command) error {
 	in.dry = cmd.Bool("dry-run")
 
 	if !in.dry {
-		if err := touchStamp(filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now()); err != nil {
+		if err := touchStamp(filepath.Join(t.Layout.StorageRoot.Path(), janitorStamp), time.Now()); err != nil {
 			return err
 		}
 	}
@@ -123,11 +124,11 @@ type janitorInput struct {
 	localOnly bool
 }
 
-func janitorFor(t *target) janitorInput {
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	in := janitorInput{main: main, prefix: t.eff.IDPrefix, storage: t.lay.StorageRoot}
+func janitorFor(t *target.Target) janitorInput {
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+	in := janitorInput{main: main, prefix: t.Effective.IDPrefix, storage: t.Layout.StorageRoot}
 
-	if h, err := t.host(); err == nil {
+	if h, err := hostOf(t); err == nil {
 		h = h.at(main)
 		in.host = &h
 	}

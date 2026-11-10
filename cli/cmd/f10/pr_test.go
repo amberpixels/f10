@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // prRepo is a clone of a bare origin, so origin/HEAD and pushed branches
@@ -155,7 +156,7 @@ func TestOpenPullOfSkipsClosed(t *testing.T) {
 		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-02T00:00:00Z"},`+
 			`{"number":5,"state":"OPEN","createdAt":"2026-10-01T00:00:00Z"}]`)
 
-	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
 	if p, err := openPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
 		t.Errorf("openPullOf = %d, %v; want 5", p.Number, err)
@@ -171,7 +172,7 @@ func TestLastPullOfTakesTheNewestAnyState(t *testing.T) {
 		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-01T00:00:00Z"},`+
 			`{"number":5,"state":"MERGED","baseRefName":"main","createdAt":"2026-10-02T00:00:00Z"}]`)
 
-	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
 	if p, err := lastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
 		t.Errorf("lastPullOf = #%d on %q, %v; want #5 on main", p.Number, p.Base, err)
@@ -218,12 +219,12 @@ func TestBranchTask(t *testing.T) {
 	dir := prRepo(t)
 	git(t, dir, "config", branchmeta.Task.For("picked-up"), "REPO-3")
 
-	tg, err := targetAt(t.Context(), dir, false, "pr")
+	tg, err := target.At(t.Context(), dir, false, "pr")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	named := tg.eff.IDPrefix + "-4"
+	named := tg.Effective.IDPrefix + "-4"
 
 	for branch, want := range map[string]string{"picked-up": "REPO-3", named + "/slug": named, "other": ""} {
 		got := ""

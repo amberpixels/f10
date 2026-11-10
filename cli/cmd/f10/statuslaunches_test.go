@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // launchFixture is a main checkout whose session sess-1 launched tasks,
@@ -45,7 +46,7 @@ func (fx launchFixture) worktree(t *testing.T, id string, run state.Run) {
 	git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
 
 	run.Session, run.Task, run.Root = "agent-"+id, id, gitx.Resolved(path)
-	if err := run.Save(fx.stateDir, time.Now()); err != nil {
+	if err := run.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -62,7 +63,7 @@ func (fx launchFixture) launch(t *testing.T, kind, value string) {
 func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...string) int {
 	t.Helper()
 
-	tg, err := targetAt(t.Context(), fx.repo, false, "status")
+	tg, err := target.At(t.Context(), fx.repo, false, "status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,7 @@ func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...
 		change(rec)
 	}
 
-	if err := drives.Create(tg.lay.StorageRoot.Path(), rec); err != nil {
+	if err := drives.Create(tg.Layout.StorageRoot.Path(), rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -180,7 +181,7 @@ func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
 
 	own := &state.Run{Session: "sess-1", Task: "DM-1", Root: fx.repo, Capture: "done", Plan: "done", Ship: "upcoming"}
-	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -192,7 +193,7 @@ func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 	}
 
 	own.Task = "DM-9"
-	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -215,12 +216,12 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 	fx.launch(t, state.LaunchStart, "DM-5")
 
 	// only a running drive holds DM-4 for its base
-	tg, err := targetAt(t.Context(), fx.repo, false, "status")
+	tg, err := target.At(t.Context(), fx.repo, false, "status")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	lease, err := drives.Acquire(tg.lay.StorageRoot.Path(), drives.DriveKey(n), n)
+	lease, err := drives.Acquire(tg.Layout.StorageRoot.Path(), drives.DriveKey(n), n)
 	if err != nil {
 		t.Fatal(err)
 	}

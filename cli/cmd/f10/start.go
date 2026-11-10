@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -111,22 +112,22 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in := startInput{
-		main:    cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		driver:  t.driver(),
+		main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		driver:  t.Driver(),
 		task:    r,
 		suffix:  suffix,
 		mode:    mode,
 		flow:    fl,
 		pace:    strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
 		base:    base,
-		storage: t.lay.StorageRoot,
+		storage: t.Layout.StorageRoot,
 		title:   titleLookup(t, r.Number),
 		pick:    pick,
 		note:    note,
 	}
 
 	if checksParent(mode, pick) {
-		in.children = t.tracker().children
+		in.children = trackerFor(t).children
 	}
 
 	if pick == nil {
@@ -190,13 +191,13 @@ func startFlags(cmd *cli.Command) (string, string, string, string, error) {
 }
 
 // startTarget reads the project and the flow the run's pace resolves.
-func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*target, shipFlow, error) {
-	t, err := targetFor(ctx, cmd)
+func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*target.Target, shipFlow, error) {
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return nil, shipFlow{}, err
 	}
 
-	run, err := resolveRun(ctx, t.eff, runInput{pace: cmd.String("pace")})
+	run, err := resolveRun(ctx, t.Effective, runInput{pace: cmd.String("pace")})
 	if err != nil {
 		return nil, shipFlow{}, err
 	}
@@ -214,7 +215,7 @@ func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*targe
 func startRef(
 	ctx context.Context,
 	cmd *cli.Command,
-	t *target,
+	t *target.Target,
 	token string,
 	pick *pickup,
 	pr forge.PR,
@@ -228,7 +229,7 @@ func startRef(
 		err    error
 	)
 
-	if task, err = pickedTask(t.eff.IDPrefix, t.hostIssues(), pick, pr, task); err != nil {
+	if task, err = pickedTask(t.Effective.IDPrefix, t.HostIssues(), pick, pr, task); err != nil {
 		return ref.Ref{}, "", err
 	}
 
@@ -242,7 +243,7 @@ func startRef(
 			return ref.Ref{}, "", fmt.Errorf("--task %s: a PR is picked up for one task, not a bundle", task)
 		}
 
-		if r, err = t.reference(ctx, task); err != nil {
+		if r, err = t.Reference(ctx, task); err != nil {
 			return ref.Ref{}, "", fmt.Errorf("%s: %w", pick.url, err)
 		}
 
@@ -252,7 +253,7 @@ func startRef(
 
 		id, suffix = ref.SplitSuffix(token)
 
-		if r, err = t.reference(ctx, id); err != nil {
+		if r, err = t.Reference(ctx, id); err != nil {
 			return ref.Ref{}, "", err
 		}
 
@@ -271,7 +272,7 @@ func startRef(
 // stacked on: --after, else the body's After: line unless --base named a ref.
 func startDependency(
 	ctx context.Context,
-	t *target,
+	t *target.Target,
 	in *startInput,
 	r ref.Ref,
 	pick *pickup,
@@ -285,14 +286,14 @@ func startDependency(
 			return err
 		}
 	case after != "":
-		afterRef, err := t.reference(ctx, after)
+		afterRef, err := t.Reference(ctx, after)
 		if err != nil {
 			return fmt.Errorf("--after: %w", err)
 		}
 
 		in.after = afterRef.Head().ID
 	case base == "":
-		if in.after, in.notes, err = afterFromBody(ctx, t.tracker(), in.main, r); err != nil {
+		if in.after, in.notes, err = afterFromBody(ctx, trackerFor(t), in.main, r); err != nil {
 			return err
 		}
 	}
@@ -302,13 +303,13 @@ func startDependency(
 
 // startProfile resolves the agent profile from --agent or --model over the
 // project's default.
-func startProfile(ctx context.Context, cmd *cli.Command, t *target, in *startInput) error {
+func startProfile(ctx context.Context, cmd *cli.Command, t *target.Target, in *startInput) error {
 	flag, err := profileFlag(cmd.String("agent"), cmd.String("model"))
 	if err != nil {
 		return err
 	}
 
-	run, err := resolveRun(ctx, t.eff, runInput{pace: cmd.String("pace"), profile: flag})
+	run, err := resolveRun(ctx, t.Effective, runInput{pace: cmd.String("pace"), profile: flag})
 	if err != nil {
 		return err
 	}
@@ -327,7 +328,7 @@ func startProfile(ctx context.Context, cmd *cli.Command, t *target, in *startInp
 
 // afterStart records the launch for status, then runs start's upkeep: the
 // watcher and the due janitor sweep.
-func afterStart(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suffix string) {
+func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.Ref, suffix string) {
 	// the task is already open, so a failed launch record is a line, not a
 	// failed start
 	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
@@ -337,7 +338,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target, r ref.Ref, suf
 
 	watchProject(ctx, cmd.ErrWriter, t)
 
-	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now(),
+	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 }
 

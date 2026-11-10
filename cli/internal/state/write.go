@@ -66,8 +66,8 @@ func LoadOrFresh(dir, session string) (*Run, bool) {
 // fallbackRoot is the checkout a run is about when nothing recorded one:
 // steps and hooks both run with the checkout as cwd. A variable so tests
 // stay off the real cwd.
-var fallbackRoot = func() string {
-	if top := gitx.Out(context.Background(), "", "rev-parse", "--show-toplevel"); top != "" {
+var fallbackRoot = func(ctx context.Context) string {
+	if top, err := gitx.Toplevel(ctx, ""); err == nil {
 		return top
 	}
 
@@ -91,6 +91,7 @@ var ErrBusy = errors.New("state: the session is being written")
 // save a stale copy over each other. change reports whether to save; loaded
 // says a file was read. A lock not taken within wait is ErrBusy.
 func Update(
+	ctx context.Context,
 	dir, session string,
 	wait time.Duration,
 	now time.Time,
@@ -121,13 +122,13 @@ func Update(
 		return err
 	}
 
-	return r.Save(dir, now)
+	return r.Save(ctx, dir, now)
 }
 
 // Save writes the run as the status line's bash renderer reads it, through a
 // temp file so the polling renderer never sees a torn file; values are
 // flattened to one line, since a newline would start a new key.
-func (r *Run) Save(dir string, now time.Time) error {
+func (r *Run) Save(ctx context.Context, dir string, now time.Time) error {
 	if dir == "" || r.Session == "" {
 		return errors.New("state: no directory or session to save to")
 	}
@@ -137,7 +138,7 @@ func (r *Run) Save(dir string, now time.Time) error {
 	}
 
 	if r.Root == "" {
-		r.Root = fallbackRoot()
+		r.Root = fallbackRoot(ctx)
 	}
 
 	r.Updated = time.Unix(now.Unix(), 0)
@@ -227,8 +228,8 @@ func Clear(dir, session string) {
 const clearWait = 2 * time.Second
 
 // RootOf is the checkout root a cwd is in; outside git, the cwd itself.
-func RootOf(cwd string) string {
-	if top := gitx.Out(context.Background(), cwd, "rev-parse", "--show-toplevel"); top != "" {
+func RootOf(ctx context.Context, cwd string) string {
+	if top, err := gitx.Toplevel(ctx, cwd); err == nil {
 		return top
 	}
 
@@ -579,7 +580,7 @@ func createsTask(skill string) bool {
 // (plan, then ship) carries settled phases forward, or ship would show this
 // session's plan as `skipped`; --help runs nothing and reports false, so the
 // badge keeps the last real run.
-func (r *Run) Seed(skill, args, cwd string) bool {
+func (r *Run) Seed(ctx context.Context, skill, args, cwd string) bool {
 	if slices.Contains(strings.Fields(args), "--help") {
 		return false
 	}
@@ -604,7 +605,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	// so a terminal with no session id can still find its runs
 	if cwd != "" {
-		r.Root = RootOf(cwd)
+		r.Root = RootOf(ctx, cwd)
 	}
 
 	if chain {

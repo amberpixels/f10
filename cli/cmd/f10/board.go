@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -123,19 +124,19 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 			return errors.New("the scope names no project: the groups and roots given matched none")
 		}
 	} else {
-		t, err := targetFor(ctx, cmd)
+		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
-		entries = []scopeEntry{{dir: t.dir, target: t}}
+		entries = []scopeEntry{{dir: t.Dir, target: t}}
 	}
 
 	boards := collectBoards(ctx, entries, cmd.ErrWriter, now, span, stateView, remote, people)
 
 	// several projects (--all, --group, more than one -C) are a JSON array
 	// and a line each unless --detail; the page draws one project
-	several := cmd.Bool("all") || len(cmd.StringSlice("group")) > 0 || len(checkoutFlags(cmd)) > 1
+	several := cmd.Bool("all") || len(cmd.StringSlice("group")) > 0 || len(target.CheckoutFlags(cmd)) > 1
 	summary := (cmd.Bool("all") || len(cmd.StringSlice("group")) > 0) && !cmd.Bool("detail")
 
 	switch {

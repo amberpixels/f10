@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // testRoot holds every user-level dir for the run, so a test that sets
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 	askNotifier = nil
 
 	// a start or a drive run here hands nothing to a real daemon
-	watchProject = func(context.Context, io.Writer, *target) {}
+	watchProject = func(context.Context, io.Writer, *target.Target) {}
 
 	code := m.Run()
 

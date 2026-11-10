@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -106,7 +107,7 @@ type driveFinish struct {
 	deferred func(string)
 }
 
-func driveFinishInput(t *target, main string, h host, req driveFinish) (finishInput, error) {
+func driveFinishInput(t *target.Target, main string, h host, req driveFinish) (finishInput, error) {
 	in := finishInputFor(t, main, h, req.task)
 
 	var err error

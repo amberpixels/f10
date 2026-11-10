@@ -37,7 +37,7 @@ func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 
 	apply := func(r *state.Run, loaded bool) (bool, error) { return b.apply(o, issueID, r, loaded) }
 
-	return state.Update(b.env.StateDir, b.session, hookLockWait, b.env.now(), apply)
+	return state.Update(ctx, b.env.StateDir, b.session, hookLockWait, b.env.now(), apply)
 }
 
 // apply is one observation's change to the run, under the session's lock.

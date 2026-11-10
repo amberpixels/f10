@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -304,16 +305,16 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--kind %s is not a task kind (%s)", kind, strings.Join(facts.TaskKinds, ", "))
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	run, err := resolveRun(ctx, t.eff, runInput{
+	run, err := resolveRun(ctx, t.Effective, runInput{
 		pace:    cmd.String("pace"),
 		profile: cmd.String("agent"),
-		main:    cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		branch:  gitx.CurrentBranch(ctx, t.lay.CheckoutRoot),
+		main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		branch:  gitx.CurrentBranch(ctx, t.Layout.CheckoutRoot),
 	})
 	if err != nil {
 		return err

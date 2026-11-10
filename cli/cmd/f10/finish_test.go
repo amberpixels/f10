@@ -25,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -2332,7 +2333,7 @@ func TestFinishRef(t *testing.T) {
 	repo := tracedRepo(t, "DM-5/fix", "")
 	sessionTask(t, "DM-9")
 
-	tg, err := targetAt(t.Context(), repo, false, "finish")
+	tg, err := target.At(t.Context(), repo, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2349,7 +2350,7 @@ func TestFinishRef(t *testing.T) {
 		t.Errorf("DM-7-b = %q %q %v, want DM-7 and suffix b", r.ID, suffix, err)
 	}
 
-	scoped, err := targetAt(t.Context(), repo, true, "finish")
+	scoped, err := target.At(t.Context(), repo, true, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2362,7 +2363,7 @@ func TestFinishRef(t *testing.T) {
 	onMain := tracedRepo(t, "main", "")
 	sessionTask(t, "DM-9")
 
-	tg, err = targetAt(t.Context(), onMain, false, "finish")
+	tg, err = target.At(t.Context(), onMain, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2395,7 +2396,7 @@ func sessionTask(t *testing.T, id string) {
 	t.Setenv("F10_STATE_DIR", dir)
 	t.Setenv("F10_SESSION_ID", "sess-1")
 
-	if err := (&state.Run{Session: "sess-1", Task: id}).Save(dir, time.Now()); err != nil {
+	if err := (&state.Run{Session: "sess-1", Task: id}).Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2723,14 +2724,14 @@ func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
 // Only the host's issues get a close; a declared tracker of another kind gets nil.
 func TestCloseTaskFor(t *testing.T) {
 	tg := childTarget(t, "gh")
-	if closeTaskFor(tg, newHost("gh", tg.dir)) == nil {
+	if closeTaskFor(tg, newHost("gh", tg.Dir)) == nil {
 		t.Error("host issues: no close")
 	}
 
-	tg.eff.TrackerKind = facts.TrackerJira
-	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
+	tg.Effective.TrackerKind = facts.TrackerJira
+	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
-	if closeTaskFor(tg, newHost("gh", tg.dir)) != nil {
+	if closeTaskFor(tg, newHost("gh", tg.Dir)) != nil {
 		t.Error("a Jira tracker: a close was bound")
 	}
 }
@@ -2980,7 +2981,7 @@ func TestFinishRefOnADetachedHead(t *testing.T) {
 	repo := tracedRepo(t, "DM-5/fix", "")
 	git(t, repo, "checkout", "-q", "--detach")
 
-	tg, err := targetAt(t.Context(), repo, false, "finish")
+	tg, err := target.At(t.Context(), repo, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}

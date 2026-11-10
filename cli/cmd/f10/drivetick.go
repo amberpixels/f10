@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -191,7 +192,7 @@ func (in *driveInput) loadLinks(ctx context.Context, tasks []driveTask) {
 	if in.links == nil {
 		in.links = linksFor(in.out, false)
 		if in.links.on {
-			in.project = projectOf(ctx, in.main)
+			in.project = target.ProjectOf(ctx, in.main)
 		}
 	}
 
@@ -435,13 +436,13 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 		return skip("fetching origin", err)
 	}
 
-	target, err := in.prTarget(ctx, r)
+	aim, err := in.prTarget(ctx, r)
 	if err != nil {
 		return skip("reading what "+branch+" targets", err)
 	}
 
-	// a base gone from everywhere is nobody's target until finish releases the dependent
-	if target.sha == "" {
+	// a base gone from everywhere is nobody's aim until finish releases the dependent
+	if aim.sha == "" {
 		return nil
 	}
 
@@ -454,7 +455,7 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 		return nil
 	}
 
-	has, err := gitx.IsAncestor(ctx, in.main, target.sha, "refs/heads/"+branch)
+	has, err := gitx.IsAncestor(ctx, in.main, aim.sha, "refs/heads/"+branch)
 	if err != nil {
 		return skip("reading "+branch, err)
 	}
@@ -467,19 +468,19 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 	// branch's commits into it
 	if in.pull != nil {
 		if pr, err := in.pull(ctx, branch); err == nil && pr.Status == forge.Open {
-			if st, err := readTarget(ctx, in.main, target, pr.Base, "", ""); err == nil && st.retargeted {
+			if st, err := readTarget(ctx, in.main, aim, pr.Base, "", ""); err == nil && st.retargeted {
 				return fmt.Errorf("%s targets %s, not %s, which %s was started on: retarget it back, "+
 					"or catch it up by hand with /f10:catchup in %s", pr.URL, pr.Base,
-					strings.TrimPrefix(target.name, "origin/"), branch, r.o.path)
+					strings.TrimPrefix(aim.name, "origin/"), branch, r.o.path)
 			}
 		}
 	}
 
-	if err := branchmeta.Set(ctx, in.main, branch, target.key, target.value); err != nil {
-		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
+	if err := branchmeta.Set(ctx, in.main, branch, aim.key, aim.value); err != nil {
+		return fmt.Errorf("marking %s behind %s: %w", branch, aim.name, err)
 	}
 
-	fmt.Fprintf(in.out, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), target.name, branch)
+	fmt.Fprintf(in.out, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), aim.name, branch)
 
 	return nil
 }

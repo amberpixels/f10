@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -23,7 +24,7 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("report needs a task id")
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -31,12 +32,12 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 	refs := make([]ref.Ref, len(tokens))
 
 	for i, token := range tokens {
-		if r, err := t.reference(ctx, token); err == nil {
+		if r, err := t.Reference(ctx, token); err == nil {
 			refs[i] = r
 		}
 	}
 
-	known := t.taskRefs(ctx, refs, true, false, cmd.ErrWriter)
+	known := taskRefsFor(t, ctx, refs, true, false, cmd.ErrWriter)
 
 	if cmd.Bool("children") {
 		return writeParentTree(ctx, cmd, t, tokens[0], refs[0], known[refs[0].ID])
@@ -65,14 +66,14 @@ func reportNode(token, id, url string) tasktree.Node {
 // writeParentTree hangs a parent's open subtasks under it, in After: order,
 // each row with its title and url, so a split reads as one block. A parent
 // the tracker cannot link prints as one task's facts.
-func writeParentTree(ctx context.Context, cmd *cli.Command, t *target, token string, r ref.Ref,
+func writeParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, token string, r ref.Ref,
 	k ledger.TaskRef,
 ) error {
 	if r.ID == "" {
 		return writeTaskFacts(cmd, token, "", k)
 	}
 
-	kids, err := t.tracker().children(ctx, r)
+	kids, err := trackerFor(t).children(ctx, r)
 	switch {
 	case errors.Is(err, errNoParentLink):
 		ui.Warnf(cmd.ErrWriter, "%s: %v: no subtasks to list", r.ID, err)
@@ -90,7 +91,7 @@ func writeParentTree(ctx context.Context, cmd *cli.Command, t *target, token str
 		treeOpts{head: &treeRow{ID: r.ID, Title: k.Title, URL: k.URL}, url: true},
 	)
 
-	t.rememberRefs(ctx, childRefs(kids)...)
+	rememberRefsFor(ctx, t, childRefs(kids)...)
 
 	return tasktree.Tree{Align: true}.Write(cmd.Writer, nodes)
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/doctor"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -30,7 +31,7 @@ func doctorCommand() *cli.Command {
 }
 
 func runDoctor(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -43,12 +44,12 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 	results := doctor.Run(ctx, &doctor.Env{
 		ClaudeDir:   filepath.Dir(claudeSettingsPath()),
 		Home:        home,
-		Layout:      t.lay,
-		Probes:      t.pb,
-		Facts:       t.eff,
+		Layout:      t.Layout,
+		Probes:      t.Probes,
+		Facts:       t.Effective,
 		Version:     version(debug.ReadBuildInfo()),
-		Driver:      t.driver(),
-		NeedsDriver: !t.hostIssues(),
+		Driver:      t.Driver(),
+		NeedsDriver: !t.HostIssues(),
 		Getenv:      os.Getenv,
 		LookPath:    exec.LookPath,
 		Run:         shell.Capture,

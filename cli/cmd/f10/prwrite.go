@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -24,7 +25,7 @@ const statusLimit = 140
 // openPull is the subject's open request, read whole, for a command that
 // writes to it: a merged or closed one, or none, is refused by name.
 func openPull(ctx context.Context, cmd *cli.Command) (host, forge.PR, error) {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return host{}, forge.PR{}, err
 	}
@@ -42,7 +43,7 @@ func openPull(ctx context.Context, cmd *cli.Command) (host, forge.PR, error) {
 		return host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.branch)
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return host{}, forge.PR{}, err
 	}
@@ -125,7 +126,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -140,7 +141,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if s.number > 0 {
-		h, err := t.host()
+		h, err := hostOf(t)
 		if err != nil {
 			return err
 		}
@@ -165,11 +166,19 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
 	}
 
-	if head := refSHA(ctx, t.lay.CheckoutRoot, "HEAD"); refSHA(ctx, s.main, "refs/remotes/origin/"+s.branch) != head {
+	if head := refSHA(
+		ctx,
+		t.Layout.CheckoutRoot,
+		"HEAD",
+	); refSHA(
+		ctx,
+		s.main,
+		"refs/remotes/origin/"+s.branch,
+	) != head {
 		return fmt.Errorf("origin does not have %s at HEAD: run `git push -u origin %s` first", s.branch, s.branch)
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}

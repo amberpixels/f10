@@ -39,7 +39,7 @@ func TestStatusTaskJSONShape(t *testing.T) {
 	t.Chdir(repo)
 
 	other := &state.Run{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "pending"}
-	if err := other.Save(dir, time.Now()); err != nil {
+	if err := other.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -56,7 +56,7 @@ func TestStatusTaskJSONShape(t *testing.T) {
 		Session: "own", Task: "DM-5", Root: repo, Capture: "prior", Plan: "done", Ship: "running",
 		Leaf: "implement", Ask: "1. Keep? [yes | no]",
 	}
-	if err := own.Save(dir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,7 +127,7 @@ func TestHookStatusTextReportsTheSessionTasksAsk(t *testing.T) {
 	})
 
 	own := &state.Run{Session: "sess-1", Task: "DM-3", Root: fx.repo, Capture: "prior", Plan: "done", Ship: "pending"}
-	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,7 +149,7 @@ func TestStateShowPrintsTheRunBlock(t *testing.T) {
 		Session: "sess-1", Task: "GH-1", URL: "https://gh/issues/1", Capture: "prior", Plan: "done",
 		Ship: "blocked", Leaf: "judge", Note: "stop: x", Ask: "1. Keep? [yes | no]",
 	}
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 

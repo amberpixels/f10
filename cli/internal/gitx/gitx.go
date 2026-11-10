@@ -75,6 +75,12 @@ func absent(err error) bool {
 	return ok && exit.Code == 1
 }
 
+// Toplevel is the root of the checkout dir is in; every reader of the
+// checkout root asks here, so they agree on one answer.
+func Toplevel(ctx context.Context, dir string) (string, error) {
+	return Exec(ctx, dir, "rev-parse", "--show-toplevel")
+}
+
 // Out runs git and returns trimmed stdout, or "" on any error. It cannot
 // tell "not there" from "git failed", so it is for display only: a read
 // that decides what f10 does next goes through Read.

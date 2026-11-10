@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // The hook noun is what hooks/hooks.json runs; hidden, since nobody types it.
@@ -76,12 +77,12 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 }
 
 func hookTaskID(ctx context.Context, cwd, url string) string {
-	t, err := targetAt(ctx, cwd, true, "hook")
+	t, err := target.At(ctx, cwd, true, "hook")
 	if err != nil {
 		return ""
 	}
 
-	r, err := t.reference(ctx, url)
+	r, err := t.Reference(ctx, url)
 	if err != nil {
 		return ""
 	}

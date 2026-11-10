@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // A standup's period and a board's scope are the person's, not a checkout's,
@@ -260,7 +261,7 @@ func groupEntry(entry string) ([]scopeItem, error) {
 		return []scopeItem{{repo: &r}}, nil
 	}
 
-	p, err := expandHome(entry)
+	p, err := target.ExpandHome(entry)
 	if err != nil {
 		return nil, err
 	}

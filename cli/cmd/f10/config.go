@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -134,12 +135,12 @@ func configCommand() *cli.Command {
 func runConfig(ctx context.Context, cmd *cli.Command) error {
 	// through the shared target, so -C answers here too: which project's
 	// configuration you see is what this command is for
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	lay, pb, eff := t.lay, t.pb, t.eff
+	lay, pb, eff := t.Layout, t.Probes, t.Effective
 
 	// the project load prints this one line, so a section selector stays
 	// limited to it until another has a reader

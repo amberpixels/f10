@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 func TestRefLine(t *testing.T) {
@@ -72,7 +73,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
-	projectOf = func(context.Context, string) string { return "github.com/o/r" }
+	target.ProjectOf = func(context.Context, string) string { return "github.com/o/r" }
 
 	f.script("gh issue view 109 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":109,"title":"Base task","state":"OPEN","url":"https://github.com/o/r/issues/109","body":"b"}`)
@@ -94,7 +95,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 
 	var warn strings.Builder
 
-	got := tg.taskRefs(t.Context(), refs, true, false, &warn)
+	got := taskRefsFor(tg, t.Context(), refs, true, false, &warn)
 	if got["FT-109"].Title != "Base task" || got["FT-132"].URL != "https://github.com/o/r/issues/132" {
 		t.Errorf("refs = %+v", got)
 	}
@@ -105,7 +106,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 
 	f.calls = nil
 
-	got = tg.taskRefs(t.Context(), refs[:2], true, false, &warn)
+	got = taskRefsFor(tg, t.Context(), refs[:2], true, false, &warn)
 	if len(f.calls) != 0 || got["FT-132"].Title != "Second" {
 		t.Errorf("second lookup called %v, refs %+v", f.calls, got)
 	}
@@ -115,7 +116,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 		`{"title":"Renamed","url":"https://github.com/o/r/issues/109"}`,
 	)
 
-	if got := tg.taskRefs(t.Context(), refs[:1], false, true, &warn); got["FT-109"].Title != "Renamed" {
+	if got := taskRefsFor(tg, t.Context(), refs[:1], false, true, &warn); got["FT-109"].Title != "Renamed" {
 		t.Errorf("fresh = %+v", got)
 	}
 
@@ -153,7 +154,7 @@ esac
 	}
 
 	// the new task answers from the ledger without the tracker
-	k := ledger.LookupRefs(t.Context(), projectOf(t.Context(), repo), []string{"FT-1043", "FT-1041"})
+	k := ledger.LookupRefs(t.Context(), target.ProjectOf(t.Context(), repo), []string{"FT-1043", "FT-1041"})
 	if k["FT-1043"].Title != "Add the index" || k["FT-1043"].URL != "https://tracker.example/1041" ||
 		k["FT-1041"].URL != "https://tracker.example/1041" {
 		t.Errorf("ledger refs = %+v", k)

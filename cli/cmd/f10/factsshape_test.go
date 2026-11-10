@@ -120,24 +120,24 @@ func TestHostIssuesByKind(t *testing.T) {
 		facts.TrackerNotion: false,
 		facts.TrackerJira:   false,
 	} {
-		if got := declaredTracker(t, kind).hostIssues(); got != want {
+		if got := declaredTracker(t, kind).HostIssues(); got != want {
 			t.Errorf("declared %s: hostIssues = %v, want %v", kind, got, want)
 		}
 	}
 
 	// a kind only the CLI implies is no declaration, so the host answers
 	detected := childTarget(t, "gh")
-	detected.eff.TrackerKind = facts.TrackerJira
-	detected.eff.Facts = nil
+	detected.Effective.TrackerKind = facts.TrackerJira
+	detected.Effective.Facts = nil
 
-	if !detected.hostIssues() || detected.trackerDeclared() {
+	if !detected.HostIssues() || detected.TrackerDeclared() {
 		t.Error("an undeclared kind should fall back to host issues")
 	}
 
 	none := childTarget(t, "gh")
-	none.eff.TrackerKind = ""
+	none.Effective.TrackerKind = ""
 
-	if !none.hostIssues() {
+	if !none.HostIssues() {
 		t.Error("no kind should fall back to host issues")
 	}
 }

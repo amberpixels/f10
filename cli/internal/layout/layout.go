@@ -51,7 +51,7 @@ type Layout struct {
 func Locate(ctx context.Context, cwd string) *Layout {
 	lay := &Layout{Cwd: cwd, Layering: LayeringExtends}
 
-	here := gitx.Out(ctx, cwd, "rev-parse", "--show-toplevel")
+	here, _ := gitx.Toplevel(ctx, cwd)
 	if here == "" {
 		here = gitx.Resolved(cwd)
 	} else {

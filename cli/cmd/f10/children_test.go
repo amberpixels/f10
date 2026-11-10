@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 func childRows(spec ...[2]string) []childRow {
@@ -101,16 +102,16 @@ FT-74  t74  after FT-73
 	}
 }
 
-func childTarget(t *testing.T, cli string) *target {
+func childTarget(t *testing.T, cli string) *target.Target {
 	t.Helper()
 
 	root := t.TempDir()
 
-	return &target{
-		dir: root,
-		lay: &layout.Layout{CheckoutRoot: root, StorageRoot: storage.InRepo(root)},
-		pb:  &probe.Probes{CLI: probe.Signal{Value: cli}},
-		eff: &facts.Effective{IDPrefix: "FT"},
+	return &target.Target{
+		Dir:       root,
+		Layout:    &layout.Layout{CheckoutRoot: root, StorageRoot: storage.InRepo(root)},
+		Probes:    &probe.Probes{CLI: probe.Signal{Value: cli}},
+		Effective: &facts.Effective{IDPrefix: "FT"},
 	}
 }
 
@@ -135,7 +136,7 @@ func TestChildrenFromGitHub(t *testing.T) {
 	]`)
 	scriptNoBranch(f, "FT-72", "FT-73", "FT-75")
 
-	tr := tg.tracker()
+	tr := trackerFor(tg)
 
 	if err := os.MkdirAll(tr.storage.Archive(), 0o750); err != nil {
 		t.Fatal(err)
@@ -172,7 +173,7 @@ func TestChildrenGitHub404(t *testing.T) {
 	f.fail("gh api --paginate repos/{owner}/{repo}/issues/71/sub_issues",
 		shell.Result{Code: 1, Stderr: "gh: Not Found (HTTP 404)"})
 
-	_, err := tg.tracker().children(t.Context(), ref.Ref{ID: "FT-71", Number: "71"})
+	_, err := trackerFor(tg).children(t.Context(), ref.Ref{ID: "FT-71", Number: "71"})
 	if !errors.Is(err, errNoParentLink) {
 		t.Errorf("err = %v, want errNoParentLink", err)
 	}
@@ -184,8 +185,8 @@ func TestChildrenDriverDeclines(t *testing.T) {
 	newFakes(t)
 
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
-	tg.eff = &facts.Effective{
+	writeDriver(t, tg.Layout.StorageRoot.Path())
+	tg.Effective = &facts.Effective{
 		IDPrefix:    "FT",
 		TrackerKind: facts.TrackerNotion,
 		Facts:       []facts.Fact{{Key: "tracker.kind", Value: "Notion", Origin: facts.DeclaredFrontmatter("main")}},
@@ -195,7 +196,7 @@ func TestChildrenDriverDeclines(t *testing.T) {
 		return shell.Result{Code: 3}, nil
 	}
 
-	if _, err := tg.rawChildren(t.Context(), ref.Ref{ID: "FT-71", Number: "71"}); !errors.Is(err, errNoParentLink) {
+	if _, err := rawChildrenFor(t.Context(), tg, ref.Ref{ID: "FT-71", Number: "71"}); !errors.Is(err, errNoParentLink) {
 		t.Errorf("err = %v, want errNoParentLink", err)
 	}
 }

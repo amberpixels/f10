@@ -266,7 +266,7 @@ func startState(t *testing.T, env *Env, r *state.Run) {
 	t.Helper()
 
 	r.Session, r.Root = "s1", "/work/acme"
-	if err := r.Save(env.StateDir, fixedNow); err != nil {
+	if err := r.Save(t.Context(), env.StateDir, fixedNow); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // startInput is everything start needs once the target is settled, so
@@ -49,9 +50,9 @@ type startInput struct {
 // titleLookup asks the host for the task's title, needed only when no driver
 // names the branch. A checkout with no host CLI answers with the reason, so
 // the note beneath the report can quote it.
-func titleLookup(t *target, number string) func(context.Context) (string, error) {
+func titleLookup(t *target.Target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		return t.tasks().Title(ctx, ref.Ref{Number: number})
+		return tasksFor(t).Title(ctx, ref.Ref{Number: number})
 	}
 }
 
@@ -108,14 +109,14 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 
 // startedMove moves a task to tracker.status's started word, or is nil when
 // none is declared.
-func startedMove(t *target) func(context.Context, ref.Ref) error {
-	word := t.eff.TrackerStatus["started"]
+func startedMove(t *target.Target) func(context.Context, ref.Ref) error {
+	word := t.Effective.TrackerStatus["started"]
 	if word == "" {
 		return nil
 	}
 
 	return func(ctx context.Context, task ref.Ref) error {
-		return t.tasks().Update(ctx, io.Discard, task, props{status: word})
+		return tasksFor(t).Update(ctx, io.Discard, task, props{status: word})
 	}
 }
 

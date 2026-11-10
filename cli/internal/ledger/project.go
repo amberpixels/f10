@@ -25,7 +25,7 @@ func Where(ctx context.Context, dir string) Place {
 	}
 
 	p := Place{
-		Checkout: gitx.Out(ctx, dir, "rev-parse", "--show-toplevel"),
+		Checkout: toplevel(ctx, dir),
 		Branch:   gitx.CurrentBranch(ctx, dir),
 	}
 
@@ -100,4 +100,10 @@ func cutScheme(url string) (string, bool) {
 	}
 
 	return url, false
+}
+
+func toplevel(ctx context.Context, dir string) string {
+	top, _ := gitx.Toplevel(ctx, dir)
+
+	return top
 }

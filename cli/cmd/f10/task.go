@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -178,14 +179,14 @@ func taskCommand() *cli.Command {
 }
 
 func runTaskRead(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
 	token := cmd.Args().First()
 
-	r, err := t.reference(ctx, token)
+	r, err := t.Reference(ctx, token)
 	if err != nil {
 		return fetchFallback(err)
 	}
@@ -206,24 +207,24 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		// a person at a terminal opens the links themselves and would wait on
 		// the downloads; an agent gets local files in place of urls that expire
 		if !ui.IsTerminal(cmd.Writer) && !cmd.Bool("no-images") {
-			doc = withImages(ctx, doc, t.imagesDir(ctx, m.ID), images.Downloader{Authorize: githubAuth(ctx, t)})
+			doc = withImages(ctx, doc, imagesDirFor(ctx, t, m.ID), images.Downloader{Authorize: githubAuth(ctx, t)})
 		}
 
 		docs = append(docs, strings.TrimRight(doc, "\n"))
 	}
 
-	return writeDoc(ctx, cmd.Writer, t.dir, strings.Join(docs, "\n\n---\n\n"))
+	return writeDoc(ctx, cmd.Writer, t.Dir, strings.Join(docs, "\n\n---\n\n"))
 }
 
 // runTaskCurrent names the task a bare skill call stands for, by the cascade
 // a bare finish walks, so no skill parses a branch name itself.
 func runTaskCurrent(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	r, err := t.reference(ctx, "")
+	r, err := t.Reference(ctx, "")
 	if err != nil {
 		return fmt.Errorf("no current task: %w", err)
 	}
@@ -241,10 +242,10 @@ func fetchFallback(err error) error {
 }
 
 // readDoc feeds the ledger's task refs, so a later ref costs no tracker call.
-func readDoc(ctx context.Context, t *target, r ref.Ref) (string, error) {
-	doc, k, err := t.tasks().Read(ctx, r)
+func readDoc(ctx context.Context, t *target.Target, r ref.Ref) (string, error) {
+	doc, k, err := tasksFor(t).Read(ctx, r)
 	if err == nil {
-		t.rememberRefs(ctx, k)
+		rememberRefsFor(ctx, t, k)
 	}
 
 	return doc, err
@@ -293,19 +294,19 @@ func withImages(ctx context.Context, doc, dir string, d images.Downloader) strin
 
 // imagesDir puts .f10/ into info/exclude first under stealth, since a read
 // may be the first thing to create it.
-func (t *target) imagesDir(ctx context.Context, id string) string {
-	if !t.outOfTree() && t.eff.Visibility == "stealth" {
-		_, _ = excludeF10(ctx, t.lay.CheckoutRoot)
+func imagesDirFor(ctx context.Context, t *target.Target, id string) string {
+	if !t.OutOfTree() && t.Effective.Visibility == "stealth" {
+		_, _ = excludeF10(ctx, t.Layout.CheckoutRoot)
 	}
 
-	return t.lay.StorageRoot.Images(strings.ToUpper(id))
+	return t.Layout.StorageRoot.Images(strings.ToUpper(id))
 }
 
 // githubAuth sends the gh token only to GitHub's own hosts over https,
 // where a private repo's attachments sit. It is read once; a failed read
 // leaves the request bare, so its error names the image.
-func githubAuth(ctx context.Context, t *target) func(*http.Request) {
-	h, err := t.host()
+func githubAuth(ctx context.Context, t *target.Target) func(*http.Request) {
+	h, err := hostOf(t)
 	if err != nil {
 		return nil
 	}
@@ -340,7 +341,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return runTaskRead(ctx, cmd)
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -355,27 +356,27 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("link"))
+		return follow(ctx, cmd.Writer, t.Dir, url, cmd.Bool("link"))
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return err
 	}
 
-	url, err := t.tasks().URL(ctx, r)
+	url, err := tasksFor(t).URL(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	return follow(ctx, cmd.Writer, t.dir, url, cmd.Bool("link"))
+	return follow(ctx, cmd.Writer, t.Dir, url, cmd.Bool("link"))
 }
 
-func taskListURL(ctx context.Context, t *target) (string, error) {
-	return t.tasks().Index(ctx)
+func taskListURL(ctx context.Context, t *target.Target) (string, error) {
+	return tasksFor(t).Index(ctx)
 }
 
-func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
+func writeTaskList(ctx context.Context, t *target.Target, w, warn io.Writer) error {
 	rows, err := taskRows(ctx, t, issuePage)
 	if err != nil {
 		return err
@@ -384,9 +385,9 @@ func writeTaskList(ctx context.Context, t *target, w, warn io.Writer) error {
 	return writeRows(w, rankRows(settlePriorities(rows, warn)), "no open tasks")
 }
 
-func taskRows(ctx context.Context, t *target, limit int) ([]row, error) {
-	rows, err := t.tasks().List(ctx, limit)
-	t.rememberRefs(ctx, rowRefs(rows)...)
+func taskRows(ctx context.Context, t *target.Target, limit int) ([]row, error) {
+	rows, err := tasksFor(t).List(ctx, limit)
+	rememberRefsFor(ctx, t, rowRefs(rows)...)
 
 	return rows, err
 }
@@ -397,7 +398,7 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("search needs a query")
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -475,9 +476,9 @@ func rankRows(rows []row) []row {
 	return rows
 }
 
-func searchRows(ctx context.Context, t *target, query string) ([]row, error) {
-	rows, err := t.tasks().Search(ctx, query)
-	t.rememberRefs(ctx, rowRefs(rows)...)
+func searchRows(ctx context.Context, t *target.Target, query string) ([]row, error) {
+	rows, err := tasksFor(t).Search(ctx, query)
+	rememberRefsFor(ctx, t, rowRefs(rows)...)
 
 	return rows, err
 }
@@ -560,13 +561,13 @@ const mayExist = "the task may exist already: check the tracker before running c
 // an issue on the host. f10 never retries it, since a failed write is an
 // unknown outcome.
 func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
 	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
-	if rs, ok := t.refusedUpFront(); ok {
+	if rs, ok := refusedUpFrontFor(t); ok {
 		return rs.refuseCreate()
 	}
 
@@ -581,14 +582,14 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
 	}
 
-	doc = t.linkBodyAfter(ctx, doc, cmd.ErrWriter)
+	doc = linkBodyAfterFor(ctx, t, doc, cmd.ErrWriter)
 
 	nt, err := readNewTask(ctx, t, cmd, doc)
 	if err != nil {
 		return err
 	}
 
-	r, url, err := t.tasks().Create(ctx, cmd.ErrWriter, nt)
+	r, url, err := tasksFor(t).Create(ctx, cmd.ErrWriter, nt)
 	if err != nil {
 		return err
 	}
@@ -597,7 +598,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	retitleAfter(ctx, cmd.ErrWriter, t, r, "created")
 
 	// the url too, so naming the new task costs no tracker call
-	t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc), URL: url})
+	rememberRefsFor(ctx, t, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc), URL: url})
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
@@ -607,7 +608,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 // driverCreate returns the new task and its url, "" when the driver gives
 // none; a declined create is driver.ErrUnsupported, unwrapped.
 func driverCreate(
-	ctx context.Context, warnTo io.Writer, t *target, d *driver.Driver, doc string, args []string,
+	ctx context.Context, warnTo io.Writer, t *target.Target, d *driver.Driver, doc string, args []string,
 ) (ref.Ref, string, error) {
 	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
 	if errors.Is(err, driver.ErrUnsupported) {
@@ -633,7 +634,7 @@ func driverCreate(
 		return ref.Ref{}, "", fmt.Errorf("driver create printed %q, not one task id\n%s", out, mayExist)
 	}
 
-	r, err := t.reference(ctx, line)
+	r, err := t.Reference(ctx, line)
 	if err != nil {
 		return ref.Ref{}, "", fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
 	}
@@ -646,8 +647,8 @@ func driverCreate(
 // retitleAfter writes tracker.title onto an issue just written, since the
 // template needs the number and a driver has no title verb; the write
 // stands, so a failure is a warning.
-func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, verb string) {
-	if t.eff.TitleTemplate == "" || !t.hostIssues() {
+func retitleAfter(ctx context.Context, warnTo io.Writer, t *target.Target, r ref.Ref, verb string) {
+	if t.Effective.TitleTemplate == "" || !t.HostIssues() {
 		return
 	}
 
@@ -657,8 +658,8 @@ func retitleAfter(ctx context.Context, warnTo io.Writer, t *target, r ref.Ref, v
 	}
 }
 
-func retitleOne(ctx context.Context, t *target, number string) error {
-	h, err := t.host()
+func retitleOne(ctx context.Context, t *target.Target, number string) error {
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}
@@ -684,7 +685,7 @@ func taskTitle(doc string) string {
 
 // readNewTask reads the properties and resolves the parent and the body's
 // After: base once, before any source sees them.
-func readNewTask(ctx context.Context, t *target, cmd *cli.Command, doc string) (newTask, error) {
+func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (newTask, error) {
 	p, err := readProps(cmd)
 	if err != nil {
 		return newTask{}, err
@@ -703,7 +704,7 @@ func readNewTask(ctx context.Context, t *target, cmd *cli.Command, doc string) (
 			continue
 		}
 
-		r, err := t.reference(ctx, link.id)
+		r, err := t.Reference(ctx, link.id)
 		if err != nil {
 			return newTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
 		}

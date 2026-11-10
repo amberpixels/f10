@@ -406,7 +406,7 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 			}
 
 			if tc.archived {
-				tr := tg.tracker()
+				tr := trackerFor(tg)
 				if err := os.MkdirAll(tr.storage.Archive(), 0o750); err != nil {
 					t.Fatal(err)
 				}

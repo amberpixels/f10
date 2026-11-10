@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/trace"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -90,12 +91,12 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 		review = &counts
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	if !t.eff.Traces {
+	if !t.Effective.Traces {
 		return nil
 	}
 
@@ -110,7 +111,7 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if len(tasks) > 0 {
-		out += changeTrailer(tasks[0], changeOf(t.lay.StorageRoot.Reviews(tasks[0])))
+		out += changeTrailer(tasks[0], changeOf(t.Layout.StorageRoot.Reviews(tasks[0])))
 	}
 
 	fmt.Fprint(cmd.Writer, out)
@@ -121,8 +122,8 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 // traceTasks uses the lookup itself, not target.reference: under -C the
 // branch is the one -C points at, and never the session's task, since a
 // branch naming no task carries none; that case is nil and a stderr line.
-func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) ([]string, error) {
-	r, err := ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir, NoSession: true}.Find(ctx, cmd.String("task"))
+func traceTasks(ctx context.Context, cmd *cli.Command, t *target.Target, alone string) ([]string, error) {
+	r, err := ref.Lookup{Prefix: t.Effective.IDPrefix, Dir: t.Dir, NoSession: true}.Find(ctx, cmd.String("task"))
 
 	switch {
 	case err == nil:
@@ -141,22 +142,22 @@ func traceTasks(ctx context.Context, cmd *cli.Command, t *target, alone string) 
 // description is the author's. With traces off a draft still takes over the
 // block the body holds, so the switch turned off never drops the last state.
 func runTraceState(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
 	file := cmd.String("body-file")
-	if !t.eff.Traces && file == "" {
+	if !t.Effective.Traces && file == "" {
 		return nil
 	}
 
-	branch := gitx.CurrentBranch(ctx, t.dir)
+	branch := gitx.CurrentBranch(ctx, t.Dir)
 	if branch == "" {
 		return errors.New("no branch is checked out: the state block belongs to a branch's PR")
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}
@@ -187,7 +188,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	if !t.eff.Traces {
+	if !t.Effective.Traces {
 		return carryStateToFile(file, p.Body)
 	}
 
@@ -198,7 +199,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 
 	u := trace.Update{
 		Step:  cmd.String("step"),
-		After: branchAfter(ctx, t.dir, branch),
+		After: branchAfter(ctx, t.Dir, branch),
 		Round: countFlag(cmd, "round"),
 		Open:  countFlag(cmd, "open"),
 		Asks:  countFlag(cmd, "asks"),

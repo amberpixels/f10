@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -156,10 +157,10 @@ func TestOneIDHeading(t *testing.T) {
 func TestRetitleAfter(t *testing.T) {
 	f := newFakes(t)
 
-	tg := &target{
-		dir: t.TempDir(),
-		pb:  &probe.Probes{CLI: probe.Signal{Value: "gh"}},
-		eff: &facts.Effective{TrackerKind: facts.TrackerGitHub, IDPrefix: "FT", TitleTemplate: "{id}: {title}"},
+	tg := &target.Target{
+		Dir:       t.TempDir(),
+		Probes:    &probe.Probes{CLI: probe.Signal{Value: "gh"}},
+		Effective: &facts.Effective{TrackerKind: facts.TrackerGitHub, IDPrefix: "FT", TitleTemplate: "{id}: {title}"},
 	}
 	r := ref.Ref{ID: "FT-12", Number: "12"}
 

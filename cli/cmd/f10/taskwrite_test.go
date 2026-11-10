@@ -186,7 +186,7 @@ func TestHostRelink(t *testing.T) {
 		t.Errorf("unlink with no parent: %v", err)
 	}
 
-	err := childTarget(t, "glab").tasks().Relink(t.Context(), &bytes.Buffer{},
+	err := tasksFor(childTarget(t, "glab")).Relink(t.Context(), &bytes.Buffer{},
 		ref.Ref{ID: "FT-12", Number: "12"}, "7", unwrittenNothing)
 	if exitCode(err) != ui.ExitDeclined {
 		t.Errorf("glab relink: err = %v, want exit %d", err, ui.ExitDeclined)
@@ -342,7 +342,7 @@ func TestHostUpdate(t *testing.T) {
 func TestHostCreate(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	tg.eff.PriorityLabels = map[string]string{"p1": "high"}
+	tg.Effective.PriorityLabels = map[string]string{"p1": "high"}
 
 	f.script("gh issue create --title Add it --body the body --label draft --label p1",
 		"Creating issue in o/r\n\nhttps://github.com/o/r/issues/12\n")
@@ -351,7 +351,7 @@ func TestHostCreate(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	r, url, err := tg.tasks().Create(t.Context(), &warn, newTask{
+	r, url, err := tasksFor(tg).Create(t.Context(), &warn, newTask{
 		doc:    "# Add it\n\nthe body\n",
 		props:  props{priority: "high", labels: []string{"draft"}},
 		parent: ref.Ref{ID: "FT-7", Number: "7"},
@@ -376,7 +376,9 @@ func TestHostCreateLinkFailureWarns(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	r, _, err := tg.tasks().Create(t.Context(), &warn, newTask{doc: "# A\n", parent: ref.Ref{ID: "FT-7", Number: "7"}})
+	r, _, err := tasksFor(
+		tg,
+	).Create(t.Context(), &warn, newTask{doc: "# A\n", parent: ref.Ref{ID: "FT-7", Number: "7"}})
 	if err != nil || r.ID != "FT-12" || !strings.Contains(warn.String(), "not linked under FT-7") {
 		t.Errorf("hostCreate = %+v, %v, %q; want the id and a warning", r, err, warn.String())
 	}
@@ -390,7 +392,7 @@ func TestHostCreateRefusals(t *testing.T) {
 	tg := childTarget(t, "gh")
 
 	for _, p := range []props{{status: "closed"}, {priority: "urgent"}, {set: []string{"Kind=Bug"}}} {
-		if _, _, err := tg.tasks().Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n", props: p}); err == nil {
+		if _, _, err := tasksFor(tg).Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n", props: p}); err == nil {
 			t.Errorf("%+v: no error", p)
 		}
 	}
@@ -401,7 +403,7 @@ func TestHostCreateRefusals(t *testing.T) {
 
 	f.script("gh issue create --title A --body ", "done\n")
 
-	if _, _, err := tg.tasks().Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n"}); err == nil ||
+	if _, _, err := tasksFor(tg).Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n"}); err == nil ||
 		!strings.Contains(err.Error(), mayExist) {
 		t.Errorf("no url printed: err = %v, want the may-exist warning", err)
 	}

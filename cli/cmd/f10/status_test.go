@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -135,7 +136,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 // before the id, and a capture, which is about another task.
 func TestTaskRunsFromTheWriter(t *testing.T) {
 	seed := func(skill, args string) func(r *state.Run) {
-		return func(r *state.Run) { r.Seed(skill, args, "/work/acme") }
+		return func(r *state.Run) { r.Seed(t.Context(), skill, args, "/work/acme") }
 	}
 	set := func(phase, status string) func(r *state.Run) {
 		return func(r *state.Run) { _ = r.Set(phase, status, "") }
@@ -261,7 +262,7 @@ func TestBareStatusReadsTheBranchTask(t *testing.T) {
 		{Session: "own", Task: "DM-5", Root: repo, Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
 		{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "upcoming"},
 	} {
-		if err := r.Save(dir, time.Now()); err != nil {
+		if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -290,7 +291,7 @@ func TestBareStatusKeepsTheSessionRunForATaskWithNoBranch(t *testing.T) {
 	t.Chdir(repo)
 
 	r := &state.Run{Session: "sess-1", Task: "DM-9", Root: repo, Capture: "done", Plan: "running", Ship: "upcoming"}
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -316,11 +317,11 @@ func TestBareTaskID(t *testing.T) {
 			t.Setenv("F10_SESSION_ID", "sess-1")
 
 			r := &state.Run{Session: "sess-1", Task: tc.session, Root: repo}
-			if err := r.Save(dir, time.Now()); err != nil {
+			if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 
-			tg, err := targetAt(t.Context(), repo, false, "status")
+			tg, err := target.At(t.Context(), repo, false, "status")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -361,7 +362,7 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 	git(t, repo, "worktree", "add", "-q", "--detach", detached)
 
 	for dir, want := range map[string]string{repo: "", named: "", detached: "DM-4"} {
-		tg, err := targetAt(t.Context(), dir, false, "status")
+		tg, err := target.At(t.Context(), dir, false, "status")
 		if err != nil {
 			t.Fatal(err)
 		}

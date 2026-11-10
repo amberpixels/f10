@@ -24,6 +24,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -234,7 +235,7 @@ func loadAskLinks(ctx context.Context, links *taskLinks, all []asks.Ask) {
 		}
 
 		if _, ok := projects[dir]; !ok {
-			projects[dir] = projectOf(ctx, dir)
+			projects[dir] = target.ProjectOf(ctx, dir)
 		}
 
 		links.LoadAs(ctx, projects[dir], a.Project, a.Task)
@@ -562,8 +563,8 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 	}
 
 	var extra []string
-	if t, err := targetAt(ctx, a.Main, false, "asks"); err == nil {
-		extra = t.eff.DriveEnv
+	if t, err := target.At(ctx, a.Main, false, "asks"); err == nil {
+		extra = t.Effective.DriveEnv
 	}
 
 	dir := daemon.RunDir()

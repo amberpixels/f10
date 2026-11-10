@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -58,10 +59,10 @@ func finishCommand() *cli.Command {
 // finishRef is the task a token names, its suffix, and for a bare call the
 // branch checked out here, which picks it among suffixed siblings. The
 // session's task is refused: nothing else would stand between it and a merge.
-func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, string, error) {
+func finishRef(ctx context.Context, t *target.Target, token string) (ref.Ref, string, string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		r, err := t.reference(ctx, "")
+		r, err := t.Reference(ctx, "")
 		if err != nil {
 			return ref.Ref{}, "", "", err
 		}
@@ -70,11 +71,11 @@ func finishRef(ctx context.Context, t *target, token string) (ref.Ref, string, s
 			return ref.Ref{}, "", "", fmt.Errorf("the branch names no task: name it (f10 finish %s)", r.Label())
 		}
 
-		return r, "", gitx.Out(ctx, t.dir, "rev-parse", "--abbrev-ref", "HEAD"), nil
+		return r, "", gitx.Out(ctx, t.Dir, "rev-parse", "--abbrev-ref", "HEAD"), nil
 	}
 
 	id, suffix := ref.SplitSuffix(token)
-	r, err := t.reference(ctx, id)
+	r, err := t.Reference(ctx, id)
 
 	return r, suffix, "", err
 }
@@ -94,12 +95,12 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}
@@ -123,7 +124,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("--close names riders, and %s ships alone", r.ID)
 		}
 
-		resolve := func(tok string) (ref.Ref, error) { return t.reference(ctx, tok) }
+		resolve := func(tok string) (ref.Ref, error) { return t.Reference(ctx, tok) }
 		if closing, err = closeChoice(r, v, resolve); err != nil {
 			return err
 		}
@@ -131,13 +132,13 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 
 	// drive's own finish runs under the lease drive holds, so only the
 	// command takes it
-	lease, err := finishLease(t.lay.StorageRoot.Path(), r.ID)
+	lease, err := finishLease(t.Layout.StorageRoot.Path(), r.ID)
 	if err != nil {
 		return err
 	}
 	defer lease.Release()
 
-	in := finishInputFor(t, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), h, r)
+	in := finishInputFor(t, cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot), h, r)
 	if in.cwd, in.workspace, err = processPlace(); err != nil {
 		return err
 	}
@@ -148,7 +149,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	}
 	in.close = closing
 	in.sweep = func(ctx context.Context) {
-		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.lay.StorageRoot.Path(), janitorStamp), time.Now(),
+		sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), janitorStamp), time.Now(),
 			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
 	}
 
@@ -247,30 +248,30 @@ type finishFlags struct {
 // finishInputFor fills what comes from the task and the project's settings,
 // so the command, the drive and the watcher all take the same ones; each
 // caller then sets only its own fields.
-func finishInputFor(t *target, main string, h host, task ref.Ref) finishInput {
+func finishInputFor(t *target.Target, main string, h host, task ref.Ref) finishInput {
 	task = task.Head()
 
 	return finishInput{
 		main:       main,
-		root:       t.lay.StorageRoot.Path(),
-		driver:     t.driver(),
+		root:       t.Layout.StorageRoot.Path(),
+		driver:     t.Driver(),
 		task:       task,
 		host:       h.at(main),
-		method:     t.eff.MergeMethod,
-		traces:     t.eff.Traces,
-		hostCloses: t.hostCloses(),
+		method:     t.Effective.MergeMethod,
+		traces:     t.Effective.Traces,
+		hostCloses: t.HostCloses(),
 		loreStore:  &lore.Store{Root: loreRootFor(t)},
-		gate:       t.eff.LoreGate,
-		storage:    t.lay.StorageRoot,
+		gate:       t.Effective.LoreGate,
+		storage:    t.Layout.StorageRoot,
 		title:      titleLookup(t, task.Number),
-		subtasks:   t.tracker().allChildren,
+		subtasks:   trackerFor(t).allChildren,
 		closeTask:  closeTaskFor(t, h.at(main)),
 	}
 }
 
 // closeTaskFor closes the task on the host only where the host is the tracker.
-func closeTaskFor(t *target, h host) func(context.Context, ref.Ref) error {
-	if !t.hostCloses() {
+func closeTaskFor(t *target.Target, h host) func(context.Context, ref.Ref) error {
+	if !t.HostCloses() {
 		return nil
 	}
 

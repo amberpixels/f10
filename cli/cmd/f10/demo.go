@@ -8,6 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -41,23 +42,23 @@ func runDemoOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return ui.Open(ctx, t.dir, path)
+	return ui.Open(ctx, t.Dir, path)
 }
 
 // demoReport refuses a missing file rather than falling back to whatever
 // else the directory holds, which is how a reader opens another task's demo.
-func demoReport(ctx context.Context, cmd *cli.Command) (*target, string, error) {
-	t, err := targetFor(ctx, cmd)
+func demoReport(ctx context.Context, cmd *cli.Command) (*target.Target, string, error) {
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return nil, "", err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return nil, "", err
 	}
 
-	path := filepath.Join(t.lay.StorageRoot.Demo(r.Head().ID), "report.html")
+	path := filepath.Join(t.Layout.StorageRoot.Demo(r.Head().ID), "report.html")
 	if _, err := os.Stat(path); err != nil {
 		return nil, "", fmt.Errorf("no demo report for %s at %s", memberLabel(r), path)
 	}

@@ -8,34 +8,37 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // standupTracker keys where the target's task ids live. A host's issues
 // belong to the repository (GH-12 in two repositories is two issues), so
 // each is its own project; any other tracker is shared by kind and prefix.
-func (t *target) standupTracker() (standup.Tracker, string) {
-	tr := standup.Tracker{Kind: t.eff.TrackerKind.String(), Prefix: t.eff.IDPrefix}
+func standupTrackerFor(t *target.Target) (standup.Tracker, string) {
+	tr := standup.Tracker{Kind: t.Effective.TrackerKind.String(), Prefix: t.Effective.IDPrefix}
 
-	if tr.Prefix != "" && !t.hostCloses() {
+	if tr.Prefix != "" && !t.HostCloses() {
 		tr.Key = "tracker\x00" + tr.Kind + "\x00" + tr.Prefix
 
 		return tr, tr.Prefix
 	}
 
-	tr.Key = "repo\x00" + cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	tr.Key = "repo\x00" + cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 
-	return tr, t.lay.Project
+	return tr, t.Layout.Project
 }
 
 // collectTarget collects one checkout, its repository and tracker named.
-func collectTarget(ctx context.Context, t *target, since time.Time) (standup.Input, error) {
-	tr, project := t.standupTracker()
+func collectTarget(ctx context.Context, t *target.Target, since time.Time) (standup.Input, error) {
+	tr, project := standupTrackerFor(t)
 	src := standup.Source{
-		Dir: t.lay.CheckoutRoot, Main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), Prefix: t.eff.IDPrefix,
-		Upkeep: t.eff.UpkeepPaths,
+		Dir:    t.Layout.CheckoutRoot,
+		Main:   cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Prefix: t.Effective.IDPrefix,
+		Upkeep: t.Effective.UpkeepPaths,
 	}
 
-	if h := t.optionalHost(); h != nil {
+	if h := optionalHostOf(t); h != nil {
 		src.Host = &h.Host
 	}
 
@@ -44,7 +47,7 @@ func collectTarget(ctx context.Context, t *target, since time.Time) (standup.Inp
 		return standup.Input{}, err
 	}
 
-	in.Repo, in.Project, in.Tracker = t.lay.Project, project, tr
+	in.Repo, in.Project, in.Tracker = t.Layout.Project, project, tr
 
 	return in, nil
 }
@@ -52,7 +55,7 @@ func collectTarget(ctx context.Context, t *target, since time.Time) (standup.Inp
 // collectAll collects every target, a few at a time, keeping the scope's
 // order. A checkout that fails fails the run, named: dropping it would
 // leave its work out of a report meant to be whole.
-func collectAll(ctx context.Context, targets []*target, since time.Time) ([]standup.Input, error) {
+func collectAll(ctx context.Context, targets []*target.Target, since time.Time) ([]standup.Input, error) {
 	if len(targets) == 1 {
 		in, err := collectTarget(ctx, targets[0], since)
 
@@ -78,7 +81,7 @@ func collectAll(ctx context.Context, targets []*target, since time.Time) ([]stan
 
 	for i, err := range errs {
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", targets[i].lay.CheckoutRoot, err)
+			return nil, fmt.Errorf("%s: %w", targets[i].Layout.CheckoutRoot, err)
 		}
 	}
 

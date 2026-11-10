@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -78,17 +79,17 @@ type rawChild struct {
 }
 
 func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return err
 	}
 
-	rows, err := t.tracker().children(ctx, r)
+	rows, err := trackerFor(t).children(ctx, r)
 	if errors.Is(err, errNoParentLink) {
 		return ui.Exit(ui.ExitDeclined, "%s: %v", r.ID, err)
 	}
@@ -117,8 +118,8 @@ func openRows(rows []childRow) []childRow {
 
 // rawChildren is the task's subtasks as the tracker holds them;
 // errNoParentLink when it has no parent link to read.
-func (t *target) rawChildren(ctx context.Context, task ref.Ref) ([]rawChild, error) {
-	return t.tasks().Children(ctx, task)
+func rawChildrenFor(ctx context.Context, t *target.Target, task ref.Ref) ([]rawChild, error) {
+	return tasksFor(t).Children(ctx, task)
 }
 
 func shapeChildren(ctx context.Context, tr tracker, main string, raw []rawChild, keepClosed bool) ([]childRow, error) {

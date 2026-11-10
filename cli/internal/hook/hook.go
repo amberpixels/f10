@@ -92,7 +92,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		// the mark proves to a drive that the agent took a prompt, even when
 		// the turn ended between two of its looks
 		if sid != "" && p.Cwd != "" {
-			_ = state.MarkPrompt(env.StateDir, sid, state.RootOf(p.Cwd), env.now())
+			_ = state.MarkPrompt(env.StateDir, sid, state.RootOf(ctx, p.Cwd), env.now())
 		}
 
 		if env.PromptTyped != nil && p.Cwd != "" {
@@ -106,7 +106,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			return answerStatus(ctx, env, sid)
 		}
 
-		seed(env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd)
+		seed(ctx, env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd)
 		notify(ctx, env, sid, p.Cwd, skillStarted(p.CommandName, p.CommandArgs)...)
 	case "PreToolUse":
 		// the model calling the skill itself, which the expansion never sees
@@ -120,7 +120,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		}
 
 		_ = json.Unmarshal(p.ToolInput, &in)
-		seed(env, sid, skillOf(in.Skill), in.Args, p.Cwd)
+		seed(ctx, env, sid, skillOf(in.Skill), in.Args, p.Cwd)
 		notify(ctx, env, sid, p.Cwd, skillStarted(in.Skill, in.Args)...)
 	case "PostToolUse":
 		obs := observed(ctx, env, p)
@@ -139,22 +139,29 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 
 		var stop *observe.SessionStopped
 
-		_ = state.Update(env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, loaded bool) (bool, error) {
-			if !loaded {
-				return false, nil
-			}
+		_ = state.Update(
+			ctx,
+			env.StateDir,
+			sid,
+			hookLockWait,
+			env.now(),
+			func(r *state.Run, loaded bool) (bool, error) {
+				if !loaded {
+					return false, nil
+				}
 
-			// read before the backstop: the ledger keeps where the run stopped,
-			// never the done the backstop infers
-			stop = stopped(r)
+				// read before the backstop: the ledger keeps where the run stopped,
+				// never the done the backstop infers
+				stop = stopped(r)
 
-			backstop := r.Backstop()
-			if backstop && stop != nil {
-				stop.Backstop = true
-			}
+				backstop := r.Backstop()
+				if backstop && stop != nil {
+					stop.Backstop = true
+				}
 
-			return backstop, nil
-		})
+				return backstop, nil
+			},
+		)
 
 		if stop != nil {
 			notify(ctx, env, sid, p.Cwd, stop)
@@ -252,13 +259,13 @@ func stopped(r *state.Run) *observe.SessionStopped {
 // rather than saving over a newer one.
 const hookLockWait = 2 * time.Second
 
-func seed(env *Env, sid, skill, args, cwd string) {
+func seed(ctx context.Context, env *Env, sid, skill, args, cwd string) {
 	if skill == "" || sid == "" {
 		return
 	}
 
-	_ = state.Update(env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, _ bool) (bool, error) {
-		return r.Seed(skill, args, cwd), nil
+	_ = state.Update(ctx, env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, _ bool) (bool, error) {
+		return r.Seed(ctx, skill, args, cwd), nil
 	})
 }
 

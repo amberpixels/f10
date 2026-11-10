@@ -27,6 +27,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -81,10 +82,10 @@ func newFakes(t *testing.T) *fakes {
 
 	t.Cleanup(func() { enterRetry, enterPoll = prevRetry, prevPoll })
 
-	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, projectOf
+	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, target.ProjectOf
 
 	// task refs need the project from git, which these fakes do not script
-	projectOf = func(context.Context, string) string { return "" }
+	target.ProjectOf = func(context.Context, string) string { return "" }
 
 	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
 		res := f.answer("git " + strings.Join(args, " "))
@@ -108,7 +109,9 @@ func newFakes(t *testing.T) *fakes {
 
 	shell.Has = func(name string) bool { return f.has[name] }
 
-	t.Cleanup(func() { gitx.Exec, shell.Capture, shell.Has, projectOf = prevExec, prevCapture, prevHas, prevProject })
+	t.Cleanup(func() {
+		gitx.Exec, shell.Capture, shell.Has, target.ProjectOf = prevExec, prevCapture, prevHas, prevProject
+	})
 	t.Setenv("HERDR_ENV", "1")
 
 	return f

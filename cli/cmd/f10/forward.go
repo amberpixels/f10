@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -55,14 +56,14 @@ func runForward(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("forward needs the text to send after the task id")
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
 	id, suffix := ref.SplitSuffix(token)
 
-	r, err := t.reference(ctx, id)
+	r, err := t.Reference(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -71,9 +72,9 @@ func runForward(ctx context.Context, cmd *cli.Command) error {
 	r = r.Head()
 
 	return forward(ctx, cmd.Writer, forwardInput{
-		main:     cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		here:     t.lay.CheckoutRoot,
-		driver:   t.driver(),
+		main:     cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		here:     t.Layout.CheckoutRoot,
+		driver:   t.Driver(),
 		task:     r,
 		suffix:   suffix,
 		text:     text,

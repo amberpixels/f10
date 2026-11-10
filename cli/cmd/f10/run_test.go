@@ -8,6 +8,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // A run's pace is the flag, else the branch's record, else the default a
@@ -72,7 +73,7 @@ func TestGatesFollowTheRecordedPace(t *testing.T) {
 // A problem in the user's file names that file, so only the project's own
 // errors take the project.md label.
 func TestLabeledErrors(t *testing.T) {
-	got := labeledErrors("/home/me/.f10/agents.md: agents.review: bad\nagents.x: no flow has an x entry")
+	got := target.LabeledErrors("/home/me/.f10/agents.md: agents.review: bad\nagents.x: no flow has an x entry")
 	want := "/home/me/.f10/agents.md: agents.review: bad\nproject.md: agents.x: no flow has an x entry"
 
 	if got != want {

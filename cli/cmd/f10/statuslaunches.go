@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -47,7 +48,7 @@ func dropRows(rows []taskRow, drop func(taskRow) bool) []taskRow {
 // launchKids is the session's launches as rows, nested under their bases
 // as a parent's children are. A finished task is left out, and so is the
 // session run's own task, which may be the parent the launches split.
-func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []childRow {
+func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid string) []childRow {
 	launches, err := state.Launches(state.Dir(), sid)
 	if err != nil {
 		ui.Warnf(warn, "reading this session's launches: %v", err)
@@ -73,7 +74,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		case state.LaunchStart:
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
-			for _, task := range driveTasks(t.lay.StorageRoot.Path(), l.Value) {
+			for _, task := range driveTasks(t.Layout.StorageRoot.Path(), l.Value) {
 				tokens = append(tokens, token{text: task.ID, after: task.After, queued: task.Queued, phase: task.Phase})
 			}
 		}
@@ -84,14 +85,14 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 		refs []ref.Ref
 	)
 
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	root := t.tracker().storage
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+	root := trackerFor(t).storage
 	bases := map[string]string{} // siblings share a base: resolve it once
 
 	for _, tok := range tokens {
 		id, suffix := ref.SplitSuffix(tok.text)
 
-		r, err := t.reference(ctx, id)
+		r, err := t.Reference(ctx, id)
 		if err != nil {
 			continue
 		}
@@ -120,7 +121,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 	// titles from the ledger, the tracker only on a miss: the typed status
 	// answers inside a hook with a short timeout, and a row with no title
 	// still reads, so a failed lookup says nothing
-	known := t.taskRefs(ctx, refs, false, false, io.Discard)
+	known := taskRefsFor(t, ctx, refs, false, false, io.Discard)
 	for i := range kids {
 		kids[i].Title, kids[i].URL = tasktitle.Clean(known[kids[i].ID].Title, kids[i].ID), known[kids[i].ID].URL
 	}
@@ -133,7 +134,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target, sid string) []ch
 // seen holds each base as written against its answer.
 func launchBase(
 	ctx context.Context,
-	t *target,
+	t *target.Target,
 	main, id, suffix, recorded string,
 	branched bool,
 	seen map[string]string,
@@ -156,11 +157,11 @@ func launchBase(
 	}
 
 	out := ""
-	if r, err := t.reference(ctx, base); err == nil {
+	if r, err := t.Reference(ctx, base); err == nil {
 		out = r.Head().ID
 
 		has, err := hasTaskBranch(ctx, main, out)
-		if err != nil || finishedTask(taskInfo{}, t.tracker().storage, out, has) {
+		if err != nil || finishedTask(taskInfo{}, trackerFor(t).storage, out, has) {
 			out = ""
 		}
 	}

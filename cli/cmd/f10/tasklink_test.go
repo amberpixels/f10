@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,9 +15,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/layers"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
@@ -33,11 +36,11 @@ func withLinks(t *testing.T, on bool) {
 
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 
-	prevTerm, prevProject := linkTerminal, projectOf
-	t.Cleanup(func() { linkTerminal, projectOf = prevTerm, prevProject })
+	prevTerm, prevProject := linkTerminal, target.ProjectOf
+	t.Cleanup(func() { linkTerminal, target.ProjectOf = prevTerm, prevProject })
 
 	linkTerminal = func(io.Writer) bool { return on }
-	projectOf = func(context.Context, string) string { return linkProject }
+	target.ProjectOf = func(context.Context, string) string { return linkProject }
 
 	ledger.RememberRefs(t.Context(), linkProject,
 		ledger.TaskRef{ID: "FT-1", Title: "One", URL: issueURL("FT-1")},
@@ -294,31 +297,61 @@ var plainIDPrint = regexp.MustCompile(
 )
 
 // machineRead are prints of a bare id that agents or scripts parse, by file
-// and a piece of the line, so they stay plain on purpose.
+// (relative to the module root) and a piece of the line, so they stay plain
+// on purpose.
 var machineRead = map[string]string{
-	"host.go":        `"# %s: %s\n\n"`,                // the task as markdown, for an agent
-	"reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
-	"review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
-	"pr.go":          `"task: %s\n"`,                  // pr view, parsed
-	"taskref.go":     `"%s: %v"`,                      // a warning on stderr
-	"taskreport.go":  `"%s: %v: no subtasks to list"`, // a warning on stderr
+	"cmd/f10/host.go":        `"# %s: %s\n\n"`,                // the task as markdown, for an agent
+	"cmd/f10/reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
+	"cmd/f10/review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
+	"cmd/f10/pr.go":          `"task: %s\n"`,                  // pr view, parsed
+	"cmd/f10/taskref.go":     `"%s: %v"`,                      // a warning on stderr
+	"cmd/f10/taskreport.go":  `"%s: %v: no subtasks to list"`, // a warning on stderr
+}
+
+// commandSources are the non-test files of the command tree: cmd/f10 and
+// every package the layers table ranks above the domain packages.
+func commandSources(t *testing.T) []string {
+	t.Helper()
+
+	root := filepath.Join("..", "..")
+
+	var files []string
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+
+		if r, ok := layers.RankOf(
+			filepath.ToSlash(filepath.Dir(rel)),
+			layers.Table,
+		); ok && r.Rank > 0 &&
+			!strings.HasPrefix(rel, "cmd/f10eval/") {
+			files = append(files, rel)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(files) == 0 {
+		t.Fatal("no command sources found")
+	}
+
+	return files
 }
 
 // The render table above covers the commands that exist; this scan catches a
 // new print of a bare task id in any file, which must go through taskLinks or
 // be listed in machineRead.
 func TestNoPlainTaskIDPrints(t *testing.T) {
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
-			continue
-		}
-
-		src, err := os.ReadFile(f)
+	for _, f := range commandSources(t) {
+		src, err := os.ReadFile(filepath.Join("..", "..", f))
 		if err != nil {
 			t.Fatal(err)
 		}

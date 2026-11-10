@@ -192,13 +192,13 @@ func TestTasksPicksTheSource(t *testing.T) {
 		name := fmt.Sprintf("driver %v, %s, cli %q", tc.driver, tc.kind, tc.cli)
 		t.Run(name, func(t *testing.T) {
 			tg := declaredTracker(t, tc.kind)
-			tg.pb = &probe.Probes{CLI: probe.Signal{Value: tc.cli, Evidence: "none"}}
+			tg.Probes = &probe.Probes{CLI: probe.Signal{Value: tc.cli, Evidence: "none"}}
 
 			if tc.driver {
-				writeDriver(t, tg.lay.StorageRoot.Path())
+				writeDriver(t, tg.Layout.StorageRoot.Path())
 			}
 
-			src := tg.tasks()
+			src := tasksFor(tg)
 			got := fmt.Sprintf("%T", src)
 
 			if f, ok := src.(fallbackSource); ok {
@@ -217,7 +217,7 @@ func TestTasksPicksTheSource(t *testing.T) {
 func TestFallbackOnlyOnUnsupported(t *testing.T) {
 	f := newFakes(t)
 	tg := declaredTracker(t, facts.TrackerGitHub)
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: 1, Stderr: "tracker down"})
 

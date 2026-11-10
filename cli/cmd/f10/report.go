@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 type fact struct {
@@ -83,4 +89,40 @@ func writeFacts(w io.Writer, rows []fact, width, limit int) error {
 	}
 
 	return nil
+}
+
+// follow acts on a url a driver returned; drivers only return addresses.
+func follow(ctx context.Context, w io.Writer, dir, url string, linkOnly bool) error {
+	if linkOnly {
+		_, err := fmt.Fprintln(w, url)
+
+		return err
+	}
+
+	return ui.Open(ctx, dir, url)
+}
+
+// writeDoc pages markdown on a terminal and writes it raw to a pipe: no
+// renderer is bundled, since glow, bat or an editor compose for free.
+func writeDoc(ctx context.Context, w io.Writer, dir, doc string) error {
+	doc = strings.TrimRight(doc, "\n") + "\n"
+
+	pager := strings.Fields(os.Getenv("PAGER"))
+	if !ui.IsTerminal(w) || len(pager) == 0 {
+		_, err := io.WriteString(w, doc)
+
+		return err
+	}
+
+	return shell.Pipe(ctx, dir, doc, pager[0], pager[1:]...)
+}
+
+// linkFlag is the same flag on every verb that follows an address, so `open`
+// keeps one meaning across nouns whose addresses are paths and urls alike.
+func linkFlag() cli.Flag {
+	return &cli.BoolFlag{Name: "link", Usage: "print the address instead of opening it"}
+}
+
+func printFlag() cli.Flag {
+	return &cli.BoolFlag{Name: "print", Usage: "write the item, or with none the list's first page, to stdout"}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -35,19 +36,19 @@ func initCommand() *cli.Command {
 }
 
 func runInit(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	lay := t.lay
+	lay := t.Layout
 
 	path, err := destination(lay)
 	if err != nil {
 		return err
 	}
 
-	draft, err := facts.Scaffold(lay, t.pb, t.eff)
+	draft, err := facts.Scaffold(lay, t.Probes, t.Effective)
 	if err != nil {
 		return err
 	}
@@ -56,7 +57,7 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 	// the time anything appears inside it
 	var excluded string
 
-	if t.eff.Storage == "in-repo" && t.eff.Visibility == "stealth" {
+	if t.Effective.Storage == "in-repo" && t.Effective.Visibility == "stealth" {
 		if excluded, err = excludeF10(ctx, lay.CheckoutRoot); err != nil {
 			return fmt.Errorf("excluding %s: %w", excludeLine, err)
 		}

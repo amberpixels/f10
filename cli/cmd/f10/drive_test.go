@@ -25,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -2408,10 +2409,10 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", originMain)
-			target := "m2"
+			aim := "m2"
 
 			if tc.after != "" {
-				target = "b2"
+				aim = "b2"
 				fx.f.meta.Seed("GH-1", branchmeta.AfterBranch, tc.after)
 				fx.f.script("git rev-parse -q --verify refs/heads/"+tc.after, "b2")
 
@@ -2426,7 +2427,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 				ancestor = []shell.Result{{}}
 			}
 
-			fx.f.answers["git merge-base --is-ancestor "+target+" refs/heads/GH-1"] = ancestor
+			fx.f.answers["git merge-base --is-ancestor "+aim+" refs/heads/GH-1"] = ancestor
 			// local main does not hold origin's, so origin/main is the target
 			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
 			// origin holds the target, unless the base was never pushed
@@ -2453,7 +2454,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			fx.f.script(catchup, "{}")
-			fx.f.script("git merge-tree --write-tree --no-messages "+target+" HEAD", "tree")
+			fx.f.script("git merge-tree --write-tree --no-messages "+aim+" HEAD", "tree")
 			fx.f.script("git rev-parse -q --verify HEAD", "head0", "head1")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
@@ -2969,7 +2970,7 @@ func TestDriveFinishInputTakesTheSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tg, err := targetAt(t.Context(), repo, false, "drive")
+	tg, err := target.At(t.Context(), repo, false, "drive")
 	if err != nil {
 		t.Fatal(err)
 	}

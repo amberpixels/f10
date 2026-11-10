@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -88,19 +89,19 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--guard %q: want implement, pr or judge", guard)
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
 	in := catchupInput{
-		dir:            t.lay.CheckoutRoot,
-		main:           cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
+		dir:            t.Layout.CheckoutRoot,
+		main:           cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
 		guard:          guard,
-		catchup:        t.eff.Catchup,
-		stacked:        t.eff.CatchupStacked,
-		catchupDefault: factDefault(t.eff, "catchup"),
-		stackedDefault: factDefault(t.eff, "catchup_stacked"),
+		catchup:        t.Effective.Catchup,
+		stacked:        t.Effective.CatchupStacked,
+		catchupDefault: factDefault(t.Effective, "catchup"),
+		stackedDefault: factDefault(t.Effective, "catchup_stacked"),
 		shipStopped:    shipStopped(),
 	}
 

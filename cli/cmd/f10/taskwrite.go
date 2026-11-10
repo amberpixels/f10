@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -113,7 +114,7 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task comment reads the comment as markdown on stdin, and it was empty")
 	}
 
-	url, err := t.tasks().Comment(ctx, cmd.ErrWriter, r, body)
+	url, err := tasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
 	if err != nil {
 		return err
 	}
@@ -154,7 +155,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if !p.empty() {
-		if err := t.tasks().Update(ctx, cmd.ErrWriter, r, p); err != nil {
+		if err := tasksFor(t).Update(ctx, cmd.ErrWriter, r, p); err != nil {
 			return err
 		}
 	}
@@ -169,17 +170,17 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		unwritten = "the other properties were written, the parent link was not"
 	}
 
-	return t.tasks().Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
+	return tasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
 }
 
 // parentNumber resolves --parent before anything is written; empty means
 // "take the task out from under its parent".
-func parentNumber(ctx context.Context, t *target, r ref.Ref, raw string) (string, error) {
+func parentNumber(ctx context.Context, t *target.Target, r ref.Ref, raw string) (string, error) {
 	if raw = strings.TrimSpace(raw); raw == "" {
 		return "", nil
 	}
 
-	pr, err := t.reference(ctx, raw)
+	pr, err := t.Reference(ctx, raw)
 	if err != nil {
 		return "", fmt.Errorf("--parent %s: %w", raw, err)
 	}
@@ -193,18 +194,18 @@ func parentNumber(ctx context.Context, t *target, r ref.Ref, raw string) (string
 
 // writeTarget settles the task for a write verb, and refuses before stdin
 // is read when nothing could take the write.
-func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target, ref.Ref, error) {
-	t, err := targetFor(ctx, cmd)
+func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target.Target, ref.Ref, error) {
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return nil, ref.Ref{}, err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return nil, ref.Ref{}, err
 	}
 
-	if rs, ok := t.refusedUpFront(); ok {
+	if rs, ok := refusedUpFrontFor(t); ok {
 		return nil, ref.Ref{}, rs.refuseWrite(verb, unwrittenNothing)
 	}
 
@@ -342,20 +343,20 @@ func (h host) setTitle(ctx context.Context, number, title string) error {
 // runTaskRetitle leaves a title already written through tracker.title alone,
 // so a second run changes nothing.
 func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	if t.eff.TitleTemplate == "" {
+	if t.Effective.TitleTemplate == "" {
 		ui.Warnf(cmd.ErrWriter, "project.md declares no tracker.title; nothing to retitle")
 
 		return nil
 	}
 
-	if !t.hostIssues() {
+	if !t.HostIssues() {
 		return ui.Exit(ui.ExitDeclined, "retitle writes the host's issue titles, and a %s tracker is not the host's; "+
-			"nothing was written", t.eff.TrackerKind)
+			"nothing was written", t.Effective.TrackerKind)
 	}
 
 	all := cmd.Bool("all")
@@ -363,14 +364,14 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("retitle takes a task id or --all, not both")
 	}
 
-	h, err := t.host()
+	h, err := hostOf(t)
 	if err != nil {
 		return err
 	}
 
 	number := ""
 	if !all {
-		r, err := t.reference(ctx, cmd.Args().First())
+		r, err := t.Reference(ctx, cmd.Args().First())
 		if err != nil {
 			return err
 		}
@@ -409,7 +410,7 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 // write, since it needs the new number; the issue exists by then, so a failed
 // link is a warning and never a reason to create it again. An issue has no
 // named properties, so --set is refused before anything is written.
-func hostCreate(ctx context.Context, warnTo io.Writer, t *target, h host, nt newTask) (ref.Ref, string, error) {
+func hostCreate(ctx context.Context, warnTo io.Writer, t *target.Target, h host, nt newTask) (ref.Ref, string, error) {
 	p := nt.props
 
 	if len(p.set) > 0 {
@@ -428,7 +429,7 @@ func hostCreate(ctx context.Context, warnTo io.Writer, t *target, h host, nt new
 	labels := p.labels
 
 	if p.priority != "" {
-		label := priorityLabel(p.priority, t.eff.PriorityLabels)
+		label := priorityLabel(p.priority, t.Effective.PriorityLabels)
 		if label == "" {
 			return ref.Ref{}, "", fmt.Errorf(
 				"priority %s: tracker.priority in project.md maps no label to it", p.priority)
@@ -444,7 +445,7 @@ func hostCreate(ctx context.Context, warnTo io.Writer, t *target, h host, nt new
 		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
 	}
 
-	r, err := t.reference(ctx, number)
+	r, err := t.Reference(ctx, number)
 	if err != nil {
 		return ref.Ref{}, "", fmt.Errorf("%s: %w\n%s", url, err, mayExist)
 	}

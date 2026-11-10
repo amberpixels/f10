@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -50,7 +51,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	v := statusView{w: cmd.Writer, warn: cmd.ErrWriter, json: cmd.Bool("json"), plain: cmd.Bool("plain")}
 
 	if token == "" {
-		dir, scoped, err := rootDir(cmd)
+		dir, scoped, err := target.RootDir(cmd)
 		if err != nil {
 			return err
 		}
@@ -64,7 +65,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -91,7 +92,7 @@ func bareStatus(ctx context.Context, v statusView, dir string, scoped bool, sid 
 	// since the run is what status reports; in a checkout naming no task the
 	// launches come first, as the session run's task would hide them
 	if !all && !scoped {
-		if t, err := targetAt(ctx, dir, false, "status"); err == nil {
+		if t, err := target.At(ctx, dir, false, "status"); err == nil {
 			if rd, err = newStatusReader(t, now); err != nil {
 				return false, err
 			}
@@ -186,17 +187,17 @@ func sessionTaskID(sid string) string {
 
 // checkoutTaskID is the task the branch names, else the one a linked
 // worktree's directory names on a detached HEAD, "" for none.
-func checkoutTaskID(ctx context.Context, t *target) string {
-	if r, err := (ref.Lookup{Prefix: t.eff.IDPrefix, Dir: t.dir, NoSession: true}).Find(ctx, ""); err == nil {
+func checkoutTaskID(ctx context.Context, t *target.Target) string {
+	if r, err := (ref.Lookup{Prefix: t.Effective.IDPrefix, Dir: t.Dir, NoSession: true}).Find(ctx, ""); err == nil {
 		return r.Label()
 	}
 
-	linked := t.lay.MainRoot != "" && gitx.Resolved(t.lay.MainRoot) != gitx.Resolved(t.lay.CheckoutRoot)
-	if !linked || gitx.Out(ctx, t.dir, "rev-parse", "--abbrev-ref", "HEAD") != "HEAD" {
+	linked := t.Layout.MainRoot != "" && gitx.Resolved(t.Layout.MainRoot) != gitx.Resolved(t.Layout.CheckoutRoot)
+	if !linked || gitx.Out(ctx, t.Dir, "rev-parse", "--abbrev-ref", "HEAD") != "HEAD" {
 		return ""
 	}
 
-	return ref.Match(t.eff.IDPrefix, filepath.Base(t.lay.CheckoutRoot))
+	return ref.Match(t.Effective.IDPrefix, filepath.Base(t.Layout.CheckoutRoot))
 }
 
 // taskStatusInput is what `status <id>` knows about a task before reading
@@ -218,13 +219,13 @@ type taskStatusInput struct {
 var errNoRunToRead = errors.New("no run to read")
 
 // taskStatusFor resolves the task to its checkout.
-func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (taskStatusInput, error) {
+func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix string) (taskStatusInput, error) {
 	// a bundle's run, plan and branch are its lead's
 	r = r.Head()
 
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
+	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 
-	name, path, err := taskCheckout(ctx, main, t.driver(), r, suffix)
+	name, path, err := taskCheckout(ctx, main, t.Driver(), r, suffix)
 
 	switch {
 	case err != nil:
@@ -240,12 +241,12 @@ func taskStatusFor(ctx context.Context, t *target, r ref.Ref, suffix string) (ta
 		branch:  name,
 		root:    path,
 		main:    main,
-		plan:    t.lay.StorageRoot.Plan(r.ID),
-		handoff: taskHandoff(t.lay.StorageRoot, r.ID),
-		storage: t.lay.StorageRoot.Path(),
+		plan:    t.Layout.StorageRoot.Plan(r.ID),
+		handoff: taskHandoff(t.Layout.StorageRoot, r.ID),
+		storage: t.Layout.StorageRoot.Path(),
 	}
 
-	if h, err := t.host(); err == nil {
+	if h, err := hostOf(t); err == nil {
 		h = h.at(path)
 		in.host = &h
 	}

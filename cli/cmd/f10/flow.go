@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -57,24 +58,24 @@ type flowView struct {
 }
 
 func runFlow(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	run, err := resolveRun(ctx, t.eff, runInput{
+	run, err := resolveRun(ctx, t.Effective, runInput{
 		pace:   cmd.String("pace"),
-		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		branch: gitx.CurrentBranch(ctx, t.lay.CheckoutRoot),
+		main:   cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		branch: gitx.CurrentBranch(ctx, t.Layout.CheckoutRoot),
 	})
 	if err != nil {
 		return err
 	}
 
-	v := pacedFlowsView(t.eff, t.eff.PaceSet, run.pace)
+	v := pacedFlowsView(t.Effective, t.Effective.PaceSet, run.pace)
 
 	if name := strings.ToLower(strings.TrimSpace(cmd.Args().First())); name != "" {
-		if _, err := pacedFlow(t.eff, "", name); err != nil {
+		if _, err := pacedFlow(t.Effective, "", name); err != nil {
 			return err
 		}
 
@@ -438,12 +439,12 @@ func completeFlow(ctx context.Context, cmd *cli.Command) {
 		return
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return
 	}
 
-	for _, name := range t.eff.FlowNames() {
+	for _, name := range t.Effective.FlowNames() {
 		fmt.Fprintln(cmd.Root().Writer, name)
 	}
 }

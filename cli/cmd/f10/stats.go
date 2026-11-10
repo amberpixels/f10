@@ -15,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/timing"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -42,7 +43,7 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		return ui.Exit(ui.ExitUsage, "stats: --since: %v", err)
 	}
 
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -50,7 +51,7 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 	// resolved before the ledger is read, so 414 matches FT-414 and a typo errors
 	var task string
 	if arg := strings.TrimSpace(cmd.Args().First()); arg != "" {
-		r, err := t.reference(ctx, arg)
+		r, err := t.Reference(ctx, arg)
 		if err != nil {
 			return fmt.Errorf("stats: %w", err)
 		}
@@ -58,7 +59,7 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		task = r.ID
 	}
 
-	events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: ledger.Where(ctx, t.dir).Project})
+	events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: ledger.Where(ctx, t.Dir).Project})
 	if err != nil {
 		return err
 	}

@@ -37,7 +37,7 @@ func TestUpdateKeepsConcurrentChanges(t *testing.T) {
 }
 
 func writeField(t *testing.T, dir, field, value string) {
-	err := Update(dir, "s", 5*time.Second, time.Now(), func(r *Run, _ bool) (bool, error) {
+	err := Update(t.Context(), dir, "s", 5*time.Second, time.Now(), func(r *Run, _ bool) (bool, error) {
 		if field == "note" {
 			r.Note = value
 		} else {
@@ -63,7 +63,7 @@ func TestClearWaitsForAWriter(t *testing.T) {
 		close(cleared)
 	}()
 
-	err := Update(dir, "s", time.Second, time.Now(), func(r *Run, _ bool) (bool, error) {
+	err := Update(t.Context(), dir, "s", time.Second, time.Now(), func(r *Run, _ bool) (bool, error) {
 		r.Note = "written"
 		close(saving)
 

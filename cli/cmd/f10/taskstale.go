@@ -9,6 +9,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // The words task stale prints; fetch acts on each and works out nothing.
@@ -20,12 +21,12 @@ const (
 )
 
 func runTaskStale(ctx context.Context, cmd *cli.Command) error {
-	t, err := targetFor(ctx, cmd)
+	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	r, err := t.reference(ctx, cmd.Args().First())
+	r, err := t.Reference(ctx, cmd.Args().First())
 	if err != nil {
 		return err
 	}
@@ -36,21 +37,21 @@ func runTaskStale(ctx context.Context, cmd *cli.Command) error {
 	var created time.Time
 
 	// no stale_after: nothing to judge, so the tracker is never asked
-	if t.eff.StaleAfter.On() {
-		if created, err = t.createdAt(ctx, r, cmd.String("created")); err != nil {
+	if t.Effective.StaleAfter.On() {
+		if created, err = createdAtFor(ctx, t, r, cmd.String("created")); err != nil {
 			return err
 		}
 	}
 
-	roots := []string{t.lay.StorageRoot.Path()}
-	_, err = fmt.Fprintln(cmd.Writer, staleness(created, t.eff.StaleAfter, time.Now(), roots, r.ID))
+	roots := []string{t.Layout.StorageRoot.Path()}
+	_, err = fmt.Fprintln(cmd.Writer, staleness(created, t.Effective.StaleAfter, time.Now(), roots, r.ID))
 
 	return err
 }
 
 // createdAt prefers --created, the date the agent already read; a bare call
 // asks the tracker, and one that keeps no date f10 can parse answers zero.
-func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Time, error) {
+func createdAtFor(ctx context.Context, t *target.Target, r ref.Ref, flag string) (time.Time, error) {
 	if flag != "" {
 		at, err := time.Parse(time.DateOnly, flag)
 		if err != nil {
@@ -60,7 +61,7 @@ func (t *target) createdAt(ctx context.Context, r ref.Ref, flag string) (time.Ti
 		return at, nil
 	}
 
-	return t.tasks().Created(ctx, r)
+	return tasksFor(t).Created(ctx, r)
 }
 
 // staleness is the line task stale prints. A proceed on the task within

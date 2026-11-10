@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -50,14 +51,14 @@ func pullNumberOf(token string) int {
 // resolvePRSubject turns a PR, a task id or nothing (the current branch) into
 // a subject, with the branch's open request looked up on the host, whose
 // target then wins over the base git records.
-func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, error) {
-	s := prSubject{main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)}
+func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSubject, error) {
+	s := prSubject{main: cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)}
 	token = strings.TrimSpace(token)
 	withPull := true
 
 	switch n := pullNumberOf(token); {
 	case n > 0:
-		h, err := t.host()
+		h, err := hostOf(t)
 		if err != nil {
 			return s, err
 		}
@@ -75,15 +76,15 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 		s.remote = refSHA(ctx, s.main, "refs/heads/"+s.branch) == ""
 		s.task = branchTask(ctx, t, s.main, s.branch)
 	case token == "":
-		if s.branch = gitx.CurrentBranch(ctx, t.dir); s.branch == "" {
+		if s.branch = gitx.CurrentBranch(ctx, t.Dir); s.branch == "" {
 			return s, errors.New("HEAD is detached: name a PR or a task")
 		}
 
-		if r, err := t.reference(ctx, ""); err == nil && r.Origin != ref.OriginSession {
+		if r, err := t.Reference(ctx, ""); err == nil && r.Origin != ref.OriginSession {
 			s.task = &r
 		}
 	default:
-		r, err := t.reference(ctx, token)
+		r, err := t.Reference(ctx, token)
 		if err != nil {
 			return s, err
 		}
@@ -93,7 +94,7 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 
 		// origin too, unlike taskCheckout: a branch pushed from another
 		// machine is only on origin, and still names the change
-		want, _, err := branchName(ctx, t.driver(), r, "", nil)
+		want, _, err := branchName(ctx, t.Driver(), r, "", nil)
 		if err != nil {
 			return s, err
 		}
@@ -135,7 +136,7 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 		}
 
 		s.path = worktreeOf(wts, s.branch)
-		s.here = s.path != "" && gitx.SamePath(s.path, t.lay.CheckoutRoot)
+		s.here = s.path != "" && gitx.SamePath(s.path, t.Layout.CheckoutRoot)
 	}
 
 	if withPull {
@@ -156,17 +157,17 @@ func resolvePRSubject(ctx context.Context, t *target, token string) (prSubject, 
 
 // branchTask is the task a PR's head branch belongs to: its link, else the
 // id in its name; nil when neither names one the tracker resolves.
-func branchTask(ctx context.Context, t *target, main, branch string) *ref.Ref {
+func branchTask(ctx context.Context, t *target.Target, main, branch string) *ref.Ref {
 	id, _ := branchmeta.Get(ctx, main, branch, branchmeta.Task)
-	if id == "" && t.eff != nil {
-		id = ref.Matcher(t.eff.IDPrefix)(branch)
+	if id == "" && t.Effective != nil {
+		id = ref.Matcher(t.Effective.IDPrefix)(branch)
 	}
 
 	if id == "" {
 		return nil
 	}
 
-	r, err := t.reference(ctx, id)
+	r, err := t.Reference(ctx, id)
 	if err != nil {
 		return nil
 	}
@@ -189,8 +190,8 @@ func (s prSubject) base(ctx context.Context, warn io.Writer) (string, error) {
 // openPullOf is the newest open request whose head is branch, or 0: a merged
 // or closed one is history, not the change's request. A checkout with no
 // host CLI has no requests, and still diffs.
-func openPullOf(ctx context.Context, t *target, branch string) (forge.PR, error) {
-	h, err := t.host()
+func openPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
+	h, err := hostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
@@ -211,8 +212,8 @@ func openPullOf(ctx context.Context, t *target, branch string) (forge.PR, error)
 
 // lastPullOf is the newest request of any state whose head is branch, or 0;
 // a checkout with no host CLI has none.
-func lastPullOf(ctx context.Context, t *target, branch string) (forge.PR, error) {
-	h, err := t.host()
+func lastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
+	h, err := hostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
