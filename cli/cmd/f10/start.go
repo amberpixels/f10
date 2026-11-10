@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -40,7 +41,7 @@ func startCommand() *cli.Command {
 				Usage: "prompt only the task's fetch: the agent summarises it and waits to discuss it before any plan",
 			},
 			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local flow: --flow local"},
-			flowFlag(),
+			configcmd.FlowFlag(),
 			runplan.PaceFlag(),
 			&cli.StringFlag{
 				Name:  "after",
@@ -66,7 +67,7 @@ func startCommand() *cli.Command {
 			},
 		},
 		Action:        runStart,
-		ShellComplete: completeFlow,
+		ShellComplete: configcmd.CompleteFlow,
 	}
 }
 
@@ -170,7 +171,7 @@ func startFlags(cmd *cli.Command) (string, string, string, string, error) {
 		return "", "", "", "", err
 	}
 
-	flowName, err := flowFlags(cmd)
+	flowName, err := configcmd.FlowFlags(cmd)
 	if err != nil {
 		return "", "", "", "", err
 	}

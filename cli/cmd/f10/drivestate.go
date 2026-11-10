@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -54,7 +55,7 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 	lead := r.task.ref.Head().ID
 	s.plan = r.o.plan != "" || fsx.Exists(in.storage.Plan(lead))
 
-	o := readOutcomes(nil, in.storage.Path(), lead)
+	o := statuscmd.ReadOutcomes(nil, in.storage.Path(), lead)
 	s.reviews, s.changeJudged = len(o.Local)+len(o.Remote), o.ChangeJudge != nil
 
 	if in.pull != nil && s.origin != "" {

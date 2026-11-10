@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/facts"
 )
 
@@ -155,7 +156,7 @@ func TestConfigViewCoversEffective(t *testing.T) {
 		"ceilingExceptOrigin", // the ceiling's last entry's origin
 	}
 
-	shown := jsonKeys(reflect.TypeFor[view]())
+	shown := jsonKeys(reflect.TypeFor[configcmd.View]())
 
 	for _, key := range jsonKeys(reflect.TypeFor[facts.Effective]()) {
 		if !slices.Contains(shown, key) && !slices.Contains(folded, key) {

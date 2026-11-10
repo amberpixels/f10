@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -37,7 +38,7 @@ func TestFlowAndConfigAgree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var config view
+	var config configcmd.View
 	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "config", "--json").must(t)), &config); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestCompletingFlow(t *testing.T) {
 		"f10 start --local --generate-shell-completion":      false,
 		"f10 start --flow local --generate-shell-completion": false,
 	} {
-		if got := completingFlow(strings.Fields(args)); got != want {
+		if got := configcmd.CompletingFlow(strings.Fields(args)); got != want {
 			t.Errorf("%q = %v, want %v", args, got, want)
 		}
 	}

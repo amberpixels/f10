@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -32,7 +33,7 @@ var testStorage storage.Root
 // otherwise leak into the tests. The dir overrides among it are cleared, not
 // pinned, so they follow HOME and a test that moves HOME moves them too.
 var cleared = []string{
-	"XDG_CONFIG_HOME", "F10_STATE_DIR", userDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
+	"XDG_CONFIG_HOME", "F10_STATE_DIR", configcmd.UserDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
 	daemon.NumberFileEnv, "F10_AGENT_MODEL", "F10_AGENT_VIA", "F10_AGENT_SESSION",
 	"F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE",
 	"HERDR_ENV", "HERDR_WORKSPACE_ID",

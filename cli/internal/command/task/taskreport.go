@@ -1,0 +1,119 @@
+package task
+
+import (
+	"cmp"
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasktree"
+	"github.com/amberpixels/f10/cli/internal/ui"
+)
+
+// `task report` renders the facts block a skill's report opens with, so the
+// rows and the tree under a parent are drawn the same every run.
+
+func runTaskReport(ctx context.Context, cmd *cli.Command) error {
+	tokens := cmd.Args().Slice()
+	if len(tokens) == 0 {
+		return errors.New("report needs a task id")
+	}
+
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	refs := make([]ref.Ref, len(tokens))
+
+	for i, token := range tokens {
+		if r, err := t.Reference(ctx, token); err == nil {
+			refs[i] = r
+		}
+	}
+
+	known := statusview.TaskRefsFor(t, ctx, refs, true, false, cmd.ErrWriter)
+
+	if cmd.Bool("children") {
+		return WriteParentTree(ctx, cmd, t, tokens[0], refs[0], known[refs[0].ID])
+	}
+
+	if len(tokens) == 1 {
+		return writeTaskFacts(cmd, tokens[0], refs[0].ID, known[refs[0].ID])
+	}
+
+	nodes := make([]tasktree.Node, len(tokens))
+	for i, token := range tokens {
+		nodes[i] = reportNode(token, refs[i].ID, known[refs[i].ID].URL)
+	}
+
+	return tasktree.Tree{Align: true}.Write(cmd.Writer, nodes)
+}
+
+func reportNode(token, id, url string) tasktree.Node {
+	if id == "" || url == "" {
+		return tasktree.Node{Cells: []tasktree.Cell{{Text: cmp.Or(id, token)}}}
+	}
+
+	return tasktree.Node{Cells: []tasktree.Cell{{Text: id + ":"}, {Text: "↗ " + url}}}
+}
+
+// WriteParentTree hangs a parent's open subtasks under it, in After: order,
+// each row with its title and url, so a split reads as one block. A parent
+// the tracker cannot link prints as one task's facts.
+func WriteParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, token string, r ref.Ref,
+	k ledger.TaskRef,
+) error {
+	if r.ID == "" {
+		return writeTaskFacts(cmd, token, "", k)
+	}
+
+	kids, err := stack.TrackerFor(t).Children(ctx, r)
+	switch {
+	case errors.Is(err, hostops.ErrNoParentLink):
+		ui.Warnf(cmd.ErrWriter, "%s: %v: no subtasks to list", r.ID, err)
+	case err != nil:
+		return err
+	}
+
+	kids = OpenRows(kids)
+	if len(kids) == 0 {
+		return writeTaskFacts(cmd, token, r.ID, k)
+	}
+
+	nodes := hostops.SubtaskNodes(
+		childTreeRows(kids),
+		hostops.TreeOpts{Head: &hostops.TreeRow{ID: r.ID, Title: k.Title, URL: k.URL}, Url: true},
+	)
+
+	stack.RememberRefsFor(ctx, t, stack.ChildRefs(kids)...)
+
+	return tasktree.Tree{Align: true}.Write(cmd.Writer, nodes)
+}
+
+func writeTaskFacts(cmd *cli.Command, token, id string, k ledger.TaskRef) error {
+	rows := [][3]string{{"task:", " ", cmp.Or(id, token)}}
+	if k.Title != "" {
+		rows = append(rows, [3]string{"title:", " ", k.Title})
+	}
+
+	if k.URL != "" {
+		rows = append(rows, [3]string{"url:", "↗", k.URL})
+	}
+
+	for _, r := range rows {
+		if _, err := fmt.Fprintf(cmd.Writer, "%-6s %s %s\n", r[0], r[1], r[2]); err != nil {
+			return fmt.Errorf("writing the report: %w", err)
+		}
+	}
+
+	return nil
+}

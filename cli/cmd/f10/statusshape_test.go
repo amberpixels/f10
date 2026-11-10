@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -106,7 +107,7 @@ func TestTaskReportChildrenTree(t *testing.T) {
 	cmd := &cli.Command{Writer: &out, ErrWriter: &out}
 	r := ref.Ref{ID: "FT-71", Number: "71"}
 
-	if err := writeParentTree(t.Context(), cmd, tg, "71", r,
+	if err := taskcmd.WriteParentTree(t.Context(), cmd, tg, "71", r,
 		ledger.TaskRef{ID: "FT-71", Title: "Rate limits", URL: "https://x/71"}); err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
@@ -35,7 +36,7 @@ func TestRenderByPersonAtWidth(t *testing.T) {
 
 	var out bytes.Buffer
 
-	renderByPerson(&out, boards, 70)
+	boardcmd.RenderByPerson(&out, boards, 70)
 
 	got := strings.TrimLeft(out.String(), "\n")
 	for l := range strings.SplitSeq(got, "\n") {
@@ -69,7 +70,7 @@ func TestRenderSummaryNarrowError(t *testing.T) {
 	for limit, want := range map[int]string{30: "gh: authe…", 0: "gh: authentication required"} {
 		var out bytes.Buffer
 
-		renderSummary(&out, boards, now, limit)
+		boardcmd.RenderSummary(&out, boards, now, limit)
 
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("limit %d: summary lacks %q:\n%s", limit, want, out.String())

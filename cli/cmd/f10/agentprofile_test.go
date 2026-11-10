@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 )
 
@@ -32,13 +33,13 @@ func TestAgentLines(t *testing.T) {
 		},
 		{
 			step: "plan", kind: "bug",
-			want: []string{"plan.bug: claude:opus:medium", agentReachNone}, notWant: "Agent tool",
+			want: []string{"plan.bug: claude:opus:medium", configcmd.AgentReachNone}, notWant: "Agent tool",
 		},
 		{step: "default", want: []string{"default: claude:opus:high", "the task's agent"}},
 	}
 
 	for _, c := range cases {
-		line := agentLineFor(m, c.step, c.kind, "").String()
+		line := configcmd.AgentLineFor(m, c.step, c.kind, "").String()
 		for _, w := range c.want {
 			if !strings.Contains(line, w) {
 				t.Errorf("%s.%s line %q lacks %q", c.step, c.kind, line, w)
@@ -50,7 +51,7 @@ func TestAgentLines(t *testing.T) {
 		}
 	}
 
-	line := agentLineFor(runplan.AgentMap{}, "implement", "", "").String()
+	line := configcmd.AgentLineFor(runplan.AgentMap{}, "implement", "", "").String()
 	if !strings.Contains(line, "the kind's default: no flag passed") {
 		t.Errorf("no map: %q", line)
 	}
@@ -60,7 +61,7 @@ func TestAgentLines(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	if err := printAgentMap(&b, m, false); err != nil {
+	if err := configcmd.PrintAgentMap(&b, m, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +71,7 @@ func TestAgentLines(t *testing.T) {
 
 	b.Reset()
 
-	if err := printAgentMap(
+	if err := configcmd.PrintAgentMap(
 		&b,
 		runplan.AgentMap{},
 		false,

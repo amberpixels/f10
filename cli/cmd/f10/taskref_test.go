@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -30,7 +31,7 @@ func TestRefLine(t *testing.T) {
 		{"12", "FT-12", ledger.TaskRef{}, false, "FT-12"},
 		{"A+B", "", k, true, "A+B"},
 	} {
-		if got := refLine(tc.token, tc.id, tc.k, tc.md); got != tc.want {
+		if got := taskcmd.RefLine(tc.token, tc.id, tc.k, tc.md); got != tc.want {
 			t.Errorf("refLine(%q, md=%v) = %q, want %q", tc.id, tc.md, got, tc.want)
 		}
 	}
@@ -44,7 +45,7 @@ func TestAfterInReadsALink(t *testing.T) {
 		"After: [FT-109: Base task](https://github.com/o/r/issues/109)\n":          "FT-109",
 		"After: [FT-109](https://github.com/o/r/issues/109)\n":                     "FT-109",
 		"**After:** [FT-109: a: b \\[c\\] d](https://github.com/o/r/issues/109)\n": "FT-109",
-		"After: " + mdLink("FT-109", "Fix [x]: y", "https://u") + "\n":             "FT-109",
+		"After: " + taskcmd.MdLink("FT-109", "Fix [x]: y", "https://u") + "\n":     "FT-109",
 		"After: FT-109 and more\n":                                                 "",
 		"After: [FT-109: t](https://u) and more\n":                                 "",
 		"After: [FT-109 x](https://u)":                                             "",
@@ -59,7 +60,7 @@ func TestAfterInReadsALink(t *testing.T) {
 func TestLinkAfter(t *testing.T) {
 	body := "Text naming After: FT-1 in prose.\n  After: FT-2\nAfter: FT-109\n\nend\n"
 
-	got := stack.LinkAfter(body, mdLink("FT-109", "Base", "https://u/109"))
+	got := stack.LinkAfter(body, taskcmd.MdLink("FT-109", "Base", "https://u/109"))
 	if want := "Text naming After: FT-1 in prose.\n  After: FT-2\nAfter: [FT-109: Base](https://u/109)\n\nend\n"; got != want {
 		t.Errorf("linkAfter = %q, want %q", got, want)
 	}
@@ -81,7 +82,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 	f.script("gh issue view 109 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":109,"title":"Base task","state":"OPEN","url":"https://github.com/o/r/issues/109","body":"b"}`)
 
-	if _, err := readDoc(t.Context(), tg, ref.Ref{ID: "FT-109", Number: "109"}); err != nil {
+	if _, err := taskcmd.ReadDoc(t.Context(), tg, ref.Ref{ID: "FT-109", Number: "109"}); err != nil {
 		t.Fatal(err)
 	}
 

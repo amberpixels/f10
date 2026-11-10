@@ -14,6 +14,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
+	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/layers"
@@ -205,9 +207,9 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			var out bytes.Buffer
 
 			links := render.LinksFor(&out, false)
-			loadStandupLinks(t.Context(), links, rep)
+			standupcmd.LoadStandupLinks(t.Context(), links, rep)
 
-			if err := renderStandup(&out, links, rep); err != nil {
+			if err := standupcmd.RenderStandup(&out, links, rep); err != nil {
 				t.Fatal(err)
 			}
 
@@ -270,7 +272,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"board": func(t *testing.T, on bool) string {
 			var out bytes.Buffer
 
-			lines := []boardLine{{Key: "FT-1", URL: issueURL("FT-1")}, {Key: "FT-2", URL: issueURL("FT-2")}}
+			lines := []boardcmd.BoardLine{{Key: "FT-1", URL: issueURL("FT-1")}, {Key: "FT-2", URL: issueURL("FT-2")}}
 
 			limit := 0
 			if on {
@@ -281,7 +283,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 
 			nodes := make([]tasktree.Node, len(lines))
 			for i, l := range lines {
-				nodes[i] = boardNode(l, "", false, links)
+				nodes[i] = boardcmd.BoardNode(l, "", false, links)
 			}
 
 			if err := (tasktree.Tree{Align: true, Width: limit}).Write(&out, nodes); err != nil {
@@ -319,13 +321,13 @@ var plainIDPrint = regexp.MustCompile(
 // (relative to the module root) and a piece of the line, so they stay plain
 // on purpose.
 var machineRead = map[string]string{
-	"internal/hostops/host.go":    `"# %s: %s\n\n"`,                // the task as markdown, for an agent
-	"cmd/f10/taskwrite.go":        `"%s  %s  ->  %s\n"`,            // retitle's change list, plain since it was written
-	"cmd/f10/reviewround.go":      `"  %s %s - %s\n"`,              // a declined round, read by the review step
-	"cmd/f10/review.go":           `"%s  %s  %s\n"`,                // review pick, parsed
-	"cmd/f10/pr.go":               `"task: %s\n"`,                  // pr view, parsed
-	"internal/statusview/refs.go": `"%s: %v"`,                      // a warning on stderr
-	"cmd/f10/taskreport.go":       `"%s: %v: no subtasks to list"`, // a warning on stderr
+	"internal/hostops/host.go":               `"# %s: %s\n\n"`,                // the task as markdown, for an agent
+	"internal/command/task/taskwrite.go":     `"%s  %s  ->  %s\n"`,            // retitle's change list, plain since it was written
+	"internal/command/review/reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
+	"internal/command/review/review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
+	"internal/command/pr/pr.go":              `"task: %s\n"`,                  // pr view, parsed
+	"internal/statusview/refs.go":            `"%s: %v"`,                      // a warning on stderr
+	"internal/command/task/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
 }
 
 // commandSources are the non-test files of the command tree: cmd/f10 and

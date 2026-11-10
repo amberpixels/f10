@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/scope"
@@ -373,7 +374,7 @@ func TestRenderByPerson(t *testing.T) {
 
 	var out bytes.Buffer
 
-	renderByPerson(&out, boards, 0)
+	boardcmd.RenderByPerson(&out, boards, 0)
 
 	var heads, lines []string
 
@@ -429,7 +430,7 @@ func TestRenderSummary(t *testing.T) {
 
 	var out bytes.Buffer
 
-	renderSummary(&out, boards, now, 0)
+	boardcmd.RenderSummary(&out, boards, now, 0)
 
 	for _, want := range []string{
 		"api  2 in flight  1 waiting on you  oldest FT-2 2d",
@@ -451,7 +452,7 @@ func TestTitleAfterKey(t *testing.T) {
 		{"FT-121", "FT-121", "FT-121"},
 		{"#12 title", "", "#12 title"},
 	} {
-		if got := titleAfterKey(tc.title, tc.key); got != tc.want {
+		if got := boardcmd.TitleAfterKey(tc.title, tc.key); got != tc.want {
 			t.Errorf("titleAfterKey(%q, %q) = %q, want %q", tc.title, tc.key, got, tc.want)
 		}
 	}

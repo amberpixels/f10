@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
@@ -17,7 +18,7 @@ func verifySpecOf(eff *facts.Effective) (stack.VerifySpec, string) {
 		return stack.VerifySpec{List: eff.Verify}, ""
 	}
 
-	f := verifyFieldIn(eff.Fields)
+	f := configcmd.VerifyFieldIn(eff.Fields)
 	body := strings.TrimSpace(f.Value)
 
 	switch {

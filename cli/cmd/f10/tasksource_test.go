@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -239,7 +240,7 @@ func TestFallbackOnlyOnUnsupported(t *testing.T) {
 	f.fail("driver search x", shell.Result{Code: driver.ExitUnsupported})
 	f.script("gh issue list --search x --json number,title,state,url,labels,body,assignees,createdAt --limit 30", `[]`)
 
-	if _, err := searchRows(t.Context(), tg, "x"); err != nil || !f.called("gh issue list") {
+	if _, err := taskcmd.SearchRows(t.Context(), tg, "x"); err != nil || !f.called("gh issue list") {
 		t.Errorf("err = %v; want the declined search on host issues", err)
 	}
 }

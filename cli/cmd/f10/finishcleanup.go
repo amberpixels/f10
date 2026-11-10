@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -111,11 +112,11 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		return err
 	}
 
-	if err := writeHandoff(w, l.hand); err != nil {
+	if err := taskcmd.WriteHandoff(w, l.hand); err != nil {
 		return err
 	}
 
-	if err := errs.check("", moveHandoff(a.handoffSrc, a.handoff)); err != nil {
+	if err := errs.check("", taskcmd.MoveHandoff(a.handoffSrc, a.handoff)); err != nil {
 		return fmt.Errorf("%s, but %w", l.ended, err)
 	}
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -87,7 +88,7 @@ func TestReviewPickSkipsHandledAndSeesThroughStaleReactions(t *testing.T) {
 		t.Errorf("sha = %q, want c2", r.SHA)
 	}
 
-	doc := reviewDoc(r)
+	doc := reviewcmd.ReviewDoc(r)
 	for _, want := range []string{"# review by claude[bot] · issue comment", "https://github.com/o/r/pull/5#issuecomment-200", "c2", "round two"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("doc missing %q:\n%s", want, doc)
@@ -150,7 +151,7 @@ func TestAwaitReviewGivesUpWithinBudget(t *testing.T) {
 
 	start := time.Now()
 
-	_, err := awaitReview(t.Context(), rv, time.Time{}, 40*time.Millisecond, 5*time.Millisecond)
+	_, err := reviewcmd.AwaitReview(t.Context(), rv, time.Time{}, 40*time.Millisecond, 5*time.Millisecond)
 	if err == nil {
 		t.Fatal("wait returned a review from an empty thread")
 	}
@@ -194,7 +195,7 @@ func TestAwaitReviewReturnsOnceDone(t *testing.T) {
 	f.script("gh api user", viewerJSON)
 	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
 
-	r, err := awaitReview(t.Context(), rv, time.Time{}, time.Second, time.Millisecond)
+	r, err := reviewcmd.AwaitReview(t.Context(), rv, time.Time{}, time.Second, time.Millisecond)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
@@ -771,7 +772,10 @@ func TestReviewSettledReadsAsHandled(t *testing.T) {
 		t.Errorf("reactions read %d times over two calls, want 2", n)
 	}
 
-	if doc := reviewDoc(r); !strings.Contains(doc, "settled") || !strings.Contains(doc, "revision "+r.Revision) {
+	if doc := reviewcmd.ReviewDoc(
+		r,
+	); !strings.Contains(doc, "settled") ||
+		!strings.Contains(doc, "revision "+r.Revision) {
 		t.Errorf("doc missing the settled state or the revision:\n%s", doc)
 	}
 }
@@ -1017,7 +1021,7 @@ func TestAwaitReviewSinceSkipsTheOlderReview(t *testing.T) {
 
 	since := time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)
 
-	r, err := awaitReview(t.Context(), rv, since, time.Second, time.Millisecond)
+	r, err := reviewcmd.AwaitReview(t.Context(), rv, since, time.Second, time.Millisecond)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
@@ -1028,7 +1032,7 @@ func TestAwaitReviewSinceSkipsTheOlderReview(t *testing.T) {
 
 	f.script(commentsPath, old)
 
-	_, err = awaitReview(t.Context(), rv, since, 20*time.Millisecond, 5*time.Millisecond)
+	_, err = reviewcmd.AwaitReview(t.Context(), rv, since, 20*time.Millisecond, 5*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "predates 2026-10-06T16:00:00Z") {
 		t.Errorf("err = %v", err)
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
@@ -61,7 +62,7 @@ func driveCommand() *cli.Command {
 		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
 		SkipFlagParsing: true,
 		Action:          runDrive,
-		ShellComplete:   completeFlow,
+		ShellComplete:   configcmd.CompleteFlow,
 	}
 }
 

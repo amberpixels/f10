@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/calendar"
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -176,30 +177,30 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 			return fx.Tasks, nil
 		}
 
-		rows, err := h.ListIssues(ctx, "", fx.Prefix, nil, boardPage)
+		rows, err := h.ListIssues(ctx, "", fx.Prefix, nil, boardcmd.BoardPage)
 		if err != nil {
 			return nil, err
 		}
 
-		return boardTasks(rows, fx.Prefix), nil
+		return boardcmd.BoardTasks(rows, fx.Prefix), nil
 	}
 
 	var board lookaround.Board
 
 	if fx.Feed {
-		span, err := resolveBoardSpan(fx.Window, false, fx.Now, func() (calendar.Workdays, error) {
+		span, err := boardcmd.ResolveBoardSpan(fx.Window, false, fx.Now, func() (calendar.Workdays, error) {
 			return calendar.DefaultWorkdays(), nil
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		in.Since, in.Feed = span.from(), true
+		in.Since, in.Feed = span.From(), true
 		facts := lookaround.Collect(t.Context(), in)
 
-		w := lookaround.ChooseWindow(span.today, span.lastWorkday, facts)
-		if span.named != nil {
-			w = *span.named
+		w := lookaround.ChooseWindow(span.Today, span.LastWorkday, facts)
+		if span.Named != nil {
+			w = *span.Named
 		}
 
 		board = lookaround.DeriveFeed(facts, fx.Now, w)
@@ -252,7 +253,7 @@ func TestRecordBoardFixture(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	fx := boardFixture{
 		Now:    now,
-		Since:  now.Add(-boardStateWindow),
+		Since:  now.Add(-boardcmd.BoardStateWindow),
 		Prefix: parts[2],
 		Host:   "gh",
 		Calls:  map[string]fixtureCall{},
@@ -290,12 +291,12 @@ func TestRecordBoardFixture(t *testing.T) {
 		Project: lookaround.Project{ID: "recorded", Name: filepath.Base(root), Host: "gh", Remote: true},
 		Prefix:  fx.Prefix, Since: fx.Since, Host: &h,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
-			rows, err := hostops.NewHost("gh", root).ListIssues(ctx, "", fx.Prefix, nil, boardPage)
+			rows, err := hostops.NewHost("gh", root).ListIssues(ctx, "", fx.Prefix, nil, boardcmd.BoardPage)
 			if err != nil {
 				return nil, err
 			}
 
-			return boardTasks(rows, fx.Prefix), nil
+			return boardcmd.BoardTasks(rows, fx.Prefix), nil
 		},
 	}
 

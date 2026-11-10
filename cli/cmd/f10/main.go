@@ -17,11 +17,18 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
+	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
+	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
+	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	statecmd "github.com/amberpixels/f10/cli/internal/command/state"
 	statscmd "github.com/amberpixels/f10/cli/internal/command/stats"
+	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	tracecmd "github.com/amberpixels/f10/cli/internal/command/trace"
 )
 
@@ -51,20 +58,20 @@ func newApp() *cli.Command {
 			},
 		},
 		Commands: []*cli.Command{
-			initCommand(),
-			configCommand(),
-			agentsCommand(),
-			flowCommand(),
-			doctorCommand(),
-			taskCommand(),
-			planCommand(),
-			demoCommand(),
-			prCommand(),
-			reviewCommand(),
+			configcmd.InitCommand(),
+			configcmd.Command(),
+			configcmd.AgentsCommand(),
+			configcmd.FlowCommand(),
+			configcmd.DoctorCommand(),
+			taskcmd.Command(),
+			taskcmd.PlanCommand(),
+			taskcmd.DemoCommand(),
+			prcmd.Command(),
+			reviewcmd.Command(),
 			tracecmd.Command(),
-			statusCommand(),
-			standupCommand(),
-			boardCommand(),
+			statuscmd.Command(),
+			standupcmd.Command(),
+			boardcmd.Command(),
 			startCommand(),
 			forwardCommand(),
 			driveCommand(),

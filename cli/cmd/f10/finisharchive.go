@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -40,7 +41,7 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 		a.images = removeImages(root, id)
 	}
 
-	a.handoffSrc, a.handoff = handoffTarget(root, id)
+	a.handoffSrc, a.handoff = taskcmd.HandoffTarget(root, id)
 
 	if end != nil {
 		a.reviews, err = closeSeries(root.Reviews(id), *end)

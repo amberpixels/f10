@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -303,7 +304,7 @@ func TestShipStopped(t *testing.T) {
 	t.Setenv("F10_STATE_DIR", dir)
 	t.Setenv("F10_SESSION_ID", "sess-1")
 
-	if shipStopped() {
+	if prcmd.ShipStopped() {
 		t.Error("no run file read as stopped")
 	}
 
@@ -312,7 +313,7 @@ func TestShipStopped(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := shipStopped(); got != want {
+		if got := prcmd.ShipStopped(); got != want {
 			t.Errorf("ship %s: stopped %v, want %v", status, got, want)
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -59,7 +60,7 @@ func TestChildTree(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeTree(&out, got[:5]); err != nil {
+	if err := taskcmd.WriteTree(&out, got[:5]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,7 +91,7 @@ func TestOpenPlainTree(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeTree(&out, openRows(rows)); err != nil {
+	if err := taskcmd.WriteTree(&out, taskcmd.OpenRows(rows)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -233,7 +234,7 @@ func TestOpenSubtasks(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := openSubtasks(t.Context(), stack.Tracker{Children: tc.children}, r)
+			got, err := taskcmd.OpenSubtasks(t.Context(), stack.Tracker{Children: tc.children}, r)
 
 			switch {
 			case tc.err != "" && (err == nil || err.Error() != tc.err):

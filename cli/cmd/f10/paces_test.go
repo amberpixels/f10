@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -21,7 +22,7 @@ func paceRepo(t *testing.T, frontmatter, user string) string {
 	t.Helper()
 
 	home := isolateEnv(t)
-	t.Setenv(userDirEnv, filepath.Join(home, ".f10"))
+	t.Setenv(configcmd.UserDirEnv, filepath.Join(home, ".f10"))
 
 	repo := mkRepo(t)
 	path := filepath.Join(repo, ".f10", "instructions", "project.md")

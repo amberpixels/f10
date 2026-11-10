@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -43,13 +45,13 @@ func TestWithImages(t *testing.T) {
 	d := images.Downloader{Client: srv.Client()}
 
 	plain := "# GH-1: no images\n\nbody\n"
-	if got := withImages(context.Background(), plain, dir, d); got != plain {
+	if got := taskcmd.WithImages(context.Background(), plain, dir, d); got != plain {
 		t.Errorf("withImages(plain) = %q, want it unchanged", got)
 	}
 
 	doc := "# GH-1: shots\n\n![a](" + srv.URL + "/shot.png)\n\n---\n\n**bob**\n\n" + srv.URL + "/gone.png\n"
 
-	got := withImages(context.Background(), doc, dir, d)
+	got := taskcmd.WithImages(context.Background(), doc, dir, d)
 	want := strings.TrimRight(doc, "\n") + "\n\n" +
 		"Images: " + filepath.Join(dir, "1.png") + " - read each before summarising\n" +
 		"Images not downloaded: " + srv.URL + "/gone.png (HTTP 404)\n"
@@ -67,7 +69,7 @@ func TestWithImagesUnwritableDir(t *testing.T) {
 
 	doc := "# GH-1\n\n![a](https://x.io/a.png)\n"
 
-	got := withImages(context.Background(), doc, filepath.Join(blocker, "GH-1"), images.Downloader{})
+	got := taskcmd.WithImages(context.Background(), doc, filepath.Join(blocker, "GH-1"), images.Downloader{})
 	if !strings.HasPrefix(got, doc) || !strings.Contains(got, "Images not downloaded: https://x.io/a.png (") {
 		t.Errorf("withImages = %q, want the doc and the image named as failed", got)
 	}
@@ -84,7 +86,7 @@ func TestGithubAuthScopesTheToken(t *testing.T) {
 
 	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	auth := githubAuth(context.Background(), tg)
+	auth := taskcmd.GithubAuth(context.Background(), tg)
 	if auth == nil {
 		t.Fatal("githubAuth = nil on a gh host")
 	}
@@ -138,14 +140,14 @@ func TestTaskListURL(t *testing.T) {
 
 	f.script("driver index", "https://tracker.example.com/board\n")
 
-	if got, err := taskListURL(t.Context(), tg); err != nil || got != "https://tracker.example.com/board" {
+	if got, err := taskcmd.TaskListURL(t.Context(), tg); err != nil || got != "https://tracker.example.com/board" {
 		t.Errorf("driver index = %q, %v", got, err)
 	}
 
 	f.fail("driver index", shell.Result{Code: driver.ExitUnsupported})
 	f.script("gh repo view --json url", `{"url":"https://github.com/o/r"}`)
 
-	if got, err := taskListURL(t.Context(), tg); err != nil || got != "https://github.com/o/r/issues" {
+	if got, err := taskcmd.TaskListURL(t.Context(), tg); err != nil || got != "https://github.com/o/r/issues" {
 		t.Errorf("fallback = %q, %v", got, err)
 	}
 }
@@ -171,7 +173,7 @@ func TestTaskRows(t *testing.T) {
 
 	// the body is read for its After: line, a bare number in the project's
 	// format, and never printed
-	if tasks := boardTasks(rows, "FT"); len(tasks) != 1 || tasks[0].After != "FT-12" {
+	if tasks := boardcmd.BoardTasks(rows, "FT"); len(tasks) != 1 || tasks[0].After != "FT-12" {
 		t.Errorf("board tasks = %+v, want After FT-12", tasks)
 	}
 
@@ -200,7 +202,7 @@ func TestTaskRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows = rankRows(rows)
+	rows = taskcmd.RankRows(rows)
 
 	got := make([]string, 0, len(rows))
 	for _, r := range rows {
@@ -225,7 +227,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 		`{"id":"FT-5","title":"e","priority":"Highest"}]`)
 
 	var out, warn bytes.Buffer
-	if err := writeTaskList(t.Context(), tg, &out, &warn); err != nil {
+	if err := taskcmd.WriteTaskList(t.Context(), tg, &out, &warn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -258,7 +260,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 	out.Reset()
 	warn.Reset()
 
-	if err := writeTaskList(t.Context(), tg, &out, &warn); err != nil {
+	if err := taskcmd.WriteTaskList(t.Context(), tg, &out, &warn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -295,7 +297,7 @@ func TestSettleAndRankPriorities(t *testing.T) {
 	}
 
 	var order strings.Builder
-	for _, r := range rankRows(rows) {
+	for _, r := range taskcmd.RankRows(rows) {
 		order.WriteString(r.ID)
 	}
 
@@ -303,7 +305,7 @@ func TestSettleAndRankPriorities(t *testing.T) {
 		t.Errorf("ranked order = %q, want ecfabd", order.String())
 	}
 
-	if len(rankRows(nil)) != 0 {
+	if len(taskcmd.RankRows(nil)) != 0 {
 		t.Error("ranking nothing produced rows")
 	}
 }

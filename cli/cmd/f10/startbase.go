@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -65,7 +66,7 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 	}
 
 	for _, m := range in.task.MemberRefs() {
-		open, err := openSubtasks(ctx, stack.Tracker{Children: in.children}, m)
+		open, err := taskcmd.OpenSubtasks(ctx, stack.Tracker{Children: in.children}, m)
 		if err != nil {
 			return err
 		}

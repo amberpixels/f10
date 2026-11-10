@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
+	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
@@ -292,7 +293,7 @@ func TestLoreStepCommands(t *testing.T) {
 
 	store := &lore.Store{Root: filepath.Join(dir, ".lore")}
 
-	o := readOutcomes(store, "", "FT-1")
+	o := statuscmd.ReadOutcomes(store, "", "FT-1")
 	if len(o.Local) != 1 || o.Local[0].Fixed != 1 || len(o.Remote) != 1 || o.Remote[0].Skipped != 1 ||
 		o.ChangeJudge == nil {
 		t.Errorf("status reads %+v", o)
@@ -301,7 +302,12 @@ func TestLoreStepCommands(t *testing.T) {
 	// round two reopens the fixed finding from the settle's id, the chain's head
 	must("add", "finding", "--change", "FT-1", "--supersedes", settled, "--status", "open", "-m", "Still off by one")
 
-	if o := readOutcomes(store, "", "FT-1"); len(o.Local) != 1 || o.Local[0].Ask != 1 || o.Local[0].Fixed != 0 {
+	if o := statuscmd.ReadOutcomes(
+		store,
+		"",
+		"FT-1",
+	); len(o.Local) != 1 || o.Local[0].Ask != 1 ||
+		o.Local[0].Fixed != 0 {
 		t.Errorf("a reopened finding reads %+v, want it open", o.Local)
 	}
 }

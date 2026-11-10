@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
@@ -113,12 +114,12 @@ func TestScopedVerify(t *testing.T) {
 				writeTestFile(t, filepath.Join(lay.CheckoutRoot, f), "y\n")
 			}
 
-			base, changed, err := verifyDiff(t.Context(), lay)
+			base, changed, err := configcmd.VerifyDiff(t.Context(), lay)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			got := scopedVerifyLine(eff, verifyFieldIn(eff.Fields), base, changed, nil)
+			got := configcmd.ScopedVerifyLine(eff, configcmd.VerifyFieldIn(eff.Fields), base, changed, nil)
 
 			for _, w := range tc.want {
 				if !strings.Contains(got, w) {
@@ -147,7 +148,7 @@ func TestScopedVerifyReadsBothSidesOfARename(t *testing.T) {
 	git(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
 	git(t, root, "mv", "cli/a.go", "a.go")
 
-	_, changed, err := verifyDiff(t.Context(), lay)
+	_, changed, err := configcmd.VerifyDiff(t.Context(), lay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestScopedVerifyReadsCommits(t *testing.T) {
 	git(t, lay.CheckoutRoot, "add", ".")
 	git(t, lay.CheckoutRoot, "commit", "-q", "-m", "tool")
 
-	_, changed, err := verifyDiff(t.Context(), lay)
+	_, changed, err := configcmd.VerifyDiff(t.Context(), lay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestScopedVerifyReadsCommits(t *testing.T) {
 func TestScopedVerifyFallsBackToEveryCommand(t *testing.T) {
 	_, eff := verifyRepo(t)
 
-	got := scopedVerifyLine(eff, facts.Field{}, "", nil, errors.New("HEAD is detached"))
+	got := configcmd.ScopedVerifyLine(eff, facts.Field{}, "", nil, errors.New("HEAD is detached"))
 
 	want := "verify: declared (main), every command: the diff could not be read (HEAD is detached)\n" +
 		"  just cli::lint\n  shellcheck bin/*\n"

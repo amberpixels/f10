@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -130,7 +131,7 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	f.fail("driver search index", shell.Result{Code: driver.ExitUnsupported})
 
 	_, listErr := stack.TaskRows(t.Context(), tg, hostops.IssuePage)
-	_, searchErr := searchRows(t.Context(), tg, "index")
+	_, searchErr := taskcmd.SearchRows(t.Context(), tg, "index")
 
 	for verb, err := range map[string]error{"list": listErr, "search": searchErr} {
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||

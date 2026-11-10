@@ -1,0 +1,370 @@
+package pr
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/reviews"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/ui"
+)
+
+// statusLimit is the longest description a commit status takes.
+const statusLimit = 140
+
+// openPull is the subject's open request, read whole, for a command that
+// writes to it: a merged or closed one, or none, is refused by name.
+func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, error) {
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return hostops.Host{}, forge.PR{}, err
+	}
+
+	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
+	if err != nil {
+		return hostops.Host{}, forge.PR{}, err
+	}
+
+	if s.LookupErr != nil {
+		return hostops.Host{}, forge.PR{}, s.LookupErr
+	}
+
+	if s.Number == 0 {
+		return hostops.Host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.Branch)
+	}
+
+	h, err := hostops.HostOf(t)
+	if err != nil {
+		return hostops.Host{}, forge.PR{}, err
+	}
+
+	p, err := h.PR(ctx, strconv.Itoa(s.Number))
+	if err != nil {
+		return hostops.Host{}, forge.PR{}, err
+	}
+
+	if err := RequireOpen(p); err != nil {
+		return hostops.Host{}, forge.PR{}, err
+	}
+
+	return h, p, nil
+}
+
+func RequireOpen(p forge.PR) error {
+	if p.Status != forge.Open {
+		return fmt.Errorf("%s is %s: nothing written", p.URL, p.Status)
+	}
+
+	return nil
+}
+
+func runPREdit(ctx context.Context, cmd *cli.Command) error {
+	title, file := cmd.String("title"), cmd.String("body-file")
+	if title == "" && file == "" {
+		return errors.New("pr edit needs --title, --body-file, or both")
+	}
+
+	var body string
+
+	if file != "" {
+		var err error
+		if body, err = readBody(cmd, file); err != nil {
+			return err
+		}
+	}
+
+	h, p, err := openPull(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	return h.EditPull(ctx, strconv.Itoa(p.Number), title, body)
+}
+
+// readBody reads a PR body from file, - meaning stdin; an empty one is
+// refused, since it would blank the description.
+func readBody(cmd *cli.Command, file string) (string, error) {
+	var (
+		in  []byte
+		err error
+	)
+
+	if file == "-" {
+		in, err = io.ReadAll(cmd.Reader)
+	} else {
+		in, err = os.ReadFile(filepath.Clean(file))
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("reading the body: %w", err)
+	}
+
+	body := strings.TrimSpace(string(in))
+	if body == "" {
+		return "", fmt.Errorf("the body in %s is empty", file)
+	}
+
+	return body, nil
+}
+
+// runPRCreate opens the branch checked out here against the base pr base
+// prints, so the two never disagree. An open request is printed instead, so
+// a retried step never opens two.
+func runPRCreate(ctx context.Context, cmd *cli.Command) error {
+	body, err := readBody(cmd, cmd.String("body-file"))
+	if err != nil {
+		return err
+	}
+
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	s, err := reviews.ResolvePRSubject(ctx, t, "")
+	if err != nil {
+		return err
+	}
+
+	if s.LookupErr != nil {
+		return fmt.Errorf("could not tell whether %s has an open PR: %w", s.Branch, s.LookupErr)
+	}
+
+	if s.Number > 0 {
+		h, err := hostops.HostOf(t)
+		if err != nil {
+			return err
+		}
+
+		p, err := h.PR(ctx, strconv.Itoa(s.Number))
+		if err != nil {
+			return err
+		}
+
+		ui.Warnf(cmd.ErrWriter, "already open for %s, nothing created", s.Branch)
+		_, err = fmt.Fprintln(cmd.Writer, p.URL)
+
+		return err
+	}
+
+	base, err := s.Base(ctx, cmd.ErrWriter)
+	if err != nil {
+		return err
+	}
+
+	if stack.RefSHA(ctx, s.Main, "refs/remotes/origin/"+base) == "" {
+		return fmt.Errorf("the base %s is not on origin: push it first", base)
+	}
+
+	if head := stack.RefSHA(
+		ctx,
+		t.Layout.CheckoutRoot,
+		"HEAD",
+	); stack.RefSHA(
+		ctx,
+		s.Main,
+		"refs/remotes/origin/"+s.Branch,
+	) != head {
+		return fmt.Errorf("origin does not have %s at HEAD: run `git push -u origin %s` first", s.Branch, s.Branch)
+	}
+
+	h, err := hostops.HostOf(t)
+	if err != nil {
+		return err
+	}
+
+	url, err := h.OpenPull(ctx, forge.NewPull{
+		Head: s.Branch, Base: base, Title: cmd.String("title"), Body: body,
+		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, url)
+
+	return err
+}
+
+func runPRComment(ctx context.Context, cmd *cli.Command) error {
+	in, err := io.ReadAll(cmd.Reader)
+	if err != nil {
+		return fmt.Errorf("reading the comment from stdin: %w", err)
+	}
+
+	body := strings.TrimSpace(string(in))
+	if body == "" {
+		return errors.New("pr comment reads the comment as markdown on stdin, and it was empty")
+	}
+
+	h, p, err := openPull(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	url, err := CommentOnce(ctx, cmd.ErrWriter, h, p, cmd.String("reply-to"), cmd.String("quote"), body)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, url)
+
+	return err
+}
+
+// CommentOnce never posts the same text twice where it lands: a retry after
+// a post whose answer was lost finds it and returns its url instead. quote
+// heads a reply that fell back to the top level, which no thread places.
+func CommentOnce(
+	ctx context.Context,
+	warn io.Writer,
+	h hostops.Host,
+	p forge.PR,
+	replyTo, quote, body string,
+) (string, error) {
+	number, _ := strconv.Atoi(strconv.Itoa(p.Number))
+
+	var thread string
+
+	if replyTo != "" {
+		var err error
+
+		thread, err = h.Thread(ctx, number, replyTo)
+
+		switch {
+		case errors.Is(err, forge.ErrNoThread):
+			ui.Warnf(warn, "%s names no thread: commenting at the top level", replyTo)
+
+			if quote != "" {
+				body = "> " + quote + "\n\n" + body
+			}
+		case err != nil:
+			return "", err
+		}
+	}
+
+	login, err := h.Login(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	posted, err := h.ThreadComments(ctx, number, p.URL, thread)
+	if err != nil {
+		return "", err
+	}
+
+	for _, c := range posted {
+		if strings.EqualFold(c.Author, login) && strings.TrimSpace(c.Body) == body {
+			ui.Warnf(warn, "already posted")
+
+			return c.URL, nil
+		}
+	}
+
+	return h.PostComment(ctx, number, p.URL, thread, body)
+}
+
+func runPRStatus(ctx context.Context, cmd *cli.Command) error {
+	state := cmd.String("state")
+	if state != "success" && state != "failure" {
+		return fmt.Errorf("--state is success or failure, not %q", state)
+	}
+
+	h, p, err := openPull(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	s := forge.CommitStatus{
+		Name:        cmd.String("name"),
+		State:       state,
+		Description: textx.Cut(strings.TrimSpace(cmd.String("description")), statusLimit),
+	}
+
+	line, err := StatusOnce(ctx, cmd.ErrWriter, h, p, cmd.String("sha"), s)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintln(cmd.Writer, line)
+
+	return err
+}
+
+// StatusOnce sets the status on the head only, so it never lands on a commit
+// the PR has moved past; sha, when given, is the head the caller judged. One
+// already set the same way is left alone, so a retry never posts twice.
+func StatusOnce(
+	ctx context.Context,
+	warn io.Writer,
+	h hostops.Host,
+	p forge.PR,
+	sha string,
+	s forge.CommitStatus,
+) (string, error) {
+	head := p.HeadSHA
+	if head == "" {
+		return "", fmt.Errorf("%s returned no head sha for %s", h.Name, p.URL)
+	}
+
+	if sha != "" && !strings.HasPrefix(head, sha) {
+		// the host moves a PR's head a moment after a push lands, so a sha
+		// built on the head it reports is that push, not a stale commit
+		full, err := gitx.Exec(ctx, h.Dir, "rev-parse", "--verify", sha+"^{commit}")
+		if err != nil {
+			return "", fmt.Errorf("head is %s, not %s: no status set", gitx.ShortSHA(head), sha)
+		}
+
+		if ahead, err := gitx.IsAncestor(ctx, h.Dir, head, full); err != nil || !ahead {
+			return "", fmt.Errorf("head is %s, not %s: no status set", gitx.ShortSHA(head), sha)
+		}
+
+		head = full
+	}
+
+	line := fmt.Sprintf("%s %s %s", gitx.ShortSHA(head), s.Name, s.State)
+
+	prev, err := h.LatestStatus(ctx, head, s.Name)
+	if err != nil {
+		return "", err
+	}
+
+	if prev != nil && prev.State == s.State && prev.Description == s.Description {
+		ui.Warnf(warn, "already set")
+
+		return line, nil
+	}
+
+	return line, h.SetStatus(ctx, head, s)
+}
+
+// MineLine says whether the signed-in user opened p. A failed login read is
+// unknown, never no, so a step guarding someone else's PR stops on it; the
+// view itself goes on, since explain and demo need none of it.
+func MineLine(ctx context.Context, warn io.Writer, h hostops.Host, p forge.PR) string {
+	login, err := h.Login(ctx)
+
+	switch {
+	case err != nil:
+		ui.Warnf(warn, "who is signed in is unknown: %v", err)
+
+		return "mine: unknown\n"
+	case strings.EqualFold(p.Author, login):
+		return "mine: yes\n"
+	default:
+		return "mine: no\n"
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -108,7 +109,11 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 	l := landing{
 		ended: p.URL + " merged",
 		// read before the merge, while the branch tip it was written at still exists
-		hand: handoffLines(archive.TaskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p)),
+		hand: taskcmd.HandoffLines(
+			archive.TaskHandoff(in.storage, in.task.ID),
+			in.task.ID,
+			taskcmd.BranchTip(ctx, in.main, name, p),
+		),
 	}
 
 	recordLanded := sizeRecorder(ctx, in, name, def, unpushed)

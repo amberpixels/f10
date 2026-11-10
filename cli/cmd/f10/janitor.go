@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -649,7 +650,7 @@ func (j *sweeper) clear(id string, end archive.SeriesEnd) {
 		j.say("archived %s's findings to %s", id, a.reviews)
 	}
 
-	switch err := moveHandoff(a.handoffSrc, a.handoff); {
+	switch err := taskcmd.MoveHandoff(a.handoffSrc, a.handoff); {
 	case err != nil:
 		j.say("%v", err)
 	case a.handoff != "":
