@@ -1,4 +1,4 @@
-package main
+package lore
 
 import (
 	"cmp"
@@ -15,6 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/reviews"
@@ -24,9 +25,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// The lore noun only resolves the root and the paths and hands over to
+// Command is the lore noun, which only resolves the root and the paths and hands over to
 // internal/lore; docs/lore.md is the spec.
-func loreCommand() *cli.Command {
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "lore",
 		Usage: "the why behind the code: entries per change, why a line is the way it is, lessons for a file",
@@ -40,7 +41,7 @@ func loreCommand() *cli.Command {
 			{
 				Name:      "add",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Usage:     "write one entry and print its id",
 				ArgsUsage: "<intent|decision|finding|verdict|lesson>",
 				// a rejected option's reason is prose, and prose has commas:
@@ -87,7 +88,7 @@ func loreCommand() *cli.Command {
 			{
 				Name:      "change",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Usage:     "print the lore change the task's current PR writes to: the task id, or <id>.<n> for its n-th PR",
 				ArgsUsage: "[<task-id>]",
 				Action:    runLoreChange,
@@ -116,7 +117,7 @@ func loreCommand() *cli.Command {
 			{
 				Name:      "check",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Usage:     "exit 1 naming each reason when the change has no intent, no passing verdict, or an open blocker or major finding",
 				ArgsUsage: "<change>",
 				Action:    runLoreCheck,
@@ -124,7 +125,7 @@ func loreCommand() *cli.Command {
 			{
 				Name:      "validate",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Usage:     "lint every entry of the change, or of every change, against the schema",
 				ArgsUsage: "[<change>]",
 				Action:    runLoreValidate,
@@ -178,10 +179,10 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 	}, nil
 }
 
-// loreNote names each missing kind, so a change that reached finish without a
+// LoreNote names each missing kind, so a change that reached finish without a
 // ship run shows it; "" when lore cannot be read, since finish never fails
 // on it.
-func loreNote(store *lore.Store, change string) string {
+func LoreNote(store *lore.Store, change string) string {
 	entries, err := store.Effective(change)
 
 	switch {

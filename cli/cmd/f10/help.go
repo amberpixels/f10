@@ -7,16 +7,13 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/command"
 )
 
-// plumbingCategory marks a verb the steps and skills call: Hidden from
-// `f10 --help`, listed under this heading by `f10 help --all`. A Hidden
-// command with no category is internal (hooks, the daemon) and never listed.
-const plumbingCategory = "plumbing"
+func isPlumbing(c *cli.Command) bool { return c.Hidden && c.Category == command.Plumbing }
 
-func isPlumbing(c *cli.Command) bool { return c.Hidden && c.Category == plumbingCategory }
-
-func isInternal(c *cli.Command) bool { return c.Hidden && c.Category != plumbingCategory }
+func isInternal(c *cli.Command) bool { return c.Hidden && c.Category != command.Plumbing }
 
 // helpCommand replaces urfave's own, which it adds only when the root has no
 // `help`; -h and --help still go through urfave's flag.
@@ -74,7 +71,7 @@ func writeNestedPlumbing(w io.Writer, root *cli.Command) {
 			for _, sub := range c.Commands {
 				p := path + " " + sub.Name
 				// showPlumbing already cleared Hidden, so the category alone marks it
-				if sub.Category == plumbingCategory {
+				if sub.Category == command.Plumbing {
 					rows = append(rows, [2]string{p, sub.Usage})
 				}
 

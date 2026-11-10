@@ -36,6 +36,35 @@ var Table = []Rule{
 	{Prefix: "internal/driverec", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
+	{Prefix: "internal/command", Rank: 2, Peers: true},
+
+	// leaf commands: nothing but services below them
+	{Prefix: "internal/command/trace", Rank: 3},
+	{Prefix: "internal/command/lore", Rank: 3},
+	{Prefix: "internal/command/ledger", Rank: 3},
+	{Prefix: "internal/command/state", Rank: 3},
+	{Prefix: "internal/command/hook", Rank: 3},
+	{Prefix: "internal/command/asks", Rank: 3},
+	{Prefix: "internal/command/stats", Rank: 3},
+
+	// the commands that read a task, its request, the config and the board
+	{Prefix: "internal/command/task", Rank: 4},
+	{Prefix: "internal/command/pr", Rank: 4},
+	{Prefix: "internal/command/review", Rank: 4},
+	{Prefix: "internal/command/config", Rank: 4},
+	{Prefix: "internal/command/standup", Rank: 4},
+	{Prefix: "internal/command/board", Rank: 4},
+	{Prefix: "internal/command/status", Rank: 4},
+
+	// finish, start (which sweeps finished tasks), then the drive over both
+	{Prefix: "internal/finish", Rank: 5},
+	{Prefix: "internal/command/finish", Rank: 5},
+	{Prefix: "internal/start", Rank: 6},
+	{Prefix: "internal/command/start", Rank: 6},
+	{Prefix: "internal/drive", Rank: 7},
+	{Prefix: "internal/command/drive", Rank: 7},
+	{Prefix: "internal/command/daemon", Rank: 7},
+
 	{Prefix: "cmd/f10", Rank: 9},
 	{Prefix: "cmd/f10eval", Rank: 9},
 }

@@ -1,4 +1,4 @@
-package main
+package state
 
 import (
 	"cmp"
@@ -18,10 +18,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// The state noun writes the run state the badge renders. The badge is
+// Command is the state noun, which writes the run state the badge renders. The badge is
 // cosmetic, so no session or an unwritable directory is a silent no-op; a
 // malformed call exits 2, since silence would freeze the badge over a typo.
-func stateCommand() *cli.Command {
+func Command() *cli.Command {
 	verb := func(name, args, usage string, apply func(r *state.Run, a cli.Args) error) *cli.Command {
 		kind := "state_" + name
 

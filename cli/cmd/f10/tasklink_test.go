@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/asks"
+	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/layers"
@@ -188,7 +189,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := listAsks(t.Context(), &out, dir, time.Now(), false); err != nil {
+			if err := askscmd.ListAsks(t.Context(), &out, dir, time.Now(), false); err != nil {
 				t.Fatal(err)
 			}
 

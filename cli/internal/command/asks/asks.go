@@ -1,4 +1,4 @@
-package main
+package asks
 
 import (
 	"bufio"
@@ -31,7 +31,9 @@ import (
 
 const recentAnswered = 24 * time.Hour
 
-func asksCommand() *cli.Command {
+// Command is the asks noun: the questions driven agents wait on, listed,
+// answered or walked in a terminal.
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "asks",
 		Usage: "the questions driven agents wait on, across projects: list, answer, or walk them in a terminal",
@@ -77,7 +79,7 @@ func asksCommand() *cli.Command {
 
 func runAsks(ctx context.Context, cmd *cli.Command) error {
 	if ui.Interactive() {
-		return walkAsks(ctx, cmd.Writer, bufio.NewReader(os.Stdin), asks.Dir(), liveDeliver())
+		return WalkAsks(ctx, cmd.Writer, bufio.NewReader(os.Stdin), asks.Dir(), liveDeliver())
 	}
 
 	return runAsksList(ctx, cmd)
@@ -98,7 +100,7 @@ type askView struct {
 	AnsweredAt *time.Time      `json:"answered_at,omitempty"`
 }
 
-type askList struct {
+type AskList struct {
 	Open     []askView `json:"open"`
 	Answered []askView `json:"answered"`
 }
@@ -119,10 +121,10 @@ func viewOf(a asks.Ask) askView {
 }
 
 func runAsksList(ctx context.Context, cmd *cli.Command) error {
-	return listAsks(ctx, cmd.Writer, asks.Dir(), time.Now(), cmd.Bool("json"))
+	return ListAsks(ctx, cmd.Writer, asks.Dir(), time.Now(), cmd.Bool("json"))
 }
 
-func listAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
+func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
 	open, err := asks.Open(dir)
 	if err != nil {
 		return err
@@ -134,7 +136,7 @@ func listAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSO
 	}
 
 	if asJSON {
-		out := askList{Open: []askView{}, Answered: []askView{}}
+		out := AskList{Open: []askView{}, Answered: []askView{}}
 
 		for _, a := range open {
 			out.Open = append(out.Open, viewOf(a))
@@ -321,18 +323,18 @@ func answersFor(a asks.Ask, values []string) (string, error) {
 	return asks.Format(a.Questions, given), nil
 }
 
-// A deliverer moves a claimed answer on: prompt reaches an agent no drive
+// A Deliverer moves a claimed answer on: prompt reaches an agent no drive
 // watches, resume restarts a stopped drive, and live says whether a drive
 // still runs.
-type deliverer struct {
-	prompt func(ctx context.Context, w io.Writer, a asks.Ask) error
-	resume func(ctx context.Context, w io.Writer, a asks.Ask) error
-	live   func(a asks.Ask) bool
+type Deliverer struct {
+	Prompt func(ctx context.Context, w io.Writer, a asks.Ask) error
+	Resume func(ctx context.Context, w io.Writer, a asks.Ask) error
+	Live   func(a asks.Ask) bool
 }
 
-func liveDeliver() deliverer {
-	return deliverer{
-		prompt: func(ctx context.Context, w io.Writer, a asks.Ask) error {
+func liveDeliver() Deliverer {
+	return Deliverer{
+		Prompt: func(ctx context.Context, w io.Writer, a asks.Ask) error {
 			note, err := launch.PromptChecked(ctx, a.Worktree, a.Task, a.Suffix, a.Answer)
 			if note != "" {
 				fmt.Fprintln(w, note)
@@ -340,8 +342,8 @@ func liveDeliver() deliverer {
 
 			return err
 		},
-		resume: resumeAskDrive,
-		live: func(a asks.Ask) bool {
+		Resume: resumeAskDrive,
+		Live: func(a asks.Ask) bool {
 			_, held := drives.Probe(a.Root, drives.DriveKey(a.Drive))
 
 			return held
@@ -352,19 +354,19 @@ func liveDeliver() deliverer {
 // deliver moves a claimed answer to where it acts. A drive's ask goes to its
 // drive, a running one taking it as it exits so nothing runs twice; any
 // other is sent to its agent, unless typed in the pane already.
-func (d deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.Ask) error {
+func (d Deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.Ask) error {
 	switch {
-	case a.Drive > 0 && d.live(a):
+	case a.Drive > 0 && d.Live(a):
 		fmt.Fprintf(w, "drive %d takes it as it stops\n", a.Drive)
 
 		return nil
 	case a.Drive > 0:
-		return d.resume(ctx, w, a)
+		return d.Resume(ctx, w, a)
 	case !a.DeliveredAt.IsZero():
 		return nil
 	}
 
-	if err := d.prompt(ctx, w, a); err != nil {
+	if err := d.Prompt(ctx, w, a); err != nil {
 		return fmt.Errorf("sending the answer to %s's agent: %w; type it in its pane: %s", a.Task, err, a.Answer)
 	}
 
@@ -393,10 +395,10 @@ func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--by takes %s or %s", asks.ByAsks, asks.BySkill)
 	}
 
-	return answerAsk(ctx, cmd.Writer, asks.Dir(), args[0], args[1:], by, liveDeliver())
+	return AnswerAsk(ctx, cmd.Writer, asks.Dir(), args[0], args[1:], by, liveDeliver())
 }
 
-func answerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d deliverer) error {
+func AnswerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d Deliverer) error {
 	a, err := findOpen(dir, token)
 	if err != nil {
 		return err
@@ -417,7 +419,7 @@ func answerAsk(ctx context.Context, w io.Writer, dir, token string, values []str
 	return d.deliver(ctx, w, dir, claimed)
 }
 
-func walkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d deliverer) error {
+func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d Deliverer) error {
 	open, err := asks.Open(dir)
 	if err != nil {
 		return err
@@ -603,14 +605,14 @@ func runAsksHook(ctx context.Context, cmd *cli.Command) error {
 		root = layout.Locate(ctx, p.Cwd).CheckoutRoot
 	}
 
-	_, _ = cmd.Writer.Write(asksContext(asks.Dir(), state.Dir(), p.Session, p.Event, root))
+	_, _ = cmd.Writer.Write(AsksContext(asks.Dir(), state.Dir(), p.Session, p.Event, root))
 
 	return nil
 }
 
-// asksContext is the hook's output: the untold open asks, outside the
+// AsksContext is the hook's output: the untold open asks, outside the
 // session's own checkout, as additional context; nothing when none.
-func asksContext(dir, stateDir, session, event, root string) []byte {
+func AsksContext(dir, stateDir, session, event, root string) []byte {
 	open, err := asks.Open(dir)
 	if err != nil || len(open) == 0 {
 		return nil

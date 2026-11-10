@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
@@ -45,7 +46,7 @@ func taskCommand() *cli.Command {
 			{
 				Name:     "current",
 				Hidden:   true,
-				Category: plumbingCategory,
+				Category: command.Plumbing,
 				Usage: "print the task the branch names, else the one this session's run records " +
 					"(exit 1: none)",
 				Action: runTaskCurrent,
@@ -53,7 +54,7 @@ func taskCommand() *cli.Command {
 			{
 				Name:     "ref",
 				Hidden:   true,
-				Category: plumbingCategory,
+				Category: command.Plumbing,
 				Usage: "print each task as `<id> (<title>)`, or a markdown link with --md, from the titles f10 " +
 					"already read; an unknown id prints bare",
 				ArgsUsage: "<task-id>...",
@@ -66,7 +67,7 @@ func taskCommand() *cli.Command {
 			{
 				Name:     "report",
 				Hidden:   true,
-				Category: plumbingCategory,
+				Category: command.Plumbing,
 				Usage: "print a report's facts block for the tasks: one task's task, title and url rows, else a row " +
 					"per task; from the titles f10 already read",
 				ArgsUsage: "<task-id>... | --children <parent-id>",
@@ -79,7 +80,7 @@ func taskCommand() *cli.Command {
 			{
 				Name:     "stale",
 				Hidden:   true,
-				Category: plumbingCategory,
+				Category: command.Plumbing,
 				Usage: "print fetch's stale check against stale_after: fresh, judged <verdict file>, needs judge, " +
 					"or undated",
 				ArgsUsage: "[task-id]",
@@ -105,7 +106,7 @@ func taskCommand() *cli.Command {
 			{
 				Name:      "children",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Usage:     "list the task's open subtasks in After: order (exit 3: the tracker has no parent link)",
 				ArgsUsage: "[task-id]",
 				Flags: []cli.Flag{

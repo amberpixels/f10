@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
@@ -309,7 +310,7 @@ func TestLoreNote(t *testing.T) {
 	store := &lore.Store{Root: t.TempDir()}
 
 	want := "lore: no entries for FT-9: no intent, no decisions, no lessons"
-	if got := loreNote(store, "FT-9"); got != want {
+	if got := lorecmd.LoreNote(store, "FT-9"); got != want {
 		t.Errorf("empty: %q, want %q", got, want)
 	}
 
@@ -326,14 +327,14 @@ func TestLoreNote(t *testing.T) {
 	add(lore.Entry{Kind: lore.KindDecision, Chosen: "x", Anchors: []lore.Anchor{anchor}})
 	add(lore.Entry{Kind: lore.KindDecision, Chosen: "y", Anchors: []lore.Anchor{anchor}})
 
-	if got, want := loreNote(store, "FT-9"), "lore: no intent, 2 decisions, no lessons"; got != want {
+	if got, want := lorecmd.LoreNote(store, "FT-9"), "lore: no intent, 2 decisions, no lessons"; got != want {
 		t.Errorf("decisions only: %q, want %q", got, want)
 	}
 
 	add(lore.Entry{Kind: lore.KindIntent})
 	add(lore.Entry{Kind: lore.KindLesson, Anchors: []lore.Anchor{anchor}})
 
-	if got, want := loreNote(store, "FT-9"), "lore: intent, 2 decisions, 1 lesson"; got != want {
+	if got, want := lorecmd.LoreNote(store, "FT-9"), "lore: intent, 2 decisions, 1 lesson"; got != want {
 		t.Errorf("all kinds: %q, want %q", got, want)
 	}
 }

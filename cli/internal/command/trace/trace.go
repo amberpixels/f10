@@ -1,4 +1,4 @@
-package main
+package trace
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -23,15 +24,15 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// The trace noun renders what a step leaves on the host for a reader of the
+// Command is the trace noun, which renders what a step leaves on the host for a reader of the
 // history, so no step hand-writes the format. With traces off both verbs do
 // nothing and exit 0, so every step calls them the same way and the prose
 // carries no switch.
-func traceCommand() *cli.Command {
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:     "trace",
 		Hidden:   true,
-		Category: plumbingCategory,
+		Category: command.Plumbing,
 		Usage:    "the trailers a step's commit carries, rendered from the project's traces switch",
 		Commands: []*cli.Command{
 			{

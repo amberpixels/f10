@@ -16,6 +16,13 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
+	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
+	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
+	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
+	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
+	statecmd "github.com/amberpixels/f10/cli/internal/command/state"
+	statscmd "github.com/amberpixels/f10/cli/internal/command/stats"
+	tracecmd "github.com/amberpixels/f10/cli/internal/command/trace"
 )
 
 func main() {
@@ -54,7 +61,7 @@ func newApp() *cli.Command {
 			demoCommand(),
 			prCommand(),
 			reviewCommand(),
-			traceCommand(),
+			tracecmd.Command(),
 			statusCommand(),
 			standupCommand(),
 			boardCommand(),
@@ -62,15 +69,15 @@ func newApp() *cli.Command {
 			forwardCommand(),
 			driveCommand(),
 			daemonCommand(),
-			asksCommand(),
+			askscmd.Command(),
 			watchCommand(),
 			finishCommand(),
 			janitorCommand(),
-			hookCommand(),
-			stateCommand(),
-			ledgerCommand(),
-			statsCommand(),
-			loreCommand(),
+			hookcmd.Command(),
+			statecmd.Command(),
+			ledgercmd.Command(),
+			statscmd.Command(),
+			lorecmd.Command(),
 			helpCommand(),
 		},
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -43,7 +44,7 @@ func standupCommand() *cli.Command {
 			{
 				Name:     "mark",
 				Hidden:   true,
-				Category: plumbingCategory,
+				Category: command.Plumbing,
 				Usage:    "record a standup as reported: the next period starts when this one ended",
 				Flags: []cli.Flag{
 					&cli.StringFlag{

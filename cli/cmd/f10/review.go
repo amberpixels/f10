@@ -9,6 +9,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/reviews"
@@ -23,7 +24,7 @@ func reviewCommand() *cli.Command {
 	return &cli.Command{
 		Name:     "review",
 		Hidden:   true,
-		Category: plumbingCategory,
+		Category: command.Plumbing,
 		Usage:    "read, await or acknowledge the remote review of a branch's PR or MR",
 		Commands: []*cli.Command{
 			{

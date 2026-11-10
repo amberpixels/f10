@@ -1,4 +1,4 @@
-package main
+package ledger
 
 import (
 	"context"
@@ -16,10 +16,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// The ledger noun reads the local record of what runs did, ~/.f10/f10.db,
+// Command is the ledger noun, which reads the local record of what runs did, ~/.f10/f10.db,
 // to check what a run left there. It replays the spool first, so spooled
 // rows show, then reads the database read-only.
-func ledgerCommand() *cli.Command {
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "ledger",
 		Usage: "read the local record of what f10 runs did",
@@ -90,14 +90,14 @@ func writeEvent(cmd *cli.Command, e ledger.Event) error {
 	}
 
 	_, err = fmt.Fprintf(cmd.Writer, "%s  %-8s  %-19s  %-8s  %-12s  %s\n",
-		e.At.Local().Format(time.DateTime), e.Source, e.Kind, textx.OrDash(eventTask(e)), textx.OrDash(e.Branch),
+		e.At.Local().Format(time.DateTime), e.Source, e.Kind, textx.OrDash(EventTask(e)), textx.OrDash(e.Branch),
 		strings.TrimSpace(string(payload)))
 
 	return err
 }
 
-// eventTask is the task column: a bundle's ids joined, else the task.
-func eventTask(e ledger.Event) string {
+// EventTask is the task column: a bundle's ids joined, else the task.
+func EventTask(e ledger.Event) string {
 	if members := e.Bundle(); members != nil {
 		return strings.Join(members, ref.Separator)
 	}

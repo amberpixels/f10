@@ -1,4 +1,4 @@
-package main
+package hook
 
 import (
 	"bytes"
@@ -20,8 +20,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
-// The hook noun is what hooks/hooks.json runs; hidden, since nobody types it.
-func hookCommand() *cli.Command {
+// Command is the hook noun: what hooks/hooks.json runs; hidden, since nobody types it.
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:   "hook",
 		Usage:  "handle one Claude Code hook event; the payload on stdin",
@@ -63,7 +63,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		Debug:       os.Getenv("F10_STATE_DEBUG") != "",
 		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot.Path() },
 		TaskID:      hookTaskID,
-		StatusText:  hookStatusText,
+		StatusText:  HookStatusText,
 		PromptTyped: asknotify.PaneAnswered,
 		Observers:   []observe.Observer{recorder},
 	}
@@ -92,9 +92,9 @@ func hookTaskID(ctx context.Context, cwd, url string) string {
 	return r.ID
 }
 
-// hookStatusText is what a bare `f10 status` prints for the session in the
+// HookStatusText is what a bare `f10 status` prints for the session in the
 // hook's directory, and whether it printed a question a driven agent waits on.
-func hookStatusText(ctx context.Context, session string) (string, bool) {
+func HookStatusText(ctx context.Context, session string) (string, bool) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "f10: " + err.Error(), false

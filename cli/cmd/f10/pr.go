@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -39,7 +40,7 @@ func prCommand() *cli.Command {
 				Usage:     "the branch a change is based on: its open PR/MR's target, else the stacked base, else the default branch",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Flags: []cli.Flag{&cli.BoolFlag{
 					Name:  "origin",
 					Usage: "fail when origin does not have the base, which a PR cannot target",
@@ -52,7 +53,7 @@ func prCommand() *cli.Command {
 					"else its open PR/MR's diff, else the branch's commits",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Flags:     []cli.Flag{&cli.BoolFlag{Name: "name-only", Usage: "list the changed files only"}},
 				Action:    runPRDiff,
 			},
@@ -61,7 +62,7 @@ func prCommand() *cli.Command {
 				Usage:     "a change's branch, base, task and open PR/MR with its description",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Flags:     []cli.Flag{&cli.BoolFlag{Name: "comments", Usage: "add the PR/MR's comments"}},
 				Action:    runPRView,
 			},
@@ -70,7 +71,7 @@ func prCommand() *cli.Command {
 				Usage: "open a PR/MR for the branch checked out here against its base and print its url; " +
 					"an open one is printed instead",
 				Hidden:   true,
-				Category: plumbingCategory,
+				Category: command.Plumbing,
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "title", Usage: "the `TITLE`", Required: true},
 					&cli.StringFlag{Name: "body-file", Usage: "the body from `FILE`; - reads stdin", Required: true},
@@ -85,7 +86,7 @@ func prCommand() *cli.Command {
 				Usage:     "rewrite an open PR/MR's title, its body, or both; base, labels and assignees stay",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "title", Usage: "the new `TITLE`"},
 					&cli.StringFlag{Name: "body-file", Usage: "the new body from `FILE`; - reads stdin"},
@@ -98,7 +99,7 @@ func prCommand() *cli.Command {
 					"one already posted with that text is not posted again",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "reply-to",
@@ -117,7 +118,7 @@ func prCommand() *cli.Command {
 					"is left alone",
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
-				Category:  plumbingCategory,
+				Category:  command.Plumbing,
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "name", Usage: "the status `NAME` (GitHub's context)", Required: true},
 					&cli.StringFlag{Name: "state", Usage: "`success` or failure", Required: true},

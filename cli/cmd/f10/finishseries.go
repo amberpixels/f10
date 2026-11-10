@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -23,7 +24,7 @@ func seriesLore(in *finishInput, end *archive.SeriesEnd) string {
 		return ""
 	}
 
-	return loreNote(in.loreStore, in.loreChange())
+	return lorecmd.LoreNote(in.loreStore, in.loreChange())
 }
 
 // closeSeries ends the task's series even when it had no review rounds,

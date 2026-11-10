@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -32,7 +33,7 @@ func forwardCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "forward",
 		Hidden:    true,
-		Category:  plumbingCategory,
+		Category:  command.Plumbing,
 		Usage:     "hand a command to the agent working on a task in another worktree",
 		ArgsUsage: "<task-id>[-suffix] <text...>",
 		Action:    runForward,

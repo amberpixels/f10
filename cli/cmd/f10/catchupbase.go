@@ -8,6 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -23,7 +24,7 @@ func prCatchupCommand() *cli.Command {
 	return &cli.Command{
 		Name:     "catchup",
 		Hidden:   true,
-		Category: plumbingCategory,
+		Category: command.Plumbing,
 		Usage: "print what a catchup of the current branch brings in: the base, how it was found, " +
 			"the method and why, and the mark a conflict sets",
 		Flags: []cli.Flag{

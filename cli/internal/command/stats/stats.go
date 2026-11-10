@@ -1,4 +1,4 @@
-package main
+package stats
 
 import (
 	"cmp"
@@ -20,10 +20,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// The stats verb is active time per task and step: every wait on the user is
+// Command is the stats verb: active time per task and step: every wait on the user is
 // out, tool run time stays in. Density is implement minutes per 100 changed
 // lines; a task from before waits were recorded has no numbers.
-func statsCommand() *cli.Command {
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:      "stats",
 		Usage:     "active minutes per task by step group, with size and density; a task id adds its steps",
@@ -38,7 +38,7 @@ func statsCommand() *cli.Command {
 func runStats(ctx context.Context, cmd *cli.Command) error {
 	now := time.Now()
 
-	cutoff, err := statsCutoff(cmd.String("since"), now)
+	cutoff, err := StatsCutoff(cmd.String("since"), now)
 	if err != nil {
 		return ui.Exit(ui.ExitUsage, "stats: --since: %v", err)
 	}
@@ -64,21 +64,21 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	rows := statRows(events, task, cutoff)
+	rows := StatRows(events, task, cutoff)
 
-	if err := writeStats(cmd.Writer, rows); err != nil || task == "" || len(rows) == 0 {
+	if err := WriteStats(cmd.Writer, rows); err != nil || task == "" || len(rows) == 0 {
 		return err
 	}
 
 	fmt.Fprintln(cmd.Writer)
 
-	return writeSteps(cmd.Writer, rows[0])
+	return WriteSteps(cmd.Writer, rows[0])
 }
 
 // statRow is one task's numbers; a step absent, or a nil, was never recorded.
 type statRow struct {
-	task  string
-	steps map[string]time.Duration
+	Task  string
+	Steps map[string]time.Duration
 	// shown is the breakdown's rows: a step, or a labelled entry of one by
 	// its label, so two pr entries read as pr and pr-polish
 	shown  map[string]shownStep
@@ -102,7 +102,7 @@ func (r statRow) group(column string) *time.Duration {
 		found bool
 	)
 
-	for step, d := range r.steps {
+	for step, d := range r.Steps {
 		if stepColumn(step) == column {
 			sum, found = sum+d, true
 		}
@@ -138,15 +138,15 @@ func (r statRow) density() *float64 {
 	return &d
 }
 
-// statRows is a row per task with a window or a size, newest first: a task
+// StatRows is a row per task with a window or a size, newest first: a task
 // named is shown whatever its age, else only those active since cutoff.
-func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
+func StatRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 	rows := map[string]*statRow{}
 
 	row := func(id string, at time.Time) *statRow {
 		r, ok := rows[id]
 		if !ok {
-			r = &statRow{task: id}
+			r = &statRow{Task: id}
 			rows[id] = r
 		}
 
@@ -163,11 +163,11 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 		}
 
 		r := row(w.Task, w.To)
-		if r.steps == nil {
-			r.steps, r.shown = map[string]time.Duration{}, map[string]shownStep{}
+		if r.Steps == nil {
+			r.Steps, r.shown = map[string]time.Duration{}, map[string]shownStep{}
 		}
 
-		r.steps[w.Step] += w.Active
+		r.Steps[w.Step] += w.Active
 
 		key := cmp.Or(w.Label, w.Step)
 		r.shown[key] = shownStep{step: w.Step, active: r.shown[key].active + w.Active}
@@ -192,7 +192,7 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 	var out []statRow
 
 	for _, r := range rows {
-		if task != "" && !strings.EqualFold(r.task, task) || task == "" && r.latest.Before(cutoff) {
+		if task != "" && !strings.EqualFold(r.Task, task) || task == "" && r.latest.Before(cutoff) {
 			continue
 		}
 
@@ -200,13 +200,13 @@ func statRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 	}
 
 	slices.SortFunc(out, func(a, b statRow) int {
-		return cmp.Or(b.latest.Compare(a.latest), strings.Compare(a.task, b.task))
+		return cmp.Or(b.latest.Compare(a.latest), strings.Compare(a.Task, b.Task))
 	})
 
 	return out
 }
 
-func writeStats(w io.Writer, rows []statRow) error {
+func WriteStats(w io.Writer, rows []statRow) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no active time recorded")
 
@@ -227,7 +227,7 @@ func writeStats(w io.Writer, rows []statRow) error {
 	medians := make([][]float64, len(columns))
 
 	for _, r := range rows {
-		cells := []string{r.task}
+		cells := []string{r.Task}
 		for i, c := range columns {
 			cells = append(cells, minutes(r.group(c), &medians[i]))
 		}
@@ -262,8 +262,8 @@ var stepOrder = []string{
 	timing.Plan, timing.Judge, timing.Implement, timing.Cleanup, timing.PR, timing.Review, timing.Resolve,
 }
 
-// writeSteps is one task's active time per step, with a total.
-func writeSteps(w io.Writer, r statRow) error {
+// WriteSteps is one task's active time per step, with a total.
+func WriteSteps(w io.Writer, r statRow) error {
 	steps := slices.Collect(maps.Keys(r.shown))
 	slices.SortFunc(steps, func(a, b string) int {
 		rank := func(s string) int {
@@ -368,9 +368,9 @@ func percent(part, whole int) int {
 	return (part*100 + whole/2) / whole
 }
 
-// statsCutoff is where --since starts the table: a count of days or weeks
+// StatsCutoff is where --since starts the table: a count of days or weeks
 // back from now.
-func statsCutoff(arg string, now time.Time) (time.Time, error) {
+func StatsCutoff(arg string, now time.Time) (time.Time, error) {
 	p, err := calendar.Parse(arg, now, calendar.Offsets, nil)
 	if err != nil {
 		return time.Time{}, err

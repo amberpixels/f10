@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -132,7 +133,7 @@ func TestHookStatusTextReportsTheSessionTasksAsk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	text, asks := hookStatusText(t.Context(), "sess-1")
+	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1")
 	if !asks || !strings.Contains(text, "1. Refactor?") {
 		t.Errorf("asks = %v, text:\n%s", asks, text)
 	}
