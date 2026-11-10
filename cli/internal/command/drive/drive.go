@@ -113,7 +113,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	drain, unwatch := drive.WatchDrain(a.Fore)
 	defer unwatch()
 
-	if err := worktree.Agents("").Available(); err != nil {
+	if err := worktree.RequireAgents(); err != nil {
 		return err
 	}
 

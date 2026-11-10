@@ -116,7 +116,7 @@ func Forward(ctx context.Context, w io.Writer, in ForwardInput) error {
 		return ui.Exit(ui.ExitDeclined, "%s", reason)
 	}
 
-	if err := worktree.Agents("").Available(); err != nil {
+	if err := worktree.RequireAgents(); err != nil {
 		return err
 	}
 
