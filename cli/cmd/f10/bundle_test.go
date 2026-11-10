@@ -382,8 +382,8 @@ func TestLedgerMatchesABundleMember(t *testing.T) {
 	e := ledger.Event{Task: "GH-1", Branch: "GH-1+GH-2/slug"}
 
 	for id, want := range map[string]bool{"GH-1": true, "gh-2": true, "GH-3": false} {
-		if got := onTask(e, id); got != want {
-			t.Errorf("onTask(%s) = %v, want %v", id, got, want)
+		if got := e.OnTask(id); got != want {
+			t.Errorf("OnTask(%s) = %v, want %v", id, got, want)
 		}
 	}
 

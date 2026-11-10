@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,12 +10,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -27,46 +30,62 @@ func TestStageOf(t *testing.T) {
 	asking := run("prior", "done", "blocked", "judge")
 	asking.Ask = "1. Merge? [yes | no]"
 
+	type facts = lookaround.TaskFacts
+
+	merged := &lookaround.PR{Status: forge.Merged}
+
 	for _, tc := range []struct {
 		name        string
-		f           rowFacts
+		f           facts
+		baseDone    bool
 		stage, step string
 	}{
-		{"finished", rowFacts{finished: true}, stageDone, "finish"},
-		{"merged", rowFacts{merged: true, run: run("prior", "done", "done", "")}, stageDone, "finish"},
-		{"ask", rowFacts{run: asking}, stageAsking, "judge"},
-		{"drive halt", rowFacts{halt: &ledgerHalt{skill: "ship"}, run: run("prior", "done", "running", "implement")}, stageHalted, "ship"},
-		{"run stopped", rowFacts{run: run("prior", "done", "failed", "pr")}, stageHalted, "pr"},
-		{"implementing", rowFacts{run: run("prior", "done", "running", "cleanup")}, stageImplementing, "cleanup"},
-		{"reviewing", rowFacts{run: run("prior", "done", "running", "review")}, stageReviewing, "review"},
-		{"resolving", rowFacts{run: run("prior", "done", "running", "resolve")}, stageResolving, "resolve"},
-		{"judging", rowFacts{run: run("prior", "done", "running", "judge")}, stageJudging, "judge"},
-		{"shipped", rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}}, stageShipped, "pr"},
-		{"planning", rowFacts{run: run("skipped", "running", "upcoming", "")}, stagePlanning, "plan"},
-		{"planned", rowFacts{run: run("skipped", "done", "upcoming", "")}, stagePlanned, "plan"},
-		{"after, no drive", rowFacts{after: "FT-1"}, stageNotStarted, "after FT-1"},
-		{"waiting", rowFacts{after: "FT-1", driven: true}, stageWaiting, "after FT-1"},
+		{"finished", facts{Finished: true}, false, stageDone, "finish"},
+		{"merged", facts{PR: merged, Run: run("prior", "done", "done", "")}, false, stageDone, "finish"},
+		{"ask", facts{Run: asking}, false, stageAsking, "judge"},
+		{
+			"drive halt",
+			facts{Halt: &lookaround.Halt{Skill: "ship"}, Run: run("prior", "done", "running", "implement")},
+			false, stageHalted, "ship",
+		},
+		{"run stopped", facts{Run: run("prior", "done", "failed", "pr")}, false, stageHalted, "pr"},
+		{"implementing", facts{Run: run("prior", "done", "running", "cleanup")}, false, stageImplementing, "cleanup"},
+		{"reviewing", facts{Run: run("prior", "done", "running", "review")}, false, stageReviewing, "review"},
+		{"resolving", facts{Run: run("prior", "done", "running", "resolve")}, false, stageResolving, "resolve"},
+		{"judging", facts{Run: run("prior", "done", "running", "judge")}, false, stageJudging, "judge"},
+		{
+			"shipped",
+			facts{Run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}},
+			false, stageShipped, "pr",
+		},
+		{"planning", facts{Run: run("skipped", "running", "upcoming", "")}, false, stagePlanning, "plan"},
+		{"planned", facts{Run: run("skipped", "done", "upcoming", "")}, false, stagePlanned, "plan"},
+		{"after, no drive", facts{Base: "FT-1"}, false, stageNotStarted, "after FT-1"},
+		{"waiting", facts{Base: "FT-1", Driven: true}, false, stageWaiting, "after FT-1"},
 		{
 			"parked",
-			rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
-			stageWaiting, "on FT-1",
+			facts{Run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
+			false, stageWaiting, "on FT-1",
 		},
-		{"base done", rowFacts{after: "FT-1", baseDone: true}, stageNotStarted, ""},
-		{"queued", rowFacts{queued: true, after: "FT-1"}, stageQueued, ""},
+		{"base done", facts{Base: "FT-1"}, true, stageNotStarted, ""},
+		{"queued", facts{Queued: true, Base: "FT-1"}, false, stageQueued, ""},
 		{
 			"parked by its drive",
-			rowFacts{run: run("skipped", "done", "upcoming", ""), after: "FT-1", phase: drives.PhaseParked},
-			stageWaiting, "on FT-1",
+			facts{Run: run("skipped", "done", "upcoming", ""), Base: "FT-1", DrivePhase: drives.PhaseParked},
+			false, stageWaiting, "on FT-1",
 		},
 		{
 			"finish waits for its base",
-			rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}, after: "FT-1", phase: drives.PhaseWaiting},
-			stageWaiting, "to finish after FT-1",
+			facts{
+				Run:  &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"},
+				Base: "FT-1", DrivePhase: drives.PhaseWaiting,
+			},
+			false, stageWaiting, "to finish after FT-1",
 		},
-		{"nothing", rowFacts{}, stageNotStarted, ""},
+		{"nothing", facts{}, false, stageNotStarted, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if stage, step := stageOf(tc.f); stage != tc.stage || step != tc.step {
+			if stage, step := stageOf(tc.f, tc.baseDone); stage != tc.stage || step != tc.step {
 				t.Errorf("stageOf = %q %q, want %q %q", stage, step, tc.stage, tc.step)
 			}
 		})
@@ -407,6 +426,7 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 				"git remote",
 				"git log ",
 				"git worktree ",
+				"gh api graphql ",
 			)
 
 			switch {
@@ -457,17 +477,17 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 
 // A shipped task whose finish drive holds names it in the step column.
 func TestRowStepNamesDriveFinish(t *testing.T) {
-	f := rowFacts{run: &state.Run{Plan: "done", Ship: "done"}}
+	f := lookaround.TaskFacts{Run: &state.Run{Plan: "done", Ship: "done"}}
 
 	row := taskRow{Gates: []gate{{Step: "finish", State: gateRunning, Via: viaDrive, Action: "merging #204"}}}
-	row.finish(f)
+	row.finish(f, false)
 
 	if row.Stage != stageShipped || row.Step != "finish: running (drive): merging #204" {
 		t.Errorf("row = %s / %q, want shipped / the finish action", row.Stage, row.Step)
 	}
 
 	plain := taskRow{Gates: []gate{{Step: "finish", State: gateUpcoming}}}
-	plain.finish(f)
+	plain.finish(f, false)
 
 	if plain.Step != "ship" {
 		t.Errorf("an upcoming finish changed the step to %q", plain.Step)
@@ -502,16 +522,6 @@ func TestPRColumnIcons(t *testing.T) {
 	}
 }
 
-// Status shows a ledger claim without the wait and done it recorded.
-func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
-	r := &state.Run{Ship: "blocked", Leaf: "implement", Wait: "FT-2", Done: "catchup"}
-	e := ledger.Event{Task: "FT-1", Kind: ledger.StateSet, Payload: ledger.NewPayload(ledger.EncodeClaim(r, nil))}
-
-	if got := claimRun(e); got.Ship != "blocked" || got.Leaf != "implement" || got.Wait != "" || got.Done != "" {
-		t.Errorf("claim %+v", got)
-	}
-}
-
 // A halt drive records reads back through the ledger's readers.
 func TestHaltPayloadReadsBack(t *testing.T) {
 	p := haltPayload(driveResult{skill: "ship", reason: "stalled"})
@@ -519,5 +529,46 @@ func TestHaltPayloadReadsBack(t *testing.T) {
 	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
 	if e.Skill() != "ship" || e.Reason() != "stalled" {
 		t.Errorf("halt %v", e.Payload.Val)
+	}
+}
+
+// A task with a branch reads that branch's requests only: an older merged
+// request on another head leaves its live run deciding the stage. Two rows
+// of one id gather at once without sharing the requests they sort.
+func TestGatherReadsTheBranchRequests(t *testing.T) {
+	run := &state.Run{
+		Task: "FT-5", Root: "/w/FT-5", Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement",
+		Updated: time.Now(),
+	}
+	merged := lookaround.PR{Number: 40, Status: forge.Merged, Head: "FT-5/x", MergedAt: time.Now()}
+	open := lookaround.PR{Number: 41, Status: forge.Open, Head: "FT-5/z"}
+
+	src := rowSource{
+		live: []*state.Run{run},
+		checkout: func(_ context.Context, _, suffix string) (string, string) {
+			if suffix == "" {
+				return "FT-5/y", "/w/FT-5"
+			}
+
+			return "", ""
+		},
+		requests: map[string][]lookaround.PR{"FT-5": {merged, open}},
+	}
+
+	if _, f := src.gather(t.Context(), childRow{ID: "FT-5"}); f.PR != nil {
+		t.Errorf("FT-5/y read request #%d of another head", f.PR.Number)
+	} else if stage, _ := stageOf(f, false); stage != stageImplementing {
+		t.Errorf("stage = %s, want implementing", stage)
+	}
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() { src.gather(t.Context(), childRow{ID: "FT-5", suffix: "2"}) })
+	}
+
+	wg.Wait()
+
+	if got := src.requests["FT-5"]; got[0].Number != 40 || got[1].Number != 41 {
+		t.Errorf("the shared requests were reordered: #%d, #%d", got[0].Number, got[1].Number)
 	}
 }

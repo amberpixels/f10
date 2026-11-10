@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -61,7 +60,7 @@ func runLedgerDump(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	for _, e := range events {
-		if task != "" && !onTask(e, task) {
+		if task != "" && !e.OnTask(task) {
 			continue
 		}
 
@@ -97,34 +96,9 @@ func writeEvent(cmd *cli.Command, e ledger.Event) error {
 	return err
 }
 
-// bundleOf is the bundle an event's branch ships when the event's task
-// leads it, else nil.
-func bundleOf(e ledger.Event) []string {
-	i := strings.LastIndexByte(e.Task, '-')
-	if i < 0 {
-		return nil
-	}
-
-	members := ref.Members(e.Task[:i], e.Branch)
-	if len(members) < 2 || !strings.EqualFold(members[0], e.Task) {
-		return nil
-	}
-
-	return members
-}
-
-// onTask reports whether the event is the task's: its own, or its bundle's.
-func onTask(e ledger.Event, id string) bool {
-	if strings.EqualFold(e.Task, id) {
-		return true
-	}
-
-	return slices.ContainsFunc(bundleOf(e), func(m string) bool { return strings.EqualFold(m, id) })
-}
-
 // eventTask is the task column: a bundle's ids joined, else the task.
 func eventTask(e ledger.Event) string {
-	if members := bundleOf(e); members != nil {
+	if members := e.Bundle(); members != nil {
 		return strings.Join(members, ref.Separator)
 	}
 

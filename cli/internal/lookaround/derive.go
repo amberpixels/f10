@@ -68,20 +68,9 @@ func Derive(f Facts, now, since time.Time) Board {
 // A row is one Row under construction, with the facts it was built from.
 type row struct {
 	Row
+	TaskFacts
 
-	prs      []PR   // every request naming the row's task, open first
-	pr       *PR    // the one the stage reads: open, else merged in the window
-	lead     string // the bundle's lead, for a rider sharing its branch and run
-	run      *state.Run
-	branch   *Branch
-	worktree *Worktree
-	plan     bool
-	findings *Findings
-	verdict  string
-	finished bool
-	base     string // the base task's id, from the branch, the block or the body
-	baseFrom string
-	dropped  bool
+	dropped bool
 }
 
 func gather(f Facts, since time.Time) []*row {
@@ -121,30 +110,16 @@ func gather(f Facts, since time.Time) []*row {
 		// a bundle's request is every member's
 		for i, key := range members {
 			r := find(key)
-			r.prs = append(r.prs, p)
+			r.PRs = append(r.PRs, p)
 
 			if i > 0 {
-				r.lead = members[0]
+				r.Lead = members[0]
 			}
 		}
 	}
 
 	for _, r := range rows {
-		slices.SortStableFunc(r.prs, func(a, c PR) int {
-			if (a.Status == forge.Open) != (c.Status == forge.Open) {
-				if a.Status == forge.Open {
-					return -1
-				}
-
-				return 1
-			}
-
-			return c.MergedAt.Compare(a.MergedAt)
-		})
-
-		if len(r.prs) > 0 {
-			r.pr = &r.prs[0]
-		}
+		r.SetPRs(r.PRs)
 	}
 
 	if f.Local != nil {
@@ -237,12 +212,12 @@ func local(f Facts, find func(string) *row, all func() []*row) {
 	for id, c := range best {
 		r := find(id)
 		b := c.branch
-		r.branch = &b
-		r.worktree = c.worktree
+		r.Branch = &b
+		r.Worktree = c.worktree
 		r.Where.Branch = c.name
 
 		if !strings.EqualFold(c.lead, id) {
-			r.lead = c.lead
+			r.Lead = c.lead
 		}
 	}
 
@@ -253,8 +228,8 @@ func local(f Facts, find func(string) *row, all func() []*row) {
 		}
 
 		for _, r := range append([]*row{find(run.Task)}, ridersOf(all(), run.Task)...) {
-			if r.run == nil || run.Updated.After(r.run.Updated) {
-				r.run = run
+			if r.Run == nil || run.Updated.After(r.Run.Updated) {
+				r.Run = run
 			}
 		}
 	}
@@ -263,49 +238,50 @@ func local(f Facts, find func(string) *row, all func() []*row) {
 	// (a planless description) names no task
 	for id := range l.Plans {
 		if !l.Archived[id] && strings.EqualFold(ref.Match(f.Prefix, id), id) {
-			find(id).plan = true
+			find(id).Plan = true
 		}
 	}
 
 	for id, fd := range l.Findings {
 		r := find(id)
 		found := fd
-		r.findings = &found
+		r.Findings = &found
 	}
 
 	for id, v := range l.Verdicts {
-		find(id).verdict = v
+		find(id).Verdict = v
 	}
 
 	for id := range l.Finished {
 		if finishedNow(l, id) {
-			find(id).finished = true
+			r := find(id)
+			r.Finished, r.FinishedFrom = true, FinishedByLedger
 		}
 	}
 
 	for _, r := range all() {
-		if r.worktree != nil {
-			r.Where.Worktree = r.worktree.Path
+		if r.Worktree != nil {
+			r.Where.Worktree = r.Worktree.Path
 
-			if ws, ok := l.Workspaces[r.worktree.Path]; ok {
+			if ws, ok := l.Workspaces[r.Worktree.Path]; ok {
 				r.Where.Workspace = cmp.Or(ws.Label, ws.ID)
 				r.Who.AgentStatus = ws.AgentStatus
 			}
 
 			// the one agent in a bundle's worktree is named after the lead
 			if !strings.HasPrefix(r.Key, "#") {
-				r.Who.Agent = AgentFor(cmp.Or(r.lead, r.Key), r.Where.Branch, r.worktree.Path)
+				r.Who.Agent = AgentFor(cmp.Or(r.Lead, r.Key), r.Where.Branch, r.Worktree.Path)
 			}
 		}
 
-		if r.branch != nil {
-			r.Who.Model = r.branch.Model
+		if r.Branch != nil {
+			r.Who.Model = r.Branch.Model
 		}
 	}
 }
 
 func (r *row) fill() {
-	if p := r.pr; p != nil {
+	if p := r.PR; p != nil {
 		r.Where.PR = &PRRef{
 			Number: p.Number, Title: p.Title, URL: p.URL, State: p.Status, Draft: p.Draft, Head: p.Head, Base: p.Base,
 			Mergeable: p.Mergeable, Checks: p.Checks,
@@ -339,45 +315,45 @@ func (r *row) fill() {
 		r.touch(p.UpdatedAt, p.MergedAt)
 	}
 
-	if r.findings != nil {
+	if r.Findings != nil {
 		if r.Review == nil {
 			r.Review = &ReviewFacts{}
 		}
 
-		if r.findings.Round >= r.Review.Round {
-			r.Review.Round, r.Review.Open = r.findings.Round, r.findings.Open
+		if r.Findings.Round >= r.Review.Round {
+			r.Review.Round, r.Review.Open = r.Findings.Round, r.Findings.Open
 		}
 
-		r.touch(r.findings.At)
+		r.touch(r.Findings.At)
 	}
 
-	if r.run != nil {
-		r.touch(r.run.Updated)
+	if r.Run != nil {
+		r.touch(r.Run.Updated)
 	}
 
 	if r.Task != nil && r.Task.Assignee != "" {
 		r.Who.Assignees = append([]string{r.Task.Assignee}, r.Who.Assignees...)
 	}
 
-	if r.pr != nil {
-		for _, c := range r.pr.Commits {
+	if r.PR != nil {
+		for _, c := range r.PR.Commits {
 			r.commit(c.Email)
 		}
 	}
 
-	if r.worktree != nil {
-		for _, e := range r.worktree.Emails {
+	if r.Worktree != nil {
+		for _, e := range r.Worktree.Emails {
 			r.commit(e)
 		}
 	}
 
 	switch {
-	case r.branch != nil && r.branch.After != "":
-		r.base, r.baseFrom = r.branch.After, FromLocal
-	case r.pr != nil && r.pr.Block != nil && r.pr.Block.After != "":
-		r.base, r.baseFrom = r.pr.Block.After, FromTrace
+	case r.Branch != nil && r.Branch.After != "":
+		r.Base, r.BaseFrom = r.Branch.After, FromLocal
+	case r.PR != nil && r.PR.Block != nil && r.PR.Block.After != "":
+		r.Base, r.BaseFrom = r.PR.Block.After, FromTrace
 	case r.Task != nil && r.Task.After != "":
-		r.base, r.baseFrom = r.Task.After, FromGuessed
+		r.Base, r.BaseFrom = r.Task.After, FromGuessed
 	}
 }
 
@@ -448,7 +424,7 @@ func ridersOf(rows []*row, lead string) []*row {
 	var out []*row
 
 	for _, r := range rows {
-		if strings.EqualFold(r.lead, lead) {
+		if strings.EqualFold(r.Lead, lead) {
 			out = append(out, r)
 		}
 	}
@@ -465,19 +441,19 @@ func (r *row) touch(times ...time.Time) {
 	}
 }
 
-func (r *row) live() bool { return r.run != nil }
+func (r *row) live() bool { return r.Run != nil }
 
 func (r *row) running() bool {
-	return r.live() && (r.run.Ship == "running" || r.run.Plan == "running" || r.run.Capture == "running")
+	return r.live() && (r.Run.Ship == "running" || r.Run.Plan == "running" || r.Run.Capture == "running")
 }
 
 func (r *row) stopped() bool {
-	return r.live() && (state.Stopped(r.run.Ship) || state.Stopped(r.run.Plan) || state.Stopped(r.run.Capture))
+	return r.live() && (state.Stopped(r.Run.Ship) || state.Stopped(r.Run.Plan) || state.Stopped(r.Run.Capture))
 }
 
 func (r *row) tracked() bool { return r.Task != nil && !closed(r.Task.Status) }
 
-func (r *row) open() bool { return r.pr != nil && r.pr.Status == forge.Open }
+func (r *row) open() bool { return r.PR != nil && r.PR.Status == forge.Open }
 
 type counts struct {
 	Step              string
@@ -485,11 +461,11 @@ type counts struct {
 }
 
 func (r *row) block() (counts, bool) {
-	if r.pr == nil || r.pr.Block == nil {
+	if r.PR == nil || r.PR.Block == nil {
 		return counts{}, false
 	}
 
-	b := r.pr.Block
+	b := r.PR.Block
 
 	return counts{Step: b.Step, Round: b.Round, Open: b.Open, Asks: b.Asks}, true
 }
@@ -529,14 +505,14 @@ func (r *row) stage(withLocal bool, since time.Time) {
 	set := func(stage, from string) { r.Stage, r.StageFrom = stage, from }
 
 	switch {
-	case r.pr != nil && r.pr.Status == forge.Merged && !r.pr.MergedAt.Before(since):
+	case r.PR != nil && r.PR.Status == forge.Merged && !r.PR.MergedAt.Before(since):
 		// only a worktree left on disk still holds work; a branch left
 		// behind is a note on a done row
-		r.Where.BranchLeft = !r.finished && r.worktree == nil &&
-			((withLocal && r.branch != nil) || (r.pr.HeadExists != nil && *r.pr.HeadExists))
+		r.Where.BranchLeft = !r.Finished && r.Worktree == nil &&
+			((withLocal && r.Branch != nil) || (r.PR.HeadExists != nil && *r.PR.HeadExists))
 
 		switch {
-		case withLocal && r.worktree != nil && !r.finished:
+		case withLocal && r.Worktree != nil && !r.Finished:
 			set(StageMergedUnfinished, FromLocal)
 		case withLocal:
 			set(StageDone, FromLocal)
@@ -544,7 +520,7 @@ func (r *row) stage(withLocal bool, since time.Time) {
 			set(StageDone, FromGuessed)
 		}
 
-	case r.live() && r.run.Ask != "":
+	case r.live() && r.Run.Ask != "":
 		set(StageAsksWaiting, FromLocal)
 	case blockAsks(r):
 		set(StageAsksWaiting, FromTrace)
@@ -553,47 +529,47 @@ func (r *row) stage(withLocal bool, since time.Time) {
 		set(StageBlocked, FromLocal)
 	// a verdict file is never archived, so it holds only a task still
 	// open or with a request in the window
-	case (r.verdict == "rethink" || r.verdict == "stop") && !r.live() && (r.tracked() || r.pr != nil):
+	case (r.Verdict == "rethink" || r.Verdict == "stop") && !r.live() && (r.tracked() || r.PR != nil):
 		set(StageBlocked, FromLocal)
 
-	case r.open() && !r.pr.Draft && r.pr.Mergeable != forge.Conflicts && r.pr.Mergeable != forge.Blocked &&
-		r.pr.Checks != forge.Red && blockClean(r):
+	case r.open() && !r.PR.Draft && r.PR.Mergeable != forge.Conflicts && r.PR.Mergeable != forge.Blocked &&
+		r.PR.Checks != forge.Red && blockClean(r):
 		set(StageReady, FromTrace)
-	case r.open() && !r.pr.Draft && r.pr.Mergeable != forge.Conflicts && r.pr.Mergeable != forge.Blocked &&
-		r.pr.Checks != forge.Red && r.pr.Decision == forge.Approved && r.pr.Block == nil:
+	case r.open() && !r.PR.Draft && r.PR.Mergeable != forge.Conflicts && r.PR.Mergeable != forge.Blocked &&
+		r.PR.Checks != forge.Red && r.PR.Decision == forge.Approved && r.PR.Block == nil:
 		set(StageReady, FromGuessed)
 
-	case r.running() && planJudge(r.run):
+	case r.running() && planJudge(r.Run):
 		set(StagePlanned, FromLocal)
-	case r.running() && r.run.Ship == "running" && reviewStep(r.run.Leaf):
+	case r.running() && r.Run.Ship == "running" && reviewStep(r.Run.Leaf):
 		set(StageInReview, FromLocal)
-	case withLocal && r.findings != nil && r.findings.Open > 0 && r.open():
+	case withLocal && r.Findings != nil && r.Findings.Open > 0 && r.open():
 		set(StageInReview, FromLocal)
 	case blockInReview(r):
 		set(StageInReview, FromTrace)
-	case r.open() && (len(r.pr.Reviews) > 0 || len(r.pr.Reviewers) > 0 ||
-		r.pr.Decision == forge.ChangesRequested || r.pr.RemoteOpen):
+	case r.open() && (len(r.PR.Reviews) > 0 || len(r.PR.Reviewers) > 0 ||
+		r.PR.Decision == forge.ChangesRequested || r.PR.RemoteOpen):
 		set(StageInReview, FromGuessed)
 
-	case r.open() && !r.pr.Draft && r.pr.Block != nil:
+	case r.open() && !r.PR.Draft && r.PR.Block != nil:
 		set(StagePROpen, FromTrace)
-	case r.open() && !r.pr.Draft:
+	case r.open() && !r.PR.Draft:
 		set(StagePROpen, FromGuessed)
 
-	case r.running() && r.run.Ship == "running":
+	case r.running() && r.Run.Ship == "running":
 		set(StageImplementing, FromLocal)
-	case r.open() && r.pr.Draft:
+	case r.open() && r.PR.Draft:
 		set(StageImplementing, FromGuessed)
 
 	// local facts with no request behind them count for a task the
 	// tracker still lists: a worktree or a plan left behind by a task
 	// closed long ago is not work in flight
-	case r.tracked() && r.worktree != nil && r.worktree.Ahead > 0:
+	case r.tracked() && r.Worktree != nil && r.Worktree.Ahead > 0:
 		set(StageImplementing, FromLocal)
-	case r.live() && r.run.Plan == "running":
+	case r.live() && r.Run.Plan == "running":
 		set(StagePlanning, FromLocal)
 	// a worktree with nothing ahead is a started task with no code yet
-	case r.tracked() && (r.plan || r.worktree != nil):
+	case r.tracked() && (r.Plan || r.Worktree != nil):
 		set(StagePlanned, FromLocal)
 
 	case r.Task != nil && !closed(r.Task.Status):
@@ -635,42 +611,27 @@ func closed(status string) bool {
 // row is not merged is blocked, unless a run is working on it or it is
 // already past the point a base can hold it (done, merged, asking).
 func settleBases(rows []*row) {
-	index := map[string]*row{}
-	for _, r := range rows {
-		index[strings.ToUpper(r.Key)] = r
+	keys := make([]string, len(rows))
+	for i, r := range rows {
+		keys[i] = r.Key
 	}
 
-	done := map[*row]bool{}
-
-	var settle func(r *row, path map[*row]bool)
-
-	settle = func(r *row, path map[*row]bool) {
-		if done[r] || path[r] {
+	SettleBases(keys, func(i int) string { return rows[i].Base }, func(i, b int) {
+		if b < 0 {
 			return
 		}
 
-		path[r] = true
+		r, base := rows[i], rows[b]
 
-		base, ok := index[strings.ToUpper(r.base)]
-		if r.base != "" && ok && base != r {
-			settle(base, path)
+		// merging releases a dependent; the base's leftover worktree or
+		// branch is its own chore
+		holds := !base.dropped && base.Stage != StageDone && base.Stage != StageMergedUnfinished
 
-			// merging releases a dependent; the base's leftover worktree
-			// or branch is its own chore
-			holds := !base.dropped && base.Stage != StageDone && base.Stage != StageMergedUnfinished
-
-			if holds && !r.running() && !r.dropped && !earlyStage(r.Stage) {
-				r.Stage, r.StageFrom = StageBlocked, r.baseFrom
-				r.BlockedBy = []string{base.Key}
-			}
+		if holds && !r.running() && !r.dropped && !earlyStage(r.Stage) {
+			r.Stage, r.StageFrom = StageBlocked, r.BaseFrom
+			r.BlockedBy = []string{base.Key}
 		}
-
-		done[r] = true
-	}
-
-	for _, r := range rows {
-		settle(r, map[*row]bool{})
-	}
+	})
 }
 
 // earlyStage is a stage the base rule never overrides: the rules before it.

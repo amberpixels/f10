@@ -385,37 +385,39 @@ func rowURL(r lookaround.Row) string {
 	return ""
 }
 
-// stageStyle is the badge's palette on the board's stages: done green,
-// halted or asking red, implementing yellow, reviewing orange-ish
-// (magenta here, the nearest ANSI), planning blue, next dim.
+// stageStyle is the one palette on both stage vocabularies, status's and
+// the board's, by how much a stage needs you: done green, asking, halted or
+// blocked red, implementing yellow, reviewing orange, planning blue, idle dim.
 func stageStyle(stage string) lipgloss.Style {
 	s := lipgloss.NewStyle()
 
 	switch stage {
-	case lookaround.StageDone, lookaround.GroupFinished:
+	case stageDone, lookaround.GroupFinished:
 		return s.Foreground(lipgloss.Color("2"))
+	case stageShipped:
+		return s.Faint(true).Foreground(lipgloss.Color("2"))
+	case lookaround.StageReady:
+		return s.Bold(true).Foreground(lipgloss.Color("2"))
+	case stageAsking, stageHalted, lookaround.StageAsksWaiting, lookaround.StageBlocked:
+		return s.Bold(true).Foreground(lipgloss.Color("1"))
+	case "abandoned":
+		return s.Foreground(lipgloss.Color("1"))
+	case stageImplementing:
+		return s.Foreground(lipgloss.Color("3"))
+	case stageReviewing, stageResolving, lookaround.StageInReview, lookaround.StagePROpen:
+		return s.Foreground(lipgloss.Color("208"))
+	case stagePlanning, stageJudging:
+		return s.Foreground(lipgloss.Color("4"))
+	case stagePlanned:
+		return s.Faint(true).Foreground(lipgloss.Color("4"))
+	case lookaround.StageMergedUnfinished:
+		return s.Bold(true).Foreground(lipgloss.Color("6"))
 	case lookaround.GroupStarted:
 		return s.Bold(true).Foreground(lipgloss.Color("4"))
 	case lookaround.GroupUpdated:
 		return s.Bold(true).Foreground(lipgloss.Color("3"))
 	case lookaround.GroupReviewed:
 		return s.Bold(true).Foreground(lipgloss.Color("5"))
-	case "abandoned":
-		return s.Foreground(lipgloss.Color("1"))
-	case lookaround.StageReady:
-		return s.Bold(true).Foreground(lipgloss.Color("2"))
-	case lookaround.StageAsksWaiting, lookaround.StageBlocked:
-		return s.Bold(true).Foreground(lipgloss.Color("1"))
-	case lookaround.StageImplementing:
-		return s.Bold(true).Foreground(lipgloss.Color("3"))
-	case lookaround.StageInReview, lookaround.StagePROpen:
-		return s.Bold(true).Foreground(lipgloss.Color("5"))
-	case lookaround.StagePlanning:
-		return s.Bold(true).Foreground(lipgloss.Color("4"))
-	case lookaround.StagePlanned:
-		return s.Foreground(lipgloss.Color("4"))
-	case lookaround.StageMergedUnfinished:
-		return s.Bold(true).Foreground(lipgloss.Color("6"))
 	default:
 		return s.Faint(true)
 	}

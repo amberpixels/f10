@@ -11,15 +11,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
@@ -61,51 +62,33 @@ type taskRow struct {
 	full bool // a finished task alone: every gate on a line of its own
 }
 
-// rowFacts is what a row's stage is decided from: the task's run, live in
-// its worktree or as the ledger last recorded it, and the durable facts.
-type rowFacts struct {
-	run      *state.Run
-	finished bool // finish ran, the tracker closed it, or its plan is archived
-	merged   bool
-	halt     *ledgerHalt // a halt drive recorded after the run's last claim
-	after    string
-	baseDone bool
-	queued   bool   // its drive's cap holds it back
-	phase    string // where its running drive says it stands, a drives.Phase name
-	driven   bool   // a running drive lists it
-}
-
-type ledgerHalt struct {
-	skill, reason string
-	at            time.Time
-}
-
-// stageOf is the one mapping from a task's facts to its stage and step.
-func stageOf(f rowFacts) (string, string) {
-	r := f.run
+// stageOf is the one mapping from a task's facts to its stage and step;
+// baseDone says the base the task waits on is done.
+func stageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
+	r := f.Run
 
 	switch {
-	case f.finished || f.merged:
+	case f.Finished || f.PR != nil && f.PR.Status == forge.Merged:
 		return stageDone, "finish"
 	case r != nil && r.Ask != "":
 		return stageAsking, cmp.Or(r.LeafShown(), r.Furthest())
-	case f.halt != nil:
-		return stageHalted, f.halt.skill
+	case f.Halt != nil:
+		return stageHalted, f.Halt.Skill
 	case r != nil && r.Wait != "" && stoppedRun(r):
 		return stageWaiting, "on " + r.Wait
 	case r != nil && stoppedRun(r):
 		return stageHalted, cmp.Or(r.LeafShown(), r.Furthest())
-	case f.phase == drives.PhaseParked:
-		return stageWaiting, "on " + cmp.Or(f.after, "its base")
-	case f.phase == drives.PhaseWaiting:
-		return stageWaiting, "to finish after " + cmp.Or(f.after, "its base")
-	case r == nil && f.queued:
+	case f.DrivePhase == drives.PhaseParked:
+		return stageWaiting, "on " + cmp.Or(f.Base, "its base")
+	case f.DrivePhase == drives.PhaseWaiting:
+		return stageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
+	case r == nil && f.Queued:
 		return stageQueued, ""
-	case r == nil && f.after != "" && !f.baseDone && f.driven:
-		return stageWaiting, "after " + f.after
-	case r == nil && f.after != "" && !f.baseDone:
+	case r == nil && f.Base != "" && !baseDone && f.Driven:
+		return stageWaiting, "after " + f.Base
+	case r == nil && f.Base != "" && !baseDone:
 		// only a drive holds a task for its base; nothing holds this one yet
-		return stageNotStarted, "after " + f.after
+		return stageNotStarted, "after " + f.Base
 	case r == nil:
 		return stageNotStarted, ""
 	}
@@ -136,15 +119,6 @@ func stageOf(f rowFacts) (string, string) {
 	return stageNotStarted, ""
 }
 
-// ledgerTask is what the ledger holds about one task.
-type ledgerTask struct {
-	claim    *state.Run
-	finished bool
-	pr       string
-	pushed   bool // a push on the task: its PR may exist though no pr_opened says so
-	halt     *ledgerHalt
-}
-
 // readLedger reads the project's events once. A ledger that is missing or
 // will not open has nothing to say: status only reads.
 func readLedger(ctx context.Context, main string) []ledger.Event {
@@ -153,53 +127,13 @@ func readLedger(ctx context.Context, main string) []ledger.Event {
 	return events
 }
 
-// ledgerFor folds the task's events, oldest first, into its last claim,
-// whether finish ran on it, its PR and the halt drive saw after the claim.
-// resolve turns finish's argument as typed (`117`, a url) into an id.
-func ledgerFor(events []ledger.Event, id string, resolve func(string) string) ledgerTask {
-	var lt ledgerTask
-
-	for _, e := range events {
-		p := e.Payload.Val
-
-		switch {
-		case e.Kind == ledger.TaskFinished:
-			// finish runs from the main checkout, whose session may be on
-			// another task: the id it was given decides
-			if strings.EqualFold(resolve(e.FinishedTask()), id) {
-				lt.finished = true
-			}
-		case !onTask(e, id):
-		case strings.HasPrefix(e.Kind, "state_"):
-			lt.claim = claimRun(e)
-			if lt.halt != nil && !lt.halt.at.After(e.At) {
-				lt.halt = nil
-			}
-		case e.Kind == ledger.PROpened:
-			lt.pr = cmp.Or(p.String("url"), lt.pr)
-		case e.Kind == ledger.Pushed:
-			lt.pushed = true
-		case e.Kind == ledger.TaskHalted:
-			lt.halt = &ledgerHalt{skill: e.Skill(), reason: e.Reason(), at: e.At}
-		}
-	}
-
-	return lt
-}
-
-// claimRun reads a recorded `f10 state` call back as the run it left, minus
-// its wait and done: status reads those from a live run only.
-func claimRun(e ledger.Event) *state.Run {
-	r := ledger.DecodeClaim(e).Run
-	r.Wait, r.Done = "", ""
-
-	return &r
-}
-
 // rowSource is what gathering rows reads from, bound once per status call.
 type rowSource struct {
-	live   []*state.Run
-	events []ledger.Event
+	live    []*state.Run
+	events  []ledger.Event
+	main    string       // where the branch records live
+	storage storage.Root // where a live plan says a finished task came back
+	prefix  string       // the task id prefix requests are matched by
 	// checkout is the task's branch and the checkout holding it, "" for none
 	checkout func(ctx context.Context, id, suffix string) (string, string)
 	// resolve is a reference as typed, in the project's id format; nil
@@ -210,6 +144,8 @@ type rowSource struct {
 	driven map[string]bool
 	// gates reads a task's gates; nil reads none
 	gates func(ctx context.Context, id, branch, root string, run *state.Run) []gate
+	// requests is every child's requests by upper-cased id, read once
+	requests map[string][]lookaround.PR
 }
 
 // idOf is token as an id. An empty token, a finish run with no argument
@@ -223,16 +159,17 @@ func (src rowSource) idOf(token string) string {
 	return src.resolve(token)
 }
 
-// rowsFrom builds a row per child, the reads for each running beside the
-// others', then decides the stages in tree order so a base's stage is
-// known before its dependents'.
+// rowsFrom builds a row per child from one host read of every child's
+// requests, the local reads for each running beside the others', then
+// decides the stages with each base's before its dependents'.
 func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
-	facts := make([]rowFacts, len(kids))
+	facts := make([]lookaround.TaskFacts, len(kids))
 	rows := make([]taskRow, len(kids))
+	src.requests = src.readRequests(ctx, kids)
 
 	var wg sync.WaitGroup
 
-	sem := make(chan struct{}, 4) // each row shells out to git and the host
+	sem := make(chan struct{}, 4) // each row shells out to git
 
 	for i, k := range kids {
 		wg.Go(func() {
@@ -245,29 +182,59 @@ func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
 
 	wg.Wait()
 
-	done := map[string]bool{}
-
-	for i := range rows {
-		facts[i].baseDone = done[facts[i].after]
-		rows[i].finish(facts[i])
-		done[rows[i].ID] = rows[i].Stage == stageDone
+	ids := make([]string, len(kids))
+	for i, k := range kids {
+		ids[i] = k.ID
 	}
+
+	lookaround.SettleBases(ids, func(i int) string { return facts[i].Base }, func(i, b int) {
+		rows[i].finish(facts[i], b >= 0 && rows[b].Stage == stageDone)
+	})
 
 	return rows
 }
 
-// gather reads one task's sources: the live run in its checkout, else the
-// ledger's last claim, then the PR by branch or by the url the ledger kept.
-func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts) {
-	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
-	f := rowFacts{
-		finished: k.Finished,
-		after:    k.After,
-		queued:   k.queued,
-		phase:    k.phase,
-		driven:   src.driven[strings.ToUpper(k.ID)],
+// readRequests is every child's requests by upper-cased id, one host query
+// for all of them. A failed read leaves each row to the url the ledger kept.
+func (src rowSource) readRequests(ctx context.Context, kids []childRow) map[string][]lookaround.PR {
+	if src.host == nil || len(kids) == 0 {
+		return nil
 	}
-	lt := ledgerFor(src.events, k.ID, src.idOf)
+
+	ids := make([]string, 0, len(kids))
+	for _, k := range kids {
+		if !slices.ContainsFunc(ids, func(id string) bool { return strings.EqualFold(id, k.ID) }) {
+			ids = append(ids, k.ID)
+		}
+	}
+
+	found, err := lookaround.TaskRequests(ctx, &src.host.Host, src.prefix, ids)
+	if err != nil {
+		return nil
+	}
+
+	out := make(map[string][]lookaround.PR, len(found))
+	for id, prs := range found {
+		out[strings.ToUpper(id)] = prs
+	}
+
+	return out
+}
+
+// gather reads one task's facts: the live run in its checkout, else the
+// ledger's last claim, the requests naming it (its branch's where it has
+// one), and the base its branch records, else the tracker's.
+func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, lookaround.TaskFacts) {
+	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
+	f := lookaround.TaskFacts{
+		Queued:     k.queued,
+		DrivePhase: k.phase,
+		Driven:     src.driven[strings.ToUpper(k.ID)],
+	}
+
+	if k.Finished {
+		f.Finished, f.FinishedFrom = true, lookaround.FinishedByTracker
+	}
 
 	branch, root := "", ""
 	if src.checkout != nil {
@@ -276,43 +243,57 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, rowFacts)
 
 	if root != "" {
 		if own, _ := taskRuns(inRoot(src.live, root), k.ID); len(own) > 0 {
-			f.run = own[0] // state.List sorts newest first
+			f.Run = own[0] // state.List sorts newest first
 		}
 	}
 
-	if f.run == nil {
-		f.run = lt.claim
+	f.AddLedger(lookaround.FoldLedger(src.events, k.ID, src.idOf), src.storage.PlanLive(k.ID))
+
+	// another row may share the id's requests, so they are sorted as a copy;
+	// a task with a branch reads that branch's requests only, since an older
+	// merged request on another head says nothing about the work in it
+	prs := slices.Clone(src.requests[strings.ToUpper(k.ID)])
+	if branch != "" {
+		prs = slices.DeleteFunc(prs, func(p lookaround.PR) bool { return p.Head != branch })
 	}
 
-	f.finished = f.finished || lt.finished
+	f.SetPRs(prs)
 
-	if lt.halt != nil && (f.run == nil || lt.halt.at.After(f.run.Updated)) {
-		f.halt = lt.halt
-	}
+	// the search is capped and lags a new request, so a branch the search
+	// missed is read exactly; a request no id names, by the url the ledger kept
+	for _, at := range []string{branch, f.PRURL} {
+		if f.PR != nil || at == "" || src.host == nil {
+			continue
+		}
 
-	// gh and glab take a branch or a request's url alike
-	if at := cmp.Or(branch, lt.pr); at != "" && src.host != nil {
 		if p, err := src.host.PR(ctx, at); err == nil {
-			row.PR, row.PRState = p.URL, p.Status
+			f.SetPRs([]lookaround.PR{{PR: p}})
 		}
 	}
 
-	if row.PR == "" {
-		row.PR = lt.pr
+	if f.PR != nil {
+		row.PR, row.PRState = f.PR.URL, f.PR.Status
+	} else {
+		row.PR = f.PRURL
 	}
 
-	f.merged = row.PRState == "merged"
+	f.Base, f.BaseFrom = k.After, lookaround.FromGuessed
+	if branch != "" {
+		if after := branchAfter(ctx, src.main, branch); after != "" {
+			f.Base, f.BaseFrom = after, lookaround.FromLocal
+		}
+	}
 
 	if src.gates != nil {
-		row.Gates = src.gates(ctx, k.ID, branch, root, f.run)
+		row.Gates = src.gates(ctx, k.ID, branch, root, f.Run)
 	}
 
 	return row, f
 }
 
 // finish settles the row's stage and the lines printed under it.
-func (row *taskRow) finish(f rowFacts) {
-	row.Stage, row.Step = stageOf(f)
+func (row *taskRow) finish(f lookaround.TaskFacts, baseDone bool) {
+	row.Stage, row.Step = stageOf(f, baseDone)
 
 	// a shipped task whose finish drive holds says so where the step goes
 	if row.Stage == stageShipped {
@@ -325,37 +306,13 @@ func (row *taskRow) finish(f rowFacts) {
 
 	switch row.Stage {
 	case stageAsking:
-		row.Ask = f.run.Ask
+		row.Ask = f.Run.Ask
 	case stageHalted:
-		if f.halt != nil {
-			row.Note = f.halt.reason
+		if f.Halt != nil {
+			row.Note = f.Halt.Reason
 		} else {
-			row.Note, row.Next = f.run.Note, f.run.Next
+			row.Note, row.Next = f.Run.Note, f.Run.Next
 		}
-	}
-}
-
-// rowStageStyle colors a stage by how much it needs you.
-func rowStageStyle(stage string) lipgloss.Style {
-	s := lipgloss.NewStyle()
-
-	switch stage {
-	case stageDone:
-		return s.Foreground(lipgloss.Color("2"))
-	case stageShipped:
-		return s.Faint(true).Foreground(lipgloss.Color("2"))
-	case stageAsking, stageHalted:
-		return s.Bold(true).Foreground(lipgloss.Color("1"))
-	case stageImplementing:
-		return s.Foreground(lipgloss.Color("3"))
-	case stageReviewing, stageResolving:
-		return s.Foreground(lipgloss.Color("208"))
-	case stagePlanning, stageJudging:
-		return s.Foreground(lipgloss.Color("4"))
-	case stagePlanned:
-		return s.Faint(true).Foreground(lipgloss.Color("4"))
-	default:
-		return s.Faint(true)
 	}
 }
 
@@ -431,7 +388,7 @@ func (row *taskRow) cells(v rowView, withGates bool, faint lipgloss.Style) ([]ta
 	cells = append(cells, tasktree.Cell{Text: prColumn(*row)})
 
 	if v.term {
-		stage, pr := rowStageStyle(row.Stage), row.PR
+		stage, pr := stageStyle(row.Stage), row.PR
 
 		cells[0].Render = func(s string) string { return stage.Render(s) }
 		cells[1].Render = func(s string) string { return faint.Render(s) }
@@ -574,10 +531,10 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *taskRow {
 	tr := rd.t.tracker()
 	info, _ := tr.info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
-	lt := ledgerFor(rd.ledger(ctx), r.ID, rd.idOf(ctx))
+	lt := lookaround.FoldLedger(rd.ledger(ctx), r.ID, rd.idOf(ctx))
 
 	// a ledger finish counts only while no live plan says the task came back
-	if !finishedTask(info, tr.storage, r.ID, false) && (!lt.finished || tr.storage.PlanLive(r.ID)) {
+	if !finishedTask(info, tr.storage, r.ID, false) && (!lt.Finished || tr.storage.PlanLive(r.ID)) {
 		return nil
 	}
 
