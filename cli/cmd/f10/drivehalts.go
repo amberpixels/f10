@@ -3,15 +3,14 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -124,17 +123,6 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 	ledger.Record(e)
 }
 
-// blockedRun reports a phase of run stopped blocked: a decision, never breakage.
-func blockedRun(run *state.Run) bool {
-	return slices.ContainsFunc(state.Phases, func(p string) bool { return run.Status(p) == "blocked" })
-}
-
-// guardStop reports the stop ship's catchup guard left, by the kind it
-// recorded: failed or partial, marked as the guard's.
-func guardStop(run *state.Run) bool {
-	return run.Stop == state.StopGuard && (run.Ship == "failed" || run.Ship == "partial")
-}
-
 // baseHead is the base branch's head, "none" for no branch, or why git
 // could not read it.
 func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string) {
@@ -146,18 +134,34 @@ func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string
 	return cmp.Or(head, "none"), ""
 }
 
-// awaitsDecision is a stop a catchup must not run over: a question or a
-// blocked decision, not one a catchup leaves in place (heldStop).
-func awaitsDecision(run *state.Run) bool {
-	return run != nil && stoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
+// A taskEnd is a task's end returned up its path instead of applied where it
+// was found; onTask, at each per-task entry of the tick, applies it.
+type taskEnd struct{ res driveResult }
+
+func (e *taskEnd) Error() string { return e.res.row + ": " + e.res.reason }
+
+func endWith(res driveResult) error { return &taskEnd{res: res} }
+
+// halt ends the task halted at skill for reason.
+func halt(id, skill, reason string) error { return endWith(halted(id, skill, reason)) }
+
+// endOf is the end err carries, if it is one.
+func endOf(err error) (driveResult, bool) {
+	var e *taskEnd
+	if errors.As(err, &e) {
+		return e.res, true
+	}
+
+	return driveResult{}, false
 }
 
-// heldStop is a ship stop a catchup leaves in place: the guard's, or a
-// ship parked on its base, which resumes once the catchup ends clean.
-func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
+// onTask applies an end r's path returned; any other error goes on up.
+func (in *driveInput) onTask(ctx context.Context, w io.Writer, r *driveRun, err error) error {
+	if res, ok := endOf(err); ok {
+		in.end(ctx, w, r, res)
 
-func stoppedRun(r *state.Run) bool {
-	_, stopped := r.StoppedPhase()
+		return nil
+	}
 
-	return stopped
+	return err
 }

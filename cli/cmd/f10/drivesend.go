@@ -4,14 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -87,9 +84,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 				return in.prompt(ctx, w, r, ws, skill, at)
 			}
 
-			in.end(ctx, w, r, in.verdict(r.task, skill, run))
-
-			return nil
+			return endWith(in.verdict(r.task, skill, run))
 		}
 
 		// closed before the prompt, so the pane hook does not read the
@@ -106,11 +101,9 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		// the agent got there before a drive that stopped could see it
 		fmt.Fprintf(w, "%s %s: already done\n", in.id(id), skill)
 
-		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
-			return fmt.Errorf("recording %s done: %w", skill, err)
+		if err := in.advance(ctx, r, skill); err != nil {
+			return err
 		}
-
-		r.pos++
 
 		return in.next(ctx, w, r)
 	default:
@@ -135,11 +128,8 @@ func (in *driveInput) prompt(
 
 	// an idle agent on a run still running waits on something in its pane,
 	// a permission dialog among others: text typed there could answer it
-	fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
-		in.end(ctx, w, r, halted(id, skill, err.Error()))
-
-		return nil
+	if err := refuseStalled(in.stallCheck(r), ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
+		return halt(id, skill, err.Error())
 	}
 
 	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, r.finishes), steering)
@@ -180,50 +170,6 @@ func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) 
 	if note := retryEnter(ctx, agents(r.o.path), r.typedTo, r.typed); note != "" {
 		fmt.Fprintf(w, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
 	}
-}
-
-// resumeAt is the steering that resumes a ship the catchup guard stopped,
-// or one parked on its base, naming its place when the flow names the entry
-// twice; a failed catchup keeps the place of the entry it guarded, which is
-// where ship resumes.
-func resumeAt(skill string, run *state.Run) string {
-	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
-		return ""
-	}
-
-	entry := run.Leaf
-
-	switch {
-	case run.Wait != "":
-		// a ship parked on its base resumes at the entry that found it empty
-	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
-		entry = run.Pipeline[run.At-1]
-	case !strings.Contains(run.Next, "/f10:catchup"):
-		return ""
-	}
-
-	step := flow.Parse(entry).Step
-	if !slices.Contains(flow.Guarded, step) || !slices.Contains(run.Pipeline, entry) {
-		return ""
-	}
-
-	s := "resume at " + entry
-	twice := slices.Contains(run.Pipeline[slices.Index(run.Pipeline, entry)+1:], entry)
-	if run.At > 0 && twice {
-		s += fmt.Sprintf(" (entry %d)", run.At)
-	}
-
-	return s
-}
-
-// resumeShown is resumeAt's steering as a person reads it: the resumed
-// entry by its label, when the flow gives it one.
-func resumeShown(run *state.Run, at string) string {
-	if label := run.LabelAt(run.At); label != "" {
-		return "resume at " + label
-	}
-
-	return at
 }
 
 // steered puts steering after the skill's subject, before any chained

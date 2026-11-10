@@ -164,7 +164,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 				continue
 			}
 
-			if err := in.poll(ctx, w, r, wss, live); err != nil {
+			if err := in.onTask(ctx, w, r, in.poll(ctx, w, r, wss, live)); err != nil {
 				return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 			}
 		}
@@ -295,11 +295,15 @@ func (in *driveInput) startRunnable(
 
 		in.unqueue(r)
 
-		if err := in.open(ctx, w, r); err != nil {
+		if err := in.onTask(ctx, w, r, in.open(ctx, w, r)); err != nil {
 			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 		}
 
-		if err := in.next(ctx, w, r); err != nil {
+		if r.end != nil {
+			continue
+		}
+
+		if err := in.onTask(ctx, w, r, in.next(ctx, w, r)); err != nil {
 			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 		}
 	}

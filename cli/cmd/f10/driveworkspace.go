@@ -69,3 +69,9 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 
 	return nil, nil
 }
+
+// stallCheck reads r's run state as of its last send, ignoring runs from
+// before the drive opened the task.
+func (in *driveInput) stallCheck(r *driveRun) stallCheck {
+	return stallCheck{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
+}

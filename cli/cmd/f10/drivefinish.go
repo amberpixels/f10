@@ -17,36 +17,28 @@ import (
 // A pushed branch is tried as origin's copy against origin's default branch,
 // since the host merges that; one origin lacks against the local default,
 // since finish merges it here.
-func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
+func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun) error {
 	id, branch := r.task.ref.ID, r.o.branch
 
 	def, err := localDefault(ctx, in.main)
 	if err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	pushed, err := gitx.Ref(ctx, r.o.path, "origin/"+branch)
 	if err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	base, head := "origin/"+def, pushed
 
 	if pushed == "" {
 		if base, err = landingBase(ctx, in.main, def); err != nil {
-			res := halted(id, "finish", err.Error())
-
-			return &res
+			return halt(id, "finish", err.Error())
 		}
 
 		head = "refs/heads/" + branch
@@ -56,9 +48,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	// "not an ancestor" would pick the lease and rewrite origin's branch
 	clean, err := gitx.MergesCleanly(ctx, r.o.path, base, head)
 	if err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	if clean {
@@ -68,9 +58,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	caughtUp := false
 	if pushed != "" {
 		if caughtUp, err = gitx.IsAncestor(ctx, r.o.path, base, "HEAD"); err != nil {
-			res := halted(id, "finish", err.Error())
-
-			return &res
+			return halt(id, "finish", err.Error())
 		}
 	}
 
@@ -78,9 +66,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	// catchup left and what the push would send, so HEAD is what is tried
 	if !caughtUp && pushed != "" && r.lastCatchup != nil {
 		if caughtUp, err = gitx.MergesCleanly(ctx, r.o.path, base, "HEAD"); err != nil {
-			res := halted(id, "finish", err.Error())
-
-			return &res
+			return halt(id, "finish", err.Error())
 		}
 	}
 
@@ -88,14 +74,12 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 		return in.pushAfterCatchup(ctx, w, r, "finish", base)
 	}
 
-	if res := in.conflictAttempt(ctx, w, r, "finish", branchmeta.Landed); res != nil {
-		return res
+	if err := in.conflictAttempt(ctx, w, r, "finish", branchmeta.Landed); err != nil {
+		return err
 	}
 
 	if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Landed, def); err != nil {
-		res := halted(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
-
-		return &res
+		return halt(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
 	}
 
 	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)

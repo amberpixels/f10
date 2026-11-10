@@ -263,7 +263,12 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 	var out bytes.Buffer
 
 	attempt := func(fp string) *driveResult {
-		return in.attemptAt(&out, r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main"))
+		res, ok := endOf(in.attemptAt(&out, r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")))
+		if !ok {
+			return nil
+		}
+
+		return &res
 	}
 
 	same := drives.Fingerprint("m1", "a.go", "")

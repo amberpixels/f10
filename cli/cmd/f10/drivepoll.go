@@ -12,23 +12,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// phaseRunning reports run's plan or ship phase still running: the two
-// phases a turn owns, so the turn has not reported its end.
-func phaseRunning(run *state.Run, phase string) bool {
-	return (phase == "plan" || phase == "ship") && run != nil && run.Status(phase) == "running"
-}
-
-// unreported reports a turn whose end the run has not told. A catchup is
-// done only by a signal written after the prompt: both times are whole
-// seconds, and no catchup reports within the second it was sent.
-func unreported(run *state.Run, skill string, since time.Time) bool {
-	if skill != "catchup" {
-		return phaseRunning(run, skill)
-	}
-
-	return run == nil || run.Done != "catchup" || !run.DoneAt.After(since)
-}
-
 // stalled is an agent idle for grace with its turn's end unreported, once
 // the Stop hook had time; drive and the watcher read a stall the same way.
 // Background work launched at bg keeps it working: Herdr shows an agent idle
@@ -71,18 +54,6 @@ func idleWhile(run *state.Run, skill string) string {
 	}
 
 	return "while its run says " + skill + " " + run.PhaseText(skill)
-}
-
-// phaseDone reports a run past skill: plan and ship own a phase, which
-// reads done, or prior for a plan an earlier run wrote.
-func phaseDone(run *state.Run, skill string) bool {
-	if skill != "plan" && skill != "ship" {
-		return false
-	}
-
-	s := run.Status(skill)
-
-	return s == "done" || s == "prior"
 }
 
 // poll reads one task's turn. Herdr's `done` lasts from the previous turn,
@@ -140,8 +111,8 @@ func (in *driveInput) poll(
 	default:
 		// Herdr shows no agent yet: the start window bounds this wait too
 		if !r.begun && now.Sub(r.sentAt) > startWindow {
-			in.end(ctx, w, r, halted(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
-				"check its pane, then rerun this drive", workspaceName(ws), startWindow)))
+			return halt(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
+				"check its pane, then rerun this drive", workspaceName(ws), startWindow))
 		}
 
 		return nil
@@ -190,10 +161,8 @@ func (in *driveInput) poll(
 		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
 			// the stop the guard leaves names the catchup ship resumes from; a
 			// mark on a ship that failed elsewhere is the watcher's, not the guard's
-			if res := in.guardAgain(ctx, w, r); res != nil {
-				in.end(ctx, w, r, *res)
-
-				return nil
+			if err := in.guardAgain(ctx, w, r); err != nil {
+				return err
 			}
 
 			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
@@ -202,9 +171,7 @@ func (in *driveInput) poll(
 		case run.Ask != "" || blockedRun(run):
 			// blocked is a decision, a judge's stop or a stale task's verdict:
 			// sending the skill again would roll it again
-			in.end(ctx, w, r, in.verdict(r.task, skill, run))
-
-			return nil
+			return endWith(in.verdict(r.task, skill, run))
 		default:
 			// the run may be a turn the drive did not send, as a ship typed by
 			// hand while it followed plan: the branch says how far it got
@@ -246,12 +213,9 @@ func (in *driveInput) poll(
 		return in.catchupSettled(ctx, w, r, true)
 	}
 
-	if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
-		return fmt.Errorf("recording %s done: %w", skill, err)
+	if err := in.advance(ctx, r, skill); err != nil {
+		return err
 	}
-
-	in.clearAttempts(r)
-	r.pos++
 
 	return in.next(ctx, w, r)
 }
@@ -259,7 +223,7 @@ func (in *driveInput) poll(
 // guardAgain halts a ship whose guard conflicted the same way three times
 // after the drive's catchups, or nil to catch up again; a mark git cannot
 // read is left to next, which halts.
-func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
+func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) error {
 	key, err := in.mark(ctx, r)
 	if err != nil || key == "" {
 		return nil

@@ -222,9 +222,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	spike, err := in.spikeDone(ctx, r)
 	if err != nil {
-		in.end(ctx, w, r, halted(r.task.ref.ID, "finish", err.Error()))
-
-		return nil
+		return halt(r.task.ref.ID, "finish", err.Error())
 	}
 
 	if spike && !r.finishes {
@@ -233,17 +231,13 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	skills := in.skills(r)
 	if r.pos >= len(skills) {
-		in.end(ctx, w, r, driveResult{row: "done: " + strings.Join(skills, " ")})
-
-		return nil
+		return endWith(driveResult{row: "done: " + strings.Join(skills, " ")})
 	}
 
 	skill := skills[r.pos]
 
 	if b := r.base; b != nil && b.end != nil && b.end.code == ui.ExitHalted {
-		in.end(ctx, w, r, baseHalted(r, skill))
-
-		return nil
+		return endWith(baseHalted(r, skill))
 	}
 
 	// a drive resumed onto a ship stopped before pr waits for origin, not code
@@ -289,36 +283,28 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	// a spike merges nothing, so it needs no catchup and no clean merge
 	if skill == "finish" && spike {
-		in.end(ctx, w, r, in.runFinish(ctx, w, r))
-
-		return nil
+		return endWith(in.runFinish(ctx, w, r))
 	}
 
 	// finish tries the merge itself and catches up only a conflict, under
 	// the progress rule, so a clean PR merges as it stands
 	if skill != "finish" {
 		if err := in.markBehind(ctx, w, r); err != nil {
-			in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
-
-			return nil
+			return halt(r.task.ref.ID, skill, err.Error())
 		}
 	}
 
 	key, err := in.mark(ctx, r)
 	if err == nil && skill == "finish" && key == "" {
-		if res := in.readyToMerge(ctx, w, r); res != nil {
-			in.end(ctx, w, r, *res)
-
-			return nil
+		if err := in.readyToMerge(ctx, w, r); err != nil {
+			return err
 		}
 
 		key, err = in.mark(ctx, r)
 	}
 
 	if err != nil {
-		in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
-
-		return nil
+		return halt(r.task.ref.ID, skill, err.Error())
 	}
 
 	switch {
@@ -326,14 +312,10 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		skill = "catchup"
 
 		if err := in.recordCatchup(ctx, r, key); err != nil {
-			in.end(ctx, w, r, halted(r.task.ref.ID, skill, err.Error()))
-
-			return nil
+			return halt(r.task.ref.ID, skill, err.Error())
 		}
 	case skill == "finish":
-		in.end(ctx, w, r, in.runFinish(ctx, w, r))
-
-		return nil
+		return endWith(in.runFinish(ctx, w, r))
 	}
 
 	return in.send(ctx, w, r, skill)
@@ -394,16 +376,12 @@ func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *s
 	}
 
 	if b == nil || b.through() {
-		in.end(ctx, w, r, in.verdict(r.task, r.skill, run))
-
-		return nil
+		return endWith(in.verdict(r.task, r.skill, run))
 	}
 
 	head, why := in.baseHead(ctx, b)
 	if why != "" {
-		in.end(ctx, w, r, halted(r.task.ref.ID, r.skill, why))
-
-		return nil
+		return halt(r.task.ref.ID, r.skill, why)
 	}
 
 	if head != r.waitHead && in.released(ctx, b) {
