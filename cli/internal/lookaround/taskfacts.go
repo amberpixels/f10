@@ -102,13 +102,14 @@ func ClaimRun(e ledger.Event) *state.Run {
 }
 
 // AddLedger takes what the ledger adds to the record: the claim where no live
-// run is, a finish, the request url, and a halt newer than the run.
-func (tf *TaskFacts) AddLedger(lt LedgerTask) {
+// run is, a finish, the request url, and a halt newer than the run. A finish
+// counts only while planLive is false: a live plan means the task came back.
+func (tf *TaskFacts) AddLedger(lt LedgerTask, planLive bool) {
 	if tf.Run == nil {
 		tf.Run = lt.Claim
 	}
 
-	if lt.Finished && !tf.Finished {
+	if lt.Finished && !planLive && !tf.Finished {
 		tf.Finished, tf.FinishedFrom = true, FinishedByLedger
 	}
 

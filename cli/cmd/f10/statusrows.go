@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
@@ -124,10 +125,11 @@ func readLedger(ctx context.Context, main string) []ledger.Event {
 
 // rowSource is what gathering rows reads from, bound once per status call.
 type rowSource struct {
-	live   []*state.Run
-	events []ledger.Event
-	main   string // where the branch records live
-	prefix string // the task id prefix requests are matched by
+	live    []*state.Run
+	events  []ledger.Event
+	main    string       // where the branch records live
+	storage storage.Root // where a live plan says a finished task came back
+	prefix  string       // the task id prefix requests are matched by
 	// checkout is the task's branch and the checkout holding it, "" for none
 	checkout func(ctx context.Context, id, suffix string) (string, string)
 	// resolve is a reference as typed, in the project's id format; nil
@@ -240,21 +242,26 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, lookaroun
 		}
 	}
 
-	f.AddLedger(lookaround.FoldLedger(src.events, k.ID, src.idOf))
+	f.AddLedger(lookaround.FoldLedger(src.events, k.ID, src.idOf), src.storage.PlanLive(k.ID))
 
-	prs := src.requests[strings.ToUpper(k.ID)]
+	// another row may share the id's requests, so they are sorted as a copy;
+	// a task with a branch reads that branch's requests only, since an older
+	// merged request on another head says nothing about the work in it
+	prs := slices.Clone(src.requests[strings.ToUpper(k.ID)])
 	if branch != "" {
-		own := slices.DeleteFunc(slices.Clone(prs), func(p lookaround.PR) bool { return p.Head != branch })
-		if len(own) > 0 {
-			prs = own
-		}
+		prs = slices.DeleteFunc(prs, func(p lookaround.PR) bool { return p.Head != branch })
 	}
 
 	f.SetPRs(prs)
 
-	// a request no id names is known by the url the ledger kept
-	if f.PR == nil && f.PRURL != "" && src.host != nil {
-		if p, err := src.host.PR(ctx, f.PRURL); err == nil {
+	// the search is capped and lags a new request, so a branch the search
+	// missed is read exactly; a request no id names, by the url the ledger kept
+	for _, at := range []string{branch, f.PRURL} {
+		if f.PR != nil || at == "" || src.host == nil {
+			continue
+		}
+
+		if p, err := src.host.PR(ctx, at); err == nil {
 			f.SetPRs([]lookaround.PR{{PR: p}})
 		}
 	}

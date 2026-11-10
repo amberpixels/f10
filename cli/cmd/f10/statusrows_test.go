@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -514,5 +516,46 @@ func TestHaltPayloadReadsBack(t *testing.T) {
 	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
 	if e.Skill() != "ship" || e.Reason() != "stalled" {
 		t.Errorf("halt %v", e.Payload.Val)
+	}
+}
+
+// A task with a branch reads that branch's requests only: an older merged
+// request on another head leaves its live run deciding the stage. Two rows
+// of one id gather at once without sharing the requests they sort.
+func TestGatherReadsTheBranchRequests(t *testing.T) {
+	run := &state.Run{
+		Task: "FT-5", Root: "/w/FT-5", Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement",
+		Updated: time.Now(),
+	}
+	merged := lookaround.PR{Number: 40, Status: forge.Merged, Head: "FT-5/x", MergedAt: time.Now()}
+	open := lookaround.PR{Number: 41, Status: forge.Open, Head: "FT-5/z"}
+
+	src := rowSource{
+		live: []*state.Run{run},
+		checkout: func(_ context.Context, _, suffix string) (string, string) {
+			if suffix == "" {
+				return "FT-5/y", "/w/FT-5"
+			}
+
+			return "", ""
+		},
+		requests: map[string][]lookaround.PR{"FT-5": {merged, open}},
+	}
+
+	if _, f := src.gather(t.Context(), childRow{ID: "FT-5"}); f.PR != nil {
+		t.Errorf("FT-5/y read request #%d of another head", f.PR.Number)
+	} else if stage, _ := stageOf(f, false); stage != stageImplementing {
+		t.Errorf("stage = %s, want implementing", stage)
+	}
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() { src.gather(t.Context(), childRow{ID: "FT-5", suffix: "2"}) })
+	}
+
+	wg.Wait()
+
+	if got := src.requests["FT-5"]; got[0].Number != 40 || got[1].Number != 41 {
+		t.Errorf("the shared requests were reordered: #%d, #%d", got[0].Number, got[1].Number)
 	}
 }

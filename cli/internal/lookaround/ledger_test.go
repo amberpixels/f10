@@ -62,3 +62,16 @@ func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
 		t.Errorf("claim %+v", got)
 	}
 }
+
+// A ledger finish counts only while no live plan says the task came back,
+// the rule the board's local collector applies too.
+func TestAddLedgerKeepsARePlannedTaskOpen(t *testing.T) {
+	var replanned, done TaskFacts
+
+	replanned.AddLedger(LedgerTask{Finished: true}, true)
+	done.AddLedger(LedgerTask{Finished: true}, false)
+
+	if replanned.Finished || !done.Finished || done.FinishedFrom != FinishedByLedger {
+		t.Errorf("re-planned %+v, finished %+v", replanned, done)
+	}
+}

@@ -113,10 +113,11 @@ func (rd *statusReader) gatesOf(ctx context.Context, id, branch, root string, ru
 // rows is the row reads bound to this call.
 func (rd *statusReader) rows(ctx context.Context) rowSource {
 	return rowSource{
-		live:   rd.live,
-		events: rd.ledger(ctx),
-		main:   rd.main,
-		prefix: rd.t.eff.IDPrefix,
+		live:    rd.live,
+		events:  rd.ledger(ctx),
+		main:    rd.main,
+		storage: rd.t.lay.StorageRoot,
+		prefix:  rd.t.eff.IDPrefix,
 		checkout: func(ctx context.Context, id, suffix string) (string, string) {
 			r, err := rd.t.reference(ctx, id)
 			if err != nil {
