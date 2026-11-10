@@ -235,7 +235,7 @@ func stopped(r *state.Run) *observe.SessionStopped {
 	phase := ""
 
 	for _, ph := range state.Phases {
-		if r.Status(ph) != "pending" {
+		if r.Status(ph) != state.Upcoming {
 			phase = ph
 		}
 	}

@@ -79,3 +79,14 @@ func TestDecodeClaimReadsAStoredRow(t *testing.T) {
 		t.Errorf("decoded %+v %+v", c.Args, c.Run)
 	}
 }
+
+func TestDecodeClaimReadsPendingAsUpcoming(t *testing.T) {
+	var p Payload
+	if err := json.Unmarshal([]byte(`{"capture":"prior","plan":"done","ship":"pending"}`), &p); err != nil {
+		t.Fatal(err)
+	}
+
+	if c := DecodeClaim(Event{Task: "FT-1", Payload: NewPayload(p)}); c.Run.Ship != state.Upcoming {
+		t.Errorf("ship = %q, want %q", c.Run.Ship, state.Upcoming)
+	}
+}

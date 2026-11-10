@@ -219,9 +219,9 @@ func Load(path string) (*Run, error) {
 
 	r := &Run{
 		Session: strings.TrimSuffix(filepath.Base(path), fileExt),
-		Capture: "pending",
-		Plan:    "pending",
-		Ship:    "pending",
+		Capture: Upcoming,
+		Plan:    Upcoming,
+		Ship:    Upcoming,
 	}
 
 	sc := bufio.NewScanner(f)
@@ -238,11 +238,11 @@ func Load(path string) (*Run, error) {
 		case "skill":
 			r.Skill = value
 		case "capture":
-			r.Capture = cmp.Or(value, "pending")
+			r.Capture = LegacyStatus(cmp.Or(value, Upcoming))
 		case "plan":
-			r.Plan = cmp.Or(value, "pending")
+			r.Plan = LegacyStatus(cmp.Or(value, Upcoming))
 		case "ship":
-			r.Ship = cmp.Or(value, "pending")
+			r.Ship = LegacyStatus(cmp.Or(value, Upcoming))
 		case "leaf":
 			r.Leaf = value
 		case "at":
@@ -416,12 +416,12 @@ func Stopped(status string) bool {
 }
 
 // Furthest is the last phase the run has left: its status is neither
-// pending nor unset. A run that left none is at its first phase.
+// upcoming nor unset. A run that left none is at its first phase.
 func (r *Run) Furthest() string {
 	phase := Phases[0]
 
 	for _, p := range Phases {
-		if s := r.Status(p); s != "pending" && s != "" {
+		if s := r.Status(p); s != Upcoming && s != "" {
 			phase = p
 		}
 	}

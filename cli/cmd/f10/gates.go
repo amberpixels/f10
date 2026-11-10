@@ -22,16 +22,16 @@ import (
 // Gate states. A plain step also takes a run's stop status (failed,
 // blocked, partial) on the step it stopped at.
 const (
-	gateOff     = "not in this flow"
-	gatePending = "pending"
-	gateRunning = "running"
-	gateQueued  = "queued"
-	gateWaiting = "waiting" // a driven ship parked on its base's code
-	gateDone    = "done"
-	gateSkipped = "skipped"
-	gateOpen    = "open"
-	gateSettled = "settled"
-	gateUnknown = "unknown"
+	gateOff      = "not in this flow"
+	gateUpcoming = state.Upcoming
+	gateRunning  = "running"
+	gateQueued   = "queued"
+	gateWaiting  = "waiting" // a driven ship parked on its base's code
+	gateDone     = "done"
+	gateSkipped  = "skipped"
+	gateOpen     = "open"
+	gateSettled  = "settled"
+	gateUnknown  = "unknown"
 )
 
 // How a running gate was started.
@@ -179,7 +179,7 @@ func taskGates(ctx context.Context, in gateInput) []gate {
 		g := gate{Step: "judge", Judged: judged}
 		in.judge(&g, judged, entries, steps)
 
-		if g.State != gatePending {
+		if g.State != gateUpcoming {
 			gates, extra = append(gates, g), true
 		}
 	}
@@ -208,12 +208,12 @@ func (in gateInput) flow() flow.Flow {
 }
 
 // stepStates follows the claims ship's session made: steps before the one
-// it is on are done, that one has the run's status, the rest are pending.
+// it is on are done, that one has the run's status, the rest are upcoming.
 // finish is done once drive recorded it.
 func (in gateInput) stepStates(entries flow.Flow) []string {
 	states := make([]string, len(entries))
 	for i := range states {
-		states[i] = gatePending
+		states[i] = gateUpcoming
 	}
 
 	shipLen := len(entries)
@@ -226,7 +226,7 @@ func (in gateInput) stepStates(entries flow.Flow) []string {
 	}
 
 	r := in.run
-	if r == nil || shipLen == 0 || r.Ship == "pending" || r.Ship == "" || r.Ship == "skipped" {
+	if r == nil || shipLen == 0 || r.Ship == state.Upcoming || r.Ship == "" || r.Ship == "skipped" {
 		return states
 	}
 
@@ -258,7 +258,7 @@ func (in gateInput) stepStates(entries flow.Flow) []string {
 		case k == at:
 			s = r.Ship
 		default:
-			s = gatePending
+			s = gateUpcoming
 		}
 
 		states[k] = s
@@ -269,7 +269,7 @@ func (in gateInput) stepStates(entries flow.Flow) []string {
 
 func (in gateInput) finishGate(st string) gate {
 	g := gate{Step: "finish", State: st}
-	if st != gatePending || in.finish.State == "" || !in.shipDone() {
+	if st != gateUpcoming || in.finish.State == "" || !in.shipDone() {
 		return g
 	}
 
@@ -304,7 +304,7 @@ func (in gateInput) half(entries flow.Flow, steps []string, remote, inFlow bool)
 	h := in.readHalf(entries, steps, remote)
 
 	// a half the flow does not declare shows once something ran it
-	if !inFlow && h.State == gatePending {
+	if !inFlow && h.State == gateUpcoming {
 		return nil
 	}
 
@@ -317,7 +317,7 @@ func (in gateInput) readHalf(entries flow.Flow, steps []string, remote bool) *re
 		rounds, last = in.outcomes.remote, in.outcomes.remoteAt
 	}
 
-	h := &reviewHalf{State: gatePending, Rounds: rounds}
+	h := &reviewHalf{State: gateUpcoming, Rounds: rounds}
 
 	if len(rounds) > 0 {
 		h.State = gateSettled
@@ -391,7 +391,7 @@ func (in gateInput) hostHalf(ctx context.Context, h *reviewHalf) {
 		h.State = gateSettled
 	case !rs.handled:
 		h.State = gateOpen
-	case h.State == gatePending:
+	case h.State == gateUpcoming:
 		h.State = gateSettled
 	}
 }
@@ -402,7 +402,7 @@ func (in gateInput) judge(g *gate, judged string, entries flow.Flow, steps []str
 		out, last = in.outcomes.planJudge, in.outcomes.planAt
 	}
 
-	g.State = gatePending
+	g.State = gateUpcoming
 	if out != nil {
 		g.State, g.Outcome = gateDone, out
 	}
@@ -425,7 +425,7 @@ func (in gateInput) judge(g *gate, judged string, entries flow.Flow, steps []str
 	}
 
 	// a judge run outside ship judges the plan until ship starts
-	shipStarted := in.run != nil && in.run.Ship != "pending" && in.run.Ship != ""
+	shipStarted := in.run != nil && in.run.Ship != state.Upcoming && in.run.Ship != ""
 	if (judged == "plan") == shipStarted {
 		return
 	}

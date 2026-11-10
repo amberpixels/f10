@@ -124,7 +124,7 @@ func stageOf(f rowFacts) (string, string) {
 	switch {
 	case r.Capture == "running" || r.Plan == "running":
 		return stagePlanning, r.Furthest()
-	case r.Plan != "pending" && r.Plan != "":
+	case r.Plan != state.Upcoming && r.Plan != "":
 		return stagePlanned, "plan"
 	}
 

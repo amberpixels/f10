@@ -21,8 +21,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
+// Upcoming is a phase or step in the run's flow that the run has not reached:
+// nothing running or waiting on it.
+const Upcoming = "upcoming"
+
 // Statuses a phase can hold, in the order the usage text lists them.
-var Statuses = []string{"pending", "running", "done", "failed", "partial", "skipped", "prior", "blocked"}
+var Statuses = []string{Upcoming, "running", "done", "failed", "partial", "skipped", "prior", "blocked"}
 
 // A UsageError is a typo in step prose (an unknown phase or status, a missing
 // argument), so the command exits 2 rather than leave the badge frozen.
@@ -30,14 +34,24 @@ type UsageError struct{ msg string }
 
 func (e *UsageError) Error() string { return e.msg }
 
+// LegacyStatus reads the name a not-reached phase had before it was Upcoming,
+// still held by older run files, ledger claims and older callers.
+func LegacyStatus(status string) string {
+	if status == "pending" {
+		return Upcoming
+	}
+
+	return status
+}
+
 func usagef(format string, args ...any) error {
 	return &UsageError{msg: fmt.Sprintf(format, args...)}
 }
 
 // Fresh is the run a session has before anything reported: every phase
-// pending.
+// upcoming.
 func Fresh(session string) *Run {
-	return &Run{Session: session, Capture: "pending", Plan: "pending", Ship: "pending"}
+	return &Run{Session: session, Capture: Upcoming, Plan: Upcoming, Ship: Upcoming}
 }
 
 // LoadOrFresh reads the session's file, or starts a fresh run when there is
@@ -260,17 +274,17 @@ func (r *Run) setStatus(phase, status string) {
 	}
 }
 
-// backfill retires the pending phases before the one entered, or a run from a
+// backfill retires the upcoming phases before the one entered, or a run from a
 // task id or a plan file would never fill its leading circles. `skipped` means
 // nobody said; evidence of earlier work (a task id, a saved plan) is `prior`.
 func (r *Run) backfill(phase string) {
 	if phase == "plan" || phase == "ship" {
-		if r.Capture == "pending" {
+		if r.Capture == Upcoming {
 			r.Capture = "skipped"
 		}
 	}
 
-	if phase == "ship" && r.Plan == "pending" {
+	if phase == "ship" && r.Plan == Upcoming {
 		r.Plan = "skipped"
 	}
 }
@@ -284,6 +298,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 		return usagef("unknown phase '%s' (want: %s)", phase, strings.Join(Phases, " "))
 	}
 
+	status = LegacyStatus(status)
 	if !slices.Contains(Statuses, status) {
 		return usagef("unknown status '%s'", status)
 	}
@@ -359,7 +374,7 @@ func (r *Run) SetTask(id, url string) error {
 		r.URL = url
 	}
 
-	if r.Capture == "pending" || r.Capture == "skipped" {
+	if r.Capture == Upcoming || r.Capture == "skipped" {
 		r.Capture = "prior"
 	}
 
@@ -567,7 +582,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait = "", "", "", "", "", ""
 	r.Done, r.DoneAt = "", time.Time{}
 	r.Pipeline, r.Labels, r.At = nil, nil, 0
-	r.Ship = "pending"
+	r.Ship = Upcoming
 
 	// so a terminal with no session id can still find its runs
 	if cwd != "" {
@@ -576,15 +591,15 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 
 	if chain {
 		if !settled(r.Capture) {
-			r.Capture = "pending"
+			r.Capture = Upcoming
 		}
 
 		// the plan skill is here to (re)plan; a kept `done` would lie over it
 		if skill == "plan" || !settled(r.Plan) {
-			r.Plan = "pending"
+			r.Plan = Upcoming
 		}
 	} else {
-		r.Task, r.URL, r.Capture, r.Plan = "", "", "pending", "pending"
+		r.Task, r.URL, r.Capture, r.Plan = "", "", Upcoming, Upcoming
 
 		// a full id ties the run to its board row before fetch reports; a
 		// bare number waits for fetch, which knows the prefix
@@ -618,11 +633,11 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 		strings.HasSuffix(toks[0], ".md") {
 		r.Task = strings.TrimSuffix(filepath.Base(toks[0]), ".md")
 
-		if r.Capture == "pending" {
+		if r.Capture == Upcoming {
 			r.Capture = "prior"
 		}
 
-		if r.Plan == "pending" {
+		if r.Plan == Upcoming {
 			r.Plan = "prior"
 		}
 	}

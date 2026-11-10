@@ -292,10 +292,10 @@ func TestStepStartedFillsInTheShipLeaf(t *testing.T) {
 		keepsAsk bool
 	}{
 		{"ship running", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"}, "bash-load-step", "running", "implement", false},
-		{"ship pending", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "pending"}, "bash-load-step", "running", "implement", false},
+		{"ship upcoming", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "upcoming"}, "bash-load-step", "running", "implement", false},
 		{"never over a stop state", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. go? [no | yes]"}, "bash-load-step", "blocked", "judge", true},
 		{"never over done", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "done"}, "bash-load-step", "done", "", false},
-		{"not under plan", state.Run{Skill: "plan", Capture: "skipped", Plan: "running", Ship: "pending"}, "bash-load-step", "pending", "", false},
+		{"not under plan", state.Run{Skill: "plan", Capture: "skipped", Plan: "running", Ship: "upcoming"}, "bash-load-step", "upcoming", "", false},
 		{"several steps name none", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"}, "bash-load-planning", "running", "pr", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -327,9 +327,9 @@ func TestIssueCreatedNamesTheCapturedTask(t *testing.T) {
 		payload string
 		task    string
 	}{
-		{"capture running", state.Run{Skill: "capture", Capture: "running", Plan: "pending", Ship: "pending"}, "bash-gh-issue", "FT-12"},
-		{"parent wins over subtask", state.Run{Skill: "capture", Capture: "running", Plan: "pending", Ship: "pending"}, "bash-gh-issue-two", "FT-12"},
-		{"task already named", state.Run{Skill: "capture", Task: "FT-9", Capture: "running", Plan: "pending", Ship: "pending"}, "bash-gh-issue", "FT-9"},
+		{"capture running", state.Run{Skill: "capture", Capture: "running", Plan: "upcoming", Ship: "upcoming"}, "bash-gh-issue", "FT-12"},
+		{"parent wins over subtask", state.Run{Skill: "capture", Capture: "running", Plan: "upcoming", Ship: "upcoming"}, "bash-gh-issue-two", "FT-12"},
+		{"task already named", state.Run{Skill: "capture", Task: "FT-9", Capture: "running", Plan: "upcoming", Ship: "upcoming"}, "bash-gh-issue", "FT-9"},
 		{"capture over", state.Run{Skill: "ship", Capture: "done", Plan: "done", Ship: "running"}, "bash-gh-issue", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -42,8 +42,8 @@ func TestStageOf(t *testing.T) {
 		{"resolving", rowFacts{run: run("prior", "done", "running", "resolve")}, stageResolving, "resolve"},
 		{"judging", rowFacts{run: run("prior", "done", "running", "judge")}, stageJudging, "judge"},
 		{"shipped", rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}}, stageShipped, "pr"},
-		{"planning", rowFacts{run: run("skipped", "running", "pending", "")}, stagePlanning, "plan"},
-		{"planned", rowFacts{run: run("skipped", "done", "pending", "")}, stagePlanned, "plan"},
+		{"planning", rowFacts{run: run("skipped", "running", "upcoming", "")}, stagePlanning, "plan"},
+		{"planned", rowFacts{run: run("skipped", "done", "upcoming", "")}, stagePlanned, "plan"},
 		{"after, no drive", rowFacts{after: "FT-1"}, stageNotStarted, "after FT-1"},
 		{"waiting", rowFacts{after: "FT-1", driven: true}, stageWaiting, "after FT-1"},
 		{
@@ -402,11 +402,11 @@ func TestRowStepNamesDriveFinish(t *testing.T) {
 		t.Errorf("row = %s / %q, want shipped / the finish action", row.Stage, row.Step)
 	}
 
-	plain := taskRow{Gates: []gate{{Step: "finish", State: gatePending}}}
+	plain := taskRow{Gates: []gate{{Step: "finish", State: gateUpcoming}}}
 	plain.finish(f)
 
 	if plain.Step != "ship" {
-		t.Errorf("a pending finish changed the step to %q", plain.Step)
+		t.Errorf("an upcoming finish changed the step to %q", plain.Step)
 	}
 }
 
