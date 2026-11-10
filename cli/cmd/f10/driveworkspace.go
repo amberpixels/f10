@@ -112,7 +112,7 @@ func (in *driveInput) stallCheck(r *driveRun) stallCheck {
 type fetchOnce struct{ done bool }
 
 func (f *fetchOnce) fetch(ctx context.Context, dir string) error {
-	if f != nil && f.done {
+	if f.done {
 		return nil
 	}
 
@@ -120,9 +120,7 @@ func (f *fetchOnce) fetch(ctx context.Context, dir string) error {
 		return err
 	}
 
-	if f != nil {
-		f.done = true
-	}
+	f.done = true
 
 	return nil
 }

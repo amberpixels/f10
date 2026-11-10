@@ -136,8 +136,8 @@ func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string
 	return cmp.Or(head, "none"), ""
 }
 
-// A taskEndError is a task's end returned up its path instead of applied where it
-// was found; onTask, at each per-task entry of the tick, applies it.
+// A taskEndError carries a task's end up its path instead of applying it
+// where it was found; onTask applies it at each per-task entry of the tick.
 type taskEndError struct{ res driveResult }
 
 func (e *taskEndError) Error() string { return e.res.row + ": " + e.res.reason }
