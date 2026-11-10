@@ -469,6 +469,7 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p1")
 	fx.f.script("git fetch origin", "")
 	fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
+	fx.f.script("git merge-base --is-ancestor p1 refs/heads/GH-1", "")
 	fx.f.script("git merge-base --is-ancestor main0 refs/remotes/origin/main", "")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"))
 
@@ -482,6 +483,35 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 
 	if fx.f.called("git push") {
 		t.Errorf("pushed a rewrite the drive did not make: %q", fx.f.calls)
+	}
+}
+
+// A branch origin is ahead of (a commit pushed to the PR, not yet in the
+// worktree) is never caught up: the lease is read after that commit landed,
+// so a rebase would push over it. The task halts naming the fix.
+func TestDriveRefusesACatchupBehindOrigin(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	b := &binaryCatchupFake{stops: []bool{false}}
+	fx.binaryCatchup(t, b, t.TempDir())
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p2")
+	fx.f.script("git fetch origin", "")
+	fx.f.fail("git merge-base --is-ancestor p2 refs/heads/GH-1", shell.Result{Code: 1})
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"))
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != ui.ExitHalted ||
+		!strings.Contains(out, "origin/GH-1 has commits GH-1 lacks") ||
+		!strings.Contains(out, "bring origin/GH-1 into /code/repo.GH-1") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+
+	if b.integrals != 0 || fx.f.called("git push") {
+		t.Errorf("integrated %d times, calls %q", b.integrals, fx.f.calls)
 	}
 }
 

@@ -46,7 +46,7 @@ type Task struct {
 	Queued  bool     `yaml:"queued,omitempty"` // held back by the drive's cap
 	Outcome *Outcome `yaml:"outcome,omitempty"`
 	// Catchup is the catchup the drive last sent for the task, so a resumed
-	// drive still leases its push and counts its repeats
+	// drive still leases its push; the repeat count stays in the drive's memory
 	Catchup *Catchup `yaml:"catchup,omitempty"`
 }
 

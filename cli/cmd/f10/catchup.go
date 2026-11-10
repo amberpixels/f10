@@ -366,11 +366,6 @@ func catchupRecord(
 		return nil, fmt.Errorf("reading the head of %s: %w", branch, err)
 	}
 
-	conflicts, err := gitx.Conflicts(ctx, dir, target, "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("reading what %s conflicts on: %w", branch, err)
-	}
-
 	targetRef, err := catchupTargetRef(ctx, main, branch, key)
 	if err != nil {
 		return nil, err
@@ -382,8 +377,7 @@ func catchupRecord(
 	}
 
 	return &drives.Catchup{
-		Target: target, Head: head, Origin: origin, Base: base, At: now,
-		Fingerprint: drives.Fingerprint(target, conflictWay(conflicts), ""), TargetRef: targetRef,
+		Target: target, Head: head, Origin: origin, Base: base, At: now, TargetRef: targetRef,
 	}, nil
 }
 
@@ -530,9 +524,9 @@ func (e originMovedError) Error() string {
 }
 
 // pushCatchup is the one push after a clean catchup of a branch origin has:
-// plain after a merge, leased against rec's origin tip after a rebase, and
-// never carrying a base origin lacks. A rewrite with no live lease is
-// refused as unseen; only a push that went out spends the lease.
+// plain when it fast-forwards origin, leased against rec's origin tip after
+// a rewrite, and never carrying a base origin lacks. A rewrite with no live
+// lease is refused as unseen; a push or a refusal spends the lease.
 func pushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
 
@@ -578,12 +572,16 @@ func pushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (
 		return "", err
 	}
 
-	if rec != nil && !rec.Spent {
-		if pushed != rec.Origin {
-			return "", refused
-		}
-	} else if !fastForward {
+	// a fast-forward drops nothing, so only a rewrite needs the lease, which
+	// a refusal spends: a rerun must not replay a lease origin already broke
+	switch {
+	case fastForward:
+	case rec == nil || rec.Spent:
 		refused.unseen = true
+
+		return "", refused
+	case pushed != rec.Origin:
+		rec.Spent = true
 
 		return "", refused
 	}

@@ -2245,6 +2245,8 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor old HEAD", shell.Result{Code: 1})
+			// the branch holds origin's copy when the catchup goes out
+			fx.f.script("git merge-base --is-ancestor old refs/heads/GH-1", "")
 			fx.f.script("git push --force-with-lease=refs/heads/GH-1:old origin HEAD:refs/heads/GH-1", "")
 			// origin holds the target, so the caught-up branch may be pushed
 			fx.f.script("git merge-base --is-ancestor m1 refs/remotes/origin/main", "")
@@ -2267,6 +2269,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 
 			if tc.again {
 				fx.f.answers["git merge-tree --write-tree origin/main new"] = []shell.Result{{Code: 1}, {}}
+				fx.f.script("git merge-base --is-ancestor new refs/heads/GH-1", "")
 			}
 
 			fx.f.fail("git merge-base --is-ancestor origin/main HEAD", shell.Result{Code: 1})
@@ -2453,6 +2456,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 			fx.f.script("git status --porcelain", "")
 			fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
+			fx.f.script("git merge-base --is-ancestor p1 refs/heads/GH-1", "") // not behind origin
 			fx.f.script("git rev-parse -q --verify origin/GH-1", tc.pushed)
 			fx.f.script("git merge-tree --write-tree origin/main p1", "")
 
@@ -3763,6 +3767,10 @@ func TestPushCatchupOnlyOverWhatTheCatchupSaw(t *testing.T) {
 		"no record, merged": {
 			pushed: "p2", fastForward: true, push: "git push origin HEAD:refs/heads/GH-1",
 		},
+		// a branch that already holds what origin gained drops nothing
+		"origin moved, merged": {
+			held: true, pushed: "p2", fastForward: true, push: "git push origin HEAD:refs/heads/GH-1",
+		},
 	}
 
 	for name, tc := range cases {
@@ -3799,6 +3807,11 @@ func TestPushCatchupOnlyOverWhatTheCatchupSaw(t *testing.T) {
 
 			if !errors.As(err, new(originMovedError)) || fx.f.called("git push") {
 				t.Fatalf("err = %v, want refused with no push: %q", err, fx.f.calls)
+			}
+
+			// a refusal spends the lease, so a rerun never replays it
+			if !rec.Spent {
+				t.Error("a refused push left its lease live")
 			}
 
 			res := pushHalted("GH-1", "finish", err)

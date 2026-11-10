@@ -16,8 +16,8 @@ type Catchup struct {
 	// Failed is a catchup that did not end clean; the watcher sends another
 	// only once the fingerprint moves
 	Failed bool `yaml:"failed,omitempty"`
-	// Fingerprint is the progress state the catchup started from, or for a
-	// failed one the state it failed at (see Fingerprint)
+	// Fingerprint is the state a failed watcher catchup stopped at (see
+	// Fingerprint): the watcher sends another only once it moves
 	Fingerprint string `yaml:"fingerprint,omitempty"`
 	// TargetRef is the target's remote-tracking ref, "" for a target recorded
 	// nowhere; a push waits until the target is on it

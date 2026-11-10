@@ -355,11 +355,26 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 }
 
 // recordCatchup notes what the catchup about to go out starts from, kept on
-// the drive record so a resumed drive leases its push the same way.
+// the drive record so a resumed drive leases its push the same way. A branch
+// origin is ahead of is refused: the lease is read after those commits
+// landed, so a rebase would push over them. Ahead of origin is the drive's
+// own unpushed work, and fine.
 func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key branchmeta.Key) error {
 	rec, err := catchupRecord(ctx, in.main, r.o.path, r.o.branch, key, in.now())
 	if err != nil {
 		return err
+	}
+
+	if rec.Origin != "" {
+		held, err := gitx.IsAncestor(ctx, r.o.path, rec.Origin, "refs/heads/"+r.o.branch)
+		if err != nil {
+			return fmt.Errorf("reading whether %s holds origin/%s: %w", r.o.branch, r.o.branch, err)
+		}
+
+		if !held {
+			return fmt.Errorf("origin/%s has commits %s lacks, so a catchup would push over them: "+
+				"bring origin/%s into %s, then rerun the drive", r.o.branch, r.o.branch, r.o.branch, r.o.path)
+		}
 	}
 
 	r.lastCatchup = rec
