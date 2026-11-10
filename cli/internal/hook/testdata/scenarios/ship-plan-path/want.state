@@ -4,7 +4,7 @@ url
 root /work/acme
 capture prior
 plan prior
-ship pending
+ship upcoming
 leaf 
 at 
 final 

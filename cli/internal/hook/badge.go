@@ -50,7 +50,7 @@ func (b badge) apply(o observe.Observation, issueID string, r *state.Run, loaded
 	case *observe.StepStarted:
 		// ship loads each pipeline step alone, right before it runs
 		if !loaded || r.Skill != "ship" || len(o.Steps) != 1 || slices.Contains(planningSteps, o.Steps[0]) ||
-			(r.Ship != "pending" && r.Ship != "running") {
+			(r.Ship != state.Upcoming && r.Ship != "running") {
 			return false, nil
 		}
 

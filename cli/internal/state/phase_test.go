@@ -9,12 +9,12 @@ func TestRunFurthestAndStoppedPhase(t *testing.T) {
 		furthest string
 		stopped  string
 	}{
-		{"untouched", Run{Capture: "pending", Plan: "pending", Ship: "pending"}, "capture", ""},
+		{"untouched", Run{Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}, "capture", ""},
 		{"unset reads as untouched", Run{}, "capture", ""},
-		{"planning", Run{Capture: "prior", Plan: "running", Ship: "pending"}, "plan", ""},
-		{"plan blocked", Run{Capture: "prior", Plan: "blocked", Ship: "pending"}, "plan", "plan"},
+		{"planning", Run{Capture: "prior", Plan: "running", Ship: "upcoming"}, "plan", ""},
+		{"plan blocked", Run{Capture: "prior", Plan: "blocked", Ship: "upcoming"}, "plan", "plan"},
 		{"ship partial", Run{Capture: "prior", Plan: "done", Ship: "partial"}, "ship", "ship"},
-		{"skipped counts as left", Run{Capture: "prior", Plan: "skipped", Ship: "pending"}, "plan", ""},
+		{"skipped counts as left", Run{Capture: "prior", Plan: "skipped", Ship: "upcoming"}, "plan", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.run.Furthest(); got != tc.furthest {

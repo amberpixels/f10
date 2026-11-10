@@ -46,7 +46,7 @@ func (g gate) style() string {
 		return "done"
 	}
 
-	return "pending"
+	return state.Upcoming
 }
 
 // shown is the gate's name as a person reads it: its label, else its step.

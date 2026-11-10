@@ -85,9 +85,9 @@ func TestGatesDuringShip(t *testing.T) {
 		"implement":    "done",
 		"cleanup":      "done",
 		"pr":           "done",
-		"review":       "local: round 1 running (in ship) · remote: pending",
-		"judge change": "change: pending",
-		"pr again":     "pending",
+		"review":       "local: round 1 running (in ship) · remote: upcoming",
+		"judge change": "change: upcoming",
+		"pr again":     "upcoming",
 	})
 
 	if n := len(gates); n != 6 {
@@ -117,7 +117,7 @@ func TestGatesParkedOnTheBase(t *testing.T) {
 
 	gates := taskGates(context.Background(), gateInput{task: "FT-2", run: run, now: time.Unix(1_800_000_000, 0)})
 
-	checkTexts(t, gates, map[string]string{"implement": "waiting on FT-1", "cleanup": "pending"})
+	checkTexts(t, gates, map[string]string{"implement": "waiting on FT-1", "cleanup": "upcoming"})
 }
 
 // An optional CI review with no remote reviewer declared is dropped, so
@@ -127,13 +127,13 @@ func TestGatesOptionalCI(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 
 	alone := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: flow.Of(pipeline), now: now})
-	checkTexts(t, alone, map[string]string{"review": "local: pending"})
+	checkTexts(t, alone, map[string]string{"review": "local: upcoming"})
 
 	both := taskGates(
 		context.Background(),
 		gateInput{task: "FT-1", pipeline: flow.Of(pipeline), remoteFlow: true, now: now},
 	)
-	checkTexts(t, both, map[string]string{"review": "local: pending · remote: pending"})
+	checkTexts(t, both, map[string]string{"review": "local: upcoming · remote: upcoming"})
 
 	// a flow whose only review is a dropped ci? keeps one review gate, off
 	ciOnly := taskGates(context.Background(), gateInput{
@@ -167,13 +167,13 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 	}
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local+ci", Pipeline: pipeline}
 
-	pending := taskGates(context.Background(), gateInput{
+	upcoming := taskGates(context.Background(), gateInput{
 		task: "FT-1", pipeline: flow.Of(pipeline), events: events[:3], now: at(3),
 	})
-	checkTexts(t, pending, map[string]string{"review": "local: pending · remote: pending"})
+	checkTexts(t, upcoming, map[string]string{"review": "local: upcoming · remote: upcoming"})
 
-	if n := len(pending); n != 5 {
-		t.Errorf("%d gates, want implement, pr, review, pr, judge off: %v", n, texts(pending))
+	if n := len(upcoming); n != 5 {
+		t.Errorf("%d gates, want implement, pr, review, pr, judge off: %v", n, texts(upcoming))
 	}
 
 	running := taskGates(context.Background(), gateInput{task: "FT-1", run: run, events: events, now: at(4)})
@@ -257,7 +257,7 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 		{
 			"a remote review read in",
 			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "FT-1 ci"})},
-			map[string]string{"review": "local: pending · remote: round 1 running (manual)"},
+			map[string]string{"review": "local: upcoming · remote: round 1 running (manual)"},
 		},
 		{
 			"a review in the ship's session whose turn ended",
@@ -265,7 +265,7 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 				hookEvent(at(4), "s1", ledger.RunStarted, ledger.Payload{"skill": "review"}),
 				hookEvent(at(5), "s1", ledger.SessionStopped, ledger.Payload{}),
 			},
-			map[string]string{"review": "local: pending"},
+			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a review whose session moved on to another skill",
@@ -273,12 +273,12 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 				hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"}),
 				hookEvent(at(5), "s2", ledger.RunStarted, ledger.Payload{"skill": "explain"}),
 			},
-			map[string]string{"review": "local: pending"},
+			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a review older than the state TTL, its stop never written",
 			[]ledger.Event{hookEvent(at(4).Add(-48*time.Hour), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"})},
-			map[string]string{"review": "local: pending"},
+			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a review typed in a session whose ship stopped blocked",
@@ -297,7 +297,7 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 
 				return e
 			}()},
-			map[string]string{"review": "local: pending"},
+			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a judge by hand after ship",
@@ -345,21 +345,21 @@ func TestGatesOutcomes(t *testing.T) {
 			gateInput{remoteFlow: true, remote: func(context.Context) remoteState {
 				return remoteState{found: true, done: true}
 			}},
-			map[string]string{"review": "local: pending · remote: open (not handled)"},
+			map[string]string{"review": "local: upcoming · remote: open (not handled)"},
 		},
 		{
 			"a remote review settled on the host",
 			gateInput{remoteFlow: true, remote: func(context.Context) remoteState {
 				return remoteState{found: true, done: true, handled: true, settled: true}
 			}},
-			map[string]string{"review": "local: pending · remote: settled"},
+			map[string]string{"review": "local: upcoming · remote: settled"},
 		},
 		{
 			"a host past the timeout",
 			gateInput{remoteFlow: true, remote: func(context.Context) remoteState {
 				return remoteState{err: context.DeadlineExceeded}
 			}},
-			map[string]string{"review": "local: pending · remote: unknown (timed out)"},
+			map[string]string{"review": "local: upcoming · remote: unknown (timed out)"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -401,16 +401,16 @@ func TestGatesOutcomes(t *testing.T) {
 	checkTexts(t, gates, map[string]string{
 		"judge plan":   "plan: proceed - sound",
 		"judge change": "change: rethink - symptom",
-		"finish":       "pending",
+		"finish":       "upcoming",
 	})
 
-	if got := compactGates(gates); got != "󰊛 PJ proceed · 󰚔 L pending · R - · 󰊛 J rethink" {
+	if got := compactGates(gates); got != "󰊛 PJ proceed · 󰚔 L upcoming · R - · 󰊛 J rethink" {
 		t.Errorf("compact = %q", got)
 	}
 
 	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
 
-	if got := compactGates(gates); got != "jd PJ proceed · rv L pending · R - · jd J rethink" {
+	if got := compactGates(gates); got != "jd PJ proceed · rv L upcoming · R - · jd J rethink" {
 		t.Errorf("with F10_STATUS_GLYPHS: compactGates = %q", got)
 	}
 }
@@ -555,8 +555,12 @@ func TestRenderGates(t *testing.T) {
 	r := &state.Run{Task: "FT-1", Capture: "prior", Plan: "done", Ship: "running", Leaf: "review (local)"}
 	gates := []gate{
 		{Step: "implement", State: gateDone},
-		{Step: "review", Local: &reviewHalf{State: gateRunning, Via: viaShip}, Remote: &reviewHalf{State: gatePending}},
-		{Step: "judge", Judged: "change", State: gatePending},
+		{
+			Step:   "review",
+			Local:  &reviewHalf{State: gateRunning, Via: viaShip},
+			Remote: &reviewHalf{State: gateUpcoming},
+		},
+		{Step: "judge", Judged: "change", State: gateUpcoming},
 	}
 
 	var out bytes.Buffer
@@ -565,8 +569,8 @@ func TestRenderGates(t *testing.T) {
 	for _, want := range []string{
 		"ship            running: review (local)\n",
 		"  implement     done\n",
-		"  review        local: round 1 running (in ship) · remote: pending\n",
-		"  judge         change: pending\n",
+		"  review        local: round 1 running (in ship) · remote: upcoming\n",
+		"  judge         change: upcoming\n",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
@@ -600,7 +604,7 @@ func TestRenderGates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(out.String(), "review  󰚔 L … · R pending · 󰊛 J pending") {
+	if !strings.Contains(out.String(), "review  󰚔 L … · R upcoming · 󰊛 J upcoming") {
 		t.Errorf("rows lack the gate column:\n%s", out.String())
 	}
 
@@ -654,9 +658,9 @@ func TestGatesTaskJudge(t *testing.T) {
 			gateInput{outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
 			"task: stop - done in FT-9",
 		},
-		{"running", gateInput{run: &state.Run{Plan: "running", Ship: "pending", Leaf: "judge"}}, "task: running"},
+		{"running", gateInput{run: &state.Run{Plan: "running", Ship: "upcoming", Leaf: "judge"}}, "task: running"},
 		{"blocked", gateInput{
-			run:      &state.Run{Plan: "blocked", Ship: "pending", Leaf: "judge"},
+			run:      &state.Run{Plan: "blocked", Ship: "upcoming", Leaf: "judge"},
 			outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "rethink"}},
 		}, "task: blocked"},
 	} {
@@ -674,7 +678,7 @@ func TestGatesTaskJudge(t *testing.T) {
 		task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now(),
 		outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "proceed"}},
 	})
-	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L pending · R - · 󰊛 J pending" {
+	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L upcoming · R - · 󰊛 J upcoming" {
 		t.Errorf("compact = %q", got)
 	}
 }
@@ -731,7 +735,7 @@ func running(action string) branchmeta.DriveFinish {
 	return branchmeta.DriveFinish{State: branchmeta.FinishRunning, Action: action}
 }
 
-// Drive's record of running finish turns the finish row from pending to
+// Drive's record of running finish turns the finish row from upcoming to
 // queued once ship is done, then running with the action finish is on; a
 // base wait stays queued.
 func TestGatesDriveFinish(t *testing.T) {
@@ -747,8 +751,8 @@ func TestGatesDriveFinish(t *testing.T) {
 		finish branchmeta.DriveFinish
 		want   string
 	}{
-		{"no record", shipped, "", branchmeta.DriveFinish{}, gatePending},
-		{"ship not done", working, "", queued(""), gatePending},
+		{"no record", shipped, "", branchmeta.DriveFinish{}, gateUpcoming},
+		{"ship not done", working, "", queued(""), gateUpcoming},
 		{"queued", shipped, "", queued(""), "queued (drive)"},
 		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (drive)"},
 		{"waiting for a base", shipped, "", queued("waiting for FT-0"), "queued (drive): waiting for FT-0"},
@@ -988,8 +992,8 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		task: "FT-1", pipeline: run.Entries(), now: at(5),
 	})
 	if i := slices.IndexFunc(gates, func(g gate) bool { return g.shown() == "pr-polish" }); i < 0 ||
-		gates[i].State != gatePending {
-		t.Errorf("gates = %+v, want pr-polish pending", gates)
+		gates[i].State != gateUpcoming {
+		t.Errorf("gates = %+v, want pr-polish upcoming", gates)
 	}
 }
 

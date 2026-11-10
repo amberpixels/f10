@@ -120,7 +120,7 @@ func TestBareStatusListsTheSessionLaunches(t *testing.T) {
 	fx := newLaunchFixture(t)
 
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
-	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
 	fx.worktree(t, "DM-3", state.Run{
 		Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [refactor | stop]",
 	})
@@ -177,9 +177,9 @@ func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 	fx := newLaunchFixture(t)
 
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
-	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
 
-	own := &state.Run{Session: "sess-1", Task: "DM-1", Root: fx.repo, Capture: "done", Plan: "done", Ship: "pending"}
+	own := &state.Run{Session: "sess-1", Task: "DM-1", Root: fx.repo, Capture: "done", Plan: "done", Ship: "upcoming"}
 	if err := own.Save(fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 	fx := newLaunchFixture(t)
 
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
-	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
 	git(t, fx.repo, "config", branchmeta.After.For("DM-5/work"), "DM-3")
 
 	n := fx.drive(t, func(r *drives.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
@@ -244,7 +244,7 @@ func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
 
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-7", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
-	fx.worktree(t, "DM-4", state.Run{Capture: "prior", Plan: "done", Ship: "pending"})
+	fx.worktree(t, "DM-4", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
 	git(t, fx.repo, "config", branchmeta.After.For("DM-4/work"), "DM-3")
 
 	fx.drive(t, func(r *drives.Record) { r.Tasks[2].After = "DM-7" }, "DM-3", "DM-7", "DM-4")

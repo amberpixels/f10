@@ -47,20 +47,20 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			name: "old file without the new keys",
+			name: "old file without the new keys, its pending read as upcoming",
 			body: "v 1\ntask GH-1\nurl \ncapture done\nplan running\nship pending\nleaf \nfinal \nupdated " + stamp + "\n",
 			want: Run{
 				Task:    "GH-1",
 				Capture: "done",
 				Plan:    "running",
-				Ship:    "pending",
+				Ship:    "upcoming",
 				Updated: time.Unix(now.Unix(), 0),
 			},
 		},
 		{
-			name: "garbage timestamp reads as stale, statuses default to pending",
+			name: "garbage timestamp reads as stale, statuses default to upcoming",
 			body: "v 1\ntask GH-2\nupdated soon\nunknown key ignored\n",
-			want: Run{Task: "GH-2", Capture: "pending", Plan: "pending", Ship: "pending"},
+			want: Run{Task: "GH-2", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"},
 		},
 	}
 
@@ -137,7 +137,7 @@ func TestPhaseText(t *testing.T) {
 		{"blocked", "judge", "blocked at judge"},
 		{"failed", "", "failed"},
 		{"done", "pr", "done"},
-		{"pending", "", "pending"},
+		{"upcoming", "", "upcoming"},
 	}
 
 	for _, tc := range cases {
@@ -148,13 +148,13 @@ func TestPhaseText(t *testing.T) {
 	}
 
 	// the leaf is ship's: a running capture beside a recorded leaf stays bare
-	r := &Run{Capture: "running", Ship: "pending", Leaf: "implement"}
+	r := &Run{Capture: "running", Ship: "upcoming", Leaf: "implement"}
 	if got := r.PhaseText("capture"); got != "running" {
 		t.Errorf("PhaseText(capture) = %q, want running", got)
 	}
 
 	// but plan carries the judge a stale task stops at
-	r = &Run{Plan: "blocked", Ship: "pending", Leaf: "judge"}
+	r = &Run{Plan: "blocked", Ship: "upcoming", Leaf: "judge"}
 	if got := r.PhaseText("plan"); got != "blocked at judge" {
 		t.Errorf("PhaseText(plan) = %q, want blocked at judge", got)
 	}
@@ -391,9 +391,9 @@ func TestRenderParity(t *testing.T) {
 		run  Run
 		want string
 	}{
-		{Run{Capture: "pending", Plan: "pending", Ship: "pending"}, " 󱊴 ○○○"},
-		{Run{Capture: "running", Plan: "pending", Ship: "pending"}, " 󱊴 ◎○○"},
-		{Run{Capture: "skipped", Plan: "done", Ship: "pending"}, " 󱊴 ◌●○"},
+		{Run{Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}, " 󱊴 ○○○"},
+		{Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}, " 󱊴 ◎○○"},
+		{Run{Capture: "skipped", Plan: "done", Ship: "upcoming"}, " 󱊴 ◌●○"},
 		{Run{Capture: "prior", Plan: "prior", Ship: "running", Leaf: "implement"}, " 󱊴 ◉◉◎"},
 		{Run{Capture: "prior", Plan: "done", Ship: "failed", Leaf: "pr"}, " 󱊴 ◉●✗ pr"},
 		{Run{Capture: "prior", Plan: "done", Ship: "partial", Leaf: "pr"}, " 󱊴 ◉●󰅚 pr"},
@@ -423,6 +423,19 @@ func TestSetRejectsTypos(t *testing.T) {
 		if _, ok := errors.AsType[*UsageError](err); !ok {
 			t.Errorf("got %v, want a UsageError", err)
 		}
+	}
+}
+
+func TestSetTakesPendingAsUpcoming(t *testing.T) {
+	r := Fresh("s")
+	r.Plan = "running"
+
+	if err := r.Set("plan", "pending", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if r.Plan != Upcoming {
+		t.Errorf("plan = %q, want %q", r.Plan, Upcoming)
 	}
 }
 
@@ -691,7 +704,7 @@ func TestRenderCountsAsks(t *testing.T) {
 		}
 	}
 
-	r := &Run{Session: "asks", Capture: "pending", Plan: "pending", Ship: "pending"}
+	r := &Run{Session: "asks", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
 	if err := r.Save(dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -722,7 +735,7 @@ func TestRenderRecordsModel(t *testing.T) {
 	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
 	dir := t.TempDir()
 
-	r := &Run{Session: "s1", Capture: "pending", Plan: "pending", Ship: "pending"}
+	r := &Run{Session: "s1", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
 	if err := r.Save(dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}

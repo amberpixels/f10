@@ -4,7 +4,7 @@ url https://github.com/acme/app/issues/12
 root /work/acme
 capture prior
 plan running
-ship pending
+ship upcoming
 leaf 
 at 
 final 
