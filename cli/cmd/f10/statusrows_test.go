@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -27,36 +28,49 @@ func TestStageOf(t *testing.T) {
 	asking := run("prior", "done", "blocked", "judge")
 	asking.Ask = "1. Merge? [yes | no]"
 
+	type facts = lookaround.TaskFacts
+
+	merged := &lookaround.PR{Status: forge.Merged}
+
 	for _, tc := range []struct {
 		name        string
-		f           rowFacts
+		f           facts
+		baseDone    bool
 		stage, step string
 	}{
-		{"finished", rowFacts{finished: true}, stageDone, "finish"},
-		{"merged", rowFacts{merged: true, run: run("prior", "done", "done", "")}, stageDone, "finish"},
-		{"ask", rowFacts{run: asking}, stageAsking, "judge"},
-		{"drive halt", rowFacts{halt: &ledgerHalt{skill: "ship"}, run: run("prior", "done", "running", "implement")}, stageHalted, "ship"},
-		{"run stopped", rowFacts{run: run("prior", "done", "failed", "pr")}, stageHalted, "pr"},
-		{"implementing", rowFacts{run: run("prior", "done", "running", "cleanup")}, stageImplementing, "cleanup"},
-		{"reviewing", rowFacts{run: run("prior", "done", "running", "review")}, stageReviewing, "review"},
-		{"resolving", rowFacts{run: run("prior", "done", "running", "resolve")}, stageResolving, "resolve"},
-		{"judging", rowFacts{run: run("prior", "done", "running", "judge")}, stageJudging, "judge"},
-		{"shipped", rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}}, stageShipped, "pr"},
-		{"planning", rowFacts{run: run("skipped", "running", "upcoming", "")}, stagePlanning, "plan"},
-		{"planned", rowFacts{run: run("skipped", "done", "upcoming", "")}, stagePlanned, "plan"},
-		{"after, no drive", rowFacts{after: "FT-1"}, stageNotStarted, "after FT-1"},
-		{"waiting", rowFacts{after: "FT-1", driven: true}, stageWaiting, "after FT-1"},
+		{"finished", facts{Finished: true}, false, stageDone, "finish"},
+		{"merged", facts{PR: merged, Run: run("prior", "done", "done", "")}, false, stageDone, "finish"},
+		{"ask", facts{Run: asking}, false, stageAsking, "judge"},
+		{
+			"drive halt",
+			facts{Halt: &lookaround.Halt{Skill: "ship"}, Run: run("prior", "done", "running", "implement")},
+			false, stageHalted, "ship",
+		},
+		{"run stopped", facts{Run: run("prior", "done", "failed", "pr")}, false, stageHalted, "pr"},
+		{"implementing", facts{Run: run("prior", "done", "running", "cleanup")}, false, stageImplementing, "cleanup"},
+		{"reviewing", facts{Run: run("prior", "done", "running", "review")}, false, stageReviewing, "review"},
+		{"resolving", facts{Run: run("prior", "done", "running", "resolve")}, false, stageResolving, "resolve"},
+		{"judging", facts{Run: run("prior", "done", "running", "judge")}, false, stageJudging, "judge"},
+		{
+			"shipped",
+			facts{Run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}},
+			false, stageShipped, "pr",
+		},
+		{"planning", facts{Run: run("skipped", "running", "upcoming", "")}, false, stagePlanning, "plan"},
+		{"planned", facts{Run: run("skipped", "done", "upcoming", "")}, false, stagePlanned, "plan"},
+		{"after, no drive", facts{Base: "FT-1"}, false, stageNotStarted, "after FT-1"},
+		{"waiting", facts{Base: "FT-1", Driven: true}, false, stageWaiting, "after FT-1"},
 		{
 			"parked",
-			rowFacts{run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
-			stageWaiting, "on FT-1",
+			facts{Run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
+			false, stageWaiting, "on FT-1",
 		},
-		{"base done", rowFacts{after: "FT-1", baseDone: true}, stageNotStarted, ""},
-		{"queued", rowFacts{queued: true, after: "FT-1"}, stageQueued, ""},
-		{"nothing", rowFacts{}, stageNotStarted, ""},
+		{"base done", facts{Base: "FT-1"}, true, stageNotStarted, ""},
+		{"queued", facts{Queued: true, Base: "FT-1"}, false, stageQueued, ""},
+		{"nothing", facts{}, false, stageNotStarted, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if stage, step := stageOf(tc.f); stage != tc.stage || step != tc.step {
+			if stage, step := stageOf(tc.f, tc.baseDone); stage != tc.stage || step != tc.step {
 				t.Errorf("stageOf = %q %q, want %q %q", stage, step, tc.stage, tc.step)
 			}
 		})
@@ -397,6 +411,7 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 				"git remote",
 				"git log ",
 				"git worktree ",
+				"gh api graphql ",
 			)
 
 			switch {
@@ -447,17 +462,17 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 
 // A shipped task whose finish drive holds names it in the step column.
 func TestRowStepNamesDriveFinish(t *testing.T) {
-	f := rowFacts{run: &state.Run{Plan: "done", Ship: "done"}}
+	f := lookaround.TaskFacts{Run: &state.Run{Plan: "done", Ship: "done"}}
 
 	row := taskRow{Gates: []gate{{Step: "finish", State: gateRunning, Via: viaDrive, Action: "merging #204"}}}
-	row.finish(f)
+	row.finish(f, false)
 
 	if row.Stage != stageShipped || row.Step != "finish: running (drive): merging #204" {
 		t.Errorf("row = %s / %q, want shipped / the finish action", row.Stage, row.Step)
 	}
 
 	plain := taskRow{Gates: []gate{{Step: "finish", State: gateUpcoming}}}
-	plain.finish(f)
+	plain.finish(f, false)
 
 	if plain.Step != "ship" {
 		t.Errorf("an upcoming finish changed the step to %q", plain.Step)
@@ -489,16 +504,6 @@ func TestPRColumnIcons(t *testing.T) {
 
 	if got := prColumn(taskRow{PR: pr}); got != "\U000F04C2 #7" {
 		t.Errorf("a short F10_STATUS_GLYPHS replaced the icons: %q", got)
-	}
-}
-
-// Status shows a ledger claim without the wait and done it recorded.
-func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
-	r := &state.Run{Ship: "blocked", Leaf: "implement", Wait: "FT-2", Done: "catchup"}
-	e := ledger.Event{Task: "FT-1", Kind: ledger.StateSet, Payload: ledger.NewPayload(ledger.EncodeClaim(r, nil))}
-
-	if got := claimRun(e); got.Ship != "blocked" || got.Leaf != "implement" || got.Wait != "" || got.Done != "" {
-		t.Errorf("claim %+v", got)
 	}
 }
 

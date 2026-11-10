@@ -115,6 +115,8 @@ func (rd *statusReader) rows(ctx context.Context) rowSource {
 	return rowSource{
 		live:   rd.live,
 		events: rd.ledger(ctx),
+		main:   rd.main,
+		prefix: rd.t.eff.IDPrefix,
 		checkout: func(ctx context.Context, id, suffix string) (string, string) {
 			r, err := rd.t.reference(ctx, id)
 			if err != nil {

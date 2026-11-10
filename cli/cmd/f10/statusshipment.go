@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -88,19 +89,19 @@ func (s *shipment) facts(link bool) []fact {
 //
 //nolint:lostfield // PRState comes from askPR, only for a pushed task
 func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event, known ledger.TaskRef) shipment {
-	lt := ledgerFor(events, in.id, func(token string) string { return token })
+	lt := lookaround.FoldLedger(events, in.id, func(token string) string { return token })
 
 	s := shipment{
 		Task:   in.id,
 		Title:  known.Title,
 		URL:    known.URL,
 		Branch: in.branch,
-		PR:     lt.pr,
+		PR:     lt.PR,
 	}
 
 	// a PR opened by a script around the host CLI leaves no pr_opened; only a
 	// pushed task asks the host, so a status before the PR stays local
-	if s.PR == "" && lt.pushed {
+	if s.PR == "" && lt.Pushed {
 		s.askPR(ctx, in)
 	}
 

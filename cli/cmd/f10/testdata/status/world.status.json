@@ -1,0 +1,104 @@
+[
+  {
+    "id": "FT-2",
+    "title": "closed by the tracker",
+    "url": "https://x/2",
+    "depth": 0,
+    "stage": "done",
+    "step": "finish"
+  },
+  {
+    "id": "FT-7",
+    "title": "after a closed base",
+    "url": "https://x/7",
+    "depth": 1,
+    "after": "FT-2",
+    "stage": "not started"
+  },
+  {
+    "id": "FT-3",
+    "title": "in review",
+    "url": "https://x/3",
+    "depth": 0,
+    "stage": "reviewing",
+    "step": "review",
+    "pr": "https://github.com/a/b/pull/30",
+    "pr_state": "open",
+    "gates": [
+      {
+        "step": "implement",
+        "state": "done"
+      },
+      {
+        "step": "pr",
+        "state": "done"
+      },
+      {
+        "step": "review",
+        "local": {
+          "state": "running",
+          "via": "in ship",
+          "action": "review"
+        }
+      },
+      {
+        "step": "judge",
+        "state": "not in this flow"
+      }
+    ]
+  },
+  {
+    "id": "FT-6",
+    "title": "driven, after review",
+    "url": "https://x/6",
+    "depth": 1,
+    "after": "FT-3",
+    "stage": "waiting",
+    "step": "after FT-3"
+  },
+  {
+    "id": "FT-9",
+    "title": "after review, no drive",
+    "url": "https://x/9",
+    "depth": 1,
+    "after": "FT-3",
+    "stage": "not started",
+    "step": "after FT-3"
+  },
+  {
+    "id": "FT-4",
+    "title": "merged, branch gone",
+    "url": "https://x/4",
+    "depth": 0,
+    "stage": "done",
+    "step": "finish",
+    "pr": "https://github.com/a/b/pull/40",
+    "pr_state": "merged"
+  },
+  {
+    "id": "FT-5",
+    "title": "asking",
+    "url": "https://x/5",
+    "depth": 0,
+    "stage": "asking",
+    "step": "judge",
+    "ask": "1. Proceed? [yes | no]"
+  },
+  {
+    "id": "FT-8",
+    "title": "halted by drive",
+    "url": "https://x/8",
+    "depth": 0,
+    "stage": "halted",
+    "step": "ship",
+    "note": "agent idle"
+  },
+  {
+    "id": "FT-10",
+    "title": "planned",
+    "url": "https://x/10",
+    "depth": 0,
+    "stage": "planned",
+    "step": "plan"
+  }
+]

@@ -41,7 +41,7 @@ func (r *row) next() {
 	// drive merges and removes it in its own process: nothing is owed
 	if r.driveFinishes() {
 		r.Next = text("drive finishes it")
-		if a := r.branch.Finish.Action; a != "" {
+		if a := r.Branch.Finish.Action; a != "" {
 			r.Next = text("drive: " + a)
 		}
 
@@ -65,10 +65,10 @@ func (r *row) next() {
 			r.Next = text("waiting on " + strings.Join(r.BlockedBy, ", "))
 		case r.stopped():
 			r.Next = text(stoppedText(r))
-		case r.verdict == "rethink":
+		case r.Verdict == "rethink":
 			r.Next = command(cmdPlan)
 		default:
-			r.Next = text("judged " + r.verdict)
+			r.Next = text("judged " + r.Verdict)
 		}
 	case StageInReview:
 		switch {
@@ -79,7 +79,7 @@ func (r *row) next() {
 		case r.Review != nil && r.Review.ChangesRequested > 0:
 			r.Next = text("changes requested")
 		case r.running():
-			r.Next = text("at " + r.run.Leaf)
+			r.Next = text("at " + r.Run.Leaf)
 		default:
 			r.Next = text("waiting on review")
 		}
@@ -88,8 +88,8 @@ func (r *row) next() {
 	case StageImplementing:
 		switch {
 		case r.running():
-			r.Next = text("at " + cmp.Or(r.run.Leaf, "implement"))
-		case r.worktree != nil:
+			r.Next = text("at " + cmp.Or(r.Run.Leaf, "implement"))
+		case r.Worktree != nil:
 			r.Next = command(cmdShip)
 		default:
 			r.Next = text("in progress")
@@ -100,7 +100,7 @@ func (r *row) next() {
 		switch {
 		case r.running():
 			r.Next = command(cmdStatus)
-		case r.worktree != nil:
+		case r.Worktree != nil:
 			r.Next = command(cmdShip)
 		default:
 			r.Next = command(cmdStart)
@@ -125,7 +125,7 @@ func (r *row) next() {
 // driveFinishes reports a row whose finish a running drive holds, read
 // as `f10 status` reads it: ship done, with a PR open or merged.
 func (r *row) driveFinishes() bool {
-	if r.branch == nil || r.branch.Finish == nil || r.run == nil || r.run.Ship != "done" {
+	if r.Branch == nil || r.Branch.Finish == nil || r.Run == nil || r.Run.Ship != "done" {
 		return false
 	}
 
@@ -138,15 +138,15 @@ func (r *row) driveFinishes() bool {
 }
 
 func stoppedText(r *row) string {
-	phase, ok := r.run.StoppedPhase()
+	phase, ok := r.Run.StoppedPhase()
 	if !ok {
 		phase = "ship"
 	}
 
-	out := phase + " " + r.run.PhaseText(phase)
+	out := phase + " " + r.Run.PhaseText(phase)
 
-	if r.run.Note != "" {
-		out += ": " + r.run.Note
+	if r.Run.Note != "" {
+		out += ": " + r.Run.Note
 	}
 
 	return out
