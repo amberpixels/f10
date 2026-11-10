@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/urfave/cli/v3"
-
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -19,39 +17,6 @@ import (
 
 // launchesHead heads the tree of what this session launched.
 const launchesHead = "launched here"
-
-// statusAsks, under statusAsksKey in the context, learns whether a status
-// printed a question to relay: the hook then leaves the turn to the model.
-type (
-	statusAsks    struct{ printed bool }
-	statusAsksKey struct{}
-)
-
-// launchStatus prints the tree of what session started or drove that is
-// still live, reporting whether it printed: with nothing live, the bare
-// answer stays what it was.
-func launchStatus(ctx context.Context, cmd *cli.Command, t *target, sid string) (bool, error) {
-	kids := launchKids(ctx, cmd.ErrWriter, t, sid)
-	if len(kids) == 0 {
-		return false, nil
-	}
-
-	src, err := statusSource(ctx, t)
-	if err != nil {
-		return false, err
-	}
-
-	rows := dropRows(src.rowsFrom(ctx, kids), func(r taskRow) bool { return r.Stage == stageDone })
-	if len(rows) == 0 {
-		return false, nil
-	}
-
-	if a, ok := ctx.Value(statusAsksKey{}).(*statusAsks); ok {
-		a.printed = slices.ContainsFunc(rows, func(r taskRow) bool { return r.Stage == stageAsking })
-	}
-
-	return true, writeTaskRows(cmd, rows, launchesHead)
-}
 
 // dropRows leaves out the rows drop picks, in tree order: what hung under a
 // dropped row moves up to its level.

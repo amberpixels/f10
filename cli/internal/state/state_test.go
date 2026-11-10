@@ -278,12 +278,11 @@ func TestLeafPlace(t *testing.T) {
 	}
 }
 
-// Show and `f10 status` print the same facts: a field added to one fails here
-// until the other carries it too.
-func TestShowParity(t *testing.T) {
-	r := Fresh("parity")
+// A ship run stopped by a judge verdict: the ask folds to one line and the
+// ship phase names the step it stopped at.
+func TestBlockedRunFacts(t *testing.T) {
+	r := Fresh("blocked")
 
-	// the sequence a ship run stopped by a judge verdict makes
 	for _, err := range []error{
 		r.SetTask("GH-26", "https://github.com/amberpixels/f10/issues/26"),
 		r.SetFinal("pr"),
@@ -297,59 +296,12 @@ func TestShowParity(t *testing.T) {
 		}
 	}
 
-	ours := map[string]string{
-		"task":    r.Task,
-		"url":     r.URL,
-		"capture": r.PhaseText("capture"),
-		"plan":    r.PhaseText("plan"),
-		"ship":    r.PhaseText("ship"),
-		"note":    r.Note,
-		"next":    r.Next,
-		"ask":     r.Ask,
-		"final":   r.Final,
-	}
-
 	if want := "1. keep the retry? [no | yes] 2. where? [client | server]"; r.Ask != want {
 		t.Errorf("ask = %q, want the newline folded: %q", r.Ask, want)
 	}
 
-	if want := "blocked at judge"; ours["ship"] != want {
-		t.Errorf("ship = %q, want %q", ours["ship"], want)
-	}
-
-	var out strings.Builder
-	r.Show(&out, time.Now())
-
-	seen := 0
-
-	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
-		label, rest, _ := strings.Cut(line, " ")
-		value := strings.TrimSpace(rest)
-
-		switch label {
-		case "capture", "plan", "ship":
-			// a glyph comes first; the words after it are the value
-			_, value, _ = strings.Cut(value, " ")
-		case "updated", "root":
-			continue
-		}
-
-		want, known := ours[label]
-		if !known {
-			t.Errorf("show prints %q, which the run does not carry", label)
-
-			continue
-		}
-
-		seen++
-
-		if value != want {
-			t.Errorf("%s: show %q, run %q", label, value, want)
-		}
-	}
-
-	if seen != len(ours) {
-		t.Errorf("show printed %d of the %d shared labels", seen, len(ours))
+	if want := "blocked at judge"; r.PhaseText("ship") != want {
+		t.Errorf("ship = %q, want %q", r.PhaseText("ship"), want)
 	}
 }
 

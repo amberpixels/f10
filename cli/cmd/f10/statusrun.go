@@ -1,18 +1,12 @@
 package main
 
 import (
-	"cmp"
-	"context"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/layout"
-	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -22,39 +16,35 @@ import (
 // head is the task's shipment, printed once above the runs in place of each
 // run's task and url rows; nil for runs listed without a task. agent is the
 // profile the task's branch records, "" for the kind's default.
-func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipment, showRoot bool, agent string,
+func writeRuns(v statusView, runs []*state.Run, gates [][]gate, head *shipment, showRoot bool, agent string,
 	now time.Time,
 ) error {
-	if cmd.Bool("json") {
+	if v.json {
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
-			out[i] = runJSON{Run: r, Agent: agent, Gates: gates[i]}
+			out[i] = runJSON{Run: r, Agent: agent, Gates: gates[i], Shipment: head}
 			if head != nil {
-				out[i].Verdicts, out[i].Reviews = head.verdicts, head.reviews
+				out[i].Verdicts, out[i].Reviews = head.Verdicts, head.Reviews
 			}
 		}
 
-		return ui.JSON(cmd.Writer, out)
+		return ui.JSON(v.w, out)
 	}
 
-	limit := ui.Width(cmd.Writer)
-
 	if head != nil {
-		if err := writeReport(cmd.Writer, head.facts(), nil); err != nil {
+		if err := writeReport(v.w, head.facts(linksFor(v.w, v.plain).on), nil); err != nil {
 			return err
 		}
 	}
 
 	for i, r := range runs {
 		if i > 0 || head != nil {
-			fmt.Fprintln(cmd.Writer)
+			fmt.Fprintln(v.w)
 		}
 
-		if head != nil {
-			renderRunRows(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
-		} else {
-			renderRun(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
-		}
+		runRows(v.w, r, runView{
+			gates: gates[i], showRoot: showRoot, agent: agent, now: now, limit: ui.Width(v.w), headed: head != nil,
+		})
 	}
 
 	return nil
@@ -76,103 +66,70 @@ type runJSON struct {
 	Agent string `json:"agent,omitempty"`
 	Gates []gate `json:"gates,omitempty"`
 
-	// the task's files, repeated per run as the agent is
+	// the task's files and facts, repeated per run as the agent is; the
+	// files predate the shipment and repeat what it holds
 	Verdicts []verdictPath `json:"verdicts,omitempty"`
 	Reviews  []reviewPath  `json:"reviews,omitempty"`
+	Shipment *shipment     `json:"shipment,omitempty"`
 }
 
-// runGates is each of the task's runs' gates, from the ledger's events.
-func runGates(ctx context.Context, t *target, in taskStatusInput, events []ledger.Event, runs []*state.Run) [][]gate {
-	src := newGateSource(t, events, in.host)
-	out := make([][]gate, len(runs))
-
-	for i, r := range runs {
-		out[i] = src.gatesOf(ctx, in.id, in.branch, in.root, layout.Locate(ctx, r.Root).StorageRoot.Path(), r)
-	}
-
-	return out
+// runView is how one run block prints.
+type runView struct {
+	gates    []gate
+	showRoot bool   // listing runs: for one session the root is the directory you are in
+	agent    string // the profile the task's branch records, "" for the kind's default
+	now      time.Time
+	limit    int
+	headed   bool // a shipment block above holds the task and url rows
 }
 
-// newGateSource binds the gate reads to this target.
-func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
-	src := gateSource{
-		events: events,
-		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		eff:    t.eff,
-		review: t.eff.Review,
-		store:  &lore.Store{Root: loreRootFor(t)},
-		host:   h,
-	}
-
-	src.shared = t.lay.StorageRoot.Path()
-	src.driveFlows = driveFlows(src.shared)
-
-	return src
-}
-
-// renderRun prints one run in the order `f10 state show` prints the same
-// facts, the task's gates under ship when it has them. The root row appears
-// only when listing: for one session it is the directory you are in.
-func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
-	plain := lipgloss.NewStyle()
-
-	headerRow(w, "task", textx.OrDash(r.Task), limit, plain)
-	headerRow(w, "url", textx.OrDash(r.URL), limit, plain)
-	renderRunRows(w, r, gates, showRoot, agent, now, limit)
-}
-
-// renderRunRows is a run's rows after its task and url: the step rows a
-// shipment block heads.
-func renderRunRows(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
+// runRows prints one run, the task's gates under ship when it has them;
+// every run block, `f10 state show` included, prints through it.
+func runRows(w io.Writer, r *state.Run, v runView) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
-	if agent != "" {
-		headerRow(w, "agent", agent, limit, faint)
+	if !v.headed {
+		headerRow(w, "task", textx.OrDash(r.Task), v.limit, plain)
+		headerRow(w, "url", textx.OrDash(r.URL), v.limit, plain)
 	}
 
-	if showRoot {
-		headerRow(w, "root", textx.OrDash(r.Root), limit, faint)
+	if v.agent != "" {
+		headerRow(w, "agent", v.agent, v.limit, faint)
+	}
+
+	if v.showRoot {
+		headerRow(w, "root", textx.OrDash(r.Root), v.limit, faint)
 	}
 
 	for _, p := range state.Phases {
-		headerRow(w, p, r.PhaseText(p), limit, statusStyle(r.Status(p)))
+		headerRow(w, p, r.PhaseText(p), v.limit, statusStyle(r.Status(p)))
 	}
 
-	for _, g := range gates {
-		headerRow(w, "  "+g.shown(), g.text(), limit, statusStyle(g.style()))
+	for _, g := range v.gates {
+		headerRow(w, "  "+g.shown(), g.text(), v.limit, statusStyle(g.style()))
 	}
 
-	if r.Note != "" {
-		headerRow(w, "note", r.Note, limit, plain)
-	}
-
-	if r.Next != "" {
-		headerRow(w, "next", r.Next, limit, plain)
-	}
-
-	if r.Ask != "" {
-		headerRow(w, "ask", r.Ask, limit, plain)
-	}
-
-	if r.Wait != "" {
-		headerRow(w, "wait", r.Wait, limit, plain)
+	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}} {
+		if kv[1] != "" {
+			headerRow(w, kv[0], kv[1], v.limit, plain)
+		}
 	}
 
 	if final := r.FinalShown(); final != "" {
-		headerRow(w, "final", final, limit, faint)
+		headerRow(w, "final", final, v.limit, faint)
 	}
 
 	age := "unknown"
 	if !r.Updated.IsZero() {
-		age = textx.Age(now, r.Updated) + " ago"
+		age = textx.Age(v.now, r.Updated) + " ago"
 	}
 
-	if !r.Live(now, state.TTL()) {
+	if !r.Live(v.now, state.TTL()) {
 		age += " (stale)"
 	}
 
-	headerRow(w, "updated", age, limit, faint)
+	headerRow(w, "updated", age, v.limit, faint)
 }
 
 // statusStyle is the badge's palette: shape first, color second, so the

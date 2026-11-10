@@ -390,46 +390,58 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 
 	// plain output keeps its rows narrow: the gates go on a line beneath
 	withGates := !v.plain && slices.ContainsFunc(rows, func(r taskRow) bool { return r.gateColumn() != "" })
-	nodes := make([]tasktree.Node, len(rows))
 
+	tr := make([]treeRow, len(rows))
 	for i, r := range rows {
-		cells := []tasktree.Cell{
-			{Text: stateGlyph(r.Stage) + " " + r.ID},
-			{Text: r.Stage},
-			{Text: r.Step},
-		}
-
-		if withGates {
-			cells = append(cells, tasktree.Cell{Text: r.gateColumn()})
-		}
-
-		cells = append(cells, tasktree.Cell{Text: prColumn(r)})
-
+		tr[i] = treeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
 		links.Known("", r.ID, r.URL)
-
-		if v.term {
-			glyph, id := stateGlyph(r.Stage), links.ID("", r.ID)
-			stage, pr := rowStageStyle(r.Stage), r.PR
-
-			cells[0].Render = func(string) string { return glyph + " " + id }
-			cells[1].Render = func(s string) string { return stage.Render(s) }
-			cells[2].Render = func(s string) string { return faint.Render(s) }
-			cells[len(cells)-1].Render = func(s string) string { return hyperlink(pr, s) }
-		}
-
-		notes := make([]tasktree.Note, 0, 3)
-		if gc := r.gateColumn(); v.plain && gc != "" {
-			notes = append(notes, tasktree.Note{Label: "gates", Text: gc})
-		}
-
-		for _, sub := range r.subLines() {
-			notes = append(notes, tasktree.Note{Label: sub[0], Text: sub[1], Whole: sub[0] == "ask"})
-		}
-
-		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells, Title: r.Title, Notes: notes}
 	}
 
+	nodes := subtaskNodes(tr, treeOpts{
+		titleBelow: true,
+		id: func(i int) tasktree.Cell {
+			c := tasktree.Cell{Text: stateGlyph(rows[i].Stage) + " " + rows[i].ID}
+			if v.term {
+				glyph, id := stateGlyph(rows[i].Stage), links.ID("", rows[i].ID)
+				c.Render = func(string) string { return glyph + " " + id }
+			}
+
+			return c
+		},
+		extra: func(i int) ([]tasktree.Cell, []tasktree.Note) { return rows[i].cells(v, withGates, faint) },
+	})
+
 	return tree.Write(w, nodes)
+}
+
+// cells is the row's stage, step, gates and PR, and the lines under it.
+func (row *taskRow) cells(v rowView, withGates bool, faint lipgloss.Style) ([]tasktree.Cell, []tasktree.Note) {
+	cells := []tasktree.Cell{{Text: row.Stage}, {Text: row.Step}}
+
+	if withGates {
+		cells = append(cells, tasktree.Cell{Text: row.gateColumn()})
+	}
+
+	cells = append(cells, tasktree.Cell{Text: prColumn(*row)})
+
+	if v.term {
+		stage, pr := rowStageStyle(row.Stage), row.PR
+
+		cells[0].Render = func(s string) string { return stage.Render(s) }
+		cells[1].Render = func(s string) string { return faint.Render(s) }
+		cells[len(cells)-1].Render = func(s string) string { return hyperlink(pr, s) }
+	}
+
+	notes := make([]tasktree.Note, 0, 3)
+	if gc := row.gateColumn(); v.plain && gc != "" {
+		notes = append(notes, tasktree.Note{Label: "gates", Text: gc})
+	}
+
+	for _, sub := range row.subLines() {
+		notes = append(notes, tasktree.Note{Label: sub[0], Text: sub[1], Whole: sub[0] == "ask"})
+	}
+
+	return cells, notes
 }
 
 // stateGlyph marks a row's stage at a glance: done, stopped, waiting on an
@@ -541,48 +553,38 @@ func pullNumber(url string) string {
 
 // parentRows is `status <id>` for a parent: its children, closed ones
 // included, as rows. errNoParentLink, or no rows, is not a parent.
-func parentRows(ctx context.Context, t *target, r ref.Ref) ([]taskRow, error) {
-	kids, err := t.tracker().allChildren(ctx, r)
+func (rd *statusReader) parentRows(ctx context.Context, r ref.Ref) ([]taskRow, error) {
+	kids, err := rd.t.tracker().allChildren(ctx, r)
 	if err != nil || len(kids) == 0 {
 		return nil, err
 	}
 
-	src, err := statusSource(ctx, t)
-	if err != nil {
-		return nil, err
-	}
-
-	return src.rowsFrom(ctx, kids), nil
+	return rd.rows(ctx).rowsFrom(ctx, kids), nil
 }
 
 // finishedRow is `status <id>` for a task with no branch left: one done
 // row when the ledger, the tracker or the plan archive says it finished.
-func finishedRow(ctx context.Context, t *target, r ref.Ref) (*taskRow, error) {
-	src, err := statusSource(ctx, t)
-	if err != nil {
-		return nil, err
-	}
-
-	tr := t.tracker()
+func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *taskRow {
+	tr := rd.t.tracker()
 	info, _ := tr.info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
-	lt := ledgerFor(src.events, r.ID, src.idOf)
+	lt := ledgerFor(rd.ledger(ctx), r.ID, rd.idOf(ctx))
 
 	// a ledger finish counts only while no live plan says the task came back
 	if !finishedTask(info, tr.storage, r.ID, false) && (!lt.finished || tr.storage.PlanLive(r.ID)) {
-		return nil, nil
+		return nil
 	}
 
 	k := childRow{ID: r.ID, Finished: true}
-	if title, err := t.tasks().Title(ctx, r); err == nil {
+	if title, err := rd.t.tasks().Title(ctx, r); err == nil {
 		k.Title = title
-		t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
+		rd.t.rememberRefs(ctx, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
 	}
 
-	rows := src.rowsFrom(ctx, []childRow{k})
+	rows := rd.rows(ctx).rowsFrom(ctx, []childRow{k})
 	rows[0].full = true
 
-	return &rows[0], nil
+	return &rows[0]
 }
 
 // drivenTasks is every task a drive lists while its driver runs, by id,
@@ -604,44 +606,4 @@ func drivenTasks(root string) map[string]bool {
 	}
 
 	return out
-}
-
-// statusSource binds the row reads to this target: live runs, the ledger,
-// the checkout lookup and the host.
-func statusSource(ctx context.Context, t *target) (rowSource, error) {
-	live, err := state.List(state.Dir(), time.Now(), state.TTL())
-	if err != nil {
-		return rowSource{}, err
-	}
-
-	main := cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot)
-	src := rowSource{live: live, events: readLedger(ctx, main)}
-
-	src.checkout = func(ctx context.Context, id, suffix string) (string, string) {
-		r, err := t.reference(ctx, id)
-		if err != nil {
-			return "", ""
-		}
-
-		name, root, err := taskCheckout(ctx, main, t.driver(), r, suffix)
-		if err != nil {
-			return "", ""
-		}
-
-		return name, root
-	}
-
-	src.resolve = t.idOf(ctx)
-
-	if h, err := t.host(); err == nil {
-		src.host = &h
-	}
-
-	gs := newGateSource(t, src.events, src.host)
-	src.driven = drivenTasks(gs.shared)
-	src.gates = func(ctx context.Context, id, branch, root string, run *state.Run) []gate {
-		return gs.gatesOf(ctx, id, branch, root, gs.storageFor(ctx, root), run)
-	}
-
-	return src, nil
 }

@@ -61,14 +61,17 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: plan, host: &h}
 	capture := &state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}
 
+	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
+	ship.askPR(t.Context(), in)
+
 	var out bytes.Buffer
-	taskFallback(t.Context(), in, []*state.Run{capture}, shipment{}).render(&out, 0, false)
+	taskFallback(in, []*state.Run{capture}, ship).render(&out, 0, false)
 
 	for _, want := range []string{
 		"none for GH-1 in " + root,
 		"- · capture running",
 		plan,
-		"pr:    ↗ https://gh/pr/9",
+		"pr:      ↗ https://gh/pr/9",
 		"pr state        open",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -86,7 +89,10 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	h := newHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: filepath.Join(root, "GH-1.md"), host: &h}
 
-	fb := taskFallback(t.Context(), in, nil, shipment{})
+	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
+	ship.askPR(t.Context(), in)
+
+	fb := taskFallback(in, nil, ship)
 
 	var out bytes.Buffer
 	fb.render(&out, 0, false)
@@ -180,7 +186,7 @@ func TestRenderRunKeepsTheAsk(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	renderRun(&out, own[0], nil, true, "opus:high", time.Now(), 0)
+	runRows(&out, own[0], runView{showRoot: true, agent: "opus:high", now: time.Now()})
 
 	if !strings.Contains(out.String(), "opus:high") {
 		t.Errorf("output lacks the agent row:\n%s", out.String())
@@ -191,9 +197,9 @@ func TestRenderRunKeepsTheAsk(t *testing.T) {
 	}
 }
 
-// The run block shows what `f10 state show` shows: the final entry by its
-// label, and the base task a driven ship waits on.
-func TestRenderRunRowsMatchesShow(t *testing.T) {
+// The run block names the final entry by its label, and the base task a
+// driven ship waits on.
+func TestRunRowsFinalLabelAndWait(t *testing.T) {
 	r := &state.Run{
 		Task: "GH-1", Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement",
 		Pipeline: []string{"implement", "pr", "review", "pr"}, Labels: []string{"", "", "", "pr-polish"},
@@ -201,7 +207,7 @@ func TestRenderRunRowsMatchesShow(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	renderRunRows(&out, r, nil, false, "", time.Now(), 0)
+	runRows(&out, r, runView{headed: true, now: time.Now()})
 
 	got := out.String()
 
@@ -367,16 +373,16 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 // marker on the two urls alone.
 func TestShipmentFacts(t *testing.T) {
 	s := shipment{
-		task:   "GH-1",
-		title:  "Add a retry",
-		url:    "https://gh/issues/1",
-		branch: "GH-1/add-a-retry",
-		pr:     "https://gh/pr/9",
-		plan:   "/store/plans/GH-1.md",
+		Task:   "GH-1",
+		Title:  "Add a retry",
+		URL:    "https://gh/issues/1",
+		Branch: "GH-1/add-a-retry",
+		PR:     "https://gh/pr/9",
+		Plan:   "/store/plans/GH-1.md",
 	}
 
 	var out bytes.Buffer
-	if err := writeReport(&out, s.facts(), nil); err != nil {
+	if err := writeReport(&out, s.facts(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -412,8 +418,8 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 	s := readShipment(t.Context(), in, events, known)
 
 	want := shipment{
-		task: "GH-1", title: "Add a retry", url: "https://gh/issues/1", branch: "GH-1",
-		pr: "https://gh/pr/9", plan: plan,
+		Task: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1", Branch: "GH-1",
+		PR: "https://gh/pr/9", Plan: plan,
 	}
 	if !reflect.DeepEqual(s, want) {
 		t.Errorf("shipment = %+v, want %+v", s, want)
@@ -430,8 +436,8 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", host: &h}
 	pushed := []ledger.Event{{Kind: ledger.Pushed, Task: "GH-1", Payload: ledger.NewPayload(ledger.Payload{})}}
 
-	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.pr != "" {
-		t.Errorf("an unpushed task has pr %q, want none", s.pr)
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.PR != "" {
+		t.Errorf("an unpushed task has pr %q, want none", s.PR)
 	}
 
 	if f.called(ghView) {
@@ -439,14 +445,15 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 	}
 
 	s := readShipment(t.Context(), in, pushed, ledger.TaskRef{})
-	if s.pr != "https://gh/pr/9" {
-		t.Errorf("pr = %q, want the branch's PR", s.pr)
+	if s.PR != "https://gh/pr/9" {
+		t.Errorf("pr = %q, want the branch's PR", s.PR)
 	}
 
 	// the fallback reuses that answer rather than asking the host again
 	f.script(ghView)
+	s.askPR(t.Context(), in)
 
-	if fb := taskFallback(t.Context(), in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
+	if fb := taskFallback(in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
 		t.Errorf("fallback pr = %q (%s), want the shipment's PR and its state", fb.PR, fb.PRState)
 	}
 }
@@ -474,11 +481,11 @@ func TestShipFiles(t *testing.T) {
 	writeFile(t, filepath.Join(storage, "reviews", "FT-1", "1.md"), "# Review\n")
 	writeFile(t, filepath.Join(storage, "reviews", "FT-1", "2.md"), "# Review\n")
 
-	s := shipment{task: "FT-1"}
-	s.verdicts, s.reviews = shipFiles(storage, "FT-1")
+	s := shipment{Task: "FT-1"}
+	s.Verdicts, s.Reviews = shipFiles(storage, "FT-1")
 
 	var out bytes.Buffer
-	if err := writeReport(&out, s.facts(), nil); err != nil {
+	if err := writeReport(&out, s.facts(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -497,22 +504,23 @@ func TestShipFiles(t *testing.T) {
 // fallback.
 func TestStatusJSONCarriesTheFiles(t *testing.T) {
 	head := shipment{
-		task:     "GH-1",
-		verdicts: []verdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
-		reviews:  []reviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
+		Task:     "GH-1",
+		Verdicts: []verdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
+		Reviews:  []reviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
 	}
 
 	var out bytes.Buffer
 
-	cmd := statusCommand()
-	cmd.Writer = &out
-
-	if err := cmd.Set("json", "true"); err != nil {
-		t.Fatal(err)
-	}
-
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "done"}
-	if err := writeRuns(cmd, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+	if err := writeRuns(
+		statusView{w: &out, json: true},
+		[]*state.Run{r},
+		[][]gate{nil},
+		&head,
+		false,
+		"",
+		time.Now(),
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -521,14 +529,14 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(runs) != 1 || !reflect.DeepEqual(runs[0].Verdicts, head.verdicts) ||
-		!reflect.DeepEqual(runs[0].Reviews, head.reviews) {
+	if len(runs) != 1 || !reflect.DeepEqual(runs[0].Verdicts, head.Verdicts) ||
+		!reflect.DeepEqual(runs[0].Reviews, head.Reviews) || runs[0].Shipment == nil {
 		t.Errorf("run JSON lacks the files:\n%s", out.String())
 	}
 
 	out.Reset()
 
-	fb := fallback{Task: "GH-1", Others: []*state.Run{}, Verdicts: head.verdicts, Reviews: head.reviews}
+	fb := taskFallback(taskStatusInput{id: "GH-1"}, nil, head)
 	if err := ui.JSON(&out, fb); err != nil {
 		t.Fatal(err)
 	}
@@ -542,14 +550,11 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 // A headed run prints the block once and drops its own task and url rows.
 func TestWriteRunsUnderTheShipment(t *testing.T) {
 	r := &state.Run{Task: "GH-1", URL: "https://gh/issues/1", Capture: "prior", Plan: "done", Ship: "done"}
-	head := shipment{task: "GH-1", url: "https://gh/issues/1"}
+	head := shipment{Task: "GH-1", URL: "https://gh/issues/1"}
 
 	var out bytes.Buffer
 
-	cmd := statusCommand()
-	cmd.Writer = &out
-
-	if err := writeRuns(cmd, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+	if err := writeRuns(statusView{w: &out}, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -572,14 +577,14 @@ func TestReadShipmentCommitRow(t *testing.T) {
 
 	in := taskStatusInput{id: "FT-2", branch: "FT-2/b", main: r.dir}
 
-	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.commit != "" {
-		t.Errorf("a fresh branch has commit %q, want none", s.commit)
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != "" {
+		t.Errorf("a fresh branch has commit %q, want none", s.Commit)
 	}
 
 	r.commit(during, "c.go", "package main // c\n", "c")
 
 	want := r.at(during, "rev-parse", "--short", "HEAD")
-	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.commit != want {
-		t.Errorf("commit = %q, want the branch head %q", s.commit, want)
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
+		t.Errorf("commit = %q, want the branch head %q", s.Commit, want)
 	}
 }

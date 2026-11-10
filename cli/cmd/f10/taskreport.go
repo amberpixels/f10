@@ -85,23 +85,14 @@ func writeParentTree(ctx context.Context, cmd *cli.Command, t *target, token str
 		return writeTaskFacts(cmd, token, r.ID, k)
 	}
 
-	nodes := []tasktree.Node{titledNode(r.ID, k.Title, k.URL, 0)}
-	for _, c := range kids {
-		nodes = append(nodes, titledNode(c.ID, c.Title, c.URL, c.Depth+1))
-	}
+	nodes := subtaskNodes(
+		childTreeRows(kids),
+		treeOpts{head: &treeRow{ID: r.ID, Title: k.Title, URL: k.URL}, url: true},
+	)
 
 	t.rememberRefs(ctx, childRefs(kids)...)
 
 	return tasktree.Tree{Align: true}.Write(cmd.Writer, nodes)
-}
-
-func titledNode(id, title, url string, depth int) tasktree.Node {
-	cells := []tasktree.Cell{{Text: id}, {Text: title}}
-	if url != "" {
-		cells = append(cells, tasktree.Cell{Text: "↗ " + url})
-	}
-
-	return tasktree.Node{Depth: depth, Cells: cells}
 }
 
 func writeTaskFacts(cmd *cli.Command, token, id string, k ledger.TaskRef) error {

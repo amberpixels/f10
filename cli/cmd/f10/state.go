@@ -74,7 +74,11 @@ func stateCommand() *cli.Command {
 						return err
 					}
 
-					r.Show(cmd.Writer, time.Now())
+					runRows(
+						cmd.Writer,
+						r,
+						runView{showRoot: r.Root != "", now: time.Now(), limit: ui.Width(cmd.Writer)},
+					)
 
 					return nil
 				},

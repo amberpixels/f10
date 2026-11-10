@@ -238,10 +238,10 @@ func writeTree(w io.Writer, rows []childRow) error {
 		return err
 	}
 
-	nodes := make([]tasktree.Node, len(rows))
+	nodes := subtaskNodes(childTreeRows(rows), treeOpts{extra: func(i int) ([]tasktree.Cell, []tasktree.Note) {
+		r := rows[i]
 
-	for i, r := range rows {
-		cells := []tasktree.Cell{{Text: r.ID}, {Text: r.Title}}
+		var cells []tasktree.Cell
 
 		if r.After != "" {
 			cells = append(cells, tasktree.Cell{Text: "after " + r.After})
@@ -255,10 +255,20 @@ func writeTree(w io.Writer, rows []childRow) error {
 			cells = append(cells, tasktree.Cell{Text: "finished"})
 		}
 
-		nodes[i] = tasktree.Node{Depth: r.Depth, Cells: cells}
-	}
+		return cells, nil
+	}})
 
 	return tasktree.Tree{}.Write(w, nodes)
+}
+
+// childTreeRows is the subtasks as subtask tree rows.
+func childTreeRows(rows []childRow) []treeRow {
+	out := make([]treeRow, len(rows))
+	for i, r := range rows {
+		out[i] = treeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
+	}
+
+	return out
 }
 
 // relink puts child under parent, or with parent "" takes it out from under
